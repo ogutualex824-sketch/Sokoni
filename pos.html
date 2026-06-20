@@ -272,10 +272,14 @@
             <button class="cart-action-btn" onclick="SPos.cart.hold()">⏸ Hold</button>
             <button class="cart-action-btn" onclick="SPos.cart.recall()">📋 Recall</button>
           </div>
+          <!-- Mobile/tablet charge trigger — visible when payment column is hidden (≤900px) -->
+          <button class="cart-mobile-pay-btn" id="mobile-pay-btn" onclick="SPos.ui.openPaymentPanel()" disabled>Charge KES 0.00</button>
         </div>
       </section>
 
       <aside class="pos-payment">
+        <!-- Back button — only shown on mobile/tablet when panel is in overlay mode -->
+        <button class="pos-pay-back-btn" onclick="SPos.ui.closePaymentPanel()">← Back to Cart</button>
         <div class="pos-pay-header">
           <div class="pos-pay-label">AMOUNT DUE</div>
           <div class="pos-pay-total"><small>KES </small><span id="pay-total-display">0.00</span></div>
@@ -989,6 +993,9 @@
   </div>
 </div>
 
+<!-- Payment panel backdrop — tapping closes the panel -->
+<div class="pos-pay-overlay" id="pos-pay-overlay" onclick="SPos.ui.closePaymentPanel()"></div>
+
 <style>
 .terminal-type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
 .terminal-type-card{border:1px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:background .15s,border-color .15s}
@@ -1003,6 +1010,7 @@
 <script src="pos-idempotency.js"></script>
 <script src="pos-health.js"></script>
 <script src="pos-sync.js"></script>
+<script src="pos-omni.js"></script>
 <!-- ══ POS modules ══ -->
 <script src="pos-printer.js"></script>
 <script src="pos-barcode.js"></script>

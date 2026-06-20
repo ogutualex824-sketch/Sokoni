@@ -970,7 +970,7 @@ export default class GIPEngine {
    * Uses the same haversine/ray-cast logic as the fence engine.
    */
   geofenceContains(zoneId, lat, lng) {
-    const zone = this._geofenceEngine?._zones?.get(zoneId);
+    const zone = this._fence?._zones?.get(zoneId);
     if (!zone) return false;
     if (zone.type === 'circle') {
       const d = _haversineKm(lat, lng, zone.lat, zone.lng);

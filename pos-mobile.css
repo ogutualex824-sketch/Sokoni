@@ -171,6 +171,45 @@
 
   /* Finance tabs wrap */
   .finance-tab { padding: 6px 10px; font-size: 11px; }
+
+  /* ── Reports header: stack on phone ── */
+  .rep-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+    padding: 10px 12px !important;
+  }
+
+  .rep-header > strong { font-size: 16px !important; }
+
+  /* Date inputs: 16px prevents iOS auto-zoom */
+  .rep-date-input {
+    font-size: 16px !important;
+    padding: 10px 12px !important;
+    flex: 1;
+  }
+
+  /* Inventory search: 16px prevents iOS auto-zoom */
+  .inv-search { font-size: 16px !important; }
+
+  /* Product search: already 14px — bump to 16px */
+  .pos-search-input { font-size: 16px !important; }
+
+  /* Numpad keys — bigger touch targets on phone */
+  .numpad-key         { min-height: 52px !important; font-size: 20px !important; }
+  .numpad-key.clear-num { font-size: 13px !important; }
+  .numpad-key.dot     { font-size: 24px !important; }
+
+  /* Inventory toolbar: wrap cleanly on phone */
+  .inv-toolbar {
+    padding: 8px 10px !important;
+    gap: 6px !important;
+  }
+
+  .inv-btn { font-size: 12px !important; padding: 8px 12px !important; }
+
+  /* Customers toolbar */
+  .cust-search { font-size: 16px !important; }
 }
 
 /* ═══════════════════════════════════════════════════════════

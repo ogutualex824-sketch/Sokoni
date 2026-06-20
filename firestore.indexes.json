@@ -1204,7 +1204,23 @@
 
     /* gipRoutes — asset route history */
     { "collectionGroup": "gipRoutes", "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "assetId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
+      "fields": [{ "fieldPath": "assetId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* posTransactions — seller transaction history (Reports tab, shift reports) */
+    { "collectionGroup": "posTransactions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "sellerId", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
+
+    /* posTransactions — seller + payment method breakdown (Finance tab) */
+    { "collectionGroup": "posTransactions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "sellerId", "order": "ASCENDING" }, { "fieldPath": "paymentMethod", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
+
+    /* posTransactions — seller + shift reconciliation (Cashier close-of-day) */
+    { "collectionGroup": "posTransactions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "sellerId", "order": "ASCENDING" }, { "fieldPath": "shiftId", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
+
+    /* posTransactions — seller + status filter (pending/completed/refunded) */
+    { "collectionGroup": "posTransactions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "sellerId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }

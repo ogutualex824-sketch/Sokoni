@@ -368,6 +368,17 @@ const SPos = (function () {
         );
       });
     },
+
+    /* ── Mobile/tablet payment panel ── */
+    openPaymentPanel() {
+      document.querySelector('.pos-payment')?.classList.add('mobile-open');
+      document.getElementById('pos-pay-overlay')?.classList.add('open');
+    },
+
+    closePaymentPanel() {
+      document.querySelector('.pos-payment')?.classList.remove('mobile-open');
+      document.getElementById('pos-pay-overlay')?.classList.remove('open');
+    },
   };
 
   /* ═══════════════════════════════════════════════════════════
@@ -578,6 +589,9 @@ const SPos = (function () {
       _setVal('pay-total-display', total.toFixed(2));
       _setVal('pay-btn', total > 0 ? `Charge KES ${total.toFixed(2)}` : 'Charge KES 0.00');
       document.getElementById('pay-btn').disabled = total <= 0;
+      /* Sync mobile charge button */
+      const _mBtn = document.getElementById('mobile-pay-btn');
+      if (_mBtn) { _mBtn.textContent = total > 0 ? `Charge KES ${total.toFixed(2)}` : 'Charge KES 0.00'; _mBtn.disabled = total <= 0; _mBtn.className = 'cart-mobile-pay-btn'; }
 
       document.getElementById('row-subtotal').style.display = disc > 0 || tax > 0 ? '' : 'none';
       document.getElementById('row-discount').style.display = disc > 0 ? '' : 'none';
@@ -649,6 +663,9 @@ const SPos = (function () {
         ? `💳 Charge KES ${total.toFixed(2)} via Card`
         : `Charge KES ${total.toFixed(2)}`;
       payBtn.disabled = total <= 0;
+      /* Sync mobile charge button label + style */
+      const _mBtn2 = document.getElementById('mobile-pay-btn');
+      if (_mBtn2) { _mBtn2.textContent = payBtn.textContent; _mBtn2.className = 'cart-mobile-pay-btn' + (isM ? ' mpesa' : ''); }
 
       _setVal('numpad-label', method === 'cash' ? 'Amount tendered' : 'Amount');
     },
@@ -850,6 +867,9 @@ const SPos = (function () {
           toast(`${tier.icon} ${tier.name} member — ${tier.discount}% loyalty discount applied next visit`, 'info');
         }
       }
+
+      /* Close mobile payment panel before showing success overlay */
+      ui.closePaymentPanel();
 
       /* Show success overlay — always wire up buttons */
       _showSuccessOverlay(receiptData);
@@ -1510,12 +1530,13 @@ const SPos = (function () {
   ═══════════════════════════════════════════════════════════ */
   const reports = {
     setRange(range) {
+      const _localISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       const now   = new Date();
       const from  = new Date();
       if (range === 'week')  from.setDate(now.getDate() - 7);
       if (range === 'month') from.setDate(1);
-      document.getElementById('rep-date-from').value = from.toISOString().split('T')[0];
-      document.getElementById('rep-date-to').value   = now.toISOString().split('T')[0];
+      document.getElementById('rep-date-from').value = _localISO(from);
+      document.getElementById('rep-date-to').value   = _localISO(now);
       /* Respect active sub-tab */
       const activeSubTab = document.querySelector('.rep-subtab.active')?.dataset.subtab;
       if (activeSubTab === 'transactions') sales.showHistory();
@@ -2075,7 +2096,7 @@ const SPos = (function () {
         customerId:      originalTxn.customerId,
         customerName:    originalTxn.customerName,
         status:          'refunded',
-        receiptNo:       'REF-' + Date.now().toString().slice(-8),
+        receiptNo:       window.PosIdempotency ? PosIdempotency.generateReceiptNo('REF-') : ('REF-' + Date.now().toString(36).toUpperCase().slice(-6) + Math.random().toString(36).slice(2,5).toUpperCase()),
       };
       await PosDB.transactions.save(refundTxn);
 
@@ -2190,28 +2211,19 @@ const SPos = (function () {
     async run(silent = false) {
       if (!navigator.onLine) return;
       try {
-        const pending = await PosDB.syncQueue.getPending();
-        if (!pending.length) { if (!silent) toast('All data is synced ✓', 'success'); return; }
-
-        /* Attempt Firestore sync if Firebase is available */
-        if (window.firebaseApp) {
-          const { getFirestore, collection, addDoc, doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-          const db     = getFirestore(window.firebaseApp);
-          const bizPin = state.settings.bizPin || 'unknown';
-          for (const item of pending) {
-            try {
-              /* Namespace by business KRA PIN so data is tenant-isolated */
-              const colRef = collection(db, 'businesses', bizPin, 'pos_transactions');
-              await addDoc(colRef, { ...item.data, bizPin, _syncedAt: new Date() });
-              await PosDB.syncQueue.markDone(item.id);
-              await PosDB.transactions.markSynced(item.data.id);
-            } catch (_) {
-              await PosDB.syncQueue.markFailed(item.id);
-            }
+        /* Delegate entirely to PosSyncEngine — idempotent setDoc writes to posTransactions.
+           The previous addDoc path to businesses/{bizPin}/pos_transactions is removed:
+           it was non-idempotent, had no security rules, and duplicated PosSyncEngine's work. */
+        if (window.PosSyncEngine) {
+          const r = await PosSyncEngine.processQueue({ reason: 'manual' });
+          if (!silent) {
+            if (r.skipped) toast('All data is synced ✓', 'success');
+            else if (r.success > 0) toast(`Sync complete ✓ (${r.success} uploaded)`, 'success');
+            else toast('All data is synced ✓', 'success');
           }
-          if (!silent) toast('Sync complete ✓', 'success');
         } else {
-          if (!silent) toast(`${pending.length} item(s) queued — connect to sync`, 'info');
+          const pending = await PosDB.syncQueue.getPending();
+          if (!silent) toast(pending.length ? `${pending.length} item(s) queued — connect to sync` : 'All data is synced ✓', pending.length ? 'info' : 'success');
         }
       } catch (e) {
         if (!silent) toast('Sync failed: ' + e.message, 'error');

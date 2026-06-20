@@ -139,10 +139,10 @@ export default class GIPApi {
   }
 
   /** Destroy all listeners, Firestore subscriptions, and the map. */
-  destroy() {
+  async destroy() {
     this._gip?.destroy();
     this._dispatch?.destroy?.();
-    this._analytics?.destroy?.();
+    await this._analytics?.destroy?.().catch(() => {});
     this._fleet?.destroy?.();
     this._inited = false;
   }

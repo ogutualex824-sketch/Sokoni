@@ -2188,6 +2188,25 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       POS BRANCHES  (PosBoss.branch.init() — multi-branch management)
+       Each branch document carries a `businessId` == seller's Firebase UID.
+       • create / update: only the business owner.
+       • read: owner or admin (branch config is commercially sensitive).
+       • delete: admin only (branch history must be preserved).
+    ══════════════════════════════════════════════════════════════ */
+    match /pos_branches/{branchId} {
+      allow create: if isAuthed()
+                    && request.resource.data.businessId == request.auth.uid
+                    && request.resource.data.keys().hasAll(['businessId','name']);
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.businessId == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.businessId == request.auth.uid
+                        && request.resource.data.businessId == resource.data.businessId);
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        INVENTORY MODULE
        Tenant-scoped under tenants/{tenantId}/inventory_*
        Stock mutations are locked to Cloud Functions only (admin SDK).
@@ -2457,16 +2476,6 @@ service cloud.firestore {
                     && request.resource.data.lat  >= -90   && request.resource.data.lat  <= 90
                     && request.resource.data.lng  is number
                     && request.resource.data.lng  >= -180  && request.resource.data.lng  <= 180;
-      allow delete: if isAdmin();
-    }
-
-    /* Asset registry */
-    match /gipAssets/{assetId} {
-      allow read:   if isAuthed();
-      allow create: if isAuthed()
-                    && request.resource.data.uid == request.auth.uid;
-      allow update: if isAuthed()
-                    && (resource.data.uid == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
     }
 

@@ -1,4 +1,47 @@
-﻿## [2026-06-20] — Inventory Management System v1.0: AI-Powered, Offline-First, Multi-Warehouse
+﻿## [2026-06-21] — SmartPOS Omnichannel Sync + Audit Fixes
+
+### Summary
+Completed the SmartPOS Final Verification Audit remaining items: created the missing PosOmni
+omnichannel marketplace sync module, wired it into pos.html + service worker, deployed four
+composite Firestore indexes for posTransactions queries, and fixed the Reports date picker
+timezone bug that showed yesterday's date to sellers in UTC+3.
+
+### New Files
+- **pos-omni.js** — Omnichannel sync engine v1.0: bidirectional stock sync between SmartPOS
+  and the Sokoni Marketplace (pushStock, startSync, pullOrders, stopSync, getStatus).
+  Offline-aware with an in-memory push queue that flushes on reconnect.
+
+### Modified Files
+- **pos.html** — Added `<script src="pos-omni.js">` in the enterprise resilience block (before pos.js)
+- **service-worker.js** — Added `/pos-omni.js` to PRECACHE_STATIC; bumped cache version to v236
+- **pos.js** — Fixed `reports.setRange()` date picker to use local timezone date (`_localISO()`)
+  instead of `toISOString()` which returned UTC dates (wrong date shown at night in Kenya UTC+3)
+- **firestore.indexes.json** — Added 4 composite indexes for top-level `posTransactions` collection:
+  sellerId+timestamp, sellerId+paymentMethod+timestamp, sellerId+shiftId+timestamp, sellerId+status+timestamp
+
+### Database Changes
+New Firestore composite indexes (deployed):
+- `posTransactions` — sellerId ASC + timestamp DESC (Reports tab, shift history)
+- `posTransactions` — sellerId ASC + paymentMethod ASC + timestamp DESC (Finance tab breakdown)
+- `posTransactions` — sellerId ASC + shiftId ASC + timestamp DESC (cashier close-of-day)
+- `posTransactions` — sellerId ASC + status ASC + timestamp DESC (pending/completed/refunded filter)
+
+### Security Changes
+- PosOmni writes to `products/{marketplaceId}` under the authenticated seller's Firebase UID.
+  Firestore rules already enforce `uid == auth.uid` on the products collection — no rule changes needed.
+- PosOmni reads `orders` where `sellerId == auth.uid` — enforced by existing order rules.
+
+### Performance Changes
+- posTransactions indexes eliminate full-collection scans on Reports and Finance tabs.
+- PosOmni stock push is non-blocking (fire-and-forget with `catch(() => {})`), so it does
+  not add latency to the POS checkout flow.
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-20] — Inventory Management System v1.0: AI-Powered, Offline-First, Multi-Warehouse
 
 ### Summary
 Enterprise-grade inventory management system built as a core SOKONI module. Supports multi-tenant

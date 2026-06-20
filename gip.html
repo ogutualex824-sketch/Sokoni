@@ -296,10 +296,18 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 /* ── Mobile responsive ─────────────────────────────────────── */
 @media (max-width: 900px) {
   :root{ --sidebar: 0px; }
-  #gipSidebar{ position:absolute;left:0;top:var(--topbar);bottom:0;width:260px;display:none;z-index:900;}
+  #gipSidebar{ position:absolute;left:0;top:var(--topbar);bottom:0;width:280px;display:none;z-index:1000;}
   #gipSidebar.mobile-open{display:flex;}
   #gipRight{display:none;}
+  #gipRight.mobile-panel-open{
+    display:flex;position:absolute;right:0;top:var(--topbar);bottom:0;
+    width:min(320px, 92vw);z-index:1000;
+    border-left:1px solid var(--border);
+    box-shadow:-8px 0 40px rgba(0,0,0,0.6);
+  }
   #gipMobileToggle{display:flex;}
+  #gipMobilePanelBtn{display:flex;}
+  #gipRightClose{display:flex;}
 }
 @media (max-width: 600px) {
   .gip-stats{ display:none; }
@@ -309,10 +317,31 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
   width:36px;height:36px;margin:0 4px;
   background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;
   align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;
+  color:white;
+}
+#gipMobilePanelBtn{
+  display:none;
+  width:36px;height:36px;margin:0 4px;
+  background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;
+  align-items:center;justify-content:center;cursor:pointer;font-size:16px;flex-shrink:0;
+  color:white;
+}
+#gipRightClose{
+  display:none;
+  width:30px;height:30px;margin-left:auto;flex-shrink:0;
+  background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;
+  align-items:center;justify-content:center;cursor:pointer;
+  font-size:16px;color:rgba(255,255,255,0.5);
+}
+#gipRightClose:hover{background:rgba(255,68,68,0.15);color:#ff6b6b;border-color:rgba(255,68,68,0.3);}
+#gipBackdrop{
+  display:none;position:fixed;inset:0;z-index:999;
+  background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);
 }
 </style>
 </head>
 <body>
+<div id="gipBackdrop"></div>
 
 <div id="gipShell">
 
@@ -360,7 +389,8 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
       <span id="gipAlertBadge"></span>
     </button>
 
-    <button id="gipMobileToggle" onclick="gipToggleSidebar()">☰</button>
+    <button id="gipMobilePanelBtn" onclick="gipOpenRightPanel()" title="Jobs & Alerts">⊞</button>
+    <button id="gipMobileToggle" onclick="gipToggleSidebar()" title="Fleet">☰</button>
   </header>
 
   <!-- ── Body ───────────────────────────────────────────────── -->
@@ -421,6 +451,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
         <button class="gip-panel-tab"        onclick="gipRightTab('alerts',this)">Alerts</button>
         <button class="gip-panel-tab"        onclick="gipRightTab('dispatch',this)">Dispatch</button>
         <button class="gip-panel-tab"        onclick="gipRightTab('analytics',this)">Analytics</button>
+        <button id="gipRightClose" onclick="gipCloseRightPanel()" title="Close">✕</button>
       </div>
       <div class="gip-panel-body" id="gipRightBody">
         <!-- Populated dynamically -->
@@ -436,20 +467,55 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 
 <!-- ── Firebase & GIP modules ─────────────────────────────── -->
 <script type="module">
-import { getFirestore, collection, doc, onSnapshot, query, where, orderBy, limit }
+import { getFirestore, collection, onSnapshot, query, where, orderBy, limit }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
-/* ── Use firebase.js which is already initialised on every SOKONI page ── */
+/* ══════════════════════════════════════════════════════════════
+   BOOT SEQUENCE
+   1. Initialise Firebase (firebase.js sets window.firebaseApp)
+   2. Wait for auth state — never start Firestore subscriptions
+      before we know who the user is. This eliminates permission-
+      denied errors for unauthenticated visitors.
+   3. Verify admin custom claim — GIP is admin-only.
+   4. Load GIP modules lazily (after auth is confirmed).
+   5. Initialise map and wire all subscriptions.
+══════════════════════════════════════════════════════════════ */
+
 await import('./firebase.js');
 const db   = getFirestore(window.firebaseApp);
 const auth = getAuth(window.firebaseApp);
 
-/* expose for GIP modules */
-window._db   = db;
-window._auth = auth;
+/* ── Auth gate ── */
+function _showAuthError(msg) {
+  document.getElementById('gipShell').innerHTML = `
+    <div style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#080808;">
+      <div style="font-size:40px;">🔒</div>
+      <div style="font-size:15px;font-weight:800;color:white;">${msg}</div>
+      <a href="auth.html" style="padding:10px 24px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-weight:700;text-decoration:none;font-size:13px;">Sign In</a>
+    </div>`;
+}
 
-/* ── Import GIP modules ── */
+async function _isAdmin(user) {
+  try {
+    const result = await user.getIdTokenResult(false);
+    return result.claims?.admin === true || result.claims?.superAdmin === true;
+  } catch { return false; }
+}
+
+/* Wait for Firebase Auth to resolve — Promise resolves with the user or null */
+const currentUser = await new Promise(resolve => {
+  const unsub = onAuthStateChanged(auth, user => { unsub(); resolve(user); });
+});
+
+if (!currentUser) { _showAuthError('GIP Command — Sign in required'); }
+else if (!(await _isAdmin(currentUser))) { _showAuthError('GIP Command — Admin access required'); }
+else { await _bootGIP(db, currentUser); }
+
+/* ── GIP boot (only reached when admin is confirmed) ── */
+async function _bootGIP(db, user) {
+
+/* ── Import GIP modules (lazy — only after auth confirmed) ── */
 const [
   { default: GIPEngine },
   { default: DispatchEngine },
@@ -482,9 +548,10 @@ await gip.init({
 window._gip      = gip;
 window._dispatch = dispatch;
 window._analytics = analytics;
+window._gipUser   = user;
 
 /* ── Real-time asset updates → sidebar list ── */
-gip.on('gip:tick', ({ count }) => _updateStats());
+gip.on('gip:tick', () => _updateStats());
 gip.on('asset:updated', asset => _updateAssetCard(asset));
 gip.on('asset:removed', ({ assetId }) => {
   document.getElementById('assetCard-' + assetId)?.remove();
@@ -497,7 +564,7 @@ gip.on('gip:online', () => {
   document.getElementById('gipOfflineBanner').classList.remove('show');
 });
 
-gip.on('gip:alert', alert => {
+gip.on('gip:alert', () => {
   unresolvedAlerts++;
   _updateAlertBadge();
   if (rightTab === 'alerts') _renderAlerts();
@@ -515,8 +582,9 @@ const _unsubAlerts = onSnapshot(
   snap => {
     unresolvedAlerts = snap.size;
     _updateAlertBadge();
-    if (rightTab === 'alerts') _renderAlerts(snap.docs.map(d=>d.data()));
-  }
+    if (rightTab === 'alerts') _renderAlerts(snap.docs.map(d => d.data()));
+  },
+  err => console.warn('[GIP] Alerts listener:', err.code)
 );
 
 /* ──────────────────────────────────────────────────────────
@@ -723,11 +791,38 @@ window.gipRightTab = (tab, btn) => {
   else if (tab === 'analytics') _renderAnalytics();
 };
 
+function _showRightPanel() {
+  const el = document.getElementById('gipRight');
+  if (window.innerWidth <= 900) {
+    el.classList.add('mobile-panel-open');
+    const bd = document.getElementById('gipBackdrop');
+    bd.style.display = 'block';
+    bd.onclick = gipCloseRightPanel;
+  } else {
+    el.style.display = 'flex';
+  }
+}
+
+window.gipOpenRightPanel = () => {
+  rightTab = 'jobs';
+  document.querySelectorAll('.gip-panel-tab').forEach((b, i) => b.classList.toggle('active', i === 0));
+  _showRightPanel();
+};
+
 window.gipShowAlertsPanel = () => {
   document.querySelectorAll('.gip-panel-tab').forEach((b, i) => b.classList.toggle('active', i === 1));
   rightTab = 'alerts';
   _renderAlerts();
-  document.getElementById('gipRight').style.display = 'flex';
+  _showRightPanel();
+};
+
+window.gipCloseRightPanel = () => {
+  const el = document.getElementById('gipRight');
+  el.classList.remove('mobile-panel-open');
+  el.style.display = '';
+  const bd = document.getElementById('gipBackdrop');
+  bd.style.display = 'none';
+  bd.onclick = null;
 };
 
 window.gipResolveAlert = async (alertId) => {
@@ -735,7 +830,20 @@ window.gipResolveAlert = async (alertId) => {
 };
 
 window.gipToggleSidebar = () => {
-  document.getElementById('gipSidebar').classList.toggle('mobile-open');
+  const sidebar  = document.getElementById('gipSidebar');
+  const backdrop = document.getElementById('gipBackdrop');
+  const isOpen   = sidebar.classList.toggle('mobile-open');
+  if (isOpen) {
+    backdrop.style.display = 'block';
+    backdrop.onclick = () => {
+      sidebar.classList.remove('mobile-open');
+      backdrop.style.display = 'none';
+      backdrop.onclick = null;
+    };
+  } else {
+    backdrop.style.display = 'none';
+    backdrop.onclick = null;
+  }
 };
 
 window.gipSearch = (term) => {
@@ -773,8 +881,9 @@ window.addEventListener('beforeunload', () => {
   _unsubJobs?.();
   _unsubAlerts?.();
   gip.destroy();
-  dispatch.destroy();
-  analytics.destroy();
+  dispatch.destroy?.();
+  /* analytics.destroy() flushes pending heat data — fire async, don't block unload */
+  analytics.destroy?.().catch(() => {});
 });
 
 /* ── Connectivity banner ── */
@@ -782,6 +891,7 @@ window.addEventListener('offline', () => document.getElementById('gipOfflineBann
 window.addEventListener('online',  () => document.getElementById('gipOfflineBanner').classList.remove('show'));
 if (!navigator.onLine) document.getElementById('gipOfflineBanner').classList.add('show');
 
+} /* end _bootGIP */
 </script>
 </body>
 </html>
