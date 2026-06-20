@@ -1184,7 +1184,27 @@
 
     /* gipAnalytics — driver daily scores */
     { "collectionGroup": "drivers", "queryScope": "COLLECTION_GROUP",
-      "fields": [{ "fieldPath": "assetId", "order": "ASCENDING" }, { "fieldPath": "computedAt", "order": "DESCENDING" }] }
+      "fields": [{ "fieldPath": "assetId", "order": "ASCENDING" }, { "fieldPath": "computedAt", "order": "DESCENDING" }] },
+
+    /* gipAssets — regional fleet list with module filter */
+    { "collectionGroup": "gipAssets", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "region", "order": "ASCENDING" }, { "fieldPath": "module", "order": "ASCENDING" }, { "fieldPath": "isOnline", "order": "ASCENDING" }] },
+
+    /* gipAssets — owner's own assets */
+    { "collectionGroup": "gipAssets", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "vehicleType", "order": "ASCENDING" }] },
+
+    /* gipFleet — daily utilization per asset + date */
+    { "collectionGroup": "gipDispatch", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "assignedAssetId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "deliveredAt", "order": "ASCENDING" }] },
+
+    /* gipRoutes — module route history */
+    { "collectionGroup": "gipRoutes", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "module", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* gipRoutes — asset route history */
+    { "collectionGroup": "gipRoutes", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "assetId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }

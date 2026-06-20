@@ -2514,6 +2514,36 @@ service cloud.firestore {
       allow write:  if false;
     }
 
+    /* gipAssets — vehicle/device registry
+       Owner writes their own asset; admins write all; any authed reads */
+    match /gipAssets/{assetId} {
+      allow read:   if isAuthed();
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthed()
+                    && (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+
+      /* Service history sub-collection — owner or admin writes */
+      match /serviceHistory/{serviceId} {
+        allow read:   if isAuthed()
+                      && (isAdmin() || get(/databases/$(database)/documents/gipAssets/$(assetId)).data.uid == request.auth.uid);
+        allow create: if isAuthed()
+                      && (isAdmin() || get(/databases/$(database)/documents/gipAssets/$(assetId)).data.uid == request.auth.uid);
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    /* gipRoutes — optimized route records
+       Any authed user writes their own routes; admins read all */
+    match /gipRoutes/{routeId} {
+      allow read:   if isAuthed()
+                    && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow create: if isAuthed();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
   }
 }
 
