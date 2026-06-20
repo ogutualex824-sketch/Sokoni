@@ -1,0 +1,2519 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ══════════════════════════════════════════════════════════════
+       HELPER FUNCTIONS
+    ══════════════════════════════════════════════════════════════ */
+
+    /*
+     * isSuperAdmin()
+     * Firebase ID token carries superAdmin == true custom claim.
+     * Super admins can do everything admins can, plus manage admin claims.
+     */
+    function isSuperAdmin() {
+      return request.auth != null && request.auth.token.superAdmin == true;
+    }
+
+    /*
+     * isAdmin()
+     * Returns true when the Firebase ID token carries the custom
+     * claim  admin == true OR superAdmin == true, set server-side
+     * by the Cloud Functions grantAdminClaim / grantPlatformRole.
+     * Hardcoded email checks are intentionally absent.
+     */
+    function isAdmin() {
+      return request.auth != null &&
+             (request.auth.token.admin == true || request.auth.token.superAdmin == true);
+    }
+
+    /*
+     * isModerator()
+     * Moderators can read and act on flagged content, disputes, and
+     * community reports.  They cannot manage user accounts or view
+     * sensitive financial data.
+     */
+    function isModerator() {
+      return request.auth != null &&
+             (request.auth.token.moderator == true ||
+              request.auth.token.admin == true ||
+              request.auth.token.superAdmin == true);
+    }
+
+    /*
+     * isAuthed()
+     * Any request that carries a valid Firebase Auth token.
+     * Does NOT imply ownership of the target document.
+     */
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    /*
+     * isOwner()
+     * The authenticated user's UID matches the 'uid' field already
+     * stored in the target document (read before write).
+     * Used in update / delete rules to verify the existing owner.
+     */
+    function isOwner() {
+      return isAuthed() && resource.data.uid == request.auth.uid;
+    }
+
+    /*
+     * claimsOwner()
+     * The authenticated user's UID matches the 'uid' field in the
+     * document being written (the incoming payload).
+     * Used in create rules so users cannot write documents on behalf
+     * of another user.
+     */
+    function claimsOwner() {
+      return isAuthed() && request.resource.data.uid == request.auth.uid;
+    }
+
+    /*
+     * uidUnchanged()
+     * Returns true when an update does NOT touch the 'uid' field.
+     * Applied to every update rule that allows non-admin writes so
+     * that ownership cannot be silently transferred by overwriting
+     * the uid field.
+     */
+    function uidUnchanged() {
+      return !request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasAny(['uid']);
+    }
+
+    /*
+     * noAdminFields()
+     * Rejects writes that try to set admin-only privilege fields.
+     * Applied to create/update rules for users, products, and orders
+     * so clients cannot self-elevate or self-approve.
+     */
+    function noAdminFields() {
+      return !request.resource.data.keys()
+               .hasAny(['isAdmin','suspended','banned','adminApproved',
+                        'featured','verified','flagged','adminNote',
+                        'role','approved','approvedAt','approvedBy']);
+    }
+
+    /*
+     * noPrivilegeEscalation()
+     * When a write includes 'registeredAs', ensure the user is not
+     * attempting to grant themselves admin, superAdmin, or moderator roles,
+     * which must only be set via Cloud Functions / server-side claims.
+     */
+    function noPrivilegeEscalation() {
+      return !request.resource.data.keys().hasAny(['registeredAs'])
+             || !request.resource.data.registeredAs.keys()
+                  .hasAny(['admin','superAdmin','moderator','isAdmin']);
+    }
+
+    /*
+     * validPrice(field)
+     * Ensures a numeric price/amount field is a positive number.
+     */
+    function validPrice(field) {
+      return request.resource.data[field] is number
+             && request.resource.data[field] > 0;
+    }
+
+    /*
+     * validOrderStatus()
+     * Status transitions must use one of the defined lifecycle values.
+     * Covers both the legacy order statuses and the new SokoniOrders
+     * 11-state engine (pending_payment → completed / cancelled / refunded).
+     */
+    function validOrderStatus() {
+      return !request.resource.data.keys().hasAny(['status'])
+             || request.resource.data.status in [
+                  'pending','processing','confirmed',
+                  'shipped','out_for_delivery','delivered','cancelled','refunded',
+                  'completed',
+                  'pending_payment','paid','awaiting_confirmation',
+                  'rider_assigned','rider_en_route','picked_up','in_transit'
+                ];
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       USERS
+       Each document is keyed by the Firebase Auth UID.
+       Written by auth.js on createUserWithEmailAndPassword.
+       • Only the document owner or an admin may read / update.
+       • Nobody may delete their own account doc — admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /users/{userId} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == userId);
+      allow create: if isAuthed() && request.auth.uid == userId && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && request.auth.uid == userId
+                        && uidUnchanged()
+                        && noAdminFields()
+                        && noPrivilegeEscalation());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       APPLICATIONS  (provider / driver onboarding)
+       • create:  claimsOwner() — the uid in the payload must match
+                  the authenticated user; anonymous submissions are
+                  rejected at the rule layer, not just the UI.
+       • read:    applicant or admin — nobody else sees your application.
+       • update:  admin-only — the applicant cannot alter a submitted
+                  application (prevents gaming approval status).
+       • delete:  admin-only.
+    ══════════════════════════════════════════════════════════════ */
+    match /applications/{appId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin() || isOwner();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PROVIDERS
+       Public listing is intentional — hub pages (healthcare.html,
+       services.html etc.) discover providers without requiring login.
+
+       • create:  the uid field in the new document must match the
+                  authenticated user's uid.  Previously this was only
+                  isAuthed(), meaning any logged-in user could register
+                  a provider profile on behalf of anyone else.
+       • update:  provider may update their own profile, but cannot
+                  touch approval/verification fields (status, verified,
+                  suspended, approved) and cannot change the uid field.
+       • delete:  admin-only.
+    ══════════════════════════════════════════════════════════════ */
+    match /providers/{providerId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.uid == request.auth.uid
+                        && uidUnchanged()
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasAny(['status', 'verified', 'suspended', 'approved']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BOOKINGS
+       • create:  claimsOwner() — uid in payload must match auth uid.
+       • read:    admin, the booking creator (uid / buyerId / userId),
+                  or the assigned provider.
+       • update:  admin, the assigned provider (updating booking status),
+                  or the original creator — uid field is frozen on all
+                  non-admin updates to prevent ownership transfer.
+       • delete:  admin-only.
+    ══════════════════════════════════════════════════════════════ */
+    match /bookings/{bookingId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid        == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerId    == request.auth.uid)
+                    || (isAuthed() && resource.data.userId     == request.auth.uid)
+                    || (isAuthed() && resource.data.providerId == request.auth.uid);
+      /* Booker may cancel/reschedule; provider may update status only */
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','cancelReason','updatedAt','date','time','notes']))
+                    || (isAuthed() && resource.data.providerId == request.auth.uid
+                        && uidUnchanged()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','providerNote','updatedAt','confirmedAt','completedAt']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RIDES
+       • create:  claimsOwner().
+       • read:    admin, the passenger (uid / passengerId), or the
+                  assigned driver.
+       • update:  admin, the assigned driver (status updates), or the
+                  passenger/owner (cancel) — uid frozen on all writes.
+       • delete:  admin-only.
+    ══════════════════════════════════════════════════════════════ */
+    match /rides/{rideId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid         == request.auth.uid)
+                    || (isAuthed() && resource.data.passengerId == request.auth.uid)
+                    || (isAuthed() && resource.data.driverId    == request.auth.uid);
+      /* Passenger may cancel only; driver may update status/location fields only */
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','cancelReason','updatedAt']))
+                    || (isAuthed() && resource.data.driverId == request.auth.uid
+                        && uidUnchanged()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','driverNote','updatedAt','acceptedAt',
+                                       'arrivedAt','startedAt','completedAt','driverLocation']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DRIVER LOCATIONS  (real-time GPS)
+       Public read is intentional — passengers track drivers live.
+
+       Previously the single `allow write` rule checked the INCOMING
+       uid but not the EXISTING document's uid.  A user could therefore
+       overwrite another driver's location document by simply setting
+       their own uid in the new payload.
+
+       The rules are now split into three verbs:
+       • create:  incoming uid must match auth uid.
+       • update:  BOTH the existing doc's uid AND the incoming uid must
+                  match auth uid, preventing a user from overwriting
+                  another driver's document.
+       • delete:  owner of the existing doc or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /driverLocations/{driverId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthed()
+                    && resource.data.uid          == request.auth.uid
+                    && request.resource.data.uid  == request.auth.uid;
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PACKAGES / DELIVERIES
+       Same ownership pattern as rides.
+       Senders and assigned delivery drivers can read and update.
+       uid is frozen on all non-admin updates.
+    ══════════════════════════════════════════════════════════════ */
+    match /packages/{pkgId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid      == request.auth.uid)
+                    || (isAuthed() && resource.data.senderId == request.auth.uid)
+                    || (isAuthed() && resource.data.driverId == request.auth.uid);
+      allow update: if isAdmin()
+                    || ((isAuthed() && resource.data.driverId == request.auth.uid
+                         || isOwner())
+                        && uidUnchanged());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ORDERS  (marketplace checkout + SokoniOrders state machine)
+       • Readable by buyer (uid / userId / buyerId / buyerUid),
+         seller (sellerUid), assigned driver (assignedDriverUid), admin.
+       • create:  buyer; uid frozen; valid status; positive total.
+       • update:  buyer (cancel / confirm receipt), seller (confirm ready),
+                  assigned driver (status transitions), admin (any).
+                  uid field is always frozen on non-admin updates.
+       • delete:  admin only.
+
+       orderEvents subcollection — immutable event log:
+       • create:  any authenticated party to the order.
+       • read:    buyer, seller, assigned driver, or admin.
+       • update/delete: nobody — append-only audit trail.
+    ══════════════════════════════════════════════════════════════ */
+    match /orders/{orderId} {
+      allow create: if claimsOwner()
+                    && validOrderStatus();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid              == request.auth.uid)
+                    || (isAuthed() && resource.data.userId           == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerId          == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerUid         == request.auth.uid)
+                    || (isAuthed() && resource.data.sellerUid        == request.auth.uid)
+                    || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid);
+      allow update: if isAdmin()
+                    /* Buyer may cancel or confirm receipt */
+                    || ((isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.buyerUid == request.auth.uid))
+                        && uidUnchanged() && validOrderStatus()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','cancelReason','confirmedAt','updatedAt','review']))
+                    /* Seller may confirm ready / update tracking */
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid
+                        && uidUnchanged() && validOrderStatus()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
+                    /* Driver may update delivery status */
+                    || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
+                        && uidUnchanged() && validOrderStatus()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','driverNote','updatedAt','pickedUpAt','deliveredAt','etaMin']));
+      allow delete: if isAdmin();
+
+      match /events/{eventId} {
+        /* Append-only audit trail — only parties to the parent order may write */
+        allow create: if isAdmin()
+                      || (isAuthed()
+                          && (
+                               get(/databases/$(database)/documents/orders/$(orderId)).data.uid              == request.auth.uid
+                            || get(/databases/$(database)/documents/orders/$(orderId)).data.buyerUid         == request.auth.uid
+                            || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerUid        == request.auth.uid
+                            || get(/databases/$(database)/documents/orders/$(orderId)).data.assignedDriverUid == request.auth.uid
+                          ));
+        allow read:   if isAdmin()
+                      || (isAuthed()
+                          && get(/databases/$(database)/documents/orders/$(orderId))
+                               .data.keys().hasAny(['uid','buyerUid','sellerUid','assignedDriverUid'])
+                          && (
+                               get(/databases/$(database)/documents/orders/$(orderId)).data.uid              == request.auth.uid
+                            || get(/databases/$(database)/documents/orders/$(orderId)).data.buyerUid         == request.auth.uid
+                            || get(/databases/$(database)/documents/orders/$(orderId)).data.sellerUid        == request.auth.uid
+                            || get(/databases/$(database)/documents/orders/$(orderId)).data.assignedDriverUid == request.auth.uid
+                          ));
+        allow update, delete: if false;
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FCM TOKENS  (push notification registration)
+       Previously `allow write: if isAuthed()` let any authenticated
+       user overwrite any other user's push token, silently disabling
+       their notifications.
+
+       Now the write is gated on the token document's email field
+       matching the authenticated user's email claim from the Firebase
+       JWT.  The document ID is derived from the email in firebase.js,
+       so a user can only write the token document for their own email.
+    ══════════════════════════════════════════════════════════════ */
+    match /fcm_tokens/{tokenId} {
+      allow write: if isAuthed()
+                   && request.auth.token.email != null
+                   && request.resource.data.email == request.auth.token.email;
+      allow read:  if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       AUDIT LOGS
+       Append-only — authenticated clients (security.js) can add
+       entries.  Nobody can update or delete, preserving a tamper-
+       evident trail.  Moderators and admins can read.
+    ══════════════════════════════════════════════════════════════ */
+    match /auditLogs/{logId} {
+      allow create:         if isAuthed()
+                            && request.resource.data.uid == request.auth.uid
+                            && request.resource.data.keys().hasAll(['uid','action','ts']);
+      allow read:           if isModerator();
+      allow update, delete: if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       NOTIFICATIONS
+       Created server-side by admin (or Cloud Functions which bypass
+       client rules).  Users can read and mark-read only their own
+       notifications, identified by the userId field admin set on
+       creation.  uid field is frozen on user updates.
+    ══════════════════════════════════════════════════════════════ */
+    match /notifications/{notifId} {
+      /* SokoniNotifications.push() runs client-side for multi-party order
+         dispatch. Non-admin callers may only create notifications that:
+           1. Do NOT target 'broadcast' (only admin can broadcast)
+           2. Include required fields (heading, sub, targetUid)
+           3. Have type in the allowed order-event whitelist              */
+      /* SECURITY: wallet_credit/debit, security_alert, listing_approved/rejected,
+         platform_update must originate server-side only — restricting client to
+         workflow-safe types prevents social-engineering via fake payment alerts. */
+      allow create: if isAdmin()
+                    || (isAuthed()
+                        && request.resource.data.targetUid != 'broadcast'
+                        && request.resource.data.keys().hasAll(['targetUid','heading','sub'])
+                        && request.resource.data.type in ['order','delivery','ride','general']);
+      allow read:   if isAdmin()
+                    || (isAuthed() && (
+                         resource.data.targetUid == request.auth.uid
+                      || resource.data.targetUid == 'broadcast'
+                    ));
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.targetUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['read']));
+      allow delete: if isAdmin();
+    }
+
+    /* /escrow/{orderId} — DEPRECATED. Canonical escrow collection is /escrows/{escrowId} below.
+       Keeping read-only access so old records remain visible to admin. No new writes. */
+    match /escrow/{orderId} {
+      allow read:   if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /referrals/{refId} {
+      allow create: if isAuthed() && claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.referrerUid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       REVIEWS  (platform / seller / product / provider)
+       Publicly readable — seller-public.html and product.html show
+       reviews without requiring login.
+       • create:  claimsOwner().
+       • update:  author or admin; uid field is frozen to prevent the
+                  author from transferring review ownership.
+       • delete:  author or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /reviews/{reviewId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       eTIMS SUBMISSIONS  (KRA invoice records)
+       Sellers can create their own submissions (etims.js).
+       Only admin can read, update, or delete — tax records are
+       admin-audited, not user-browsable.
+    ══════════════════════════════════════════════════════════════ */
+    match /etims_submissions/{docId} {
+      allow create:               if claimsOwner();
+      allow read, update, delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LAWYERS  (legal-hub.html directory)
+       Public listing — anyone can browse.  Only the registering
+       attorney (claimsOwner) may create; only admin may delete.
+    ══════════════════════════════════════════════════════════════ */
+    match /lawyers/{docId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LEGAL APPOINTMENTS  (legal-hub.html booking system)
+       • create:  any authenticated user; uid in payload must match.
+       • read:    the requester (uid), the assigned lawyer (lawyerId),
+                  or admin.
+       • update:  lawyer updates status (confirm/decline); requester
+                  may cancel only; uid field frozen on all writes.
+       • delete:  admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /legalAppointments/{apptId} {
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['uid','area','type','date','time','status'])
+                    && request.resource.data.uid    == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid      == request.auth.uid)
+                    || (isAuthed() && resource.data.lawyerId == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid      == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['status'])
+                        && request.resource.data.status == 'cancelled')
+                    || (isAuthed() && resource.data.lawyerId == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['status'])
+                        && request.resource.data.status in ['confirmed','declined','completed']);
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LEGAL SERVICE REQUESTS  (property / vehicle / business)
+       • create:  any authenticated user.
+       • read:    requester (uid) or admin; lawyers assigned to the
+                  request may also read (lawyerId field).
+       • update:  admin updates status; requester may cancel only.
+       • delete:  admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /legalServiceRequests/{reqId} {
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['uid','category','type','status'])
+                    && request.resource.data.uid    == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid      == request.auth.uid)
+                    || (isAuthed() && resource.data.lawyerId == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['status'])
+                        && request.resource.data.status == 'cancelled');
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LEGAL REVIEWS  (lawyer / appointment ratings)
+       Publicly readable — trust signals for the directory.
+       • create:  any authenticated user; reviewer cannot set
+                  verified=true (admin-only field).
+       • update:  admin only — prevents review manipulation.
+       • delete:  admin or the original reviewer.
+    ══════════════════════════════════════════════════════════════ */
+    match /legalReviews/{reviewId} {
+      allow read:   if true;
+      /* SECURITY: uid + lawyerId required; uid must match caller — prevents anonymous
+         review spam and multi-submission under different document IDs. */
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['uid','lawyerId','rating','date'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.rating is number
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && !request.resource.data.keys().hasAny(['verified']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       MECHANICS  (mechanics.html directory)
+       Same public-listing, owner-write pattern as lawyers.
+    ══════════════════════════════════════════════════════════════ */
+    match /mechanics/{docId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       eTIMS CONFIG  (KRA merchant credentials)
+       Previously `allow read, write: if isAuthed()` let any
+       authenticated user overwrite KRA tax settings.
+
+       Config reads still require authentication (etims.js reads the
+       counter on every invoice).  Writes are restricted to admin so
+       that merchant credentials (TIN, device serial) cannot be
+       tampered with by a regular user.
+    ══════════════════════════════════════════════════════════════ */
+    match /etims_config/{docId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       USER SESSIONS  (multi-device session tracking)
+       • create:  the userEmail field in the new session document must
+                  match the authenticated user's email claim from the
+                  Firebase JWT.  Previously isAuthed() allowed any user
+                  to create a session document with someone else's email,
+                  enabling session list spoofing.
+       • read / update / delete:  the stored userEmail must match the
+                  JWT email claim, or admin.
+                  (The session ID is a random 128-bit string generated
+                   client-side — guessing another user's session ID is
+                   computationally infeasible.)
+    ══════════════════════════════════════════════════════════════ */
+    /* ══════════════════════════════════════════════════════════════
+       USER SYNC  (cross-device localStorage ↔ Firestore bridge)
+       ─────────────────────────────────────────────────────────────
+       Structure:
+         userSync/{uid}/kv/{key}        — simple key-value pairs
+         userSync/{uid}/products/{pid}  — seller products (one doc each)
+
+       • Only the document owner can read or write their own sync
+         documents.  No cross-user reads.  Admin can read all.
+       • uid field in written documents must match auth uid to prevent
+         a user from writing to another user's sync bucket.
+    ══════════════════════════════════════════════════════════════ */
+    match /userSync/{uid}/{subcol}/{docId} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write:  if isAuthed() && request.auth.uid == uid;
+      allow delete: if isAuthed() && request.auth.uid == uid;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PRODUCTS  (public marketplace catalogue)
+       Written by seller-wiring.js when a seller uploads a product.
+       • Public read — all visitors browse the catalogue.
+       • create:  sellerUid in payload must match auth uid.
+       • update:  only the owning seller (sellerUid) or admin;
+                  sellerUid field is frozen to prevent ownership transfer.
+       • delete:  seller or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /products/{productId} {
+      allow read:   if true;
+      allow create: if isAuthed()
+                    && request.resource.data.sellerUid == request.auth.uid
+                    && validPrice('price')
+                    && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.sellerUid == request.auth.uid
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasAny(['sellerUid'])
+                        && noAdminFields());
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LISTINGS  (universal hub provider listings)
+       Written by hub-wiring.js when a provider saves a listing.
+       • Public read — hub pages show listings to all visitors.
+       • create:  ownerId in payload must match auth uid.
+       • update:  owner (ownerId) or admin; ownerId frozen so ownership
+                  cannot be transferred.
+       • delete:  owner or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /listings/{listingId} {
+      allow read:   if true;
+      allow create: if isAuthed()
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.ownerId == request.auth.uid
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasAny(['ownerId'])
+                        && noAdminFields());
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.ownerId == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CONVERSATIONS  (cross-device real-time messaging)
+       convId = [uid1,uid2].sort().join('_')  — deterministic per pair.
+       • create:  both participants must be authenticated; the creator's
+                  uid must be in the participants array.
+       • read / update: only participants can access — enforced by
+                  array-contains check on the stored participants field.
+       • delete:  admin-only (soft-delete: remove self from participants).
+
+       Messages subcollection:
+       • create:  sender must be a participant AND senderId must match uid.
+       • read:    participants only.
+       • update / delete: admin only (messages are immutable for users).
+    ══════════════════════════════════════════════════════════════ */
+    match /conversations/{convId} {
+      function isParticipant() {
+        return isAuthed() && request.auth.uid in resource.data.participants;
+      }
+      allow read: if isParticipant();
+      /* SECURITY: field-lock update so participants cannot add new members to a
+         1:1 conversation and turn it into a mass-broadcast channel. */
+      allow update: if isParticipant()
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);
+      allow create: if isAuthed()
+                    && request.auth.uid in request.resource.data.participants
+                    && request.resource.data.participants.size() <= 2;
+      allow delete: if isAdmin();
+
+      match /messages/{msgId} {
+        function inConvo() {
+          return isAuthed()
+            && get(/databases/$(database)/documents/conversations/$(convId))
+                 .data.participants.hasAny([request.auth.uid]);
+        }
+        allow read: if inConvo();
+        allow create: if inConvo()
+                      && request.resource.data.senderId == request.auth.uid
+                      && request.resource.data.keys().hasAll(['senderId','text','sentAt'])
+                      && request.resource.data.text.size() <= 4000;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       TEAMS  (sports-hub.html team registrations)
+       • Public read — anyone can browse registered teams.
+       • create: ownerId in payload must match auth uid.
+       • update: team owner or admin; ownerId frozen.
+       • delete: team owner or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /teams/{teamId} {
+      allow read:   if true;
+      /* ownerId in the new document must match the authenticated user */
+      allow create: if isAuthed() && request.resource.data.ownerId == request.auth.uid;
+      /* SECURITY: freeze ownerId — prevents silent ownership transfer to another uid. */
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.ownerId == request.auth.uid
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerId']));
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.ownerId == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       TOURNAMENTS  (sports-hub.html tournament creation)
+       • Public read — anyone can view and join tournaments.
+       • create: any authenticated user may create a tournament.
+       • update: creator or admin; createdBy field frozen.
+       • delete: admin only (affects all registered teams).
+    ══════════════════════════════════════════════════════════════ */
+    match /tournaments/{tourneyId} {
+      allow read:   if true;
+      allow create: if claimsOwner();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DISPUTES  (dispute.html — buyer/seller dispute resolution)
+       • create: any authenticated user may submit a dispute.
+       • read: submitter (uid match), moderator, or admin.
+       • update: moderator or admin (sets status / response).
+       • delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /disputes/{disputeId} {
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(['orderId','reason','status'])
+                    && request.resource.data.status == 'open';
+      allow read:   if isModerator()
+                    || (isAuthed() && resource.data.uid      == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerUid == request.auth.uid)
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      /* Parties may add evidence/refund requests; moderators manage status/resolution */
+      allow update: if isModerator()
+                    || (isAuthed()
+                        && (resource.data.uid      == request.auth.uid
+                         || resource.data.buyerUid == request.auth.uid)
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['evidence','refundRequested',
+                             'refundAmount','refundReason','refundRequestedAt'])
+                        && uidUnchanged());
+      allow delete: if isAdmin();
+
+      /* Dispute messages subcollection — parties + moderators */
+      match /messages/{msgId} {
+        allow create: if isAuthed()
+                      && request.resource.data.senderUid == request.auth.uid
+                      && request.resource.data.keys().hasAll(['message','senderUid','sentAt'])
+                      && request.resource.data.message.size() <= 2000
+                      && (
+                           get(/databases/$(database)/documents/disputes/$(disputeId)).data.uid       == request.auth.uid
+                        || get(/databases/$(database)/documents/disputes/$(disputeId)).data.buyerUid  == request.auth.uid
+                        || get(/databases/$(database)/documents/disputes/$(disputeId)).data.sellerUid == request.auth.uid
+                        || isModerator()
+                      );
+        allow read:   if isModerator()
+                      || (isAuthed() && (
+                           get(/databases/$(database)/documents/disputes/$(disputeId)).data.uid       == request.auth.uid
+                        || get(/databases/$(database)/documents/disputes/$(disputeId)).data.buyerUid  == request.auth.uid
+                        || get(/databases/$(database)/documents/disputes/$(disputeId)).data.sellerUid == request.auth.uid
+                      ));
+        allow update, delete: if false;
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FRAUD ALERTS  (submitted by SokoniFraud.flag())
+       Authenticated users flag suspicious activity; only moderators/admin read.
+    ══════════════════════════════════════════════════════════════ */
+    match /fraudAlerts/{alertId} {
+      allow create: if isAuthed()
+                    && request.resource.data.flaggedBy == request.auth.uid
+                    && request.resource.data.keys().hasAll(['targetId','reason','flaggedBy']);
+      allow read:   if isModerator();
+      allow update: if isModerator();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ONBOARDING COMPLETED  (written by SokoniOnboarding.complete())
+       One doc per role completion per user.
+    ══════════════════════════════════════════════════════════════ */
+    match /onboardingCompleted/{docId} {
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['role','uid','completedAt']);
+      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       OFFERS  (admin-managed product promotions)
+       Public read; only admins can write.
+    ══════════════════════════════════════════════════════════════ */
+    match /offers/{offerId} {
+      allow read:   if true;
+      allow create: if isAdmin()
+                    && request.resource.data.keys().hasAll(['productId','offerPrice','originalPrice','active','createdBy'])
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.offerPrice < request.resource.data.originalPrice;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow create: if isAuthed()
+                    && request.resource.data.uid    == request.auth.uid
+                    && request.resource.data.amount is  number
+                    && request.resource.data.amount >   0;
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       COMMUNITY POSTS  (community.html real-time feed)
+       • Public read — anyone can browse the community feed.
+       • create:  any authenticated user may post.
+       • update:  any authenticated user may react (likes/helpful)
+                  or add replies (arrayUnion).  Author and admin may
+                  update their own full post content.
+       • delete:  the post author (authorUid) or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /communityPosts/{postId} {
+      allow read:   if true;
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['authorUid','content'])
+                    && request.resource.data.authorUid == request.auth.uid
+                    && request.resource.data.content.size() <= 5000;
+      /* Authors can edit their own post content only; anyone can increment social counters.
+         Numeric counters (likes, helpful, reactionCount, views) are capped to ±1 per update
+         to prevent bulk self-inflation. replies and reactions are arrays/maps — no numeric cap. */
+      allow update: if isAuthed()
+                    && (
+                         (resource.data.authorUid == request.auth.uid
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['content','title','edited','editedAt','tags','images']))
+                      || (request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['likes','helpful','replies','reactions','reactionCount','views'])
+                          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['likes'])
+                              || (request.resource.data.likes is number
+                                  && request.resource.data.likes >= resource.data.likes - 1
+                                  && request.resource.data.likes <= resource.data.likes + 1))
+                          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['helpful'])
+                              || (request.resource.data.helpful is number
+                                  && request.resource.data.helpful >= resource.data.helpful - 1
+                                  && request.resource.data.helpful <= resource.data.helpful + 1))
+                          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['views'])
+                              || (request.resource.data.views is number
+                                  && request.resource.data.views == resource.data.views + 1))
+                          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactionCount'])
+                              || (request.resource.data.reactionCount is number
+                                  && request.resource.data.reactionCount >= resource.data.reactionCount - 1
+                                  && request.resource.data.reactionCount <= resource.data.reactionCount + 1))
+                         )
+                    );
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.authorUid == request.auth.uid);
+    }
+
+    match /communityGroups/{groupId} {
+      allow read:   if true;
+      allow create: if isAuthed()
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
+      allow delete: if isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
+    }
+
+    match /userProgress/{uid}/{subcol}/{docId} {
+      allow read, write: if isAdmin() || (isAuthed() && request.auth.uid == uid);
+    }
+
+    match /userSessions/{sessionId} {
+      allow create: if isAuthed()
+                    && request.auth.token.email != null
+                    && request.resource.data.userEmail == request.auth.token.email;
+      allow read:   if isAdmin()
+                    || (isAuthed()
+                        && request.auth.token.email != null
+                        && resource.data.userEmail == request.auth.token.email);
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && request.auth.token.email != null
+                        && resource.data.userEmail == request.auth.token.email);
+      allow delete: if isAdmin()
+                    || (isAuthed()
+                        && request.auth.token.email != null
+                        && resource.data.userEmail == request.auth.token.email);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BOOKING FEES  (SokoniPay — all channel revenue records)
+       Written by sokoni-pay.js on every payment event.
+       • create:  any authenticated user (client or provider paying deposit)
+       • read:    admin only — revenue data is sensitive
+       • update/delete: admin only
+    ══════════════════════════════════════════════════════════════ */
+    match /bookingFees/{feeId} {
+      /* uid in the payload must match the caller — prevents writing fee records on behalf of others */
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['uid','amount','type'])
+                    && request.resource.data.uid == request.auth.uid;
+      allow read:   if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* commissionLedger — authoritative rule is in the Revenue Engine block below (~line 1375).
+       Written exclusively by Cloud Functions (intasendWebhook, generateInvoice).
+       Seller reads own entries; admin reads all. No client writes. */
+
+    /* ══════════════════════════════════════════════════════════════
+       BROADCAST NOTIFICATIONS  (admin → all users push targets)
+       Written server-side by Cloud Functions (KASS/admin tools).
+       Users cannot write — admin and functions only.
+    ══════════════════════════════════════════════════════════════ */
+    match /broadcast_notifications/{notifId} {
+      allow create, update, delete: if isAdmin();
+      allow read: if isAdmin()
+                  || (isAuthed() && (
+                       resource.data.targetUid == request.auth.uid
+                    || resource.data.targetUid == 'broadcast'
+                  ));
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DELETED PRODUCTS  (soft-delete audit trail)
+       Written server-side by Cloud Functions when admin deletes a
+       product. Read and delete are admin-only.
+    ══════════════════════════════════════════════════════════════ */
+    match /deleted_products/{productId} {
+      allow create, update: if isAdmin();
+      allow read, delete:   if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       UNBOXING REVIEWS  (unboxing.html video reviews)
+       Public read — anyone can browse unboxing content.
+       • create: authenticated users only; uid field must match auth uid.
+       • update: author or admin; uid field frozen.
+       • delete: author or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /unboxingReviews/{reviewId} {
+      allow read:   if true;
+      allow create: if claimsOwner();
+      allow update: if (isAdmin() || isOwner()) && uidUnchanged();
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SHOP EMPLOYEES  (created by seller.js addEmployee())
+       • Employee reads their own record (by UID).
+       • Shop owner reads/writes/deletes employees in their shop.
+       • Admin has full access.
+    ══════════════════════════════════════════════════════════════ */
+    match /shopEmployees/{empUid} {
+      allow read:   if isAdmin()
+                    || request.auth.uid == empUid
+                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
+      allow create: if isAdmin()
+                    || (isAuthed() && request.resource.data.shopOwnerId == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SELLERS
+       Store profiles created by the seller wizard.
+       • create / update: only the owner (uid must match auth uid).
+       • read: public — ministore and category pages read seller profiles.
+       • delete: admin-only.
+    ══════════════════════════════════════════════════════════════ */
+    match /sellers/{uid} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.auth.uid == uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && request.auth.uid == uid && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SELLER BROADCASTS
+       Push notifications sent by sellers to their followers.
+       • create: only the seller who owns the broadcast path.
+       • read:   any authenticated user (buyers following the seller).
+       • delete: the seller who created it, or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /sellerBroadcasts/{sellerName}/broadcasts/{broadcastId} {
+      allow read:   if isAuthed();
+      /* Path segment is seller display-name, not UID.
+         Ownership is verified via sellerUid field in the payload. */
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['sellerUid'])
+                    && request.resource.data.sellerUid == request.auth.uid;
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LANDLORD DATA
+       Stores the landlord's property/unit list.
+       Only the owner can read or write their own data.
+    ══════════════════════════════════════════════════════════════ */
+    match /landlordData/{uid} {
+      allow read, write: if isAuthed() && request.auth.uid == uid;
+      allow read: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FOLLOWS
+       Records buyer → seller follows.
+       • create / delete: authenticated user, own document only.
+       • read: authenticated user, own document or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /follows/{followId} {
+      allow read:   if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*'));
+      allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*');
+      allow delete: if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*'));
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DRIVER RATINGS  (left by passengers after trips/deliveries)
+       • create: authenticated passenger (claimsOwner); one per ref.
+       • read:   admin, or the rated driver (driverId match).
+       • update/delete: admin only — ratings are immutable for users.
+    ══════════════════════════════════════════════════════════════ */
+    match /driverRatings/{ratingId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.driverId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RIDE DRIVERS  (online/offline driver registry + live GPS)
+       Public read — passengers and the matching algorithm need
+       to see which drivers are online and their GPS coordinates.
+       • create/update: driver can only write their own document
+         (uid field must match auth uid on both old and new data).
+       • delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /rideDrivers/{driverId} {
+      allow read:   if true;
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.uid         == request.auth.uid
+                        && request.resource.data.uid == request.auth.uid
+                        && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RIDE REQUESTS  (passenger → driver ride bookings)
+       • create:  claimsOwner() — uid in payload must match auth uid.
+       • read:    requester (uid), assigned driver, or admin.
+       • update:  requester (cancel) or assigned driver (accept /
+                  arrived / start / complete), uid frozen.
+       • delete:  admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /rideRequests/{reqId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid              == request.auth.uid)
+                    || (isAuthed() && resource.data.assignedDriverId == request.auth.uid);
+      /* SECURITY: field-locked per role — rider cannot alter fare/pickup; driver cannot
+         alter uid/origin/destination or financials. */
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status','cancelReason','updatedAt']))
+                    || (isAuthed() && resource.data.assignedDriverId == request.auth.uid
+                        && uidUnchanged()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status','assignedDriverId','driverNote',
+                                                      'updatedAt','acceptedAt','arrivedAt',
+                                                      'startedAt','completedAt','driverLocation']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PACKAGE REQUESTS  (delivery orders — regular + marketplace)
+       • create:  claimsOwner() — uid in payload must match auth uid.
+       • read:    buyer (uid / buyerUid), seller (sellerUid),
+                  assigned driver, or admin.
+       • update:  buyer (cancel, confirm receipt), seller (confirm
+                  ready), assigned driver (pickup / in-transit /
+                  deliver), or admin.  uid frozen on all user writes.
+       • delete:  admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /packageRequests/{pkgId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid              == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerUid         == request.auth.uid)
+                    || (isAuthed() && resource.data.sellerUid        == request.auth.uid)
+                    || (isAuthed() && resource.data.assignedDriverId == request.auth.uid);
+      /* SECURITY: field-locked per role — seller cannot alter delivery fee paid by buyer;
+         driver cannot alter package contents, price, or addresses. */
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status','cancelReason','confirmedAt','updatedAt']))
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid
+                        && uidUnchanged()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status','sellerNote','readyAt','updatedAt']))
+                    || (isAuthed() && resource.data.assignedDriverId == request.auth.uid
+                        && uidUnchanged()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status','driverNote','updatedAt',
+                                                      'pickedUpAt','deliveredAt','etaMin']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — ARTISTS / CREATORS
+       Public read (buyers browse). Write/update: owner or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /entArtists/{artistId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — EVENTS
+       Public read for published events. Organizer creates/updates.
+       Admin can approve / cancel.
+    ══════════════════════════════════════════════════════════════ */
+    match /entEvents/{eventId} {
+      allow read:   if true;
+      allow create: if claimsOwner();
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — TICKETS
+       Buyer reads their own tickets; event organizer reads attendees;
+       admin reads all. Ticket is created on purchase. Validation
+       (marking used) may be done by admin or organizer.
+    ══════════════════════════════════════════════════════════════ */
+    match /entTickets/{ticketId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid)
+                    || (isAuthed() && resource.data.organizerUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.organizerUid == request.auth.uid
+                        && uidUnchanged());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — VENUES
+       Public read. Venue owner creates/updates. Admin full access.
+    ══════════════════════════════════════════════════════════════ */
+    match /entVenues/{venueId} {
+      allow read:   if true;
+      allow create: if claimsOwner();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — VENUE BOOKINGS
+       Booker and venue owner read their own. Admin reads all.
+    ══════════════════════════════════════════════════════════════ */
+    match /entVenueBookings/{bookId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid)
+                    || (isAuthed() && resource.data.venueOwnerUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.venueOwnerUid == request.auth.uid
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — ARTIST BOOKINGS
+       Booker and artist read their own booking. Admin reads all.
+    ══════════════════════════════════════════════════════════════ */
+    match /entArtistBookings/{bookId} {
+      allow create: if claimsOwner();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid)
+                    || (isAuthed() && resource.data.artistUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.artistUid == request.auth.uid
+                        && uidUnchanged());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — REVIEWS
+       Public read for approved reviews. Author creates; admin approves.
+    ══════════════════════════════════════════════════════════════ */
+    match /entReviews/{reviewId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERTAINMENT HUB — DIGITAL CONTENT
+       Published content is publicly readable. Creator manages own.
+    ══════════════════════════════════════════════════════════════ */
+    match /entContent/{contentId} {
+      allow read:   if resource.data.status == 'active' || isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DELIVERY HUB — DELIVERIES
+       Sender owns their delivery; assigned rider can update status
+       fields only; admin has full access.
+    ══════════════════════════════════════════════════════════════ */
+    match /deliveries/{deliveryId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.senderUid   == request.auth.uid)
+                   || (isAuthed() && resource.data.assignedRiderId == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.senderUid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.senderUid   == request.auth.uid
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                            .hasAny(['senderUid','deliveryFee','proofPIN']))
+                    || (isAuthed() && resource.data.assignedRiderId == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['status','timeline','updatedAt','assignedRiderId',
+                                      'riderName','riderPhone','riderAt','pickedUpAt',
+                                      'deliveredAt','etaMin']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DELIVERY HUB — DELIVERY RIDERS
+       Rider owns their profile (uid == riderId); public read for
+       dispatch matching; admin full access.
+    ══════════════════════════════════════════════════════════════ */
+    match /deliveryRiders/{riderId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.auth.uid == riderId
+                    && !request.resource.data.keys().hasAny(['approved','verified','suspended','banned']);
+      allow update: if isAdmin()
+                    || (isAuthed() && request.auth.uid == riderId
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasAny(['approved','verified','suspended','banned']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DELIVERY HUB — RIDER LOCATIONS
+       Rider writes their own location; public read for tracking.
+    ══════════════════════════════════════════════════════════════ */
+    match /deliveryLocations/{riderId} {
+      allow read:   if true;
+      allow write:  if isAdmin()
+                    || (isAuthed() && request.auth.uid == riderId);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DELIVERY HUB — DELIVERY PROOFS
+       Rider (assignedRiderId) creates the proof; sender + rider +
+       admin can read it. No edits or deletes after creation.
+    ══════════════════════════════════════════════════════════════ */
+    match /deliveryProofs/{proofId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.riderId    == request.auth.uid)
+                   || (isAuthed() && resource.data.senderUid  == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.riderId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SHOP SETTINGS — Daraja / Paybill credentials per seller
+       Only the seller (owner) can read/write their own settings.
+       Cloud Functions (admin SDK) bypass these rules.
+    ══════════════════════════════════════════════════════════════ */
+    match /shopSettings/{sellerUid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+      allow write: if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       POS PAYMENTS — Daraja STK push results
+       Seller OR the buyer who initiated (callerUid) can read.
+       Only Cloud Functions (admin SDK) write to this collection.
+    ══════════════════════════════════════════════════════════════ */
+    match /posPayments/{checkoutId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerUid == request.auth.uid)
+                   || (isAuthed() && resource.data.callerUid == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SELLER PAYMENTS — Confirmed M-Pesa receipts per seller
+       Written by Cloud Functions on successful Daraja callback.
+       Seller reads their own history; admin reads all.
+    ══════════════════════════════════════════════════════════════ */
+    match /sellerPayments/{paymentId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerUid  == request.auth.uid)
+                   || (isAuthed() && resource.data.callerUid  == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       REVENUE ENGINE COLLECTIONS
+    ══════════════════════════════════════════════════════════════ */
+
+    /* revenueConfig — admin writes, authed users read (needed to show rates in UI) */
+    match /revenueConfig/{configId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && configId == ("seller_" + request.auth.uid))
+                   || (isAuthed() && configId == "global")
+                   || (isAuthed() && configId.matches("hub_.*"));
+      allow write: if isAdmin();
+    }
+
+    /* subscriptionPlans — public read (pricing page), admin write */
+    match /subscriptionPlans/{planId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    /* sellerSubscriptions — seller reads own, admin reads all, Cloud Functions write */
+    match /sellerSubscriptions/{sellerUid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+      allow write: if isAdmin();
+    }
+
+    /* commissionLedger — seller reads own entries, admin reads all, Cloud Functions write */
+    match /commissionLedger/{entryId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    /* featuredListings — seller reads own, admin reads all */
+    match /featuredListings/{featureId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerUid == request.auth.uid)
+                   || resource.data.status == "active";
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* sokoAds — seller reads own campaigns, admin reads all */
+    match /sokoAds/{adId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* adImpressions — admin reads, Cloud Functions write */
+    match /adImpressions/{impId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /* invoices — seller reads own, admin reads all, Cloud Functions write */
+    match /invoices/{invoiceId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    /* sellerBilling — seller reads own monthly summaries, admin reads all */
+    match /sellerBilling/{sellerUid}/monthly/{period} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
+      allow write: if isAdmin();
+    }
+
+    /* deliveryFees — admin reads, Cloud Functions write */
+    match /deliveryFees/{feeId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    /* ── Community Hub collections — second block removed (duplicate; authoritative rule is above) ── */
+    match /communityEvents/{eventId} {
+      allow read: if true;
+      allow create: if isAuthed() && request.resource.data.organizerUid == request.auth.uid;
+      allow update: if isAdmin() || (isAuthed() && resource.data.organizerUid == request.auth.uid && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /communityRecommendations/{recId} {
+      allow read: if true;
+      allow create: if isAuthed() && request.resource.data.askerUid == request.auth.uid;
+      /* SECURITY: asker update field-locked — cannot change askerUid or inflate response counts. */
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.askerUid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['content','title','tags','edited','editedAt']))
+                    || (isAuthed() && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['responseCount','responses']));
+      allow delete: if isAdmin();
+    }
+    match /communityRecResponses/{respId} {
+      allow read: if true;
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['responderUid','content'])
+                    && request.resource.data.responderUid == request.auth.uid;
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.responderUid == request.auth.uid);
+    }
+    match /communityReports/{reportId} {
+      /* SECURITY: uid required and bound to caller — prevents anonymous/forged reports. */
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['uid','targetId','reason'])
+                    && request.resource.data.uid == request.auth.uid;
+      allow read, update: if isModerator();
+      allow delete: if isAdmin();
+    }
+
+    /* leadFees — seller reads own, admin reads all; seller can only create records for themselves */
+    match /leadFees/{leadId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.sellerUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    /* b2bFees — seller reads own, admin reads all; seller can only create records for themselves */
+    match /b2bFees/{feeId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.sellerUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LOYALTY POINTS  (users/{uid}/loyalty/points subcollection)
+       Points are synced from loyalty.html after each award/redemption.
+       • read:   owner or admin.
+       • write:  owner may write ONLY if total does not exceed the
+                 existing stored total by more than 500 in one write
+                 (hard-caps per-write injection attacks).  Decreases
+                 (redemptions) are always allowed.  Admin bypasses cap.
+       First write (no existing doc): capped at 500 per write.
+    ══════════════════════════════════════════════════════════════ */
+    match /users/{uid}/loyalty/{docId} {
+      allow read: if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      /* Loyalty writes are admin-only from client; Cloud Functions award points server-side.
+         Users may only redeem (decrease total) — never self-award. */
+      allow write: if isAdmin()
+                   || (isAuthed()
+                       && request.auth.uid == uid
+                       && resource != null
+                       && request.resource.data.total <= resource.data.total);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       VERIFICATIONS  (seller identity verification decisions)
+       Written by admin only (verification team approves/rejects).
+       • read:  any authenticated user — product.js checks this to
+                show the ✅ Verified badge.
+       • write: admin only — prevents self-approval.
+    ══════════════════════════════════════════════════════════════ */
+    match /verifications/{sellerUid} {
+      allow read:   if isAuthed();
+      /* Users may submit their own request (pending only, no verifiedAt self-set).
+         Only admins can approve (status → 'approved') or reject. */
+      allow create: if isAuthed()
+                    && request.auth.uid == sellerUid
+                    && request.resource.data.status == 'pending'
+                    && !request.resource.data.keys().hasAny(['verifiedAt','approvedBy']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ── Home Services Hub collections ── */
+    /* Bookings — authenticated users only; phone must match JWT claim or be provided as guest data */
+    match /homeServiceBookings/{bookingId} {
+      /* SECURITY: uid required on create and bound to caller; read uses uid not phone
+         (phone can be spoofed in payload; uid comes from JWT). */
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['uid','name','phone','service'])
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    /* Provider registrations — must be authenticated to register as a provider */
+    match /homeServiceProviders/{provId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    /* Reviews — must be authenticated; uid + providerId required; rating validated. */
+    match /homeServiceReviews/{revId} {
+      allow read:   if true;
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['uid','providerId','rating'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.rating is number
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5;
+      allow update, delete: if isAdmin();
+    }
+    /* Lead fees (WhatsApp contact tracking) — authenticated create; uid bound to caller */
+    match /homeServiceLeads/{leadId} {
+      allow read:   if isAdmin();
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['phone','service','uid'])
+                    && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    /* ── TECH HUB ── */
+    match /techITRequests/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    match /techStartups/{docId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /techJobs/{docId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /techLeads/{docId} {
+      allow read:   if isAdmin();
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['name','phone']);
+      allow update, delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SOKONI WALLET  (wallets/{uid} — one doc per user)
+       • read/write: owner only (uid == auth.uid).
+       • balance field: Firestore-side write validation enforces
+         balance >= 0 to prevent overdrafts.
+       • admin: full read for support/reconciliation.
+    ══════════════════════════════════════════════════════════════ */
+    match /wallets/{walletUid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == walletUid);
+      /* Wallet creation: owner only, balance must start at 0. */
+      allow create: if isAuthed() && request.auth.uid == walletUid
+                    && request.resource.data.balance == 0;
+      /* Wallet update:
+         - Admin (Cloud Functions use admin SDK, bypass rules entirely).
+         - Owner may ONLY decrease balance (payments, withdrawals, escrow debits).
+           Balance cannot increase from client — top-ups must go through
+           Cloud Functions so M-Pesa confirmation is server-verified. */
+      allow update: if isAdmin()
+                    || (isAuthed() && request.auth.uid == walletUid
+                        && request.resource.data.balance >= 0
+                        && request.resource.data.balance <= resource.data.balance);
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       WALLET TRANSACTIONS  (walletTxns/{txId})
+       • create: authenticated users, uid in payload must match.
+       • read: owner or admin.
+       • update/delete: admin only — transactions are immutable for users.
+    ══════════════════════════════════════════════════════════════ */
+    match /walletTxns/{txId} {
+      allow create: if isAuthed()
+                    && request.resource.data.uid  == request.auth.uid
+                    && request.resource.data.type in ['debit','payment','withdrawal'];
+      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ESCROWS  (escrows/{escrowId})
+       • create: authenticated buyer (buyerUid must match).
+       • read: buyer or seller involved, or admin.
+       • update: buyer/seller for limited status changes; admin for all.
+       • delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /escrows/{escrowId} {
+      allow create: if isAuthed() && request.resource.data.buyerUid == request.auth.uid;
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.buyerUid  == request.auth.uid
+                                    || resource.data.sellerUid == request.auth.uid));
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.buyerUid  == request.auth.uid
+                                    || resource.data.sellerUid == request.auth.uid)
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['status','updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BUSINESSES  (businesses/{bizId})
+       • read: public.
+       • create: authenticated user; uid in payload must match.
+       • update: owner (uid match) + uid field frozen, or admin.
+       • delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /businesses/{bizId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+
+      /* POS transaction sync — SmartPOS writes per-sale records here */
+      match /pos_transactions/{txId} {
+        allow read:   if isAdmin()
+                      || (isAuthed() && request.auth.uid == bizId)
+                      || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+        allow create: if isAuthed()
+                      && request.auth.uid == bizId
+                      && request.resource.data.sellerUid == request.auth.uid;
+        allow update, delete: if isAdmin();
+      }
+
+      /* Terminal device registry — SmartPOS device pairing & management */
+      match /terminals/{terminalId} {
+        allow read:            if isAdmin() || (isAuthed() && request.auth.uid == bizId);
+        allow create, update:  if isAuthed() && request.auth.uid == bizId;
+        allow delete:          if isAdmin() || (isAuthed() && request.auth.uid == bizId);
+      }
+
+      /* Terminal payment recovery queue — offline transaction sync */
+      match /terminal_queue/{queueId} {
+        allow read:   if isAdmin() || (isAuthed() && request.auth.uid == bizId);
+        allow create: if isAuthed() && request.auth.uid == bizId;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BUSINESS VIEW COUNTS  (bizViews/{bizId})
+       Increment-only view counter; no sensitive data.
+       • read: public (for analytics display).
+       • write: any authenticated user (increments only; no raw set).
+       • admin: full control.
+    ══════════════════════════════════════════════════════════════ */
+    match /bizViews/{bizId} {
+      allow read:   if true;
+      /* Constrain create: only allowed fields and viewCount must start at 1 */
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasOnly(['viewCount','lastViewAt'])
+                    && request.resource.data.viewCount == 1;
+      allow update: if isAuthed()
+                    && request.resource.data.diff(resource.data)
+                       .affectedKeys().hasOnly(['viewCount','lastViewAt']);
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BUSINESS TEAM  (businessTeam/{memberId})
+       • read: public.
+       • create/update: business owner (ownerUid == auth.uid) or admin.
+       • delete: business owner or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /businessTeam/{memberId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.ownerUid == request.auth.uid && uidUnchanged()
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid']));
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       VERIFICATION REQUESTS  (verificationRequests/{reqId})
+       Users submit their own applications; admin reviews them.
+       • create: authenticated; applicantUid must match auth.uid.
+       • read: applicant (own) or admin.
+       • update: admin only (status, notes, rejectionReason).
+       • delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /verificationRequests/{reqId} {
+      allow create: if isAuthed()
+                    && request.resource.data.applicantUid == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.applicantUid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ADMIN LOG  (adminLog/{logId})
+       Append-only audit trail — only admins may read or create.
+       Super admins can purge old entries.
+    ══════════════════════════════════════════════════════════════ */
+    match /adminLog/{logId} {
+      allow create: if isAdmin();
+      allow read:   if isAdmin();
+      allow update: if false;
+      allow delete: if isSuperAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PLATFORM METRICS  (platformMetrics/{metricId})
+       Cloud Functions and admin writes aggregate counters here.
+       The monitoring dashboard reads these for lightweight stats.
+       • write: admin / Cloud Functions (server SDK bypasses rules).
+       • read:  moderator and above.
+    ══════════════════════════════════════════════════════════════ */
+    match /platformMetrics/{metricId} {
+      allow read:  if isModerator();
+      allow write: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ROLE GRANTS LOG  (roleGrants/{grantId})
+       Immutable log of every role grant / revoke action.
+       Written by the grantPlatformRole / revokePlatformRole functions.
+    ══════════════════════════════════════════════════════════════ */
+    match /roleGrants/{grantId} {
+      allow read:           if isAdmin();
+      allow create:         if isAdmin();
+      allow update, delete: if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       MODERATION FLAGS  (flags/{flagId})
+       Authenticated users can report content; moderators manage queue.
+    ══════════════════════════════════════════════════════════════ */
+    match /flags/{flagId} {
+      allow create: if isAuthed()
+                    && request.resource.data.reporterUid == request.auth.uid;
+      allow read:   if isModerator();
+      allow update: if isModerator();
+      allow delete: if isAdmin();
+    }
+
+    /* ── Property Inquiries (WhatsApp contact tracking) ── */
+    match /propertyInquiries/{docId} {
+      /* uid field required and bound to caller — prevents forged inquiries with arbitrary phone numbers */
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['phone','propertyId','uid'])
+                    && request.resource.data.uid == request.auth.uid;
+      allow read:   if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    /* ── Property Viewings (schedule viewing requests) ── */
+    match /propertyViewings/{docId} {
+      /* uid field required and bound to caller — prevents forged viewing requests */
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['propertyId','date','time','uid'])
+                    && request.resource.data.uid == request.auth.uid;
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       EMPLOYEE INVITE SYSTEM
+    ══════════════════════════════════════════════════════════════ */
+
+    /* Platform invites — token IS the secret; all writes via Admin SDK.
+       get  = read one doc by known token (fine — token is the secret)
+       list = enumerate the collection (admin only — prevents email harvesting) */
+    match /platformInvites/{token} {
+      allow get:    if true;
+      allow list:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* Platform employees — admin sees all; employee sees own record */
+    match /platformEmployees/{uid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write:  if false;
+    }
+
+    /* Shop invites — token IS the secret; all writes via Admin SDK.
+       get  = read one doc by known token (join.html flow)
+       list = seller may list their own pending invites; admin sees all */
+    match /shopInvites/{token} {
+      allow get:    if true;
+      allow list:   if isAdmin()
+                    || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PAYMENTS  (IntaSend STK Push payment records)
+       Written by initiateSTKPush Cloud Function.
+       Updated by intasendWebhook Cloud Function on confirmation.
+       Client may NOT approve its own payment — only the webhook can
+       set status to COMPLETE.
+    ══════════════════════════════════════════════════════════════ */
+    match /payments/{paymentId} {
+      /* Owner can read their own payment status for polling */
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      /* Client creates the initial pending record (via Cloud Function call) */
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == "PENDING"
+                    && request.resource.data.keys().hasAll(['uid','amount','ref','status']);
+      /* CRITICAL: clients may NOT update payment status.
+         Only Cloud Functions (admin SDK) may set status to COMPLETE/FAILED. */
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SUBSCRIPTIONS  (provider plan entitlements)
+       Written exclusively by activateSubscription Cloud Function
+       after verifying payment completion.
+       Client may read own subscription to display UI.
+    ══════════════════════════════════════════════════════════════ */
+    match /subscriptions/{uid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      /* Client may NOT write subscriptions — must go through Cloud Function */
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       VOUCHERS  (admin-created discount codes)
+       Voucher redemption is handled atomically by redeemVoucher CF.
+       usageCount and redemptions array are updated by the CF only.
+    ══════════════════════════════════════════════════════════════ */
+    match /vouchers/{code} {
+      /* Any authenticated user may preview a voucher before redeeming */
+      allow read:   if isAuthed();
+      /* Only admins / Cloud Functions may create or modify vouchers */
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* Voucher redemption history — Cloud Function writes, owner reads */
+    match /voucherRedemptions/{redemptionId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       HYPER-SCALE PHASE 11: Client metrics — write from SokoniMonitor CF,
+       read only by admins. Clients never write directly to this collection.
+    ══════════════════════════════════════════════════════════════ */
+    match /clientMetrics/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false; // recordMetric CF only
+    }
+
+    /* Trending products — Cloud Function writes, anyone can read */
+    match /trending/{hub} {
+      allow read:  if true;
+      allow write: if false; // generateTrending CF only
+    }
+
+    /* platformMetrics rule is defined above — no duplicate needed here. */
+
+    /* Mail queue — sendInvoiceEmail CF writes audit entries here.
+       Authenticated users cannot read others' mail logs. */
+    match /mailQueue/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false; // sendInvoiceEmail CF only
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ENTERPRISE EMAIL SYSTEM
+       All email collections are written exclusively by Cloud Functions.
+       Clients use onCall functions (sendBroadcastEmail, resendEmail,
+       updateEmailPreferences) — never direct Firestore writes.
+    ══════════════════════════════════════════════════════════════ */
+
+    /* Full delivery log — admin read-only */
+    match /emailLogs/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false; // emailTriggers CF only
+    }
+
+    /* Email queue — admin read, no client write */
+    match /emailQueue/{queueId} {
+      allow read:  if isAdmin();
+      allow write: if false; // emailTriggers CF only
+    }
+
+    /* Bounce suppression list — admin read/delete only */
+    match /emailBounces/{email} {
+      allow read:   if isAdmin();
+      allow delete: if isAdmin();
+      allow write:  if false; // emailWebhook CF only
+    }
+
+    /* Per-user email preferences — user can read/write own record */
+    match /emailPreferences/{uid} {
+      allow read:  if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid;
+      allow read:  if isAdmin();
+    }
+
+    /* Email analytics aggregates — admin read only */
+    match /emailAnalytics/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false; // processEmailQueue CF only
+    }
+
+    /* Email event log (opens, clicks) — admin read only */
+    match /emailEvents/{eventId} {
+      allow read:  if isAdmin();
+      allow write: if false; // emailWebhook CF only
+    }
+
+    /* Notification history — user reads own records */
+    match /notificationHistory/{docId} {
+      allow read:  if request.auth != null &&
+                      resource.data.uid == request.auth.uid;
+      allow write: if false; // server-side only
+      allow read:  if isAdmin();
+    }
+
+    /* ── DMARC Reports — admin-only ───────────────────────────────── */
+
+    /* Aggregate DMARC reports parsed from XML */
+    match /dmarcReports/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false; // processDmarcReport CF only
+    }
+
+    /* Sub-collection: individual IP records within each report */
+    match /dmarcReports/{reportId}/records/{ipId} {
+      allow read:  if isAdmin();
+      allow write: if false; // processDmarcReport CF only
+    }
+
+    /* DMARC policy failure alerts */
+    match /dmarcAlerts/{alertId} {
+      allow read:  if isAdmin();
+      allow update: if isAdmin() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(["resolved", "resolvedAt", "resolvedBy"]);
+      allow write: if false; // processDmarcReport CF only (create)
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       JOBS MARKETPLACE
+    ══════════════════════════════════════════════════════════════ */
+
+    /* Job listings — anyone can read active jobs; authenticated users post */
+    match /jobs/{jobId} {
+      allow read:  if resource.data.active == true || isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() > 0
+                    && request.resource.data.title.size() <= 120
+                    && request.resource.data.company is string
+                    && request.resource.data.description is string
+                    && request.resource.data.description.size() <= 5000
+                    && request.resource.data.contactEmail is string
+                    && !('applicants' in request.resource.data)
+                       || request.resource.data.applicants == 0;
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && request.resource.data.uid == resource.data.uid
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                             .hasAny(['applicants','featured','plan','uid']));
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* Job applications — applicant writes own; employer and admin read */
+    match /jobApplications/{appId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if request.resource.data.keys().hasAll(['jobId','name','email','phone','coverLetter','appliedAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 100
+                    && request.resource.data.coverLetter.size() <= 3000
+                    && request.resource.data.status == 'pending';
+      allow update: if isAdmin(); // status changes (shortlist/reject) by employer via CF
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       EDUCATION HUB
+       • read:   public if active==true; owner or admin otherwise.
+       • create: authenticated owner; blocks admin-privilege fields.
+       • update: admin or owner (cannot touch featured/active/verified).
+       • delete: admin or owner.
+    ══════════════════════════════════════════════════════════════ */
+    match /education/{docId} {
+      allow read:   if resource.data.active == true || isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 120
+                    && request.resource.data.category is string
+                    && request.resource.data.description is string
+                    && request.resource.data.description.size() <= 3000
+                    && !('featured' in request.resource.data)
+                    && !('active'   in request.resource.data)
+                    && !('verified' in request.resource.data);
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.uid == request.auth.uid
+                        && resource.data.uid == request.resource.data.uid
+                        && !('featured' in request.resource.data)
+                        && !('verified' in request.resource.data)
+                        && !('active'   in request.resource.data));
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SMARTPOS — ENTERPRISE RETAIL COLLECTIONS
+       All POS data is seller-scoped via the `sellerId` field.
+       The `sellerId` must match the authenticated user's UID.
+       Cashiers authenticate locally via PIN — they do NOT have
+       their own Firebase Auth UID. All Firestore writes happen
+       under the seller's Firebase Auth session (via pos-sync.js).
+
+       Security model:
+         • create: authenticated seller who owns the sellerId field
+         • read:   seller who owns the data, or admin
+         • update: admin only (prevents client-side tampering)
+         • delete: admin only (audit trail must never be destroyed)
+
+       POS transactions are immutable after creation.
+       Refunds and voids are NEW documents, not transaction updates.
+    ══════════════════════════════════════════════════════════════ */
+
+    function isPosOwner() {
+      return isAuthed() && resource.data.sellerId == request.auth.uid;
+    }
+
+    function claimsPosOwner() {
+      return isAuthed() && request.resource.data.sellerId == request.auth.uid;
+    }
+
+    /* Transactions — immutable after creation (refunds = new posRefunds doc) */
+    match /posTransactions/{txnId} {
+      allow create: if claimsPosOwner()
+                    && request.resource.data.total is number
+                    && request.resource.data.total >= 0
+                    && request.resource.data.status in ['completed', 'failed', 'pending']
+                    && !('adminNote' in request.resource.data);
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isAdmin(); /* admin-only: corrections, reconciliation */
+      allow delete: if false;    /* never — audit trail is permanent */
+    }
+
+    /* Products — seller can manage their own product catalogue */
+    match /posProducts/{productId} {
+      allow create: if claimsPosOwner()
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.price is number
+                    && request.resource.data.price >= 0;
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isPosOwner() || isAdmin();
+      allow delete: if isPosOwner() || isAdmin();
+    }
+
+    /* Stock Movements — append-only audit log of every inventory change */
+    match /posStockMovements/{moveId} {
+      allow create: if claimsPosOwner()
+                    && request.resource.data.productId is string
+                    && request.resource.data.qty is number;
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if false;  /* immutable — stock history cannot be edited */
+      allow delete: if false;
+    }
+
+    /* Shifts — seller-scoped session records */
+    match /posShifts/{shiftId} {
+      allow create: if claimsPosOwner();
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isPosOwner() || isAdmin(); /* closing shift updates status */
+      allow delete: if isAdmin();
+    }
+
+    /* Customers — seller's customer CRM (scoped to their POS) */
+    match /posCustomers/{customerId} {
+      allow create: if claimsPosOwner();
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isPosOwner() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* Refunds — new document per refund, immutable after creation */
+    match /posRefunds/{refundId} {
+      allow create: if claimsPosOwner()
+                    && request.resource.data.originalTxnId is string
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0;
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* Voids — immutable void records */
+    match /posVoids/{voidId} {
+      allow create: if claimsPosOwner()
+                    && request.resource.data.originalTxnId is string;
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* Cash floats — shift opening/closing cash counts */
+    match /posCashFloats/{floatId} {
+      allow create: if claimsPosOwner()
+                    && request.resource.data.amount is number;
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* Device registry — POS terminals registered per seller */
+    match /posDevices/{deviceId} {
+      allow create: if claimsPosOwner();
+      allow read:   if isPosOwner() || isAdmin();
+      allow update: if isPosOwner() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* Platform-level SmartPOS config — admin-only */
+    match /posConfig/{configId} {
+      allow read:   if isAuthed();
+      allow write:  if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       INVENTORY MODULE
+       Tenant-scoped under tenants/{tenantId}/inventory_*
+       Stock mutations are locked to Cloud Functions only (admin SDK).
+       UI reads use tenant membership via claims.
+    ══════════════════════════════════════════════════════════════ */
+    match /tenants/{tenantId}/{document=**} {
+      function isTenantMember() {
+        return request.auth != null &&
+               (request.auth.token.tenantId == tenantId || isAdmin());
+      }
+      function isTenantAdmin() {
+        return isAdmin() || request.auth.token.get('tenantAdmin', false) == true;
+      }
+
+      /* ── Products: sellers write, everyone reads ── */
+      match /inventory_products/{productId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() > 0
+                      && request.resource.data.name.size() <= 200
+                      && request.resource.data.tenantId == tenantId
+                      && !('deletedAt' in request.resource.data);
+        allow update: if isTenantMember()
+                      && resource.data.tenantId == tenantId
+                      && request.resource.data.tenantId == tenantId;
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Stock Levels: Cloud Functions write, members read ── */
+      match /inventory_levels/{levelId} {
+        allow read:   if isTenantMember();
+        allow write:  if false; // Mutations only via Cloud Functions
+      }
+
+      /* ── Movements: Cloud Functions write, members read ── */
+      match /inventory_movements/{mvId} {
+        allow read:   if isTenantMember();
+        allow write:  if false; // Audit-safe: only Cloud Functions write
+      }
+
+      /* ── Purchase Orders: tenant members manage ── */
+      match /inventory_purchaseOrders/{poId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.supplierId is string
+                      && request.resource.data.status == 'draft';
+        allow update: if isTenantMember()
+                      && resource.data.tenantId == tenantId
+                      && !request.resource.data.diff(resource.data)
+                         .affectedKeys().hasAny(['createdBy', 'tenantId']);
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Suppliers: members create, admins delete ── */
+      match /inventory_suppliers/{supplierId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.name is string
+                      && request.resource.data.tenantId == tenantId;
+        allow update: if isTenantMember()
+                      && resource.data.tenantId == tenantId;
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Warehouses: admins only ── */
+      match /inventory_warehouses/{warehouseId} {
+        allow read:   if isTenantMember();
+        allow write:  if isTenantAdmin();
+      }
+
+      /* ── Stock Audits: members create/read, CFs complete ── */
+      match /inventory_audits/{auditId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.status == 'in_progress';
+        allow update: if isTenantMember()
+                      && resource.data.tenantId == tenantId
+                      && resource.data.status == 'in_progress'
+                      && !request.resource.data.diff(resource.data)
+                         .affectedKeys().hasAny(['completedAt', 'results']);
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Alerts: Cloud Functions write, members read ── */
+      match /inventory_alerts/{alertId} {
+        allow read:   if isTenantMember();
+        allow write:  if false; // Only Cloud Functions manage alerts
+      }
+
+      /* ── Reservations: Cloud Functions only ── */
+      match /inventory_reservations/{resId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Batches: members create, all read ── */
+      match /inventory_batches/{batchId} {
+        allow read:   if isTenantMember();
+        allow write:  if isTenantMember() && request.resource.data.tenantId == tenantId;
+      }
+
+      /* ── Serial index: members read, CFs write ── */
+      match /inventory_serials/{serialId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+      match /inventory_serialIndex/{serialNo} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Analytics + Forecasts: members read only ── */
+      match /inventory_analytics/{docId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+      match /inventory_forecasts/{forecastId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── AI Logs: members read own, admins read all ── */
+      match /inventory_ai_logs/{logId} {
+        allow read:   if isTenantAdmin();
+        allow write:  if false;
+      }
+
+      /* ── Audit Trail: immutable, admins read ── */
+      match /inventory_audit/{logId} {
+        allow read:   if isTenantAdmin();
+        allow write:  if false;
+      }
+
+      /* ═══════════════ INVENTORY V2 COLLECTIONS ═══════════════ */
+
+      /* ── Health scores: CFs write, members read ── */
+      match /inventory_health/{docId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+      match /inventory_health_history/{docId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Fraud events: CFs write, admins read ── */
+      match /inventory_fraud_events/{eventId} {
+        allow read:   if isTenantAdmin();
+        allow write:  if false;
+      }
+
+      /* ── Simulations: members read, CFs write ── */
+      match /inventory_simulations/{simId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Recalls: admins create, members read ── */
+      match /inventory_recalls/{recallId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantAdmin();
+        allow update: if isTenantAdmin();
+        allow delete: if false;
+      }
+
+      /* ── Import jobs: members read own, CFs write ── */
+      match /inventory_import_jobs/{jobId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Webhooks: members create, owner delete ── */
+      match /inventory_webhooks/{webhookId} {
+        allow read:   if isTenantAdmin();
+        allow create: if isTenantMember();
+        allow update: if isTenantAdmin();
+        allow delete: if isTenantAdmin();
+        match /deliveries/{deliveryId} {
+          allow read:  if isTenantAdmin();
+          allow write: if false;
+        }
+      }
+
+      /* ── Workflows: members create, members manage own ── */
+      match /inventory_workflows/{workflowId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember() && request.resource.data.tenantId == tenantId;
+        allow update: if isTenantAdmin();
+        allow delete: if isTenantAdmin();
+      }
+      match /inventory_workflow_runs/{runId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Pricing rules: admins manage, members read recommendations ── */
+      match /inventory_pricing_rules/{productId} {
+        allow read:   if isTenantMember();
+        allow write:  if isTenantAdmin();
+      }
+      match /inventory_price_recommendations/{productId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Digital twin: admins write, members read ── */
+      match /inventory_digital_twin/{warehouseId} {
+        allow read:   if isTenantMember();
+        allow write:  if isTenantAdmin();
+      }
+
+      /* ── Sustainability: CFs write, members read ── */
+      match /inventory_sustainability/{docId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Commerce graph: CFs only ── */
+      match /inventory_commerce_graph/{docId} {
+        allow read:   if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── AI task queue: members create, CFs read ── */
+      match /inventory_ai_tasks/{taskId} {
+        allow read:   if isTenantAdmin();
+        allow create: if isTenantMember();
+        allow write:  if false;
+      }
+
+      /* ── Supplier catalog: members read (platform-wide) ── */
+      match /inventory_supplier_catalog/{supplierId} {
+        allow read:   if isAuthed();
+        allow write:  if false;
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       GEO INTELLIGENCE PLATFORM (GIP)  — Security Rules
+
+       Security model:
+         gipLocations  — asset devices write own doc; any authed user reads
+         gipAssets     — asset owner writes own; any authed reads
+         gipDispatch   — any authed creates; admin/assigned asset updates
+         gipAlerts     — Cloud Functions write; admin/asset owner reads
+         gipGeofences  — admins write; any authed reads active zones
+         gipGeofenceEvents — Cloud Functions write; admins read
+         gipHeatData   — Cloud Functions write; any authed reads
+         gipAnalytics  — Cloud Functions write; admin or own driver reads
+    ══════════════════════════════════════════════════════════ */
+
+    /* Asset live location — each asset writes its own single document */
+    match /gipLocations/{assetId} {
+      allow read:   if isAuthed();
+      allow create: if isAuthed()
+                    && request.resource.data.assetId == assetId
+                    && request.resource.data.lat  is number
+                    && request.resource.data.lat  >= -90   && request.resource.data.lat  <= 90
+                    && request.resource.data.lng  is number
+                    && request.resource.data.lng  >= -180  && request.resource.data.lng  <= 180;
+      allow update: if isAuthed()
+                    && (request.auth.uid == resource.data.uid || isAdmin())
+                    && request.resource.data.lat  is number
+                    && request.resource.data.lat  >= -90   && request.resource.data.lat  <= 90
+                    && request.resource.data.lng  is number
+                    && request.resource.data.lng  >= -180  && request.resource.data.lng  <= 180;
+      allow delete: if isAdmin();
+    }
+
+    /* Asset registry */
+    match /gipAssets/{assetId} {
+      allow read:   if isAuthed();
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthed()
+                    && (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    /* Dispatch jobs */
+    match /gipDispatch/{jobId} {
+      allow read:   if isAuthed();
+      allow create: if isAuthed();
+      allow update: if isAuthed()
+                    && (isAdmin() || resource.data.assignedAssetId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    /* Fleet alerts — Cloud Functions write; admin or asset owner reads */
+    match /gipAlerts/{alertId} {
+      allow read:   if isAuthed()
+                    && (isAdmin() || resource.data.assetId == request.auth.uid);
+      allow create: if false;
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedAt']);
+      allow delete: if isAdmin();
+    }
+
+    /* Geofence zones */
+    match /gipGeofences/{zoneId} {
+      allow read:   if isAuthed();
+      allow write:  if isAdmin();
+    }
+
+    /* Geofence trigger audit log — Cloud Functions write only */
+    match /gipGeofenceEvents/{eventId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* Demand heat data — Cloud Functions write; authenticated reads */
+    match /gipHeatData/{region}/{date}/{hour} {
+      allow read:   if isAuthed();
+      allow write:  if false;
+    }
+
+    /* Driver/fleet analytics — Cloud Functions write; admin or own driver reads */
+    match /gipAnalytics/{date}/{subcollection}/{docId} {
+      allow read:   if isAuthed()
+                    && (isAdmin() || docId == request.auth.uid);
+      allow write:  if false;
+    }
+
+  }
+}
+

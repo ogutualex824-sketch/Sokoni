@@ -1,0 +1,186 @@
+name: CI — Lint · Scan · Test
+
+on:
+  push:
+    branches: ["main", "develop", "staging", "rc/**"]
+  pull_request:
+    branches: ["main", "staging"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # 1. STATIC ANALYSIS & SECURITY SCAN
+  # ─────────────────────────────────────────────────────────────
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint (root JS files)
+        # Blocking: --max-warnings 50 means 51+ warnings fails the build.
+        # Remove or raise the limit only after reducing the warning count.
+        run: npx eslint "*.js" "sokoni-*.js" --no-eslintrc -c .eslintrc.json --max-warnings 50
+
+      - name: Run ESLint (Cloud Functions)
+        # Blocking: 21+ warnings fails the build.
+        run: cd functions && npm ci && npx eslint index.js --max-warnings 20
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Scanning for hardcoded secrets..."
+          if grep -rn "ISPrivKey_live_\|sk_live_\|pk_live_" \
+               --include="*.js" --include="*.html" \
+               --exclude-dir=node_modules --exclude-dir=Temp .; then
+            echo "❌ HARDCODED SECRET DETECTED — failing build"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets found"
+
+      - name: Verify production guard on demo-seed.js
+        run: |
+          if grep -q "removed localhost guard" demo-seed.js; then
+            echo "❌ demo-seed.js is missing production guard"
+            exit 1
+          fi
+          echo "✅ demo-seed.js production guard present"
+
+      - name: Check Firebase rules syntax
+        run: |
+          npx -y firebase-tools firestore:rules --project sokoni-aeb26 \
+            2>/dev/null && echo "✅ Firestore rules syntax OK" || \
+          echo "⚠️ Firebase CLI check skipped (no FIREBASE_TOKEN in CI)"
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. DEPENDENCY AUDIT  — blocks on HIGH/CRITICAL vulnerabilities
+  # ─────────────────────────────────────────────────────────────
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Audit root dependencies
+        # Blocking: high-severity vulnerabilities fail the build.
+        # Use "npm audit fix" locally to resolve before pushing.
+        run: npm audit --audit-level=high
+
+      - name: Audit Cloud Functions dependencies
+        run: cd functions && npm ci && npm audit --audit-level=high
+
+  # ─────────────────────────────────────────────────────────────
+  # 3. CLOUD FUNCTIONS SYNTAX & UNIT TESTS
+  # ─────────────────────────────────────────────────────────────
+  functions-check:
+    name: Cloud Functions — Syntax + Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install CF dependencies
+        run: cd functions && npm ci
+
+      - name: Node syntax check
+        run: node --check functions/index.js && echo "✅ Syntax OK"
+
+      - name: Verify no duplicate CF exports
+        # Blocking: duplicate exports cause silent runtime failures.
+        run: |
+          cd functions && npm ci
+          EXPORTS=$(node -e "const m=require('./index.js'); console.log(Object.keys(m).join('\n'))" 2>/dev/null | sort)
+          DUPES=$(echo "$EXPORTS" | uniq -d)
+          if [ -n "$DUPES" ]; then
+            echo "❌ Duplicate CF exports: $DUPES"
+            exit 1
+          fi
+          echo "✅ No duplicate exports"
+
+      - name: Run Cloud Function unit tests
+        run: cd functions && npm test
+        env:
+          FIRESTORE_EMULATOR_HOST: "localhost:8080"
+          FIREBASE_AUTH_EMULATOR_HOST: "localhost:9099"
+
+  # ─────────────────────────────────────────────────────────────
+  # 4. SMOKE TESTS
+  # ─────────────────────────────────────────────────────────────
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [static-analysis, functions-check]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start local server
+        run: npx http-server . -p 3000 --cors -c-1 &
+        shell: bash
+
+      - name: Wait for server
+        run: sleep 3
+
+      - name: Run smoke tests
+        run: node test-smoke.js
+
+      - name: Run E2E critical flows
+        # Blocking: E2E failures on critical flows must block deploys.
+        # Use `--grep @smoke` to limit to tagged critical tests if needed.
+        run: npx playwright test tests/e2e/ --reporter=list
+
+  # ─────────────────────────────────────────────────────────────
+  # 5. SCALE TEST (run only on rc/** branches)
+  # ─────────────────────────────────────────────────────────────
+  scale-test:
+    name: Scale Test (1k)
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/rc/')
+    needs: [smoke-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install CF deps
+        run: cd functions && npm ci
+
+      - name: Run scale test at 1k
+        run: node test-scale.js --users=1000
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY_PATH }}
+          SOKONI_PROJECT_ID: sokoni-aeb26

@@ -1,0 +1,531 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Shop All Categories</title>
+  <meta name="description" content="Browse all product categories on SOKONI — electronics, fashion, food, beauty and more in Kenya.">
+  <meta property="og:title" content="SOKONI — Shop All Categories">
+  <meta property="og:description" content="Discover thousands of products across all categories on SOKONI marketplace Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://storage.googleapis.com">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="compact-grid.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    /* ── Adult category premium theme ── */
+    body.adult-theme { background:#0a0505 !important; }
+    body.adult-theme .cat-page-header { background:linear-gradient(135deg,rgba(255,30,30,0.12),rgba(180,0,60,0.08),rgba(0,0,0,0)) !important; border-bottom:1px solid rgba(255,30,30,0.15) !important; }
+    body.adult-theme .cat-page-icon { animation: adultPulse 3s infinite; }
+    @keyframes adultPulse { 0%,100%{filter:drop-shadow(0 0 8px rgba(255,30,30,0.5));} 50%{filter:drop-shadow(0 0 20px rgba(255,30,30,0.8));} }
+    body.adult-theme #catTitle { background:linear-gradient(135deg,#ff4444,#ff0080); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    body.adult-theme .cat-filter-btn.active-filter { background:rgba(255,30,30,0.15) !important; border-color:rgba(255,30,30,0.35) !important; color:#ff4444 !important; }
+
+    /* Vape category — neon purple/blue */
+    body.vape-theme { background:#050510 !important; }
+    body.vape-theme .cat-page-header { background:linear-gradient(135deg,rgba(130,0,255,0.12),rgba(0,100,255,0.08),rgba(0,0,0,0)) !important; border-bottom:1px solid rgba(130,0,255,0.15) !important; }
+    body.vape-theme #catTitle { background:linear-gradient(135deg,#8200ff,#0060ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    body.vape-theme .cat-filter-btn.active-filter { background:rgba(130,0,255,0.12) !important; border-color:rgba(130,0,255,0.3) !important; color:#a066ff !important; }
+
+    /* Tobacco — warm brown/amber */
+    body.tobacco-theme { background:#080503 !important; }
+    body.tobacco-theme .cat-page-header { background:linear-gradient(135deg,rgba(180,100,0,0.12),rgba(120,60,0,0.08),rgba(0,0,0,0)) !important; border-bottom:1px solid rgba(180,100,0,0.18) !important; }
+    body.tobacco-theme #catTitle { background:linear-gradient(135deg,#c87800,#a05000); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+
+    /* Alcohol — gold/amber premium */
+    body.alcohol-theme { background:#060503 !important; }
+    body.alcohol-theme .cat-page-header { background:linear-gradient(135deg,rgba(200,150,0,0.12),rgba(160,80,0,0.08),rgba(0,0,0,0)) !important; border-bottom:1px solid rgba(200,150,0,0.18) !important; }
+    body.alcohol-theme #catTitle { background:linear-gradient(135deg,#d4af37,#c87800); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    body.alcohol-theme .cat-filter-btn.active-filter { background:rgba(200,150,0,0.12) !important; border-color:rgba(200,150,0,0.3) !important; color:#d4af37 !important; }
+
+    /* Adult products - dark rose gold */
+    body.adult-products-theme .cat-page-header { background:linear-gradient(135deg,rgba(200,80,120,0.12),rgba(150,40,80,0.08),rgba(0,0,0,0)) !important; border-bottom:1px solid rgba(200,80,120,0.18) !important; }
+    body.adult-products-theme #catTitle { background:linear-gradient(135deg,#e8738a,#c84060); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+
+    /* ── Sort bar buttons: auto-width so they stay in one row ── */
+    .cat-sort-bar .cat-filter-btn{width:auto !important;padding:9px 16px !important;text-align:center !important;}
+    .cat-sort-bar{flex-wrap:nowrap !important;overflow-x:auto;gap:8px;padding:14px 16px 10px;}
+
+    /* ── AGE GATE MODAL ── */
+    .age-gate-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
+    .age-gate-box{background:#111;border:1px solid rgba(255,30,30,0.25);border-radius:22px;padding:32px 28px;max-width:380px;width:100%;text-align:center;}
+    .age-gate-icon{font-size:56px;margin-bottom:14px;}
+    .age-gate-title{font-size:20px;font-weight:900;color:white;margin-bottom:8px;}
+    .age-gate-sub{font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:22px;line-height:1.6;}
+    .age-gate-btns{display:flex;gap:10px;justify-content:center;}
+    .age-confirm{padding:13px 28px;background:linear-gradient(135deg,#ff4444,#cc2222);color:white;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;flex:1;}
+    .age-deny{padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.55);font-weight:700;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;flex:1;}
+    .age-disclaimer{font-size:10px;color:rgba(255,255,255,0.25);margin-top:14px;line-height:1.5;}
+
+    /* ── Category pills scroll arrows ── */
+    .cat-pills-wrap{position:relative;width:100%;}
+    .cat-pills-arrow{
+      position:absolute;top:50%;transform:translateY(-50%);z-index:10;
+      width:32px;height:32px;border-radius:50%;
+      background:rgba(10,10,10,0.92);border:1px solid rgba(255,255,255,0.15);
+      color:white;font-size:16px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      transition:all .2s;backdrop-filter:blur(8px);
+      box-shadow:0 2px 12px rgba(0,0,0,0.5);
+    }
+    .cat-pills-arrow:hover{background:rgba(113,255,0,0.15);border-color:rgba(113,255,0,0.4);color:#71ff00;}
+    .cat-pills-arrow.left{left:4px;}
+    .cat-pills-arrow.right{right:4px;}
+    .cat-pills-arrow.hidden{opacity:0;pointer-events:none;}
+    .cat-nav-pills{
+      display:flex;gap:8px;padding:12px 44px;overflow-x:auto;
+      scrollbar-width:none;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;
+      -ms-overflow-style:none;
+      width:100%;min-width:0;box-sizing:border-box;
+    }
+    .cat-nav-pills::-webkit-scrollbar{display:none;}
+
+    /* ── Category info banner ── */
+    .cat-info-banner{
+      margin:0 18px 12px;padding:12px 16px;border-radius:12px;
+      font-size:11px;color:rgba(255,255,255,0.5);line-height:1.65;
+      display:none;
+    }
+    .cat-info-banner.show{display:block;}
+    .cat-info-banner strong{color:white;}
+
+    /* -- Category grid: square premium cards -- */
+    .cat-premium-grid{
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:8px;
+      padding:10px 16px 80px;
+    }
+    @media(max-width:600px){
+      .cat-premium-grid{grid-template-columns:repeat(2,1fr) !important;gap:6px !important;padding:6px 10px 80px !important;}
+    }
+    @media(min-width:601px) and (max-width:900px){
+      .cat-premium-grid{grid-template-columns:repeat(3,1fr) !important;}
+    }
+    @media(min-width:1280px){
+      .cat-premium-grid{grid-template-columns:repeat(6,1fr) !important;gap:10px !important;}
+    }
+    /* Product cards in category page */
+    .cat-premium-grid .product-card{
+      background:rgba(16,16,16,0.96) !important;
+      border:1px solid rgba(255,255,255,0.07) !important;
+      border-radius:12px !important;
+      overflow:hidden !important;
+      cursor:pointer !important;
+      transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease !important;
+      position:relative !important;
+    }
+    .cat-premium-grid .product-card:hover{
+      transform:translateY(-3px) scale(1.012) !important;
+      border-color:rgba(113,255,0,0.28) !important;
+      box-shadow:0 6px 24px rgba(0,0,0,0.55) !important;
+    }
+    .cat-premium-grid .product-card:active{transform:scale(0.96) !important;opacity:0.88 !important;}
+    .alcohol-theme .cat-premium-grid .product-card:hover{border-color:rgba(212,175,55,0.3) !important;}
+    .vape-theme .cat-premium-grid .product-card:hover{border-color:rgba(130,0,255,0.3) !important;}
+    .adult-theme .cat-premium-grid .product-card:hover{border-color:rgba(255,30,30,0.3) !important;}
+    .tobacco-theme .cat-premium-grid .product-card:hover{border-color:rgba(180,100,0,0.3) !important;}
+    .adult-products-theme .cat-premium-grid .product-card:hover{border-color:rgba(200,80,120,0.3) !important;}
+    .cat-premium-grid .product-img-wrap{width:100% !important;aspect-ratio:1/1 !important;overflow:hidden !important;position:relative !important;height:auto !important;}
+    .cat-premium-grid .product-img-wrap::after{content:'';position:absolute;bottom:0;left:0;right:0;height:45%;background:linear-gradient(to top,rgba(6,6,6,0.72) 0%,transparent 100%);pointer-events:none;z-index:1;}
+    .cat-premium-grid .product-img-wrap img{width:100% !important;height:100% !important;object-fit:cover !important;display:block !important;transition:transform .3s !important;}
+    .cat-premium-grid .product-card:hover .product-img-wrap img{transform:scale(1.07) !important;}
+    .cat-premium-grid .product-body{padding:7px 8px 9px !important;}
+    .cat-premium-grid .product-name{font-size:11px !important;font-weight:700 !important;color:rgba(255,255,255,0.92) !important;display:-webkit-box !important;-webkit-line-clamp:2 !important;-webkit-box-orient:vertical !important;overflow:hidden !important;margin-bottom:3px !important;line-height:1.3 !important;}
+    .cat-premium-grid .price{font-size:12.5px !important;font-weight:900 !important;color:#71ff00 !important;margin:0 !important;padding:0 !important;}
+    .cat-premium-grid .product-desc,.cat-premium-grid .product-actions,.cat-premium-grid .product-buttons-compact{display:none !important;}
+
+    /* Discreet blur on adult products */
+    .adult-blur-img img{filter:blur(6px) !important;}
+    .adult-blur-img:hover img{filter:none !important;transition:filter .2s !important;}
+    .adult-hover-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:white;font-size:10px;font-weight:700;padding:5px 10px;border-radius:6px;pointer-events:none;white-space:nowrap;z-index:2;}
+
+    /* ── PRODUCT-CARD AGE GATE BLUR (class kept distinct from full-page #ageGate modal) ── */
+    .age-gate-wrap{position:relative;overflow:hidden;border-radius:inherit;display:block;}
+    .age-gate-blur{filter:blur(8px);pointer-events:none;user-select:none;}
+    .prod-age-overlay{position:absolute;inset:0;background:rgba(10,10,10,0.68);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;z-index:2;border-radius:inherit;}
+    .prod-age-overlay .age-lock{font-size:26px;}
+    .prod-age-overlay p{font-size:11px;color:rgba(255,255,255,0.8);text-align:center;margin:0;font-weight:600;}
+    .prod-age-overlay .age-verify-btn{padding:8px 18px;background:linear-gradient(135deg,#ff9800,#ff6600);color:white;border:none;border-radius:8px;font-weight:900;font-size:11px;cursor:pointer;font-family:inherit;margin-top:5px;transition:transform .15s,box-shadow .15s;box-shadow:0 2px 10px rgba(255,152,0,0.3);}
+    .prod-age-overlay .age-verify-btn:hover{transform:scale(1.06);box-shadow:0 4px 16px rgba(255,152,0,0.45);}
+  </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Shop Online Kenya — All Categories | SOKONI","description":"Browse thousands of products across fashion, electronics, beauty, food, furniture and more from verified Kenyan sellers. Fast delivery. Pay via M-Pesa.","url":"https://mysokoni.co.ke/category.html","breadcrumb":{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://mysokoni.co.ke"},{"@type":"ListItem","position":2,"name":"Shop"}]}}</script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<!-- AGE GATE (shown for 18+ categories) -->
+<div class="age-gate-overlay" id="ageGate" style="display:none;">
+  <div class="age-gate-box">
+    <div class="age-gate-icon" id="ageGateIcon">🔞</div>
+    <div class="age-gate-title">Age Verification Required</div>
+    <div class="age-gate-sub" id="ageGateSub">This section contains products restricted to adults aged 18 and over. By continuing, you confirm you are 18 years of age or older.</div>
+    <div class="age-gate-btns">
+      <button type="button" class="age-confirm" onclick="confirmAge()">✅ I am 18+, Continue</button>
+      <button type="button" class="age-deny" onclick="denyAge()">← Go Back</button>
+    </div>
+    <div class="age-disclaimer">⚠️ SOKONI complies with Kenya's Alcoholic Drinks Control Act, Tobacco Control Act, and all relevant legislation. Products in this section may only be purchased by persons 18 years of age or older. False age declaration is a criminal offence.</div>
+  </div>
+</div>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="logo-section">
+    <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="Sokoni"></a>
+  </div>
+  <div class="search-bar">
+    <div class="search-suggestions" id="searchSuggestions"></div>
+    <input type="text" id="catSearch" placeholder="Search products..." oninput="searchCatProducts()"
+      onkeydown="if(event.key==='Enter'&&this.value.trim()){event.preventDefault();location.href='search.html?q='+encodeURIComponent(this.value.trim());}">
+  </div>
+  <div class="nav-actions">
+    <a href="wishlist.html" class="wishlist-nav-btn">❤️</a>
+    <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 <span id="catCartCount">0</span></a>
+  </div>
+</nav>
+
+<!-- CATEGORY HEADER -->
+<section class="cat-page-header">
+  <div class="cat-page-bg"></div>
+  <div class="cat-page-info">
+    <div class="cat-page-icon" id="catIcon">🛍️</div>
+    <h1 id="catTitle">🛍️ All Products</h1>
+    <p id="catCount" class="cat-count-text">Loading...</p>
+    <div class="cat-pills-wrap" id="pillsWrap">
+      <button type="button" class="cat-pills-arrow left hidden" id="arrowLeft" onclick="scrollPills(-1)" aria-label="Scroll left">‹</button>
+      <div class="cat-nav-pills" id="pillsScroll">
+        <a href="category.html?cat=all"         class="cat-pill">🛍️ All</a>
+        <a href="category.html?cat=electronics" class="cat-pill">📱 Electronics</a>
+        <a href="category.html?cat=fashion"     class="cat-pill">👕 Fashion</a>
+        <a href="category.html?cat=beauty"      class="cat-pill">💄 Beauty</a>
+        <a href="category.html?cat=shoes"       class="cat-pill">👟 Shoes</a>
+        <a href="category.html?cat=computers"   class="cat-pill">💻 Computers</a>
+        <a href="category.html?cat=accessories" class="cat-pill">⌚ Accessories</a>
+        <a href="category.html?cat=appliances"  class="cat-pill">🔌 Appliances</a>
+        <a href="category.html?cat=furniture"   class="cat-pill">🛋️ Furniture</a>
+        <a href="category.html?cat=sports"      class="cat-pill">⚽ Sports</a>
+        <a href="category.html?cat=books"       class="cat-pill">📚 Books</a>
+        <a href="category.html?cat=printing"    class="cat-pill">🖨️ Printing</a>
+        <a href="category.html?cat=food"        class="cat-pill">🥦 Groceries</a>
+        <a href="category.html?cat=cars"        class="cat-pill" style="color:#f97316;border-color:rgba(249,115,22,0.2);">🚗 Cars</a>
+        <a href="car-hub.html"                  class="cat-pill" style="color:#f97316;border-color:rgba(249,115,22,0.2);">🔧 Mechanics</a>
+        <a href="category.html?cat=meat"        class="cat-pill" style="color:#ef4444;border-color:rgba(239,68,68,0.2);">🥩 Meat</a>
+        <a href="category.html?cat=fish"        class="cat-pill" style="color:#00aaff;border-color:rgba(0,170,255,0.2);">🐟 Fish</a>
+        <a href="category.html?cat=poultry"     class="cat-pill" style="color:#ffc107;border-color:rgba(255,193,7,0.2);">🐔 Poultry</a>
+        <a href="category.html?cat=dairy"       class="cat-pill" style="color:#e0e0e0;border-color:rgba(255,255,255,0.15);">🥛 Dairy</a>
+        <a href="category.html?cat=bakery"      class="cat-pill" style="color:#f59e0b;border-color:rgba(245,158,11,0.2);">🍞 Bakery</a>
+        <a href="food.html"                     class="cat-pill" style="color:#ef4444;border-color:rgba(239,68,68,0.25);">🍽️ Food Order</a>
+        <a href="category.html?cat=alcohol"     class="cat-pill cat-pill-adult" style="color:#d4af37;border-color:rgba(212,175,55,0.25);">🍺 Alcohol 18+</a>
+        <a href="category.html?cat=vape"        class="cat-pill cat-pill-adult" style="color:#a066ff;border-color:rgba(130,0,255,0.25);">💨 Vape 18+</a>
+        <a href="category.html?cat=tobacco"     class="cat-pill cat-pill-adult" style="color:#c87800;border-color:rgba(180,100,0,0.25);">🚬 Tobacco 18+</a>
+        <a href="category.html?cat=adult"       class="cat-pill cat-pill-adult" style="color:#e8738a;border-color:rgba(200,80,120,0.25);">🔞 Adults 18+</a>
+      </div>
+      <button type="button" class="cat-pills-arrow right" id="arrowRight" onclick="scrollPills(1)" aria-label="Scroll right">›</button>
+    </div>
+  </div>
+</section>
+
+<!-- CATEGORY INFO BANNER (shown for adult categories) -->
+<div class="cat-info-banner" id="catInfoBanner"></div>
+
+<!-- SORT + PRODUCTS -->
+<section class="cat-page-body">
+  <div class="cat-sort-bar">
+    <span class="sort-label">Sort by:</span>
+    <button type="button" class="cat-filter-btn active-filter" onclick="sortProducts('default',this)">Newest</button>
+    <button type="button" class="cat-filter-btn" onclick="sortProducts('low',this)">Price ↑</button>
+    <button type="button" class="cat-filter-btn" onclick="sortProducts('high',this)">Price ↓</button>
+    <button type="button" class="cat-filter-btn" onclick="sortProducts('popular',this)">🔥 Popular</button>
+  </div>
+  <div id="catProductsGrid" class="cat-premium-grid"></div>
+</section>
+
+<div id="notificationContainer"></div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="flashsale.html" class="bnav-item"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* ── Category meta: icon, theme, info banner, age gate ── */
+const CAT_META = {
+  all:        { icon:"🛍️", title:"All Products", theme:"", info:"" },
+  electronics:{ icon:"📱", title:"Electronics",   theme:"", info:"" },
+  fashion:    { icon:"👕", title:"Fashion",        theme:"", info:"" },
+  beauty:     { icon:"💄", title:"Beauty & Skincare", theme:"", info:"" },
+  shoes:      { icon:"👟", title:"Shoes & Footwear",  theme:"", info:"" },
+  computers:  { icon:"💻", title:"Computers & Laptops", theme:"", info:"" },
+  accessories:{ icon:"⌚", title:"Accessories",     theme:"", info:"" },
+  appliances: { icon:"🔌", title:"Home Appliances", theme:"", info:"" },
+  furniture:  { icon:"🛋️", title:"Furniture & Home", theme:"", info:"" },
+  sports:     { icon:"⚽", title:"Sports & Fitness",  theme:"", info:"" },
+  books:      { icon:"📚", title:"Books & Stationery", theme:"", info:"" },
+  printing:   { icon:"🖨️", title:"Printing Services",  theme:"", info:"" },
+  food:       { icon:"🥦", title:"Groceries & Fresh Food", theme:"", info:"" },
+  shoes:      { icon:"👟", title:"Shoes & Footwear",       theme:"", info:"" },
+  computers:  { icon:"💻", title:"Computers & Laptops",    theme:"", info:"" },
+  appliances: { icon:"🔌", title:"Home Appliances",        theme:"", info:"" },
+  cars:       { icon:"🚗", title:"Cars & Autos",           theme:"", info:"" },
+  meat:       { icon:"🥩", title:"Meat & Butchery", theme:"", info:"<strong>🥩 Fresh Meat on SOKONI</strong> — All meat sellers on SOKONI are required to hold a valid <strong>County Food Business Permit</strong> and KMC/county slaughterhouse certification. Look for the <strong style='color:#71ff00;'>✅ Verified Food</strong> badge for licensed sellers. Halal-certified meat is clearly labelled." },
+  fish:       { icon:"🐟", title:"Fish & Seafood", theme:"", info:"<strong>🐟 Fresh Fish & Seafood</strong> — Sellers must hold a Kenya Fisheries Service (KFS) licence and a County Food Business Permit. Chilled/frozen delivery available in major towns." },
+  poultry:    { icon:"🐔", title:"Poultry & Eggs", theme:"", info:"<strong>🐔 Poultry & Eggs</strong> — All poultry sellers must hold a County Food Business Permit. KMC certification required for processed poultry." },
+  dairy:      { icon:"🥛", title:"Dairy & Milk Products", theme:"", info:"<strong>🥛 Dairy Products</strong> — Kenya Dairy Board (KDB) licence required. All dairy products are pasteurised and compliant with KEBS KS 05-459." },
+  bakery:     { icon:"🍞", title:"Bakery & Bread", theme:"", info:"<strong>🍞 Bakery Products</strong> — All bakers must hold a valid County Food Business Permit (Public Health Act Cap 242). KEBS certified products earn a verified badge." },
+  laundry:    { icon:"🧺", title:"Laundry Services (Mamafua)", theme:"", info:"" },
+  alcohol: {
+    icon:"🥃", title:"Alcohol & Spirits",
+    theme:"alcohol-theme", adultGate:true,
+    info:`<strong>🔞 Adults Only (18+)</strong> — This section contains alcoholic beverages. All products comply with the <strong>Alcoholic Drinks Control Act of Kenya</strong>. Drink responsibly. Do not drink and drive. Delivery available in Nairobi, Mombasa & major towns. Cold chain delivery available for beer and wine.`
+  },
+  vape: {
+    icon:"💨", title:"Vape & E-Cigarettes",
+    theme:"vape-theme", adultGate:true,
+    info:`<strong>🔞 Adults Only (18+)</strong> — Vaping products are for adults aged 18 and above. Nicotine is addictive. All devices and e-liquids sold here comply with Kenya's <strong>Tobacco Control Act</strong>. Not for sale to minors.`
+  },
+  tobacco: {
+    icon:"🚬", title:"Tobacco Products",
+    theme:"tobacco-theme", adultGate:true,
+    info:`<strong>🔞 Adults Only (18+)</strong> — <strong>WARNING: Tobacco kills.</strong> Tobacco products are restricted to adults aged 18+ under the <strong>Tobacco Control Act Cap 245A</strong> of Kenya. Smoking causes cancer, heart disease, stroke, lung disease and diabetes.`
+  },
+  adult: {
+    icon:"🌹", title:"Adult Lifestyle Products",
+    theme:"adult-products-theme", adultGate:true,
+    info:`<strong>🔞 Adults Only (18+)</strong> — Premium intimate lifestyle products for adults. All items are body-safe, discreetly packaged and delivered in plain packaging. No product name or brand appears on the outside of the delivery. Private and confidential.`
+  }
+};
+
+const _cat = new URLSearchParams(window.location.search).get("cat")||"all";
+const _meta = CAT_META[_cat]||CAT_META.all;
+const ADULT_CATS_LOCAL = new Set(["alcohol","vape","tobacco","adult"]);
+
+/* Apply theme */
+if(_meta.theme) document.body.classList.add(_meta.theme);
+document.getElementById("catIcon").textContent = _meta.icon||"🛍️";
+document.getElementById("catTitle").textContent = _meta.title||"All Products";
+
+/* Info banner */
+if(_meta.info){
+  const b = document.getElementById("catInfoBanner");
+  b.innerHTML = _meta.info;
+  b.classList.add("show");
+  if(ADULT_CATS_LOCAL.has(_cat)){
+    b.style.background="rgba(255,30,30,0.06)";
+    b.style.border="1px solid rgba(255,30,30,0.15)";
+    if(_cat==="alcohol"){b.style.background="rgba(200,150,0,0.07)";b.style.border="1px solid rgba(200,150,0,0.18)";}
+    if(_cat==="vape"){b.style.background="rgba(130,0,255,0.07)";b.style.border="1px solid rgba(130,0,255,0.2)";}
+    if(_cat==="tobacco"){b.style.background="rgba(180,100,0,0.07)";b.style.border="1px solid rgba(180,100,0,0.18)";}
+    if(_cat==="adult"){b.style.background="rgba(200,80,120,0.07)";b.style.border="1px solid rgba(200,80,120,0.2)";}
+  }
+}
+
+/* Highlight active pill */
+document.querySelectorAll(".cat-pill").forEach(p=>{
+  const href = p.getAttribute("href")||"";
+  if(href.includes("cat="+_cat)||(_cat==="all"&&href.endsWith("cat=all"))){
+    p.style.background="rgba(113,255,0,0.1)";
+    p.style.borderColor="rgba(113,255,0,0.3)";
+    p.style.color="#71ff00";
+  }
+});
+
+/* Age gate */
+const AGE_KEY = "sokoniAgeVerified_"+_cat;
+function showAgeGate(){
+  const icons = {alcohol:"🥃",vape:"💨",tobacco:"🚬",adult:"🌹"};
+  const subs = {
+    alcohol:"This section contains alcoholic beverages. By continuing you confirm you are 18 years of age or older.",
+    vape:"Vaping products are for adults only. Nicotine is addictive. Confirm you are 18+.",
+    tobacco:"Tobacco products are restricted to adults 18+. WARNING: Smoking kills.",
+    adult:"This section contains adult lifestyle products. By continuing you confirm you are 18 years of age or older."
+  };
+  document.getElementById("ageGateIcon").textContent = icons[_cat]||"🔞";
+  document.getElementById("ageGateSub").textContent = subs[_cat]||subs.adult;
+  document.getElementById("ageGate").style.display="flex";
+  document.body.style.overflow="hidden";
+}
+function confirmAge(){
+  sessionStorage.setItem(AGE_KEY,'1');
+  sessionStorage.setItem('sokoniAgeVerified','true'); /* sync adult-gate.js key */
+  localStorage.setItem('sokoniAgeVerified','true');
+  document.getElementById('ageGate').style.display='none';
+  document.body.style.overflow='';
+  _unblurCards();
+}
+function denyAge(){ window.history.back(); }
+window.confirmAge=confirmAge; window.denyAge=denyAge;
+
+/* ── PRODUCT-LEVEL AGE GATE HELPERS ── */
+function _ageOk(){
+  return localStorage.getItem('sokoniAgeVerified')==='true' ||
+         sessionStorage.getItem('sokoniAgeVerified')==='true';
+}
+function _unblurCards(){
+  document.querySelectorAll('.age-gate-wrap').forEach(w=>{
+    const blur = w.querySelector('.age-gate-blur');
+    const overlay = w.querySelector('.prod-age-overlay');
+    if(blur){ blur.style.filter='none'; blur.style.pointerEvents=''; blur.style.userSelect=''; }
+    if(overlay) overlay.style.display='none';
+  });
+}
+window._unblurCards = _unblurCards;
+
+function ageGateWrap(productHtml, isRestricted){
+  if(!isRestricted || _ageOk()) return productHtml;
+  return `<div class="age-gate-wrap" style="position:relative;display:block;border-radius:inherit;">
+    <div class="age-gate-blur">${productHtml}</div>
+    <div class="prod-age-overlay">
+      <div class="age-lock">🔞</div>
+      <p>18+ Product</p>
+      <p style="font-size:10px;opacity:.75;">Tap to verify your age</p>
+      <button type="button" class="age-verify-btn" onclick="triggerAgeVerification()">Verify Age →</button>
+    </div>
+  </div>`;
+}
+window.ageGateWrap = ageGateWrap;
+
+function triggerAgeVerification(){
+  if(typeof requireAgeVerification === 'function'){
+    /* Use the full DOB + ID flow from adult-gate.js */
+    requireAgeVerification().then(verified => {
+      if(!verified) return;
+      sessionStorage.setItem('sokoniAgeVerified','true');
+      localStorage.setItem('sokoniAgeVerified','true');
+      _unblurCards();
+    });
+  } else {
+    /* adult-gate.js not ready — fall back to simple in-page modal */
+    showAgeGate();
+  }
+}
+window.triggerAgeVerification = triggerAgeVerification;
+
+/* Full-page gate for adult categories is handled by requireAgeVerification()
+   called inside the deferred category.js — don't double-fire here. */
+if(ADULT_CATS_LOCAL.has(_cat) && !_ageOk()){
+  /* Show the simple gate ONLY as an instant blocker while adult-gate.js loads */
+  showAgeGate();
+}
+
+/* Cart count handled by category.js */
+
+/* Wishlist count badge */
+(function(){
+  try{
+    const wl = JSON.parse(localStorage.getItem("sokoniWishlist"))||[];
+    const btn = document.querySelector(".wishlist-nav-btn");
+    if(btn && wl.length > 0){
+      btn.style.position = "relative";
+      const badge = document.createElement("span");
+      badge.style.cssText = "position:absolute;top:-4px;right:-4px;background:#ff4d4d;color:white;font-size:9px;font-weight:900;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;";
+      badge.textContent = wl.length > 9 ? "9+" : wl.length;
+      btn.appendChild(badge);
+    }
+  }catch(e){}
+})();
+
+/* Profile state in bottom nav */
+(function(){
+  try{
+    const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+    const profileLink = document.querySelector('.bnav-item[href="profile.html"]');
+    if(profileLink && user && user.name){
+      profileLink.querySelector("span").textContent = user.name.split(" ")[0];
+    }
+  }catch(e){}
+})();
+</script>
+
+<script src="adult-gate.js"></script>
+<script src="demo-seed.js"></script>
+<script src="sokoni-offers.js" defer></script>
+<script src="category.js" defer></script>
+<script src="scroll-memory.js" defer></script>
+<script src="market-actions.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-share.js" defer></script>
+  <script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script type="module">
+/* Load real seller products from Firestore and merge into the category grid */
+import SokoniDB from './sokoni-db.js';
+const _cat = new URLSearchParams(location.search).get('cat') || 'all';
+const _opts = (_cat !== 'all') ? { category: _cat } : {};
+SokoniDB.listenProducts(_opts, function(fsProducts) {
+  if (typeof window._catMergeFirestore === 'function') {
+    window._catMergeFirestore(fsProducts);
+  }
+});
+</script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-featured.js" defer></script>
+<script>
+/* Inject featured listings + sponsored ads above the product grid */
+document.addEventListener('DOMContentLoaded', function() {
+  var _inject = function() {
+    if (window.SokoniFeatured) {
+      var hub = (new URLSearchParams(location.search).get('cat') || 'marketplace');
+      var hubMap = { food:'food', electronics:'marketplace', fashion:'marketplace', home:'marketplace', beauty:'marketplace', automotive:'vehicles', health:'healthcare', sports:'marketplace' };
+      hub = hubMap[hub] || 'marketplace';
+      SokoniFeatured.inject(hub, 'catProductsGrid', { showFeatured: true, showAds: true });
+    }
+  };
+  /* Wait until the grid exists (may be populated async) */
+  var _t = setInterval(function(){
+    if (document.getElementById('catProductsGrid')) { clearInterval(_t); setTimeout(_inject, 800); }
+  }, 300);
+});
+</script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

@@ -1,0 +1,332 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Electrical Services Kenya</title>
+  <meta name="description" content="Book certified electricians in Nairobi, Mombasa & across Kenya. Wiring, sockets, solar, security lighting — same day on SOKONI.">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mysokoni.co.ke/electrical.html">
+  <meta property="og:title" content="SOKONI — Electrical Services Kenya">
+  <meta property="og:description" content="Book certified electricians in Nairobi, Mombasa & across Kenya. Wiring, sockets, solar, security lighting — same day on SOKONI.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:site_name" content="SOKONI">
+  <meta property="og:locale" content="en_KE">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f59e0b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#060a0f;color:white;min-height:100vh;padding-bottom:80px;}
+    .pg-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(6,10,15,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);}
+    .pg-logo{height:32px;}
+    .pg-nav-right{display:flex;gap:8px;align-items:center;}
+    .pg-nav-link{padding:7px 13px;border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.55);text-decoration:none;font-size:12px;font-weight:600;transition:all .15s;}
+    .pg-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .pg-nav-book{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+    .pg-hero{background:linear-gradient(135deg,rgba(245,158,11,0.09),rgba(180,100,0,0.05),transparent);border-bottom:1px solid rgba(255,255,255,0.07);padding:32px 20px 28px;position:relative;overflow:hidden;}
+    .pg-hero::before{content:'⚡🔌💡🔦';position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:80px;opacity:0.035;letter-spacing:-6px;pointer-events:none;}
+    .pg-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:999px;font-size:10px;font-weight:800;color:#f59e0b;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;}
+    .pg-hero h1{font-size:clamp(22px,5vw,38px);font-weight:900;line-height:1.1;margin-bottom:8px;}
+    .pg-hero h1 span{color:#f59e0b;}
+    .pg-hero p{font-size:13px;color:rgba(255,255,255,0.45);line-height:1.55;max-width:520px;margin-bottom:20px;}
+    .pg-search{display:flex;gap:8px;max-width:540px;margin-bottom:18px;}
+    .pg-search input{flex:1;padding:12px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;}
+    .pg-search input:focus{border-color:rgba(245,158,11,0.4);}
+    .pg-search input::placeholder{color:rgba(255,255,255,0.28);}
+    .pg-search-btn{padding:12px 20px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:11px;color:#060a0f;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+    .pg-hero-stats{display:flex;gap:20px;flex-wrap:wrap;}
+    .pg-stat{font-size:11px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:5px;}
+    .pg-stat strong{color:#f59e0b;font-size:14px;font-weight:900;}
+    .pg-section{padding:24px 20px 8px;}
+    .pg-section-title{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+    .pg-section-title h2{font-size:16px;font-weight:900;}
+    .pg-section-title span{flex:1;height:1px;background:rgba(255,255,255,0.07);}
+    .pg-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;}
+    .pg-type-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;transition:all .2s;text-decoration:none;color:white;}
+    .pg-type-card:hover,.pg-type-card.active{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+    .pg-type-card span{font-size:28px;line-height:1;}
+    .pg-type-card p{font-size:11px;font-weight:700;text-align:center;line-height:1.3;}
+    .pg-steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+    .pg-step{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 14px;text-align:center;}
+    .pg-step-num{width:32px;height:32px;border-radius:50%;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#f59e0b;margin:0 auto 10px;}
+    .pg-step h3{font-size:12px;font-weight:800;margin-bottom:4px;}
+    .pg-step p{font-size:10px;color:rgba(255,255,255,0.38);line-height:1.5;}
+    .pg-providers{padding:0 20px 24px;}
+    .pg-filter-row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:6px;margin-bottom:14px;}
+    .pg-filter-row::-webkit-scrollbar{display:none;}
+    .pg-filter-pill{flex-shrink:0;padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;}
+    .pg-filter-pill:hover,.pg-filter-pill.active{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+    .pg-provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+    .pg-provider-card{background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;transition:border-color .2s,transform .2s;}
+    .pg-provider-card:hover{border-color:rgba(245,158,11,0.28);transform:translateY(-2px);}
+    .pg-prov-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
+    .pg-prov-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(180,100,0,0.15));display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;border:1px solid rgba(245,158,11,0.2);}
+    .pg-prov-name{font-size:14px;font-weight:800;margin-bottom:2px;}
+    .pg-prov-loc{font-size:11px;color:rgba(255,255,255,0.38);display:flex;align-items:center;gap:4px;}
+    .pg-prov-rating{display:flex;align-items:center;gap:4px;margin-top:3px;}
+    .pg-prov-stars{color:#f59e0b;font-size:11px;}
+    .pg-prov-rnum{font-size:10px;color:rgba(255,255,255,0.4);}
+    .pg-prov-bio{font-size:11px;color:rgba(255,255,255,0.42);line-height:1.5;margin-bottom:10px;}
+    .pg-prov-skills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;}
+    .pg-prov-skill{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.15);color:rgba(245,158,11,0.8);}
+    .pg-prov-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+    .pg-prov-rate{font-size:15px;font-weight:900;color:#f59e0b;}
+    .pg-prov-rate small{font-size:10px;font-weight:400;color:rgba(255,255,255,0.35);}
+    .pg-book-btn{padding:8px 16px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#060a0f;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;}
+    .pg-wa-btn{padding:8px 12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:5px;}
+    .pg-verified-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);padding:2px 7px;border-radius:999px;}
+    .pg-avail-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.6);}
+    .pg-pricing{padding:0 20px 24px;}
+    .pg-price-table{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;}
+    .pg-price-row{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .pg-price-row:last-child{border-bottom:none;}
+    .pg-price-row:nth-child(even){background:rgba(255,255,255,0.015);}
+    .pg-price-svc{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;}
+    .pg-price-emoji{font-size:18px;width:28px;text-align:center;}
+    .pg-price-range{font-size:13px;font-weight:900;color:#f59e0b;white-space:nowrap;}
+    .pg-reviews{padding:0 20px 24px;}
+    .pg-review-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
+    .pg-review-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;}
+    .pg-review-stars{color:#f59e0b;font-size:12px;margin-bottom:8px;}
+    .pg-review-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.55;margin-bottom:10px;font-style:italic;}
+    .pg-review-author{font-size:11px;font-weight:800;color:rgba(255,255,255,0.65);}
+    .pg-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99998;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px);}
+    .pg-modal-overlay.open{display:flex;}
+    .pg-modal{background:#0d1117;border:1px solid rgba(245,158,11,0.2);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;}
+    .pg-modal h2{font-size:17px;font-weight:900;margin-bottom:4px;}
+    .pg-modal-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;}
+    .pg-modal-close{float:right;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;}
+    .pg-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;}
+    .pg-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:12px;}
+    .pg-input:focus{border-color:rgba(245,158,11,0.4);}
+    .pg-input::placeholder{color:rgba(255,255,255,0.22);}
+    .pg-chips{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:6px;margin-bottom:14px;}
+    .pg-chip{padding:6px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;}
+    .pg-chip.sel{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+    .pg-submit-btn{width:100%;padding:13px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#060a0f;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;}
+    .pg-modal-msg{font-size:12px;min-height:16px;margin-top:10px;text-align:center;}
+    @media(max-width:600px){.pg-type-grid{grid-template-columns:repeat(3,1fr);}.pg-provider-grid{grid-template-columns:1fr;}}
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+<nav class="pg-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="pg-logo" alt="SOKONI"></a>
+  <div class="pg-nav-right">
+    <a href="index.html" class="pg-nav-link">🏠</a>
+    <a href="services.html" class="pg-nav-link">🛠️ All Services</a>
+    <button type="button" class="pg-nav-link pg-nav-book" onclick="openBooking()">📅 Book Now</button>
+  </div>
+</nav>
+
+<div class="pg-hero">
+  <div class="pg-badge">⚡ Electrical Hub</div>
+  <h1>Certified Electricians,<br><span>Safe & Reliable.</span></h1>
+  <p>Book verified electricians for wiring, sockets, security lights, solar installation, DB boards and fault finding — across Kenya same day or scheduled.</p>
+  <div class="pg-search">
+    <input type="text" id="pgSearch" placeholder="🔍 Search electricians, wiring, solar..." oninput="renderProviders()">
+    <button type="button" class="pg-search-btn" onclick="renderProviders()">Search</button>
+  </div>
+  <div class="pg-hero-stats">
+    <div class="pg-stat"><strong>20+</strong> Certified Electricians</div>
+    <div class="pg-stat"><strong>4.8★</strong> Avg. Rating</div>
+    <div class="pg-stat"><strong>Same Day</strong> Bookings</div>
+    <div class="pg-stat"><strong>6 Cities</strong> Kenya-wide</div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <div class="pg-section-title"><h2>💡 What Do You Need?</h2><span></span></div>
+  <div class="pg-type-grid">
+    <a href="#providers" class="pg-type-card" onclick="filterByType('wiring',this)"><span>🔌</span><p>Wiring & Sockets</p></a>
+    <a href="#providers" class="pg-type-card" onclick="filterByType('solar',this)"><span>☀️</span><p>Solar Installation</p></a>
+    <a href="#providers" class="pg-type-card" onclick="filterByType('security',this)"><span>💡</span><p>Security Lights</p></a>
+    <a href="#providers" class="pg-type-card" onclick="filterByType('db',this)"><span>⚙️</span><p>DB Board / Faults</p></a>
+    <a href="#providers" class="pg-type-card" onclick="filterByType('generator',this)"><span>🔋</span><p>Generator / Inverter</p></a>
+    <a href="#providers" class="pg-type-card" onclick="filterByType('cctv',this)"><span>📷</span><p>CCTV Wiring</p></a>
+    <a href="#providers" class="pg-type-card" onclick="filterByType('',this)"><span>🌍</span><p>All Electricians</p></a>
+  </div>
+</div>
+
+<div class="pg-section">
+  <div class="pg-section-title"><h2>⚡ How It Works</h2><span></span></div>
+  <div class="pg-steps">
+    <div class="pg-step"><div class="pg-step-num">1</div><h3>📝 Describe Job</h3><p>Tell us what needs wiring, fixing or installing</p></div>
+    <div class="pg-step"><div class="pg-step-num">2</div><h3>🔍 Pick Electrician</h3><p>Browse certified electricians & check reviews</p></div>
+    <div class="pg-step"><div class="pg-step-num">3</div><h3>📅 Book & Pay</h3><p>Book via M-Pesa or pay cash after job</p></div>
+    <div class="pg-step"><div class="pg-step-num">4</div><h3>💡 Lights On!</h3><p>Electrician arrives on time & works safely</p></div>
+  </div>
+</div>
+
+<div class="pg-providers" id="providers">
+  <div class="pg-section-title"><h2>⚡ Verified Electricians Near You</h2><span></span><span id="pgProvCount" style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:600;white-space:nowrap;"></span></div>
+  <div class="pg-filter-row">
+    <button type="button" class="pg-filter-pill active" onclick="filterByLoc('',this)">📍 All Kenya</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('nairobi',this)">Nairobi</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('mombasa',this)">Mombasa</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('kisumu',this)">Kisumu</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('nakuru',this)">Nakuru</button>
+  </div>
+  <div class="pg-provider-grid" id="pgProviderGrid"></div>
+</div>
+
+<div class="pg-pricing">
+  <div class="pg-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Typical Nairobi rates</span></div>
+  <div class="pg-price-table">
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🔌</span>Socket / Switch Install</div><div class="pg-price-range">KES 300 – 700</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">💡</span>Security Light Install</div><div class="pg-price-range">KES 500 – 1,500</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🏠</span>Full House Wiring (2-bed)</div><div class="pg-price-range">KES 15,000 – 40,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">☀️</span>Solar Panel Install (250W)</div><div class="pg-price-range">KES 8,000 – 20,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">⚙️</span>DB Board Upgrade</div><div class="pg-price-range">KES 5,000 – 15,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🔋</span>Inverter / UPS Install</div><div class="pg-price-range">KES 3,000 – 8,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">📷</span>CCTV Wiring (4 cameras)</div><div class="pg-price-range">KES 6,000 – 15,000</div></div>
+  </div>
+  <p style="font-size:10px;color:rgba(255,255,255,0.22);margin-top:8px;padding:0 4px;">* Prices vary by complexity and location. Get exact quotes by booking below.</p>
+</div>
+
+<div class="pg-reviews">
+  <div class="pg-section-title"><h2>⭐ What Customers Say</h2><span></span></div>
+  <div class="pg-review-grid">
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"ElectroPro wired our new office — clean work, labelled everything and left zero mess. Worth every shilling."</div><div class="pg-review-author">CEO — Tech Startup, Westlands</div></div>
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Solar installation done in one day. System working perfectly. Saved 80% on KPLC bill."</div><div class="pg-review-author">James W. — Karen</div></div>
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★☆</div><div class="pg-review-text">"Fixed a tripping circuit breaker that 3 others couldn't diagnose. Found a hidden fault in the wall. Legend."</div><div class="pg-review-author">Grace M. — South B</div></div>
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Installed 8 CCTV cameras and full security lighting for our warehouse. Professional and on time."</div><div class="pg-review-author">Operations Manager — Mombasa Road</div></div>
+  </div>
+</div>
+
+<div style="padding:0 20px 24px;">
+  <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(180,100,0,0.07));border:1px solid rgba(245,158,11,0.22);border-radius:20px;padding:24px 20px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:10px;">⚡💡</div>
+    <h2 style="font-size:18px;font-weight:900;margin-bottom:6px;">⚡ Need an Electrician Today?</h2>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Our certified electricians respond fast — no job too big or small</p>
+    <button type="button" onclick="openBooking()" style="padding:12px 24px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#060a0f;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;">📅 Book an Electrician Now</button>
+  </div>
+</div>
+
+<div style="padding:0 20px 32px;">
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <span style="font-size:40px;flex-shrink:0;">⚡</span>
+    <div style="flex:1;"><div style="font-size:15px;font-weight:900;margin-bottom:3px;">Are You a Certified Electrician?</div><div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;">Join SOKONI — get daily job requests and grow your electrical business across Kenya.</div></div>
+    <a href="provider.html?cat=electrical" style="flex-shrink:0;padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;">Join as Provider →</a>
+  </div>
+</div>
+
+<div class="pg-modal-overlay" id="pgModalOverlay" onclick="if(event.target===this)closeBooking()">
+  <div class="pg-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <h2>📅 Book an Electrician</h2>
+      <button type="button" class="pg-modal-close" onclick="closeBooking()">✕</button>
+    </div>
+    <div class="pg-modal-sub" id="pgModalSub">Fill in the details and a certified electrician will confirm within 30 minutes.</div>
+    <label class="pg-label">Service Type</label>
+    <div class="pg-chips" id="pgChips">
+      <span class="pg-chip sel" data-svc="Wiring" onclick="this.classList.toggle('sel')">🔌 Wiring</span>
+      <span class="pg-chip" data-svc="Solar" onclick="this.classList.toggle('sel')">☀️ Solar</span>
+      <span class="pg-chip" data-svc="Security Lights" onclick="this.classList.toggle('sel')">💡 Security Lights</span>
+      <span class="pg-chip" data-svc="DB Board" onclick="this.classList.toggle('sel')">⚙️ DB Board</span>
+      <span class="pg-chip" data-svc="Generator / Inverter" onclick="this.classList.toggle('sel')">🔋 Generator</span>
+      <span class="pg-chip" data-svc="CCTV Wiring" onclick="this.classList.toggle('sel')">📷 CCTV Wiring</span>
+    </div>
+    <label class="pg-label">Your Name</label>
+    <input class="pg-input" type="text" id="pgName" placeholder="e.g. John Kamau">
+    <label class="pg-label">Phone Number</label>
+    <input class="pg-input" type="tel" id="pgPhone" placeholder="07XXXXXXXX">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label class="pg-label">Date</label><input class="pg-input" type="date" id="pgDate" style="margin-bottom:0;"></div>
+      <div><label class="pg-label">Time</label><input class="pg-input" type="time" id="pgTime" style="margin-bottom:12px;"></div>
+    </div>
+    <label class="pg-label">Location / Address</label>
+    <input class="pg-input" type="text" id="pgAddress" placeholder="e.g. Westlands, Nairobi — Flat 3">
+    <label class="pg-label">Additional Notes (optional)</label>
+    <textarea class="pg-input" id="pgNotes" rows="2" placeholder="e.g. Power keeps tripping at kitchen circuit..." style="resize:none;"></textarea>
+    <button type="button" class="pg-submit-btn" onclick="submitBooking()">📅 Confirm Booking via WhatsApp →</button>
+    <div class="pg-modal-msg" id="pgModalMsg"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="electrical.html" class="bnav-item active-bnav"><span class="bnav-emoji">⚡</span><span>Electrical</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+const PROVIDERS = [
+  { id:'EL01', name:'ElectroPro Kenya', emoji:'⚡', location:'nairobi', locationLabel:'Nairobi (All Areas)', rate:'KES 2,000', rateType:'per job', rating:4.9, jobs:380, phone:'0711100101', verified:true, available:true, skills:['Full Wiring','Solar','DB Board','CCTV','Security Lights'], bio:'Master electrician — 9 yrs Nairobi. ERC licensed. Residential & commercial. Own materials.', type:['wiring','solar','db','security','cctv'] },
+  { id:'EL02', name:'SunPower Solar Kenya', emoji:'☀️', location:'nairobi', locationLabel:'Nairobi & Central Kenya', rate:'KES 3,500', rateType:'per job', rating:4.8, jobs:210, phone:'0722100202', verified:true, available:true, skills:['Solar Panels','Inverters','Batteries','Off-Grid','Net Metering'], bio:'Solar specialist — 6 yrs. Design, supply & install. Post-install warranty 1 year.', type:['solar','generator'] },
+  { id:'EL03', name:'James Waweru Electric', emoji:'🔌', location:'nairobi', locationLabel:'Kilimani / Lavington / Karen', rate:'KES 1,500', rateType:'per job', rating:4.8, jobs:290, phone:'0733100303', verified:true, available:true, skills:['Sockets','Switches','Fault Finding','Lighting','Home Wiring'], bio:'Reliable solo electrician — 7 yrs south Nairobi. Fast fault diagnosis. Weekend bookings.', type:['wiring','db','security'] },
+  { id:'EL04', name:'Mombasa Electrics Ltd', emoji:'🏙️', location:'mombasa', locationLabel:'Mombasa & Coastal Region', rate:'KES 2,500', rateType:'per job', rating:4.7, jobs:155, phone:'0744100404', verified:true, available:true, skills:['Industrial','Marine','Hotel Electrical','Solar','Generator'], bio:'Coastal electrical company — 8 yrs. Hotel & industrial contracts. Licensed ERC.', type:['wiring','solar','generator','cctv'] },
+  { id:'EL05', name:'PowerSafe Electricians', emoji:'🛡️', location:'nairobi', locationLabel:'Nairobi CBD & Industrial Area', rate:'KES 4,000', rateType:'per job', rating:4.8, jobs:120, phone:'0755100505', verified:true, available:false, skills:['Industrial Wiring','Generator','Transfer Switch','DB Upgrade','Safety Audit'], bio:'Industrial electrician — 10 yrs. Factories, warehouses, offices. Safety audit certificates.', type:['generator','db','wiring'] },
+];
+let activeType='',activeLoc='',selectedProv=null;
+function renderProviders(){const q=(document.getElementById('pgSearch')?.value||'').toLowerCase();let list=[...PROVIDERS];if(activeType)list=list.filter(p=>p.type.includes(activeType));if(activeLoc)list=list.filter(p=>p.location===activeLoc);if(q)list=list.filter(p=>p.name.toLowerCase().includes(q)||p.bio.toLowerCase().includes(q)||p.skills.some(s=>s.toLowerCase().includes(q)));const grid=document.getElementById('pgProviderGrid');const cnt=document.getElementById('pgProvCount');if(cnt)cnt.textContent=list.length+' providers found';if(!list.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">🔍</div><div style="font-size:13px;">No electricians found.<br><button type="button" onclick="clearFilters();" style="color:#f59e0b;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button></div></div>`;return;}grid.innerHTML=list.map(p=>`<div class="pg-provider-card"><div class="pg-prov-top"><div class="pg-prov-avatar">${p.emoji}</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;"><div class="pg-prov-name">${p.name}</div>${p.verified?'<span class="pg-verified-badge">✓ Verified</span>':''}</div><div class="pg-prov-loc"><i class="fas fa-map-marker-alt" style="color:#f59e0b;font-size:9px;"></i> ${p.locationLabel}</div><div class="pg-prov-rating"><span class="pg-prov-stars">${'★'.repeat(Math.floor(p.rating))}${'☆'.repeat(5-Math.floor(p.rating))}</span><span class="pg-prov-rnum">${p.rating} · ${p.jobs}+ jobs</span>${p.available?'<span class="pg-avail-dot"></span><span style="font-size:9px;color:#22c55e;font-weight:700;">Available</span>':'<span style="font-size:9px;color:rgba(255,255,255,0.3);">Unavailable</span>'}</div></div></div><div class="pg-prov-bio">"${p.bio}"</div><div class="pg-prov-skills">${p.skills.map(s=>`<span class="pg-prov-skill">${s}</span>`).join('')}</div><div class="pg-prov-foot"><div class="pg-prov-rate">${p.rate} <small>${p.rateType}</small></div><div style="display:flex;gap:6px;align-items:center;"><a href="https://wa.me/254${p.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I found you on SOKONI and need an electrician. Please confirm your availability.')}" target="_blank" class="pg-wa-btn"><i class="fab fa-whatsapp"></i> WhatsApp</a><button type="button" class="pg-book-btn" onclick="openBookingFor('${p.id}','${p.name}')">Book →</button><div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('el_'+(p.id||p.name),p.name,this,'electrician')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'electrician_'+'el_'+(p.id||p.name),name:p.name,category:'electrician',tagline:'',type:'electrician'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div></div></div></div>`).join('');}
+function filterByType(type,el){activeType=type;document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');renderProviders();}
+function filterByLoc(loc,btn){activeLoc=loc;document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));if(btn)btn.classList.add('active');renderProviders();}
+function clearFilters(){activeType='';activeLoc='';document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));document.querySelector('.pg-filter-pill')?.classList.add('active');document.getElementById('pgSearch').value='';renderProviders();}
+function openBooking(){selectedProv=null;document.getElementById('pgModalSub').textContent='Fill in the details and a certified electrician will confirm within 30 minutes.';document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';const t=new Date();t.setDate(t.getDate()+1);const d=document.getElementById('pgDate');if(d&&!d.value)d.value=t.toISOString().slice(0,10);}
+function openBookingFor(id,name){selectedProv=PROVIDERS.find(p=>p.id===id);document.getElementById('pgModalSub').textContent=`Booking with: ${selectedProv?.emoji||''} ${name}`;document.getElementById('pgModalOverlay').classList.add('open');document.body.style.overflow='hidden';const t=new Date();t.setDate(t.getDate()+1);const d=document.getElementById('pgDate');if(d&&!d.value)d.value=t.toISOString().slice(0,10);}
+function closeBooking(){document.getElementById('pgModalOverlay').classList.remove('open');document.body.style.overflow='';document.getElementById('pgModalMsg').textContent='';}
+function submitBooking(){if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('elec_book',10,300000)){if(msgEl){msgEl.textContent='⚠️ Too many attempts. Wait 5 min.';msgEl.style.color='#ff9800';}return;};const name=document.getElementById('pgName')?.value.trim();const phone=document.getElementById('pgPhone')?.value.trim();const date=document.getElementById('pgDate')?.value;const time=document.getElementById('pgTime')?.value;const address=document.getElementById('pgAddress')?.value.trim();const notes=document.getElementById('pgNotes')?.value.trim();const msgEl=document.getElementById('pgModalMsg');const services=[...document.querySelectorAll('#pgChips .pg-chip.sel')].map(c=>c.dataset.svc).join(', ');if(!name||!phone||!address){if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and address.';msgEl.style.color='#ff6b6b';}return;}const id='ELC'+Date.now().toString().slice(-7);const msg=`Hi${selectedProv?' '+selectedProv.name:''}! I found you on SOKONI and need an electrician.\n\n📋 Booking ID: ${id}\n👤 Name: ${name}\n📞 Phone: ${phone}\n⚡ Service: ${services||'General Electrical'}\n📅 Date: ${date||'TBD'} at ${time||'TBD'}\n📍 Location: ${address}\n${notes?'📝 Notes: '+notes+'\n':''}\nPlease confirm your availability. Thank you!`;(typeof SokoniPay!=='undefined'&&SokoniPay.waConnect?SokoniPay.waConnect((selectedProv?.phone||'0705726803').replace(/^0/,'254').replace(/\D/g,''),msg,{providerName:selectedProv?.name||'SOKONI Electricians',category:'electrical',serviceDesc:services||'Electrical Service'}):window.open(`https://wa.me/254${(selectedProv?.phone||'0705726803').replace(/^0/,'')}?text=${encodeURIComponent(msg)}`,'_blank'));let _bks=[];try{_bks=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}; _bks.unshift({id,type:'electrical',service:services||'General Electrical',name,phone,date,time,address,notes,provider:selectedProv?.name||'Any Electrician',status:'requested',createdAt:new Date().toISOString()}); localStorage.setItem('sokoniBookings',JSON.stringify(_bks.slice(0,100))); if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:services||'Electrical Service',category:'Electrical',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id,sellerName:selectedProv?.name||'SOKONI Electricians',date:new Date().toISOString(),notes:address});},700); if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#f59e0b;">${id}</strong> sent via WhatsApp!`;msgEl.style.color='#22c55e';}setTimeout(closeBooking,3000);}
+window.openBooking=openBooking;window.openBookingFor=openBookingFor;window.closeBooking=closeBooking;window.submitBooking=submitBooking;
+renderProviders();
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'home-services', category:'electrical'})" style="padding:12px 28px;background:#facc15;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

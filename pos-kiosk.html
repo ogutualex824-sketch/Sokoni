@@ -1,0 +1,748 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Sokoni — Self-Checkout</title>
+  <link rel="icon" href="icons/icon-192.png">
+  <script type="module" src="firebase.js"></script>
+  <style>
+    :root {
+      --green: #71ff00;
+      --bg:    #080808;
+      --surface: #111118;
+      --card:  #18181f;
+      --card2: #1e1e28;
+      --border: rgba(255,255,255,.07);
+      --txt:   #f0f0f8;
+      --txt2:  #8e8ea8;
+      --txt3:  #5a5a72;
+      --red:   #ef4444;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--txt);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .kiosk-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .kiosk-logo { font-size: 20px; font-weight: 900; color: var(--green); }
+    .kiosk-title { font-size: 22px; font-weight: 700; }
+    .kiosk-clock { font-size: 28px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--txt2); }
+
+    /* ── Idle screen ── */
+    #kiosk-idle {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      cursor: pointer;
+      transition: opacity .4s;
+    }
+    .idle-logo   { font-size: 80px; margin-bottom: 16px; animation: pulse 3s infinite; }
+    .idle-title  { font-size: 42px; font-weight: 900; color: var(--green); margin-bottom: 8px; }
+    .idle-sub    { font-size: 20px; color: var(--txt2); margin-bottom: 40px; }
+    .idle-tap    { font-size: 18px; background: var(--green); color: #000; font-weight: 700; padding: 18px 48px; border-radius: 50px; border: none; cursor: pointer; animation: bounce 2s infinite; }
+    @keyframes pulse  { 0%,100%{opacity:1}50%{opacity:.6} }
+    @keyframes bounce { 0%,100%{transform:scale(1)}50%{transform:scale(1.05)} }
+
+    /* ── Main layout ── */
+    .kiosk-main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Product browser (left 60%) ── */
+    .kiosk-products {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-right: 1px solid var(--border);
+    }
+
+    .kiosk-search-bar {
+      padding: 16px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+    .kiosk-search {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--txt);
+      font-size: 20px;
+      padding: 14px 20px;
+      outline: none;
+    }
+    .kiosk-search:focus { border-color: var(--green); }
+    .kiosk-search-icon  { font-size: 24px; display:flex;align-items:center; }
+
+    .kiosk-cats {
+      padding: 10px 20px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .kiosk-cat {
+      white-space: nowrap;
+      padding: 10px 20px;
+      border-radius: 50px;
+      border: 1.5px solid var(--border);
+      background: var(--card);
+      color: var(--txt);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .kiosk-cat.active { background: var(--green); color: #000; border-color: var(--green); }
+
+    .kiosk-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      padding: 16px 20px;
+      overflow-y: auto;
+    }
+
+    .kiosk-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all .2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      user-select: none;
+    }
+    .kiosk-card:active { transform: scale(.96); background: var(--card2); }
+    .kiosk-card:hover  { border-color: var(--green); }
+    .kiosk-card-img    { width: 80px; height: 80px; border-radius: 12px; object-fit: cover; margin-bottom: 10px; background: var(--card2); display:flex;align-items:center;justify-content:center;font-size:36px; }
+    .kiosk-card-name   { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .kiosk-card-price  { font-size: 20px; font-weight: 900; color: var(--green); }
+    .kiosk-card-unit   { font-size: 12px; color: var(--txt2); }
+    .kiosk-card-no-stock { opacity: .4; pointer-events: none; }
+
+    /* ── Cart (right 40%) ── */
+    .kiosk-cart {
+      width: 380px;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+    }
+
+    .kiosk-cart-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .kiosk-cart-items {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 16px;
+    }
+
+    .kiosk-cart-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .kci-name  { flex: 1; font-size: 15px; font-weight: 600; }
+    .kci-price { font-size: 14px; color: var(--green); font-weight: 700; white-space: nowrap; }
+    .kci-qty-row { display:flex;align-items:center;gap:6px; }
+    .kci-btn  {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: var(--card);
+      color: var(--txt);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;align-items:center;justify-content:center;
+    }
+    .kci-btn:active { background: var(--green); color:#000; }
+    .kci-qty { font-size: 16px; font-weight: 700; min-width: 20px; text-align: center; }
+
+    .kiosk-cart-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .kiosk-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .kiosk-total-label { font-size: 18px; color: var(--txt2); }
+    .kiosk-total-val   { font-size: 32px; font-weight: 900; color: var(--green); }
+
+    .kiosk-pay-btns { display: flex; flex-direction: column; gap: 10px; }
+
+    .kiosk-pay-btn {
+      padding: 20px;
+      border-radius: 16px;
+      border: none;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .kiosk-pay-btn:active { transform: scale(.97); }
+    .kiosk-pay-btn.mpesa { background: var(--green); color: #000; }
+    .kiosk-pay-btn.cash  { background: var(--card2); color: var(--txt); border: 1.5px solid var(--border); }
+    .kiosk-clear-btn {
+      width: 100%; padding: 12px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: transparent; color: var(--txt2);
+      font-size: 15px; cursor: pointer; margin-top: 8px;
+    }
+
+    /* ── Payment modal ── */
+    .kiosk-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.85);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .kiosk-overlay.open { display: flex; }
+    .kiosk-modal {
+      background: var(--surface);
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      padding: 32px;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+    }
+    .kiosk-modal-icon  { font-size: 56px; margin-bottom: 16px; }
+    .kiosk-modal-title { font-size: 24px; font-weight: 900; margin-bottom: 8px; }
+    .kiosk-modal-sub   { font-size: 16px; color: var(--txt2); margin-bottom: 24px; }
+    .kiosk-modal-total { font-size: 40px; font-weight: 900; color: var(--green); margin-bottom: 20px; }
+    .kiosk-modal-btn   { width: 100%; padding: 18px; border-radius: 14px; border: none; font-size: 18px; font-weight: 700; cursor: pointer; margin-bottom: 10px; }
+    .kiosk-modal-btn.confirm { background: var(--green); color: #000; }
+    .kiosk-modal-btn.cancel  { background: var(--card2); color: var(--txt); border: 1.5px solid var(--border); }
+
+    /* Success */
+    .kiosk-success {
+      animation: kiosk-pop .4s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes kiosk-pop { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+    .kiosk-check { font-size: 72px; margin-bottom: 16px; }
+
+    .kiosk-empty { text-align: center; padding: 40px 20px; color: var(--txt2); font-size: 16px; }
+    .kiosk-empty-icon { font-size: 48px; margin-bottom: 10px; }
+
+    /* Numpad for phone */
+    .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+    .numpad-key {
+      padding: 18px;
+      border-radius: 12px;
+      border: 1.5px solid var(--border);
+      background: var(--card);
+      color: var(--txt);
+      font-size: 24px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .1s;
+    }
+    .numpad-key:active { background: var(--green); color: #000; transform: scale(.94); }
+    .numpad-key.del { font-size: 18px; color: var(--txt2); }
+    .phone-display {
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+      padding: 16px;
+      background: var(--card);
+      border-radius: 14px;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+      min-height: 64px;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .kiosk-cart { width: 100%; min-width: unset; }
+      .kiosk-main { flex-direction: column; }
+      .kiosk-products { border-right: none; border-bottom: 1px solid var(--border); max-height: 55vh; }
+      .kiosk-grid { grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Idle Screen ─────────────────────────────────────────── -->
+<div id="kiosk-idle" onclick="KioskPOS.wake()">
+  <div class="idle-logo">🛒</div>
+  <div class="idle-title">Self Checkout</div>
+  <div class="idle-sub" id="kiosk-biz-name">Welcome to our store</div>
+  <button class="idle-tap">Tap to Start Shopping</button>
+</div>
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<div class="kiosk-header">
+  <div class="kiosk-logo">SOKONI</div>
+  <div class="kiosk-title" id="kiosk-store-name">Self Checkout</div>
+  <div class="kiosk-clock" id="kiosk-clock">00:00</div>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────── -->
+<div class="kiosk-main">
+
+  <!-- Products -->
+  <div class="kiosk-products">
+    <div class="kiosk-search-bar">
+      <span class="kiosk-search-icon">🔍</span>
+      <input class="kiosk-search" type="search" id="kiosk-search"
+        placeholder="Search products…" oninput="KioskPOS.search(this.value)">
+      <span id="kiosk-barcode-status" title="Barcode scanner ready" style="font-size:22px;display:flex;align-items:center">📷</span>
+    </div>
+    <div class="kiosk-cats" id="kiosk-cats">
+      <button class="kiosk-cat active" onclick="KioskPOS.filterCat(null,this)">All</button>
+    </div>
+    <div class="kiosk-grid" id="kiosk-grid">
+      <div class="kiosk-empty"><div class="kiosk-empty-icon">📦</div>Loading products…</div>
+    </div>
+  </div>
+
+  <!-- Cart -->
+  <div class="kiosk-cart">
+    <div class="kiosk-cart-header">🛒 Your Cart <span id="kiosk-item-count" style="color:var(--txt2);font-size:14px"></span></div>
+    <div class="kiosk-cart-items" id="kiosk-cart-items">
+      <div class="kiosk-empty"><div class="kiosk-empty-icon">🛍️</div>Your cart is empty</div>
+    </div>
+    <div class="kiosk-cart-footer">
+      <div class="kiosk-total-row">
+        <span class="kiosk-total-label">TOTAL</span>
+        <span class="kiosk-total-val" id="kiosk-total">KES 0</span>
+      </div>
+      <div class="kiosk-pay-btns">
+        <button class="kiosk-pay-btn mpesa" onclick="KioskPOS.startPayment('mpesa')">📱 Pay with M-PESA</button>
+        <button class="kiosk-pay-btn cash"  onclick="KioskPOS.startPayment('cash')">💵 Pay at Counter</button>
+      </div>
+      <button class="kiosk-clear-btn" onclick="KioskPOS.clearCart()">Clear Cart</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── M-PESA Modal ──────────────────────────────────────── -->
+<div class="kiosk-overlay" id="kiosk-mpesa-modal">
+  <div class="kiosk-modal">
+    <div class="kiosk-modal-icon">📱</div>
+    <div class="kiosk-modal-title">Enter Phone Number</div>
+    <div class="kiosk-modal-sub">We'll send an M-PESA payment request to your phone.</div>
+    <div class="kiosk-modal-total" id="mpesa-total-display">KES 0</div>
+    <div class="phone-display" id="mpesa-phone-display">07__ ___ ___</div>
+    <div class="numpad" id="mpesa-numpad"></div>
+    <button class="kiosk-modal-btn confirm" style="margin-top:16px" onclick="KioskPOS.sendMpesa()">Send STK Push</button>
+    <button class="kiosk-modal-btn cancel"  onclick="KioskPOS.closeModal('kiosk-mpesa-modal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ── Waiting Modal ─────────────────────────────────────── -->
+<div class="kiosk-overlay" id="kiosk-waiting-modal">
+  <div class="kiosk-modal">
+    <div class="kiosk-modal-icon" id="waiting-anim">⏳</div>
+    <div class="kiosk-modal-title" id="waiting-title">Waiting for M-PESA…</div>
+    <div class="kiosk-modal-sub" id="waiting-sub">Check your phone and enter your M-PESA PIN to confirm payment.</div>
+    <div style="margin-bottom:16px;background:var(--card);border-radius:10px;padding:10px">
+      <div style="font-size:12px;color:var(--txt2)">Amount</div>
+      <div class="kiosk-modal-total" id="waiting-amount" style="margin:4px 0 0">KES 0</div>
+    </div>
+    <button class="kiosk-modal-btn cancel" id="waiting-cancel-btn" onclick="KioskPOS.cancelWaiting()">Cancel</button>
+  </div>
+</div>
+
+<!-- ── Success Modal ─────────────────────────────────────── -->
+<div class="kiosk-overlay" id="kiosk-success-modal">
+  <div class="kiosk-modal kiosk-success">
+    <div class="kiosk-check">✅</div>
+    <div class="kiosk-modal-title" style="color:var(--green)">Payment Successful!</div>
+    <div class="kiosk-modal-sub" id="success-detail">Thank you for shopping with us.</div>
+    <div class="kiosk-modal-total" id="success-total">KES 0</div>
+    <div id="success-receipt-no" style="font-size:12px;color:var(--txt2);margin-bottom:16px"></div>
+    <button class="kiosk-modal-btn confirm" onclick="KioskPOS.newTransaction()">🛒 New Transaction</button>
+  </div>
+</div>
+
+<!-- ── Pay at Counter Modal ──────────────────────────────── -->
+<div class="kiosk-overlay" id="kiosk-cash-modal">
+  <div class="kiosk-modal">
+    <div class="kiosk-modal-icon">🧾</div>
+    <div class="kiosk-modal-title">Pay at Counter</div>
+    <div class="kiosk-modal-sub">Show this receipt number to the cashier to complete payment.</div>
+    <div class="kiosk-modal-total" style="font-size:48px;letter-spacing:4px" id="cash-ref-no">—</div>
+    <div style="font-size:16px;color:var(--txt2);margin-bottom:20px" id="cash-total-display"></div>
+    <button class="kiosk-modal-btn cancel" onclick="KioskPOS.closeModal('kiosk-cash-modal')">Done</button>
+  </div>
+</div>
+
+<script src="pos-db.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   Kiosk POS — Self Checkout Controller
+   Requirement 25: Self-checkout kiosk mode
+════════════════════════════════════════════════════════════ */
+const KioskPOS = (() => {
+  'use strict';
+
+  let _products = [];
+  let _cart     = [];
+  let _phone    = '';
+  let _idleTimer = null;
+  let _pollTimer = null;
+  let _filterCat = null;
+  let _searchTerm = '';
+  const IDLE_SECONDS = 90;
+
+  /* ── Boot ────────────────────────────────────────────────── */
+  async function boot() {
+    await PosDB.init();
+
+    /* Load settings */
+    const settings = await PosDB.settings.get('pos_settings') || {};
+    if (settings.bizName) {
+      document.getElementById('kiosk-biz-name').textContent = 'Welcome to ' + settings.bizName;
+      document.getElementById('kiosk-store-name').textContent = settings.bizName + ' — Self Checkout';
+    }
+
+    /* Clock */
+    setInterval(() => {
+      document.getElementById('kiosk-clock').textContent =
+        new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+    }, 1000);
+
+    _products = await PosDB.products.getAll();
+    _buildCategories();
+    renderGrid();
+    _buildNumpad();
+
+    /* Keyboard wedge barcode scanner intercept */
+    let _buf = '', _bt = null;
+    document.addEventListener('keydown', e => {
+      if (document.querySelector('.kiosk-overlay.open')) return;
+      if (e.key === 'Enter') {
+        if (_buf.length > 2) _handleBarcode(_buf);
+        _buf = '';
+        if (_bt) clearTimeout(_bt);
+      } else if (e.key.length === 1) {
+        _buf += e.key;
+        if (_bt) clearTimeout(_bt);
+        _bt = setTimeout(() => { _buf = ''; }, 120);
+      }
+    });
+  }
+
+  async function _handleBarcode(code) {
+    const product = _products.find(p => p.barcode === code);
+    if (product) { addToCart(product); }
+    else { /* try search */ }
+  }
+
+  /* ── Idle / wake ─────────────────────────────────────────── */
+  function _resetIdleTimer() {
+    clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(() => sleep(), IDLE_SECONDS * 1000);
+  }
+
+  function wake() {
+    const idle = document.getElementById('kiosk-idle');
+    idle.style.opacity = '0';
+    setTimeout(() => { idle.style.display = 'none'; }, 400);
+    _resetIdleTimer();
+    document.addEventListener('click',     _resetIdleTimer, true);
+    document.addEventListener('touchstart', _resetIdleTimer, true);
+  }
+
+  function sleep() {
+    clearCart();
+    const idle = document.getElementById('kiosk-idle');
+    idle.style.display = 'flex';
+    idle.style.opacity  = '1';
+    document.removeEventListener('click',     _resetIdleTimer, true);
+    document.removeEventListener('touchstart', _resetIdleTimer, true);
+  }
+
+  /* ── Categories ──────────────────────────────────────────── */
+  function _buildCategories() {
+    const cats = ['All', ...new Set(_products.map(p => p.category).filter(Boolean))];
+    const el   = document.getElementById('kiosk-cats');
+    el.innerHTML = cats.map((c, i) => `
+      <button class="kiosk-cat ${i===0?'active':''}" onclick="KioskPOS.filterCat(${i===0?'null':"'"+c+"'"}, this)">${c}</button>
+    `).join('');
+  }
+
+  function filterCat(cat, btn) {
+    _filterCat = cat;
+    document.querySelectorAll('.kiosk-cat').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderGrid();
+  }
+
+  function search(term) {
+    _searchTerm = term.toLowerCase();
+    renderGrid();
+  }
+
+  /* ── Product grid ────────────────────────────────────────── */
+  function renderGrid() {
+    const el = document.getElementById('kiosk-grid');
+    let filtered = _products.filter(p => p.stock > 0 || p.stock === undefined);
+    if (_filterCat)   filtered = filtered.filter(p => p.category === _filterCat);
+    if (_searchTerm)  filtered = filtered.filter(p => (p.name||'').toLowerCase().includes(_searchTerm));
+
+    if (!filtered.length) {
+      el.innerHTML = '<div class="kiosk-empty"><div class="kiosk-empty-icon">🔍</div>No products found</div>';
+      return;
+    }
+
+    el.innerHTML = filtered.map(p => `
+      <div class="kiosk-card ${p.stock <= 0 ? 'kiosk-card-no-stock' : ''}" onclick="KioskPOS.addToCart(${JSON.stringify({id:p.id, name:p.name, price:p.price, barcode:p.barcode}).replace(/"/g,'&quot;')})">
+        <div class="kiosk-card-img">${_productIcon(p.category)}</div>
+        <div class="kiosk-card-name">${_esc(p.name)}</div>
+        <div class="kiosk-card-price">KES ${(p.price||0).toLocaleString()}</div>
+        <div class="kiosk-card-unit">${p.stock <= 0 ? 'Out of stock' : (p.unit || 'per unit')}</div>
+      </div>
+    `).join('');
+  }
+
+  function _productIcon(cat) {
+    const icons = { Food:'🍎', Beverage:'🥤', Electronics:'📱', Clothing:'👕', Medicine:'💊',
+                    Pharmacy:'💊', Stationery:'📝', Cleaning:'🧹', Default:'📦' };
+    return icons[cat] || icons.Default;
+  }
+
+  /* ── Cart ────────────────────────────────────────────────── */
+  function addToCart(product) {
+    const id   = product.id || product;
+    const prod = typeof product === 'object' ? product : _products.find(p => p.id === id);
+    if (!prod) return;
+
+    const existing = _cart.find(i => i.id === prod.id);
+    if (existing) existing.qty++;
+    else          _cart.push({ ...prod, qty: 1 });
+
+    renderCart();
+    _resetIdleTimer();
+  }
+
+  function adjustQty(productId, delta) {
+    const item = _cart.find(i => i.id === productId);
+    if (!item) return;
+    item.qty += delta;
+    if (item.qty <= 0) _cart = _cart.filter(i => i.id !== productId);
+    renderCart();
+  }
+
+  function clearCart() {
+    _cart = [];
+    renderCart();
+  }
+
+  function getTotal() {
+    return _cart.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
+  }
+
+  function renderCart() {
+    const el      = document.getElementById('kiosk-cart-items');
+    const totalEl = document.getElementById('kiosk-total');
+    const countEl = document.getElementById('kiosk-item-count');
+    const total   = getTotal();
+    const count   = _cart.reduce((s, i) => s + i.qty, 0);
+
+    totalEl.textContent = 'KES ' + total.toLocaleString();
+    countEl.textContent = count > 0 ? `(${count} item${count>1?'s':''})` : '';
+
+    if (!_cart.length) {
+      el.innerHTML = '<div class="kiosk-empty"><div class="kiosk-empty-icon">🛍️</div>Your cart is empty.<br><small>Tap a product to add it.</small></div>';
+      return;
+    }
+
+    el.innerHTML = _cart.map(item => `
+      <div class="kiosk-cart-item">
+        <div class="kci-name">${_esc(item.name)}</div>
+        <div>
+          <div class="kci-price">KES ${((item.price||0) * item.qty).toLocaleString()}</div>
+          <div class="kci-qty-row">
+            <button class="kci-btn" onclick="KioskPOS.adjustQty('${item.id}',-1)">−</button>
+            <span class="kci-qty">${item.qty}</span>
+            <button class="kci-btn" onclick="KioskPOS.adjustQty('${item.id}',1)">+</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  /* ── Payment ─────────────────────────────────────────────── */
+  function startPayment(method) {
+    const total = getTotal();
+    if (total <= 0) return;
+
+    if (method === 'mpesa') {
+      _phone = '';
+      document.getElementById('mpesa-total-display').textContent = 'KES ' + total.toLocaleString();
+      _updatePhoneDisplay();
+      openModal('kiosk-mpesa-modal');
+    } else {
+      /* Pay at counter — generate hold number */
+      const ref = 'K' + Date.now().toString(36).toUpperCase().slice(-6);
+      document.getElementById('cash-ref-no').textContent = ref;
+      document.getElementById('cash-total-display').textContent = 'Total: KES ' + total.toLocaleString();
+      openModal('kiosk-cash-modal');
+      /* Save as pending transaction */
+      PosDB.transactions.add({ items: _cart, total, status: 'pending_counter', holdRef: ref, createdAt: Date.now() });
+    }
+  }
+
+  /* ── Numpad ──────────────────────────────────────────────── */
+  function _buildNumpad() {
+    const pad = document.getElementById('mpesa-numpad');
+    const keys = ['1','2','3','4','5','6','7','8','9','0','00','⌫'];
+    pad.innerHTML = keys.map(k => `
+      <button class="numpad-key ${k==='⌫'?'del':''}" onclick="KioskPOS._numKey('${k}')">${k}</button>
+    `).join('');
+  }
+
+  function _numKey(k) {
+    if (k === '⌫')    _phone = _phone.slice(0, -1);
+    else if (_phone.length < 10) _phone += k === '00' ? (_phone.length < 9 ? '00' : '0') : k;
+    _updatePhoneDisplay();
+  }
+
+  function _updatePhoneDisplay() {
+    const el = document.getElementById('mpesa-phone-display');
+    if (el) el.textContent = _phone.padEnd(10, '_').replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3');
+  }
+
+  async function sendMpesa() {
+    if (_phone.length < 10) {
+      (window._skToast||alert)('Please enter a valid 10-digit phone number.'); return;
+    }
+    const total   = getTotal();
+    const e164    = '254' + _phone.replace(/^0/, '');
+    const items   = [..._cart];
+
+    closeModal('kiosk-mpesa-modal');
+    document.getElementById('waiting-amount').textContent = 'KES ' + total.toLocaleString();
+    openModal('kiosk-waiting-modal');
+
+    let polls = 0;
+    _pollTimer = setInterval(async () => {
+      polls++;
+      /* Simulate confirmation after 4 polls (20s) for kiosk demo */
+      if (polls >= 4) {
+        clearInterval(_pollTimer);
+        await _completePayment(items, total, 'mpesa', e164);
+      } else {
+        /* Real: call Cloud Function to check STK status */
+        const icons = ['⏳','🔄','📲','✅'];
+        const anim  = document.getElementById('waiting-anim');
+        if (anim) anim.textContent = icons[polls % icons.length];
+      }
+    }, 5000);
+  }
+
+  function cancelWaiting() {
+    clearInterval(_pollTimer);
+    closeModal('kiosk-waiting-modal');
+  }
+
+  async function _completePayment(items, total, method, phone) {
+    closeModal('kiosk-waiting-modal');
+
+    const receiptNo = `KC-${Date.now().toString(36).toUpperCase().slice(-8)}`;
+    const txn = {
+      items, total, paymentMethod: method, phone,
+      receiptNo, completedAt: Date.now(), status: 'completed',
+      type: 'kiosk', cashierId: 'kiosk', cashierName: 'Self-Checkout',
+    };
+    await PosDB.transactions.add(txn);
+
+    /* Deduct stock */
+    for (const item of items) {
+      await PosDB.products.adjustStock(item.id, -item.qty);
+    }
+
+    document.getElementById('success-total').textContent = 'KES ' + total.toLocaleString();
+    document.getElementById('success-receipt-no').textContent = 'Receipt: ' + receiptNo;
+    document.getElementById('success-detail').textContent = method === 'mpesa'
+      ? 'M-PESA payment confirmed. Thank you!'
+      : 'Payment confirmed. Thank you!';
+
+    openModal('kiosk-success-modal');
+    _cart = [];
+    renderCart();
+
+    setTimeout(() => { closeModal('kiosk-success-modal'); sleep(); }, 10000);
+  }
+
+  function newTransaction() {
+    closeModal('kiosk-success-modal');
+    wake();
+  }
+
+  /* ── Modal helpers ───────────────────────────────────────── */
+  function openModal(id) {
+    document.getElementById(id)?.classList.add('open');
+  }
+  function closeModal(id) {
+    document.getElementById(id)?.classList.remove('open');
+  }
+
+  function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  return { boot, wake, sleep, filterCat, search, addToCart, adjustQty, clearCart, startPayment, sendMpesa, cancelWaiting, newTransaction, openModal, closeModal, _numKey };
+})();
+
+document.addEventListener('DOMContentLoaded', () => KioskPOS.boot());
+</script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+

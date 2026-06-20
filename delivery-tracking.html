@@ -1,0 +1,689 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<meta charset="UTF-8">
+<script src="auth-guard.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Track Delivery</title>
+<meta name="description" content="Live delivery tracking — see your rider on the map in real time.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css'">
+<script src="shared-header.js" defer></script>
+<style>
+  :root { --green:#71ff00; --blue:#00aaff; --card:rgba(255,255,255,0.04); --border:rgba(255,255,255,0.08); }
+  *{box-sizing:border-box;}
+  body { background:#0a0a0a; color:white; font-family:system-ui,-apple-system,sans-serif; margin:0; min-height:100vh; }
+
+  /* ── page wrapper ── */
+  .dt-wrap { max-width:520px; margin:0 auto; padding:20px 16px 100px; }
+
+  /* ── header ── */
+  .dt-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+  .dt-back { width:38px;height:38px;border-radius:12px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;text-decoration:none;color:white;flex-shrink:0; }
+  .dt-title { font-size:18px; font-weight:900; color:white; }
+  .dt-ref   { font-size:11px; color:rgba(255,255,255,0.35); font-weight:600; letter-spacing:.5px; margin-top:2px; }
+
+  /* ── status banner ── */
+  .dt-status { padding:14px 18px; border-radius:16px; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
+  .dt-status-icon { font-size:28px; flex-shrink:0; }
+  .dt-status-label { font-size:15px; font-weight:900; }
+  .dt-status-sub   { font-size:11px; color:rgba(255,255,255,0.5); margin-top:2px; }
+
+  /* ── live map ── */
+  /* overflow:hidden + border-radius clips Leaflet 3D tile pane on iOS Safari — use clip-path instead */
+  .dt-map-wrap { border-radius:18px; overflow:visible; clip-path:inset(0 round 18px); border:1px solid var(--border); margin-bottom:16px; position:relative; -webkit-transform:translateZ(0); transform:translateZ(0); }
+  #dtMap { height:240px; width:100%; background:#111; }
+  .dt-map-badge { position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:6px;z-index:400; }
+  .dt-live-dot { width:6px;height:6px;border-radius:50%;background:var(--green);animation:dtPulse 1.3s ease-in-out infinite; }
+  @keyframes dtPulse{ 0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(1.6);} }
+
+  /* ── timeline ── */
+  .dt-timeline { margin-bottom:16px; }
+  .dt-tl-step { display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .dt-tl-step:last-child { border-bottom:none; }
+  .dt-tl-dot  { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:1px; }
+  .dt-tl-dot.done    { background:rgba(113,255,0,0.15);border:1.5px solid rgba(113,255,0,0.5); }
+  .dt-tl-dot.current { background:rgba(0,170,255,0.15);border:2px solid var(--blue);animation:dtPulse 1.2s ease-in-out infinite; }
+  .dt-tl-dot.pending { background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1); }
+  .dt-tl-label { font-size:13px; font-weight:700; color:white; }
+  .dt-tl-label.pending { color:rgba(255,255,255,0.3); font-weight:600; }
+  .dt-tl-time  { font-size:10px; color:rgba(255,255,255,0.3); margin-top:2px; }
+
+  /* ── info card ── */
+  .dt-card { background:var(--card);border:1px solid var(--border);border-radius:18px;padding:18px 20px;margin-bottom:14px; }
+  .dt-card-title { font-size:12px;font-weight:800;color:rgba(255,255,255,0.4);letter-spacing:.7px;margin-bottom:12px; }
+  .dt-row { display:flex;justify-content:space-between;align-items:flex-start;font-size:12px;margin-bottom:8px;gap:8px; }
+  .dt-row-key { color:rgba(255,255,255,0.35);font-weight:600;white-space:nowrap; }
+  .dt-row-val { color:rgba(255,255,255,0.85);font-weight:700;text-align:right; }
+
+  /* ── PIN box ── */
+  .dt-pin { background:rgba(113,255,0,0.06);border:2px solid rgba(113,255,0,0.3);border-radius:16px;padding:18px 20px;margin-bottom:14px;text-align:center; }
+  .dt-pin-label { font-size:11px;font-weight:800;color:rgba(255,255,255,0.4);letter-spacing:.7px;margin-bottom:8px; }
+  .dt-pin-code  { font-size:36px;font-weight:900;letter-spacing:12px;color:var(--green);margin-bottom:6px; }
+  .dt-pin-hint  { font-size:11px;color:rgba(255,255,255,0.4); }
+
+  /* ── action buttons ── */
+  .dt-actions { display:flex;flex-direction:column;gap:10px;margin-bottom:14px; }
+  .dt-btn-primary { padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:14px;cursor:pointer;font-size:14px;font-family:inherit;width:100%; }
+  .dt-btn-secondary { padding:13px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.25);color:var(--blue);font-weight:800;border-radius:14px;cursor:pointer;font-size:13px;font-family:inherit;width:100%; }
+  .dt-btn-danger { padding:13px;background:rgba(255,61,61,0.07);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:800;border-radius:14px;cursor:pointer;font-size:13px;font-family:inherit;width:100%; }
+  .dt-btn-success{ padding:14px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:900;border:none;border-radius:14px;cursor:pointer;font-size:14px;font-family:inherit;width:100%; }
+
+  /* ── share row ── */
+  .dt-share { display:flex;gap:8px;margin-bottom:14px; }
+  .dt-share-btn { flex:1;padding:11px;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none; }
+
+  /* ── skeleton ── */
+  .dt-skeleton { animation:dtSkel 1.4s ease-in-out infinite; background:rgba(255,255,255,0.05);border-radius:10px; }
+  @keyframes dtSkel{ 0%,100%{opacity:.5;}50%{opacity:1;} }
+
+  /* ── toast ── */
+  .dt-toast { position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);padding:11px 22px;border-radius:12px;font-size:13px;font-weight:800;z-index:9999;opacity:0;transition:.3s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center; }
+  .dt-toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
+</style>
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<div class="dt-wrap">
+
+  <!-- Header -->
+  <div class="dt-header">
+    <a class="dt-back" href="javascript:history.back()">←</a>
+    <div>
+      <div class="dt-title">Live Delivery Tracking</div>
+      <div class="dt-ref" id="dtHeaderRef">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Status banner -->
+  <div class="dt-status" id="dtStatusBanner" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+    <div class="dt-status-icon">⏳</div>
+    <div>
+      <div class="dt-status-label" id="dtStatusLabel">Loading…</div>
+      <div class="dt-status-sub"  id="dtStatusSub">Fetching delivery details</div>
+    </div>
+  </div>
+
+  <!-- Live map -->
+  <div class="dt-map-wrap" id="dtMapWrap" style="display:none;">
+    <div id="dtMap"></div>
+    <div class="dt-map-badge"><div class="dt-live-dot"></div><span id="dtMapBadge">Live GPS</span></div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="dt-card" id="dtTimelineCard">
+    <div class="dt-card-title">DELIVERY TIMELINE</div>
+    <div class="dt-timeline" id="dtTimeline">
+      <div style="height:16px;width:60%;" class="dt-skeleton"></div>
+    </div>
+  </div>
+
+  <!-- PIN display (buyer only) -->
+  <div class="dt-pin" id="dtPINBox" style="display:none;">
+    <div class="dt-pin-label">YOUR DELIVERY PIN</div>
+    <div class="dt-pin-code" id="dtPINCode">——</div>
+    <div class="dt-pin-hint">Show this code to the rider when they arrive at your door</div>
+  </div>
+
+  <!-- Delivery details -->
+  <div class="dt-card" id="dtDetailsCard" style="display:none;">
+    <div class="dt-card-title">DELIVERY DETAILS</div>
+    <div id="dtDetails"></div>
+  </div>
+
+  <!-- Driver info (shown when assigned) -->
+  <div class="dt-card" id="dtDriverCard" style="display:none;">
+    <div class="dt-card-title">YOUR RIDER</div>
+    <div id="dtDriverInfo"></div>
+  </div>
+
+  <!-- Action buttons (role-dependent) -->
+  <div class="dt-actions" id="dtActions"></div>
+
+  <!-- Share row -->
+  <div class="dt-share" id="dtShare">
+    <button class="dt-share-btn" style="background:rgba(37,211,102,0.08);border-color:rgba(37,211,102,0.25);color:rgba(37,211,102,0.9);" onclick="dtShareWA()">
+      💬 Share on WhatsApp
+    </button>
+    <button class="dt-share-btn" style="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);" onclick="dtCopyLink()">
+      🔗 Copy Link
+    </button>
+  </div>
+
+</div><!-- .dt-wrap -->
+
+<div class="dt-toast" id="dtToast"></div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="delivery.html" class="bnav-item"><span class="bnav-emoji">🚚</span><span>Delivery</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s);"></script>
+<script src="sokoni-routing.js"></script>
+<script type="module">
+import SokoniDelivery from './sokoni-delivery.js';
+import SokoniDB       from './sokoni-db.js';
+import DeliveryHub    from './delivery-hub.js';
+
+/* ── helpers ── */
+function _uid() {
+  try {
+    const u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    return window.firebaseAuth?.currentUser?.uid || u?.uid || null;
+  } catch(e){ return null; }
+}
+
+function toast(msg, ok) {
+  const t = document.getElementById('dtToast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.background = ok === false ? '#ff4444' : ok === 'blue' ? '#00aaff' : '#71ff00';
+  t.style.color = ok === false ? 'white' : 'black';
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ── Timeline steps definition ── */
+const STEPS = [
+  { key:'order_placed',    icon:'🛒', label:'Order Placed'           },
+  { key:'ready_for_pickup',icon:'✅', label:'Ready for Pickup'       },
+  { key:'driver_assigned', icon:'🏍️', label:'Rider Assigned'         },
+  { key:'driver_accepted', icon:'🟢', label:'Rider Heading to Seller'},
+  { key:'driver_at_seller',icon:'📍', label:'Rider at Seller'        },
+  { key:'in_transit',      icon:'🚗', label:'In Transit'             },
+  { key:'delivered',       icon:'📦', label:'Delivered'              },
+  { key:'buyer_confirmed', icon:'🎉', label:'Receipt Confirmed'      },
+];
+const CANCELLED = { key:'cancelled', icon:'❌', label:'Cancelled' };
+
+/* Hub-only timeline steps (deliveries collection) */
+const STEPS_HUB = [
+  { key:'pending',         icon:'⏳', label:'Delivery Created'          },
+  { key:'rider_assigned',  icon:'🏍️', label:'Rider Assigned'            },
+  { key:'rider_en_route',  icon:'🛵', label:'Rider Heading to Pickup'   },
+  { key:'picked_up',       icon:'📍', label:'Package Picked Up'         },
+  { key:'in_transit',      icon:'🚗', label:'In Transit to You'         },
+  { key:'delivered',       icon:'📦', label:'Delivered'                 },
+  { key:'completed',       icon:'🎉', label:'Receipt Confirmed'         },
+];
+
+const STATUS_BANNER = {
+  order_placed:     { label:'Order Placed',            sub:'Waiting for seller to confirm the item is ready', color:'rgba(251,191,36,0.12)', border:'rgba(251,191,36,0.3)', icon:'🛒' },
+  ready_for_pickup: { label:'Ready for Pickup',        sub:'Item is ready — searching for nearest rider',    color:'rgba(113,255,0,0.08)',  border:'rgba(113,255,0,0.3)',  icon:'✅' },
+  driver_assigned:  { label:'Rider Assigned',          sub:'Rider has been notified — waiting for acceptance', color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🏍️' },
+  driver_accepted:  { label:'Rider En Route to Seller',sub:'Your rider is on the way to pick up the item',   color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🛵' },
+  driver_at_seller: { label:'Rider at Seller',         sub:'Rider has arrived — item being handed over',     color:'rgba(255,165,0,0.08)', border:'rgba(255,165,0,0.3)', icon:'📍' },
+  in_transit:       { label:'In Transit',              sub:'Your item is on the way to you right now!',      color:'rgba(0,170,255,0.1)',  border:'rgba(0,170,255,0.4)', icon:'🚗' },
+  delivered:        { label:'Delivered!',              sub:'Item delivered — please confirm receipt below',  color:'rgba(113,255,0,0.1)',  border:'rgba(113,255,0,0.4)', icon:'📦' },
+  buyer_confirmed:  { label:'Receipt Confirmed',       sub:'Delivery complete. Thank you for using SOKONI!', color:'rgba(113,255,0,0.1)',  border:'rgba(113,255,0,0.35)','icon':'🎉' },
+  cancelled:        { label:'Delivery Cancelled',      sub:'This delivery was cancelled',                    color:'rgba(255,61,61,0.08)', border:'rgba(255,61,61,0.2)', icon:'❌' },
+  /* Hub (deliveries collection) statuses */
+  pending:          { label:'Delivery Created',        sub:'Looking for the nearest available rider',        color:'rgba(251,191,36,0.1)', border:'rgba(251,191,36,0.3)', icon:'⏳' },
+  rider_assigned:   { label:'Rider Assigned',          sub:'Your rider has been notified — awaiting acceptance', color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🏍️' },
+  rider_en_route:   { label:'Rider En Route to Pickup',sub:'Your rider is heading to collect the package',  color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🛵' },
+  picked_up:        { label:'Package Picked Up',       sub:'Rider has collected your package — heading to you!', color:'rgba(255,165,0,0.08)', border:'rgba(255,165,0,0.3)', icon:'📍' },
+  completed:        { label:'Delivery Complete',       sub:'Receipt confirmed. Thank you for using SOKONI!', color:'rgba(113,255,0,0.1)',  border:'rgba(113,255,0,0.35)', icon:'🎉' },
+};
+
+/* ── Source flag — 'pkg' (packageRequests) or 'hub' (deliveries) ── */
+let _delivSource = 'pkg';
+
+/* Normalise a hub delivery doc so _onDelivery can render it unchanged */
+function _normalizeHub(d) {
+  return {
+    ...d,
+    deliveryAddress: d.dropoffAddress || d.deliveryAddress,
+    deliveryCoords:  d.dropoffCoords  || d.deliveryCoords,
+    buyerUid:        d.senderUid      || d.buyerUid,
+    driverName:      d.riderName      || d.driverName,
+    assignedDriverId:d.assignedRiderId|| d.assignedDriverId,
+    /* keep _src so GPS handler knows which collection to use */
+    _src: 'hub',
+  };
+}
+
+/* ── Map state ── */
+let _map = null, _riderMarker = null, _routeLine = null;
+let _pickupMarker = null, _dropoffMarker = null;
+
+function _initMap(pickupLat, pickupLng) {
+  const wrap = document.getElementById('dtMapWrap');
+  if (!wrap || _map) return;
+  wrap.style.display = 'block';
+  const center = pickupLat ? [pickupLat, pickupLng] : [-1.2864, 36.8172];
+  _map = L.map('dtMap', { zoomControl:false, fadeAnimation:false, zoomAnimation:false }).setView(center, 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution:'© OpenStreetMap', maxZoom:19, detectRetina:false }).addTo(_map);
+  L.control.zoom({ position:'bottomright' }).addTo(_map);
+  [100,300,700,1400,2600].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));
+  window.addEventListener('resize',()=>_map?.invalidateSize(true));
+  window.addEventListener('orientationchange',()=>setTimeout(()=>_map?.invalidateSize(true),350));
+  try{screen.orientation.addEventListener('change',()=>setTimeout(()=>_map?.invalidateSize(true),350));}catch{}
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')[0,100,400].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));});
+}
+
+function _placeMarker(lat, lng, htmlIcon, popup) {
+  if (!_map) return null;
+  const ic = L.divIcon({ className:'', html:htmlIcon, iconSize:[38,38], iconAnchor:[19,38] });
+  const m  = L.marker([lat,lng], { icon:ic }).addTo(_map);
+  if (popup) m.bindPopup(popup);
+  return m;
+}
+
+function _updateRiderMarker(lat, lng, name) {
+  if (!_map) return;
+  if (!_riderMarker) {
+    _riderMarker = _placeMarker(lat, lng,
+      '<div style="font-size:22px;filter:drop-shadow(0 0 6px rgba(0,170,255,0.8));">🏍️</div>',
+      '🏍️ ' + (name || 'Your Rider'));
+  } else {
+    _riderMarker.setLatLng([lat, lng]);
+  }
+  _map.panTo([lat, lng], { animate:true, duration:1.5 });
+  document.getElementById('dtMapBadge').textContent = 'Live GPS · ' + lat.toFixed(4) + ', ' + lng.toFixed(4);
+}
+
+function _drawRoute(geom, fromLat, fromLng, toLat, toLng) {
+  if (!_map) return;
+  if (_routeLine) { _map.removeLayer(_routeLine); _routeLine = null; }
+  if (geom?.coordinates) {
+    const coords = geom.coordinates.map(([lng,lat]) => [lat,lng]);
+    _routeLine = L.polyline(coords, { color:'#00aaff', weight:4, opacity:0.55, dashArray:'8 4' }).addTo(_map);
+    _map.fitBounds(_routeLine.getBounds(), { padding:[30,30] });
+  } else if (fromLat && toLat) {
+    _routeLine = L.polyline([[fromLat,fromLng],[toLat,toLng]], { color:'#00aaff', weight:3, opacity:0.4, dashArray:'6 4' }).addTo(_map);
+    _map.fitBounds(_routeLine.getBounds(), { padding:[40,40] });
+  }
+}
+
+/* ── Timeline renderer ── */
+function _renderTimeline(currentStatus, timelineData, src) {
+  const el = document.getElementById('dtTimeline');
+  if (!el) return;
+  if (currentStatus === 'cancelled') {
+    el.innerHTML = `
+      <div class="dt-tl-step">
+        <div class="dt-tl-dot current">❌</div>
+        <div><div class="dt-tl-label">Delivery Cancelled</div><div class="dt-tl-time">${new Date().toLocaleTimeString()}</div></div>
+      </div>`;
+    return;
+  }
+  const stepList = src === 'hub' ? STEPS_HUB : STEPS;
+  const currentIdx = stepList.findIndex(s => s.key === currentStatus);
+  el.innerHTML = stepList.map((step, i) => {
+    const done    = i <  currentIdx;
+    const current = i === currentIdx;
+    const pending = i >  currentIdx;
+    const ts = (timelineData||[]).find(t => t.status === step.key)?.at;
+    const timeStr = ts ? new Date(ts).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}) : '';
+    const cls = done ? 'done' : current ? 'current' : 'pending';
+    return `
+      <div class="dt-tl-step">
+        <div class="dt-tl-dot ${cls}">${done ? '✓' : step.icon}</div>
+        <div>
+          <div class="dt-tl-label ${pending ? 'pending' : ''}">${step.label}</div>
+          ${timeStr ? `<div class="dt-tl-time">${timeStr}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ── Status banner renderer ── */
+function _renderBanner(status) {
+  const b  = STATUS_BANNER[status] || STATUS_BANNER.order_placed;
+  const el = document.getElementById('dtStatusBanner');
+  if (!el) return;
+  el.style.background = b.color;
+  el.style.border     = '1px solid ' + b.border;
+  el.innerHTML = `
+    <div class="dt-status-icon">${b.icon}</div>
+    <div>
+      <div class="dt-status-label">${b.label}</div>
+      <div class="dt-status-sub">${b.sub}</div>
+    </div>`;
+}
+
+/* ── Details card renderer ── */
+function _renderDetails(d) {
+  const el = document.getElementById('dtDetails');
+  const card = document.getElementById('dtDetailsCard');
+  if (!el || !card) return;
+  const fee   = Number(d.deliveryFee || 0).toLocaleString();
+  const total = Number(d.orderTotal  || 0).toLocaleString();
+  const items = (d.items||[]).map(i=>`${i.qty||1}× ${i.name||'Item'}`).join(', ') || '—';
+  el.innerHTML = `
+    <div class="dt-row"><span class="dt-row-key">From</span><span class="dt-row-val">${d.pickupAddress||'—'}</span></div>
+    <div class="dt-row"><span class="dt-row-key">To</span><span class="dt-row-val">${d.deliveryAddress||'—'}</span></div>
+    <div class="dt-row"><span class="dt-row-key">Items</span><span class="dt-row-val">${items}</span></div>
+    <div class="dt-row"><span class="dt-row-key">Order Total</span><span class="dt-row-val">KES ${total}</span></div>
+    <div class="dt-row"><span class="dt-row-key">Delivery Fee</span><span class="dt-row-val">KES ${fee}</span></div>
+    <div class="dt-row"><span class="dt-row-key">Speed</span><span class="dt-row-val">${(d.speed||'same_day').replace('_',' ')}</span></div>
+    ${d.distanceKm ? `<div class="dt-row"><span class="dt-row-key">Distance</span><span class="dt-row-val">${Number(d.distanceKm).toFixed(1)} km</span></div>` : ''}`;
+  card.style.display = 'block';
+}
+
+/* ── Driver card renderer ── */
+function _renderDriver(d) {
+  const el   = document.getElementById('dtDriverInfo');
+  const card = document.getElementById('dtDriverCard');
+  if (!el || !card || !d.driverName) return;
+  const eta  = d.etaMin ? '~' + d.etaMin + ' min away' : '';
+  el.innerHTML = `
+    <div class="dt-row"><span class="dt-row-key">Name</span><span class="dt-row-val">${d.driverName}</span></div>
+    ${d.driverPhone?`<div class="dt-row"><span class="dt-row-key">Phone</span><span class="dt-row-val">${d.driverPhone}</span></div>`:''}
+    ${d.driverPlate?`<div class="dt-row"><span class="dt-row-key">Plate</span><span class="dt-row-val">${d.driverPlate}</span></div>`:''}
+    ${eta?`<div class="dt-row"><span class="dt-row-key">ETA</span><span class="dt-row-val">${eta}</span></div>`:''}
+    ${d.driverPhone?`
+    <a href="tel:${d.driverPhone}" style="display:block;margin-top:8px;padding:10px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);border-radius:10px;color:var(--blue);font-weight:700;font-size:12px;text-align:center;text-decoration:none;">
+      📞 Call Rider
+    </a>`:''}`;
+  card.style.display = 'block';
+}
+
+/* ── Action buttons by role + status ── */
+function _renderActions(d, role) {
+  const el  = document.getElementById('dtActions');
+  if (!el) return;
+  const ref = d.deliveryRef || d.ref || d._fsId;
+  const btns = [];
+
+  if (role === 'seller') {
+    if (d.status === 'order_placed') {
+      btns.push(`<button class="dt-btn-primary" onclick="dtSellerConfirm('${ref}')">✅ Item Ready for Pickup</button>`);
+    }
+    if (d.status === 'cancelled' || d.status === 'buyer_confirmed') {
+      btns.push(`<button class="dt-btn-secondary" onclick="history.back()">← Back to Orders</button>`);
+    }
+  }
+
+  if (role === 'buyer') {
+    if (d._src === 'hub') {
+      /* Hub delivery — sender actions */
+      if (d.status === 'delivered') {
+        btns.push(`<button class="dt-btn-primary" onclick="dtHubConfirm('${d.id || ref}')">🎉 I Received My Package!</button>`);
+      }
+      if (['pending','rider_assigned'].includes(d.status)) {
+        btns.push(`<button class="dt-btn-danger" onclick="dtHubCancel('${d.id || ref}')">✕ Cancel Delivery</button>`);
+      }
+    } else {
+      if (d.status === 'delivered') {
+        btns.push(`<button class="dt-btn-primary" onclick="dtBuyerConfirm('${ref}')">🎉 I Received My Order!</button>`);
+      }
+      if (['in_transit','driver_accepted','driver_at_seller'].includes(d.status)) {
+        btns.push(`<button class="dt-btn-success" onclick="dtSOSBuyer('${ref}', '${d.driverPhone||''}')">🆘 SOS — Safety Issue</button>`);
+      }
+      if (d.status === 'order_placed') {
+        btns.push(`<button class="dt-btn-danger" onclick="dtCancelDelivery('${ref}')">✕ Cancel Order</button>`);
+      }
+    }
+  }
+
+  el.innerHTML = btns.join('');
+}
+
+/* ── GPS driver tracking listener ── */
+let _gpsUnsub = null;
+
+function _attachGPS(driverId, driverName, src) {
+  if (_gpsUnsub) { _gpsUnsub(); _gpsUnsub = null; }
+  if (!driverId) return;
+  if (src === 'hub') {
+    /* Hub deliveries track via deliveryLocations collection */
+    _gpsUnsub = DeliveryHub.listenRiderLocation(driverId, loc => {
+      if (loc?.lat && loc?.lng) _updateRiderMarker(loc.lat, loc.lng, driverName);
+    });
+  } else {
+    _gpsUnsub = SokoniDB.listenDriverLocation(driverId, loc => {
+      if (loc?.lat && loc?.lng) _updateRiderMarker(loc.lat, loc.lng, driverName);
+    });
+  }
+}
+
+/* ── Main delivery listener ── */
+let _deliveryUnsub = null;
+let _currentData   = null;
+let _mapReady      = false;
+
+function _onDelivery(d) {
+  if (!d) return;
+  _currentData = d;
+  const myUid = _uid();
+  const role  = myUid === d.buyerUid  ? 'buyer'
+              : myUid === d.sellerUid ? 'seller'
+              : 'viewer';
+
+  /* Header */
+  const refEl = document.getElementById('dtHeaderRef');
+  if (refEl) refEl.textContent = (d.deliveryRef || d.ref || '—') + (role !== 'viewer' ? ' · ' + role : '');
+
+  /* Banner */
+  _renderBanner(d.status);
+
+  /* Timeline */
+  _renderTimeline(d.status, d.timeline, d._src);
+
+  /* Buyer PIN */
+  const pinBox  = document.getElementById('dtPINBox');
+  const pinCode = document.getElementById('dtPINCode');
+  if (d.proofPIN && role === 'buyer' && !['delivered','buyer_confirmed','cancelled'].includes(d.status)) {
+    if (pinBox)  pinBox.style.display  = 'block';
+    if (pinCode) pinCode.textContent   = d.proofPIN;
+  } else {
+    if (pinBox) pinBox.style.display = 'none';
+  }
+
+  /* Details */
+  _renderDetails(d);
+
+  /* Proof photo (hub deliveries only, shown after delivered) */
+  if (d._src === 'hub' && d.proofPhotoUrl && ['delivered','completed'].includes(d.status)) {
+    let proofEl = document.getElementById('dtProofPhoto');
+    if (!proofEl) {
+      proofEl = document.createElement('div');
+      proofEl.id = 'dtProofPhoto';
+      proofEl.className = 'dt-card';
+      document.getElementById('dtDetailsCard')?.after(proofEl);
+    }
+    proofEl.innerHTML = `
+      <div class="dt-card-title">DELIVERY PROOF</div>
+      <img src="${d.proofPhotoUrl}" alt="Proof photo" style="width:100%;border-radius:12px;object-fit:cover;max-height:220px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:8px;text-align:center;">📸 Captured by rider at delivery</div>`;
+    proofEl.style.display = 'block';
+  }
+
+  /* Driver */
+  const hasDriver = d.driverName && (
+    ['driver_assigned','driver_accepted','driver_at_seller','in_transit'].includes(d.status) ||
+    (d._src === 'hub' && ['rider_assigned','rider_en_route','picked_up','in_transit'].includes(d.status))
+  );
+  if (hasDriver) _renderDriver(d);
+
+  /* Map */
+  const showMap = ['driver_accepted','driver_at_seller','in_transit',
+                   'rider_en_route','picked_up'].includes(d.status);
+  if (showMap && !_mapReady) {
+    _mapReady = true;
+    _initMap(d.pickupCoords?.lat, d.pickupCoords?.lng);
+    /* Place pickup + dropoff markers */
+    if (_map && d.pickupCoords?.lat) {
+      _pickupMarker = _placeMarker(d.pickupCoords.lat, d.pickupCoords.lng,
+        '<div style="font-size:20px;">📍</div>', '📍 ' + (d.pickupAddress||'Pickup'));
+    }
+    if (_map && d.deliveryCoords?.lat) {
+      _dropoffMarker = _placeMarker(d.deliveryCoords.lat, d.deliveryCoords.lng,
+        '<div style="font-size:20px;">🎯</div>', '🎯 ' + (d.deliveryAddress||'Delivery'));
+    }
+    /* Draw static route line */
+    if (d.pickupCoords?.lat && d.deliveryCoords?.lat) {
+      if (window.SokoniRouting) {
+        SokoniRouting.getRoute(
+          d.pickupCoords.lat, d.pickupCoords.lng,
+          d.deliveryCoords.lat, d.deliveryCoords.lng
+        ).then(route => {
+          if (route) _drawRoute(route.geometry, d.pickupCoords.lat, d.pickupCoords.lng, d.deliveryCoords.lat, d.deliveryCoords.lng);
+        }).catch(()=>{});
+      }
+    }
+    /* Initial rider marker from stored coords */
+    if (d.driverLat && d.driverLng) _updateRiderMarker(d.driverLat, d.driverLng, d.driverName);
+  }
+
+  /* Live GPS for active trips */
+  if (showMap && d.assignedDriverId && !_gpsUnsub) {
+    _attachGPS(d.assignedDriverId, d.driverName, d._src);
+  }
+
+  /* Actions */
+  _renderActions(d, role);
+}
+
+/* ── URL → start listener ── */
+const params    = new URLSearchParams(location.search);
+const delivRef  = params.get('ref') || params.get('deliveryRef');
+
+if (!delivRef) {
+  document.getElementById('dtStatusLabel').textContent = 'No delivery reference';
+  document.getElementById('dtStatusSub').textContent   = 'Add ?ref=DEL-XXXXXXX to the URL';
+} else {
+  /* Try packageRequests first; if it never fires with data, fall back to deliveries */
+  let _pkgGotData = false;
+  _deliveryUnsub = SokoniDelivery.listenDelivery(delivRef, data => {
+    if (data) {
+      _pkgGotData = true;
+      _delivSource = 'pkg';
+      _onDelivery(data);
+    }
+  });
+  /* After 4 s, if packageRequests returned nothing, try the deliveries collection */
+  setTimeout(() => {
+    if (_pkgGotData) return;
+    /* Unsubscribe from empty packageRequests listener */
+    _deliveryUnsub?.();
+    _delivSource = 'hub';
+    _deliveryUnsub = DeliveryHub.listenDeliveryByRef(delivRef, data => {
+      if (data) {
+        _onDelivery(_normalizeHub(data));
+      } else if (!_pkgGotData) {
+        document.getElementById('dtStatusLabel').textContent = 'Delivery not found';
+        document.getElementById('dtStatusSub').textContent   = 'Reference ' + delivRef + ' was not found.';
+      }
+    });
+  }, 4000);
+}
+
+/* ── Action handlers ── */
+window.dtSellerConfirm = async function(ref) {
+  const btn = document.querySelector('#dtActions button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Confirming…'; }
+  const uid = _uid();
+  try {
+    const r = await SokoniDelivery.sellerConfirmReady(ref, uid);
+    if (r?.error) { toast(r.error, false); if (btn) { btn.disabled=false; btn.textContent='✅ Item Ready for Pickup'; } }
+    else toast(r?.driverName ? '🏍️ Rider assigned: ' + r.driverName : '✅ Confirmed! Finding rider…');
+  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='✅ Item Ready for Pickup'; } }
+};
+
+window.dtBuyerConfirm = async function(ref) {
+  const uid = _uid();
+  const btn = document.querySelector('#dtActions button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Confirming…'; }
+  try {
+    await SokoniDelivery.buyerConfirmReceipt(ref, uid);
+    toast('🎉 Thank you! Seller payout released.');
+  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='🎉 I Received My Order!'; } }
+};
+
+window.dtCancelDelivery = async function(ref, _c) {
+  if (!_c) { _skConfirm('Cancel this delivery?', ()=>window.dtCancelDelivery(ref,true)); return; }
+  const uid = _uid();
+  try {
+    await SokoniDelivery.cancelDelivery(ref, uid, 'Buyer cancelled');
+    toast('Delivery cancelled.');
+  } catch(e) { toast(e.message, false); }
+};
+
+window.dtSOSBuyer = function(ref, driverPhone) {
+  const d   = _currentData || {};
+  const msg = encodeURIComponent('🆘 *SOKONI SOS*\n\nDelivery: ' + ref
+    + '\nBuyer: ' + (d.buyerName||'') + ' · ' + (d.buyerPhone||'')
+    + '\nRider: ' + (d.driverName||'') + ' · ' + (driverPhone||'')
+    + '\nStatus: ' + (d.status||'')
+    + '\n\nPlease assist urgently.');
+  window.open('https://wa.me/254705726803?text=' + msg, '_blank');
+};
+
+window.dtShareWA = function() {
+  const d   = _currentData || {};
+  const url = location.href;
+  const msg = encodeURIComponent('📦 *Track my SOKONI Delivery*\n\n'
+    + 'Order: ' + (d.deliveryRef||delivRef||'') + '\n'
+    + 'Status: ' + (d.status||'').replace(/_/g,' ') + '\n\n'
+    + '👉 ' + url);
+  window.open('https://wa.me/?text=' + msg, '_blank');
+};
+
+window.dtCopyLink = function() {
+  navigator.clipboard?.writeText(location.href).then(() => toast('🔗 Link copied!'));
+};
+
+/* ── Hub delivery actions ── */
+window.dtHubConfirm = async function(fsId) {
+  const uid = _uid();
+  const btn = document.querySelector('#dtActions button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Confirming…'; }
+  try {
+    await DeliveryHub.confirmReceipt(fsId, uid);
+    toast('🎉 Receipt confirmed! Thank you for using SOKONI.');
+  } catch(e) {
+    toast(e.message || 'Could not confirm', false);
+    if (btn) { btn.disabled = false; btn.textContent = '🎉 I Received My Package!'; }
+  }
+};
+
+window.dtHubCancel = async function(fsId, _c) {
+  if (!_c) { _skConfirm('Cancel this delivery?', ()=>window.dtHubCancel(fsId,true)); return; }
+  const uid = _uid();
+  try {
+    await DeliveryHub.cancelDelivery(fsId, uid, 'Sender cancelled');
+    toast('Delivery cancelled.');
+  } catch(e) { toast(e.message || 'Could not cancel', false); }
+};
+
+/* ── Clean up on unload ── */
+window.addEventListener('beforeunload', () => {
+  _deliveryUnsub?.();
+  _gpsUnsub?.();
+});
+</script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="nav-active.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <!-- Tracking & Location stack -->
+  <script defer src="sokoni-gps-manager.js"></script>
+  <script defer src="sokoni-map-manager.js"></script>
+  <script defer src="sokoni-route-manager.js"></script>
+  <script defer src="sokoni-tracking.js"></script>
+  <script defer src="sokoni-tracking-manager.js"></script>
+</body>
+</html>
+

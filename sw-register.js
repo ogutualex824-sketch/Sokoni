@@ -1,0 +1,731 @@
+﻿/* ================================================================
+   SOKONI — Service Worker Registration + PWA + Push Notifications
+   Include on every page: <script src="sw-register.js"></script>
+
+   PUSH NOTIFICATION SETUP:
+   1. Firebase Console → Project Settings → Cloud Messaging
+   2. Generate VAPID key pair → copy the public key
+   3. Paste it below ↓
+================================================================ */
+
+(function () {
+  "use strict";
+
+  /* ── HTTPS check — service workers need a secure context ── */
+  const _isSecure = location.protocol === "https:" ||
+                    location.hostname === "localhost" ||
+                    location.hostname === "127.0.0.1";
+  /* Only skip SW registration (not the install prompt) on non-HTTPS */
+  if (!_isSecure && "serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+  }
+
+  /* ── ⚙️ VAPID KEY — paste yours here after generating in Firebase Console ── */
+  const SOKONI_VAPID_KEY = "BMl0A7E14MzZgiRao7a8lhl0iRRV37jSwp26IvQGle38v3vAhZgNFNgqDObX8i_vD0Xrfw4wG-5ngbBMto7qEBg";
+  /* ────────────────────────────────────────────────────────────────────────── */
+
+  /* ══════════════════════════════════════════════════════
+     1. REGISTER SERVICE WORKER (HTTPS only)
+  ══════════════════════════════════════════════════════ */
+  let _swReg = null; /* stored so the Update button can reach the waiting worker */
+
+  /* Apply update: tell waiting SW to skip waiting, controllerchange reloads once */
+  let _userRequestedUpdate = false;
+  window._sokoniApplyUpdate = function () {
+    const toast = document.getElementById("swUpdateToast");
+    if (toast) toast.remove();
+    if (_swReg && _swReg.waiting) {
+      _userRequestedUpdate = true;
+      _swReg.waiting.postMessage({ type: "SKIP_WAITING" });
+    } else {
+      window.location.reload();
+    }
+  };
+
+  /* ── One-tap update check ─────────────────────────────────────────
+     Call window.sokoniCheckForUpdates(optionalBtn) from any page.
+     Flow: force SW check → if new version found, auto-apply & reload
+           otherwise show "Already up to date" and restore button.
+  ──────────────────────────────────────────────────────────────────*/
+  window.sokoniCheckForUpdates = async function (btn) {
+    const origHTML = btn ? btn.innerHTML : null;
+    const setBtn = (html, disabled) => { if (btn) { btn.innerHTML = html; btn.disabled = !!disabled; } };
+
+    /* Hard reload if no SW support */
+    if (!_swReg || !("serviceWorker" in navigator)) {
+      window.location.reload(true);
+      return;
+    }
+
+    setBtn("⏳ Checking…", true);
+
+    /* If a waiting worker already exists — apply it immediately */
+    if (_swReg.waiting) {
+      setBtn("🔄 Updating…", true);
+      _userRequestedUpdate = true;
+      _swReg.waiting.postMessage({ type: "SKIP_WAITING" });
+      return;
+    }
+
+    try {
+      /* Force browser to fetch the SW file from network */
+      await _swReg.update();
+    } catch (e) {
+      setBtn(origHTML, false);
+      _showUpToDateToast("⚠️ Could not check — are you online?");
+      return;
+    }
+
+    /* Re-check: update() may have resolved a waiting worker synchronously */
+    if (_swReg.waiting) {
+      setBtn("🔄 Updating…", true);
+      _userRequestedUpdate = true;
+      _swReg.waiting.postMessage({ type: "SKIP_WAITING" });
+      return;
+    }
+
+    /* Wait up to 10 s for updatefound → installed */
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      setBtn(origHTML, false);
+      _showUpToDateToast("✓ You're on the latest version");
+    }, 10000);
+
+    _swReg.addEventListener("updatefound", function onFound() {
+      _swReg.removeEventListener("updatefound", onFound);
+      const nw = _swReg.installing;
+      if (!nw) return;
+      setBtn("⬇️ Downloading…", true);
+      nw.addEventListener("statechange", function () {
+        if (nw.state === "installed" && navigator.serviceWorker.controller) {
+          clearTimeout(timer);
+          if (resolved) return;
+          resolved = true;
+          setBtn("🔄 Applying…", true);
+          _userRequestedUpdate = true;
+          _swReg.waiting && _swReg.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+      });
+    });
+  };
+
+  function _showUpToDateToast(msg) {
+    const t = document.createElement("div");
+    t.style.cssText = `position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1e1e1e;border:1px solid rgba(113,255,0,0.3);color:#71ff00;padding:11px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:999999;white-space:nowrap;box-shadow:0 6px 24px rgba(0,0,0,0.5);pointer-events:none;`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.transition = "opacity .4s"; t.style.opacity = "0"; setTimeout(() => t.remove(), 420); }, 3000);
+  }
+
+  if (_isSecure && "serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      /* Register main SW — relative path works at any URL depth */
+      navigator.serviceWorker
+        .register("./service-worker.js", { scope: "./" })
+        .then(reg => {
+          _swReg = reg;
+          console.log("[SOKONI SW] Registered:", reg.scope);
+
+          /* Show update toast only when a waiting worker is fully installed */
+          reg.addEventListener("updatefound", () => {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener("statechange", () => {
+              if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                _showUpdateToast();
+              }
+            });
+          });
+
+          /* If a waiting worker already exists on page load, show toast */
+          if (reg.waiting && navigator.serviceWorker.controller) {
+            setTimeout(_showUpdateToast, 2000);
+          }
+        })
+        .catch(err => console.warn("[SOKONI SW] Registration failed:", err));
+
+      /* Also register FCM messaging SW */
+      if (SOKONI_VAPID_KEY !== "YOUR_VAPID_KEY_HERE") {
+        navigator.serviceWorker
+          .register("/firebase-messaging-sw.js", { scope: "/" })
+          .then(() => console.log("[SOKONI FCM SW] Registered"))
+          .catch(() => {});
+      }
+
+      /* Reload ONLY when the user explicitly tapped "Update" — not on every SW activation */
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (_userRequestedUpdate && !refreshing) { refreshing = true; window.location.reload(); }
+      });
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════
+     2. NOTIFICATION PERMISSION + FCM TOKEN
+  ══════════════════════════════════════════════════════ */
+
+  async function _initPushNotifications() {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "denied") return;
+    if (localStorage.getItem("sokoniNotifDismissed")) return;
+
+    /* Show our own permission prompt first (much better UX than raw browser prompt) */
+    if (Notification.permission === "default") {
+      await new Promise(r => setTimeout(r, 6000));
+      _showNotificationPrompt();
+      return; /* Will be called again after user accepts */
+    }
+
+    /* Permission already granted — set up everything */
+    if (Notification.permission === "granted") {
+      await _setupPushAfterPermission();
+    }
+  }
+
+  async function _setupPushAfterPermission() {
+    /* Register periodic sync if supported (Android Chrome) */
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if ("periodicSync" in reg) {
+        const status = await navigator.permissions.query({ name: "periodic-background-sync" });
+        if (status.state === "granted") {
+          await reg.periodicSync.register("sokoni-daily", { minInterval: 24 * 60 * 60 * 1000 });
+          console.log("[SOKONI] Periodic sync registered — daily notifications active");
+        }
+      }
+    } catch (e) {}
+
+    /* Background sync as fallback */
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if ("sync" in reg) {
+        await reg.sync.register("sokoni-notify");
+      }
+    } catch (e) {}
+
+    /* FCM token if VAPID key is set */
+    if (SOKONI_VAPID_KEY !== "YOUR_VAPID_KEY_HERE") {
+      try {
+        const { sokoniRequestPushPermission, sokoniListenMessages } =
+          await import("./firebase.js");
+        const token = await sokoniRequestPushPermission(SOKONI_VAPID_KEY);
+        if (token) {
+          localStorage.setItem("sokoni_fcm_token", token);
+          sokoniListenMessages(null);
+        }
+      } catch (e) {
+        console.warn("[SOKONI Push] FCM init error:", e.message);
+      }
+    }
+  }
+
+  /* ── Notification permission prompt ── */
+  function _showNotificationPrompt() {
+    if (document.getElementById("sokoniNotifPrompt")) return;
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      Notification.requestPermission().then(perm => {
+        if (perm === "granted") _setupPushAfterPermission();
+      });
+      return;
+    }
+
+    /* Inject keyframes once */
+    if (!document.getElementById("_sokoniKF")) {
+      const s = document.createElement("style");
+      s.id = "_sokoniKF";
+      s.textContent = `
+        @keyframes _sokoniUp{from{opacity:0;transform:translateX(-50%) translateY(24px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+        @keyframes _sokoniInstallUp{from{opacity:0;transform:translateX(-50%) translateY(24px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+      `;
+      document.head.appendChild(s);
+    }
+
+    const el = document.createElement("div");
+    el.id = "sokoniNotifPrompt";
+    el.style.cssText = [
+      "position:fixed",
+      "bottom:calc(76px + env(safe-area-inset-bottom,0px))",
+      "left:50%",
+      "transform:translateX(-50%)",
+      "width:calc(100vw - 28px)",
+      "max-width:390px",
+      "background:rgba(8,8,8,0.95)",
+      "border:1px solid rgba(113,255,0,0.3)",
+      "border-radius:22px",
+      "padding:18px 18px 18px",
+      "box-shadow:0 16px 48px rgba(0,0,0,0.75)",
+      "z-index:999997",
+      "display:flex",
+      "align-items:flex-start",
+      "gap:14px",
+      "font-family:'Segoe UI',system-ui,-apple-system,sans-serif",
+      "animation:_sokoniUp .38s cubic-bezier(.34,1.56,.64,1) forwards",
+      "-webkit-backdrop-filter:blur(20px)",
+      "backdrop-filter:blur(20px)",
+    ].join(";");
+
+    el.innerHTML = `
+      <div style="font-size:34px;flex-shrink:0;line-height:1;margin-top:2px;">🔔</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:900;color:#fff;margin-bottom:4px;letter-spacing:-.01em;">
+          Stay in the loop
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.48);margin-bottom:14px;line-height:1.55;">
+          Get alerts for new orders, messages &amp; flash deals — even when SOKONI is closed.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button
+            style="flex:1;min-width:130px;padding:12px 10px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;letter-spacing:-.01em;box-shadow:0 4px 14px rgba(113,255,0,0.3);-webkit-tap-highlight-color:transparent;touch-action:manipulation;"
+            onclick="(function(){var p=document.getElementById('sokoniNotifPrompt');if(p)p.remove();Notification.requestPermission().then(function(perm){if(perm==='granted'){window._sokoniSetupPush&&window._sokoniSetupPush();}});})()">
+            🔔 Allow Notifications
+          </button>
+          <button
+            style="padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.55);border-radius:12px;cursor:pointer;font-family:inherit;font-size:12px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;"
+            onclick="(function(){var p=document.getElementById('sokoniNotifPrompt');if(p)p.remove();localStorage.setItem('sokoniNotifDismissed','permanent');})()">
+            Later
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(el);
+    setTimeout(() => { const p = document.getElementById("sokoniNotifPrompt"); if(p) p.remove(); }, 18000);
+  }
+
+  /* Init push after page is interactive */
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    _initPushNotifications();
+  } else {
+    window.addEventListener("DOMContentLoaded", _initPushNotifications);
+  }
+
+  /* ══════════════════════════════════════════════════════
+     3. LOCAL PUSH NOTIFICATION TRIGGERS
+     Fires browser notifications for key app events
+     even without an FCM backend
+  ══════════════════════════════════════════════════════ */
+
+  function _showLocalNotification(title, body, icon, url) {
+    if (Notification.permission !== "granted") return;
+    const n = new Notification(title, {
+      body,
+      icon:   icon  || "/assets/logosokoni.png",
+      badge:        "/assets/logosokoni.png",
+      vibrate:      [200, 100, 200],
+      tag:    url   || title,
+    });
+    if (url) n.onclick = () => { window.focus(); window.location.href = url; };
+  }
+
+  /* Listen to localStorage changes for real-time events */
+  window.addEventListener("storage", e => {
+    /* New order placed */
+    if (e.key === "sokoniOrders" && e.newValue) {
+      try {
+        const orders = JSON.parse(e.newValue) || [];
+        const latest = orders[0];
+        if (latest && (Date.now() - latest.timestamp < 5000)) {
+          _showLocalNotification(
+            "✅ Order Confirmed!",
+            `Order ${latest.id} · KES ${Number(latest.total).toLocaleString()} — processing now`,
+            "/assets/logosokoni.png",
+            "/track.html"
+          );
+        }
+      } catch (_) {}
+    }
+
+    /* New message received */
+    if (e.key === "sokoniMessages" && e.newValue) {
+      try {
+        const msgs   = JSON.parse(e.newValue) || [];
+        const unread = msgs.reduce((s, c) => s + (c.unread || 0), 0);
+        if (unread > 0) {
+          const latest = msgs.find(c => c.unread > 0);
+          _showLocalNotification(
+            "💬 New Message",
+            `${latest?.sellerName || "Someone"}: new message on Sokoni`,
+            "/assets/logosokoni.png",
+            "/messages.html"
+          );
+        }
+      } catch (_) {}
+    }
+
+    /* Flash sale started */
+    if (e.key === "sokoniFlashSales" && e.newValue) {
+      try {
+        const sales  = JSON.parse(e.newValue) || [];
+        const active = sales.filter(s => s.endsAt > Date.now());
+        if (active.length > 0) {
+          _showLocalNotification(
+            "⚡ Flash Sale Started!",
+            `${active.length} product(s) on sale — grab them before they're gone!`,
+            "/assets/logosokoni.png",
+            "/flashsale.html"
+          );
+        }
+      } catch (_) {}
+    }
+
+    /* New offer received (seller) */
+    if (e.key === "sokoniOffers" && e.newValue) {
+      try {
+        const offers = JSON.parse(e.newValue) || [];
+        const latest = offers[0];
+        if (latest && (Date.now() - latest.timestamp < 5000)) {
+          _showLocalNotification(
+            "🏷️ New Offer Received",
+            `Offer of KES ${Number(latest.offerPrice).toLocaleString()} on "${latest.productName}"`,
+            "/assets/logosokoni.png",
+            "/seller.html"
+          );
+        }
+      } catch (_) {}
+    }
+  });
+
+  /* Make local notif + push setup available globally */
+  window.sokoniNotify = _showLocalNotification;
+  window._sokoniSetupPush = _setupPushAfterPermission;
+
+  /* ══════════════════════════════════════════════════════
+     4. UPDATE AVAILABLE TOAST
+  ══════════════════════════════════════════════════════ */
+  function _showUpdateToast() {
+    if (document.getElementById("swUpdateToast")) return;
+    const toast = document.createElement("div");
+    toast.id = "swUpdateToast";
+    toast.style.cssText = `
+      position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+      background:#1e1e1e;border:1px solid rgba(113,255,0,0.3);
+      color:white;padding:12px 16px;border-radius:14px;font-size:13px;
+      font-weight:700;font-family:inherit;z-index:999999;
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      box-shadow:0 8px 32px rgba(0,0,0,0.5);
+      animation:swToastIn .3s ease;
+      width:max-content;max-width:calc(100vw - 28px);box-sizing:border-box;
+    `;
+    toast.innerHTML = `
+      <span>🔄 New version of SOKONI available</span>
+      <button onclick="window._sokoniApplyUpdate()" style="padding:6px 14px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.3);color:#71ff00;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">Update</button>
+      <button onclick="sessionStorage.setItem('_skUpdateToastSeen','1');this.closest('#swUpdateToast').remove()" style="background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;font-size:16px;line-height:1;padding:0;">✕</button>
+    `;
+    if (!document.getElementById("swToastStyle")) {
+      const s = document.createElement("style");
+      s.id = "swToastStyle";
+      s.textContent = "@keyframes swToastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}";
+      document.head.appendChild(s);
+    }
+    document.body.appendChild(toast);
+  }
+
+  /* ══════════════════════════════════════════════════════
+     5. PWA INSTALL PROMPT
+     Single source of truth — no competing handlers.
+     Android: beforeinstallprompt → native dialog
+     iOS:     Share sheet instructions
+  ══════════════════════════════════════════════════════ */
+
+  const _COOLDOWN = 24 * 60 * 60 * 1000; /* 1 day */
+  const _INSTALL_VER = "v20"; /* bump this to reset dismiss state on all devices */
+  /* Reset dismiss flag when app version changes */
+  if (localStorage.getItem("sokoniInstallVer") !== _INSTALL_VER) {
+    localStorage.removeItem("sokoniInstallDismissed");
+    localStorage.setItem("sokoniInstallVer", _INSTALL_VER);
+  }
+  /* Store the event on window so ANY script can reach it */
+  window._sokoniInstallEvent = null;
+
+  const _isInstalled = () =>
+    window.matchMedia("(display-mode:standalone)").matches ||
+    window.navigator.standalone === true;
+
+  const _wasDismissed = () => {
+    const t = Number(localStorage.getItem("sokoniInstallDismissed") || 0);
+    return t && (Date.now() - t) < _COOLDOWN;
+  };
+
+  function _dismissInstall() {
+    const b = document.getElementById("swInstallBanner");
+    if (b) {
+      b.style.opacity = "0";
+      b.style.transform = "translateX(-50%) translateY(30px)";
+      b.style.transition = "opacity .25s, transform .25s";
+      setTimeout(() => b.remove(), 260);
+    }
+    localStorage.setItem("sokoniInstallDismissed", Date.now().toString());
+  }
+  window._dismissInstall = _dismissInstall;
+
+  /* ── THE install function — called by button onclick ── */
+  window.sokoniInstall = function () {
+    const evt = window._sokoniInstallEvent;
+    if (!evt) return;
+    /* prompt() MUST be called in a user-gesture stack */
+    evt.prompt();
+    evt.userChoice.then(choice => {
+      window._sokoniInstallEvent = null;
+      const b = document.getElementById("swInstallBanner");
+      if (b) b.remove();
+      if (choice.outcome === "accepted") {
+        localStorage.setItem("sokoniInstallDismissed",
+          (Date.now() + 999 * 24 * 60 * 60 * 1000).toString());
+      }
+    }).catch(() => {});
+  };
+
+  /* ── Capture event — single listener, no competition ── */
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    window._sokoniInstallEvent = e;
+    /* Large banner disabled — index.html shows the compact #pwaPrompt instead */
+  });
+
+  /* ── Banner builder ── */
+  function _showInstallBanner() {
+    if (document.getElementById("swInstallBanner") || _isInstalled()) return;
+
+    /* Inject animation CSS once */
+    if (!document.getElementById("_skBannerCSS")) {
+      const s = document.createElement("style");
+      s.id = "_skBannerCSS";
+      s.textContent = `@keyframes _skUp{from{opacity:0;transform:translateX(-50%) translateY(24px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`;
+      document.head.appendChild(s);
+    }
+
+    const hasPrompt = !!window._sokoniInstallEvent;
+    const isIOS     = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+    const b = document.createElement("div");
+    b.id = "swInstallBanner";
+    Object.assign(b.style, {
+      position:       "fixed",
+      bottom:         "calc(80px + env(safe-area-inset-bottom,0px))",
+      left:           "50%",
+      transform:      "translateX(-50%)",
+      width:          "calc(100vw - 20px)",
+      maxWidth:       "420px",
+      background:     "rgba(6,6,6,0.97)",
+      border:         "1px solid rgba(113,255,0,0.4)",
+      borderRadius:   "22px",
+      boxShadow:      "0 20px 60px rgba(0,0,0,0.85)",
+      backdropFilter: "blur(24px)",
+      webkitBackdropFilter: "blur(24px)",
+      zIndex:         "999998",
+      fontFamily:     "'Segoe UI',system-ui,sans-serif",
+      animation:      "_skUp .4s cubic-bezier(.34,1.56,.64,1) forwards",
+      overflow:       "hidden",
+    });
+
+    b.innerHTML = `
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.07);">
+        <img src="assets/logosokoni.png" style="width:42px;height:42px;border-radius:10px;object-fit:cover;border:1px solid rgba(113,255,0,0.25);flex-shrink:0;" onerror="this.style.display='none'">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:900;color:#fff;">Install SOKONI</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px;">Free · Fast · Works offline</div>
+        </div>
+        <button onclick="window._dismissInstall()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.55);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:14px;">
+        ${hasPrompt ? `
+        <!-- Android: one-tap install -->
+        <button id="skInstallBtn"
+          style="width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;letter-spacing:.01em;box-shadow:0 4px 20px rgba(113,255,0,0.4);-webkit-tap-highlight-color:transparent;touch-action:manipulation;margin-bottom:12px;">
+          📲 Add to Home Screen
+        </button>
+        <p style="font-size:11px;color:rgba(255,255,255,0.35);text-align:center;margin-bottom:10px;">Tap above — your browser will ask to install</p>
+        ` : isIOS ? `
+        <!-- iOS: step-by-step -->
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:12px;padding:10px 12px;">
+            <span style="font-size:22px;flex-shrink:0;">⬆️</span>
+            <div><div style="font-size:12px;font-weight:800;color:#fff;">1. Tap Share</div><div style="font-size:11px;color:rgba(255,255,255,0.45);">The box-with-arrow icon at the bottom of Safari</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:12px;padding:10px 12px;">
+            <span style="font-size:22px;flex-shrink:0;">➕</span>
+            <div><div style="font-size:12px;font-weight:800;color:#fff;">2. Add to Home Screen</div><div style="font-size:11px;color:rgba(255,255,255,0.45);">Scroll the Share sheet and tap this option</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:12px;padding:10px 12px;">
+            <span style="font-size:22px;flex-shrink:0;">✅</span>
+            <div><div style="font-size:12px;font-weight:800;color:#fff;">3. Tap Add</div><div style="font-size:11px;color:rgba(255,255,255,0.45);">Tap "Add" in the top-right corner — done!</div></div>
+          </div>
+        </div>
+        ` : `
+        <!-- Android without prompt: Chrome menu -->
+        <p style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:10px;line-height:1.6;">Open Chrome's menu (⋮) → tap <b style="color:#fff">Add to Home screen</b> or <b style="color:#fff">Install app</b>.</p>
+        `}
+
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+          <span style="padding:4px 10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:99px;font-size:10px;color:#71ff00;font-weight:700;">⚡ Faster</span>
+          <span style="padding:4px 10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:99px;font-size:10px;color:#71ff00;font-weight:700;">📶 Offline</span>
+          <span style="padding:4px 10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:99px;font-size:10px;color:#71ff00;font-weight:700;">🔔 Alerts</span>
+          <span style="padding:4px 10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:99px;font-size:10px;color:#71ff00;font-weight:700;">📱 Full screen</span>
+        </div>
+
+        <button onclick="window._dismissInstall()" style="width:100%;padding:11px;background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);border-radius:12px;font-size:12px;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">
+          Maybe later
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(b);
+
+    /* Wire the install button AFTER the element is in the DOM */
+    if (hasPrompt) {
+      const btn = document.getElementById("skInstallBtn");
+      if (btn) {
+        btn.addEventListener("click", function () {
+          window.sokoniInstall();
+        });
+      }
+    }
+
+    /* Auto-dismiss after 40 s */
+    setTimeout(() => { const el=document.getElementById("swInstallBanner"); if(el) el.remove(); }, 40000);
+  }
+
+  window.addEventListener("appinstalled", () => {
+    _deferredPrompt = null;
+    const b = document.getElementById("swInstallBanner");
+    if (b) b.remove();
+
+    /* In-app celebration toast */
+    if (typeof showNotification === "function") {
+      showNotification("🎉 SOKONI installed on your device!", "success");
+    }
+
+    /* Request notification permission immediately on install */
+    if ("Notification" in window && Notification.permission === "default") {
+      /* Small delay to let the install animation finish */
+      setTimeout(() => {
+        Notification.requestPermission().then(perm => {
+          if (perm === "granted") {
+            /* Fire welcome notification */
+            navigator.serviceWorker.ready.then(reg => {
+              reg.showNotification("🎉 SOKONI is installed!", {
+                body:    "Welcome! Shop, sell & discover Kenya's best deals. Tap to open your marketplace.",
+                icon:    "/assets/logosokoni.png",
+                badge:   "/assets/logosokoni.png",
+                vibrate: [200, 100, 200, 100, 200],
+                tag:     "sokoni-install-welcome",
+                data:    { url: "/index.html" },
+                actions: [
+                  { action: "shop",    title: "🛍️ Start Shopping" },
+                  { action: "sell",    title: "🏪 Start Selling" },
+                ],
+                requireInteraction: true,
+              });
+            });
+            _setupPushAfterPermission();
+          }
+        });
+      }, 1500);
+    } else if (Notification.permission === "granted") {
+      /* Already have permission — just send the welcome notification */
+      navigator.serviceWorker.ready.then(reg => {
+        reg.showNotification("🎉 SOKONI is installed!", {
+          body:    "Welcome! Shop, sell & discover Kenya's best deals.",
+          icon:    "/assets/logosokoni.png",
+          badge:   "/assets/logosokoni.png",
+          vibrate: [200, 100, 200],
+          tag:     "sokoni-install-welcome",
+          data:    { url: "/index.html" },
+          requireInteraction: false,
+        });
+      });
+    }
+  });
+
+  /* ══════════════════════════════════════════════════════
+     6. ONLINE / OFFLINE STATUS DOT
+  ══════════════════════════════════════════════════════ */
+  function _updateOnlineStatus() {
+    const dot = document.getElementById("sokoniOnlineDot");
+    if (dot) {
+      dot.style.background = navigator.onLine ? "#71ff00" : "#ff4444";
+      dot.title = navigator.onLine ? "Online" : "Offline — some features unavailable";
+    }
+    /* Show offline banner */
+    if (!navigator.onLine) {
+      _showOfflineBanner();
+    } else {
+      const b = document.getElementById("sokoniOfflineBanner");
+      if (b) b.remove();
+    }
+  }
+
+  function _showOfflineBanner() {
+    if (document.getElementById("sokoniOfflineBanner")) return;
+    const b = document.createElement("div");
+    b.id = "sokoniOfflineBanner";
+    b.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:999999;background:#1a0000;border-bottom:2px solid #ff4444;padding:10px 20px;text-align:center;font-size:13px;color:#ff8888;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px;`;
+    b.innerHTML = `<span>📶 You're offline — some features may not work.</span><a href="offline.html" style="color:#ff4444;font-weight:700;text-decoration:none;">View cached pages →</a>`;
+    document.body.prepend(b);
+  }
+
+  window.addEventListener("online",  _updateOnlineStatus);
+  window.addEventListener("offline", _updateOnlineStatus);
+  _updateOnlineStatus();
+
+  /* ══════════════════════════════════════════════════════
+     7. SW MESSAGE HANDLER
+  ══════════════════════════════════════════════════════ */
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", event => {
+      if (event.data?.type === "SYNC_COMPLETE") {
+        console.log("[SOKONI] Background sync complete");
+      }
+      if (event.data?.type === "PUSH_NOTIFICATION") {
+        _showLocalNotification(
+          event.data.title || "SOKONI",
+          event.data.body  || "",
+          event.data.icon,
+          event.data.url
+        );
+      }
+    });
+  }
+
+})();
+
+/* ─────────────────────────────────────────────────────────────
+   HYPER-SCALE BOOTSTRAP
+   Lazily injects the universal infrastructure modules on every page
+   that includes sw-register.js (104 pages). Scripts load after DOM
+   is ready to avoid blocking first paint. Order is preserved so
+   sokoni-logger is ready before sokoni-scale/cache use it.
+───────────────────────────────────────────────────────────── */
+(function _sokoniHyperscaleLoad() {
+  const _mods = [
+    "/sokoni-logger.js",
+    "/sokoni-scale.js",
+    "/sokoni-cache.js",
+    "/sokoni-monitor.js",
+  ];
+
+  function _inject(src) {
+    const bare = src.replace(/^\//, "");
+    if (document.querySelector('script[src="' + src + '"], script[src="' + bare + '"]')) return;
+    const s   = document.createElement("script");
+    s.src     = src;
+    s.defer   = true;
+    s.async   = false; // preserve load order within this group
+    document.head.appendChild(s);
+  }
+
+  function _boot() {
+    _mods.forEach(_inject);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _boot);
+  } else {
+    _boot();
+  }
+}());

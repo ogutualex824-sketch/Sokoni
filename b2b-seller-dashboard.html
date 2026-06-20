@@ -1,0 +1,574 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Supplier Dashboard — SOKONI B2B</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.sd-body{max-width:900px;margin:0 auto;padding:14px 16px;}
+
+/* HERO */
+.sd-hero{background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,170,255,0.04));border:1px solid rgba(113,255,0,0.15);border-radius:18px;padding:18px;margin-bottom:14px;display:flex;align-items:center;gap:14px;}
+.sd-hero-icon{width:56px;height:56px;border-radius:14px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;}
+.sd-hero-name{font-size:18px;font-weight:900;}
+.sd-hero-sub{font-size:11px;color:rgba(255,255,255,0.4);}
+.sd-hero-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;color:#22c55e;margin-top:6px;}
+
+/* STATS */
+.sd-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
+.sd-stat{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;}
+.sd-stat-icon{font-size:22px;margin-bottom:6px;}
+.sd-stat-val{font-size:22px;font-weight:900;color:white;}
+.sd-stat-val.green{color:#71ff00;}
+.sd-stat-val.blue{color:#00aaff;}
+.sd-stat-val.amber{color:#f59e0b;}
+.sd-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+
+/* TABS */
+.sd-tab-bar{display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:16px;overflow-x:auto;scrollbar-width:none;}
+.sd-tab-bar::-webkit-scrollbar{display:none;}
+.sd-tab{padding:9px 16px;font-size:12px;font-weight:800;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,0.4);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;white-space:nowrap;}
+.sd-tab.active{color:#71ff00;border-bottom-color:#71ff00;}
+.sd-pane{display:none;}
+.sd-pane.active{display:block;}
+
+/* SECTION */
+.sd-section{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:14px;}
+.sd-sh{font-size:13px;font-weight:800;color:white;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+.sd-sh::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+/* RFQ CARD (incoming) */
+.rfq-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:13px;margin-bottom:10px;transition:border-color .2s;}
+.rfq-card:hover{border-color:rgba(113,255,0,0.25);}
+.rfq-card-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;}
+.rfq-card-title{font-size:13px;font-weight:800;color:white;}
+.rfq-card-meta{font-size:11px;color:rgba(255,255,255,0.35);}
+.rfq-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;}
+.rfq-detail-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
+.rfq-detail-item{font-size:11px;color:rgba(255,255,255,0.5);}
+.rfq-detail-item strong{color:white;}
+.rfq-btns{display:flex;gap:8px;flex-wrap:wrap;}
+.rfq-btn{padding:7px 14px;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .2s;}
+.rfq-btn.primary{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;}
+.rfq-btn.primary:hover{background:rgba(113,255,0,0.2);}
+.rfq-btn.secondary{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);}
+.rfq-btn.danger{background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);color:#ef4444;}
+
+/* QUOTE ROW */
+.qt-row{display:flex;justify-content:space-between;align-items:center;padding:11px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:11px;margin-bottom:8px;}
+.qt-id{font-size:12px;font-weight:800;color:white;font-family:monospace;}
+.qt-status{font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;}
+
+/* ORDER FULFILL */
+.ord-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:13px;margin-bottom:10px;}
+.ord-hd{display:flex;justify-content:space-between;margin-bottom:8px;}
+.ord-id{font-size:12px;font-weight:800;color:white;font-family:monospace;}
+.ord-total{font-size:15px;font-weight:900;color:#71ff00;}
+.ord-meta{font-size:11px;color:rgba(255,255,255,0.35);}
+
+/* ANALYTICS CHART */
+.sd-chart{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:14px;}
+.sd-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.sd-bar-lbl{font-size:11px;color:rgba(255,255,255,0.4);width:60px;text-align:right;flex-shrink:0;}
+.sd-bar-track{flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:16px;overflow:hidden;}
+.sd-bar-fill{height:100%;border-radius:4px;transition:width .6s;}
+.sd-bar-val{font-size:11px;font-weight:700;width:90px;}
+
+/* LEAD */
+.lead-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.lead-row:last-child{border-bottom:none;}
+.lead-icon{width:36px;height:36px;border-radius:9px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.lead-title{font-size:12px;font-weight:800;color:white;}
+.lead-meta{font-size:10px;color:rgba(255,255,255,0.35);}
+
+/* SETTINGS */
+.sd-set-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.sd-set-row:last-child{border-bottom:none;}
+.sd-set-lbl{font-size:13px;font-weight:700;color:white;}
+.sd-set-sub{font-size:11px;color:rgba(255,255,255,0.35);}
+.sd-toggle{position:relative;width:46px;height:24px;flex-shrink:0;}
+.sd-toggle input{opacity:0;width:0;height:0;}
+.sd-toggle-track{position:absolute;inset:0;background:rgba(255,255,255,0.1);border-radius:24px;cursor:pointer;transition:background .3s;}
+.sd-toggle input:checked~.sd-toggle-track{background:rgba(113,255,0,0.4);}
+.sd-toggle-thumb{position:absolute;width:18px;height:18px;border-radius:50%;background:white;top:3px;left:3px;transition:left .3s;pointer-events:none;}
+.sd-toggle input:checked~.sd-toggle-track .sd-toggle-thumb{left:25px;}
+
+/* MODAL */
+#sdModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:flex-end;justify-content:center;animation:fadein .2s;}
+#sdModal.open{display:flex;}
+#sdModalBox{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;}
+#sdModalTitle{font-size:16px;font-weight:900;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.sd-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;font-family:inherit;margin-bottom:11px;}
+.sd-input:focus{outline:none;border-color:rgba(113,255,0,0.4);}
+.sd-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block;}
+.sd-submit{width:100%;padding:13px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.35);border-radius:11px;color:#71ff00;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;}
+.sd-submit:hover{background:rgba(113,255,0,0.25);}
+.sd-empty{text-align:center;padding:28px 16px;color:rgba(255,255,255,0.3);font-size:13px;}
+
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#71ff00;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-b2b.js"></script>
+
+<nav class="fn">
+  <a href="b2b.html" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;">←</a>
+  <span style="font-size:14px;font-weight:800;flex:1;">🏭 Supplier Dashboard</span>
+  <button onclick="openSettings()" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">⚙ Settings</button>
+  <a href="messages.html" style="position:relative;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:16px;flex-shrink:0;">💬<span id="sdInboxBadge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#ff3c3c;color:white;border-radius:999px;font-size:9px;font-weight:900;line-height:16px;text-align:center;padding:0 3px;"></span></a>
+  <a href="notifications.html" style="position:relative;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:16px;flex-shrink:0;">🔔<span id="sdBellBadge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#ff3c3c;color:white;border-radius:999px;font-size:9px;font-weight:900;line-height:16px;text-align:center;padding:0 3px;"></span></a>
+</nav>
+<script>
+(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var bb=document.getElementById('sdBellBadge'),ib=document.getElementById('sdInboxBadge');if(bb){bb.textContent=n>9?'9+':n;bb.style.display='block';}if(ib){ib.textContent=n>9?'9+':n;ib.style.display='block';}}window.addEventListener('sokoniInboxUnread',function(e){var c=e.detail?.count||0;var bb=document.getElementById('sdBellBadge'),ib=document.getElementById('sdInboxBadge');if(bb){bb.textContent=c>9?'9+':c;bb.style.display=c>0?'block':'none';}if(ib){ib.textContent=c>9?'9+':c;ib.style.display=c>0?'block':'none';}});})();
+</script>
+
+<div class="sd-body">
+
+  <!-- HERO -->
+  <div class="sd-hero" id="sdHero">
+    <div class="sd-hero-icon" id="sdHeroIcon">🏭</div>
+    <div>
+      <div class="sd-hero-name" id="sdHeroName">Supplier Dashboard</div>
+      <div class="sd-hero-sub" id="sdHeroSub">Manage RFQs, quotations and orders</div>
+      <div class="sd-hero-badge" id="sdHeroBadge">✅ Verified Supplier</div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="sd-stats" id="sdStats"></div>
+
+  <!-- TABS -->
+  <div class="sd-tab-bar">
+    <button class="sd-tab active" onclick="switchTab('rfqs',this)">📋 Incoming RFQs</button>
+    <button class="sd-tab" onclick="switchTab('quotes',this)">💬 My Quotes</button>
+    <button class="sd-tab" onclick="switchTab('orders',this)">📦 Orders</button>
+    <button class="sd-tab" onclick="switchTab('leads',this)">🎯 Leads</button>
+    <button class="sd-tab" onclick="switchTab('analytics',this)">📊 Analytics</button>
+  </div>
+
+  <!-- INCOMING RFQs -->
+  <div class="sd-pane active" id="pane-rfqs">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <input type="text" id="rfqSearch" placeholder="Search RFQs by product..." class="sd-input" style="margin-bottom:0;flex:1;" oninput="filterRFQs()">
+      <select id="rfqFilter" class="sd-input" style="margin-bottom:0;width:auto;" onchange="filterRFQs()">
+        <option value="all">All</option>
+        <option value="open">Open</option>
+        <option value="quoted">Quoted</option>
+        <option value="awarded">Awarded</option>
+      </select>
+    </div>
+    <div id="rfqsList"></div>
+  </div>
+
+  <!-- MY QUOTES -->
+  <div class="sd-pane" id="pane-quotes">
+    <div id="quotesList"></div>
+  </div>
+
+  <!-- ORDERS TO FULFILL -->
+  <div class="sd-pane" id="pane-orders">
+    <div id="ordersToFulfill"></div>
+  </div>
+
+  <!-- LEADS -->
+  <div class="sd-pane" id="pane-leads">
+    <div class="sd-section">
+      <div class="sd-sh">🎯 Recent Buyer Interest</div>
+      <div id="leadsList"></div>
+    </div>
+    <div class="sd-section">
+      <div class="sd-sh">📞 Contact Buyers Directly</div>
+      <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:12px;">Buyers who enquired about your catalog but haven't submitted an RFQ yet.</p>
+      <div id="enquiryLeads"></div>
+    </div>
+  </div>
+
+  <!-- ANALYTICS -->
+  <div class="sd-pane" id="pane-analytics">
+    <div class="sd-chart">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">💰 Monthly Revenue</div>
+      <div id="revChart"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="sd-section">
+        <div style="font-size:12px;font-weight:800;margin-bottom:10px;">📋 RFQ Funnel</div>
+        <div id="rfqFunnel"></div>
+      </div>
+      <div class="sd-section">
+        <div style="font-size:12px;font-weight:800;margin-bottom:10px;">⭐ Rating</div>
+        <div id="ratingBlock"></div>
+      </div>
+    </div>
+    <div class="sd-chart">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">📦 Top Products (Enquiries)</div>
+      <div id="prodChart"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SUBMIT QUOTE MODAL -->
+<div id="sdModal">
+  <div id="sdModalBox">
+    <div id="sdModalTitle">Submit Quotation <span onclick="closeModal()" style="cursor:pointer;font-size:20px;font-weight:300;color:rgba(255,255,255,0.4);">✕</span></div>
+    <div id="sdModalBody"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="b2b.html" class="bnav-item"><i class="fas fa-handshake"></i><span>B2B</span></a>
+  <a href="b2b-seller-dashboard.html" class="bnav-item active"><i class="fas fa-store"></i><span>My Store</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script>
+const B = window.SokoniB2B;
+let _sid = null;
+let _allRFQs = [];
+
+function init() {
+  /* Try to determine supplier — URL param or first supplier in list */
+  const p = new URLSearchParams(window.location.search);
+  _sid = p.get('id') || (B.SUPPLIERS[0]||{}).id || null;
+
+  const sup = _sid ? B.getSupplierById(_sid) : null;
+  if (sup) {
+    const ind = B.INDUSTRIES.find(i=>i.id===sup.industry)||{icon:'🏭'};
+    document.getElementById('sdHeroIcon').textContent = ind.icon;
+    document.getElementById('sdHeroName').textContent = sup.name;
+    document.getElementById('sdHeroSub').textContent = `${sup.type} · ${sup.location}`;
+    if (!sup.verified) document.getElementById('sdHeroBadge').style.display='none';
+  }
+
+  const stats = _sid ? B.getSupplierStats(_sid) : {incomingRFQs:0,quotesSubmitted:0,accepted:0,orderCount:0,revenue:0,winRate:0};
+  renderStats(stats);
+  renderRFQs();
+}
+
+function renderStats(s) {
+  document.getElementById('sdStats').innerHTML = `
+    <div class="sd-stat"><div class="sd-stat-icon">📋</div><div class="sd-stat-val blue">${s.incomingRFQs}</div><div class="sd-stat-lbl">Open RFQs</div></div>
+    <div class="sd-stat"><div class="sd-stat-icon">💬</div><div class="sd-stat-val">${s.quotesSubmitted}</div><div class="sd-stat-lbl">Quotes Sent</div></div>
+    <div class="sd-stat"><div class="sd-stat-icon">🏆</div><div class="sd-stat-val amber">${s.accepted}</div><div class="sd-stat-lbl">Accepted</div></div>
+    <div class="sd-stat"><div class="sd-stat-icon">📦</div><div class="sd-stat-val">${s.orderCount}</div><div class="sd-stat-lbl">Active Orders</div></div>
+    <div class="sd-stat"><div class="sd-stat-icon">💰</div><div class="sd-stat-val green">KES ${B.fmt(s.revenue)}</div><div class="sd-stat-lbl">Revenue</div></div>
+    <div class="sd-stat"><div class="sd-stat-icon">📈</div><div class="sd-stat-val">${s.winRate}%</div><div class="sd-stat-lbl">Win Rate</div></div>`;
+}
+
+function renderRFQs() {
+  _allRFQs = B.getRFQs(); /* all open RFQs visible to suppliers */
+  filterRFQs();
+}
+
+function filterRFQs() {
+  const q = (document.getElementById('rfqSearch').value||'').toLowerCase();
+  const f = document.getElementById('rfqFilter').value;
+  let rfqs = _allRFQs.filter(r=>{
+    const matchQ = !q || r.title.toLowerCase().includes(q) || (r.description||'').toLowerCase().includes(q);
+    const matchF = f==='all' || r.status===f;
+    return matchQ && matchF;
+  });
+  const cont = document.getElementById('rfqsList');
+  if (!rfqs.length) {
+    cont.innerHTML = '<div class="sd-empty"><div style="font-size:36px;margin-bottom:10px;">📋</div><p>No RFQs found. Active buyer RFQs will appear here.</p></div>';
+    return;
+  }
+  cont.innerHTML = rfqs.map(r=>{
+    const st = B.RFQ_STATUS[r.status]||{label:r.status,color:'white'};
+    const myQuote = (B.getQuotes(r.id)||[]).find(q=>q.supplierId===_sid);
+    return `
+    <div class="rfq-card">
+      <div class="rfq-card-hd">
+        <div>
+          <div class="rfq-card-title">${r.title}</div>
+          <div class="rfq-card-meta">#${r.id} · ${B.timeSince(r.createdAt)} · Qty: ${r.qty||'N/A'} ${r.unit||''}</div>
+        </div>
+        <span class="rfq-badge" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
+      </div>
+      ${r.description?`<p style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;">${r.description}</p>`:''}
+      <div class="rfq-detail-row">
+        ${r.budget?`<div class="rfq-detail-item">Budget: <strong>KES ${B.fmt(r.budget)}</strong></div>`:''}
+        ${r.deliveryLocation?`<div class="rfq-detail-item">Delivery: <strong>${r.deliveryLocation}</strong></div>`:''}
+        ${r.deadline?`<div class="rfq-detail-item">Deadline: <strong>${new Date(r.deadline).toLocaleDateString()}</strong></div>`:''}
+        <div class="rfq-detail-item">Quotes: <strong>${(B.getQuotes(r.id)||[]).length}</strong></div>
+      </div>
+      <div class="rfq-btns">
+        ${myQuote
+          ? `<button class="rfq-btn secondary" disabled style="cursor:default;">✅ Quote Submitted</button><a href="b2b-rfq.html?id=${r.id}" class="rfq-btn secondary" style="text-decoration:none;">👁 View RFQ</a>`
+          : `<button class="rfq-btn primary" onclick="openQuoteForm('${r.id}')">📤 Submit Quote</button><a href="b2b-rfq.html?id=${r.id}" class="rfq-btn secondary" style="text-decoration:none;">👁 View RFQ</a><button class="rfq-btn secondary" onclick="contactBuyer('${r.id}')">💬 Ask Buyer</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+window.filterRFQs = filterRFQs;
+
+function renderQuotes() {
+  const allQ = B.getAllQuotes().filter(q=>q.supplierId===_sid);
+  const cont = document.getElementById('quotesList');
+  if (!allQ.length) { cont.innerHTML='<div class="sd-empty"><div style="font-size:36px;margin-bottom:10px;">💬</div><p>No quotes submitted yet.<br>Browse open RFQs and submit competitive quotes.</p></div>'; return; }
+  cont.innerHTML = allQ.map(q=>{
+    const st = B.QUOTE_STATUS[q.status]||{label:q.status,color:'white'};
+    const rfq = B.getRFQById(q.rfqId);
+    return `
+    <div class="qt-row">
+      <div>
+        <div class="qt-id">${q.id}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">For: ${rfq?.title||q.rfqId} · ${B.timeSince(q.createdAt)}</div>
+        <div style="font-size:12px;color:#71ff00;font-weight:800;margin-top:3px;">KES ${B.fmt(q.unitPrice||0)} / ${q.unit||'unit'}</div>
+      </div>
+      <div style="text-align:right;">
+        <span class="qt-status" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
+        ${q.status==='negotiating'?`<button onclick="openNegotiate('${q.rfqId}')" style="display:block;margin-top:6px;padding:5px 10px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);border-radius:7px;color:#00aaff;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;">💬 Negotiate</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderOrdersToFulfill() {
+  const orders = B.getOrders().filter(o=>o.supplierId===_sid);
+  const cont = document.getElementById('ordersToFulfill');
+  if (!orders.length) { cont.innerHTML='<div class="sd-empty"><div style="font-size:36px;margin-bottom:10px;">📦</div><p>No orders to fulfill yet.<br>Win quotes to start receiving orders.</p></div>'; return; }
+  cont.innerHTML = orders.map(o=>{
+    const st = B.ORDER_STATUS[o.status]||{label:o.status,icon:'📦'};
+    return `
+    <div class="ord-card">
+      <div class="ord-hd">
+        <div><div class="ord-id">${o.id}</div><div class="ord-meta">${o.createdAt?new Date(o.createdAt).toLocaleDateString():''} · ${o.trackingRef||'—'}</div></div>
+        <div class="ord-total">KES ${B.fmt(o.total)}</div>
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:10px;">${st.icon} ${st.label}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${o.status==='confirmed'?`<button class="rfq-btn primary" onclick="advOrder('${o.id}','processing')">⚙ Mark Processing</button>`:''}
+        ${o.status==='processing'?`<button class="rfq-btn primary" onclick="advOrder('${o.id}','dispatched')">🚚 Mark Dispatched</button>`:''}
+        ${o.status==='dispatched'?`<button class="rfq-btn primary" onclick="advOrder('${o.id}','delivered')">✅ Mark Delivered</button>`:''}
+        <a href="b2b-orders.html?id=${o.id}" class="rfq-btn secondary" style="text-decoration:none;">Details →</a>
+        <button class="rfq-btn secondary" onclick="genInvoice('${o.id}')">🧾 Invoice</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderLeads() {
+  /* Simulate leads from enquiries stored in b2b_enquiries */
+  const enquiries = JSON.parse(localStorage.getItem('b2b_enquiries')||'[]').filter(e=>e.supplierId===_sid);
+  const list = document.getElementById('leadsList');
+  const sample = [
+    {name:'Eastleigh Trader',product:'Bulk Fabric',interest:'high',ts:Date.now()-3600000*2},
+    {name:'Gikomba Dealer',product:'Wholesale Phones',interest:'medium',ts:Date.now()-3600000*6},
+    {name:'Downtown Store',product:'Electronics Bundle',interest:'high',ts:Date.now()-3600000*14},
+  ];
+  const leads = [...enquiries.map(e=>({name:e.buyerName||'Anonymous',product:e.product||'Products',interest:'medium',ts:e.ts||Date.now()})),...sample];
+  list.innerHTML = leads.slice(0,5).map(l=>`
+    <div class="lead-row">
+      <div class="lead-icon">${l.interest==='high'?'🔥':'⭐'}</div>
+      <div style="flex:1;">
+        <div class="lead-title">${l.name}</div>
+        <div class="lead-meta">Interested in: ${l.product} · ${B.timeSince(l.ts)}</div>
+      </div>
+      <span style="font-size:10px;font-weight:800;color:${l.interest==='high'?'#ef4444':'#f59e0b'};">${l.interest.toUpperCase()}</span>
+    </div>`).join('');
+
+  const eList = document.getElementById('enquiryLeads');
+  eList.innerHTML = `<div class="sd-empty"><p>Enquiry leads will appear here when buyers view your catalog and message you.</p><a href="b2b-chat.html" style="color:#00aaff;font-weight:700;font-size:13px;">Go to Messages →</a></div>`;
+}
+
+function renderAnalytics() {
+  /* Revenue chart */
+  const months = ['Jan','Feb','Mar','Apr','May','Jun'];
+  const revs = months.map(()=>Math.floor(Math.random()*80000)+10000);
+  const maxRev = Math.max(...revs);
+  document.getElementById('revChart').innerHTML = months.map((m,i)=>`
+    <div class="sd-bar-row">
+      <div class="sd-bar-lbl">${m}</div>
+      <div class="sd-bar-track"><div class="sd-bar-fill" style="width:${(revs[i]/maxRev)*100}%;background:rgba(113,255,0,0.2);border-right:2px solid #71ff00;"></div></div>
+      <div class="sd-bar-val" style="color:#71ff00;">KES ${B.fmt(revs[i])}</div>
+    </div>`).join('');
+
+  /* RFQ funnel */
+  const stats = _sid ? B.getSupplierStats(_sid) : {incomingRFQs:12,quotesSubmitted:8,accepted:3,orderCount:2};
+  document.getElementById('rfqFunnel').innerHTML = `
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">📋 Received: <strong style="color:white;">${stats.incomingRFQs}</strong></div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">💬 Quoted: <strong style="color:white;">${stats.quotesSubmitted}</strong></div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);">✅ Won: <strong style="color:#71ff00;">${stats.accepted}</strong></div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);padding:6px 0;">📦 Delivered: <strong style="color:white;">${stats.orderCount}</strong></div>`;
+
+  /* Rating */
+  const sup = _sid ? B.getSupplierById(_sid) : null;
+  const rating = sup?.rating||4.5;
+  document.getElementById('ratingBlock').innerHTML = `
+    <div style="font-size:36px;font-weight:900;color:#f59e0b;text-align:center;">${rating}</div>
+    <div style="text-align:center;font-size:20px;margin:6px 0;">${B.starsHTML(rating)}</div>
+    <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);">${sup?.reviews||0} reviews</div>`;
+
+  /* Products chart */
+  const prods = _sid ? B.getProductsBySupplierId(_sid).slice(0,5) : B.PRODUCTS.slice(0,5);
+  const maxEnq = 50;
+  document.getElementById('prodChart').innerHTML = prods.map(p=>{
+    const enq = Math.floor(Math.random()*maxEnq)+5;
+    return `
+    <div class="sd-bar-row">
+      <div class="sd-bar-lbl" style="font-size:10px;">${p.name.slice(0,10)}</div>
+      <div class="sd-bar-track"><div class="sd-bar-fill" style="width:${(enq/maxEnq)*100}%;background:rgba(0,170,255,0.3);border-right:2px solid #00aaff;"></div></div>
+      <div class="sd-bar-val" style="color:#00aaff;">${enq} enquiries</div>
+    </div>`;
+  }).join('');
+}
+
+function openQuoteForm(rfqId) {
+  const rfq = B.getRFQById(rfqId);
+  document.getElementById('sdModalTitle').innerHTML = `Submit Quote <span onclick="closeModal()" style="cursor:pointer;font-size:20px;font-weight:300;color:rgba(255,255,255,0.4);">✕</span>`;
+  document.getElementById('sdModalBody').innerHTML = `
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:white;">${rfq?.title||rfqId}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);">Qty: ${rfq?.qty||'—'} · Budget: ${rfq?.budget?'KES '+B.fmt(rfq.budget):'Not specified'}</div>
+    </div>
+    <label class="sd-label">Unit Price (KES) *</label>
+    <input type="number" id="qUnitPrice" class="sd-input" placeholder="e.g. 1200">
+    <label class="sd-label">Total Amount (KES) *</label>
+    <input type="number" id="qTotal" class="sd-input" placeholder="Unit × Qty">
+    <label class="sd-label">Unit (e.g. piece, kg, box)</label>
+    <input type="text" id="qUnit" class="sd-input" placeholder="piece">
+    <label class="sd-label">Lead Time</label>
+    <input type="text" id="qLeadTime" class="sd-input" placeholder="e.g. 7-14 days">
+    <label class="sd-label">Payment Terms</label>
+    <input type="text" id="qPayTerms" class="sd-input" placeholder="e.g. 50% deposit, 50% on delivery">
+    <label class="sd-label">Minimum Order Qty</label>
+    <input type="number" id="qMOQ" class="sd-input" placeholder="${rfq?.qty||50}">
+    <label class="sd-label">Validity (days)</label>
+    <input type="number" id="qValidity" class="sd-input" placeholder="30" value="30">
+    <label class="sd-label">Notes / Offer Details</label>
+    <textarea id="qNotes" class="sd-input" rows="3" placeholder="Describe what's included, warranties, delivery..."></textarea>
+    <button class="sd-submit" onclick="submitQuote('${rfqId}')">📤 Submit Quote</button>`;
+  document.getElementById('sdModal').classList.add('open');
+}
+window.openQuoteForm = openQuoteForm;
+
+function submitQuote(rfqId) {
+  const unitPrice = parseFloat(document.getElementById('qUnitPrice').value);
+  const total = parseFloat(document.getElementById('qTotal').value);
+  if (!unitPrice || !total) { (window._skToast||alert)('Please enter price and total.'); return; }
+  const sup = _sid ? B.getSupplierById(_sid) : B.SUPPLIERS[0];
+  B.submitQuote({
+    rfqId,
+    supplierId: _sid,
+    supplierName: sup?.name||'Your Company',
+    unitPrice,
+    total,
+    unit: document.getElementById('qUnit').value||'piece',
+    leadTime: document.getElementById('qLeadTime').value,
+    paymentTerms: document.getElementById('qPayTerms').value,
+    moq: parseInt(document.getElementById('qMOQ').value)||1,
+    validityDays: parseInt(document.getElementById('qValidity').value)||30,
+    notes: document.getElementById('qNotes').value,
+  });
+  closeModal();
+  (window._skToast||alert)('✅ Quote submitted! The buyer will be notified.');
+  renderRFQs();
+  document.querySelector('.sd-tab:nth-child(2)').click();
+}
+window.submitQuote = submitQuote;
+
+function contactBuyer(rfqId) {
+  const rfq = B.getRFQById(rfqId);
+  const thread = 'rfq_' + rfqId;
+  window.location.href = `b2b-chat.html?thread=${thread}&name=RFQ: ${rfq?.title||rfqId}`;
+}
+window.contactBuyer = contactBuyer;
+
+function openNegotiate(rfqId) { window.location.href = `b2b-rfq.html?id=${rfqId}&tab=negotiate`; }
+window.openNegotiate = openNegotiate;
+
+function advOrder(orderId, newStatus) {
+  B.updateOrderStatus(orderId, newStatus);
+  renderOrdersToFulfill();
+}
+window.advOrder = advOrder;
+
+function genInvoice(orderId) {
+  const inv = B.generateInvoice(orderId);
+  (window._skToast||alert)(`🧾 Invoice ${inv.number} generated for order ${orderId}`);
+}
+window.genInvoice = genInvoice;
+
+function openSettings() {
+  const sup = _sid ? B.getSupplierById(_sid) : null;
+  document.getElementById('sdModalTitle').innerHTML = `⚙ Supplier Settings <span onclick="closeModal()" style="cursor:pointer;font-size:20px;font-weight:300;color:rgba(255,255,255,0.4);">✕</span>`;
+  document.getElementById('sdModalBody').innerHTML = `
+    <label class="sd-label">Business Name</label>
+    <input id="sName" class="sd-input" value="${sup?.name||''}">
+    <label class="sd-label">Business Phone</label>
+    <input id="sPhone" class="sd-input" value="${sup?.phone||''}">
+    <label class="sd-label">Business Location</label>
+    <input id="sLoc" class="sd-input" value="${sup?.location||'Nairobi, Kenya'}">
+    <label class="sd-label">Minimum Order Value (KES)</label>
+    <input id="sMOV" type="number" class="sd-input" value="${sup?.minOrder||5000}">
+    <label class="sd-label">Business Description</label>
+    <textarea id="sDesc" class="sd-input" rows="3">${sup?.desc||''}</textarea>
+    <button class="sd-submit" onclick="saveSettings()">💾 Save Settings</button>`;
+  document.getElementById('sdModal').classList.add('open');
+}
+window.openSettings = openSettings;
+
+function saveSettings() {
+  if (!_sid) return;
+  const sup = B.getSupplierById(_sid);
+  if (sup) {
+    sup.name = document.getElementById('sName').value;
+    sup.phone = document.getElementById('sPhone').value;
+    sup.location = document.getElementById('sLoc').value;
+    sup.minOrder = parseInt(document.getElementById('sMOV').value)||5000;
+    sup.desc = document.getElementById('sDesc').value;
+  }
+  closeModal();
+  (window._skToast||alert)('✅ Settings saved!');
+  init();
+}
+window.saveSettings = saveSettings;
+
+function closeModal() { document.getElementById('sdModal').classList.remove('open'); }
+window.closeModal = closeModal;
+document.getElementById('sdModal').addEventListener('click', e=>{ if(e.target===document.getElementById('sdModal'))closeModal(); });
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.sd-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sd-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('pane-'+name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name==='quotes') renderQuotes();
+  if (name==='orders') renderOrdersToFulfill();
+  if (name==='leads') renderLeads();
+  if (name==='analytics') renderAnalytics();
+}
+window.switchTab = switchTab;
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+
+

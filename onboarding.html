@@ -1,0 +1,241 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Get Started — SOKONI</title>
+  <meta name="description" content="Choose how you want to get started on SOKONI — Kenya's all-in-one marketplace.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding-bottom:60px;}
+
+    /* ── Top Bar ── */
+    .ob-topbar{display:flex;align-items:center;padding:16px 20px;background:rgba(10,10,10,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+    .ob-back{background:none;border:none;color:rgba(255,255,255,0.6);font-size:22px;cursor:pointer;padding:4px 10px 4px 0;line-height:1;display:flex;align-items:center;gap:6px;font-family:inherit;}
+    .ob-back:hover{color:#fff;}
+    .ob-logo{height:30px;margin-left:4px;}
+    .ob-nav-wordmark{font-size:15px;font-weight:900;letter-spacing:1px;color:#71ff00;margin-left:8px;}
+
+    /* ── Hero ── */
+    .ob-hero{padding:48px 24px 32px;text-align:center;background:linear-gradient(160deg,rgba(113,255,0,0.06) 0%,transparent 60%);}
+    .ob-hero-logo{height:56px;margin-bottom:18px;filter:drop-shadow(0 0 20px rgba(113,255,0,0.35));}
+    .ob-hero h1{font-size:clamp(24px,6vw,40px);font-weight:900;line-height:1.15;margin-bottom:10px;}
+    .ob-hero h1 span{color:#71ff00;}
+    .ob-hero p{color:rgba(255,255,255,0.5);font-size:15px;max-width:360px;margin:0 auto 16px;}
+    .ob-user-greeting{display:inline-flex;align-items:center;gap:8px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:24px;padding:8px 16px;font-size:13px;font-weight:700;color:#71ff00;margin-top:4px;}
+    .ob-user-greeting span{color:rgba(255,255,255,0.7);}
+
+    /* ── Role Cards ── */
+    .ob-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:24px 18px;max-width:640px;margin:0 auto;}
+    @media(max-width:400px){.ob-grid{grid-template-columns:1fr;}}
+    .ob-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:22px 18px 20px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;cursor:pointer;transition:all .22s;position:relative;overflow:hidden;text-decoration:none;color:inherit;}
+    .ob-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(113,255,0,0.05),transparent);opacity:0;transition:opacity .2s;}
+    .ob-card:hover,.ob-card:focus-visible{border-color:rgba(113,255,0,0.35);transform:translateY(-2px);box-shadow:0 12px 40px rgba(113,255,0,0.1);}
+    .ob-card:hover::before{opacity:1;}
+    .ob-card-icon{font-size:32px;line-height:1;margin-bottom:2px;}
+    .ob-card-title{font-size:16px;font-weight:900;color:#fff;}
+    .ob-card-sub{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.4;}
+    .ob-card-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#71ff00;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:8px;padding:3px 8px;margin-top:4px;}
+
+    /* Progress bar */
+    .ob-progress-wrap{width:100%;margin-top:8px;}
+    .ob-progress-label{font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:4px;display:flex;justify-content:space-between;}
+    .ob-progress-track{height:4px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;}
+    .ob-progress-fill{height:100%;background:#71ff00;border-radius:4px;transition:width .5s;}
+
+    /* CTA button inside card */
+    .ob-card-btn{margin-top:10px;width:100%;padding:11px 16px;background:linear-gradient(135deg,#71ff00,#4dcc00);border:none;border-radius:12px;color:#0a0a0a;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;letter-spacing:0.3px;transition:filter .15s;}
+    .ob-card-btn:hover{filter:brightness(1.08);}
+    .ob-card-btn.secondary{background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.12);}
+
+    /* ── Footer links ── */
+    .ob-footer{padding:20px 24px 32px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;}
+    .ob-dashboard-link{display:inline-flex;align-items:center;gap:8px;color:rgba(255,255,255,0.55);font-size:13px;font-weight:600;text-decoration:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 20px;transition:all .2s;}
+    .ob-dashboard-link:hover{color:#fff;border-color:rgba(255,255,255,0.25);}
+
+    .ob-trust-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;}
+    .ob-trust-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:6px 12px;}
+    .ob-trust-badge .dot{color:#71ff00;font-size:14px;}
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="ob-topbar">
+    <button class="ob-back" onclick="window.location.href='index.html'" aria-label="Back to home">&#8592;</button>
+    <img src="assets/logosokoni.png" alt="SOKONI" class="ob-logo">
+    <span class="ob-nav-wordmark">SOKONI</span>
+  </div>
+
+  <!-- Hero -->
+  <div class="ob-hero">
+    <img src="assets/Sokonilogo2.png" alt="SOKONI" class="ob-hero-logo" onerror="this.style.display='none'">
+    <h1>Welcome to <span>SOKONI</span></h1>
+    <p>Choose how you want to get started on Kenya's #1 marketplace</p>
+    <div class="ob-user-greeting" id="obGreeting" style="display:none;">
+      <span>Signed in as</span> <strong id="obUserName"></strong>
+    </div>
+  </div>
+
+  <!-- Role cards -->
+  <div class="ob-grid">
+
+    <!-- Seller -->
+    <div class="ob-card" id="cardSeller" tabindex="0" role="button" aria-label="Start Selling">
+      <div class="ob-card-icon">🛍️</div>
+      <div class="ob-card-title">Seller</div>
+      <div class="ob-card-sub">List products and start earning today</div>
+      <div class="ob-progress-wrap" id="progressSeller">
+        <div class="ob-progress-label"><span>Setup progress</span><span id="pctSeller">0%</span></div>
+        <div class="ob-progress-track"><div class="ob-progress-fill" id="fillSeller" style="width:0%"></div></div>
+      </div>
+      <div id="sellerDone" class="ob-card-badge" style="display:none;">✅ Setup complete</div>
+      <button class="ob-card-btn" onclick="window.location.href='onboarding-seller.html'">Start Selling</button>
+    </div>
+
+    <!-- Business -->
+    <div class="ob-card" tabindex="0" role="button" aria-label="Register Business">
+      <div class="ob-card-icon">🏢</div>
+      <div class="ob-card-title">Business</div>
+      <div class="ob-card-sub">Register your shop or company on SOKONI</div>
+      <button class="ob-card-btn" onclick="openBusinessReg()">Register Business</button>
+    </div>
+
+    <!-- Driver -->
+    <div class="ob-card" id="cardDriver" tabindex="0" role="button" aria-label="Become a Driver">
+      <div class="ob-card-icon">🏍️</div>
+      <div class="ob-card-title">Driver</div>
+      <div class="ob-card-sub">Join as a delivery driver or boda rider</div>
+      <div class="ob-progress-wrap" id="progressDriver">
+        <div class="ob-progress-label"><span>Setup progress</span><span id="pctDriver">0%</span></div>
+        <div class="ob-progress-track"><div class="ob-progress-fill" id="fillDriver" style="width:0%"></div></div>
+      </div>
+      <button class="ob-card-btn" onclick="window.location.href='onboarding-driver.html'">Become a Driver</button>
+    </div>
+
+    <!-- Professional -->
+    <div class="ob-card" id="cardPro" tabindex="0" role="button" aria-label="Join as Professional">
+      <div class="ob-card-icon">👔</div>
+      <div class="ob-card-title">Professional</div>
+      <div class="ob-card-sub">Doctors, Lawyers, Agents, Consultants</div>
+      <div class="ob-progress-wrap" id="progressPro">
+        <div class="ob-progress-label"><span>Setup progress</span><span id="pctPro">0%</span></div>
+        <div class="ob-progress-track"><div class="ob-progress-fill" id="fillPro" style="width:0%"></div></div>
+      </div>
+      <button class="ob-card-btn" onclick="window.location.href='onboarding-professional.html'">Join as Professional</button>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="ob-footer">
+    <a href="index.html" class="ob-dashboard-link">🏠 Already set up? Go to Dashboard</a>
+    <div class="ob-trust-row">
+      <div class="ob-trust-badge"><span class="dot">●</span> 256-bit encrypted</div>
+      <div class="ob-trust-badge"><span class="dot">●</span> Verified by SOKONI</div>
+      <div class="ob-trust-badge"><span class="dot">●</span> KES protected</div>
+    </div>
+  </div>
+
+  <script type="module" src="firebase.js"></script>
+  <script src="sokoni-trust.js" defer></script>
+  <script src="kass-widget.js" defer></script>
+  <script src="scroll-top.js" defer></script>
+  <script>
+    /* ── Keyboard nav for cards ── */
+    document.querySelectorAll('.ob-card').forEach(function(c){
+      c.addEventListener('keydown', function(e){
+        if(e.key==='Enter'||e.key===' '){
+          var btn = c.querySelector('.ob-card-btn');
+          if(btn) btn.click();
+        }
+      });
+    });
+
+    /* ── Update progress bars ── */
+    function updateProgress() {
+      if (!window.SokoniOnboarding) return;
+      var roles = [
+        { role:'seller',       pct:'pctSeller', fill:'fillSeller', prog:'progressSeller', steps:4 },
+        { role:'driver',       pct:'pctDriver', fill:'fillDriver', prog:'progressDriver', steps:4 },
+        { role:'professional', pct:'pctPro',    fill:'fillPro',    prog:'progressPro',    steps:4 }
+      ];
+      roles.forEach(function(r){
+        var pct = SokoniOnboarding.getProgress(r.role, r.steps);
+        var state = SokoniOnboarding.getState(r.role);
+        var fillEl  = document.getElementById(r.fill);
+        var pctEl   = document.getElementById(r.pct);
+        if(fillEl)  fillEl.style.width = pct + '%';
+        if(pctEl)   pctEl.textContent  = pct + '%';
+        if(pct === 0 || pct === 100){
+          var progEl = document.getElementById(r.prog);
+          if(progEl && pct === 0) progEl.style.display = 'none';
+        }
+      });
+
+      /* Check if seller is done via legacy key */
+      var providerProfile = localStorage.getItem('sokoniProviderProfile');
+      var sellerOnboard   = localStorage.getItem('sokoniSellerOnboarding');
+      if(providerProfile || sellerOnboard){
+        var doneEl = document.getElementById('sellerDone');
+        if(doneEl) doneEl.style.display = 'inline-flex';
+        var progEl = document.getElementById('progressSeller');
+        if(progEl) progEl.style.display = 'none';
+      }
+    }
+
+    /* ── Auth greeting ── */
+    function initGreeting() {
+      var auth = window.firebaseAuth;
+      if(!auth) return;
+      auth.onAuthStateChanged(function(user){
+        if(user){
+          var greet = document.getElementById('obGreeting');
+          var name  = document.getElementById('obUserName');
+          if(greet) greet.style.display = 'inline-flex';
+          if(name){
+            var dn = user.displayName || user.email || 'User';
+            name.textContent = dn.replace(/&/g,'').replace(/</g,'').replace(/>/g,'');
+          }
+        }
+      });
+    }
+
+    /* ── Business registration ── */
+    function openBusinessReg() {
+      if(window.HubRegister && typeof HubRegister.open === 'function'){
+        HubRegister.open();
+      } else {
+        window.location.href = 'hub-register.html';
+      }
+    }
+
+    /* ── Init ── */
+    window.addEventListener('load', function(){
+      updateProgress();
+      initGreeting();
+    });
+
+    /* Also try after trust.js loads */
+    document.addEventListener('sokoniTrustReady', updateProgress);
+    setTimeout(updateProgress, 800);
+  </script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

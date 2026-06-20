@@ -1,0 +1,528 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Driver Registration — SOKONI</title>
+  <meta name="description" content="Join SOKONI as a delivery driver or boda rider. Apply in 4 easy steps.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding-bottom:60px;}
+
+    /* ── Top bar ── */
+    .wiz-topbar{display:flex;align-items:center;padding:14px 18px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);gap:12px;}
+    .wiz-back{background:none;border:none;color:rgba(255,255,255,0.6);font-size:20px;cursor:pointer;padding:4px;font-family:inherit;line-height:1;}
+    .wiz-back:hover{color:#fff;}
+    .wiz-topbar-title{font-size:15px;font-weight:800;flex:1;}
+    .wiz-topbar-logo{height:26px;}
+    .wiz-step-counter{font-size:12px;color:rgba(255,255,255,0.4);font-weight:600;white-space:nowrap;}
+
+    /* ── Progress ── */
+    .wiz-progress{display:flex;gap:6px;padding:14px 18px 0;}
+    .wiz-prog-seg{flex:1;height:4px;border-radius:4px;background:rgba(255,255,255,0.1);transition:background .3s;}
+    .wiz-prog-seg.done{background:#71ff00;}
+    .wiz-prog-seg.active{background:rgba(113,255,0,0.45);}
+
+    /* ── Steps ── */
+    .wiz-step{display:none;padding:24px 18px;max-width:560px;margin:0 auto;animation:fadeIn .25s ease;}
+    .wiz-step.active{display:block;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+    .wiz-step-hero{text-align:center;padding:12px 0 24px;}
+    .wiz-step-hero .step-icon{font-size:44px;margin-bottom:12px;}
+    .wiz-step-hero h2{font-size:22px;font-weight:900;margin-bottom:6px;}
+    .wiz-step-hero h2 span{color:#71ff00;}
+    .wiz-step-hero p{color:rgba(255,255,255,0.45);font-size:14px;line-height:1.5;}
+
+    /* ── Vehicle type radio cards ── */
+    .vehicle-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:16px 0;}
+    .veh-card{background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+    .veh-card:hover{border-color:rgba(113,255,0,0.25);}
+    .veh-card.selected{border-color:#71ff00;background:rgba(113,255,0,0.07);}
+    .veh-card input[type=radio]{position:absolute;opacity:0;pointer-events:none;}
+    .veh-icon{font-size:36px;line-height:1;margin-bottom:8px;}
+    .veh-label{font-size:13px;font-weight:800;color:rgba(255,255,255,0.8);}
+
+    /* ── Form elements ── */
+    .wiz-field{margin-bottom:16px;}
+    .wiz-label{display:block;font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;}
+    .wiz-input,.wiz-select{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:16px;font-family:inherit;outline:none;transition:border-color .2s,background .2s;}
+    .wiz-input{padding:13px 16px;}
+    .wiz-select{padding:13px 16px;-webkit-appearance:none;appearance:none;cursor:pointer;}
+    .wiz-input:focus,.wiz-select:focus{border-color:rgba(113,255,0,0.45);background:rgba(113,255,0,0.04);}
+    .wiz-input::placeholder{color:rgba(255,255,255,0.25);}
+    .wiz-select option{background:#1a1a1a;color:#fff;}
+    .wiz-input.invalid,.wiz-select.invalid{border-color:rgba(255,100,100,0.5);}
+
+    /* ── Info boxes ── */
+    .wiz-info{background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.18);border-radius:14px;padding:14px 16px;margin:16px 0;display:flex;gap:12px;align-items:flex-start;}
+    .wiz-info-icon{font-size:20px;flex-shrink:0;}
+    .wiz-info p{font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;}
+    .wiz-info strong{color:#71ff00;}
+    .wiz-info.blue{background:rgba(0,170,255,0.07);border-color:rgba(0,170,255,0.2);}
+    .wiz-info.blue strong{color:#00aaff;}
+
+    /* ── GPS section ── */
+    .gps-hero{text-align:center;padding:28px 20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;margin:16px 0;}
+    .gps-icon{font-size:56px;margin-bottom:12px;}
+    .gps-status{font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:16px;}
+    .gps-status.active{color:#71ff00;}
+    .gps-location-text{font-size:16px;font-weight:800;color:#71ff00;margin-top:8px;}
+    .gps-btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;background:linear-gradient(135deg,#71ff00,#4dcc00);border:none;border-radius:14px;color:#0a0a0a;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;transition:filter .15s;}
+    .gps-btn:hover{filter:brightness(1.08);}
+    .gps-btn:disabled{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);cursor:not-allowed;}
+    .gps-check{font-size:36px;display:none;}
+
+    /* ── Payout radio ── */
+    .payout-opts{display:flex;gap:10px;margin:10px 0;}
+    .payout-opt{flex:1;background:rgba(255,255,255,0.04);border:2px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 12px;text-align:center;cursor:pointer;transition:all .2s;}
+    .payout-opt:hover{border-color:rgba(113,255,0,0.25);}
+    .payout-opt.selected{border-color:#71ff00;background:rgba(113,255,0,0.07);}
+    .payout-opt input[type=radio]{display:none;}
+    .payout-opt-icon{font-size:22px;margin-bottom:6px;}
+    .payout-opt-label{font-size:13px;font-weight:800;}
+
+    /* ── Earnings box ── */
+    .earnings-box{background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(113,255,0,0.03));border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;margin:16px 0;text-align:center;}
+    .earnings-box .earn-label{font-size:12px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+    .earnings-box .earn-value{font-size:24px;font-weight:900;color:#71ff00;}
+    .earnings-box .earn-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;}
+
+    /* ── Checkboxes ── */
+    .wiz-check-label{display:flex;align-items:flex-start;gap:12px;cursor:pointer;font-size:14px;color:rgba(255,255,255,0.8);line-height:1.5;margin-top:12px;}
+    .wiz-check-label input[type=checkbox]{width:20px;height:20px;accent-color:#71ff00;cursor:pointer;flex-shrink:0;margin-top:2px;}
+
+    /* ── Buttons ── */
+    .wiz-btn-row{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;}
+    .wiz-btn{flex:1;min-width:140px;padding:15px 20px;border:none;border-radius:14px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;transition:filter .15s,transform .1s;}
+    .wiz-btn:active{transform:scale(0.98);}
+    .wiz-btn.primary{background:linear-gradient(135deg,#71ff00,#4dcc00);color:#0a0a0a;}
+    .wiz-btn.primary:hover{filter:brightness(1.08);}
+    .wiz-btn.ghost{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.1);}
+    .wiz-btn.ghost:hover{background:rgba(255,255,255,0.09);color:#fff;}
+
+    /* ── Error ── */
+    .wiz-error{color:#ff6b6b;font-size:12px;margin-top:5px;font-weight:600;display:none;}
+
+    /* ── Success Modal ── */
+    .wiz-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;backdrop-filter:blur(6px);}
+    .wiz-modal{background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:24px;padding:36px 28px;text-align:center;max-width:380px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.7);}
+    .wiz-modal .modal-icon{font-size:56px;margin-bottom:16px;}
+    .wiz-modal h2{font-size:22px;font-weight:900;margin-bottom:8px;color:#71ff00;}
+    .wiz-modal p{color:rgba(255,255,255,0.55);font-size:14px;line-height:1.6;margin-bottom:24px;}
+    .wiz-modal-btns{display:flex;flex-direction:column;gap:10px;}
+    .wiz-modal-btn{padding:13px 20px;border:none;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;}
+    .wiz-modal-btn.primary{background:linear-gradient(135deg,#71ff00,#4dcc00);color:#0a0a0a;}
+    .wiz-modal-btn.ghost{background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.12);}
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="wiz-topbar">
+    <button class="wiz-back" onclick="goBack()" aria-label="Back">&#8592;</button>
+    <img src="assets/logosokoni.png" alt="SOKONI" class="wiz-topbar-logo">
+    <span class="wiz-topbar-title">Driver Application</span>
+    <span class="wiz-step-counter" id="stepCounter">Step 1 of 4</span>
+  </div>
+
+  <!-- Progress -->
+  <div class="wiz-progress" id="wizProgress">
+    <div class="wiz-prog-seg active" id="seg0"></div>
+    <div class="wiz-prog-seg" id="seg1"></div>
+    <div class="wiz-prog-seg" id="seg2"></div>
+    <div class="wiz-prog-seg" id="seg3"></div>
+  </div>
+
+  <!-- ══════════════ STEP 1: Vehicle ══════════════ -->
+  <div class="wiz-step active" id="step0">
+    <div class="wiz-step-hero">
+      <div class="step-icon">🚗</div>
+      <h2>Vehicle <span>registration</span></h2>
+      <p>Tell us about the vehicle you'll be using for deliveries</p>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label">Vehicle Type *</label>
+      <div class="vehicle-grid" id="vehicleGrid">
+        <label class="veh-card" onclick="selectVehicle(this,'boda')">
+          <input type="radio" name="vehType" value="boda">
+          <div class="veh-icon">🏍️</div>
+          <div class="veh-label">Boda Boda</div>
+        </label>
+        <label class="veh-card" onclick="selectVehicle(this,'tuktuk')">
+          <input type="radio" name="vehType" value="tuktuk">
+          <div class="veh-icon">🛺</div>
+          <div class="veh-label">Tuk-tuk</div>
+        </label>
+        <label class="veh-card" onclick="selectVehicle(this,'car')">
+          <input type="radio" name="vehType" value="car">
+          <div class="veh-icon">🚗</div>
+          <div class="veh-label">Car</div>
+        </label>
+        <label class="veh-card" onclick="selectVehicle(this,'van')">
+          <input type="radio" name="vehType" value="van">
+          <div class="veh-icon">🚐</div>
+          <div class="veh-label">Van / Truck</div>
+        </label>
+      </div>
+      <div class="wiz-error" id="errVehType">Please select your vehicle type.</div>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label" for="platNum">Vehicle Plate Number *</label>
+      <input class="wiz-input" id="platNum" type="text" placeholder="e.g. KBZ 123A" autocomplete="off" style="text-transform:uppercase;">
+      <div class="wiz-error" id="errPlate">Please enter the plate number.</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="vehYear">Vehicle Year *</label>
+      <select class="wiz-select" id="vehYear">
+        <option value="">Select year...</option>
+      </select>
+      <div class="wiz-error" id="errYear">Please select the vehicle year.</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="vehModel">Vehicle Model</label>
+      <input class="wiz-input" id="vehModel" type="text" placeholder="e.g. Honda CB125, Toyota Probox">
+    </div>
+
+    <div class="wiz-info">
+      <div class="wiz-info-icon">ℹ️</div>
+      <p>Your vehicle details are <strong>verified before activation</strong>. Keep your logbook and insurance ready.</p>
+    </div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn primary" onclick="step1Next()">Next &#8594;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ STEP 2: License ══════════════ -->
+  <div class="wiz-step" id="step1">
+    <div class="wiz-step-hero">
+      <div class="step-icon">🪪</div>
+      <h2>License <span>verification</span></h2>
+      <p>Your documents are required to activate your driver account</p>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label" for="drvFullName">Full Name *</label>
+      <input class="wiz-input" id="drvFullName" type="text" placeholder="As on your National ID" autocomplete="name" required>
+      <div class="wiz-error" id="errDrvName">Please enter your full name.</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="natIdNum">National ID Number *</label>
+      <input class="wiz-input" id="natIdNum" type="text" placeholder="e.g. 34567890" inputmode="numeric" required>
+      <div class="wiz-error" id="errNatId">Please enter your National ID number.</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="dlNum">Driver's License Number *</label>
+      <input class="wiz-input" id="dlNum" type="text" placeholder="e.g. DL/12345/2020" autocomplete="off" required>
+      <div class="wiz-error" id="errDL">Please enter your driver's license number.</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="dlExpiry">License Expiry Date</label>
+      <input class="wiz-input" id="dlExpiry" type="date">
+    </div>
+
+    <div class="wiz-info blue">
+      <div class="wiz-info-icon">📱</div>
+      <p>Upload your documents at a <strong>SOKONI agent</strong> near you, or send scanned copies via WhatsApp: <strong>+254 700 000 000</strong></p>
+    </div>
+
+    <label class="wiz-check-label">
+      <input type="checkbox" id="docConfirm">
+      I confirm my documents are valid and I am legally authorised to drive in Kenya
+    </label>
+    <div class="wiz-error" id="errDocConfirm" style="margin-top:8px;">Please confirm your documents are valid.</div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn ghost" onclick="goToStep(0)">&#8592; Back</button>
+      <button class="wiz-btn primary" onclick="step2Next()">Next &#8594;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ STEP 3: GPS ══════════════ -->
+  <div class="wiz-step" id="step2">
+    <div class="wiz-step-hero">
+      <div class="step-icon">📡</div>
+      <h2>GPS <span>activation</span></h2>
+      <p>Enable location to receive delivery requests near you</p>
+    </div>
+
+    <div class="gps-hero">
+      <div class="gps-icon" id="gpsIcon">📍</div>
+      <div class="gps-status" id="gpsStatus">Location access not yet enabled</div>
+      <div class="gps-location-text" id="gpsLocationText" style="display:none;"></div>
+      <div class="gps-check" id="gpsCheck">✅</div>
+      <br>
+      <button class="gps-btn" id="gpsBtn" onclick="activateGPS()">📍 Enable GPS</button>
+    </div>
+
+    <div class="wiz-info">
+      <div class="wiz-info-icon">🔒</div>
+      <p>Your location is <strong>only shared during active deliveries</strong>. Customers track you live. Location access is required for the driver app.</p>
+    </div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn ghost" onclick="goToStep(1)">&#8592; Back</button>
+      <button class="wiz-btn primary" id="gpsNextBtn" onclick="goToStep(3)">Next &#8594;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ STEP 4: Earnings ══════════════ -->
+  <div class="wiz-step" id="step3">
+    <div class="wiz-step-hero">
+      <div class="step-icon">💰</div>
+      <h2>Earnings <span>setup</span></h2>
+      <p>Set up how you want to receive your daily earnings</p>
+    </div>
+
+    <div class="earnings-box">
+      <div class="earn-label">Estimated earnings</div>
+      <div class="earn-value">KES 800 – 3,000</div>
+      <div class="earn-sub">per day on SOKONI deliveries</div>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label" for="drvMpesa">M-Pesa Number *</label>
+      <input class="wiz-input" id="drvMpesa" type="tel" placeholder="07XXXXXXXX" autocomplete="tel" inputmode="tel" required>
+      <div class="wiz-error" id="errDrvMpesa">Please enter a valid Safaricom number.</div>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label">Payout Frequency</label>
+      <div class="payout-opts">
+        <label class="payout-opt selected" id="payDaily" onclick="selectPayout('daily',this)">
+          <input type="radio" name="payout" value="daily" checked>
+          <div class="payout-opt-icon">📅</div>
+          <div class="payout-opt-label">Daily</div>
+        </label>
+        <label class="payout-opt" id="payWeekly" onclick="selectPayout('weekly',this)">
+          <input type="radio" name="payout" value="weekly">
+          <div class="payout-opt-icon">📆</div>
+          <div class="payout-opt-label">Weekly</div>
+        </label>
+      </div>
+    </div>
+
+    <label class="wiz-check-label">
+      <input type="checkbox" id="drvAgree">
+      I agree to the SOKONI Driver Terms and Code of Conduct. I understand that maintaining a rating above 4.0 is required to stay active.
+    </label>
+    <div class="wiz-error" id="errDrvAgree" style="margin-top:8px;">Please agree to the driver terms.</div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn ghost" onclick="goToStep(2)">&#8592; Back</button>
+      <button class="wiz-btn primary" onclick="step4Submit()">Submit Application &#8594;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ Success Modal ══════════════ -->
+  <div class="wiz-modal-bg" id="successModal" style="display:none;">
+    <div class="wiz-modal">
+      <div class="modal-icon">✅</div>
+      <h2>Application submitted!</h2>
+      <p>Our team will review your application within 24 hours and contact you via SMS on the M-Pesa number provided.</p>
+      <div class="wiz-modal-btns">
+        <button class="wiz-modal-btn primary" onclick="window.location.href='driver-success.html'">View My Status</button>
+        <button class="wiz-modal-btn ghost" onclick="window.location.href='index.html'">Back to Home</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="firebase.js"></script>
+  <script src="sokoni-trust.js" defer></script>
+  <script src="kass-widget.js" defer></script>
+  <script src="scroll-top.js" defer></script>
+  <script>
+    var currentStep = 0;
+    var TOTAL_STEPS = 4;
+    var driverData  = {};
+    var gpsEnabled  = false;
+
+    /* ── Populate year select ── */
+    (function(){
+      var sel = document.getElementById('vehYear');
+      var yr  = new Date().getFullYear();
+      for(var y = yr; y >= 2000; y--){
+        var opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        sel.appendChild(opt);
+      }
+    })();
+
+    /* ── Vehicle selection ── */
+    function selectVehicle(el, type){
+      document.querySelectorAll('.veh-card').forEach(function(c){ c.classList.remove('selected'); });
+      el.classList.add('selected');
+      driverData.vehicleType = type;
+    }
+
+    /* ── Payout selection ── */
+    function selectPayout(freq, el){
+      document.querySelectorAll('.payout-opt').forEach(function(o){ o.classList.remove('selected'); });
+      el.classList.add('selected');
+      driverData.payoutFrequency = freq;
+    }
+
+    /* ── Progress UI ── */
+    function updateProgressUI(){
+      for(var i=0;i<TOTAL_STEPS;i++){
+        var seg = document.getElementById('seg'+i);
+        if(!seg) continue;
+        if(i < currentStep)       seg.className = 'wiz-prog-seg done';
+        else if(i===currentStep)  seg.className = 'wiz-prog-seg active';
+        else                      seg.className = 'wiz-prog-seg';
+      }
+      var ctr = document.getElementById('stepCounter');
+      if(ctr) ctr.textContent = 'Step '+(currentStep+1)+' of '+TOTAL_STEPS;
+    }
+
+    function goToStep(n){
+      document.getElementById('step'+currentStep).classList.remove('active');
+      currentStep = n;
+      document.getElementById('step'+currentStep).classList.add('active');
+      updateProgressUI();
+      window.scrollTo({top:0,behavior:'smooth'});
+      if(window.SokoniOnboarding) SokoniOnboarding.setStep('driver', n, driverData);
+    }
+
+    function goBack(){
+      if(currentStep > 0) goToStep(currentStep-1);
+      else window.location.href = 'onboarding.html';
+    }
+
+    function showErr(id, show){ var e=document.getElementById(id); if(e) e.style.display=show?'block':'none'; }
+    function markInvalid(id, inv){ var e=document.getElementById(id); if(e){ if(inv) e.classList.add('invalid'); else e.classList.remove('invalid'); } }
+
+    /* ── Step 1 ── */
+    function step1Next(){
+      var plate = document.getElementById('platNum').value.trim();
+      var year  = document.getElementById('vehYear').value;
+      var vtype = driverData.vehicleType;
+      var valid = true;
+      if(!vtype){ showErr('errVehType',true); valid=false; } else showErr('errVehType',false);
+      if(!plate){ showErr('errPlate',true); markInvalid('platNum',true); valid=false; } else { showErr('errPlate',false); markInvalid('platNum',false); }
+      if(!year) { showErr('errYear',true);  markInvalid('vehYear',true); valid=false; } else { showErr('errYear',false);  markInvalid('vehYear',false); }
+      if(!valid) return;
+      driverData.plate = plate.toUpperCase();
+      driverData.year  = year;
+      driverData.model = document.getElementById('vehModel').value.trim();
+      goToStep(1);
+    }
+
+    /* ── Step 2 ── */
+    function step2Next(){
+      var name    = document.getElementById('drvFullName').value.trim();
+      var natId   = document.getElementById('natIdNum').value.trim();
+      var dlNum   = document.getElementById('dlNum').value.trim();
+      var confirm = document.getElementById('docConfirm').checked;
+      var valid = true;
+      if(!name)   { showErr('errDrvName',true);    markInvalid('drvFullName',true); valid=false; } else { showErr('errDrvName',false);    markInvalid('drvFullName',false); }
+      if(!natId)  { showErr('errNatId',true);      markInvalid('natIdNum',true);    valid=false; } else { showErr('errNatId',false);      markInvalid('natIdNum',false); }
+      if(!dlNum)  { showErr('errDL',true);         markInvalid('dlNum',true);       valid=false; } else { showErr('errDL',false);         markInvalid('dlNum',false); }
+      if(!confirm){ showErr('errDocConfirm',true);                                  valid=false; } else showErr('errDocConfirm',false);
+      if(!valid) return;
+      driverData.fullName   = name;
+      driverData.nationalId = natId;
+      driverData.dlNumber   = dlNum;
+      driverData.dlExpiry   = document.getElementById('dlExpiry').value;
+      goToStep(2);
+    }
+
+    /* ── GPS ── */
+    function activateGPS(){
+      var btn    = document.getElementById('gpsBtn');
+      var status = document.getElementById('gpsStatus');
+      var locTxt = document.getElementById('gpsLocationText');
+      var check  = document.getElementById('gpsCheck');
+      if(!navigator.geolocation){ status.textContent='Geolocation not supported on this device.'; return; }
+      btn.disabled = true;
+      btn.textContent = 'Activating...';
+      navigator.geolocation.getCurrentPosition(
+        function(pos){
+          gpsEnabled = true;
+          driverData.gpsEnabled = true;
+          driverData.lat = pos.coords.latitude;
+          driverData.lng = pos.coords.longitude;
+          status.textContent = 'Location active';
+          status.className   = 'gps-status active';
+          locTxt.style.display = 'block';
+          locTxt.textContent = 'Lat: '+pos.coords.latitude.toFixed(4)+' | Lng: '+pos.coords.longitude.toFixed(4);
+          check.style.display = 'block';
+          document.getElementById('gpsIcon').textContent = '✅';
+          btn.style.display = 'none';
+        },
+        function(err){
+          btn.disabled = false;
+          btn.textContent = '📍 Enable GPS';
+          status.textContent = 'Location access denied. Please enable in browser settings.';
+        }
+      );
+    }
+
+    /* ── Step 4 submit ── */
+    async function step4Submit(){
+      /* Auth gate — must be signed in to submit GPS/license data */
+      var auth = window.firebaseAuth;
+      if(!auth || !auth.currentUser){
+        (window._skToast||alert)('Please sign in before submitting your driver application.');
+        window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
+        return;
+      }
+      var mpesa  = document.getElementById('drvMpesa').value.trim();
+      var agree  = document.getElementById('drvAgree').checked;
+      var valid  = true;
+      var payout = driverData.payoutFrequency || 'daily';
+      if(!/^(07|01)\d{8}$/.test(mpesa)){ showErr('errDrvMpesa',true); markInvalid('drvMpesa',true); valid=false; } else { showErr('errDrvMpesa',false); markInvalid('drvMpesa',false); }
+      if(!agree){ showErr('errDrvAgree',true); valid=false; } else showErr('errDrvAgree',false);
+      if(!valid) return;
+
+      driverData.mpesa           = mpesa;
+      driverData.payoutFrequency = payout;
+      driverData.submittedAt     = new Date().toISOString();
+      driverData.status          = 'pending';
+
+      /* Save to Firestore */
+      try {
+        var db   = window.firebaseDB;
+        var auth = window.firebaseAuth;
+        if(db){
+          var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+          await fs.addDoc(fs.collection(db,'applications'), Object.assign({type:'driver'}, driverData, {uid: auth.currentUser.uid}));
+        }
+      } catch(err){ console.warn('[DriverOnboarding]', err); }
+
+      if(window.SokoniOnboarding){
+        SokoniOnboarding.setStep('driver', 4, driverData);
+        await SokoniOnboarding.complete('driver');
+      }
+
+      document.getElementById('successModal').style.display = 'flex';
+    }
+
+    window.addEventListener('load', updateProgressUI);
+  </script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,2090 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI Fitness Hub — Gyms, Coaches, Workouts & Equipment Kenya</title>
+<meta name="description" content="Find gyms, book fitness coaches, buy & sell equipment, post workouts and manage your gym on SOKONI Fitness Hub Kenya.">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mysokoni.co.ke/fitness-hub.html">
+<meta property="og:title" content="SOKONI Fitness Hub — Gyms, Coaches, Workouts & Equipment Kenya">
+<meta property="og:description" content="Find gyms, book fitness coaches, buy & sell equipment, post workouts and manage your gym on SOKONI Fitness Hub Kenya.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:site_name" content="SOKONI">
+<meta property="og:locale" content="en_KE">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#39ff14">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#060b06;color:white;min-height:100vh;padding-bottom:100px;}
+:root{--fc:#39ff14;--fc2:#71ff00;}
+
+.fh-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(6,11,6,0.97);border-bottom:1px solid rgba(57,255,20,0.1);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.fh-nav-logo{height:30px;}
+.fh-nav-tabs{display:flex;gap:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:4px;overflow-x:auto;scrollbar-width:none;}
+.fh-nav-tabs::-webkit-scrollbar{display:none;}
+.fh-nav-tab{padding:7px 14px;border-radius:9px;border:none;background:transparent;color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.fh-nav-tab.active{background:rgba(57,255,20,0.12);color:#39ff14;border:1px solid rgba(57,255,20,0.25);}
+
+.fh-panel{display:none;}
+.fh-panel.active{display:block;}
+
+.fh-hero{padding:44px 24px 32px;background:linear-gradient(135deg,rgba(57,255,20,0.07),rgba(113,255,0,0.04),rgba(0,0,0,0));border-bottom:1px solid rgba(57,255,20,0.1);position:relative;overflow:hidden;}
+.fh-hero::before{content:'💪';position:absolute;right:3%;top:50%;transform:translateY(-50%);font-size:180px;opacity:0.04;}
+.fh-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:rgba(57,255,20,0.09);border:1px solid rgba(57,255,20,0.28);border-radius:999px;font-size:11px;font-weight:800;color:#39ff14;margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;}
+.fh-hero h1{font-size:clamp(24px,5vw,40px);font-weight:900;line-height:1.2;margin-bottom:10px;}
+.fh-hero h1 span{background:linear-gradient(135deg,#39ff14,#71ff00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.fh-hero p{color:rgba(255,255,255,0.5);font-size:14px;max-width:500px;line-height:1.7;margin-bottom:20px;}
+.fh-stats{display:flex;gap:24px;flex-wrap:wrap;}
+.fh-stat strong{display:block;font-size:18px;font-weight:900;color:#39ff14;}
+.fh-stat span{font-size:11px;color:rgba(255,255,255,0.35);}
+
+.fh-filter-bar{display:flex;gap:8px;padding:14px 20px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid rgba(255,255,255,0.05);}
+.fh-filter-bar::-webkit-scrollbar{display:none;}
+.fh-pill{padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;flex-shrink:0;}
+.fh-pill.active,.fh-pill:hover{background:rgba(57,255,20,0.1);border-color:rgba(57,255,20,0.3);color:#39ff14;}
+
+.fh-body{max-width:1200px;margin:0 auto;padding:24px 18px 60px;}
+.fh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;}
+.fh-section-h{font-size:15px;font-weight:800;color:white;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.fh-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+.fh-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:18px;transition:all .2s;}
+.fh-card:hover{transform:translateY(-3px);border-color:rgba(57,255,20,0.25);box-shadow:0 8px 28px rgba(57,255,20,0.06);}
+.fh-card-emoji{font-size:38px;margin-bottom:12px;display:block;}
+.fh-card-name{font-size:15px;font-weight:900;color:white;margin-bottom:3px;}
+.fh-card-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:8px;line-height:1.5;}
+.fh-card-price{font-size:17px;font-weight:900;color:#39ff14;margin-bottom:12px;}
+.fh-wa-btn{width:100%;padding:10px;border:1px solid rgba(37,211,102,0.3);border-radius:10px;background:rgba(37,211,102,0.07);color:#25d366;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center;margin-top:6px;}
+.fh-book-btn{width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#39ff14,#71ff00);color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;}
+
+.fh-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+.fh-input:focus{border-color:rgba(57,255,20,0.4);}
+.fh-input::placeholder{color:rgba(255,255,255,0.3);}
+.fh-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+
+/* WORKOUT CARDS */
+.wk-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:16px;transition:all .2s;}
+.wk-card:hover{border-color:rgba(57,255,20,0.2);}
+.wk-tag{font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.2);color:#39ff14;font-weight:700;display:inline-block;margin-bottom:8px;}
+.wk-title{font-size:14px;font-weight:800;color:white;margin-bottom:4px;}
+.wk-meta{font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;}
+.wk-exercises{display:flex;flex-direction:column;gap:5px;}
+.wk-exercise{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.65);}
+.wk-exercise-sets{font-size:11px;color:#39ff14;font-weight:700;}
+
+/* GYM DASHBOARD */
+.gm-stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px;}
+.gm-stat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px;text-align:center;}
+.gm-stat-num{font-size:26px;font-weight:900;color:#39ff14;margin-bottom:4px;}
+.gm-stat-label{font-size:11px;color:rgba(255,255,255,0.4);}
+.gm-chart-bar{display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:12px;}
+.gm-bar{flex:1;background:rgba(57,255,20,0.15);border-radius:4px 4px 0 0;transition:height .3s;position:relative;cursor:pointer;}
+.gm-bar:hover{background:rgba(57,255,20,0.3);}
+.gm-bar-label{font-size:9px;color:rgba(255,255,255,0.3);text-align:center;margin-top:4px;}
+
+@media(max-width:600px){.fh-nav-tabs{max-width:calc(100vw-130px);}}
+
+/* ── CLASSES ── */
+.cls-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+.cls-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:all .2s;}
+.cls-card:hover{border-color:rgba(57,255,20,0.25);transform:translateY(-2px);}
+.cls-type{font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.2);color:#39ff14;font-weight:700;display:inline-block;margin-bottom:8px;}
+.cls-name{font-size:15px;font-weight:900;color:white;margin-bottom:3px;}
+.cls-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;line-height:1.5;}
+
+/* ── BOOKINGS ── */
+.bk-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:18px;}
+.bk-cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:all .15s;color:rgba(255,255,255,0.5);}
+.bk-cal-day.today{border-color:rgba(57,255,20,0.4);color:#39ff14;}
+.bk-cal-day.has-booking{background:rgba(57,255,20,0.08);color:#71ff00;}
+.bk-cal-day:hover{background:rgba(255,255,255,0.06);color:white;}
+.bk-cal-day.selected{background:rgba(57,255,20,0.2);border-color:#39ff14;color:#39ff14;}
+.bk-cal-hdr{font-size:9px;color:rgba(255,255,255,0.3);text-align:center;font-weight:700;padding:4px 0;}
+.bk-slot{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:6px;font-size:12px;}
+.bk-slot-time{color:#39ff14;font-weight:800;min-width:55px;}
+.bk-slot-name{color:rgba(255,255,255,0.7);flex:1;padding:0 8px;}
+.bk-slot-btn{padding:5px 12px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.25);border-radius:7px;color:#39ff14;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;}
+.bk-booking-card{padding:14px;background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:14px;margin-bottom:10px;}
+
+/* ── NUTRITION ── */
+.nut-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:all .2s;}
+.nut-card:hover{border-color:rgba(57,255,20,0.2);transform:translateY(-2px);}
+.meal-day{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;}
+.meal-title{font-size:12px;font-weight:800;color:#39ff14;margin-bottom:8px;}
+.meal-item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;color:rgba(255,255,255,0.65);border-bottom:1px solid rgba(255,255,255,0.04);}
+.meal-cal{margin-left:auto;font-size:10px;color:rgba(57,255,20,0.7);font-weight:700;}
+
+/* ── COMMUNITY ── */
+.cm-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:all .2s;}
+.cm-card:hover{border-color:rgba(57,255,20,0.2);}
+.ch-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.1);border-radius:10px;margin-bottom:6px;}
+.ch-rank{width:22px;height:22px;border-radius:50%;background:rgba(57,255,20,0.12);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#39ff14;flex-shrink:0;}
+.ch-name{font-size:12px;font-weight:700;color:white;flex:1;padding:0 10px;}
+.ch-pts{font-size:12px;font-weight:900;color:#39ff14;}
+
+/* ── PROGRESS ── */
+.pr-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;text-align:center;}
+.pr-stat-num{font-size:22px;font-weight:900;color:#39ff14;margin-bottom:2px;}
+.pr-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);}
+.pr-log-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;font-size:12px;}
+.pr-badge{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:rgba(57,255,20,0.06);border:1px solid rgba(57,255,20,0.18);border-radius:10px;font-size:11px;font-weight:700;color:#71ff00;transition:all .2s;}
+.pr-badge.earned{background:rgba(57,255,20,0.14);border-color:rgba(57,255,20,0.4);color:#39ff14;}
+.pr-wt-bar{height:4px;background:rgba(57,255,20,0.15);border-radius:2px;margin-top:4px;overflow:hidden;}
+.pr-wt-fill{height:100%;background:linear-gradient(90deg,#39ff14,#71ff00);border-radius:2px;transition:width .5s;}
+</style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="fh-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="fh-nav-logo" alt="SOKONI"></a>
+  <div class="fh-nav-tabs">
+    <button type="button" class="fh-nav-tab active" onclick="showFhPanel('gyms',this)">🏋️ Gyms</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('coaches',this)">🏃 Coaches</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('workouts',this)">💪 Workouts</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('equipment',this)">🛒 Equipment</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('classes',this)">🧘 Classes</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('bookings',this)">📅 Book</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('nutrition',this)">🥗 Nutrition</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('community',this)">👥 Community</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('progress',this)">📈 Progress</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('manage',this)">📊 My Gym</button>
+    <button type="button" class="fh-nav-tab" onclick="showFhPanel('askhub',this)">💬 Ask Hub</button>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <a href="notifications.html" title="Notifications" style="padding:8px 10px;border:1px solid rgba(57,255,20,0.2);border-radius:10px;color:#39ff14;font-size:14px;font-weight:700;text-decoration:none;position:relative;">🔔<span id="fhNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
+    <a href="index.html" style="padding:8px 14px;border:1px solid rgba(57,255,20,0.2);border-radius:10px;color:#39ff14;font-size:12px;font-weight:700;text-decoration:none;">🏠</a>
+  </div>
+</nav>
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('fhNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
+<!-- GYMS PANEL -->
+<div id="fhpanel-gyms" class="fh-panel active">
+  <div class="fh-hero">
+    <div class="fh-badge">🏋️ SOKONI Fitness Hub</div>
+    <h1>Find Gyms &<br><span>Fitness Spaces</span></h1>
+    <p>Discover gyms near you, compare memberships, book day passes and read real reviews.</p>
+    <div style="display:flex;gap:8px;max-width:500px;flex-wrap:wrap;">
+      <input type="text" id="gymSearch" placeholder="Search gym, area, or type…" oninput="filterGyms()" style="flex:1;min-width:160px;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <select id="gymType" onchange="filterGyms()" style="padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+        <option value="">All Types</option>
+        <option value="commercial">Commercial Gym</option>
+        <option value="crossfit">CrossFit Box</option>
+        <option value="yoga">Yoga Studio</option>
+        <option value="martial">Martial Arts</option>
+        <option value="pool">Swimming Pool</option>
+        <option value="outdoor">Outdoor / Calisthenics</option>
+      </select>
+    </div>
+    <div class="fh-stats" style="margin-top:16px;">
+      <div class="fh-stat"><strong>120+</strong><span>Gyms Listed</span></div>
+      <div class="fh-stat"><strong>47</strong><span>Counties</span></div>
+      <div class="fh-stat"><strong>Day Pass</strong><span>Available</span></div>
+    </div>
+  </div>
+  <div class="fh-filter-bar">
+    <button type="button" class="fh-pill active" onclick="setGymArea('all',this)">All Areas</button>
+    <button type="button" class="fh-pill" onclick="setGymArea('westlands',this)">Westlands</button>
+    <button type="button" class="fh-pill" onclick="setGymArea('cbd',this)">CBD</button>
+    <button type="button" class="fh-pill" onclick="setGymArea('karen',this)">Karen</button>
+    <button type="button" class="fh-pill" onclick="setGymArea('kilimani',this)">Kilimani</button>
+    <button type="button" class="fh-pill" onclick="setGymArea('langata',this)">Lang'ata</button>
+    <button type="button" class="fh-pill" onclick="setGymArea('mombasa',this)">Mombasa</button>
+    <button type="button" class="fh-pill" onclick="setGymArea('kisumu',this)">Kisumu</button>
+  </div>
+  <div class="fh-body">
+    <div class="fh-section-h">🏋️ Available Gyms</div>
+    <div class="fh-grid" id="gymsGrid"></div>
+    <div class="fh-section-h" style="margin-top:32px;">🏢 List Your Gym or Studio</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:20px;padding:22px;text-align:center;">
+      <div style="font-size:14px;color:rgba(255,255,255,0.6);margin-bottom:14px;">Own a gym, yoga studio, martial arts dojo, pilates studio or fitness space? List it on SOKONI and reach members near you — free to get started.</div>
+      <button onclick="HubRegister.open({hub:'fitness',category:'gym'})" style="padding:12px 28px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏋️ Register My Gym / Studio</button>
+      <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,0.3);">Yoga studios · CrossFit boxes · Swimming pools · Dance studios · Martial arts</div>
+    </div>
+  </div>
+</div>
+
+<!-- COACHES PANEL -->
+<div id="fhpanel-coaches" class="fh-panel">
+  <div class="fh-hero">
+    <div class="fh-badge">🏃 Find a Coach</div>
+    <h1>Personal Trainers &<br><span>Fitness Coaches</span></h1>
+    <p>Weight loss, muscle gain, sports performance, yoga, nutrition — find your expert.</p>
+    <div style="display:flex;gap:8px;max-width:500px;flex-wrap:wrap;">
+      <input type="text" id="coachSearch" placeholder="Search by name or speciality…" oninput="filterFitCoaches()" style="flex:1;min-width:160px;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <select id="coachSpec" onchange="filterFitCoaches()" style="padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+        <option value="">All Specialities</option>
+        <option value="weightloss">Weight Loss</option>
+        <option value="muscle">Muscle Building</option>
+        <option value="yoga">Yoga</option>
+        <option value="nutrition">Nutrition</option>
+        <option value="crossfit">CrossFit</option>
+        <option value="sports">Sports Performance</option>
+        <option value="rehab">Rehabilitation</option>
+      </select>
+    </div>
+  </div>
+  <div class="fh-body">
+    <div class="fh-section-h">🏃 Available Coaches</div>
+    <div class="fh-grid" id="fitCoachesGrid"></div>
+    <div style="margin-top:20px;text-align:center;padding:18px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:16px;">
+      <button onclick="HubRegister.open({hub:'fitness',category:'nutrition'})" style="padding:10px 22px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.3);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">🏃 Register as Coach / Trainer</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKOUTS PANEL -->
+<div id="fhpanel-workouts" class="fh-panel">
+  <div class="fh-body">
+    <div style="text-align:center;padding:28px 0 16px;">
+      <div style="font-size:40px;margin-bottom:10px;">💪</div>
+      <h2 style="font-size:20px;font-weight:900;margin-bottom:6px;">Workout Library</h2>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);">Free workouts from coaches on SOKONI — follow, save & share</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;" id="wkFilterRow">
+      <button type="button" class="fh-pill active" onclick="filterWorkouts('all',this)">All</button>
+      <button type="button" class="fh-pill" onclick="filterWorkouts('beginner',this)">Beginner</button>
+      <button type="button" class="fh-pill" onclick="filterWorkouts('intermediate',this)">Intermediate</button>
+      <button type="button" class="fh-pill" onclick="filterWorkouts('advanced',this)">Advanced</button>
+      <button type="button" class="fh-pill" onclick="filterWorkouts('home',this)">🏠 Home</button>
+      <button type="button" class="fh-pill" onclick="filterWorkouts('gym',this)">🏋️ Gym</button>
+      <button type="button" class="fh-pill" onclick="filterWorkouts('yoga',this)">🧘 Yoga</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;" id="workoutsGrid"></div>
+
+    <!-- POST A WORKOUT -->
+    <div class="fh-section-h" style="margin-top:28px;">➕ Post Your Workout</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:20px;padding:22px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="fh-label">Workout Name *</label>
+          <input type="text" id="wkName" class="fh-input" placeholder="e.g. Full Body Shred 30min">
+          <label class="fh-label">Category</label>
+          <select id="wkCat" class="fh-input">
+            <option value="beginner">Beginner</option><option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option><option value="home">Home Workout</option>
+            <option value="gym">Gym Workout</option><option value="yoga">Yoga</option>
+          </select>
+          <label class="fh-label">Duration</label>
+          <input type="text" id="wkDuration" class="fh-input" placeholder="e.g. 45 minutes">
+        </div>
+        <div>
+          <label class="fh-label">Coach Name</label>
+          <input type="text" id="wkCoach" class="fh-input" placeholder="Your name or gym">
+          <label class="fh-label">Target (Who's it for)</label>
+          <input type="text" id="wkTarget" class="fh-input" placeholder="e.g. Weight loss, Build muscle">
+          <label class="fh-label">Your Phone (for bookings)</label>
+          <input type="tel" id="wkPhone" class="fh-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <label class="fh-label">Exercises (one per line: e.g. Push-ups · 3 sets × 15 reps)</label>
+      <textarea id="wkExercises" class="fh-input" style="min-height:90px;resize:vertical;" placeholder="Push-ups · 3×15&#10;Squats · 4×20&#10;Burpees · 3×10&#10;Plank · 3×60sec"></textarea>
+      <button type="button" onclick="postWorkout()" style="width:100%;padding:13px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">💪 Post Workout</button>
+      <div id="wkMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- EQUIPMENT PANEL -->
+<div id="fhpanel-equipment" class="fh-panel">
+  <div class="fh-hero">
+    <div class="fh-badge">🛒 Equipment Marketplace</div>
+    <h1>Buy & Sell<br><span>Gym Equipment</span></h1>
+    <p>New and used treadmills, dumbbells, benches, bikes and more from verified sellers.</p>
+    <div style="display:flex;gap:8px;max-width:500px;flex-wrap:wrap;">
+      <input type="text" id="eqSearch" placeholder="Search equipment…" oninput="filterEquipment()" style="flex:1;min-width:160px;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <select id="eqCondition" onchange="filterEquipment()" style="padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+        <option value="">Any Condition</option>
+        <option value="new">Brand New</option>
+        <option value="used">Used</option>
+      </select>
+    </div>
+  </div>
+  <div class="fh-body">
+    <div class="fh-section-h">🏋️ Available Equipment</div>
+    <div class="fh-grid" id="equipmentGrid"></div>
+    <div class="fh-section-h" style="margin-top:24px;">➕ Sell Equipment</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:18px;padding:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="fh-label">Equipment Name *</label>
+          <input type="text" id="eqSellName" class="fh-input" placeholder="e.g. Treadmill, Dumbbells set">
+          <label class="fh-label">Price (KES) *</label>
+          <input type="number" id="eqSellPrice" class="fh-input" placeholder="e.g. 25000">
+        </div>
+        <div>
+          <label class="fh-label">Condition</label>
+          <select id="eqSellCond" class="fh-input"><option value="new">Brand New</option><option value="used">Used</option></select>
+          <label class="fh-label">Your Phone *</label>
+          <input type="tel" id="eqSellPhone" class="fh-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <label class="fh-label">Description</label>
+      <input type="text" id="eqSellDesc" class="fh-input" placeholder="Brand, specs, reason for selling…">
+      <button type="button" onclick="sellEquipment()" style="width:100%;padding:12px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:11px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">List for Sale</button>
+      <div id="eqMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MY GYM / GYM MANAGEMENT DASHBOARD -->
+<div id="fhpanel-manage" class="fh-panel">
+  <div class="fh-body">
+    <div style="padding-top:8px;margin-bottom:24px;">
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:4px;">📊 Gym Owner Dashboard</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);">Manage your gym, track members, market and earn</div>
+    </div>
+
+    <!-- GYM PROFILE -->
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.15);border-radius:20px;padding:22px;margin-bottom:24px;">
+      <div style="font-size:14px;font-weight:800;color:white;margin-bottom:16px;">🏋️ Your Gym Profile</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="fh-label">Gym Name *</label>
+          <input type="text" id="gmName" class="fh-input" placeholder="e.g. Iron Beast Gym">
+          <label class="fh-label">Location *</label>
+          <input type="text" id="gmLoc" class="fh-input" placeholder="e.g. Westlands, Nairobi">
+          <label class="fh-label">Monthly Membership (KES)</label>
+          <input type="number" id="gmMonthly" class="fh-input" placeholder="e.g. 3500">
+        </div>
+        <div>
+          <label class="fh-label">Day Pass Price (KES)</label>
+          <input type="number" id="gmDayPass" class="fh-input" placeholder="e.g. 300">
+          <label class="fh-label">Opening Hours</label>
+          <input type="text" id="gmHours" class="fh-input" placeholder="e.g. 5am–10pm Mon–Sat">
+          <label class="fh-label">WhatsApp / Booking Phone</label>
+          <input type="tel" id="gmPhone" class="fh-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <label class="fh-label">Facilities (comma-separated)</label>
+      <input type="text" id="gmFacilities" class="fh-input" placeholder="Free weights, Cardio machines, Pool, Sauna, Classes, Parking…">
+      <label class="fh-label">Gym Tagline</label>
+      <input type="text" id="gmTagline" class="fh-input" placeholder="e.g. No excuses. Just results.">
+      <button type="button" onclick="saveGymProfile()" style="padding:12px 24px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">💾 Save & Publish Gym</button>
+      <div id="gmMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+
+    <!-- STATS -->
+    <div class="fh-section-h">📈 Gym Statistics</div>
+    <div class="gm-stats-row" id="gmStatsRow"></div>
+
+    <!-- WEEKLY CHECK-INS CHART -->
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;margin-bottom:24px;">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">📅 Weekly Check-ins</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:10px;">Members who visited this week</div>
+      <div class="gm-chart-bar" id="gmChartBar"></div>
+      <div style="display:flex;gap:6px;" id="gmChartLabels"></div>
+    </div>
+
+    <!-- MEMBER MANAGEMENT -->
+    <div class="fh-section-h">👥 Member Check-In</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <input type="text" id="gmMemberName" class="fh-input" style="flex:1;min-width:160px;margin-bottom:0;" placeholder="Member name or phone">
+      <button type="button" onclick="checkInMember()" style="padding:12px 18px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.28);border-radius:11px;color:#39ff14;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">✅ Check In</button>
+    </div>
+    <div id="gmCheckinLog" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;"></div>
+
+    <!-- MARKETING -->
+    <div class="fh-section-h" style="margin-top:24px;">📣 Market Your Gym</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+      <a href="marketing.html" style="padding:16px;background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.2);border-radius:16px;text-decoration:none;display:block;transition:all .2s;" onmouseover="this.style.borderColor='rgba(249,115,22,0.4)'" onmouseout="this.style.borderColor='rgba(249,115,22,0.2)'">
+        <div style="font-size:24px;margin-bottom:8px;">🚀</div>
+        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Boost Your Gym</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Reach thousands of fitness seekers near you</div>
+      </a>
+      <button type="button" onclick="shareGym()" style="padding:16px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);border-radius:16px;text-align:left;cursor:pointer;font-family:inherit;transition:all .2s;" onmouseover="this.style.borderColor='rgba(37,211,102,0.4)'" onmouseout="this.style.borderColor='rgba(37,211,102,0.2)'">
+        <div style="font-size:24px;margin-bottom:8px;">💬</div>
+        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Share on WhatsApp</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Send your gym profile to your contact list</div>
+      </button>
+      <a href="seller.html" style="padding:16px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.2);border-radius:16px;text-decoration:none;display:block;transition:all .2s;" onmouseover="this.style.borderColor='rgba(0,212,255,0.4)'" onmouseout="this.style.borderColor='rgba(0,212,255,0.2)'">
+        <div style="font-size:24px;margin-bottom:8px;">🛒</div>
+        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Sell Memberships Online</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Accept M-Pesa payments for memberships</div>
+      </a>
+      <button type="button" onclick="postWorkoutPromo()" style="padding:16px;background:rgba(57,255,20,0.06);border:1px solid rgba(57,255,20,0.18);border-radius:16px;text-align:left;cursor:pointer;font-family:inherit;transition:all .2s;" onmouseover="this.style.borderColor='rgba(57,255,20,0.4)'" onmouseout="this.style.borderColor='rgba(57,255,20,0.18)'">
+        <div style="font-size:24px;margin-bottom:8px;">💪</div>
+        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Post Free Workouts</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Attract members by sharing workout content</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ASK HUB PANEL -->
+<div id="fhpanel-askhub" class="fh-panel">
+  <div class="fh-body" style="max-width:800px;">
+    <div style="text-align:center;padding:20px 0 16px;">
+      <div style="font-size:40px;margin-bottom:10px;">💬</div>
+      <h2 style="font-size:20px;font-weight:900;margin-bottom:6px;">Ask the Fitness Hub</h2>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);">Post your fitness question — coaches, gym owners and members respond</p>
+    </div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:20px;padding:22px;margin-bottom:20px;">
+      <textarea id="fitAskText" placeholder="e.g. I want to lose 10kg in 3 months. Looking for a coach in Westlands with flexible hours…" style="width:100%;padding:13px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;min-height:80px;resize:vertical;outline:none;font-family:inherit;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <select id="fitAskCat" style="flex:1;min-width:120px;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+          <option>Coaching</option><option>Nutrition</option><option>Equipment</option>
+          <option>Gym Recommendation</option><option>Workout Plan</option><option>Injury / Rehab</option>
+        </select>
+        <input type="tel" id="fitAskPhone" placeholder="07XXXXXXXX" style="flex:1;min-width:120px;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        <button type="button" onclick="postFitRequest()" style="padding:10px 20px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:10px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">📢 Post</button>
+      </div>
+    </div>
+    <div id="fitAskFeed" style="display:flex;flex-direction:column;gap:12px;"></div>
+  </div>
+</div>
+
+<!-- CLASSES PANEL -->
+<div id="fhpanel-classes" class="fh-panel">
+  <div class="fh-hero" style="background:linear-gradient(135deg,rgba(113,255,0,0.06),rgba(57,255,20,0.03),transparent);">
+    <div class="fh-badge">🧘 Fitness Classes</div>
+    <h1>Group Classes &<br><span>Studio Sessions</span></h1>
+    <p>Yoga, Pilates, Aerobics, Dance, Martial Arts, CrossFit — book your next class in seconds.</p>
+  </div>
+  <div class="fh-filter-bar" id="clsFilterBar">
+    <button type="button" class="fh-pill active" onclick="filterClasses('all',this)">All Classes</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('yoga',this)">🧘 Yoga</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('pilates',this)">🤸 Pilates</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('aerobics',this)">🏃 Aerobics</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('dance',this)">💃 Dance</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('martial',this)">🥊 Martial Arts</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('crossfit',this)">🏆 CrossFit</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('hiit',this)">🔥 HIIT</button>
+    <button type="button" class="fh-pill" onclick="filterClasses('spinning',this)">🚴 Spinning</button>
+  </div>
+  <div class="fh-body">
+    <div class="fh-section-h">📅 Today's Schedule</div>
+    <div class="cls-grid" id="clsGrid"></div>
+
+    <div class="fh-section-h" style="margin-top:28px;">➕ List Your Class</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:20px;padding:22px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="fh-label">Class Name *</label>
+          <input type="text" id="clsName" class="fh-input" placeholder="e.g. Hot Yoga Flow">
+          <label class="fh-label">Type</label>
+          <select id="clsType" class="fh-input">
+            <option value="yoga">Yoga</option><option value="pilates">Pilates</option>
+            <option value="aerobics">Aerobics</option><option value="dance">Dance Fitness</option>
+            <option value="martial">Martial Arts</option><option value="crossfit">CrossFit</option>
+            <option value="hiit">HIIT</option><option value="spinning">Spinning</option>
+          </select>
+          <label class="fh-label">Time & Day</label>
+          <input type="text" id="clsTime" class="fh-input" placeholder="e.g. Mon/Wed/Fri 6am">
+        </div>
+        <div>
+          <label class="fh-label">Instructor Name</label>
+          <input type="text" id="clsInstructor" class="fh-input" placeholder="Your name">
+          <label class="fh-label">Session Fee (KES)</label>
+          <input type="number" id="clsFee" class="fh-input" placeholder="e.g. 500">
+          <label class="fh-label">WhatsApp / Booking Phone</label>
+          <input type="tel" id="clsPhone" class="fh-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <label class="fh-label">Location / Studio</label>
+      <input type="text" id="clsLoc" class="fh-input" placeholder="e.g. Karen Yoga Studio, Nairobi">
+      <label class="fh-label">Class Description</label>
+      <input type="text" id="clsDesc" class="fh-input" placeholder="Suitable for beginners, 60min, mats provided…">
+      <button type="button" onclick="postClass()" style="width:100%;padding:12px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🧘 List Class</button>
+      <div id="clsMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKINGS PANEL -->
+<div id="fhpanel-bookings" class="fh-panel">
+  <div class="fh-body" style="max-width:900px;">
+    <div style="padding-top:8px;margin-bottom:20px;">
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:4px;">📅 My Bookings</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);">Schedule sessions, classes and gym visits</div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:20px;margin-bottom:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <button type="button" onclick="calPrev()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.6);cursor:pointer;font-family:inherit;font-size:13px;">‹</button>
+        <div id="calTitle" style="font-size:14px;font-weight:800;color:white;"></div>
+        <button type="button" onclick="calNext()" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.6);cursor:pointer;font-family:inherit;font-size:13px;">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px;">
+        <div class="bk-cal-hdr">S</div><div class="bk-cal-hdr">M</div><div class="bk-cal-hdr">T</div>
+        <div class="bk-cal-hdr">W</div><div class="bk-cal-hdr">T</div><div class="bk-cal-hdr">F</div>
+        <div class="bk-cal-hdr">S</div>
+      </div>
+      <div class="bk-cal" id="calGrid"></div>
+      <div id="calDaySlots" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- BOOK A SESSION FORM -->
+    <div class="fh-section-h">➕ New Booking</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:20px;padding:22px;margin-bottom:24px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="fh-label">What are you booking? *</label>
+          <select id="bkType" class="fh-input">
+            <option value="">Select type…</option>
+            <option value="gym">Gym Session / Day Pass</option>
+            <option value="trainer">Personal Trainer</option>
+            <option value="class">Fitness Class</option>
+            <option value="nutritionist">Nutritionist Consultation</option>
+            <option value="massage">Sports Massage</option>
+          </select>
+          <label class="fh-label">Provider / Gym Name *</label>
+          <input type="text" id="bkProvider" class="fh-input" placeholder="e.g. Westlands Fitness Centre">
+          <label class="fh-label">Date *</label>
+          <input type="date" id="bkDate" class="fh-input">
+        </div>
+        <div>
+          <label class="fh-label">Time *</label>
+          <input type="time" id="bkTime" class="fh-input">
+          <label class="fh-label">Your Name</label>
+          <input type="text" id="bkName" class="fh-input" placeholder="Your name">
+          <label class="fh-label">Provider Phone (for WhatsApp)</label>
+          <input type="tel" id="bkPhone" class="fh-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <label class="fh-label">Notes</label>
+      <input type="text" id="bkNotes" class="fh-input" placeholder="Any preferences, conditions, or requests…">
+      <button type="button" onclick="makeBooking()" style="width:100%;padding:13px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">📅 Confirm Booking</button>
+      <div id="bkMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+
+    <!-- UPCOMING BOOKINGS -->
+    <div class="fh-section-h">🕐 Upcoming Bookings</div>
+    <div id="bkUpcoming"></div>
+  </div>
+</div>
+
+<!-- NUTRITION PANEL -->
+<div id="fhpanel-nutrition" class="fh-panel">
+  <div class="fh-hero" style="background:linear-gradient(135deg,rgba(34,197,94,0.07),rgba(57,255,20,0.03),transparent);">
+    <div class="fh-badge">🥗 Nutrition Hub</div>
+    <h1>Nutritionists,<br><span>Meal Plans & Diet</span></h1>
+    <p>Connect with certified nutritionists, get personalized meal plans and track your diet.</p>
+    <div style="display:flex;gap:8px;max-width:500px;flex-wrap:wrap;margin-top:10px;">
+      <input type="text" id="nutSearch" placeholder="Search nutritionist or diet goal…" oninput="filterNutritionists()" style="flex:1;min-width:160px;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+    </div>
+  </div>
+  <div class="fh-filter-bar">
+    <button type="button" class="fh-pill active" onclick="filterNutritionists('all',this)">All</button>
+    <button type="button" class="fh-pill" onclick="filterNutritionists('weightloss',this)">Weight Loss</button>
+    <button type="button" class="fh-pill" onclick="filterNutritionists('sports',this)">Sports Nutrition</button>
+    <button type="button" class="fh-pill" onclick="filterNutritionists('diabetes',this)">Diabetes</button>
+    <button type="button" class="fh-pill" onclick="filterNutritionists('vegan',this)">Vegan</button>
+    <button type="button" class="fh-pill" onclick="filterNutritionists('meal',this)">Meal Planning</button>
+  </div>
+  <div class="fh-body">
+    <div class="fh-section-h">👨‍⚕️ Certified Nutritionists</div>
+    <div class="fh-grid" id="nutGrid"></div>
+
+    <!-- SAMPLE MEAL PLAN -->
+    <div class="fh-section-h" style="margin-top:28px;">🍽️ Sample 7-Day Meal Plan</div>
+    <div id="mealPlanGrid"></div>
+
+    <!-- NUTRITION GOALS -->
+    <div class="fh-section-h" style="margin-top:28px;">🎯 Set Nutrition Goal</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:20px;padding:22px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="fh-label">Goal</label>
+          <select id="nutGoal" class="fh-input">
+            <option>Lose weight</option><option>Build muscle</option><option>Maintain weight</option>
+            <option>Manage diabetes</option><option>Sports performance</option><option>Clean eating</option>
+          </select>
+          <label class="fh-label">Daily Calorie Target (kcal)</label>
+          <input type="number" id="nutCals" class="fh-input" placeholder="e.g. 1800">
+        </div>
+        <div>
+          <label class="fh-label">Water Target (glasses/day)</label>
+          <input type="number" id="nutWater" class="fh-input" placeholder="e.g. 8">
+          <label class="fh-label">Diet Type</label>
+          <select id="nutDiet" class="fh-input">
+            <option>Balanced</option><option>Low-carb / Keto</option><option>High-protein</option>
+            <option>Vegan</option><option>Mediterranean</option><option>Intermittent Fasting</option>
+          </select>
+        </div>
+      </div>
+      <button type="button" onclick="saveNutGoal()" style="padding:11px 22px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:11px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">💾 Save Goal</button>
+      <div id="nutMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- COMMUNITY PANEL -->
+<div id="fhpanel-community" class="fh-panel">
+  <div class="fh-hero" style="background:linear-gradient(135deg,rgba(0,212,255,0.06),rgba(57,255,20,0.03),transparent);">
+    <div class="fh-badge">👥 Fitness Community</div>
+    <h1>Clubs, Challenges<br><span>& Fitness Groups</span></h1>
+    <p>Join running clubs, cycling groups, hiking communities and compete in fitness challenges.</p>
+  </div>
+  <div class="fh-filter-bar">
+    <button type="button" class="fh-pill active" onclick="showCmSection('clubs',this)">🏃 Clubs</button>
+    <button type="button" class="fh-pill" onclick="showCmSection('challenges',this)">🏆 Challenges</button>
+    <button type="button" class="fh-pill" onclick="showCmSection('events',this)">📅 Events</button>
+  </div>
+  <div class="fh-body">
+    <!-- CLUBS SECTION -->
+    <div id="cmClubs">
+      <div class="fh-section-h">🏃 Running & Activity Clubs</div>
+      <div class="fh-grid" id="cmClubsGrid"></div>
+    </div>
+
+    <!-- CHALLENGES SECTION -->
+    <div id="cmChallenges" style="display:none;">
+      <div class="fh-section-h">🏆 Active Challenges</div>
+      <div class="fh-grid" id="cmChallengesGrid"></div>
+      <div class="fh-section-h" style="margin-top:24px;">📊 Leaderboard</div>
+      <div id="cmLeaderboard"></div>
+    </div>
+
+    <!-- EVENTS SECTION -->
+    <div id="cmEvents" style="display:none;">
+      <div class="fh-section-h">📅 Upcoming Fitness Events</div>
+      <div class="fh-grid" id="cmEventsGrid"></div>
+    </div>
+
+    <!-- JOIN / CREATE CLUB -->
+    <div class="fh-section-h" style="margin-top:28px;">➕ Create a Club or Event</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:20px;padding:22px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="fh-label">Club / Group Name *</label>
+          <input type="text" id="cmClubName" class="fh-input" placeholder="e.g. Nairobi Runners Club">
+          <label class="fh-label">Activity Type</label>
+          <select id="cmClubType" class="fh-input">
+            <option value="running">Running</option><option value="cycling">Cycling</option>
+            <option value="hiking">Hiking</option><option value="swimming">Swimming</option>
+            <option value="yoga">Yoga Group</option><option value="gym">Gym Buddies</option>
+          </select>
+        </div>
+        <div>
+          <label class="fh-label">Meeting Day / Time</label>
+          <input type="text" id="cmClubTime" class="fh-input" placeholder="e.g. Sat 6am">
+          <label class="fh-label">Your WhatsApp</label>
+          <input type="tel" id="cmClubPhone" class="fh-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <label class="fh-label">Description</label>
+      <input type="text" id="cmClubDesc" class="fh-input" placeholder="Open to all levels, meet at …">
+      <button type="button" onclick="createClub()" style="padding:11px 22px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:11px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">👥 Create Club</button>
+      <div id="cmMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS PANEL -->
+<div id="fhpanel-progress" class="fh-panel">
+  <div class="fh-body" style="max-width:900px;">
+    <div style="padding-top:8px;margin-bottom:20px;">
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:4px;">📈 My Progress</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);">Track goals, workouts, weight and earn badges</div>
+    </div>
+
+    <!-- QUICK STATS -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-bottom:24px;" id="prStatsGrid"></div>
+
+    <!-- GOALS -->
+    <div class="fh-section-h">🎯 Fitness Goals</div>
+    <div style="background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.14);border-radius:18px;padding:20px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div>
+          <label class="fh-label">Goal Type</label>
+          <select id="prGoalType" class="fh-input">
+            <option>Lose weight</option><option>Build muscle</option><option>Run 5K</option>
+            <option>Run 10K</option><option>Complete marathon</option><option>30-day streak</option>
+          </select>
+        </div>
+        <div>
+          <label class="fh-label">Target Value</label>
+          <input type="text" id="prGoalVal" class="fh-input" placeholder="e.g. 75kg or 30 min">
+        </div>
+        <div>
+          <label class="fh-label">Target Date</label>
+          <input type="date" id="prGoalDate" class="fh-input">
+        </div>
+      </div>
+      <button type="button" onclick="addGoal()" style="padding:10px 20px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.28);border-radius:10px;color:#39ff14;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">+ Add Goal</button>
+    </div>
+    <div id="prGoalsList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;"></div>
+
+    <!-- WORKOUT LOG -->
+    <div class="fh-section-h">📋 Log Workout</div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label class="fh-label">Workout Type</label>
+          <select id="prLogType" class="fh-input">
+            <option>Gym</option><option>Running</option><option>Cycling</option><option>Yoga</option>
+            <option>Swimming</option><option>HIIT</option><option>CrossFit</option><option>Hiking</option>
+          </select>
+        </div>
+        <div>
+          <label class="fh-label">Duration (min)</label>
+          <input type="number" id="prLogDur" class="fh-input" placeholder="45">
+        </div>
+        <div>
+          <label class="fh-label">Calories Burned</label>
+          <input type="number" id="prLogCals" class="fh-input" placeholder="350">
+        </div>
+      </div>
+      <label class="fh-label">Notes</label>
+      <input type="text" id="prLogNotes" class="fh-input" placeholder="Personal best, felt great, skipped leg day…">
+      <button type="button" onclick="logWorkout()" style="padding:10px 20px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.28);border-radius:10px;color:#39ff14;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">✅ Log Session</button>
+    </div>
+    <div id="prWorkoutLog" style="display:flex;flex-direction:column;gap:6px;margin-bottom:24px;max-height:220px;overflow-y:auto;"></div>
+
+    <!-- WEIGHT TRACKER -->
+    <div class="fh-section-h">⚖️ Weight Tracker</div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;margin-bottom:20px;">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:100px;">
+          <label class="fh-label">Today's Weight (kg)</label>
+          <input type="number" id="prWeight" class="fh-input" placeholder="e.g. 78.5" step="0.1">
+        </div>
+        <div style="flex:1;min-width:100px;">
+          <label class="fh-label">Target Weight (kg)</label>
+          <input type="number" id="prTargetWeight" class="fh-input" placeholder="e.g. 72" step="0.1">
+        </div>
+        <button type="button" onclick="logWeight()" style="padding:12px 18px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.28);border-radius:10px;color:#39ff14;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;flex-shrink:0;margin-bottom:10px;">Log</button>
+      </div>
+      <!-- Mini weight chart -->
+      <div id="prWeightChart" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- BADGES -->
+    <div class="fh-section-h">🏅 Achievement Badges</div>
+    <div id="prBadges" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="sports-hub.html" class="bnav-item"><span class="bnav-emoji">⚽</span><span>Sports</span></a>
+  <a href="fitness-hub.html" class="bnav-item active-bnav"><span class="bnav-emoji">💪</span><span>Fitness</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+function showFhPanel(name, btn) {
+  document.querySelectorAll('.fh-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.fh-nav-tab').forEach(t=>t.classList.remove('active'));
+  const p=document.getElementById('fhpanel-'+name); if(p) p.classList.add('active');
+  if(btn) btn.classList.add('active');
+}
+window.showFhPanel=showFhPanel;
+
+/* ── DATA ── */
+const DEMO_GYMS = [
+  {id:'GYM01',type:'commercial',area:'westlands',emoji:'🏋️',name:'Westlands Fitness Centre',loc:'Westlands, Nairobi',monthly:3500,daypass:300,rating:4.8,members:450,facilities:['Free weights','Cardio','Classes','Sauna','Parking'],phone:'0712700001',tagline:'Where champions are made'},
+  {id:'GYM02',type:'crossfit',area:'kilimani',emoji:'🏆',name:'Kilimani CrossFit Box',loc:'Kilimani, Nairobi',monthly:5000,daypass:500,rating:4.9,members:180,facilities:['CrossFit','Olympic lifting','Gymnastics rings'],phone:'0723700002',tagline:'Forged in fire'},
+  {id:'GYM03',type:'yoga',area:'karen',emoji:'🧘',name:'Karen Yoga Studio',loc:'Karen, Nairobi',monthly:4500,daypass:400,rating:5.0,members:120,facilities:['Hot yoga','Pilates','Meditation','Mat rental'],phone:'0734700003',tagline:'Breathe. Move. Transform.'},
+  {id:'GYM04',type:'commercial',area:'cbd',emoji:'💪',name:'City Fitness CBD',loc:'CBD, Nairobi',monthly:2500,daypass:200,rating:4.5,members:600,facilities:['Free weights','Cardio','24hr access','Lockers'],phone:'0745700004',tagline:'Train harder. Earn more.'},
+  {id:'GYM05',type:'martial',area:'langata',emoji:'🥊',name:'Lang\'ata MMA & Fitness',loc:'Lang\'ata, Nairobi',monthly:4000,daypass:350,rating:4.7,members:95,facilities:['Boxing ring','Weights','MMA classes','Speed bags'],phone:'0756700005',tagline:'Fight fit. Fight ready.'},
+  {id:'GYM06',type:'pool',area:'mombasa',emoji:'🏊',name:'Mombasa Aqua Fitness',loc:'Nyali, Mombasa',monthly:5500,daypass:500,rating:4.6,members:200,facilities:['Olympic pool','Gym','Jacuzzi','Café'],phone:'0767700006',tagline:'Dive into fitness'},
+];
+
+const DEMO_COACHES = [
+  {id:'C01',spec:'weightloss',emoji:'🔥',name:'Janet Wanjiku',bio:'8 years helping clients lose weight sustainably. Certified PT + nutritionist.',loc:'Nairobi / Online',rate:2500,exp:8,rating:4.9,phone:'0712800001',certif:true},
+  {id:'C02',spec:'muscle',emoji:'💪',name:'Kevin Odhiambo',bio:'Bodybuilder and strength coach. Hypertrophy, powerlifting, competition prep.',loc:'Nairobi / Westlands',rate:3000,exp:6,rating:4.8,phone:'0723800002',certif:true},
+  {id:'C03',spec:'yoga',emoji:'🧘',name:'Amina Hassan',bio:'200hr certified yoga teacher. Vinyasa, yin yoga, prenatal yoga & meditation.',loc:'Nairobi / Karen',rate:2000,exp:5,rating:5.0,phone:'0734800003',certif:true},
+  {id:'C04',spec:'nutrition',emoji:'🥗',name:'Dr. Peter Kamau',bio:'Registered dietitian. Meal plans, sports nutrition, weight management, diabetes.',loc:'Nairobi / CBD',rate:3500,exp:10,rating:4.9,phone:'0745800004',certif:true},
+  {id:'C05',spec:'crossfit',emoji:'🏆',name:'Grace Akinyi',bio:'CrossFit Level 2 trainer. Functional fitness, Olympic weightlifting, endurance.',loc:'Nairobi / Kilimani',rate:2800,exp:4,rating:4.7,phone:'0756800005',certif:true},
+  {id:'C06',spec:'sports',emoji:'⚡',name:'Brian Mutua',bio:'Former national sprinter. Sports-specific training for football, basketball, athletics.',loc:'Nairobi / Langata',rate:3200,exp:7,rating:4.8,phone:'0767800006',certif:false},
+];
+
+const DEMO_WORKOUTS = [
+  {id:'W01',cat:'beginner',title:'Beginner Full Body Blast',coach:'Janet Wanjiku',duration:'30min',target:'Weight loss / beginners',phone:'0712800001',exercises:['Jumping Jacks · 3×30','Squats · 3×15','Push-ups · 3×10','Lunges · 3×12','Plank · 3×30sec']},
+  {id:'W02',cat:'gym',title:'Upper Body Power',coach:'Kevin Odhiambo',duration:'60min',target:'Muscle building',phone:'0723800002',exercises:['Bench Press · 4×8','Incline DB Press · 4×10','Pull-ups · 4×6','Barbell Row · 4×8','Tricep Dips · 3×12']},
+  {id:'W03',cat:'yoga',title:'Morning Flow — 20min',coach:'Amina Hassan',duration:'20min',target:'Flexibility & mindfulness',phone:'0734800003',exercises:['Sun Salutation A · 5 rounds','Warrior 1 & 2 · 3min/side','Down Dog Hold · 2min','Child\'s Pose · 2min','Savasana · 3min']},
+  {id:'W04',cat:'advanced',title:'CrossFit AMRAP 25min',coach:'Grace Akinyi',duration:'25min',target:'Cardio & strength',phone:'0756800005',exercises:['5 Pull-ups','10 Push-ups','15 Air Squats','200m Run','Repeat AMRAP 25min']},
+  {id:'W05',cat:'home',title:'No Equipment HIIT',coach:'Brian Mutua',duration:'35min',target:'Fat burn, anywhere',phone:'0767800006',exercises:['High Knees · 3×45sec','Mountain Climbers · 3×40sec','Burpees · 3×10','Jump Squats · 3×15','Flutter Kicks · 3×30sec']},
+  {id:'W06',cat:'intermediate',title:'Leg Day Destruction',coach:'Kevin Odhiambo',duration:'55min',target:'Leg hypertrophy',phone:'0723800002',exercises:['Barbell Squat · 4×10','Romanian Deadlift · 4×8','Leg Press · 4×12','Leg Curl · 3×12','Calf Raises · 4×20']},
+];
+
+const DEMO_EQUIPMENT = [
+  {id:'EQ01',name:'Commercial Treadmill',price:85000,cond:'used',emoji:'🏃',desc:'Life Fitness T5, good condition, 3yrs old',phone:'0712900001',loc:'Nairobi'},
+  {id:'EQ02',name:'Dumbbells Set 5–30kg',price:28000,cond:'new',emoji:'🏋️',desc:'Rubber hex dumbbells, 14 pairs + rack',phone:'0723900002',loc:'Nairobi'},
+  {id:'EQ03',name:'Adjustable Bench Press',price:18000,cond:'used',emoji:'💪',desc:'Olympic flat/incline/decline, holds 300kg',phone:'0734900003',loc:'Mombasa'},
+  {id:'EQ04',name:'Spinning Bike',price:35000,cond:'new',emoji:'🚴',desc:'Commercial grade, magnetic resistance, digital display',phone:'0745900004',loc:'Nairobi'},
+  {id:'EQ05',name:'Battle Ropes 15m',price:5500,cond:'new',emoji:'🪢',desc:'50mm diameter manila ropes with anchor',phone:'0756900005',loc:'Nairobi'},
+  {id:'EQ06',name:'Kettlebell Set 8–32kg',price:22000,cond:'used',emoji:'🔔',desc:'Cast iron, 6 sizes, slight surface rust only',phone:'0767900006',loc:'Kisumu'},
+];
+
+/* ── FILTER STATE ── */
+let _gymArea = 'all';
+
+/* ── GYMS ── */
+function setGymArea(area, btn) {
+  _gymArea = area;
+  document.querySelectorAll('.fh-filter-bar .fh-pill').forEach(b=>{b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  filterGyms();
+}
+window.setGymArea=setGymArea;
+
+function filterGyms() {
+  const q = (document.getElementById('gymSearch')?.value||'').toLowerCase();
+  const t = document.getElementById('gymType')?.value||'';
+  let local=[]; try{local=JSON.parse(localStorage.getItem('sokoniGyms')||'[]');}catch(e){}
+  let list=[...local,...DEMO_GYMS.filter(d=>!local.some(l=>l.id===d.id))];
+  if(_gymArea!=='all') list=list.filter(g=>g.area===_gymArea);
+  if(t) list=list.filter(g=>g.type===t);
+  if(q) list=list.filter(g=>(g.name+g.loc+g.facilities?.join(' ')).toLowerCase().includes(q));
+  renderGymsGrid(list);
+  setTimeout(function(){var g=document.getElementById('gymsGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+}
+
+function renderGymsGrid(list) {
+  const grid=document.getElementById('gymsGrid'); if(!grid) return;
+  if(!list.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;color:rgba(255,255,255,0.3);">No gyms found</div>';return;}
+  grid.innerHTML=list.map(g=>`
+    <div class="fh-card">
+      <span class="fh-card-emoji">${g.emoji||'🏋️'}</span>
+      <div class="fh-card-name">${g.name}</div>
+      <div class="fh-card-meta">📍 ${g.loc} · ⭐ ${g.rating||4.5} · 👥 ${g.members||'?'} members</div>
+      ${g.tagline?`<div style="font-size:11px;font-style:italic;color:rgba(57,255,20,0.7);margin-bottom:8px;">"${g.tagline}"</div>`:''}
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${(g.facilities||[]).slice(0,4).map(f=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(57,255,20,0.07);border:1px solid rgba(57,255,20,0.15);color:#71ff00;">${f}</span>`).join('')}</div>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <div><div class="fh-card-price">KES ${Number(g.monthly||0).toLocaleString()}/mo</div></div>
+        ${g.daypass?`<div style="padding:4px 10px;background:rgba(57,255,20,0.07);border:1px solid rgba(57,255,20,0.18);border-radius:8px;font-size:11px;font-weight:700;color:#39ff14;align-self:flex-start;">Day: KES ${g.daypass}</div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;">
+        ${g.daypass?`<button type="button" class="fh-book-btn" style="flex:1;" onclick="bookDayPass('${(g.phone||'').replace(/'/g,"\\'")}','${(g.name||'').replace(/'/g,"\\'")}',${g.daypass||0})">📅 Day Pass KES ${Number(g.daypass).toLocaleString()}</button>`:''}
+        <button type="button" class="fh-wa-btn" style="flex:1;" onclick="fitGymConnect('${(g.phone||'').replace(/'/g,"\\'")}','${(g.name||'').replace(/'/g,"\\'")}',${g.monthly||0})">💬 Membership</button>
+      </div>
+    </div>`).join('');
+}
+
+/* ── COACHES ── */
+function filterFitCoaches() {
+  const q=(document.getElementById('coachSearch')?.value||'').toLowerCase();
+  const sp=document.getElementById('coachSpec')?.value||'';
+  let list=[...DEMO_COACHES];
+  if(sp) list=list.filter(c=>c.spec===sp);
+  if(q) list=list.filter(c=>(c.name+c.bio+c.loc).toLowerCase().includes(q));
+  setTimeout(function(){var g=document.getElementById('fitCoachesGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+  const grid=document.getElementById('fitCoachesGrid'); if(!grid) return;
+  grid.innerHTML=list.map(c=>`
+    <div class="fh-card">
+      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
+        <div style="width:48px;height:48px;border-radius:12px;background:rgba(57,255,20,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${c.emoji}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="fh-card-name" style="font-size:14px;">${c.name} ${c.certif?'<span style="font-size:8px;background:rgba(57,255,20,0.1);color:#39ff14;padding:1px 5px;border-radius:3px;border:1px solid rgba(57,255,20,0.2);">✓ Certified</span>':''}</div>
+          <div style="font-size:11px;color:#39ff14;font-weight:700;">${{weightloss:'Weight Loss',muscle:'Muscle Building',yoga:'Yoga',nutrition:'Nutrition',crossfit:'CrossFit',sports:'Sports Perf.',rehab:'Rehab'}[c.spec]||c.spec}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${c.loc}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:12px;">${c.bio}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="fh-card-price" style="font-size:15px;">KES ${Number(c.rate).toLocaleString()}<span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">/session</span></div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.35);">⭐ ${c.rating} · ${c.exp}yrs exp</span>
+      </div>
+      <button type="button" class="fh-wa-btn" onclick="fitCoachConnect('${c.phone.replace(/'/g,"\\'")}','${c.name.replace(/'/g,"\\'")}',${c.rate||0})">💬 Book Session</button>
+    </div>`).join('');
+}
+
+/* ── WORKOUTS ── */
+let _wkFilter='all';
+function filterWorkouts(cat,btn) {
+  _wkFilter=cat;
+  document.querySelectorAll('#wkFilterRow .fh-pill').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderWorkouts();
+  setTimeout(function(){var g=document.getElementById('workoutsGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+}
+window.filterWorkouts=filterWorkouts;
+
+function renderWorkouts() {
+  let local=[]; try{local=JSON.parse(localStorage.getItem('sokoniWorkouts')||'[]');}catch(e){}
+  let list=[...local,...DEMO_WORKOUTS.filter(d=>!local.some(l=>l.id===d.id))];
+  if(_wkFilter!=='all') list=list.filter(w=>w.cat===_wkFilter);
+  const grid=document.getElementById('workoutsGrid'); if(!grid) return;
+  grid.innerHTML=list.map(w=>`
+    <div class="wk-card">
+      <span class="wk-tag">${{beginner:'🟢 Beginner',intermediate:'🟡 Intermediate',advanced:'🔴 Advanced',home:'🏠 Home',gym:'🏋️ Gym',yoga:'🧘 Yoga'}[w.cat]||w.cat}</span>
+      <div class="wk-title">${w.title}</div>
+      <div class="wk-meta">👤 ${w.coach} · ⏱ ${w.duration} · 🎯 ${w.target}</div>
+      <div class="wk-exercises">${(w.exercises||[]).map(e=>{const[nm,sets]=(e+'·').split('·');return`<div class="wk-exercise"><span>${nm.trim()}</span><span class="wk-exercise-sets">${sets?sets.trim():''}</span></div>`}).join('')}</div>
+      ${w.phone?`<button type="button" class="fh-wa-btn" style="margin-top:10px;" onclick="fitCoachConnect('${w.phone.replace(/'/g,"\\'")}','${(w.coach||'').replace(/'/g,"\\'")}',0)">💬 Book with Coach</button>`:''}
+    </div>`).join('');
+}
+
+function postWorkout() {
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('fit_post',5,60000)){(window._skToast||alert)('Posting too fast. Please wait a moment.');return;}
+  const name=(document.getElementById('wkName')?.value||'').trim();
+  const coach=(document.getElementById('wkCoach')?.value||'').trim();
+  const dur=document.getElementById('wkDuration')?.value||'';
+  const cat=document.getElementById('wkCat')?.value||'beginner';
+  const target=document.getElementById('wkTarget')?.value||'';
+  const phone=document.getElementById('wkPhone')?.value||'';
+  const exRaw=(document.getElementById('wkExercises')?.value||'').trim();
+  const msgEl=document.getElementById('wkMsg');
+  if(!name){if(msgEl){msgEl.textContent='Please enter a workout name';msgEl.style.color='#f97316';}return;}
+  const exercises=exRaw.split('\n').filter(Boolean);
+  const w={id:'WK'+Date.now(),cat,title:name,coach:coach||'Anonymous',duration:dur,target,phone,exercises};
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniWorkouts')||'[]');}catch(e){}
+  local.unshift(w);localStorage.setItem('sokoniWorkouts',JSON.stringify(local.slice(0,30)));
+  if(msgEl){msgEl.innerHTML='✅ Workout posted!';msgEl.style.color='#39ff14';}
+  document.getElementById('wkName').value='';document.getElementById('wkExercises').value='';
+  filterWorkouts(_wkFilter);
+}
+window.postWorkout=postWorkout;
+
+/* ── EQUIPMENT ── */
+function filterEquipment() {
+  const q=(document.getElementById('eqSearch')?.value||'').toLowerCase();
+  const cond=document.getElementById('eqCondition')?.value||'';
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniGymEquip')||'[]');}catch(e){}
+  let list=[...local,...DEMO_EQUIPMENT.filter(d=>!local.some(l=>l.id===d.id))];
+  if(cond) list=list.filter(e=>e.cond===cond);
+  if(q) list=list.filter(e=>(e.name+e.desc).toLowerCase().includes(q));
+  setTimeout(function(){var g=document.getElementById('equipmentGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+  const grid=document.getElementById('equipmentGrid'); if(!grid) return;
+  grid.innerHTML=list.map(e=>`
+    <div class="fh-card">
+      <span class="fh-card-emoji">${e.emoji||'🏋️'}</span>
+      <div class="fh-card-name">${e.name}</div>
+      <div class="fh-card-meta">${e.desc}</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <div class="fh-card-price">KES ${Number(e.price).toLocaleString()}</div>
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:${e.cond==='new'?'rgba(34,197,94,0.1)':'rgba(249,115,22,0.1)'};color:${e.cond==='new'?'#4ade80':'#fb923c'};font-weight:700;">${e.cond==='new'?'Brand New':'Used'}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,0.3);">📍 ${e.loc}</span>
+      </div>
+      <button type="button" class="fh-wa-btn" onclick="fitEquipConnect('${(e.phone||'').replace(/'/g,"\\'")}','${(e.name||'').replace(/'/g,"\\'")}',${e.price||0})">💬 WhatsApp Seller</button>
+    </div>`).join('');
+}
+
+function sellEquipment() {
+  const name=(document.getElementById('eqSellName')?.value||'').trim();
+  const price=Number(document.getElementById('eqSellPrice')?.value||0);
+  const phone=(document.getElementById('eqSellPhone')?.value||'').trim();
+  const msgEl=document.getElementById('eqMsg');
+  if(!name||!price||!phone){if(msgEl){msgEl.textContent='Fill name, price and phone';msgEl.style.color='#f97316';}return;}
+  const eq={id:'EQ'+Date.now(),name,price,phone,cond:document.getElementById('eqSellCond')?.value||'used',desc:document.getElementById('eqSellDesc')?.value||'',emoji:'🏋️',loc:'Kenya'};
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniGymEquip')||'[]');}catch(e){}
+  local.unshift(eq);localStorage.setItem('sokoniGymEquip',JSON.stringify(local.slice(0,30)));
+  if(msgEl){msgEl.innerHTML='✅ Listed!';msgEl.style.color='#39ff14';}
+  filterEquipment();
+}
+window.sellEquipment=sellEquipment;
+
+/* ── GYM MANAGEMENT ── */
+function renderGymDashboard() {
+  let gym={}; try{gym=JSON.parse(localStorage.getItem('myGymProfile')||'{}');}catch(e){}
+  if(gym.name){
+    document.getElementById('gmName').value=gym.name||'';
+    document.getElementById('gmLoc').value=gym.loc||'';
+    document.getElementById('gmMonthly').value=gym.monthly||'';
+    document.getElementById('gmDayPass').value=gym.daypass||'';
+    document.getElementById('gmHours').value=gym.hours||'';
+    document.getElementById('gmPhone').value=gym.phone||'';
+    document.getElementById('gmFacilities').value=gym.facilities||'';
+    document.getElementById('gmTagline').value=gym.tagline||'';
+  }
+
+  /* Stats */
+  let checkins=[];try{checkins=JSON.parse(localStorage.getItem('gymCheckins')||'[]');}catch(e){}
+  const today=new Date().toDateString();
+  const todayCount=checkins.filter(c=>new Date(c.ts).toDateString()===today).length;
+  const statsRow=document.getElementById('gmStatsRow');
+  if(statsRow){
+    const stats=[
+      {num:gym.members||0,label:'Total Members'},
+      {num:todayCount,label:'Today\'s Check-ins'},
+      {num:gym.monthly?'KES '+(gym.monthly).toLocaleString():'—',label:'Monthly Fee'},
+      {num:gym.daypass?'KES '+(gym.daypass).toLocaleString():'—',label:'Day Pass'},
+    ];
+    statsRow.innerHTML=stats.map(s=>`<div class="gm-stat-card"><div class="gm-stat-num">${s.num}</div><div class="gm-stat-label">${s.label}</div></div>`).join('');
+  }
+
+  /* Chart */
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const vals=days.map(()=>Math.floor(Math.random()*40)+5);
+  const max=Math.max(...vals);
+  const bar=document.getElementById('gmChartBar');
+  const labels=document.getElementById('gmChartLabels');
+  if(bar){
+    bar.innerHTML=vals.map((v,i)=>`<div class="gm-bar" title="${days[i]}: ${v} check-ins" style="height:${Math.round(v/max*100)}%;background:rgba(57,255,20,${0.1+v/max*0.3});"></div>`).join('');
+  }
+  if(labels){
+    labels.innerHTML=days.map(d=>`<div class="gm-bar-label" style="flex:1;text-align:center;font-size:9px;color:rgba(255,255,255,0.3);">${d}</div>`).join('');
+  }
+
+  /* Recent checkins */
+  renderCheckinLog();
+}
+
+function saveGymProfile() {
+  const gym={
+    name:document.getElementById('gmName')?.value||'',
+    loc:document.getElementById('gmLoc')?.value||'',
+    monthly:document.getElementById('gmMonthly')?.value||'',
+    daypass:document.getElementById('gmDayPass')?.value||'',
+    hours:document.getElementById('gmHours')?.value||'',
+    phone:document.getElementById('gmPhone')?.value||'',
+    facilities:document.getElementById('gmFacilities')?.value||'',
+    tagline:document.getElementById('gmTagline')?.value||'',
+    members:0,type:'commercial',area:'nairobi',rating:5.0,emoji:'🏋️',
+    id:'GYM'+Date.now()
+  };
+  localStorage.setItem('myGymProfile',JSON.stringify(gym));
+  /* Also publish to gym list */
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniGyms')||'[]');}catch(e){}
+  local=local.filter(g=>g.id!==gym.id);local.unshift(gym);
+  localStorage.setItem('sokoniGyms',JSON.stringify(local.slice(0,20)));
+  const msgEl=document.getElementById('gmMsg');
+  if(msgEl){msgEl.innerHTML='✅ Gym saved & published to the hub!';msgEl.style.color='#39ff14';}
+  renderGymDashboard();
+}
+window.saveGymProfile=saveGymProfile;
+
+function checkInMember() {
+  const name=(document.getElementById('gmMemberName')?.value||'').trim();
+  if(!name) return;
+  let checkins=[];try{checkins=JSON.parse(localStorage.getItem('gymCheckins')||'[]');}catch(e){}
+  checkins.unshift({name,ts:Date.now()});
+  localStorage.setItem('gymCheckins',JSON.stringify(checkins.slice(0,100)));
+  document.getElementById('gmMemberName').value='';
+  renderCheckinLog();
+  showFhToast('✅ '+name+' checked in!');
+}
+window.checkInMember=checkInMember;
+
+function renderCheckinLog() {
+  const log=document.getElementById('gmCheckinLog'); if(!log) return;
+  let checkins=[];try{checkins=JSON.parse(localStorage.getItem('gymCheckins')||'[]');}catch(e){}
+  if(!checkins.length){log.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.25);text-align:center;padding:16px;">No check-ins yet today</div>';return;}
+  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
+  log.innerHTML=checkins.slice(0,10).map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(57,255,20,0.04);border:1px solid rgba(57,255,20,0.1);border-radius:10px;font-size:12px;"><span style="color:rgba(255,255,255,0.7);">✅ ${c.name}</span><span style="color:rgba(255,255,255,0.3);">${ago(c.ts)}</span></div>`).join('');
+}
+
+function shareGym() {
+  let gym={}; try{gym=JSON.parse(localStorage.getItem('myGymProfile')||'{}');}catch(e){}
+  const name=gym.name||'My Gym';
+  const msg=`🏋️ *${name}* — SOKONI Fitness Hub\n\n📍 ${gym.loc||'Nairobi'}\n💰 KES ${gym.monthly||'?'}/month · Day pass: KES ${gym.daypass||'?'}\n🕐 ${gym.hours||'Mon–Sat'}\n\n✨ "${gym.tagline||'Train with us today'}"\n\nBook on SOKONI: https://mysokoni.co.ke/fitness-hub.html`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+}
+window.shareGym=shareGym;
+
+function postWorkoutPromo() {
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('fit_promo',5,60000)){(window._skToast||alert)('Posting too fast. Please wait a moment.');return;}
+  const btn=Array.from(document.querySelectorAll('.fh-nav-tab')).find(b=>b.textContent.includes('Workout'));
+  showFhPanel('workouts', btn||null);
+}
+window.postWorkoutPromo=postWorkoutPromo;
+
+/* ── ASK HUB ── */
+function postFitRequest() {
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('fit_req',5,60000)){(window._skToast||alert)('Posting too fast. Please wait a moment.');return;}
+  const text=(document.getElementById('fitAskText')?.value||'').trim();
+  const cat=document.getElementById('fitAskCategory')?.value||document.getElementById('fitAskCat')?.value||'Coaching';
+  const phone=document.getElementById('fitAskPhone')?.value||'';
+  if(!text){showFhToast('Please describe what you need');return;}
+  let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_fitness')||'[]');}catch(e){}
+  reqs.unshift({id:'FIT'+Date.now(),text,cat,phone,ts:Date.now()});
+  localStorage.setItem('askHub_fitness',JSON.stringify(reqs.slice(0,30)));
+  document.getElementById('fitAskText').value='';
+  document.getElementById('fitAskPhone').value='';
+  renderFitAskFeed();
+  showFhToast('Request posted to Fitness Hub!');
+}
+window.postFitRequest=postFitRequest;
+
+function renderFitAskFeed() {
+  const feed=document.getElementById('fitAskFeed'); if(!feed) return;
+  let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_fitness')||'[]');}catch(e){}
+  if(!reqs.length){feed.innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No requests yet. Be the first!</div>';return;}
+  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
+  feed.innerHTML=reqs.slice(0,8).map(r=>`
+    <div style="padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.18);color:#39ff14;font-weight:700;">${r.cat}</span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
+        <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
+      </div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      ${r.phone?`<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I can help with your fitness request: '+r.text)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
+    </div>`).join('');
+}
+
+/* ── TOAST ── */
+function showFhToast(msg) {
+  if(typeof window._sokoniToast==='function'){window._sokoniToast(msg,'success',2800);return;}
+  var t=document.getElementById('fhToast');if(t)t.remove();
+  t=document.createElement('div');t.id='fhToast';
+  t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#39ff14;color:#060b06;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:700;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2800);
+}
+
+/* ── COMMISSION-GATED CONNECT HELPERS ── */
+function fitGymConnect(phone, gymName, monthlyRate){
+  if(typeof SokoniPay !== 'undefined'){
+    SokoniPay.waConnect(
+      phone,
+      'Hi! I found ' + gymName + ' on SOKONI Fitness Hub. I\'d like to know more about membership options.',
+      { providerName: gymName, category: 'fitness', serviceDesc: 'Gym membership enquiry · KES ' + Number(monthlyRate).toLocaleString() + '/mo' }
+    );
+  } else {
+    var ph = phone.replace(/^0/,'254').replace(/\D/g,'');
+    window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent('Hi! I found ' + gymName + ' on SOKONI Fitness Hub. I\'d like to know more about membership options.'), '_blank');
+  }
+}
+window.fitGymConnect = fitGymConnect;
+
+function fitEquipConnect(phone, itemName, price){
+  if(typeof SokoniPay !== 'undefined'){
+    SokoniPay.waConnect(
+      phone,
+      'Hi! I saw your ' + itemName + ' on SOKONI Fitness Hub for KES ' + Number(price).toLocaleString() + '. Is it still available?',
+      { providerName: 'Equipment Seller', category: 'fitness', serviceDesc: itemName + ' · KES ' + Number(price).toLocaleString() }
+    );
+  } else {
+    var ph = phone.replace(/^0/,'254').replace(/\D/g,'');
+    window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent('Hi! I saw your ' + itemName + ' on SOKONI Fitness Hub for KES ' + Number(price).toLocaleString() + '. Is it still available?'), '_blank');
+  }
+}
+window.fitEquipConnect = fitEquipConnect;
+
+function fitCoachConnect(phone, coachName, sessionRate){
+  if(typeof SokoniPay !== 'undefined'){
+    SokoniPay.waConnect(
+      phone,
+      'Hi ' + coachName + ', I found you on SOKONI Fitness Hub. I\'d like to book a session.',
+      { providerName: coachName, category: 'fitness', serviceDesc: 'Fitness coaching session' + (sessionRate ? ' · KES ' + Number(sessionRate).toLocaleString() : '') }
+    );
+  } else {
+    var ph = phone.replace(/^0/,'254').replace(/\D/g,'');
+    window.open('https://wa.me/' + ph + '?text=' + encodeURIComponent('Hi ' + coachName + ', I found you on SOKONI Fitness Hub. I\'d like to book a session.'), '_blank');
+  }
+}
+window.fitCoachConnect = fitCoachConnect;
+
+/* ── INIT ── */
+filterGyms();
+filterFitCoaches();
+renderWorkouts();
+filterEquipment();
+renderGymDashboard();
+renderFitAskFeed();
+
+/* ═══════════════════════════════════════════════════
+   CLASSES
+═══════════════════════════════════════════════════ */
+const DEMO_CLASSES = [
+  {id:'CL01',type:'yoga',emoji:'🧘',name:'Vinyasa Yoga Flow',instructor:'Amina Hassan',loc:'Karen Yoga Studio',time:'Mon/Wed/Fri 6:00am',duration:'60min',slots:8,fee:500,phone:'0734800003',level:'All levels'},
+  {id:'CL02',type:'pilates',emoji:'🤸',name:'Core Pilates',instructor:'Sandra Njeri',loc:'Kilimani Pilates Studio',time:'Tue/Thu 7:00am',duration:'50min',slots:6,fee:600,phone:'0712300010',level:'Beginner friendly'},
+  {id:'CL03',type:'aerobics',emoji:'🏃',name:'HiLo Aerobics',instructor:'Mary Achieng',loc:'Westlands Fitness Centre',time:'Mon–Sat 5:30am & 6pm',duration:'45min',slots:20,fee:300,phone:'0723400011',level:'All levels'},
+  {id:'CL04',type:'dance',emoji:'💃',name:'Zumba Dance Fitness',instructor:'Fatuma Osman',loc:'CBD Dance Studio',time:'Tue/Thu/Sat 7:00pm',duration:'55min',slots:15,fee:400,phone:'0745500012',level:'All levels'},
+  {id:'CL05',type:'martial',emoji:'🥊',name:'Kickboxing Fitness',instructor:'James Otieno',loc:'Lang\'ata MMA & Fitness',time:'Mon/Wed 6:00pm',duration:'60min',slots:10,fee:700,phone:'0756600013',level:'Intermediate'},
+  {id:'CL06',type:'crossfit',emoji:'🏆',name:'CrossFit WOD',instructor:'Grace Akinyi',loc:'Kilimani CrossFit Box',time:'Daily 5:30am & 6pm',duration:'60min',slots:12,fee:800,phone:'0756800005',level:'Advanced'},
+  {id:'CL07',type:'hiit',emoji:'🔥',name:'HIIT Burn 45',instructor:'Brian Mutua',loc:'Westlands Fitness Centre',time:'Tue/Thu 6:30am',duration:'45min',slots:18,fee:400,phone:'0767800006',level:'All levels'},
+  {id:'CL08',type:'spinning',emoji:'🚴',name:'Spinning Cardio',instructor:'Paul Kamau',loc:'City Fitness CBD',time:'Mon/Wed/Fri 5:45am',duration:'50min',slots:14,fee:500,phone:'0778700014',level:'All levels'},
+];
+
+let _clsFilter = 'all';
+function filterClasses(type, btn) {
+  _clsFilter = type;
+  document.querySelectorAll('#clsFilterBar .fh-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderClasses();
+}
+window.filterClasses = filterClasses;
+
+function renderClasses() {
+  let local = []; try{local=JSON.parse(localStorage.getItem('sokoniClasses')||'[]');}catch(e){}
+  let list = [...local, ...DEMO_CLASSES.filter(d=>!local.some(l=>l.id===d.id))];
+  if(_clsFilter !== 'all') list = list.filter(c=>c.type===_clsFilter);
+  const grid = document.getElementById('clsGrid'); if(!grid) return;
+  if(!list.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;color:rgba(255,255,255,0.3);">No classes found</div>';return;}
+  grid.innerHTML = list.map(c=>`
+    <div class="cls-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="width:44px;height:44px;border-radius:12px;background:rgba(57,255,20,0.08);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${c.emoji||'🧘'}</div>
+        <div>
+          <div class="cls-name">${c.name}</div>
+          <div style="font-size:11px;color:#39ff14;font-weight:700;">${c.instructor}</div>
+        </div>
+      </div>
+      <span class="cls-type">${c.type.charAt(0).toUpperCase()+c.type.slice(1)}</span>
+      <div class="cls-meta">📍 ${c.loc}<br>⏰ ${c.time} · ⏱ ${c.duration}<br>👥 ${c.slots} slots · 🎯 ${c.level}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="fh-card-price" style="font-size:15px;">KES ${Number(c.fee).toLocaleString()}<span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">/session</span></div>
+        <span style="font-size:10px;padding:2px 8px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.18);border-radius:5px;color:#71ff00;font-weight:700;">${c.slots} available</span>
+      </div>
+      <button type="button" class="fh-book-btn" onclick="bookClass('${c.id}','${(c.name||'').replace(/'/g,"\\'")}','${(c.phone||'').replace(/'/g,"\\'")}',${c.fee||0})">📅 Book Class</button>
+      <button type="button" class="fh-wa-btn" style="margin-top:6px;" onclick="fitCoachConnect('${(c.phone||'').replace(/'/g,"\\'")}','${(c.instructor||'').replace(/'/g,"\\'")}',${c.fee||0})">💬 WhatsApp Instructor</button>
+    </div>`).join('');
+}
+
+function bookClass(id, name, phone, fee) {
+  if(typeof SokoniPay !== 'undefined') {
+    SokoniPay.platformBook({
+      providerName: name,
+      category: 'fitness',
+      serviceDesc: 'Class session — ' + name,
+      totalAmount: fee || 0,
+      depositPct: 100,
+      providerPhone: phone,
+      onSuccess: function(ref, deposit) {
+        _saveConfirmedBooking({type:'class', provider:name, phone, fee, ref});
+        showFhToast('✅ Class booked! Ref: ' + ref);
+      }
+    });
+  } else {
+    const ph = phone.replace(/^0/,'254').replace(/\D/g,'');
+    window.open('https://wa.me/'+ph+'?text='+encodeURIComponent('Hi! I\'d like to book a spot in '+name+'. I found it on SOKONI Fitness Hub.'),'_blank');
+  }
+}
+window.bookClass = bookClass;
+
+function bookDayPass(phone, gymName, dayPassPrice) {
+  if(typeof SokoniPay !== 'undefined') {
+    SokoniPay.platformBook({
+      providerName: gymName,
+      category: 'fitness',
+      serviceDesc: 'Day Pass — ' + gymName,
+      totalAmount: dayPassPrice || 0,
+      depositPct: 100,
+      providerPhone: phone,
+      onSuccess: function(ref) {
+        _saveConfirmedBooking({type:'gym', provider:gymName, phone, fee:dayPassPrice, ref});
+        showFhToast('✅ Day pass booked! Ref: ' + ref);
+        scheduleBookingReminder({type:'gym day pass', provider:gymName, date:new Date().toISOString().split('T')[0], time:'08:00', id:ref});
+      }
+    });
+  } else {
+    fitGymConnect(phone, gymName, dayPassPrice);
+  }
+}
+window.bookDayPass = bookDayPass;
+
+function postClass() {
+  const name=(document.getElementById('clsName')?.value||'').trim();
+  const phone=(document.getElementById('clsPhone')?.value||'').trim();
+  const msgEl=document.getElementById('clsMsg');
+  if(!name||!phone){if(msgEl){msgEl.textContent='Please fill class name and phone';msgEl.style.color='#f97316';}return;}
+  const cls={id:'CL'+Date.now(),type:document.getElementById('clsType')?.value||'yoga',emoji:'🧘',
+    name,instructor:document.getElementById('clsInstructor')?.value||'Unknown',
+    loc:document.getElementById('clsLoc')?.value||'Nairobi',
+    time:document.getElementById('clsTime')?.value||'TBA',duration:'60min',
+    slots:10,fee:Number(document.getElementById('clsFee')?.value||0),phone,level:'All levels',
+    desc:document.getElementById('clsDesc')?.value||''};
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniClasses')||'[]');}catch(e){}
+  local.unshift(cls);localStorage.setItem('sokoniClasses',JSON.stringify(local.slice(0,30)));
+  /* Save to Firestore fitness_classes collection */
+  if(window.firebaseDB){
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
+      const uid=(window.firebaseAuth&&window.firebaseAuth.currentUser)?window.firebaseAuth.currentUser.uid:'';
+      fs.addDoc(fs.collection(window.firebaseDB,'fitness_classes'),Object.assign({},cls,{uid,createdAt:fs.serverTimestamp?fs.serverTimestamp():Date.now()}));
+    }).catch(function(){});
+  }
+  if(msgEl){msgEl.innerHTML='✅ Class listed!';msgEl.style.color='#39ff14';}
+  document.getElementById('clsName').value='';document.getElementById('clsPhone').value='';
+  renderClasses();
+}
+window.postClass = postClass;
+
+/* ═══════════════════════════════════════════════════
+   BOOKINGS
+═══════════════════════════════════════════════════ */
+let _calYear, _calMonth, _calSelectedDate = null;
+
+function initCalendar() {
+  const now = new Date();
+  _calYear = now.getFullYear();
+  _calMonth = now.getMonth();
+  _calSelectedDate = now.toISOString().split('T')[0];
+  renderCalendar();
+  renderUpcomingBookings();
+}
+
+function renderCalendar() {
+  const titleEl = document.getElementById('calTitle');
+  const gridEl = document.getElementById('calGrid');
+  if(!titleEl||!gridEl) return;
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  titleEl.textContent = months[_calMonth]+' '+_calYear;
+  const first = new Date(_calYear, _calMonth, 1).getDay();
+  const days = new Date(_calYear, _calMonth+1, 0).getDate();
+  const today = new Date().toISOString().split('T')[0];
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
+  const bookedDates = new Set(local.map(b=>b.date));
+  let html = '';
+  for(let i=0;i<first;i++) html+='<div></div>';
+  for(let d=1;d<=days;d++) {
+    const dateStr=`${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=dateStr===today, hasBook=bookedDates.has(dateStr), isSel=dateStr===_calSelectedDate;
+    html+=`<div class="bk-cal-day${isToday?' today':''}${hasBook?' has-booking':''}${isSel?' selected':''}" onclick="selectCalDay('${dateStr}')">${d}</div>`;
+  }
+  gridEl.innerHTML = html;
+  renderDaySlots();
+}
+
+function selectCalDay(dateStr) {
+  _calSelectedDate = dateStr;
+  renderCalendar();
+  const dateEl = document.getElementById('bkDate'); if(dateEl) dateEl.value=dateStr;
+}
+window.selectCalDay = selectCalDay;
+
+function calPrev() { _calMonth--; if(_calMonth<0){_calMonth=11;_calYear--;} renderCalendar(); }
+function calNext() { _calMonth++; if(_calMonth>11){_calMonth=0;_calYear++;} renderCalendar(); }
+window.calPrev=calPrev; window.calNext=calNext;
+
+function renderDaySlots() {
+  const el = document.getElementById('calDaySlots'); if(!el) return;
+  if(!_calSelectedDate){el.innerHTML='';return;}
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
+  const day = local.filter(b=>b.date===_calSelectedDate);
+  if(!day.length){el.innerHTML=`<div style="font-size:12px;color:rgba(255,255,255,0.3);text-align:center;padding:12px;">No bookings on ${_calSelectedDate}</div>`;return;}
+  el.innerHTML=`<div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:8px;">Bookings on ${_calSelectedDate}</div>`+
+    day.map(b=>`<div class="bk-slot"><span class="bk-slot-time">${b.time||'TBA'}</span><span class="bk-slot-name">${b.type||''} — ${b.provider||''}</span><button type="button" class="bk-slot-btn" onclick="cancelBooking('${b.id}')">Cancel</button></div>`).join('');
+}
+
+function makeBooking() {
+  const type=document.getElementById('bkType')?.value||'';
+  const provider=(document.getElementById('bkProvider')?.value||'').trim();
+  const date=document.getElementById('bkDate')?.value||'';
+  const time=document.getElementById('bkTime')?.value||'';
+  const name=(document.getElementById('bkName')?.value||'').trim();
+  const phone=(document.getElementById('bkPhone')?.value||'').trim();
+  const notes=document.getElementById('bkNotes')?.value||'';
+  const msgEl=document.getElementById('bkMsg');
+  if(!type||!provider||!date){if(msgEl){msgEl.textContent='Please fill booking type, provider and date';msgEl.style.color='#f97316';}return;}
+
+  const depositMap={gym:300,trainer:500,class:300,nutritionist:500,massage:300};
+  const deposit = depositMap[type] || 200;
+  const typeLabel = {gym:'Gym Session',trainer:'Personal Trainer',class:'Fitness Class',nutritionist:'Nutritionist Consultation',massage:'Sports Massage'}[type]||type;
+
+  function _confirmBooking(ref) {
+    const bk={id:ref||('BK'+Date.now()),type,provider,date,time,name,phone,notes,ref,ts:Date.now(),status:'confirmed'};
+    let local=[];try{local=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
+    local.unshift(bk);localStorage.setItem('sokoniBookings',JSON.stringify(local.slice(0,50)));
+    if(msgEl){msgEl.innerHTML='✅ Booking confirmed! Ref: '+(ref||'')+'';msgEl.style.color='#39ff14';}
+    ['bkType','bkProvider','bkTime','bkName','bkNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    if(phone){
+      const msg='📋 Booking Ref: *'+(ref||'')+'*\n\n📅 Booking confirmed!\n\nService: '+typeLabel+'\nProvider: '+provider+'\nDate: '+date+(time?' at '+time:'')+'\nName: '+(name||'Guest')+'\n\n_Booked via SOKONI Fitness Hub_';
+      const wa=phone.replace(/^0/,'254').replace(/\D/g,'');
+      setTimeout(()=>window.open('https://wa.me/'+wa+'?text='+encodeURIComponent(msg),'_blank'),800);
+    }
+    _calSelectedDate=date; renderCalendar(); renderUpcomingBookings();
+    scheduleBookingReminder(bk);
+    _saveConfirmedBooking(bk);
+  }
+
+  if(typeof SokoniPay !== 'undefined') {
+    SokoniPay.gateway({
+      providerName: provider,
+      category: 'fitness',
+      serviceDesc: typeLabel + (date?' on '+date:''),
+      depositAmount: deposit,
+      providerPhone: phone,
+      onSuccess: function(ref) { _confirmBooking(ref); }
+    });
+  } else {
+    _confirmBooking('BK'+Date.now());
+  }
+}
+window.makeBooking = makeBooking;
+
+function cancelBooking(id) {
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
+  local=local.filter(b=>b.id!==id);
+  localStorage.setItem('sokoniBookings',JSON.stringify(local));
+  renderCalendar(); renderUpcomingBookings();
+  showFhToast('Booking cancelled');
+}
+window.cancelBooking = cancelBooking;
+
+function renderUpcomingBookings() {
+  const el=document.getElementById('bkUpcoming'); if(!el) return;
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
+  const now=Date.now();
+  const upcoming=local.filter(b=>new Date(b.date+'T'+(b.time||'00:00')).getTime()>=now-3600000).sort((a,b)=>new Date(a.date+'T'+(a.time||'00:00'))-new Date(b.date+'T'+(b.time||'00:00')));
+  if(!upcoming.length){el.innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No upcoming bookings. Book a session above!</div>';return;}
+  const typeIcons={gym:'🏋️',trainer:'🏃',class:'🧘',nutritionist:'🥗',massage:'💆'};
+  el.innerHTML=upcoming.slice(0,10).map(b=>`
+    <div class="bk-booking-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="font-size:22px;">${typeIcons[b.type]||'📅'}</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:800;color:white;">${b.provider}</div>
+          <div style="font-size:11px;color:#39ff14;">${b.type||''} · ${b.date}${b.time?' at '+b.time:''}</div>
+        </div>
+        <span style="padding:3px 8px;background:rgba(57,255,20,0.08);border:1px solid rgba(57,255,20,0.18);border-radius:5px;font-size:9px;font-weight:800;color:#39ff14;">CONFIRMED</span>
+      </div>
+      ${b.notes?`<div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:8px;">${b.notes.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`:''}
+      <div style="display:flex;gap:6px;">
+        ${b.phone?`<a href="https://wa.me/${b.phone.replace(/^0/,'254').replace(/\D/g,'')}?text=${encodeURIComponent('Hi, confirming my '+b.type+' booking on '+b.date+(b.time?' at '+b.time:''))}" target="_blank" rel="noopener" style="padding:6px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">💬 Confirm</a>`:''}
+        <button type="button" onclick="cancelBooking('${b.id}')" style="padding:6px 12px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:7px;color:#f87171;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Cancel</button>
+      </div>
+    </div>`).join('');
+}
+
+function scheduleBookingReminder(bk) {
+  const ms = new Date(bk.date+'T'+(bk.time||'08:00')).getTime() - Date.now() - 3600000;
+  if(ms > 0 && ms < 86400000*7 && 'Notification' in window) {
+    Notification.requestPermission().then(p=>{
+      if(p==='granted') setTimeout(()=>new Notification('📅 SOKONI Reminder',{body:'Your '+bk.type+' with '+bk.provider+' starts in 1 hour!',icon:'/assets/Sokonilogo2.png'}), ms);
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   NUTRITION
+═══════════════════════════════════════════════════ */
+const DEMO_NUTRITIONISTS = [
+  {id:'N01',spec:'weightloss',emoji:'🥗',name:'Dr. Peter Kamau',bio:'Registered dietitian. 10yrs experience in weight management, diabetes, sports nutrition.',loc:'CBD, Nairobi',rate:3500,exp:10,rating:4.9,phone:'0745800004',certif:true},
+  {id:'N02',spec:'sports',emoji:'🏋️',name:'Susan Odhiambo',bio:'Sports nutritionist. Works with athletes, marathoners and CrossFit competitors.',loc:'Westlands, Nairobi',rate:3000,exp:7,rating:4.8,phone:'0712900020',certif:true},
+  {id:'N03',spec:'diabetes',emoji:'💊',name:'Dr. Fatima Ali',bio:'Certified diabetic educator and dietitian. Specializes in type 2 diabetes meal planning.',loc:'Kilimani, Nairobi',rate:4000,exp:12,rating:5.0,phone:'0723900021',certif:true},
+  {id:'N04',spec:'vegan',emoji:'🌿',name:'Grace Wambui',bio:'Plant-based nutrition coach. Vegan, vegetarian, and flexitarian meal planning.',loc:'Karen, Nairobi / Online',rate:2500,exp:5,rating:4.7,phone:'0734900022',certif:false},
+  {id:'N05',spec:'meal',emoji:'📋',name:'John Maina',bio:'Meal prep specialist. Weekly meal plans, grocery lists, batch cooking guides.',loc:'Online',rate:2000,exp:4,rating:4.6,phone:'0745900023',certif:false},
+  {id:'N06',spec:'weightloss',emoji:'⚖️',name:'Dr. Carol Njoki',bio:'Clinical nutritionist & bariatric dietitian. Post-surgery nutrition, weight management.',loc:'Mombasa',rate:3800,exp:9,rating:4.9,phone:'0756900024',certif:true},
+];
+
+const DEMO_MEAL_PLAN = [
+  {day:'Monday',meals:[{meal:'Breakfast',food:'Oats with banana and chia seeds',cals:320},{meal:'Lunch',food:'Ugali, sukuma wiki & grilled chicken',cals:550},{meal:'Snack',food:'Apple + handful of nuts',cals:180},{meal:'Dinner',food:'Brown rice, beans & steamed veggies',cals:480}]},
+  {day:'Tuesday',meals:[{meal:'Breakfast',food:'2 eggs, avocado on brown bread',cals:380},{meal:'Lunch',food:'Sweet potato, fish & kachumbari',cals:520},{meal:'Snack',food:'Greek yogurt + berries',cals:150},{meal:'Dinner',food:'Chicken soup with vegetables',cals:400}]},
+  {day:'Wednesday',meals:[{meal:'Breakfast',food:'Smoothie: spinach, mango, banana, milk',cals:280},{meal:'Lunch',food:'Lentil stew & chapati (1 piece)',cals:600},{meal:'Snack',food:'Boiled groundnuts',cals:200},{meal:'Dinner',food:'Grilled tilapia & salad',cals:390}]},
+];
+
+let _nutFilter = 'all';
+function filterNutritionists(spec, btn) {
+  if(typeof spec === 'object'||!spec) spec='all';
+  _nutFilter = spec;
+  if(btn) { document.querySelectorAll('#fhpanel-nutrition .fh-filter-bar .fh-pill').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+  const q=(document.getElementById('nutSearch')?.value||'').toLowerCase();
+  let list=[...DEMO_NUTRITIONISTS];
+  if(_nutFilter!=='all') list=list.filter(n=>n.spec===_nutFilter);
+  if(q) list=list.filter(n=>(n.name+n.bio+n.loc).toLowerCase().includes(q));
+  const grid=document.getElementById('nutGrid'); if(!grid) return;
+  grid.innerHTML=list.map(n=>`
+    <div class="nut-card">
+      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
+        <div style="width:48px;height:48px;border-radius:12px;background:rgba(34,197,94,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${n.emoji}</div>
+        <div style="flex:1;">
+          <div class="fh-card-name" style="font-size:14px;">${n.name}${n.certif?' <span style="font-size:8px;background:rgba(57,255,20,0.1);color:#39ff14;padding:1px 5px;border-radius:3px;border:1px solid rgba(57,255,20,0.2);">✓ RD</span>':''}</div>
+          <div style="font-size:11px;color:#4ade80;font-weight:700;">${{weightloss:'Weight Loss',sports:'Sports Nutrition',diabetes:'Diabetes',vegan:'Plant-Based',meal:'Meal Planning'}[n.spec]||n.spec}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${n.loc}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:12px;">${n.bio}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="fh-card-price" style="font-size:15px;color:#4ade80;">KES ${Number(n.rate).toLocaleString()}<span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">/session</span></div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.35);">⭐ ${n.rating} · ${n.exp}yrs</span>
+      </div>
+      <button type="button" class="fh-book-btn" onclick="bookNutritionist('${n.id}','${(n.name||'').replace(/'/g,"\\'")}','${(n.phone||'').replace(/'/g,"\\'")}',${n.rate||0})">📅 Book Consultation</button>
+      <button type="button" class="fh-wa-btn" style="margin-top:6px;" onclick="fitCoachConnect('${(n.phone||'').replace(/'/g,"\\'")}','${(n.name||'').replace(/'/g,"\\'")}',${n.rate||0})">💬 WhatsApp</button>
+    </div>`).join('');
+}
+window.filterNutritionists = filterNutritionists;
+
+function bookNutritionist(id, name, phone, rate) {
+  if(typeof SokoniPay !== 'undefined') {
+    SokoniPay.platformBook({
+      providerName: name,
+      category: 'fitness',
+      serviceDesc: 'Nutrition consultation — ' + name,
+      totalAmount: rate || 0,
+      depositPct: 50,
+      providerPhone: phone,
+      onSuccess: function(ref, deposit, balance) {
+        _saveConfirmedBooking({type:'nutritionist', provider:name, phone, fee:rate, ref});
+        const ph = phone.replace(/^0/,'254').replace(/\D/g,'');
+        const msg = '📋 Booking Ref: *'+ref+'*\n\nHi '+name+', I\'d like to book a nutrition consultation.\n\nDeposit paid: KES '+deposit.toLocaleString()+'\nBalance due: KES '+balance.toLocaleString()+'\n\n_Booked via SOKONI Fitness Hub_';
+        window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(msg),'_blank');
+      }
+    });
+  } else {
+    fitCoachConnect(phone, name, rate);
+  }
+}
+window.bookNutritionist = bookNutritionist;
+
+function renderMealPlan() {
+  const el=document.getElementById('mealPlanGrid'); if(!el) return;
+  el.innerHTML=DEMO_MEAL_PLAN.map(day=>`
+    <div class="meal-day">
+      <div class="meal-title">🗓 ${day.day}</div>
+      ${day.meals.map(m=>`<div class="meal-item"><span style="min-width:70px;color:rgba(57,255,20,0.7);font-weight:700;">${m.meal}</span><span style="flex:1;">${m.food}</span><span class="meal-cal">${m.cals} kcal</span></div>`).join('')}
+      <div style="text-align:right;font-size:11px;color:#39ff14;font-weight:800;margin-top:6px;">Total: ${day.meals.reduce((s,m)=>s+m.cals,0)} kcal</div>
+    </div>`).join('');
+}
+
+function saveNutGoal() {
+  const goal={goal:document.getElementById('nutGoal')?.value||'',cals:document.getElementById('nutCals')?.value||'',water:document.getElementById('nutWater')?.value||'',diet:document.getElementById('nutDiet')?.value||''};
+  localStorage.setItem('sokoniNutGoal',JSON.stringify(goal));
+  const msgEl=document.getElementById('nutMsg');if(msgEl){msgEl.innerHTML='✅ Nutrition goal saved!';msgEl.style.color='#4ade80';}
+  showFhToast('Nutrition goal saved!');
+}
+window.saveNutGoal=saveNutGoal;
+
+/* ═══════════════════════════════════════════════════
+   COMMUNITY
+═══════════════════════════════════════════════════ */
+const DEMO_CLUBS = [
+  {id:'CM01',type:'running',emoji:'🏃',name:'Nairobi Runners',members:234,meet:'Sat 6:00am',loc:'Karura Forest, Nairobi',phone:'0712100030',desc:'All fitness levels welcome. Weekly 5–15km runs through Karura Forest.'},
+  {id:'CM02',type:'cycling',emoji:'🚴',name:'Nairobi Cycling Club',members:187,meet:'Sun 6:30am',loc:'Uhuru Park, Nairobi',phone:'0723100031',desc:'Road and mountain biking group. Weekly rides, route variety.'},
+  {id:'CM03',type:'hiking',emoji:'⛰️',name:'Kenya Hikers',members:312,meet:'Sat 7:00am (bi-weekly)',loc:'Various trails',phone:'0734100032',desc:'Weekend hiking to Ngong Hills, Mt. Longonot, Suswa and beyond.'},
+  {id:'CM04',type:'yoga',emoji:'🧘',name:'Morning Yoga Circle',members:89,meet:'Mon/Wed/Fri 6:30am',loc:'Uhuru Park, Nairobi',phone:'0745100033',desc:'Free outdoor yoga sessions. All levels, mats optional.'},
+  {id:'CM05',type:'swimming',emoji:'🏊',name:'Nairobi Masters Swim',members:56,meet:'Tue/Thu 5:30am',loc:'Moi International Sports Centre',phone:'0756100034',desc:'Competitive and recreational adult swimming.'},
+  {id:'CM06',type:'gym',emoji:'💪',name:'Iron Tribe Nairobi',members:143,meet:'Daily',loc:'Various gyms',phone:'0767100035',desc:'Gym accountability partners. Check in, motivate, and grow together.'},
+];
+
+const DEMO_CHALLENGES = [
+  {id:'CH01',emoji:'🏃',name:'30-Day Running Challenge',desc:'Run at least 3km every day for 30 days',participants:456,end:'2026-07-15',prize:'SOKONI Sport Voucher KES 5,000',pts:100},
+  {id:'CH02',emoji:'💪',name:'100 Push-ups Daily',desc:'Complete 100 push-ups every day for 30 days',participants:312,end:'2026-07-30',prize:'Personal Training Session',pts:80},
+  {id:'CH03',emoji:'🧘',name:'21-Day Yoga Journey',desc:'Complete a yoga session every day for 21 days',participants:189,end:'2026-07-07',prize:'Yoga Mat + Block Set',pts:70},
+  {id:'CH04',emoji:'⚖️',name:'August Weight Loss',desc:'Lose at least 3kg by end of August',participants:267,end:'2026-08-31',prize:'Nutritionist Consultation Package',pts:90},
+];
+
+const DEMO_EVENTS = [
+  {id:'EV01',emoji:'🏃',name:'Nairobi 10K Fun Run',date:'2026-07-06',loc:'Uhuru Park',fee:'KES 500',phone:'0712200040',desc:'Family-friendly 5K & 10K. T-shirt and medal for all finishers.'},
+  {id:'EV02',emoji:'🚴',name:'Cycling for Good',date:'2026-07-13',loc:'KICC Roundabout',fee:'KES 800',phone:'0723200041',desc:'60km charity cycle ride. Helmets required.'},
+  {id:'EV03',emoji:'🏊',name:'Open Water Swim Challenge',date:'2026-07-20',loc:'Naivasha Lake',fee:'KES 1,200',phone:'0734200042',desc:'500m, 1500m and 3000m distances. All skill levels.'},
+  {id:'EV04',emoji:'⛰️',name:'Mt. Longonot Hike',date:'2026-07-27',loc:'Naivasha',fee:'KES 2,500',phone:'0745200043',desc:'Guided summit hike including transport, guides and park fees.'},
+];
+
+const DEMO_LEADERBOARD = [
+  {name:'Grace Akinyi',pts:1240,club:'CrossFit'},
+  {name:'Brian Mutua',pts:1180,club:'Running'},
+  {name:'Janet Wanjiku',pts:1050,club:'HIIT'},
+  {name:'Kevin Odhiambo',pts:980,club:'Gym'},
+  {name:'Amina Hassan',pts:920,club:'Yoga'},
+  {name:'You',pts:0,club:'–'},
+];
+
+function showCmSection(sec, btn) {
+  ['cmClubs','cmChallenges','cmEvents'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  const el=document.getElementById('cm'+sec.charAt(0).toUpperCase()+sec.slice(1));if(el)el.style.display='';
+  document.querySelectorAll('#fhpanel-community .fh-filter-bar .fh-pill').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+}
+window.showCmSection=showCmSection;
+
+function renderClubs() {
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniClubs')||'[]');}catch(e){}
+  let list=[...local,...DEMO_CLUBS.filter(d=>!local.some(l=>l.id===d.id))];
+  const grid=document.getElementById('cmClubsGrid');if(!grid)return;
+  grid.innerHTML=list.map(c=>`
+    <div class="cm-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="font-size:30px;">${c.emoji}</div>
+        <div><div style="font-size:14px;font-weight:900;color:white;">${c.name}</div>
+          <div style="font-size:11px;color:#39ff14;font-weight:700;">👥 ${c.members} members</div></div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${c.desc}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:12px;">⏰ ${c.meet} · 📍 ${c.loc}</div>
+      <button type="button" class="fh-wa-btn" onclick="joinClub('${(c.phone||'').replace(/'/g,"\\'")}','${(c.name||'').replace(/'/g,"\\'")}')">💬 Join Club</button>
+    </div>`).join('');
+}
+
+function joinClub(phone, name) {
+  const ph=phone.replace(/^0/,'254').replace(/\D/g,'');
+  window.open(`https://wa.me/${ph}?text=${encodeURIComponent('Hi! I\'d like to join '+name+'. I found you on SOKONI Fitness Hub.')}`,'_blank');
+}
+window.joinClub=joinClub;
+
+function renderChallenges() {
+  const grid=document.getElementById('cmChallengesGrid');if(!grid)return;
+  let user=[];try{user=JSON.parse(localStorage.getItem('joinedChallenges')||'[]');}catch(e){}
+  grid.innerHTML=DEMO_CHALLENGES.map(c=>`
+    <div class="cm-card">
+      <div style="font-size:32px;margin-bottom:10px;">${c.emoji}</div>
+      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:5px;">${c.name}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;">${c.desc}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:8px;">👥 ${c.participants} joined · Ends ${c.end}</div>
+      <div style="font-size:11px;color:#fbbf24;font-weight:700;margin-bottom:12px;">🏆 Prize: ${c.prize}</div>
+      <button type="button" class="fh-book-btn" onclick="joinChallenge('${c.id}','${(c.name||'').replace(/'/g,"\\'")}',this)">${user.includes(c.id)?'✅ Joined':'Join Challenge'}</button>
+    </div>`).join('');
+  renderLeaderboard();
+}
+
+function joinChallenge(id, name, btn) {
+  let user=[];try{user=JSON.parse(localStorage.getItem('joinedChallenges')||'[]');}catch(e){}
+  if(!user.includes(id)){user.push(id);localStorage.setItem('joinedChallenges',JSON.stringify(user));}
+  if(btn){btn.textContent='✅ Joined';btn.style.background='rgba(57,255,20,0.15)';}
+  showFhToast('Joined "'+name+'"! Good luck!');
+}
+window.joinChallenge=joinChallenge;
+
+function renderLeaderboard() {
+  const el=document.getElementById('cmLeaderboard');if(!el)return;
+  el.innerHTML=DEMO_LEADERBOARD.map((e,i)=>`
+    <div class="ch-row">
+      <div class="ch-rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+      <div class="ch-name">${e.name}</div>
+      <span style="font-size:11px;color:rgba(255,255,255,0.4);padding:0 8px;">${e.club}</span>
+      <div class="ch-pts">${e.pts} pts</div>
+    </div>`).join('');
+}
+
+function renderEvents() {
+  const grid=document.getElementById('cmEventsGrid');if(!grid)return;
+  grid.innerHTML=DEMO_EVENTS.map(e=>`
+    <div class="cm-card">
+      <div style="font-size:30px;margin-bottom:10px;">${e.emoji}</div>
+      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:5px;">${e.name}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px;">${e.desc}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:8px;">📅 ${e.date} · 📍 ${e.loc}</div>
+      <div style="font-size:13px;font-weight:900;color:#39ff14;margin-bottom:12px;">Entry: ${e.fee}</div>
+      <button type="button" class="fh-wa-btn" onclick="registerEvent('${(e.phone||'').replace(/'/g,"\\'")}','${(e.name||'').replace(/'/g,"\\'")}',${JSON.stringify(e.fee||'').replace(/'/g,"\\'")})">📝 Register</button>
+    </div>`).join('');
+}
+
+function registerEvent(phone, name, fee) {
+  const feeNum = parseInt((fee||'0').toString().replace(/[^0-9]/g,''),10)||0;
+  if(typeof SokoniPay !== 'undefined' && feeNum > 0) {
+    SokoniPay.waConnect(
+      phone,
+      'Hi! I\'d like to register for '+name+'. I found it on SOKONI Fitness Hub.',
+      { providerName: name, category: 'fitness', serviceDesc: 'Event entry — '+name+' · '+fee }
+    );
+  } else {
+    const ph=phone.replace(/^0/,'254').replace(/\D/g,'');
+    window.open('https://wa.me/'+ph+'?text='+encodeURIComponent('Hi! I\'d like to register for '+name+' ('+fee+'). Found on SOKONI Fitness Hub.'),'_blank');
+  }
+}
+window.registerEvent=registerEvent;
+
+function createClub() {
+  const name=(document.getElementById('cmClubName')?.value||'').trim();
+  const phone=(document.getElementById('cmClubPhone')?.value||'').trim();
+  const msgEl=document.getElementById('cmMsg');
+  if(!name||!phone){if(msgEl){msgEl.textContent='Fill club name and phone';msgEl.style.color='#f97316';}return;}
+  const club={id:'CM'+Date.now(),type:document.getElementById('cmClubType')?.value||'running',emoji:'🏃',name,members:1,
+    meet:document.getElementById('cmClubTime')?.value||'TBA',loc:'Kenya',phone,
+    desc:document.getElementById('cmClubDesc')?.value||''};
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniClubs')||'[]');}catch(e){}
+  local.unshift(club);localStorage.setItem('sokoniClubs',JSON.stringify(local.slice(0,20)));
+  if(msgEl){msgEl.innerHTML='✅ Club created!';msgEl.style.color='#39ff14';}
+  document.getElementById('cmClubName').value='';document.getElementById('cmClubPhone').value='';
+  renderClubs();
+}
+window.createClub=createClub;
+
+/* ═══════════════════════════════════════════════════
+   PROGRESS
+═══════════════════════════════════════════════════ */
+const ALL_BADGES = [
+  {id:'first_workout',emoji:'🌱',label:'First Workout',desc:'Logged your first session'},
+  {id:'streak_7',emoji:'🔥',label:'7-Day Streak',desc:'Worked out 7 days in a row'},
+  {id:'streak_30',emoji:'⚡',label:'30-Day Streak',desc:'Worked out 30 days in a row'},
+  {id:'weight_loss_5',emoji:'⚖️',label:'Down 5kg',desc:'Lost 5kg from starting weight'},
+  {id:'calorie_10k',emoji:'🏅',label:'10K Burned',desc:'Burned over 10,000 calories total'},
+  {id:'workouts_10',emoji:'💪',label:'10 Workouts',desc:'Completed 10 workouts'},
+  {id:'workouts_50',emoji:'🏆',label:'50 Workouts',desc:'Completed 50 workouts'},
+  {id:'joined_club',emoji:'👥',label:'Club Member',desc:'Joined a fitness club'},
+  {id:'booked_trainer',emoji:'🤝',label:'First Session',desc:'Booked a personal trainer'},
+];
+
+function getProgress() {
+  try{return JSON.parse(localStorage.getItem('sokoniProgress')||'{}');}catch(e){return {};}
+}
+function saveProgress(p){localStorage.setItem('sokoniProgress',JSON.stringify(p));}
+function getWorkoutLog(){try{return JSON.parse(localStorage.getItem('prWorkoutLog')||'[]');}catch(e){return[];}}
+function getWeightLog(){try{return JSON.parse(localStorage.getItem('prWeightLog')||'[]');}catch(e){return[];}}
+function getGoals(){try{return JSON.parse(localStorage.getItem('prGoals')||'[]');}catch(e){return[];}}
+
+function renderProgressDashboard() {
+  const logs=getWorkoutLog();
+  const weights=getWeightLog();
+  const totalCals=logs.reduce((s,l)=>s+(Number(l.cals)||0),0);
+  const totalMins=logs.reduce((s,l)=>s+(Number(l.dur)||0),0);
+  const statsGrid=document.getElementById('prStatsGrid');
+  if(statsGrid){
+    const stats=[
+      {num:logs.length,lbl:'Workouts'},
+      {num:totalMins+'min',lbl:'Total Time'},
+      {num:totalCals.toLocaleString(),lbl:'Cals Burned'},
+      {num:weights.length?weights[0].kg+'kg':'—',lbl:'Weight'},
+      {num:calcStreak(logs)+'d',lbl:'Streak'},
+    ];
+    statsGrid.innerHTML=stats.map(s=>`<div class="pr-stat"><div class="pr-stat-num">${s.num}</div><div class="pr-stat-lbl">${s.lbl}</div></div>`).join('');
+  }
+  renderGoalsList();
+  renderWorkoutLogEl();
+  renderWeightChart();
+  renderBadges();
+}
+
+function calcStreak(logs) {
+  if(!logs.length) return 0;
+  const dates=new Set(logs.map(l=>l.date));
+  let s=0,d=new Date();
+  while(dates.has(d.toISOString().split('T')[0])){s++;d.setDate(d.getDate()-1);}
+  return s;
+}
+
+function addGoal() {
+  const type=document.getElementById('prGoalType')?.value||'';
+  const val=(document.getElementById('prGoalVal')?.value||'').trim();
+  const date=document.getElementById('prGoalDate')?.value||'';
+  if(!type||!val){showFhToast('Fill goal type and target value');return;}
+  const goals=getGoals();
+  goals.unshift({id:'G'+Date.now(),type,val,date,done:false,ts:Date.now()});
+  localStorage.setItem('prGoals',JSON.stringify(goals.slice(0,20)));
+  document.getElementById('prGoalVal').value='';
+  renderGoalsList();
+  showFhToast('Goal added!');
+}
+window.addGoal=addGoal;
+
+function toggleGoalDone(id) {
+  const goals=getGoals();
+  const g=goals.find(x=>x.id===id);if(g)g.done=!g.done;
+  localStorage.setItem('prGoals',JSON.stringify(goals));
+  renderGoalsList();checkBadges();
+}
+window.toggleGoalDone=toggleGoalDone;
+
+function renderGoalsList() {
+  const el=document.getElementById('prGoalsList');if(!el)return;
+  const goals=getGoals();
+  if(!goals.length){el.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.3);text-align:center;padding:16px;">No goals yet. Add one above!</div>';return;}
+  el.innerHTML=goals.map(g=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(${g.done?'57,255,20':'255,255,255'},0.04);border:1px solid rgba(${g.done?'57,255,20':'255,255,255'},${g.done?'0.18':'0.07'});border-radius:12px;">
+      <button type="button" onclick="toggleGoalDone('${g.id}')" style="width:22px;height:22px;border-radius:50%;border:2px solid ${g.done?'#39ff14':'rgba(255,255,255,0.2)'};background:${g.done?'rgba(57,255,20,0.2)':'transparent'};cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#39ff14;">${g.done?'✓':''}</button>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:800;color:${g.done?'rgba(255,255,255,0.4)':'white'};${g.done?'text-decoration:line-through;':''}">${g.type}: ${g.val}</div>${g.date?`<div style="font-size:10px;color:rgba(255,255,255,0.3);">Target: ${g.date}</div>`:''}</div>
+      <button type="button" onclick="deleteGoal('${g.id}')" style="width:24px;height:24px;border:none;background:rgba(239,68,68,0.07);border-radius:6px;color:rgba(239,68,68,0.6);font-size:12px;cursor:pointer;">✕</button>
+    </div>`).join('');
+}
+
+function deleteGoal(id) {
+  const goals=getGoals().filter(g=>g.id!==id);
+  localStorage.setItem('prGoals',JSON.stringify(goals));
+  renderGoalsList();
+}
+window.deleteGoal=deleteGoal;
+
+function logWorkout() {
+  const type=document.getElementById('prLogType')?.value||'';
+  const dur=Number(document.getElementById('prLogDur')?.value||0);
+  const cals=Number(document.getElementById('prLogCals')?.value||0);
+  const notes=(document.getElementById('prLogNotes')?.value||'').trim();
+  if(!type||!dur){showFhToast('Choose type and duration');return;}
+  const today=new Date().toISOString().split('T')[0];
+  const entry={id:'L'+Date.now(),type,dur,cals,notes,date:today,ts:Date.now()};
+  const logs=getWorkoutLog();
+  logs.unshift(entry);localStorage.setItem('prWorkoutLog',JSON.stringify(logs.slice(0,100)));
+  document.getElementById('prLogDur').value='';document.getElementById('prLogCals').value='';document.getElementById('prLogNotes').value='';
+  renderProgressDashboard();
+  checkBadges();
+  showFhToast('Workout logged! 💪');
+}
+window.logWorkout=logWorkout;
+
+function renderWorkoutLogEl() {
+  const el=document.getElementById('prWorkoutLog');if(!el)return;
+  const logs=getWorkoutLog();
+  if(!logs.length){el.innerHTML='<div style="font-size:12px;color:rgba(255,255,255,0.3);text-align:center;padding:16px;">No sessions logged yet</div>';return;}
+  const typeEmoji={Gym:'🏋️',Running:'🏃',Cycling:'🚴',Yoga:'🧘',Swimming:'🏊',HIIT:'🔥',CrossFit:'🏆',Hiking:'⛰️'};
+  el.innerHTML=logs.slice(0,20).map(l=>`
+    <div class="pr-log-row">
+      <span style="font-size:16px;">${typeEmoji[l.type]||'💪'}</span>
+      <span style="font-weight:700;color:white;flex:1;">${l.type}</span>
+      <span style="color:rgba(255,255,255,0.4);font-size:11px;">${l.date}</span>
+      <span style="color:#39ff14;font-weight:700;">${l.dur}min</span>
+      ${l.cals?`<span style="color:rgba(255,255,255,0.35);font-size:11px;">${l.cals}kcal</span>`:''}
+    </div>`).join('');
+}
+
+function logWeight() {
+  const kg=parseFloat(document.getElementById('prWeight')?.value||0);
+  const target=parseFloat(document.getElementById('prTargetWeight')?.value||0);
+  if(!kg){showFhToast('Enter your weight');return;}
+  const log=getWeightLog();
+  const today=new Date().toISOString().split('T')[0];
+  log.unshift({kg,target:target||null,date:today,ts:Date.now()});
+  localStorage.setItem('prWeightLog',JSON.stringify(log.slice(0,60)));
+  document.getElementById('prWeight').value='';
+  renderWeightChart();renderProgressDashboard();
+  showFhToast('Weight logged: '+kg+'kg');checkBadges();
+}
+window.logWeight=logWeight;
+
+function renderWeightChart() {
+  const el=document.getElementById('prWeightChart');if(!el)return;
+  const log=getWeightLog().slice(0,7).reverse();
+  if(!log.length){el.innerHTML='<div style="font-size:11px;color:rgba(255,255,255,0.25);text-align:center;">Log weight to see your chart</div>';return;}
+  const min=Math.min(...log.map(l=>l.kg))-2,max=Math.max(...log.map(l=>l.kg))+2;
+  const target=log[log.length-1]?.target;
+  el.innerHTML=`<div style="display:flex;align-items:flex-end;gap:6px;height:60px;">
+    ${log.map(l=>{const h=Math.round((l.kg-min)/(max-min)*100);return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:8px;color:#39ff14;font-weight:700;">${l.kg}</div><div style="width:100%;background:rgba(57,255,20,0.2);border-radius:3px 3px 0 0;transition:height .4s;" style="height:${h}%"></div><div style="font-size:7px;color:rgba(255,255,255,0.3);">${l.date.slice(5)}</div></div>`;}).join('')}
+  </div>${target?`<div style="font-size:10px;color:rgba(57,255,20,0.5);margin-top:4px;">Target: ${target}kg</div>`:''}`;
+  /* fix the inline style conflict with a quick DOM patch */
+  el.querySelectorAll('[style*="background:rgba(57,255,20,0.2)"]').forEach((bar,i)=>{
+    const l=log[i];if(!l)return;
+    const h=Math.round((l.kg-min)/(max-min)*100);
+    bar.style.height=Math.max(8,h)+'%';
+  });
+}
+
+function checkBadges() {
+  const logs=getWorkoutLog(),weights=getWeightLog();
+  const totalCals=logs.reduce((s,l)=>s+(Number(l.cals)||0),0);
+  const p=getProgress();
+  const earned=p.earned||[];
+  const earn=id=>{if(!earned.includes(id)){earned.push(id);showFhToast('🏅 Badge earned: '+ALL_BADGES.find(b=>b.id===id)?.label||id);}};
+  if(logs.length>=1)earn('first_workout');
+  if(logs.length>=10)earn('workouts_10');
+  if(logs.length>=50)earn('workouts_50');
+  if(totalCals>=10000)earn('calorie_10k');
+  if(calcStreak(logs)>=7)earn('streak_7');
+  if(calcStreak(logs)>=30)earn('streak_30');
+  const startWeight=weights[weights.length-1]?.kg, curWeight=weights[0]?.kg;
+  if(startWeight&&curWeight&&startWeight-curWeight>=5)earn('weight_loss_5');
+  p.earned=earned;saveProgress(p);
+  renderBadges();
+}
+
+function renderBadges() {
+  const el=document.getElementById('prBadges');if(!el)return;
+  const p=getProgress();const earned=p.earned||[];
+  el.innerHTML=ALL_BADGES.map(b=>`<div class="pr-badge${earned.includes(b.id)?' earned':''}" title="${b.desc}">${b.emoji} ${b.label}</div>`).join('');
+}
+
+/* ── SHARED: save a confirmed booking to localStorage + Firestore ── */
+function _saveConfirmedBooking(bk) {
+  /* localStorage */
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
+  if(!local.some(b=>b.id===bk.id||b.ref===bk.ref)){
+    local.unshift({id:bk.id||bk.ref||('BK'+Date.now()),...bk,ts:Date.now(),status:'confirmed'});
+    localStorage.setItem('sokoniBookings',JSON.stringify(local.slice(0,50)));
+  }
+  /* Firestore — called from module script via window._firestoreSaveBooking */
+  if(typeof window._firestoreSaveBooking === 'function') window._firestoreSaveBooking(bk);
+  renderUpcomingBookings();
+  if(_calSelectedDate) renderCalendar();
+}
+window._saveConfirmedBooking = _saveConfirmedBooking;
+
+/* ── COMMUNITY + INIT ── */
+renderClubs();
+renderChallenges();
+renderEvents();
+filterNutritionists('all',null);
+renderMealPlan();
+renderProgressDashboard();
+initCalendar();
+renderClasses();
+</script>
+<script type="module">
+/* ── Firestore real-time sync for Fitness Hub ── */
+import { db, auth } from './firebase.js';
+import {
+  collection, doc, addDoc, setDoc, getDoc,
+  onSnapshot, query, where, orderBy, limit, serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+
+let _uid = null;
+
+onAuthStateChanged(auth, u => {
+  _uid = u ? u.uid : null;
+  if (_uid) loadUserData();
+});
+
+/* ── Real-time: fitness classes ── */
+try {
+  onSnapshot(query(collection(db,'fitness_classes'), orderBy('ts','desc'), limit(30)), snap => {
+    const live = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(live.length){ window._firestoreClasses = live; if(typeof renderClasses==='function') renderClasses(); }
+  });
+} catch(e){}
+
+/* ── Real-time: community clubs ── */
+try {
+  onSnapshot(query(collection(db,'fitness_clubs'), orderBy('ts','desc'), limit(20)), snap => {
+    const live = snap.docs.map(d=>({id:d.id,...d.data()}));
+    if(live.length){ window._firestoreClubs = live; if(typeof renderClubs==='function') renderClubs(); }
+  });
+} catch(e){}
+
+/* ── Load user data on sign-in ── */
+function loadUserData() {
+  loadUserBookings();
+  loadUserProgress();
+}
+
+function loadUserBookings() {
+  if(!_uid) return;
+  try {
+    onSnapshot(
+      query(collection(db,'fitness_bookings'), where('uid','==',_uid), orderBy('date','asc'), limit(30)),
+      snap => {
+        const bks = snap.docs.map(d=>({id:d.id,...d.data()}));
+        if(bks.length) {
+          localStorage.setItem('sokoniBookings', JSON.stringify(bks));
+          if(typeof renderUpcomingBookings==='function') renderUpcomingBookings();
+          if(typeof renderCalendar==='function') renderCalendar();
+        }
+      }
+    );
+  } catch(e){}
+}
+
+function loadUserProgress() {
+  if(!_uid) return;
+  try {
+    getDoc(doc(db,'fitness_progress',_uid)).then(d => {
+      if(!d.exists()) return;
+      const p = d.data();
+      if(p.workoutLog) localStorage.setItem('prWorkoutLog', JSON.stringify(p.workoutLog));
+      if(p.weightLog)  localStorage.setItem('prWeightLog',  JSON.stringify(p.weightLog));
+      if(p.goals)      localStorage.setItem('prGoals',       JSON.stringify(p.goals));
+      if(p.earned)     localStorage.setItem('sokoniProgress',JSON.stringify({earned:p.earned}));
+      if(typeof renderProgressDashboard==='function') renderProgressDashboard();
+    });
+  } catch(e){}
+}
+
+/* ── Exposed: save booking from any payment flow ── */
+window._firestoreSaveBooking = function(bk) {
+  if(!_uid) return;
+  try {
+    addDoc(collection(db,'fitness_bookings'), {
+      uid:_uid, type:bk.type||'', provider:bk.provider||'',
+      date:bk.date||'', time:bk.time||'', ref:bk.ref||'',
+      notes:bk.notes||'', status:'confirmed', ts:serverTimestamp()
+    });
+  } catch(e){}
+};
+
+/* ── Wrap logWorkout to also persist to Firestore ── */
+const _base_logWorkout = window.logWorkout;
+window.logWorkout = function() {
+  if(_base_logWorkout) _base_logWorkout();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      setDoc(doc(db,'fitness_progress',_uid), {
+        workoutLog: JSON.parse(localStorage.getItem('prWorkoutLog')||'[]').slice(0,50),
+        weightLog:  JSON.parse(localStorage.getItem('prWeightLog')||'[]').slice(0,30),
+        goals:      JSON.parse(localStorage.getItem('prGoals')||'[]'),
+        earned:     (JSON.parse(localStorage.getItem('sokoniProgress')||'{}')).earned||[],
+        updatedAt:  serverTimestamp()
+      }, {merge:true});
+    } catch(e){}
+  }, 600);
+};
+
+/* ── Wrap logWeight to persist to Firestore ── */
+const _base_logWeight = window.logWeight;
+window.logWeight = function() {
+  if(_base_logWeight) _base_logWeight();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      setDoc(doc(db,'fitness_progress',_uid), {
+        weightLog: JSON.parse(localStorage.getItem('prWeightLog')||'[]').slice(0,30),
+        updatedAt: serverTimestamp()
+      }, {merge:true});
+    } catch(e){}
+  }, 600);
+};
+
+/* ── Save gym profile to Firestore ── */
+const _base_saveGymProfile = window.saveGymProfile;
+window.saveGymProfile = function() {
+  if(_base_saveGymProfile) _base_saveGymProfile();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      const gym = JSON.parse(localStorage.getItem('myGymProfile')||'{}');
+      if(gym.name) setDoc(doc(db,'fitness_gyms',_uid), {...gym, uid:_uid, updatedAt:serverTimestamp()}, {merge:true});
+    } catch(e){}
+  }, 400);
+};
+
+/* ── Save posted class to Firestore ── */
+const _base_postClass = window.postClass;
+window.postClass = function() {
+  const name = (document.getElementById('clsName')?.value||'').trim();
+  const phone = (document.getElementById('clsPhone')?.value||'').trim();
+  if(_base_postClass) _base_postClass();
+  if(!_uid || !name || !phone) return;
+  try {
+    addDoc(collection(db,'fitness_classes'), {
+      name, type: document.getElementById('clsType')?.value||'yoga',
+      instructor: document.getElementById('clsInstructor')?.value||'',
+      loc: document.getElementById('clsLoc')?.value||'',
+      time: document.getElementById('clsTime')?.value||'',
+      fee: Number(document.getElementById('clsFee')?.value||0),
+      phone, uid:_uid, ts:serverTimestamp()
+    });
+  } catch(e){}
+};
+
+/* ── Save created club to Firestore ── */
+const _base_createClub = window.createClub;
+window.createClub = function() {
+  const name = (document.getElementById('cmClubName')?.value||'').trim();
+  if(_base_createClub) _base_createClub();
+  if(!_uid || !name) return;
+  try {
+    addDoc(collection(db,'fitness_clubs'), {
+      name, type: document.getElementById('cmClubType')?.value||'running',
+      meet: document.getElementById('cmClubTime')?.value||'',
+      phone: document.getElementById('cmClubPhone')?.value||'',
+      desc: document.getElementById('cmClubDesc')?.value||'',
+      members:1, uid:_uid, ts:serverTimestamp()
+    });
+  } catch(e){}
+};
+
+/* ── Sync achievement badges to Firestore on earn ── */
+const _base_checkBadges = window.checkBadges;
+window.checkBadges = function() {
+  if(_base_checkBadges) _base_checkBadges();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      const earned = (JSON.parse(localStorage.getItem('sokoniProgress')||'{}')).earned||[];
+      setDoc(doc(db,'fitness_progress',_uid), {earned, updatedAt:serverTimestamp()}, {merge:true});
+    } catch(e){}
+  }, 400);
+};
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+  <!-- REGISTER CTA — universal fallback for other business types -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
+    <button onclick="HubRegister.open({hub:'fitness', category:'gym'})" style="padding:10px 24px;background:#39ff14;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

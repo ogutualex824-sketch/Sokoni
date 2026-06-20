@@ -1,0 +1,297 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Menu — SOKONI Food</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:120px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.fn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
+.fn-title{flex:1;font-size:15px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fn-cart-btn{position:relative;padding:9px 14px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:10px;color:#22c55e;font-weight:800;font-size:12px;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.food-cart-badge{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;background:#22c55e;color:#000;font-size:8px;font-weight:900;display:none;align-items:center;justify-content:center;}
+
+/* ── REST HEADER ── */
+.rest-header{padding:24px 16px 20px;background:linear-gradient(180deg,rgba(34,197,94,0.08),transparent);border-bottom:1px solid rgba(255,255,255,0.07);}
+.rest-top{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+.rest-emoji{font-size:54px;width:80px;height:80px;border-radius:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.rest-name{font-size:20px;font-weight:900;color:white;margin-bottom:4px;}
+.rest-addr{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:6px;}
+.rest-rating{display:flex;align-items:center;gap:8px;}
+.rest-stars{color:#f59e0b;font-size:13px;}
+.rest-meta-row{display:flex;gap:10px;flex-wrap:wrap;}
+.rest-meta-chip{font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);}
+.rest-promo-bar{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:8px 14px;font-size:11px;color:#22c55e;font-weight:700;margin-top:10px;display:flex;align-items:center;gap:6px;}
+
+/* ── MENU CATS ── */
+.menu-cats{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:12px 16px;background:rgba(0,0,0,0.3);border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:61px;z-index:50;backdrop-filter:blur(8px);}
+.menu-cats::-webkit-scrollbar{display:none;}
+.menu-cat-btn{padding:8px 16px;border-radius:18px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;}
+.menu-cat-btn.active{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#22c55e;}
+
+/* ── MENU BODY ── */
+.menu-body{max-width:900px;margin:0 auto;padding:16px;}
+.menu-cat-section{margin-bottom:28px;}
+.menu-cat-title{font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.menu-items-grid{display:flex;flex-direction:column;gap:10px;}
+.menu-item{display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;transition:all .2s;}
+.menu-item:hover{border-color:rgba(34,197,94,0.2);}
+.menu-item-info{flex:1;min-width:0;}
+.menu-item-name{font-size:14px;font-weight:800;color:white;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+.menu-popular{font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;}
+.menu-item-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;margin-bottom:6px;}
+.menu-item-price{font-size:15px;font-weight:900;color:#22c55e;}
+.menu-item-controls{display:flex;align-items:center;gap:0;flex-shrink:0;}
+.qty-btn{width:32px;height:32px;border-radius:8px;border:1px solid rgba(34,197,94,0.3);background:rgba(34,197,94,0.08);color:#22c55e;font-size:18px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;font-family:inherit;}
+.qty-btn:hover{background:rgba(34,197,94,0.2);}
+.qty-num{min-width:28px;text-align:center;font-size:14px;font-weight:900;color:white;}
+.add-btn{width:36px;height:36px;border-radius:10px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-size:20px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.add-btn:hover{filter:brightness(1.1);}
+
+/* ── CART BAR ── */
+.food-cart-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(34,197,94,0.2);padding:12px 16px env(safe-area-inset-bottom,12px);z-index:200;backdrop-filter:blur(16px);transform:translateY(100%);transition:transform .3s;}
+.food-cart-bar.show{transform:translateY(0);}
+.fcb-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.fcb-info{flex:1;}
+.fcb-count{font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;}
+.fcb-total{font-size:18px;font-weight:900;color:#22c55e;}
+.fcb-btn{padding:13px 24px;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;border-radius:12px;color:black;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+
+/* ── REVIEWS ── */
+.review-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;margin-bottom:10px;}
+.review-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.review-stars{color:#f59e0b;font-size:12px;}
+.review-date{font-size:10px;color:rgba(255,255,255,0.3);}
+.review-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;}
+.rate-btn{padding:10px 20px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:10px;color:#f59e0b;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;}
+
+/* ── MODAL ── */
+.food-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;align-items:flex-end;justify-content:center;padding:0;}
+.food-modal.open{display:flex;}
+.food-modal-box{background:#111;border:1px solid rgba(34,197,94,0.2);border-radius:22px 22px 0 0;padding:24px 20px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;}
+.food-modal-close{float:right;background:none;border:none;color:rgba(255,255,255,0.35);font-size:20px;cursor:pointer;}
+.food-modal-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;}
+.food-modal-input:focus{border-color:rgba(34,197,94,0.4);}
+.food-modal-submit{width:100%;padding:14px;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-top:6px;}
+.star-select{display:flex;gap:8px;margin:10px 0;}
+.star-select button{font-size:24px;background:none;border:none;cursor:pointer;opacity:.4;transition:opacity .2s;}
+.star-select button.sel{opacity:1;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-food.js"></script>
+
+<nav class="fn">
+  <a href="food.html" class="fn-back">←</a>
+  <span class="fn-title" id="pageTitle">Menu</span>
+  <a href="food-cart.html" class="fn-cart-btn">🛒 Cart<span class="food-cart-badge" id="cartBadge"></span></a>
+</nav>
+
+<div id="restHeader"></div>
+<div class="menu-cats" id="menuCats"></div>
+<div class="menu-body" id="menuBody"></div>
+
+<!-- Cart Bar -->
+<div class="food-cart-bar" id="cartBar">
+  <div class="fcb-inner">
+    <div class="fcb-info">
+      <div class="fcb-count" id="fcbCount">0 items</div>
+      <div class="fcb-total" id="fcbTotal">KES 0</div>
+    </div>
+    <button class="fcb-btn" onclick="window.location.href='food-cart.html'">View Cart →</button>
+  </div>
+</div>
+
+<!-- Rate Modal -->
+<div class="food-modal" id="rateModal">
+  <div class="food-modal-box">
+    <button class="food-modal-close" onclick="closeRateModal()">✕</button>
+    <h3 style="font-size:16px;font-weight:900;margin-bottom:12px;">⭐ Rate Your Experience</h3>
+    <div class="star-select" id="starSelect">
+      ${[1,2,3,4,5].map(i=>`<button onclick="setRating(${i})" id="star${i}">⭐</button>`).join('')}
+    </div>
+    <textarea class="food-modal-input" id="rateComment" placeholder="Tell us about your experience..." style="min-height:80px;resize:vertical;"></textarea>
+    <button class="food-modal-submit" onclick="submitRating()">Submit Review</button>
+    <div id="rateMsg" style="margin-top:8px;font-size:12px;text-align:center;min-height:14px;"></div>
+  </div>
+</div>
+
+<script>
+const _id = new URLSearchParams(window.location.search).get('id');
+const _rest = SokoniFood.RESTAURANTS.find(r => r.id === _id);
+const _menu = SokoniFood.MENUS[_id];
+let _selRating = 0;
+let _activeCat = '';
+
+if (!_rest || !_menu) {
+  document.getElementById('menuBody').innerHTML = '<div style="padding:40px;text-align:center;color:rgba(255,255,255,0.4);">Restaurant not found. <a href="food.html" style="color:#22c55e;">← Back</a></div>';
+} else {
+  document.getElementById('pageTitle').textContent = _rest.name;
+  document.title = _rest.name + ' — SOKONI Food';
+  _activeCat = _menu.cats[0];
+  renderRestHeader();
+  renderMenuCats();
+  renderMenu();
+  updateCartBar();
+}
+
+function renderRestHeader() {
+  const info = SokoniFood.getRestaurantRating(_id);
+  const reviews = SokoniFood.getRatings(_id).slice(0, 3);
+  document.getElementById('restHeader').innerHTML = `
+  <div class="rest-header">
+    <div class="rest-top">
+      <div class="rest-emoji" style="background:${_rest.coverGrad};">${_rest.emoji}</div>
+      <div>
+        <div class="rest-name">${_rest.name}</div>
+        <div class="rest-addr">📍 ${_rest.address}</div>
+        <div class="rest-rating">
+          <span class="rest-stars">${'★'.repeat(Math.floor(info.avg))}${'☆'.repeat(5-Math.floor(info.avg))}</span>
+          <span style="font-size:12px;font-weight:700;">${info.avg}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.35);">(${info.count.toLocaleString()} reviews)</span>
+        </div>
+      </div>
+    </div>
+    <div class="rest-meta-row">
+      <span class="rest-meta-chip">🕐 ${_rest.deliveryTime}</span>
+      <span class="rest-meta-chip" style="color:#22c55e;">🛵 KES ${_rest.deliveryFee} delivery</span>
+      <span class="rest-meta-chip">Min KES ${_rest.minOrder}</span>
+      <span class="rest-meta-chip">${_rest.distance}</span>
+      <span class="rest-meta-chip">${_rest.open ? '🟢 Open Now' : '🔴 Closed'}</span>
+    </div>
+    ${_rest.promo ? `<div class="rest-promo-bar">🏷️ ${_rest.promo}</div>` : ''}
+
+    <div style="margin-top:16px;">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;">⭐ Recent Reviews</div>
+      ${reviews.length ? reviews.map(r => `
+      <div class="review-card">
+        <div class="review-header">
+          <span class="review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span>
+          <span class="review-date">${new Date(r.ts).toLocaleDateString()}</span>
+        </div>
+        <div class="review-text">${r.comment || 'No comment'}</div>
+      </div>`).join('') : '<div style="font-size:12px;color:rgba(255,255,255,0.3);">No reviews yet — order and be the first!</div>'}
+      <button class="rate-btn" onclick="openRateModal()" style="margin-top:10px;">⭐ Write a Review</button>
+    </div>
+  </div>`;
+}
+
+function renderMenuCats() {
+  const el = document.getElementById('menuCats'); if (!el) return;
+  el.innerHTML = _menu.cats.map(c => `
+    <button type="button" class="menu-cat-btn ${c === _activeCat ? 'active' : ''}" onclick="scrollToSection('${c}')">${c}</button>`).join('');
+}
+
+function renderMenu() {
+  const el = document.getElementById('menuBody'); if (!el) return;
+  const cart = SokoniFood.getCart();
+  el.innerHTML = _menu.cats.map(cat => {
+    const items = _menu.items.filter(i => i.cat === cat);
+    if (!items.length) return '';
+    return `<div class="menu-cat-section" id="section-${cat.replace(/[^a-z0-9]/gi, '_')}">
+      <div class="menu-cat-title">${cat}</div>
+      <div class="menu-items-grid">${items.map(item => {
+        const inCart = cart.find(c => c.itemId === item.id && c.restaurantId === _id);
+        const qty = inCart ? inCart.qty : 0;
+        return `<div class="menu-item" id="item-${item.id}">
+          <div class="menu-item-info">
+            <div class="menu-item-name">${item.name}${item.popular ? '<span class="menu-popular">🔥 Popular</span>' : ''}</div>
+            <div class="menu-item-desc">${item.desc}</div>
+            <div class="menu-item-price">KES ${SokoniFood.fmt(item.price)}</div>
+          </div>
+          <div class="menu-item-controls">
+            ${qty > 0 ? `
+            <button class="qty-btn" onclick="changeQty('${item.id}','${inCart?.cartId}','dec')">−</button>
+            <span class="qty-num">${qty}</span>
+            <button class="qty-btn" onclick="changeQty('${item.id}','${inCart?.cartId}','inc')">+</button>
+            ` : `<button class="add-btn" onclick="addItem('${item.id}')">+</button>`}
+          </div>
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function addItem(itemId) {
+  const item = _menu.items.find(i => i.id === itemId); if (!item) return;
+  SokoniFood.addToCart(_id, _rest.name, _rest.emoji, item);
+  renderMenu();
+  updateCartBar();
+  /* Quick flash */
+  const el = document.getElementById('item-'+itemId);
+  if (el) { el.style.borderColor='rgba(34,197,94,0.5)'; setTimeout(()=>el.style.borderColor='',600); }
+}
+
+function changeQty(itemId, cartId, dir) {
+  const cart = SokoniFood.getCart();
+  const entry = cart.find(c => c.cartId === cartId);
+  if (!entry) { addItem(itemId); return; }
+  SokoniFood.updateQty(cartId, entry.qty + (dir === 'inc' ? 1 : -1));
+  renderMenu();
+  updateCartBar();
+}
+
+function updateCartBar() {
+  const count = SokoniFood.getCartCount();
+  const cart = SokoniFood.getCart();
+  const total = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const bar = document.getElementById('cartBar');
+  if (bar) bar.classList.toggle('show', count > 0);
+  const cnt = document.getElementById('fcbCount'); if (cnt) cnt.textContent = count + ' item' + (count!==1?'s':'');
+  const tot = document.getElementById('fcbTotal'); if (tot) tot.textContent = 'KES ' + SokoniFood.fmt(total);
+  const badge = document.getElementById('cartBadge');
+  if (badge) { badge.textContent = count||''; badge.style.display = count?'flex':'none'; }
+}
+
+function scrollToSection(cat) {
+  _activeCat = cat;
+  document.querySelectorAll('.menu-cat-btn').forEach(b => b.classList.toggle('active', b.textContent === cat));
+  const el = document.getElementById('section-'+cat.replace(/[^a-z0-9]/gi,'_'));
+  if (el) el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+let _selRatingVal = 0;
+function openRateModal() {
+  document.getElementById('rateModal').classList.add('open');
+}
+function closeRateModal() {
+  document.getElementById('rateModal').classList.remove('open');
+}
+function setRating(n) {
+  _selRatingVal = n;
+  document.querySelectorAll('#starSelect button').forEach((b,i) => b.classList.toggle('sel', i < n));
+}
+function submitRating() {
+  if (!_selRatingVal) { document.getElementById('rateMsg').textContent = '⚠️ Please select a rating'; return; }
+  const comment = document.getElementById('rateComment')?.value.trim();
+  SokoniFood.saveRating(_id, _selRatingVal, comment);
+  document.getElementById('rateMsg').innerHTML = '✅ Thank you for your review!';
+  document.getElementById('rateMsg').style.color = '#10b981';
+  setTimeout(() => { closeRateModal(); renderRestHeader(); }, 1500);
+}
+
+/* Fill starSelect HTML */
+document.getElementById('starSelect').innerHTML = [1,2,3,4,5].map(i=>`<button onclick="setRating(${i})" id="star${i}" style="font-size:28px;background:none;border:none;cursor:pointer;opacity:.35;transition:opacity .2s;">⭐</button>`).join('');
+
+updateCartBar();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

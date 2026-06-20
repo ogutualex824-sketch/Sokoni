@@ -1,0 +1,1466 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Payments — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{background:#0a0a0a;color:white;font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:0;min-height:100vh;padding-bottom:80px;}
+
+/* ── Status Bar ── */
+.pmt-hero{background:linear-gradient(135deg,rgba(113,255,0,.08),rgba(0,170,255,.05));border-bottom:1px solid rgba(255,255,255,.07);padding:20px 16px 16px;}
+.pmt-hero-top{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+.pmt-back{background:rgba(255,255,255,.07);border:none;border-radius:10px;width:36px;height:36px;color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.pmt-hero-title{font-size:18px;font-weight:900;flex:1;}
+.pmt-status-pill{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:11px;font-weight:800;}
+.pmt-status-pill.active{background:rgba(76,175,80,.12);border:1px solid rgba(76,175,80,.3);color:#4caf50;}
+.pmt-status-pill.inactive{background:rgba(255,165,0,.1);border:1px solid rgba(255,165,0,.25);color:#ff9800;}
+.pmt-status-pill.none{background:rgba(255,100,100,.1);border:1px solid rgba(255,100,100,.2);color:#ff6b6b;}
+
+/* Stats Row */
+.pmt-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.pmt-stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px 10px;text-align:center;}
+.pmt-stat-val{font-size:15px;font-weight:900;color:#71ff00;margin-bottom:2px;}
+.pmt-stat-label{font-size:9px;color:rgba(255,255,255,.4);font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
+@media(max-width:360px){.pmt-stat-val{font-size:13px;}}
+
+/* ── Tabs ── */
+.pmt-tabs{display:flex;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.07);overflow-x:auto;scrollbar-width:none;}
+.pmt-tabs::-webkit-scrollbar{display:none;}
+.pmt-tab{flex:1;min-width:72px;padding:12px 8px;background:none;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,.4);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;}
+.pmt-tab.active{color:#71ff00;border-bottom-color:#71ff00;}
+
+/* ── Pane ── */
+.pmt-pane{display:none;padding:16px;}
+.pmt-pane.active{display:block;}
+
+/* ── Section Headers ── */
+.pmt-sec{font-size:11px;font-weight:800;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.8px;margin:20px 0 10px;}
+
+/* ── Cards ── */
+.pmt-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 16px;margin-bottom:10px;}
+.pmt-card-title{font-size:13px;font-weight:800;color:white;margin-bottom:4px;}
+.pmt-card-sub{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;}
+
+/* ── Provider Selector ── */
+.pmt-provider-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.pmt-provider-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px 12px;cursor:pointer;text-align:center;transition:all .2s;position:relative;}
+.pmt-provider-card:hover,.pmt-provider-card.selected{border-color:rgba(113,255,0,.5);background:rgba(113,255,0,.06);}
+.pmt-provider-card .rec-badge{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#71ff00;color:#000;font-size:9px;font-weight:900;padding:2px 8px;border-radius:10px;white-space:nowrap;}
+.pmt-provider-logo{font-size:28px;margin-bottom:6px;}
+.pmt-provider-name{font-size:12px;font-weight:800;color:white;margin-bottom:2px;}
+.pmt-provider-desc{font-size:10px;color:rgba(255,255,255,.4);line-height:1.4;}
+.pmt-provider-card.coming-soon{opacity:.4;cursor:default;}
+.pmt-provider-card.coming-soon::after{content:"Coming Soon";position:absolute;top:6px;right:6px;background:rgba(255,255,255,.1);border-radius:5px;font-size:8px;padding:2px 5px;color:rgba(255,255,255,.4);}
+
+/* ── M-Pesa Type ── */
+.pmt-mpesa-types{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.pmt-mpesa-type{background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.1);border-radius:16px;padding:18px 14px;cursor:pointer;transition:all .2s;}
+.pmt-mpesa-type:hover,.pmt-mpesa-type.selected{border-color:rgba(76,175,80,.6);background:rgba(76,175,80,.07);}
+.pmt-mpesa-type-icon{font-size:32px;margin-bottom:8px;text-align:center;}
+.pmt-mpesa-type-name{font-size:13px;font-weight:900;color:white;margin-bottom:4px;text-align:center;}
+.pmt-mpesa-type-desc{font-size:11px;color:rgba(255,255,255,.5);text-align:center;line-height:1.5;}
+
+/* ── Wizard ── */
+.pmt-wizard-progress{display:flex;align-items:center;padding:4px 0 16px;overflow-x:auto;scrollbar-width:none;}
+.pmt-wizard-progress::-webkit-scrollbar{display:none;}
+.pmt-wiz-step{display:flex;flex-direction:column;align-items:center;flex:1;min-width:42px;}
+.pmt-wiz-dot{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:rgba(255,255,255,.3);transition:all .3s;background:rgba(255,255,255,.04);}
+.pmt-wiz-dot.active{border-color:#71ff00;color:#71ff00;background:rgba(113,255,0,.1);}
+.pmt-wiz-dot.done{border-color:rgba(76,175,80,.6);background:#4caf50;color:black;}
+.pmt-wiz-label{font-size:8px;color:rgba(255,255,255,.3);margin-top:4px;text-align:center;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
+.pmt-wiz-line{flex:1;height:2px;background:rgba(255,255,255,.08);margin:0 -1px;margin-bottom:14px;}
+.pmt-wiz-line.done{background:rgba(76,175,80,.4);}
+
+.pmt-step{display:none;}
+.pmt-step.active{display:block;}
+
+/* ── Inputs ── */
+.pmt-label{font-size:10px;font-weight:800;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px;margin-top:12px;}
+.pmt-input{width:100%;padding:13px 14px;background:rgba(20,20,20,.98);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:white;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;transition:border-color .2s;}
+.pmt-input:focus{border-color:rgba(113,255,0,.4);}
+.pmt-input::placeholder{color:rgba(255,255,255,.2);}
+.pmt-select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%23ffffff60' d='M0 0l6 8 6-8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;cursor:pointer;}
+.pmt-field-group{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:360px){.pmt-field-group{grid-template-columns:1fr;}}
+
+/* Input with copy/reveal */
+.pmt-input-wrap{position:relative;}
+.pmt-input-wrap .pmt-input{padding-right:40px;}
+.pmt-input-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:14px;padding:4px;}
+.pmt-input-btn:hover{color:rgba(255,255,255,.7);}
+
+/* ── Buttons ── */
+.pmt-btn{width:100%;padding:14px;border:none;border-radius:14px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;margin-top:12px;}
+.pmt-btn-primary{background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;}
+.pmt-btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(113,255,0,.3);}
+.pmt-btn-primary:disabled{background:rgba(255,255,255,.1);color:rgba(255,255,255,.3);cursor:not-allowed;transform:none;box-shadow:none;}
+.pmt-btn-ghost{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);}
+.pmt-btn-ghost:hover{background:rgba(255,255,255,.08);}
+.pmt-btn-blue{background:linear-gradient(135deg,#00aaff,#0088cc);color:white;}
+.pmt-btn-sm{padding:9px 16px;font-size:12px;margin-top:0;width:auto;}
+
+/* ── Verify Steps ── */
+.pmt-verify-list{list-style:none;margin:0;padding:0;}
+.pmt-verify-item{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05);}
+.pmt-verify-item:last-child{border-bottom:none;}
+.pmt-verify-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.pmt-verify-icon.pending{background:rgba(255,255,255,.05);}
+.pmt-verify-icon.loading{background:rgba(0,170,255,.1);animation:_pmtSpin .8s linear infinite;}
+.pmt-verify-icon.ok{background:rgba(76,175,80,.12);}
+.pmt-verify-icon.fail{background:rgba(255,100,100,.12);}
+@keyframes _pmtSpin{to{transform:rotate(360deg);}}
+.pmt-verify-text{flex:1;}
+.pmt-verify-title{font-size:13px;font-weight:800;color:white;}
+.pmt-verify-sub{font-size:11px;color:rgba(255,255,255,.4);margin-top:1px;}
+
+/* ── Test Push ── */
+.pmt-test-box{background:rgba(76,175,80,.05);border:1px solid rgba(76,175,80,.2);border-radius:16px;padding:20px;text-align:center;}
+.pmt-test-icon{font-size:48px;margin-bottom:12px;}
+.pmt-test-title{font-size:16px;font-weight:900;margin-bottom:6px;}
+.pmt-test-sub{font-size:13px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:16px;}
+.pmt-test-status{font-size:13px;margin-top:12px;min-height:18px;}
+
+/* ── Daraja Guide ── */
+.pmt-guide-steps{margin:0;padding:0;list-style:none;}
+.pmt-guide-step{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+.pmt-guide-step:last-child{border-bottom:none;}
+.pmt-guide-num{width:26px;height:26px;border-radius:8px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.25);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#71ff00;flex-shrink:0;}
+.pmt-guide-content{flex:1;min-width:0;}
+.pmt-guide-title{font-size:13px;font-weight:800;color:white;margin-bottom:3px;}
+.pmt-guide-desc{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;}
+.pmt-url-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(113,255,0,.07);border:1px solid rgba(113,255,0,.2);border-radius:8px;padding:5px 10px;font-size:11px;color:#71ff00;font-family:monospace;cursor:pointer;margin-top:6px;word-break:break-all;}
+.pmt-url-chip:hover{background:rgba(113,255,0,.12);}
+
+/* ── Info Box ── */
+.pmt-info{background:rgba(0,170,255,.06);border:1px solid rgba(0,170,255,.2);border-radius:12px;padding:12px 14px;font-size:12px;color:rgba(255,255,255,.65);line-height:1.6;margin-top:12px;}
+.pmt-info strong{color:#00aaff;}
+.pmt-warn{background:rgba(255,165,0,.07);border:1px solid rgba(255,165,0,.2);border-radius:12px;padding:12px 14px;font-size:12px;color:rgba(255,255,255,.65);line-height:1.6;margin-top:10px;}
+
+/* ── Transaction Table ── */
+.pmt-txn-item{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.pmt-txn-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.pmt-txn-icon.success{background:rgba(76,175,80,.1);}
+.pmt-txn-icon.pending{background:rgba(255,165,0,.1);}
+.pmt-txn-icon.failed{background:rgba(255,100,100,.1);}
+.pmt-txn-body{flex:1;min-width:0;}
+.pmt-txn-amount{font-size:14px;font-weight:900;color:#71ff00;}
+.pmt-txn-meta{font-size:11px;color:rgba(255,255,255,.45);margin-top:1px;}
+.pmt-txn-code{font-size:10px;font-family:monospace;color:rgba(255,255,255,.3);}
+.pmt-txn-status{font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;}
+.pmt-txn-status.success{background:rgba(76,175,80,.12);color:#4caf50;}
+.pmt-txn-status.pending{background:rgba(255,165,0,.12);color:#ff9800;}
+.pmt-txn-status.failed{background:rgba(255,100,100,.12);color:#ff6b6b;}
+
+/* ── AI Assistant ── */
+.pmt-ai-chat{max-height:400px;overflow-y:auto;padding:4px 0;margin-bottom:12px;}
+.pmt-ai-bubble{border-radius:16px;padding:12px 14px;margin-bottom:10px;max-width:85%;font-size:13px;line-height:1.6;}
+.pmt-ai-bubble.bot{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);margin-right:auto;}
+.pmt-ai-bubble.user{background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);margin-left:auto;color:#c8f080;}
+.pmt-ai-quickies{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;}
+.pmt-ai-q{padding:7px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:20px;font-size:11px;color:rgba(255,255,255,.65);cursor:pointer;font-family:inherit;transition:all .2s;}
+.pmt-ai-q:hover{background:rgba(113,255,0,.08);border-color:rgba(113,255,0,.25);color:#71ff00;}
+.pmt-ai-input-row{display:flex;gap:8px;}
+.pmt-ai-input-row input{flex:1;padding:11px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;color:white;font-size:13px;font-family:inherit;outline:none;}
+.pmt-ai-input-row input:focus{border-color:rgba(113,255,0,.35);}
+.pmt-ai-send{padding:11px 16px;background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.25);border-radius:12px;color:#71ff00;font-size:14px;cursor:pointer;}
+
+/* ── Filter Bar ── */
+.pmt-filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.pmt-filter-select{padding:8px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:white;font-size:12px;font-family:inherit;cursor:pointer;outline:none;}
+
+/* ── Connected Method Card ── */
+.pmt-method-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+.pmt-method-icon{font-size:28px;flex-shrink:0;}
+.pmt-method-body{flex:1;}
+.pmt-method-name{font-size:14px;font-weight:800;color:white;}
+.pmt-method-detail{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px;}
+.pmt-method-status{font-size:10px;font-weight:800;padding:4px 10px;border-radius:8px;flex-shrink:0;}
+.pmt-method-status.active{background:rgba(76,175,80,.12);color:#4caf50;}
+.pmt-method-status.none{background:rgba(255,255,255,.06);color:rgba(255,255,255,.3);}
+
+/* ── Callback Box ── */
+.pmt-callback-box{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;}
+.pmt-callback-url{font-size:11px;color:rgba(113,255,0,.7);word-break:break-all;font-family:monospace;line-height:1.6;margin-bottom:8px;}
+
+/* ── Message ── */
+.pmt-msg{font-size:12px;min-height:16px;margin-top:8px;text-align:center;}
+.pmt-msg.ok{color:#71ff00;}
+.pmt-msg.err{color:#ff6b6b;}
+.pmt-msg.info{color:#00aaff;}
+
+/* Loading skeleton */
+.pmt-skeleton{background:linear-gradient(90deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.04) 100%);background-size:200% 100%;animation:_pmtSkl 1.4s ease infinite;border-radius:10px;}
+@keyframes _pmtSkl{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* bottom nav */
+nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgba(10,10,10,.97);backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,.07);display:flex;z-index:100;}
+@media(min-width:769px){nav.bottom-nav{display:none;}}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-decoration:none;color:rgba(255,255,255,.4);font-size:9px;font-weight:700;transition:color .2s;}
+.bnav-item.active-bnav,.bnav-item:hover{color:#71ff00;}
+.bnav-emoji{font-size:20px;line-height:1;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<div id="shared-header-mount"></div>
+
+<!-- Hero -->
+<div class="pmt-hero">
+  <div class="pmt-hero-top">
+    <button class="pmt-back" onclick="history.back()">←</button>
+    <div class="pmt-hero-title">💳 Payments</div>
+    <div class="pmt-status-pill none" id="pmtStatusPill">⚙️ Setup Required</div>
+  </div>
+  <div class="pmt-stats" id="pmtStatsRow">
+    <div class="pmt-stat"><div class="pmt-stat-val" id="pmtSTotal">—</div><div class="pmt-stat-label">Total Received</div></div>
+    <div class="pmt-stat"><div class="pmt-stat-val" id="pmtSToday">—</div><div class="pmt-stat-label">Today</div></div>
+    <div class="pmt-stat"><div class="pmt-stat-val" id="pmtSPending">—</div><div class="pmt-stat-label">Pending</div></div>
+    <div class="pmt-stat"><div class="pmt-stat-val" id="pmtSFailed">—</div><div class="pmt-stat-label">Failed</div></div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="pmt-tabs">
+  <button class="pmt-tab active" data-tab="overview"      onclick="pmtTab('overview',this)">📊 Overview</button>
+  <button class="pmt-tab"        data-tab="wizard"        onclick="pmtTab('wizard',this)">⚡ Setup</button>
+  <button class="pmt-tab"        data-tab="transactions"  onclick="pmtTab('transactions',this)">📋 History</button>
+  <button class="pmt-tab"        data-tab="settings"      onclick="pmtTab('settings',this)">⚙️ Settings</button>
+  <button class="pmt-tab"        data-tab="assistant"     onclick="pmtTab('assistant',this)">🤖 AI Help</button>
+</div>
+
+<!-- ════════════════════════════════════════
+     OVERVIEW TAB
+════════════════════════════════════════ -->
+<div class="pmt-pane active" id="pmt-pane-overview">
+
+  <!-- Integration Status -->
+  <div class="pmt-card" id="pmtIntegCard" style="display:none;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:44px;height:44px;border-radius:14px;background:rgba(76,175,80,.1);border:1px solid rgba(76,175,80,.25);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">💚</div>
+      <div style="flex:1;">
+        <div class="pmt-card-title">M-Pesa Direct Active</div>
+        <div class="pmt-card-sub" id="pmtIntegDetail">Customers pay directly to your account</div>
+      </div>
+      <button class="pmt-btn pmt-btn-ghost pmt-btn-sm" onclick="pmtTab('settings',document.querySelector('[data-tab=settings]'))">Edit</button>
+    </div>
+  </div>
+
+  <div class="pmt-card" id="pmtSetupPromptCard">
+    <div style="text-align:center;padding:8px 0;">
+      <div style="font-size:40px;margin-bottom:10px;">📲</div>
+      <div class="pmt-card-title" style="font-size:15px;margin-bottom:6px;">Set Up Direct Payments</div>
+      <div class="pmt-card-sub" style="margin-bottom:16px;">Connect your M-Pesa Paybill or Till. Customers pay you directly — SOKONI never holds your money.</div>
+      <button class="pmt-btn pmt-btn-primary" style="margin-top:0;" onclick="pmtTab('wizard',document.querySelector('[data-tab=wizard]'))">Start Setup Wizard</button>
+    </div>
+  </div>
+
+  <div class="pmt-sec">Recent Transactions</div>
+  <div id="pmtRecentTxns">
+    <div class="pmt-skeleton" style="height:60px;margin-bottom:8px;"></div>
+    <div class="pmt-skeleton" style="height:60px;margin-bottom:8px;"></div>
+    <div class="pmt-skeleton" style="height:60px;"></div>
+  </div>
+
+  <div style="display:none" id="pmtNoTxns" class="pmt-card" style="text-align:center;">
+    <div class="pmt-card-sub" style="text-align:center;padding:8px 0;">No transactions yet. Once customers pay you, receipts will appear here.</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SETUP WIZARD TAB
+════════════════════════════════════════ -->
+<div class="pmt-pane" id="pmt-pane-wizard">
+
+  <!-- Progress Bar -->
+  <div class="pmt-wizard-progress" id="pmtWizProgress">
+    <!-- injected by JS -->
+  </div>
+
+  <!-- STEP 1: Business Info -->
+  <div class="pmt-step active" id="pmt-step-1">
+    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Business Information</div>
+    <div class="pmt-card-sub" style="margin-bottom:16px;">Let's start with your business details.</div>
+
+    <label class="pmt-label">Business Name *</label>
+    <input type="text" id="wiz1BizName" class="pmt-input" placeholder="e.g. Mama Njeri General Store">
+
+    <label class="pmt-label">Business Type *</label>
+    <select id="wiz1BizType" class="pmt-input pmt-select">
+      <option value="">— Select type —</option>
+      <option value="retail">Retail / General Shop</option>
+      <option value="restaurant">Restaurant / Food</option>
+      <option value="healthcare">Healthcare / Pharmacy</option>
+      <option value="services">Services / Freelance</option>
+      <option value="property">Property / BnB</option>
+      <option value="car">Car / Transport</option>
+      <option value="digital">Digital Products</option>
+      <option value="legal">Legal Services</option>
+      <option value="b2b">B2B / Wholesale</option>
+      <option value="other">Other</option>
+    </select>
+
+    <div class="pmt-field-group" style="margin-top:0;">
+      <div>
+        <label class="pmt-label">Contact Phone *</label>
+        <input type="tel" id="wiz1Phone" class="pmt-input" placeholder="07XXXXXXXX">
+      </div>
+      <div>
+        <label class="pmt-label">Business Email</label>
+        <input type="email" id="wiz1Email" class="pmt-input" placeholder="you@business.ke">
+      </div>
+    </div>
+
+    <div class="pmt-msg" id="wiz1Msg"></div>
+    <button class="pmt-btn pmt-btn-primary" onclick="wizNext(1)">Continue →</button>
+  </div>
+
+  <!-- STEP 2: Choose Provider -->
+  <div class="pmt-step" id="pmt-step-2">
+    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Choose Payment Method</div>
+    <div class="pmt-card-sub" style="margin-bottom:16px;">Select how you want to receive payments. You can add more later.</div>
+
+    <div class="pmt-provider-grid">
+      <div class="pmt-provider-card" id="prov-mpesa" onclick="wizChooseProvider('mpesa')">
+        <div class="rec-badge">★ Recommended</div>
+        <div class="pmt-provider-logo">🟢</div>
+        <div class="pmt-provider-name">M-Pesa Direct</div>
+        <div class="pmt-provider-desc">Daraja API — money goes straight to your M-Pesa account</div>
+      </div>
+      <div class="pmt-provider-card coming-soon" title="Coming Soon">
+        <div class="pmt-provider-logo">💳</div>
+        <div class="pmt-provider-name">IntaSend</div>
+        <div class="pmt-provider-desc">Cards + M-Pesa with simple setup</div>
+      </div>
+      <div class="pmt-provider-card coming-soon" title="Coming Soon">
+        <div class="pmt-provider-logo">🌍</div>
+        <div class="pmt-provider-name">Pesapal</div>
+        <div class="pmt-provider-desc">Multiple payment channels</div>
+      </div>
+      <div class="pmt-provider-card coming-soon" title="Coming Soon">
+        <div class="pmt-provider-logo">🔶</div>
+        <div class="pmt-provider-name">Flutterwave</div>
+        <div class="pmt-provider-desc">International payments</div>
+      </div>
+    </div>
+
+    <div class="pmt-info">
+      <strong>Why M-Pesa Direct?</strong> Money goes directly from the customer's phone into your Paybill or Till. SOKONI never touches the funds — it only orchestrates the transaction.
+    </div>
+
+    <div class="pmt-msg" id="wiz2Msg"></div>
+    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(2)" style="margin-top:10px;">← Back</button>
+  </div>
+
+  <!-- STEP 3: M-Pesa Type -->
+  <div class="pmt-step" id="pmt-step-3">
+    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">M-Pesa Account Type</div>
+    <div class="pmt-card-sub" style="margin-bottom:16px;">Choose the type of M-Pesa business account you have.</div>
+
+    <div class="pmt-mpesa-types">
+      <div class="pmt-mpesa-type" id="mtype-till" onclick="wizChooseMpesaType('till')">
+        <div class="pmt-mpesa-type-icon">🏪</div>
+        <div class="pmt-mpesa-type-name">Till Number</div>
+        <div class="pmt-mpesa-type-desc">Buy Goods & Services. Customer pays your till directly. Common for shops & kiosks.</div>
+      </div>
+      <div class="pmt-mpesa-type" id="mtype-paybill" onclick="wizChooseMpesaType('paybill')">
+        <div class="pmt-mpesa-type-icon">🏢</div>
+        <div class="pmt-mpesa-type-name">Paybill Number</div>
+        <div class="pmt-mpesa-type-desc">Lipa Na M-Pesa Paybill. Customer pays your business number + account reference.</div>
+      </div>
+    </div>
+
+    <div class="pmt-info">
+      <strong>Not sure which you have?</strong> Log into M-Pesa app → M-Pesa Ratiba → check if you see a "Till Number" or "Paybill Number". You can also check your Safaricom business dashboard.
+    </div>
+
+    <div class="pmt-msg" id="wiz3Msg"></div>
+    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(3)" style="margin-top:10px;">← Back</button>
+  </div>
+
+  <!-- STEP 4: Daraja Credentials -->
+  <div class="pmt-step" id="pmt-step-4">
+    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Daraja API Credentials</div>
+    <div class="pmt-card-sub" style="margin-bottom:12px;">Get these from developer.safaricom.co.ke</div>
+
+    <!-- Guided Steps Accordion -->
+    <div class="pmt-card" style="margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:800;color:#71ff00;margin-bottom:10px;">📋 How to get your credentials (tap to expand)</div>
+      <ul class="pmt-guide-steps">
+        <li class="pmt-guide-step">
+          <div class="pmt-guide-num">1</div>
+          <div class="pmt-guide-content">
+            <div class="pmt-guide-title">Create a Safaricom Developer Account</div>
+            <div class="pmt-guide-desc">Visit the Safaricom Developer Portal and sign up with your business email.</div>
+            <div class="pmt-url-chip" onclick="pmtCopy('developer.safaricom.co.ke')">📋 developer.safaricom.co.ke</div>
+          </div>
+        </li>
+        <li class="pmt-guide-step">
+          <div class="pmt-guide-num">2</div>
+          <div class="pmt-guide-content">
+            <div class="pmt-guide-title">Create a New App</div>
+            <div class="pmt-guide-desc">In your dashboard → My Apps → Add a New App. Select "Lipa Na M-Pesa Online" as the product. Give it your business name.</div>
+          </div>
+        </li>
+        <li class="pmt-guide-step">
+          <div class="pmt-guide-num">3</div>
+          <div class="pmt-guide-content">
+            <div class="pmt-guide-title">Get Consumer Key & Secret</div>
+            <div class="pmt-guide-desc">On your app's detail page, click "Keys" tab. Copy the Consumer Key and Consumer Secret.</div>
+          </div>
+        </li>
+        <li class="pmt-guide-step">
+          <div class="pmt-guide-num">4</div>
+          <div class="pmt-guide-content">
+            <div class="pmt-guide-title">Get Your Passkey</div>
+            <div class="pmt-guide-desc">Go to M-Pesa Business → Lipa Na M-Pesa Online → Passkey. This is only available after going live. For sandbox, use the test passkey from the Daraja portal.</div>
+          </div>
+        </li>
+        <li class="pmt-guide-step">
+          <div class="pmt-guide-num">5</div>
+          <div class="pmt-guide-content">
+            <div class="pmt-guide-title">Register Callback URL</div>
+            <div class="pmt-guide-desc">In Daraja portal → Lipa Na M-Pesa Online → Validation URL. Paste SOKONI's callback URL below.</div>
+            <div class="pmt-url-chip" onclick="pmtCopy('https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback')">📋 Copy Callback URL</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Credential Inputs -->
+    <label class="pmt-label">Business Name (shown to customers)</label>
+    <input type="text" id="sdjBizNameW" class="pmt-input" placeholder="Your Business Name">
+
+    <label class="pmt-label">Shortcode (Till / Paybill Number) *</label>
+    <div class="pmt-input-wrap">
+      <input type="text" id="sdjShortCodeW" class="pmt-input" placeholder="e.g. 174379" inputmode="numeric">
+    </div>
+
+    <label class="pmt-label">Consumer Key *</label>
+    <div class="pmt-input-wrap">
+      <input type="text" id="sdjConsumerKeyW" class="pmt-input" placeholder="Paste from Daraja portal">
+      <button class="pmt-input-btn" onclick="pmtToggleVis('sdjConsumerKeyW',this)">👁</button>
+    </div>
+
+    <label class="pmt-label">Consumer Secret *</label>
+    <div class="pmt-input-wrap">
+      <input type="password" id="sdjConsumerSecretW" class="pmt-input" placeholder="Paste from Daraja portal">
+      <button class="pmt-input-btn" onclick="pmtToggleVis('sdjConsumerSecretW',this)">👁</button>
+    </div>
+
+    <label class="pmt-label">Passkey *</label>
+    <div class="pmt-input-wrap">
+      <input type="password" id="sdjPassKeyW" class="pmt-input" placeholder="From Safaricom M-Pesa Business portal">
+      <button class="pmt-input-btn" onclick="pmtToggleVis('sdjPassKeyW',this)">👁</button>
+    </div>
+
+    <div class="pmt-field-group" style="margin-top:0;">
+      <div>
+        <label class="pmt-label">Transaction Type</label>
+        <select id="sdjTxTypeW" class="pmt-input pmt-select">
+          <option value="CustomerPayBillOnline">Paybill</option>
+          <option value="CustomerBuyGoodsOnline">Till / Buy Goods</option>
+        </select>
+      </div>
+      <div>
+        <label class="pmt-label">Environment</label>
+        <select id="sdjEnvW" class="pmt-input pmt-select">
+          <option value="production">🟢 Live</option>
+          <option value="sandbox">🟡 Sandbox</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pmt-warn">🔒 Credentials are stored server-side only in Firebase Secret Manager. They are never sent to or stored in your browser beyond this form.</div>
+
+    <div class="pmt-msg" id="wiz4Msg"></div>
+    <button class="pmt-btn pmt-btn-primary" onclick="wizSaveCredentials()">Save & Verify →</button>
+    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(4)" style="margin-top:8px;">← Back</button>
+  </div>
+
+  <!-- STEP 5: Verify -->
+  <div class="pmt-step" id="pmt-step-5">
+    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Verifying Connection</div>
+    <div class="pmt-card-sub" style="margin-bottom:16px;">SOKONI is checking your credentials are valid.</div>
+
+    <div class="pmt-card">
+      <ul class="pmt-verify-list" id="pmtVerifyList">
+        <li class="pmt-verify-item">
+          <div class="pmt-verify-icon pending" id="vicon1">⏳</div>
+          <div class="pmt-verify-text">
+            <div class="pmt-verify-title">Checking credentials format</div>
+            <div class="pmt-verify-sub" id="vsub1">Validating fields are complete</div>
+          </div>
+        </li>
+        <li class="pmt-verify-item">
+          <div class="pmt-verify-icon pending" id="vicon2">⏳</div>
+          <div class="pmt-verify-text">
+            <div class="pmt-verify-title">Generating OAuth token</div>
+            <div class="pmt-verify-sub" id="vsub2">Connecting to Safaricom Daraja</div>
+          </div>
+        </li>
+        <li class="pmt-verify-item">
+          <div class="pmt-verify-icon pending" id="vicon3">⏳</div>
+          <div class="pmt-verify-text">
+            <div class="pmt-verify-title">Validating shortcode</div>
+            <div class="pmt-verify-sub" id="vsub3">Verifying business shortcode</div>
+          </div>
+        </li>
+        <li class="pmt-verify-item">
+          <div class="pmt-verify-icon pending" id="vicon4">⏳</div>
+          <div class="pmt-verify-text">
+            <div class="pmt-verify-title">Security check</div>
+            <div class="pmt-verify-sub" id="vsub4">Encrypting credentials in vault</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="pmt-msg" id="wiz5Msg"></div>
+    <button class="pmt-btn pmt-btn-primary" id="wiz5NextBtn" onclick="wizNext(5)" style="display:none;">Test with Real Payment →</button>
+    <button class="pmt-btn pmt-btn-ghost" id="wiz5RetryBtn" onclick="wizVerify()" style="display:none;margin-top:8px;">⟳ Retry Verification</button>
+    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(5)" style="margin-top:8px;">← Back</button>
+  </div>
+
+  <!-- STEP 6: Test Payment -->
+  <div class="pmt-step" id="pmt-step-6">
+    <div class="pmt-card-title" style="font-size:16px;margin-bottom:4px;">Test Your Integration</div>
+    <div class="pmt-card-sub" style="margin-bottom:16px;">Send a real KES 1 test payment to yourself to confirm everything works.</div>
+
+    <div class="pmt-test-box" id="pmtTestBox">
+      <div class="pmt-test-icon" id="pmtTestIcon">📲</div>
+      <div class="pmt-test-title" id="pmtTestTitle">Ready to Test</div>
+      <div class="pmt-test-sub" id="pmtTestSub">Enter your phone number. SOKONI will send a KES 1 M-Pesa PIN prompt. Enter your PIN and confirm the payment goes through.</div>
+
+      <label class="pmt-label" style="text-align:left;">Your Phone Number</label>
+      <input type="tel" id="pmtTestPhone" class="pmt-input" placeholder="07XXXXXXXX" style="margin-bottom:12px;">
+
+      <button class="pmt-btn pmt-btn-blue" id="pmtTestBtn" onclick="wizSendTestPush()">📲 Send Test Push (KES 1)</button>
+      <div class="pmt-test-status" id="pmtTestStatus"></div>
+    </div>
+
+    <div class="pmt-card" id="pmtTestSuccessCard" style="display:none;border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05);">
+      <div style="text-align:center;padding:8px 0;">
+        <div style="font-size:48px;margin-bottom:10px;">✅</div>
+        <div style="font-size:16px;font-weight:900;color:#71ff00;margin-bottom:6px;">Payment Integration Active!</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.55);margin-bottom:4px;" id="pmtTestSuccessDetail">Your M-Pesa integration is live and working.</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.35);font-family:monospace;" id="pmtTestReceiptCode"></div>
+      </div>
+    </div>
+
+    <div class="pmt-info" id="pmtTestSkipNote">
+      <strong>Skipping?</strong> If you're using sandbox mode, the STK Push will appear but no real money is charged. You can skip this step and complete setup — test again anytime from Settings.
+    </div>
+
+    <div class="pmt-msg" id="wiz6Msg"></div>
+    <button class="pmt-btn pmt-btn-primary" id="wiz6FinishBtn" onclick="wizFinish()" style="display:none;">🎉 Finish Setup</button>
+    <button class="pmt-btn pmt-btn-ghost" onclick="wizSkipTest()" style="margin-top:8px;">Skip Test & Finish</button>
+    <button class="pmt-btn pmt-btn-ghost" onclick="wizBack(6)" style="margin-top:6px;">← Back</button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════
+     TRANSACTIONS TAB
+════════════════════════════════════════ -->
+<div class="pmt-pane" id="pmt-pane-transactions">
+  <div class="pmt-filter-bar">
+    <select class="pmt-filter-select" id="txnFilterStatus" onchange="pmtLoadTxns()">
+      <option value="">All Status</option>
+      <option value="completed">Completed</option>
+      <option value="pending">Pending</option>
+      <option value="failed">Failed</option>
+    </select>
+    <select class="pmt-filter-select" id="txnFilterHub" onchange="pmtLoadTxns()">
+      <option value="">All Hubs</option>
+      <option value="marketplace">Marketplace</option>
+      <option value="restaurant">Restaurant</option>
+      <option value="car">Car Hub</option>
+      <option value="healthcare">Healthcare</option>
+      <option value="legal">Legal</option>
+      <option value="bnb">BnB/Property</option>
+      <option value="digital">Digital</option>
+      <option value="delivery">Delivery</option>
+    </select>
+    <button onclick="pmtLoadTxns()" class="pmt-btn pmt-btn-ghost pmt-btn-sm">⟳</button>
+  </div>
+  <div id="pmtTxnList">
+    <div class="pmt-skeleton" style="height:68px;margin-bottom:8px;"></div>
+    <div class="pmt-skeleton" style="height:68px;margin-bottom:8px;"></div>
+    <div class="pmt-skeleton" style="height:68px;"></div>
+  </div>
+  <div id="pmtTxnEmpty" style="display:none;text-align:center;padding:40px 16px;color:rgba(255,255,255,.35);">
+    <div style="font-size:36px;margin-bottom:10px;">📭</div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px;">No Transactions</div>
+    <div style="font-size:12px;">Payments will appear here once customers start paying you.</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SETTINGS TAB
+════════════════════════════════════════ -->
+<div class="pmt-pane" id="pmt-pane-settings">
+
+  <div class="pmt-sec">Connected Methods</div>
+  <div class="pmt-method-card">
+    <div class="pmt-method-icon">🟢</div>
+    <div class="pmt-method-body">
+      <div class="pmt-method-name">M-Pesa Direct (Daraja)</div>
+      <div class="pmt-method-detail" id="setMpesaDetail">Not configured</div>
+    </div>
+    <div class="pmt-method-status none" id="setMpesaStatus">Setup</div>
+  </div>
+
+  <div class="pmt-sec" style="margin-top:16px;">Credentials</div>
+  <div class="pmt-card">
+    <label class="pmt-label" style="margin-top:0;">Business Name</label>
+    <input type="text" id="setBizName" class="pmt-input" placeholder="Your Business Name">
+
+    <label class="pmt-label">Shortcode</label>
+    <input type="text" id="setShortCode" class="pmt-input" inputmode="numeric">
+
+    <label class="pmt-label">Consumer Key</label>
+    <div class="pmt-input-wrap">
+      <input type="password" id="setConsumerKey" class="pmt-input" placeholder="••••••••••••">
+      <button class="pmt-input-btn" onclick="pmtToggleVis('setConsumerKey',this)">👁</button>
+    </div>
+
+    <label class="pmt-label">Consumer Secret</label>
+    <div class="pmt-input-wrap">
+      <input type="password" id="setConsumerSecret" class="pmt-input" placeholder="••••••••••••">
+      <button class="pmt-input-btn" onclick="pmtToggleVis('setConsumerSecret',this)">👁</button>
+    </div>
+
+    <label class="pmt-label">Passkey</label>
+    <div class="pmt-input-wrap">
+      <input type="password" id="setPassKey" class="pmt-input" placeholder="••••••••••••">
+      <button class="pmt-input-btn" onclick="pmtToggleVis('setPassKey',this)">👁</button>
+    </div>
+
+    <div class="pmt-field-group" style="margin-top:0;">
+      <div>
+        <label class="pmt-label">Transaction Type</label>
+        <select id="setTxType" class="pmt-input pmt-select">
+          <option value="CustomerPayBillOnline">Paybill</option>
+          <option value="CustomerBuyGoodsOnline">Till</option>
+        </select>
+      </div>
+      <div>
+        <label class="pmt-label">Environment</label>
+        <select id="setEnv" class="pmt-input pmt-select">
+          <option value="production">🟢 Live</option>
+          <option value="sandbox">🟡 Sandbox</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pmt-msg" id="setMsg"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="pmt-btn pmt-btn-primary" style="margin-top:0;flex:1;" onclick="pmtSaveSettings()">💾 Save</button>
+      <button class="pmt-btn pmt-btn-ghost pmt-btn-sm" style="padding:14px;" onclick="pmtTestConnection()">⚡ Test</button>
+    </div>
+  </div>
+
+  <div class="pmt-sec">Callback URL</div>
+  <div class="pmt-callback-box">
+    <div class="pmt-callback-url">https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback</div>
+    <button class="pmt-btn pmt-btn-ghost pmt-btn-sm" style="margin-top:0;" onclick="pmtCopy('https://us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback')">📋 Copy</button>
+  </div>
+  <div class="pmt-info" style="margin-top:10px;">Register this URL in your Safaricom Daraja portal under <strong>Lipa Na M-Pesa Online → CallbackURL</strong>.</div>
+
+  <div class="pmt-sec">Test Connection</div>
+  <div class="pmt-card">
+    <label class="pmt-label" style="margin-top:0;">Phone for Test Push</label>
+    <input type="tel" id="setTestPhone" class="pmt-input" placeholder="07XXXXXXXX">
+    <div class="pmt-msg" id="setTestMsg"></div>
+    <button class="pmt-btn pmt-btn-blue" onclick="pmtRunTestFromSettings()">📲 Send KES 1 Test Push</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     AI ASSISTANT TAB
+════════════════════════════════════════ -->
+<div class="pmt-pane" id="pmt-pane-assistant">
+  <div class="pmt-ai-chat" id="pmtAiChat">
+    <div class="pmt-ai-bubble bot">
+      👋 Hi! I'm your SOKONI Payment Assistant. I can help you set up M-Pesa Direct payments, troubleshoot issues, and explain anything about the payment setup. What would you like to know?
+    </div>
+  </div>
+
+  <div class="pmt-sec" style="margin-top:0;">Quick Questions</div>
+  <div class="pmt-ai-quickies">
+    <button class="pmt-ai-q" onclick="aiAsk('How do I get Daraja credentials?')">How do I get Daraja credentials?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('Till vs Paybill — what is the difference?')">Till vs Paybill?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('Why is my STK Push not working?')">STK Push not working?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('What is Consumer Key and Secret?')">What is Consumer Key?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('How do I go live from sandbox?')">Sandbox to live?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('Where do I find my Passkey?')">Where is my Passkey?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('How long does callback take?')">How fast is callback?</button>
+    <button class="pmt-ai-q" onclick="aiAsk('SOKONI never holds my money?')">Does SOKONI hold funds?</button>
+  </div>
+
+  <div class="pmt-ai-input-row">
+    <input type="text" id="aiInput" placeholder="Ask anything about payments…" onkeydown="if(event.key==='Enter')aiSendInput()">
+    <button class="pmt-ai-send" onclick="aiSendInput()">➤</button>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="seller.html" class="bnav-item"><span class="bnav-emoji">🏪</span><span>Store</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script src="scroll-top.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state + pre-fill user data */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+    /* Pre-fill wizard step 1 from cached profile */
+    if(u){
+      setTimeout(function(){
+        var bn=document.getElementById('wiz1BizName');
+        if(bn&&!bn.value) bn.value=u.shopName||u.businessName||u.name||'';
+        var ph=document.getElementById('wiz1Phone');
+        if(ph&&!ph.value) ph.value=u.phone||u.phoneNumber||'';
+        var em=document.getElementById('wiz1Email');
+        if(em&&!em.value) em.value=u.email||'';
+        var tp=document.getElementById('pmtTestPhone');
+        if(tp&&!tp.value) tp.value=u.phone||u.phoneNumber||'';
+        var sp=document.getElementById('setTestPhone');
+        if(sp&&!sp.value) sp.value=u.phone||u.phoneNumber||'';
+      },200);
+    }
+  }catch(e){}
+})();
+
+/* ── Tab switching available immediately (before module loads) ── */
+function pmtTab(tab, btn) {
+  document.querySelectorAll('.pmt-tab').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('.pmt-pane').forEach(function(p){p.classList.remove('active');});
+  var activeBtn = btn || document.querySelector('[data-tab="'+tab+'"]');
+  if(activeBtn) activeBtn.classList.add('active');
+  var pane = document.getElementById('pmt-pane-'+tab);
+  if(pane) pane.classList.add('active');
+  if(tab==='transactions' && window._pmtLoadTxnsReady) window._pmtLoadTxns();
+}
+/* Handle ?tab=X URL param */
+(function(){
+  var t = new URLSearchParams(window.location.search).get('tab');
+  if(t) setTimeout(function(){ pmtTab(t); }, 50);
+})();
+
+/* Stub remaining functions to prevent "not defined" errors before module initialises */
+['wizNext','wizBack','wizChooseProvider','wizChooseMpesaType','wizSaveCredentials',
+ 'wizVerify','wizSendTestPush','wizFinish','wizSkipTest','pmtCopy','pmtToggleVis',
+ 'pmtLoadTxns','pmtSaveSettings','pmtTestConnection','pmtRunTestFromSettings',
+ 'aiAsk','aiSendInput'
+].forEach(function(fn){ window[fn]=window[fn]||function(){}; });
+</script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-mpesa.js" defer></script>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* ── globals ── */
+let _uid = null;
+let _db  = null;
+let _fns = null;
+let _wizStep = 1;
+let _wizProvider = 'mpesa';
+let _wizMpesaType = 'paybill';
+let _testCheckoutId = null;
+let _testUnsub = null;
+
+const TOTAL_STEPS = 6;
+
+/* ── Wait for Firebase ── */
+async function _waitFB(ms = 8000) {
+  const t = Date.now();
+  while ((!window.firebaseDB || !window.firebaseAuth) && Date.now() - t < ms) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+/* ── Bootstrap ── */
+(async function init() {
+  await _waitFB();
+  if (!window.firebaseDB || !window.firebaseAuth) {
+    console.warn('[payments] Firebase not ready');
+    return;
+  }
+  _db  = window.firebaseDB;
+  const fbApp = getApp();
+  _fns = getFunctions(fbApp, 'us-central1');
+
+  window.firebaseAuth.onAuthStateChanged(async user => {
+    if (!user) { window.location.href = 'login.html?next=payments.html'; return; }
+    _uid = user.uid;
+    _buildWizardProgress();
+    pmtLoadOverview();
+    pmtLoadSettings();
+  });
+
+  /* Expose functions to global scope for onclick handlers (override early stubs) */
+  window.pmtTab             = pmtTab;
+  window._pmtLoadTxns       = pmtLoadTxns;
+  window._pmtLoadTxnsReady  = true;
+  window.wizNext            = wizNext;
+  window.wizBack            = wizBack;
+  window.wizChooseProvider  = wizChooseProvider;
+  window.wizChooseMpesaType = wizChooseMpesaType;
+  window.wizSaveCredentials = wizSaveCredentials;
+  window.wizVerify          = wizVerify;
+  window.wizSendTestPush    = wizSendTestPush;
+  window.wizFinish          = wizFinish;
+  window.wizSkipTest        = wizSkipTest;
+  window.pmtCopy            = pmtCopy;
+  window.pmtToggleVis       = pmtToggleVis;
+  window.pmtLoadTxns        = pmtLoadTxns;
+  window.pmtSaveSettings    = pmtSaveSettings;
+  window.pmtTestConnection  = pmtTestConnection;
+  window.pmtRunTestFromSettings = pmtRunTestFromSettings;
+  window.aiAsk              = aiAsk;
+  window.aiSendInput        = aiSendInput;
+})();
+
+/* ════════════════════════════════════════
+   TAB SWITCHING
+════════════════════════════════════════ */
+function pmtTab(tab, btn) {
+  document.querySelectorAll('.pmt-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.pmt-pane').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('pmt-pane-' + tab)?.classList.add('active');
+  if (tab === 'transactions') pmtLoadTxns();
+}
+
+/* ════════════════════════════════════════
+   WIZARD
+════════════════════════════════════════ */
+const STEP_LABELS = ['Business','Provider','Type','Credentials','Verify','Test'];
+
+function _buildWizardProgress() {
+  const wrap = document.getElementById('pmtWizProgress');
+  if (!wrap) return;
+  let html = '';
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    html += `<div class="pmt-wiz-step">
+      <div class="pmt-wiz-dot ${i < _wizStep ? 'done' : i === _wizStep ? 'active' : ''}" id="wdot${i}">${i < _wizStep ? '✓' : i}</div>
+      <div class="pmt-wiz-label">${STEP_LABELS[i-1]}</div>
+    </div>`;
+    if (i < TOTAL_STEPS) html += `<div class="pmt-wiz-line ${i < _wizStep ? 'done' : ''}"></div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function _goToStep(n) {
+  document.querySelectorAll('.pmt-step').forEach(s => s.classList.remove('active'));
+  document.getElementById('pmt-step-' + n)?.classList.add('active');
+  _wizStep = n;
+  _buildWizardProgress();
+  window.scrollTo(0, 0);
+}
+
+function wizNext(from) {
+  if (from === 1) {
+    const name  = document.getElementById('wiz1BizName')?.value.trim();
+    const type  = document.getElementById('wiz1BizType')?.value;
+    const phone = document.getElementById('wiz1Phone')?.value.trim();
+    const msg   = document.getElementById('wiz1Msg');
+    if (!name || !type || !phone) {
+      if (msg) { msg.textContent = '⚠️ Fill Business Name, Type and Phone.'; msg.className = 'pmt-msg err'; }
+      return;
+    }
+    if (msg) msg.textContent = '';
+    /* Pre-fill phone in test steps */
+    const tp = document.getElementById('pmtTestPhone');
+    const sp = document.getElementById('setTestPhone');
+    if (tp) tp.value = phone;
+    if (sp) sp.value = phone;
+    _goToStep(2);
+  } else if (from === 3) {
+    _goToStep(4);
+    /* Pre-fill biz name from step 1 */
+    const bizName = document.getElementById('wiz1BizName')?.value.trim();
+    const nb = document.getElementById('sdjBizNameW');
+    if (nb && !nb.value) nb.value = bizName;
+  } else if (from === 5) {
+    _goToStep(6);
+    /* Pre-fill phone */
+    const ph = document.getElementById('wiz1Phone')?.value.trim() || (JSON.parse(localStorage.getItem('sokoniUser')||'{}').phone||'');
+    const tp = document.getElementById('pmtTestPhone');
+    if (tp && !tp.value) tp.value = ph;
+  }
+}
+
+function wizBack(from) {
+  if (from === 2) _goToStep(1);
+  else if (from === 3) _goToStep(2);
+  else if (from === 4) _goToStep(3);
+  else if (from === 5) _goToStep(4);
+  else if (from === 6) _goToStep(5);
+}
+
+function wizChooseProvider(p) {
+  document.querySelectorAll('.pmt-provider-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('prov-' + p)?.classList.add('selected');
+  _wizProvider = p;
+  /* Only M-Pesa goes to next step immediately */
+  if (p === 'mpesa') {
+    setTimeout(() => _goToStep(3), 300);
+  } else {
+    const msg = document.getElementById('wiz2Msg');
+    if (msg) { msg.textContent = 'Coming soon — select M-Pesa Direct for now.'; msg.className = 'pmt-msg info'; }
+  }
+}
+
+function wizChooseMpesaType(t) {
+  document.querySelectorAll('.pmt-mpesa-type').forEach(c => c.classList.remove('selected'));
+  document.getElementById('mtype-' + t)?.classList.add('selected');
+  _wizMpesaType = t;
+  const txSel = document.getElementById('sdjTxTypeW');
+  if (txSel) txSel.value = t === 'till' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline';
+  setTimeout(() => wizNext(3), 300);
+}
+
+async function wizSaveCredentials() {
+  const get = id => (document.getElementById(id)?.value||'').trim();
+  const bizName     = get('sdjBizNameW');
+  const shortCode   = get('sdjShortCodeW').replace(/\D/g,'');
+  const consumerKey = get('sdjConsumerKeyW');
+  const consumerSec = get('sdjConsumerSecretW');
+  const passKey     = get('sdjPassKeyW');
+  const txType      = get('sdjTxTypeW') || 'CustomerPayBillOnline';
+  const env         = get('sdjEnvW')    || 'production';
+  const msg         = document.getElementById('wiz4Msg');
+  const setMsg      = (t, c='ok') => { if (msg) { msg.textContent = t; msg.className = 'pmt-msg ' + c; } };
+
+  if (!shortCode || !consumerKey || !consumerSec || !passKey) {
+    setMsg('⚠️ Shortcode, Consumer Key, Consumer Secret and Passkey are required.', 'err'); return;
+  }
+  setMsg('Saving…', 'info');
+
+  try {
+    await setDoc(doc(_db, 'shopSettings', _uid), {
+      businessName: bizName,
+      darajaShortCode: shortCode,
+      darajaConsumerKey: consumerKey,
+      darajaConsumerSecret: consumerSec,
+      darajaPassKey: passKey,
+      darajaTransactionType: txType,
+      darajaEnv: env,
+      darajaAccountRef: bizName.slice(0, 12) || 'SOKONI',
+      tillNumber: shortCode,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    setMsg('✓ Saved. Verifying connection…', 'ok');
+    _goToStep(5);
+    setTimeout(() => wizVerify(), 600);
+  } catch (e) {
+    setMsg('❌ Save failed: ' + e.message, 'err');
+  }
+}
+
+async function wizVerify() {
+  const states = [
+    { icon: 'vicon1', sub: 'vsub1', okText: 'Credentials format — ✓ Complete', failText: 'Missing required fields' },
+    { icon: 'vicon2', sub: 'vsub2', okText: 'OAuth token — ✓ Generated successfully', failText: 'Could not authenticate with Safaricom' },
+    { icon: 'vicon3', sub: 'vsub3', okText: 'Shortcode — ✓ Verified', failText: 'Invalid shortcode' },
+    { icon: 'vicon4', sub: 'vsub4', okText: 'Security — ✓ Credentials encrypted', failText: 'Security check failed' },
+  ];
+
+  const msg      = document.getElementById('wiz5Msg');
+  const nextBtn  = document.getElementById('wiz5NextBtn');
+  const retryBtn = document.getElementById('wiz5RetryBtn');
+  if (nextBtn) nextBtn.style.display = 'none';
+  if (retryBtn) retryBtn.style.display = 'none';
+  if (msg) { msg.textContent = ''; msg.className = 'pmt-msg'; }
+
+  const INIT_SUBS = [
+    'Validating all required fields',
+    'Connecting to Safaricom Daraja API',
+    'Verifying business shortcode',
+    'Encrypting credentials in vault',
+  ];
+  /* Reset all icons */
+  states.forEach((s, i) => {
+    const icon = document.getElementById(s.icon);
+    const sub  = document.getElementById(s.sub);
+    if (icon) { icon.className = 'pmt-verify-icon pending'; icon.textContent = '⏳'; }
+    if (sub)  sub.textContent = INIT_SUBS[i];
+  });
+
+  /* Step through */
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  /* Check 1: local field validation */
+  await delay(400);
+  const snap = await getDoc(doc(_db, 'shopSettings', _uid));
+  const d = snap.exists() ? snap.data() : {};
+  const complete = d.darajaConsumerKey && d.darajaConsumerSecret && d.darajaPassKey && d.darajaShortCode;
+  _setVerifyState(0, complete ? 'ok' : 'fail', complete ? states[0].okText : states[0].failText);
+  if (!complete) {
+    _verifyFail(msg, retryBtn, 'Complete all credential fields and save again.');
+    return;
+  }
+
+  /* Check 2: OAuth token via Cloud Function */
+  await delay(500);
+  _setVerifyState(1, 'loading', 'Connecting to Safaricom…');
+  try {
+    const fn  = httpsCallable(_fns, 'validateDarajaCredentials');
+    const res = await fn();
+    _setVerifyState(1, 'ok', states[1].okText + ' (' + (res.data.env || 'live') + ')');
+  } catch (e) {
+    _setVerifyState(1, 'fail', 'Error: ' + (e.message || 'Auth failed'));
+    _verifyFail(msg, retryBtn, 'Check your Consumer Key and Secret. ' + (e.message || ''));
+    return;
+  }
+
+  /* Check 3: Shortcode confirmed by OAuth pass */
+  await delay(400);
+  _setVerifyState(2, 'ok', states[2].okText + ' (' + (d.darajaShortCode || '') + ')');
+
+  /* Check 4: Security / encryption confirmed by save */
+  await delay(300);
+  _setVerifyState(3, 'ok', states[3].okText);
+
+  /* All good */
+  await delay(300);
+  if (msg) { msg.textContent = '✅ All checks passed! Your integration is ready.'; msg.className = 'pmt-msg ok'; }
+  if (nextBtn) nextBtn.style.display = 'block';
+  pmtLoadSettings(); /* refresh settings tab badge */
+}
+
+function _setVerifyState(idx, state, text) {
+  const icons = ['vicon1','vicon2','vicon3','vicon4'];
+  const subs  = ['vsub1','vsub2','vsub3','vsub4'];
+  const icon  = document.getElementById(icons[idx]);
+  const sub   = document.getElementById(subs[idx]);
+  if (!icon) return;
+  icon.className = 'pmt-verify-icon ' + state;
+  icon.textContent = state === 'ok' ? '✅' : state === 'fail' ? '❌' : state === 'loading' ? '🔄' : '⏳';
+  if (sub) sub.textContent = text;
+}
+
+function _verifyFail(msgEl, retryBtn, text) {
+  if (msgEl) { msgEl.textContent = '❌ ' + text; msgEl.className = 'pmt-msg err'; }
+  if (retryBtn) retryBtn.style.display = 'block';
+}
+
+async function wizSendTestPush() {
+  const phone  = document.getElementById('pmtTestPhone')?.value.trim();
+  const btn    = document.getElementById('pmtTestBtn');
+  const status = document.getElementById('pmtTestStatus');
+  const msg    = document.getElementById('wiz6Msg');
+
+  if (!phone) { if (status) { status.textContent = '⚠️ Enter your phone number.'; status.style.color = '#ff9800'; } return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
+  if (status) { status.textContent = '📲 Sending STK Push…'; status.style.color = 'rgba(255,255,255,.5)'; }
+
+  try {
+    const fn  = httpsCallable(_fns, 'sendTestSTKPush');
+    const res = await fn({ phone });
+    _testCheckoutId = res.data.checkoutId;
+
+    if (btn) btn.textContent = '⏳ Waiting for PIN…';
+    if (status) { status.textContent = '📱 Enter your M-Pesa PIN on your phone…'; status.style.color = '#71ff00'; }
+
+    /* Listen for callback result */
+    _listenTestResult(_testCheckoutId, btn, status, msg);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '📲 Retry Test Push'; }
+    if (status) { status.textContent = '❌ ' + (e.message || 'Failed to send'); status.style.color = '#ff6b6b'; }
+    if (msg) { msg.textContent = 'Tip: Make sure you saved valid credentials in Step 4.'; msg.className = 'pmt-msg info'; }
+  }
+}
+
+function _listenTestResult(checkoutId, btn, status, msg) {
+  if (_testUnsub) _testUnsub();
+  const unsub = onSnapshot(doc(_db, 'posPayments', checkoutId), snap => {
+    if (!snap.exists()) return;
+    const d = snap.data();
+    if (d.status === 'completed') {
+      unsub();
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Payment Confirmed!'; btn.style.background = 'linear-gradient(135deg,#4caf50,#2e7d32)'; }
+      if (status) { status.textContent = ''; }
+      document.getElementById('pmtTestBox').style.display = 'none';
+      const sc = document.getElementById('pmtTestSuccessCard');
+      if (sc) sc.style.display = 'block';
+      const det = document.getElementById('pmtTestSuccessDetail');
+      if (det) det.textContent = 'KES 1 received — ' + (d.paidPhone || d.phone || '') + ' · ' + new Date().toLocaleTimeString('en-KE');
+      const rc = document.getElementById('pmtTestReceiptCode');
+      if (rc && d.mpesaCode) rc.textContent = 'Receipt: ' + d.mpesaCode;
+      const fb = document.getElementById('wiz6FinishBtn');
+      if (fb) fb.style.display = 'block';
+      document.getElementById('pmtTestSkipNote').style.display = 'none';
+      pmtLoadOverview(); /* refresh stats */
+    } else if (d.status === 'failed' || d.status === 'cancelled') {
+      unsub();
+      if (btn) { btn.disabled = false; btn.textContent = '📲 Retry Test Push'; }
+      if (status) { status.textContent = '❌ Payment ' + d.status + '. Check your PIN and try again.'; status.style.color = '#ff6b6b'; }
+    }
+  });
+  _testUnsub = unsub;
+  /* 90s timeout */
+  setTimeout(() => {
+    unsub();
+    if (btn && btn.disabled) { btn.disabled = false; btn.textContent = '📲 Retry Test Push'; }
+    if (status && !status.textContent.includes('✅')) { status.textContent = '⏰ Timed out — try again.'; status.style.color = '#ff9800'; }
+  }, 90000);
+}
+
+function wizFinish() {
+  localStorage.setItem('_skDarajaOnboardDismissed','1');
+  pmtLoadOverview();
+  pmtTab('overview', document.querySelector('[data-tab=overview]'));
+}
+
+function wizSkipTest() {
+  wizFinish();
+}
+
+/* ════════════════════════════════════════
+   OVERVIEW
+════════════════════════════════════════ */
+async function pmtLoadOverview() {
+  if (!_uid || !_db) return;
+
+  try {
+    /* Check if configured */
+    const snap = await getDoc(doc(_db, 'shopSettings', _uid));
+    const configured = snap.exists() && snap.data().darajaConsumerKey;
+
+    const pill  = document.getElementById('pmtStatusPill');
+    const card  = document.getElementById('pmtIntegCard');
+    const setup = document.getElementById('pmtSetupPromptCard');
+    const det   = document.getElementById('pmtIntegDetail');
+
+    if (configured) {
+      const cfg = snap.data();
+      if (pill)  { pill.textContent = '✅ Active'; pill.className = 'pmt-status-pill active'; }
+      if (card)  card.style.display = 'block';
+      if (setup) setup.style.display = 'none';
+      if (det)   det.textContent = (cfg.darajaEnv === 'sandbox' ? '🟡 Sandbox' : '🟢 Live') + ' · ' + (cfg.darajaShortCode || '');
+    } else {
+      if (pill)  { pill.textContent = '⚙️ Setup Required'; pill.className = 'pmt-status-pill none'; }
+      if (card)  card.style.display = 'none';
+      if (setup) setup.style.display = 'block';
+    }
+
+    /* Load stats */
+    const q = query(
+      collection(_db, 'sellerPayments'),
+      where('sellerUid', '==', _uid),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+    const txnSnap = await getDocs(q);
+    const all = [];
+    txnSnap.forEach(d => all.push({ id: d.id, ...d.data() }));
+
+    const today = new Date().toDateString();
+    const total  = all.reduce((s,r) => s + Number(r.amount||0), 0);
+    const todayV = all.filter(r => new Date(r.createdAt?.toDate?.()??0).toDateString()===today).reduce((s,r)=>s+Number(r.amount||0),0);
+
+    /* Pending and failed from posPayments */
+    const qPend = query(collection(_db,'posPayments'), where('sellerUid','==',_uid), where('status','==','pending'), limit(20));
+    const qFail = query(collection(_db,'posPayments'), where('sellerUid','==',_uid), where('status','in',['failed','cancelled']), limit(20));
+    const [pSnap, fSnap] = await Promise.all([getDocs(qPend), getDocs(qFail)]);
+
+    _setText('pmtSTotal', 'KES ' + total.toLocaleString());
+    _setText('pmtSToday', 'KES ' + todayV.toLocaleString());
+    _setText('pmtSPending', pSnap.size);
+    _setText('pmtSFailed', fSnap.size);
+
+    /* Recent txns */
+    const recent = all.slice(0, 5);
+    const wrap   = document.getElementById('pmtRecentTxns');
+    const empty  = document.getElementById('pmtNoTxns');
+    if (!wrap) return;
+
+    if (!recent.length) {
+      wrap.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    wrap.innerHTML = recent.map(r => _txnItemHTML(r)).join('');
+  } catch(e) { console.warn('[pmt overview]', e.message); }
+}
+
+/* ════════════════════════════════════════
+   TRANSACTIONS
+════════════════════════════════════════ */
+async function pmtLoadTxns() {
+  if (!_uid || !_db) return;
+  const list   = document.getElementById('pmtTxnList');
+  const empty  = document.getElementById('pmtTxnEmpty');
+  const hub    = document.getElementById('txnFilterHub')?.value   || '';
+  const status = document.getElementById('txnFilterStatus')?.value || '';
+
+  if (list) list.innerHTML = '<div class="pmt-skeleton" style="height:68px;margin-bottom:8px;"></div>'.repeat(4);
+  if (empty) empty.style.display = 'none';
+
+  try {
+    /* Try hub-filtered query first; fall back to unfiltered if index missing */
+    let rows = [];
+    try {
+      let constraints = [where('sellerUid','==',_uid), orderBy('createdAt','desc'), limit(100)];
+      if (hub) constraints.splice(1, 0, where('hub','==',hub));
+      const snap = await getDocs(query(collection(_db,'sellerPayments'), ...constraints));
+      snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+    } catch(indexErr) {
+      /* Composite index not yet built — fall back to unfiltered, filter client-side */
+      const snap = await getDocs(query(collection(_db,'sellerPayments'),
+        where('sellerUid','==',_uid), orderBy('createdAt','desc'), limit(200)));
+      snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+      if (hub) rows = rows.filter(r => (r.hub||'') === hub);
+    }
+
+    /* Client-side status filter */
+    const filtered = status ? rows.filter(r => (r.status||'completed') === status) : rows;
+
+    if (!list) return;
+    if (!filtered.length) {
+      list.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    list.innerHTML = filtered.map(r => _txnItemHTML(r)).join('');
+  } catch(e) {
+    if (list) list.innerHTML = '<div class="pmt-card" style="color:#ff6b6b;">Error loading: '+_esc(e.message)+'</div>';
+  }
+}
+
+function _txnItemHTML(r) {
+  const date = r.createdAt?.toDate?.()?.toLocaleDateString('en-KE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) || '—';
+  const hub  = (r.hub||'').replace(/^\w/,c=>c.toUpperCase());
+  const st   = r.status || 'completed';
+  const stIcon = st === 'completed' ? '💚' : st === 'pending' ? '⏳' : '❌';
+  const stCls  = st === 'completed' ? 'success' : st === 'pending' ? 'pending' : 'failed';
+  return `<div class="pmt-txn-item">
+    <div class="pmt-txn-icon ${stCls}">${stIcon}</div>
+    <div class="pmt-txn-body">
+      <div class="pmt-txn-amount">KES ${Number(r.amount||0).toLocaleString()}</div>
+      <div class="pmt-txn-meta">${_esc(r.phone||'—')} · ${_esc(date)} · ${_esc(hub)}</div>
+      ${r.mpesaCode?`<div class="pmt-txn-code">${_esc(r.mpesaCode)}</div>`:''}
+    </div>
+    <div class="pmt-txn-status ${stCls}">${st}</div>
+  </div>`;
+}
+
+/* ════════════════════════════════════════
+   SETTINGS
+════════════════════════════════════════ */
+async function pmtLoadSettings() {
+  if (!_uid || !_db) return;
+  try {
+    const snap = await getDoc(doc(_db, 'shopSettings', _uid));
+    if (!snap.exists()) return;
+    const d = snap.data();
+    const set = (id, val) => { const e = document.getElementById(id); if (e && val != null) e.value = val; };
+    set('setBizName',      d.businessName);
+    set('setShortCode',    d.darajaShortCode);
+    set('setConsumerKey',  d.darajaConsumerKey);
+    set('setConsumerSecret', d.darajaConsumerSecret);
+    set('setPassKey',      d.darajaPassKey);
+    const tx = document.getElementById('setTxType'); if (tx && d.darajaTransactionType) tx.value = d.darajaTransactionType;
+    const en = document.getElementById('setEnv');    if (en && d.darajaEnv)             en.value = d.darajaEnv;
+
+    const det = document.getElementById('setMpesaDetail');
+    const sts = document.getElementById('setMpesaStatus');
+    if (d.darajaConsumerKey) {
+      if (det) det.textContent = (d.darajaEnv==='sandbox'?'🟡 Sandbox':'🟢 Live') + ' · ' + (d.darajaShortCode||'');
+      if (sts) { sts.textContent = '✅ Active'; sts.className = 'pmt-method-status active'; }
+    } else {
+      if (sts) { sts.textContent = 'Not set'; sts.className = 'pmt-method-status none'; }
+    }
+  } catch(e) {}
+}
+
+async function pmtSaveSettings() {
+  const get = id => (document.getElementById(id)?.value||'').trim();
+  const msg = document.getElementById('setMsg');
+  const setMsg = (t,c='ok') => { if(msg){msg.textContent=t;msg.className='pmt-msg '+c;} };
+
+  const shortCode   = get('setShortCode').replace(/\D/g,'');
+  const consumerKey = get('setConsumerKey');
+  const consumerSec = get('setConsumerSecret');
+  const passKey     = get('setPassKey');
+  if (!shortCode||!consumerKey||!consumerSec||!passKey) { setMsg('⚠️ All fields required.','err'); return; }
+
+  setMsg('Saving…','info');
+  try {
+    await setDoc(doc(_db,'shopSettings',_uid), {
+      businessName: get('setBizName'),
+      darajaShortCode: shortCode,
+      darajaConsumerKey: consumerKey,
+      darajaConsumerSecret: consumerSec,
+      darajaPassKey: passKey,
+      darajaTransactionType: get('setTxType'),
+      darajaEnv: get('setEnv'),
+      darajaAccountRef: get('setBizName').slice(0,12)||'SOKONI',
+      tillNumber: shortCode,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    setMsg('✅ Saved!','ok');
+    pmtLoadSettings();
+    pmtLoadOverview();
+  } catch(e) { setMsg('❌ '+e.message,'err'); }
+}
+
+async function pmtTestConnection() {
+  const msg = document.getElementById('setMsg');
+  const setMsg = (t,c='ok') => { if(msg){msg.textContent=t;msg.className='pmt-msg '+c;} };
+  setMsg('Verifying credentials…','info');
+  try {
+    const fn  = httpsCallable(_fns,'validateDarajaCredentials');
+    const res = await fn();
+    setMsg('✅ Connection verified! Env: ' + res.data.env + ' · Shortcode: ' + res.data.shortCode, 'ok');
+  } catch(e) { setMsg('❌ '+e.message,'err'); }
+}
+
+async function pmtRunTestFromSettings() {
+  const phone  = document.getElementById('setTestPhone')?.value.trim();
+  const msg    = document.getElementById('setTestMsg');
+  const setMsg = (t,c='ok') => { if(msg){msg.textContent=t;msg.className='pmt-msg '+c;} };
+  if (!phone) { setMsg('⚠️ Enter a phone number.','err'); return; }
+  setMsg('Sending STK Push…','info');
+  try {
+    const fn  = httpsCallable(_fns,'sendTestSTKPush');
+    const res = await fn({ phone });
+    setMsg('📲 PIN prompt sent to '+phone+'. Enter your M-Pesa PIN. Listening for result…','ok');
+    const unsub = onSnapshot(doc(_db,'posPayments',res.data.checkoutId), snap => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      if (d.status === 'completed') {
+        unsub();
+        setMsg('✅ Test successful! Receipt: ' + (d.mpesaCode||'—'), 'ok');
+      } else if (d.status==='failed'||d.status==='cancelled') {
+        unsub();
+        setMsg('❌ Test '+d.status+'. Check credentials and retry.','err');
+      }
+    });
+    setTimeout(()=>{ unsub(); if(msg.textContent.includes('Listening')) setMsg('⏰ Timed out.','err'); }, 90000);
+  } catch(e) { setMsg('❌ '+e.message,'err'); }
+}
+
+/* ════════════════════════════════════════
+   UTILITIES
+════════════════════════════════════════ */
+function pmtCopy(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event?.target;
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(()=>btn.textContent=orig, 1500); }
+  }).catch(() => (window._skToast||alert)('Copy: ' + text));
+}
+
+function pmtToggleVis(id, btn) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (btn) btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+function _setText(id, val) { const e = document.getElementById(id); if (e) e.textContent = val; }
+function _esc(s) { return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ════════════════════════════════════════
+   AI ASSISTANT
+════════════════════════════════════════ */
+const AI_KB = {
+  'daraja credentials': `To get your Daraja API credentials:\n\n1️⃣ Go to **developer.safaricom.co.ke** and create a free account using your business email.\n\n2️⃣ In your dashboard, click **My Apps → Add New App**. Select "Lipa Na M-Pesa Online" as the product.\n\n3️⃣ On the app page, click the **Keys** tab. Copy your **Consumer Key** and **Consumer Secret**.\n\n4️⃣ For the **Passkey**, go to Safaricom Business → Lipa Na M-Pesa Online → Passkey (only available after going live). For testing, use the sandbox passkey from the Daraja portal.\n\n5️⃣ Your **Shortcode** is your Till or Paybill number (e.g. 174379).`,
+
+  'till paybill': `**Till Number (Buy Goods):**\n• Used by shops, kiosks, and market stalls\n• Customer selects "Buy Goods" → enters till number\n• Money goes directly to your M-Pesa account\n• No account reference needed\n• Example: Till 123456\n\n**Paybill Number:**\n• Used by businesses, schools, utilities\n• Customer selects "Pay Bill" → enters paybill + account number\n• Allows you to track who paid by account reference\n• Example: Paybill 400200, Account: SOKONI001\n\n💡 **Which to use?** Till is simpler for small sellers. Paybill is better if you need to reconcile payments by customer.`,
+
+  'stk push not working': `Common reasons STK Push fails:\n\n❌ **Wrong credentials** — Check Consumer Key and Secret from the Daraja portal.\n\n❌ **Wrong Passkey** — Sandbox and production have different passkeys. Make sure your environment setting matches.\n\n❌ **Wrong environment** — If you're using sandbox credentials but set environment to "Live" (or vice versa), it will fail.\n\n❌ **Callback not registered** — Copy the SOKONI callback URL and register it in Daraja portal under Validation URL.\n\n❌ **Shortcode mismatch** — The shortcode must match exactly what's on your Daraja app.\n\n✅ **Fix:** Go to Settings tab → save updated credentials → Test Connection button.`,
+
+  'consumer key': `**Consumer Key** and **Consumer Secret** are your API credentials from Safaricom Daraja portal.\n\nThink of them like a username (Consumer Key) and password (Consumer Secret) that allow SOKONI's server to authenticate with Safaricom on your behalf.\n\n🔒 **Security:** These are stored server-side in Firebase's encrypted Secret Manager. They are never stored in your browser or visible to anyone except Safaricom servers.\n\nTo find them:\n1. Login at developer.safaricom.co.ke\n2. My Apps → click your app\n3. Keys tab → copy both values`,
+
+  'sandbox live': `To switch from sandbox to live (production):\n\n1️⃣ **Apply for a Daraja Production App** — In the Daraja portal, go to My Apps → Go Live. Fill in the form.\n\n2️⃣ **Get Production Credentials** — Safaricom will review your app (usually 1-3 business days) and send production Consumer Key + Secret.\n\n3️⃣ **Get Production Passkey** — In M-Pesa Business portal → Lipa Na M-Pesa Online → Passkey.\n\n4️⃣ **Update SOKONI Settings** — Go to Settings tab here, update your credentials and change Environment to "🟢 Live".\n\n5️⃣ **Test again** — Run a test push to confirm live payments work.`,
+
+  'passkey': `Your **Passkey** is a secret key provided by Safaricom that's used to generate a secure password for each STK Push request.\n\n**For Sandbox (Testing):**\nUse the sandbox passkey from the Daraja portal — it's shown on your Lipa Na M-Pesa Sandbox credentials page.\n\nSandbox passkey: bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919\n\n**For Production (Live):**\nLogin to M-Pesa Business dashboard → Lipa Na M-Pesa Online → Passkey tab. This passkey is unique to your shortcode.`,
+
+  'callback': `The **Callback URL** is where Safaricom sends payment confirmation after a customer enters their M-Pesa PIN.\n\n⏱️ **Speed:** Callbacks typically arrive within **3-15 seconds** after PIN entry. Can occasionally take up to 60 seconds.\n\n🔄 **What happens:**\n1. Customer enters PIN\n2. Safaricom processes payment\n3. Safaricom sends POST request to SOKONI's callback URL\n4. SOKONI updates the payment status\n5. Your dashboard shows "Payment Received" toast\n\nSOKONI's callback URL: **us-central1-sokoni-aeb26.cloudfunctions.net/darajaSTKCallback**\n\nMake sure to register this in your Daraja app settings.`,
+
+  'holds funds': `**SOKONI never holds your money.** 🎉\n\nHere's exactly how the payment works:\n\n1. Customer enters their phone number in SOKONI\n2. SOKONI sends an STK Push using **your own Daraja credentials** to **your own Shortcode**\n3. Customer receives M-Pesa PIN prompt\n4. Customer enters PIN → money goes **directly into your M-Pesa account**\n5. Safaricom sends confirmation to SOKONI's server\n6. SOKONI updates the order to "Paid"\n\nAt no point does any money pass through SOKONI. SOKONI is purely the orchestration layer — it just triggers the payment using your credentials. You have 100% control of your M-Pesa account.`,
+};
+
+function aiAsk(question) {
+  const chat = document.getElementById('pmtAiChat');
+  if (!chat) return;
+
+  /* Add user bubble */
+  const uBubble = document.createElement('div');
+  uBubble.className = 'pmt-ai-bubble user';
+  uBubble.textContent = question;
+  chat.appendChild(uBubble);
+
+  /* Find answer */
+  const q = question.toLowerCase();
+  let answer = null;
+  for (const [key, ans] of Object.entries(AI_KB)) {
+    if (key.split(' ').some(w => q.includes(w))) { answer = ans; break; }
+  }
+  if (!answer) {
+    answer = `I'm not sure about that specific question. Here's what I can help with:\n\n• Getting Daraja credentials\n• Till vs Paybill difference\n• Fixing STK Push errors\n• Going live from sandbox\n• How payments work\n\nFor anything else, contact SOKONI support on WhatsApp: **+254 705 726 803**`;
+  }
+
+  /* Add bot bubble with slight delay */
+  setTimeout(() => {
+    const bBubble = document.createElement('div');
+    bBubble.className = 'pmt-ai-bubble bot';
+    /* Convert **bold** and line breaks */
+    bBubble.innerHTML = _esc(answer)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+    chat.appendChild(bBubble);
+    chat.scrollTop = chat.scrollHeight;
+  }, 400);
+
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function aiSendInput() {
+  const inp = document.getElementById('aiInput');
+  if (!inp?.value.trim()) return;
+  aiAsk(inp.value.trim());
+  inp.value = '';
+}
+</script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+

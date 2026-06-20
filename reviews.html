@@ -1,0 +1,468 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Reviews & Ratings</title>
+  <meta name="description" content="Read and leave reviews for products, sellers and the Sokoni platform. See what Kenya's shoppers are saying.">
+  <meta property="og:title" content="SOKONI — Reviews & Ratings">
+  <meta property="og:description" content="Read verified reviews from Kenya's shoppers on SOKONI marketplace.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<style>
+/* ── 6×7 square review grid ── */
+.reviews-page { max-width:1280px !important; }
+.reviews-list {
+  display:grid !important;
+  grid-template-columns:repeat(6,1fr) !important;
+  gap:10px !important;
+  flex-direction:unset !important;
+}
+.review-card {
+  aspect-ratio:1/1;
+  border-radius:16px !important;
+  padding:13px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
+  transform:none !important;
+  transition:transform .22s, border-color .22s, box-shadow .22s !important;
+  background:rgba(255,255,255,0.04) !important;
+  border:1px solid rgba(255,255,255,0.08) !important;
+  position:relative;
+}
+.review-card:hover {
+  transform:scale(1.05) !important;
+  z-index:2;
+  border-color:rgba(113,255,0,0.3) !important;
+  box-shadow:0 8px 32px rgba(0,0,0,0.4) !important;
+}
+/* accent border colours per rating */
+.review-card.rc-r5 { border-color:rgba(113,255,0,0.18) !important; }
+.review-card.rc-r4 { border-color:rgba(0,200,120,0.18) !important; }
+.review-card.rc-r3 { border-color:rgba(255,193,7,0.18) !important; }
+.review-card.rc-r2 { border-color:rgba(255,120,0,0.18) !important; }
+.review-card.rc-r1 { border-color:rgba(255,60,60,0.18) !important; }
+
+.rc-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:7px; gap:4px; }
+.rc-avatar {
+  width:32px; height:32px; border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:13px; color:black;
+  flex-shrink:0;
+}
+.rc-stars { font-size:9px; color:#ffc107; letter-spacing:.5px; line-height:1; text-align:right; padding-top:2px; }
+.rc-name {
+  font-size:11px; font-weight:800; color:white;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  margin-bottom:3px; line-height:1.2;
+}
+.rc-target {
+  font-size:9px; font-weight:700;
+  color:rgba(113,255,0,0.7);
+  background:rgba(113,255,0,0.07);
+  border:1px solid rgba(113,255,0,0.18);
+  border-radius:5px;
+  padding:2px 6px;
+  display:inline-block;
+  margin-bottom:5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  max-width:100%;
+}
+.rc-comment {
+  font-size:10px; color:rgba(255,255,255,0.6); line-height:1.5;
+  flex:1; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical;
+  word-break:break-word;
+}
+.rc-footer {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-top:7px; flex-shrink:0;
+}
+.rc-date { font-size:8.5px; color:rgba(255,255,255,0.25); }
+.rc-helpful {
+  font-size:9px; color:rgba(255,255,255,0.3);
+  background:none; border:none; cursor:pointer;
+  font-family:inherit; padding:0; transition:color .2s;
+}
+.rc-helpful:hover { color:#71ff00; }
+
+@media(max-width:1024px){ .reviews-list { grid-template-columns:repeat(5,1fr) !important; } }
+@media(max-width:768px) { .reviews-list { grid-template-columns:repeat(4,1fr) !important; } }
+@media(max-width:540px) { .reviews-list { grid-template-columns:repeat(3,1fr) !important; } }
+@media(max-width:360px) { .reviews-list { grid-template-columns:repeat(2,1fr) !important; } }
+</style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="navbar">
+  <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
+  <div class="nav-actions">
+    <a href="index.html" class="wishlist-nav-btn">🏠 Home</a>
+    <a href="profile.html" class="cart-btn" style="text-decoration:none">👤 Profile</a>
+  </div>
+</nav>
+
+<section class="reviews-page">
+
+  <!-- HEADER -->
+  <div class="reviews-hero">
+    <div class="reviews-hero-badge">⭐ Verified Reviews</div>
+    <h1>Reviews & Ratings</h1>
+    <p>Real feedback from real SOKONI shoppers across Kenya</p>
+    <!-- UNBOXING WALL BANNER -->
+    <a href="unboxing.html" style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,170,255,0.04));border:1px dashed rgba(113,255,0,0.28);border-radius:16px;padding:14px 18px;margin:16px auto 0;max-width:580px;text-decoration:none;transition:all .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.5)'" onmouseout="this.style.borderColor='rgba(113,255,0,0.28)'">
+      <span style="font-size:28px;flex-shrink:0;">📦</span>
+      <div style="flex:1;text-align:left;">
+        <div style="font-size:13px;font-weight:900;color:white;margin-bottom:2px;">📸 Unboxing Wall — See real package photos!</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Post your unboxing photo & earn +50 loyalty points</div>
+      </div>
+      <span style="font-size:13px;font-weight:800;color:#71ff00;white-space:nowrap;">View Wall →</span>
+    </a>
+    <!-- PLATFORM STATS -->
+    <div class="reviews-platform-stats">
+      <div class="rps-item">
+        <div class="rps-num" id="avgRating">—</div>
+        <div class="rps-label">Platform Rating</div>
+        <div class="rps-stars" id="avgStars"></div>
+      </div>
+      <div class="rps-item">
+        <div class="rps-num" id="totalReviews">0</div>
+        <div class="rps-label">Total Reviews</div>
+      </div>
+      <div class="rps-item">
+        <div class="rps-num" id="recommendPct">—</div>
+        <div class="rps-label">Would Recommend</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="reviews-tabs">
+    <button type="button" class="rev-tab active-rev-tab" onclick="switchRevTab('platform',this)">🏪 Platform</button>
+    <button type="button" class="rev-tab" onclick="switchRevTab('seller',this)">👤 Seller</button>
+    <button type="button" class="rev-tab" onclick="switchRevTab('product',this)">📦 Product</button>
+    <button type="button" class="rev-tab" onclick="switchRevTab('provider',this)">🛠️ Provider</button>
+  </div>
+
+  <!-- WRITE REVIEW -->
+  <div class="write-review-box">
+    <h3 id="writeRevTitle">⭐ Leave a Platform Review</h3>
+    <div class="star-picker" id="starPicker">
+      <span class="star-pick" data-val="1" onclick="pickStar(1)">★</span>
+      <span class="star-pick" data-val="2" onclick="pickStar(2)">★</span>
+      <span class="star-pick" data-val="3" onclick="pickStar(3)">★</span>
+      <span class="star-pick" data-val="4" onclick="pickStar(4)">★</span>
+      <span class="star-pick" data-val="5" onclick="pickStar(5)">★</span>
+    </div>
+    <input type="text" id="reviewTarget" placeholder="Seller or business name" class="modal-input" style="max-width:320px;display:none;">
+    <input type="text" id="reviewerName" placeholder="Your name (optional)" class="modal-input" style="max-width:320px;">
+    <textarea id="reviewComment" placeholder="Share your experience with Sokoni..." class="review-textarea"></textarea>
+    <button type="button" class="auth-btn" style="max-width:200px;" onclick="submitReview()">Submit Review</button>
+  </div>
+
+  <!-- REVIEWS LIST -->
+  <div id="reviewsList" class="reviews-list"></div>
+
+</section>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item active-bnav"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Categories</span></a>
+  <a href="flashsale.html" class="bnav-item bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<div id="notificationContainer"></div>
+
+<script>
+let activeRevTab = "platform";
+let selectedStar  = 0;
+
+/* ── Avatar accent palette ── */
+const AV_COLORS = [
+  '#71ff00','#00c878','#00aaff','#f472b6','#f59e0b',
+  '#a78bfa','#ef4444','#22d3ee','#fb923c','#4ade80',
+  '#e879f9','#38bdf8','#facc15','#34d399','#f87171',
+];
+function avColor(i){ return AV_COLORS[i % AV_COLORS.length]; }
+
+/* ── Demo reviews — 42 across 3 tabs ── */
+const DEMO_REVIEWS = [
+  /* PLATFORM */
+  {id:"d01",type:"platform",rating:5,name:"Alice Wanjiru",   comment:"Best marketplace in Kenya! Fast delivery and genuine products every time.",date:"12 May 2025",helpful:24},
+  {id:"d02",type:"platform",rating:5,name:"Brian Kamau",     comment:"SOKONI changed how I shop. M-Pesa checkout is so smooth.",date:"3 May 2025",helpful:18},
+  {id:"d03",type:"platform",rating:5,name:"Celestine Auma",  comment:"I love the flash deals! Saved KES 3,000 on electronics last week.",date:"28 Apr 2025",helpful:31},
+  {id:"d04",type:"platform",rating:5,name:"David Otieno",    comment:"The delivery drivers are fast and very professional. 5 stars!",date:"21 Apr 2025",helpful:15},
+  {id:"d05",type:"platform",rating:5,name:"Eunice Nduta",    comment:"Finally a Kenyan app that works perfectly. Customer support is excellent.",date:"14 Apr 2025",helpful:22},
+  {id:"d06",type:"platform",rating:4,name:"Francis Njoroge", comment:"Great platform overall. The app loads really fast even on 3G.",date:"7 Apr 2025",helpful:9},
+  {id:"d07",type:"platform",rating:5,name:"Grace Muthoni",   comment:"Ordered groceries at 8am, delivered by 10am. Incredible service!",date:"1 Apr 2025",helpful:41},
+  {id:"d08",type:"platform",rating:5,name:"Hassan Omar",     comment:"SOKONI is legit. Ordered twice, both times perfect.",date:"25 Mar 2025",helpful:17},
+  {id:"d09",type:"platform",rating:4,name:"Irene Akinyi",    comment:"Very reliable. The seller reviews help me choose wisely every time.",date:"18 Mar 2025",helpful:13},
+  {id:"d10",type:"platform",rating:5,name:"James Kipchoge",  comment:"The ride hub saved me so much time during the rains. Love it!",date:"10 Mar 2025",helpful:28},
+  {id:"d11",type:"platform",rating:5,name:"Kadzo Ngala",     comment:"The BnB section is amazing for travel. Found a great place in Mombasa.",date:"3 Mar 2025",helpful:20},
+  {id:"d12",type:"platform",rating:5,name:"Linet Chebet",    comment:"Flash sales are real deals, not fake discounts like other apps.",date:"24 Feb 2025",helpful:36},
+  {id:"d13",type:"platform",rating:4,name:"Martin Ochieng",  comment:"Services hub is a game changer. Found a plumber in minutes.",date:"17 Feb 2025",helpful:12},
+  {id:"d14",type:"platform",rating:5,name:"Nancy Wambui",    comment:"I run my small business fully on SOKONI. The seller dashboard is great.",date:"10 Feb 2025",helpful:44},
+  {id:"d15",type:"platform",rating:5,name:"Oscar Mutua",     comment:"Payments via M-Pesa are instant. No delays at all.",date:"3 Feb 2025",helpful:19},
+  {id:"d16",type:"platform",rating:3,name:"Patricia Awino",  comment:"Good platform but needs more products in Kisumu. Hope they expand soon.",date:"27 Jan 2025",helpful:7},
+  {id:"d17",type:"platform",rating:5,name:"Quentin Njau",    comment:"The loyalty points add up fast. Redeemed mine for free delivery!",date:"20 Jan 2025",helpful:25},
+  {id:"d18",type:"platform",rating:5,name:"Rose Chemutai",   comment:"SOKONI is my go-to for everything. Clothes, food, electronics — all here.",date:"13 Jan 2025",helpful:33},
+  {id:"d19",type:"platform",rating:4,name:"Samuel Kipkemoi", comment:"Great deals on electronics. Phones are genuine and well priced.",date:"6 Jan 2025",helpful:16},
+  {id:"d20",type:"platform",rating:5,name:"Tabitha Mwangi",  comment:"The food hub is amazing. Ordered ugali combo, arrived hot in 30 mins.",date:"30 Dec 2024",helpful:29},
+  {id:"d21",type:"platform",rating:5,name:"Uche Adeyemi",    comment:"As a buyer and seller on SOKONI — both sides work perfectly.",date:"23 Dec 2024",helpful:21},
+  /* SELLER */
+  {id:"d22",type:"seller",rating:5,name:"Veronica Waweru",   comment:"Bought a dress from Nairobi Fashion Hub — perfect fit, exact colour shown.",date:"12 May 2025",helpful:14},
+  {id:"d23",type:"seller",rating:5,name:"Walter Ouma",       comment:"TechHub Kenya delivered a genuine Samsung phone. Will buy again.",date:"5 May 2025",helpful:11},
+  {id:"d24",type:"seller",rating:4,name:"Xenia Atieno",      comment:"Good seller. Packaging was a bit damaged but product inside was fine.",date:"28 Apr 2025",helpful:6},
+  {id:"d25",type:"seller",rating:5,name:"Yusuf Abdi",        comment:"Fresh Farm Direct — vegetables were incredibly fresh. Same-day delivery!",date:"21 Apr 2025",helpful:23},
+  {id:"d26",type:"seller",rating:5,name:"Zipporah Maina",    comment:"Ordered custom hoodie from Sokoni Prints. Quality is top notch.",date:"14 Apr 2025",helpful:17},
+  {id:"d27",type:"seller",rating:5,name:"Amara Ochieng",     comment:"CleanCo products are genuine and affordable. Trusted seller.",date:"7 Apr 2025",helpful:9},
+  {id:"d28",type:"seller",rating:4,name:"Benson Kariuki",    comment:"Fast dispatch, honest description. Slight delay on delivery but okay.",date:"1 Apr 2025",helpful:5},
+  {id:"d29",type:"seller",rating:5,name:"Cynthia Wanjiku",   comment:"Beauty seller sent exactly what I ordered plus a free sample. Impressed!",date:"25 Mar 2025",helpful:30},
+  {id:"d30",type:"seller",rating:5,name:"Dennis Makau",      comment:"Electronics seller replied within minutes and answered all my questions.",date:"18 Mar 2025",helpful:12},
+  {id:"d31",type:"seller",rating:5,name:"Esther Rotich",     comment:"The agricultural seller — pure honey, no additives. Reordered 3 times.",date:"11 Mar 2025",helpful:27},
+  /* PROVIDER */
+  {id:"d43",type:"provider",rating:5,name:"Aisha Mwangi",    comment:"John fixed my plumbing in under an hour. Clean work, fair price.",date:"8 Jun 2026",helpful:14,target:"John — Plumber, Westlands"},
+  {id:"d44",type:"provider",rating:5,name:"Peter Ndegwa",    comment:"My barber Mike is the best in Nairobi. Always on time, great skill.",date:"5 Jun 2026",helpful:22,target:"Mike — Barber, Kilimani"},
+  {id:"d45",type:"provider",rating:5,name:"Sharon Odhiambo", comment:"City Motors diagnosed and fixed my car same day. Transparent pricing.",date:"2 Jun 2026",helpful:19,target:"City Motors — Mechanic"},
+  {id:"d46",type:"provider",rating:4,name:"Tom Mwenda",      comment:"Electrician was professional and certified. Work done neatly.",date:"28 May 2026",helpful:8,target:"Kevin — Electrician, Ngong Rd"},
+  {id:"d47",type:"provider",rating:5,name:"Lucy Kamau",      comment:"Catering for our event was amazing — 200 guests all happy!",date:"24 May 2026",helpful:35,target:"Mama Grace Catering"},
+  {id:"d48",type:"provider",rating:5,name:"James Omondi",    comment:"DJ was lit the entire night. Every song was a banger. Highly recommended!",date:"20 May 2026",helpful:47,target:"DJ Flame — Entertainment"},
+  /* PRODUCT */
+  {id:"d32",type:"product",rating:5,name:"Fatuma Hassan",    comment:"Samsung A55 from SOKONI — genuine, sealed box, fast delivery. Perfect!",date:"12 May 2025",helpful:38},
+  {id:"d33",type:"product",rating:5,name:"George Kimani",    comment:"Nike Air Force 1s are 100% authentic. Even came with original receipt.",date:"5 May 2025",helpful:22},
+  {id:"d34",type:"product",rating:4,name:"Hannah Njeri",     comment:"Fridge works perfectly. Delivery guys were careful with installation.",date:"28 Apr 2025",helpful:14},
+  {id:"d35",type:"product",rating:5,name:"Isaac Barasa",     comment:"Custom logo design — exactly what I wanted. Fast turnaround in 2 hours!",date:"21 Apr 2025",helpful:18},
+  {id:"d36",type:"product",rating:5,name:"Joyce Adhiambo",   comment:"Leather bag quality is amazing — better than the photos showed.",date:"14 Apr 2025",helpful:26},
+  {id:"d37",type:"product",rating:5,name:"Kevin Ngugi",      comment:"MacBook M2 — sealed, genuine Apple product. Setup went smoothly.",date:"7 Apr 2025",helpful:45},
+  {id:"d38",type:"product",rating:3,name:"Lydia Koech",      comment:"Product is okay but slightly different shade than photos. Good quality though.",date:"1 Apr 2025",helpful:8},
+  {id:"d39",type:"product",rating:5,name:"Michael Mutua",    comment:"Sofa arrived in perfect condition. Assembly was easy with the guide.",date:"25 Mar 2025",helpful:19},
+  {id:"d40",type:"product",rating:5,name:"Naomi Wanjiru",    comment:"Ordered 3 dresses — all arrived same day, all perfectly sized. Wow!",date:"18 Mar 2025",helpful:32},
+  {id:"d41",type:"product",rating:5,name:"Patrick Oduya",    comment:"School uniform bulk order — all 20 pieces perfect quality and on time.",date:"11 Mar 2025",helpful:15},
+  {id:"d42",type:"product",rating:4,name:"Quincy Achieng",   comment:"Good gaming headset. Slight delay in shipping but sound quality is great.",date:"4 Mar 2025",helpful:10},
+];
+
+function getReviews(){ try{ return JSON.parse(localStorage.getItem("sokoniReviews")) || []; }catch(e){ return []; } }
+function saveReviews(r){ localStorage.setItem("sokoniReviews", JSON.stringify(r)); }
+
+const tabTitles = {
+  platform: "⭐ Leave a Platform Review",
+  seller:   "👤 Review a Seller",
+  product:  "📦 Review a Product",
+  provider: "🛠️ Review a Service Provider"
+};
+const tabTargetPlaceholder = {
+  seller:   "Seller or business name",
+  product:  "Product name",
+  provider: "Provider name (e.g. John — Barber, City Motors)"
+};
+const tabCommentPlaceholder = {
+  platform: "Share your experience with Sokoni...",
+  seller:   "How was buying from this seller?",
+  product:  "What did you think of this product?",
+  provider: "How was the service? Would you recommend them?"
+};
+
+function switchRevTab(tab, btn){
+  activeRevTab = tab;
+  document.querySelectorAll(".rev-tab").forEach(b => b.classList.remove("active-rev-tab"));
+  if(btn) btn.classList.add("active-rev-tab");
+  document.getElementById("writeRevTitle").textContent = tabTitles[tab];
+  const targetEl = document.getElementById("reviewTarget");
+  if(tabTargetPlaceholder[tab]){
+    targetEl.placeholder = tabTargetPlaceholder[tab];
+    targetEl.style.display = "";
+  } else {
+    targetEl.value = "";
+    targetEl.style.display = "none";
+  }
+  document.getElementById("reviewComment").placeholder = tabCommentPlaceholder[tab] || tabCommentPlaceholder.platform;
+  selectedStar = 0; updateStars(0);
+  renderReviews();
+}
+
+function pickStar(n){ selectedStar = n; updateStars(n); }
+function updateStars(n){
+  document.querySelectorAll(".star-pick").forEach((s,i) => s.classList.toggle("star-active", i < n));
+}
+
+function submitReview(){
+  if(!selectedStar){ showNotif("Please select a star rating","error"); return; }
+  const comment = document.getElementById("reviewComment").value.trim();
+  if(!comment){ showNotif("Please write a comment","error"); return; }
+  const targetEl = document.getElementById("reviewTarget");
+  const target = targetEl && targetEl.style.display !== "none" ? targetEl.value.trim() : "";
+  if(tabTargetPlaceholder[activeRevTab] && !target){
+    showNotif("Please enter the " + (activeRevTab === "product" ? "product name" : "name"),"error"); return;
+  }
+  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const name  = document.getElementById("reviewerName").value.trim() || (user?.name) || "Anonymous";
+  const review = {
+    id: "rev_"+Date.now(), type: activeRevTab, rating: selectedStar, comment, name,
+    target: target || "",
+    date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
+    helpful: 0
+  };
+  const reviews = getReviews();
+  reviews.unshift(review);
+  saveReviews(reviews);
+  /* Push to Firestore so all devices see it */
+  if(window.SokoniDB){
+    window.SokoniDB.saveReview(review)
+      .catch(e => console.warn("[SOKONI] Review save failed:", e.message));
+  }
+  selectedStar = 0; updateStars(0);
+  document.getElementById("reviewComment").value = "";
+  if(targetEl) targetEl.value = "";
+  showNotif("Review submitted! Thank you ⭐","success");
+  renderReviews(); updatePlatformStats();
+  try { if(typeof window.onSokoniReview==='function') window.onSokoniReview(); } catch(e){}
+}
+
+function _buildCard(r, idx){
+  const bg  = avColor(idx);
+  const cls = ['rc-r5','rc-r4','rc-r3','rc-r2','rc-r1'][Math.max(0, 5-r.rating)];
+  const stars = "★".repeat(r.rating)+"☆".repeat(5-r.rating);
+  const initials = r.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  const typeIcon = {platform:"🏪",seller:"👤",product:"📦",provider:"🛠️"}[r.type]||"⭐";
+  const targetBadge = r.target
+    ? `<div class="rc-target">${typeIcon} ${r.target}</div>`
+    : "";
+  return `
+  <div class="review-card ${cls}">
+    <div class="rc-header">
+      <div class="rc-avatar" style="background:${bg};">${initials}</div>
+      <div class="rc-stars">${stars}</div>
+    </div>
+    <div class="rc-name">${r.name}</div>
+    ${targetBadge}
+    <div class="rc-comment">"${r.comment}"</div>
+    <div class="rc-footer">
+      <span class="rc-date">${r.date}</span>
+      <button type="button" class="rc-helpful" onclick="markHelpful('${r.id}')">👍 ${r.helpful||0}</button>
+    </div>
+  </div>`;
+}
+
+function renderReviews(){
+  const userRevs = getReviews().filter(r => r.type === activeRevTab);
+  const demoRevs = DEMO_REVIEWS.filter(r => r.type === activeRevTab);
+  /* user reviews first, then demo reviews to fill the grid */
+  const all = [...userRevs, ...demoRevs];
+  const list = document.getElementById("reviewsList");
+  if(!all.length){
+    list.innerHTML = `<div class="reviews-empty" style="grid-column:1/-1;text-align:center;padding:50px 0;"><i class="fas fa-star" style="font-size:40px;color:rgba(255,255,255,0.15);margin-bottom:12px;display:block;"></i><h3>⭐ No reviews yet</h3><p>Be the first to share your experience</p></div>`;
+    return;
+  }
+  list.innerHTML = all.map((r, i) => _buildCard(r, i)).join("");
+}
+
+function markHelpful(id){
+  /* check user reviews first */
+  const revs = getReviews();
+  const rev  = revs.find(r => r.id === id);
+  if(rev){ rev.helpful = (rev.helpful||0)+1; saveReviews(revs); }
+  else {
+    /* demo review — bump in-memory */
+    const dr = DEMO_REVIEWS.find(r => r.id === id);
+    if(dr) dr.helpful = (dr.helpful||0)+1;
+  }
+  renderReviews();
+}
+
+function updatePlatformStats(){
+  const userRevs = getReviews().filter(r => r.type === "platform");
+  const all      = [...userRevs, ...DEMO_REVIEWS.filter(r => r.type === "platform")];
+  const total    = all.length;
+  const avg      = total > 0 ? (all.reduce((s,r)=>s+r.rating,0)/total).toFixed(1) : "—";
+  const pct      = total > 0 ? Math.round((all.filter(r=>r.rating>=4).length/total)*100)+"%" : "—";
+  const avgEl  = document.getElementById("avgRating");
+  const totEl  = document.getElementById("totalReviews");
+  const pctEl  = document.getElementById("recommendPct");
+  const stsEl  = document.getElementById("avgStars");
+  if(avgEl) avgEl.textContent = avg;
+  if(totEl) totEl.textContent = total;
+  if(pctEl) pctEl.textContent = pct;
+  if(stsEl && avg !== "—"){
+    const full = Math.floor(avg);
+    stsEl.innerHTML = "★".repeat(full)+(avg-full>=0.5?"½":"")+"☆".repeat(5-Math.ceil(avg));
+  }
+}
+
+function showNotif(msg, type){
+  const c = document.getElementById("notificationContainer"); if(!c) return;
+  const n = document.createElement("div");
+  n.className = `notification ${type}`; n.textContent = msg;
+  c.appendChild(n); setTimeout(()=>n.remove(), 3000);
+}
+
+window.markHelpful = markHelpful;
+renderReviews();
+updatePlatformStats();
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script type="module">
+/* Load reviews from Firestore so all devices see each other's reviews */
+import SokoniDB from './sokoni-db.js';
+window.SokoniDB = SokoniDB;
+SokoniDB.listenReviews(function(fsReviews){
+  if(!fsReviews.length) return;
+  /* Merge: keep local-only reviews (no _fsId) + Firestore truth */
+  let local = [];
+  try{ local = JSON.parse(localStorage.getItem('sokoniReviews'))||[]; }catch(e){}
+  const localOnly = local.filter(r => !r._fsId && !fsReviews.find(f=>f.id===r.id));
+  const merged = [...fsReviews, ...localOnly];
+  try{ localStorage.setItem('sokoniReviews', JSON.stringify(merged)); }catch(e){}
+  if(typeof renderReviews==='function') renderReviews();
+  if(typeof updatePlatformStats==='function') updatePlatformStats();
+});
+</script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script defer src="sokoni-loyalty.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+

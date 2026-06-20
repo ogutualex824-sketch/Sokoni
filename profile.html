@@ -1,0 +1,1897 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — My Profile</title>
+<meta name="description" content="Your universal SOKONI profile — manage all roles, orders, listings, bookings and more.">
+<meta property="og:title" content="SOKONI — My Profile">
+<meta property="og:description" content="Universal profile across all SOKONI hubs.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="dns-prefetch" href="https://storage.googleapis.com">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="profile.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+<link rel="stylesheet" href="sokoni-desktop.css">
+
+<style>
+/* ── Reset & Base ── */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#080808;color:#fff;padding-bottom:90px;}
+
+/* ── Top Nav ── */
+.upn{
+  position:fixed;top:0;left:0;right:0;height:60px;
+  background:rgba(5,5,5,0.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(113,255,0,0.12);
+  display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:1000;
+}
+.upn-left{display:flex;align-items:center;gap:10px;flex:1;}
+.upn-back{
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px;color:rgba(255,255,255,0.7);text-decoration:none;font-size:14px;transition:all .15s;
+}
+.upn-back:hover{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.upn-logo{height:26px;}
+.upn-title{font-size:15px;font-weight:900;color:#fff;letter-spacing:-.01em;white-space:nowrap;}
+.upn-right{display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end;}
+.upn-btn{
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);
+  border-radius:10px;color:rgba(255,255,255,0.65);text-decoration:none;font-size:14px;
+  cursor:pointer;transition:all .15s;font-family:inherit;
+}
+.upn-btn:hover{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.upn-gear{font-size:16px;}
+
+/* ── Page wrapper ── */
+.up-page{padding-top:68px;max-width:900px;margin:0 auto;padding-left:14px;padding-right:14px;}
+
+/* ── Cover + Avatar Header ── */
+.up-header-card{
+  border-radius:22px;overflow:hidden;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.08);
+  margin-bottom:12px;position:relative;
+}
+.up-cover{
+  height:140px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#0d2200 0%,#1a4400 40%,#071a00 70%,#162b00 100%);
+  cursor:pointer;
+}
+.up-cover-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,0,0,0.3));
+  display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;
+}
+.up-cover:hover .up-cover-overlay{opacity:1;}
+.up-cover-btn{
+  padding:8px 18px;background:rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.2);
+  border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;
+  font-family:inherit;display:flex;align-items:center;gap:6px;
+}
+.up-cover img{width:100%;height:100%;object-fit:cover;}
+
+.up-header-body{padding:0 20px 20px;position:relative;}
+
+.up-avatar-wrap{
+  position:absolute;top:-52px;left:20px;
+  width:88px;height:88px;
+  border-radius:50%;border:3px solid rgba(5,5,5,1);
+  background:#111;overflow:visible;cursor:pointer;
+}
+.up-avatar{
+  width:88px;height:88px;border-radius:50%;object-fit:cover;
+  border:3px solid #080808;display:block;
+}
+.up-verified-badge{
+  position:absolute;bottom:2px;right:2px;
+  width:22px;height:22px;background:#71ff00;border-radius:50%;
+  border:2px solid #080808;display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:#000;font-weight:900;
+}
+.up-avatar-upload{
+  position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border-radius:50%;
+}
+
+.up-meta-row{
+  padding-top:52px;
+  display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;
+}
+.up-name-block{}
+.up-name{font-size:20px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:2px;}
+.up-handle{font-size:13px;color:rgba(255,255,255,0.4);font-weight:600;margin-bottom:6px;}
+.up-bio{font-size:13px;color:rgba(255,255,255,0.6);line-height:1.5;max-width:420px;cursor:text;}
+.up-bio-input{
+  display:none;width:100%;padding:8px 12px;background:rgba(255,255,255,0.06);
+  border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#fff;font-size:16px;
+  outline:none;font-family:inherit;resize:none;margin-top:4px;
+}
+.up-meta-info{
+  display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;
+  font-size:11px;color:rgba(255,255,255,0.38);font-weight:600;
+}
+.up-meta-info span{display:flex;align-items:center;gap:5px;}
+.up-social-row{
+  display:flex;gap:16px;margin-top:8px;
+  font-size:12px;font-weight:700;
+}
+.up-social-row a{color:rgba(255,255,255,0.55);text-decoration:none;}
+.up-social-row a span{color:#fff;}
+
+.up-role-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;}
+.up-role-chip{
+  padding:4px 12px;border-radius:20px;font-size:11px;font-weight:800;
+  border:1px solid;cursor:default;letter-spacing:.02em;
+}
+.chip-buyer{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.chip-seller{background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.3);color:#fbbf24;}
+.chip-provider{background:rgba(249,115,22,0.08);border-color:rgba(249,115,22,0.3);color:#f97316;}
+.chip-driver{background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.3);color:#00aaff;}
+.chip-agent{background:rgba(168,85,247,0.08);border-color:rgba(168,85,247,0.3);color:#a855f7;}
+.chip-business{background:rgba(236,72,153,0.08);border-color:rgba(236,72,153,0.3);color:#ec4899;}
+
+.up-edit-btn{
+  padding:9px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);
+  border-radius:11px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;
+  font-family:inherit;white-space:nowrap;transition:all .15s;
+}
+.up-edit-btn:hover{background:rgba(113,255,0,0.2);}
+
+/* ── Role Switcher ── */
+.up-role-switcher{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  border-radius:18px;padding:14px 18px;margin-bottom:12px;
+  position:sticky;top:64px;z-index:90;
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.rs-label{font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.rs-active{
+  display:flex;align-items:center;gap:10px;margin-bottom:12px;
+  padding:10px 14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);
+  border-radius:12px;
+}
+.rs-active-emoji{font-size:22px;}
+.rs-active-info{}
+.rs-active-name{font-size:14px;font-weight:900;color:#71ff00;}
+.rs-active-hub{font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px;}
+.rs-btns{display:flex;flex-wrap:wrap;gap:8px;}
+.rs-btn{
+  display:flex;align-items:center;gap:6px;padding:7px 14px;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);
+  border-radius:10px;font-size:11px;font-weight:800;cursor:pointer;
+  font-family:inherit;color:rgba(255,255,255,0.55);transition:all .15s;
+}
+.rs-btn:hover{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;}
+.rs-btn.rs-active-role{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00;}
+.rs-add-btn{
+  display:flex;align-items:center;gap:6px;padding:7px 14px;
+  background:transparent;border:1px dashed rgba(255,255,255,0.15);
+  border-radius:10px;font-size:11px;font-weight:800;cursor:pointer;
+  font-family:inherit;color:rgba(255,255,255,0.3);transition:all .15s;
+}
+.rs-add-btn:hover{border-color:rgba(113,255,0,0.3);color:#71ff00;}
+
+/* ── Tabs ── */
+.up-tabs{
+  display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;
+  background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:5px;margin-bottom:14px;
+}
+.up-tabs::-webkit-scrollbar{display:none;}
+.up-tab{
+  padding:8px 16px;border-radius:10px;font-size:12px;font-weight:800;
+  cursor:pointer;white-space:nowrap;color:rgba(255,255,255,0.4);
+  border:none;background:transparent;font-family:inherit;transition:all .15s;flex-shrink:0;
+}
+.up-tab.active{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.25);}
+.up-tab:hover:not(.active){color:rgba(255,255,255,0.7);}
+
+/* ── Tab panels ── */
+.up-panel{display:none;}
+.up-panel.active{display:block;}
+
+/* ── Glass card ── */
+.up-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  border-radius:18px;padding:20px;margin-bottom:14px;
+}
+.up-card-title{
+  font-size:14px;font-weight:900;color:#fff;margin-bottom:16px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.up-card-link{font-size:12px;font-weight:700;color:#71ff00;text-decoration:none;}
+
+/* ── Stats Row ── */
+.up-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+@media(max-width:480px){.up-stats{grid-template-columns:repeat(2,1fr);}}
+.up-stat{
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;padding:14px 12px;text-align:center;
+}
+.up-stat-val{font-size:22px;font-weight:900;color:#71ff00;line-height:1;}
+.up-stat-lbl{font-size:10px;color:rgba(255,255,255,0.38);font-weight:700;margin-top:4px;text-transform:uppercase;letter-spacing:.04em;}
+
+/* ── Activity timeline ── */
+.up-timeline{padding:0;}
+.up-tl-item{
+  display:flex;gap:12px;padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.up-tl-item:last-child{border-bottom:none;}
+.up-tl-icon{
+  width:34px;height:34px;flex-shrink:0;border-radius:50%;
+  background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.15);
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+}
+.up-tl-body{flex:1;min-width:0;}
+.up-tl-text{font-size:13px;color:rgba(255,255,255,0.8);font-weight:600;line-height:1.3;}
+.up-tl-time{font-size:10px;color:rgba(255,255,255,0.3);margin-top:3px;}
+
+/* ── Quick Links ── */
+.up-quick-links{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+@media(max-width:400px){.up-quick-links{grid-template-columns:repeat(2,1fr);}}
+.up-ql{
+  display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;text-decoration:none;transition:all .15s;
+}
+.up-ql:hover{background:rgba(113,255,0,0.06);border-color:rgba(113,255,0,0.2);}
+.up-ql-emoji{font-size:22px;}
+.up-ql-label{font-size:11px;font-weight:800;color:rgba(255,255,255,0.55);text-align:center;}
+
+/* ── Order Cards ── */
+.up-order-card{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;
+  transition:border-color .15s;
+}
+.up-order-card:hover{border-color:rgba(113,255,0,0.25);}
+.up-order-title{font-size:13px;font-weight:800;color:#fff;}
+.up-order-sub{font-size:11px;color:rgba(255,255,255,0.38);margin-top:3px;}
+.up-order-right{text-align:right;flex-shrink:0;}
+.up-order-amt{font-size:14px;font-weight:900;color:#fff;}
+.up-status-badge{
+  display:inline-block;padding:2px 9px;border-radius:6px;
+  font-size:10px;font-weight:800;margin-top:4px;
+}
+.status-placed,.status-processing{background:rgba(251,191,36,0.15);color:#fbbf24;}
+.status-shipped,.status-out_for_delivery{background:rgba(0,170,255,0.15);color:#00aaff;}
+.status-delivered,.status-completed{background:rgba(113,255,0,0.15);color:#71ff00;}
+
+/* ── Listing Cards ── */
+.up-listing-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:400px){.up-listing-grid{grid-template-columns:1fr;}}
+.up-listing-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;overflow:hidden;
+}
+.up-listing-thumb{
+  height:110px;background:rgba(255,255,255,0.04);
+  display:flex;align-items:center;justify-content:center;font-size:32px;position:relative;
+}
+.up-listing-thumb img{width:100%;height:100%;object-fit:cover;}
+.up-listing-body{padding:12px;}
+.up-listing-name{font-size:13px;font-weight:800;color:#fff;margin-bottom:3px;}
+.up-listing-price{font-size:14px;font-weight:900;color:#71ff00;}
+.up-listing-meta{font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;}
+.up-listing-toggle{
+  display:flex;align-items:center;gap:8px;margin-top:10px;
+}
+.up-toggle{
+  width:36px;height:20px;border-radius:10px;border:none;cursor:pointer;
+  position:relative;transition:background .2s;background:#333;
+  flex-shrink:0;
+}
+.up-toggle.on{background:#71ff00;}
+.up-toggle::after{
+  content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;
+  border-radius:50%;background:#fff;transition:transform .2s;
+}
+.up-toggle.on::after{transform:translateX(16px);}
+.up-toggle-lbl{font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);}
+
+/* ── Star rating ── */
+.up-stars{color:#fbbf24;font-size:13px;letter-spacing:2px;}
+.up-review-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:14px 16px;margin-bottom:10px;
+}
+.up-review-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.up-reviewer{font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);}
+.up-review-date{font-size:10px;color:rgba(255,255,255,0.28);}
+.up-review-text{font-size:13px;color:rgba(255,255,255,0.75);line-height:1.5;}
+
+/* ── Following cards ── */
+.up-follow-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:380px){.up-follow-grid{grid-template-columns:1fr;}}
+.up-follow-card{
+  display:flex;align-items:center;gap:10px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:12px;padding:12px;text-decoration:none;transition:all .15s;
+}
+.up-follow-card:hover{border-color:rgba(113,255,0,0.25);}
+.up-follow-avatar{
+  width:38px;height:38px;border-radius:50%;background:rgba(113,255,0,0.08);
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+}
+.up-follow-name{font-size:12px;font-weight:800;color:#fff;line-height:1.3;}
+.up-follow-type{font-size:10px;color:#71ff00;font-weight:700;margin-top:2px;}
+.up-unfollow-btn{
+  margin-left:auto;padding:5px 10px;background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:10px;
+  font-weight:700;color:rgba(255,255,255,0.4);cursor:pointer;font-family:inherit;
+  white-space:nowrap;transition:all .15s;
+}
+.up-unfollow-btn:hover{background:rgba(255,77,77,0.1);border-color:rgba(255,77,77,0.25);color:#ff6b6b;}
+
+/* ── Wallet ── */
+.up-wallet-balance{
+  background:linear-gradient(135deg,rgba(113,255,0,0.12),rgba(113,255,0,0.04));
+  border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;margin-bottom:16px;
+}
+.up-wallet-lbl{font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;}
+.up-wallet-amt{font-size:32px;font-weight:900;color:#71ff00;}
+.up-wallet-sub{font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;}
+.up-wallet-btn{
+  display:inline-flex;align-items:center;gap:7px;margin-top:14px;
+  padding:10px 20px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);
+  border-radius:11px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;transition:all .15s;
+}
+.up-wallet-btn:hover{background:rgba(113,255,0,0.2);}
+.up-tx-item{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:11px 0;border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.up-tx-item:last-child{border-bottom:none;}
+.up-tx-icon{
+  width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+}
+.up-tx-desc{font-size:12px;font-weight:700;color:rgba(255,255,255,0.75);}
+.up-tx-time{font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;}
+.up-tx-amt{font-size:13px;font-weight:900;white-space:nowrap;}
+.up-tx-in{color:#71ff00;}
+.up-tx-out{color:#ff6b6b;}
+
+/* ── Settings Panel ── */
+.up-settings-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.up-settings-overlay.open{display:flex;}
+.up-settings-sheet{
+  width:100%;max-width:600px;max-height:90vh;overflow-y:auto;
+  background:#0e0e0e;border-radius:24px 24px 0 0;
+  border:1px solid rgba(255,255,255,0.1);border-bottom:none;
+  padding:28px 22px 40px;
+}
+.up-settings-drag{
+  width:40px;height:4px;background:rgba(255,255,255,0.15);
+  border-radius:3px;margin:0 auto 24px;
+}
+.up-settings-title{font-size:18px;font-weight:900;color:#fff;margin-bottom:20px;}
+.up-settings-group{margin-bottom:24px;}
+.up-settings-group-title{font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;}
+.up-settings-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:13px 0;border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.up-settings-row:last-child{border-bottom:none;}
+.up-settings-row-label{font-size:13px;font-weight:700;color:rgba(255,255,255,0.75);}
+.up-settings-row-sub{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
+.up-settings-input{
+  padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px;color:#fff;font-size:16px;outline:none;font-family:inherit;flex:1;max-width:220px;
+}
+.up-settings-input:focus{border-color:rgba(113,255,0,0.4);}
+.up-checkbox{
+  width:20px;height:20px;accent-color:#71ff00;cursor:pointer;flex-shrink:0;
+}
+.up-settings-close{
+  width:100%;padding:13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  border-radius:13px;color:rgba(255,255,255,0.55);font-size:14px;font-weight:800;
+  cursor:pointer;font-family:inherit;margin-top:8px;transition:all .15s;
+}
+.up-settings-close:hover{background:rgba(255,255,255,0.08);color:#fff;}
+.up-danger-btn{
+  width:100%;padding:13px;background:rgba(255,77,77,0.07);border:1px solid rgba(255,77,77,0.2);
+  border-radius:13px;color:#ff6b6b;font-size:14px;font-weight:800;
+  cursor:pointer;font-family:inherit;margin-top:8px;transition:all .15s;
+}
+.up-danger-btn:hover{background:rgba(255,77,77,0.14);}
+
+/* ── Role add modal ── */
+.up-role-modal{
+  position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9100;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.up-role-modal.open{display:flex;}
+.up-role-sheet{
+  width:100%;max-width:600px;background:#0e0e0e;
+  border-radius:24px 24px 0 0;border:1px solid rgba(255,255,255,0.1);border-bottom:none;
+  padding:26px 20px 40px;
+}
+.up-role-option{
+  display:flex;align-items:center;gap:14px;padding:14px 16px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;margin-bottom:10px;cursor:pointer;transition:all .15s;
+}
+.up-role-option:hover{background:rgba(113,255,0,0.06);border-color:rgba(113,255,0,0.2);}
+.up-role-option.has-role{opacity:0.4;pointer-events:none;}
+.up-role-option-emoji{font-size:22px;flex-shrink:0;}
+.up-role-option-name{font-size:14px;font-weight:800;color:#fff;}
+.up-role-option-desc{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;}
+.up-modal-close{
+  width:100%;padding:13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);
+  border-radius:13px;color:rgba(255,255,255,0.5);font-size:14px;font-weight:800;
+  cursor:pointer;font-family:inherit;margin-top:6px;
+}
+
+/* ── Booking cards ── */
+.up-booking-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:14px 16px;margin-bottom:10px;
+}
+.up-booking-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.up-booking-type{font-size:12px;font-weight:800;color:#fff;}
+.up-booking-meta{font-size:11px;color:rgba(255,255,255,0.38);margin-top:4px;}
+.up-booking-ref{font-size:10px;color:rgba(255,255,255,0.22);margin-top:4px;}
+
+/* ── Edit profile inline form ── */
+.up-inline-edit{
+  display:none;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);margin-top:14px;
+}
+.up-inline-edit.open{display:block;}
+.up-field{margin-bottom:12px;}
+.up-field label{
+  display:block;font-size:10px;font-weight:800;color:rgba(255,255,255,0.38);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;
+}
+.up-field input,.up-field textarea,.up-field select{
+  width:100%;padding:11px 14px;background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.1);border-radius:12px;
+  color:#fff;font-size:16px;outline:none;font-family:inherit;
+}
+.up-field input:focus,.up-field textarea:focus{border-color:rgba(113,255,0,0.35);}
+.up-field textarea{resize:vertical;min-height:80px;}
+.up-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:400px){.up-field-row{grid-template-columns:1fr;}}
+.up-save-btn{
+  width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);
+  border:none;border-radius:13px;color:#000;font-size:14px;font-weight:900;
+  cursor:pointer;font-family:inherit;transition:opacity .15s;
+}
+.up-save-btn:hover{opacity:.9;}
+
+/* ── Empty state ── */
+.up-empty{
+  text-align:center;padding:36px 20px;
+  color:rgba(255,255,255,0.25);font-size:13px;line-height:1.6;
+}
+.up-empty-icon{font-size:34px;margin-bottom:10px;}
+
+/* ── Toast ── */
+#upToast{
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(30px);
+  background:#71ff00;color:#000;padding:10px 22px;border-radius:12px;
+  font-weight:800;font-size:13px;z-index:99999;white-space:nowrap;
+  transition:transform .3s,opacity .3s;opacity:0;pointer-events:none;
+}
+
+/* ── Logout btn ── */
+.up-logout-btn{
+  width:100%;padding:12px;background:rgba(255,77,77,0.07);border:1px solid rgba(255,77,77,0.18);
+  border-radius:13px;color:#ff6b6b;font-size:14px;font-weight:800;cursor:pointer;
+  font-family:inherit;margin-top:8px;transition:all .15s;
+}
+.up-logout-btn:hover{background:rgba(255,77,77,0.13);}
+
+/* ── Bottom nav ── */
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;height:60px;
+  background:rgba(5,5,5,0.97);backdrop-filter:blur(20px);
+  border-top:1px solid rgba(255,255,255,0.07);
+  display:flex;align-items:center;justify-content:space-around;z-index:800;
+}
+.bnav-item{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  text-decoration:none;color:rgba(255,255,255,0.35);font-size:10px;font-weight:700;
+  padding:6px 10px;transition:color .15s;flex:1;
+}
+.bnav-item.active-bnav,.bnav-item:hover{color:#71ff00;}
+.bnav-emoji{font-size:18px;display:block;}
+@media(min-width:769px){.bottom-nav{display:none;}}
+</style>
+</head>
+
+<body>
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="splash.js"></script>
+
+<!-- ── Top Nav ── -->
+<nav class="upn">
+  <div class="upn-left">
+    <a href="index.html" class="upn-back" title="Back">&#8592;</a>
+    <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" alt="SOKONI" class="upn-logo"></a>
+    <span class="upn-title">My Profile</span>
+  </div>
+  <div class="upn-right">
+    <a href="messages.html" class="upn-btn" title="Messages">&#x1F4AC;</a>
+    <button type="button" class="upn-btn upn-gear" onclick="openSettings()" title="Settings" aria-label="Settings">&#9881;</button>
+  </div>
+</nav>
+
+<!-- ── Toast ── -->
+<div id="upToast"></div>
+
+<!-- ── Main ── -->
+<main class="up-page">
+
+  <!-- 1. Profile Header Card -->
+  <div class="up-header-card">
+    <!-- Cover photo -->
+    <div class="up-cover" id="upCoverArea" onclick="document.getElementById('coverUpload').click()" title="Change cover photo">
+      <img id="upCoverImg" src="" alt="" style="display:none;">
+      <div class="up-cover-overlay">
+        <button type="button" class="up-cover-btn">&#128247; Change Cover</button>
+      </div>
+      <input type="file" id="coverUpload" accept="image/*" style="display:none;" onchange="handleCoverUpload(event)">
+    </div>
+
+    <div class="up-header-body">
+      <!-- Avatar -->
+      <div class="up-avatar-wrap" title="Change photo">
+        <img id="upAvatar" class="up-avatar" src="assets/logosokoni.png" alt="Avatar" onerror="this.src='assets/logosokoni.png'">
+        <div class="up-verified-badge" id="upVerifiedBadge" style="display:none;" title="Verified">&#10003;</div>
+        <input type="file" id="avatarUpload" class="up-avatar-upload" accept="image/*" onchange="handleAvatarUpload(event)">
+      </div>
+
+      <!-- Name, handle, bio -->
+      <div class="up-meta-row">
+        <div class="up-name-block">
+          <div class="up-name" id="upName">Loading...</div>
+          <div class="up-handle" id="upHandle">@sokoni_user</div>
+          <div class="up-bio" id="upBio" onclick="startBioEdit()" title="Click to edit bio">Tap to add a bio...</div>
+          <textarea class="up-bio-input" id="upBioInput" placeholder="Write a short bio..." rows="2" maxlength="200" onblur="saveBioEdit()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();saveBioEdit();}"></textarea>
+        </div>
+        <button type="button" class="up-edit-btn" onclick="toggleInlineEdit()">&#9998; Edit Profile</button>
+      </div>
+
+      <!-- Meta info -->
+      <div class="up-meta-info" id="upMetaInfo">
+        <span id="upMetaLocation" style="display:none;">&#128205; <span id="upLocationText"></span></span>
+        <span id="upMetaJoined">&#128197; <span id="upJoinedText">Joined 2026</span></span>
+        <span>&#128101; <span id="upFollowersText">0</span> followers &middot; <span id="upFollowingText">0</span> following</span>
+      </div>
+
+      <!-- Role badges -->
+      <div class="up-role-chips" id="upRoleChips"></div>
+
+      <!-- Profile completion bar -->
+      <div id="profileCompletionWrap" style="margin-top:14px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.5);">Profile Completion</span>
+          <span id="profileCompletionPct" style="font-size:11px;font-weight:900;color:#71ff00;">0%</span>
+        </div>
+        <div style="height:5px;border-radius:10px;background:rgba(255,255,255,0.07);overflow:hidden;">
+          <div id="profileCompletionBar" style="height:100%;border-radius:10px;background:linear-gradient(90deg,#71ff00,#4fc800);width:0%;transition:width .6s ease;"></div>
+        </div>
+        <div id="profileCompletionHint" style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:5px;"></div>
+      </div>
+
+      <!-- Inline edit form -->
+      <div class="up-inline-edit" id="upInlineEdit">
+        <div class="up-field-row">
+          <div class="up-field">
+            <label>Full Name</label>
+            <input id="ieNameInput" type="text" placeholder="Your name" autocomplete="name">
+          </div>
+          <div class="up-field">
+            <label>Username (@handle)</label>
+            <input id="ieHandleInput" type="text" placeholder="sokoni_user">
+          </div>
+        </div>
+        <div class="up-field-row">
+          <div class="up-field">
+            <label>Phone</label>
+            <input id="iePhoneInput" type="tel" placeholder="07XXXXXXXX">
+          </div>
+          <div class="up-field">
+            <label>Location</label>
+            <input id="ieLocationInput" type="text" placeholder="e.g. Westlands, Nairobi">
+          </div>
+        </div>
+        <div class="up-field">
+          <label>M-Pesa Till / Paybill (Sellers)</label>
+          <input id="ieTillInput" type="tel" inputmode="numeric" placeholder="e.g. 522522">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button type="button" class="up-save-btn" onclick="saveInlineEdit()">&#128190; Save Changes</button>
+          <button type="button" onclick="toggleInlineEdit()" style="padding:13px 18px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:13px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Role Switcher -->
+  <div class="up-role-switcher" id="upRoleSwitcher">
+    <div class="rs-label">Active Role</div>
+    <div class="rs-active" id="rsActiveDisplay">
+      <div class="rs-active-emoji" id="rsActiveEmoji">&#128100;</div>
+      <div class="rs-active-info">
+        <div class="rs-active-name" id="rsActiveName">Buyer</div>
+        <div class="rs-active-hub" id="rsActiveHub">Tap a role to switch</div>
+      </div>
+    </div>
+    <div class="rs-btns" id="rsBtns">
+      <!-- dynamically filled -->
+    </div>
+  </div>
+
+  <!-- 3. Activity Tabs -->
+  <div class="up-tabs" id="upTabs" role="tablist">
+    <button type="button" class="up-tab active" data-tab="overview" onclick="switchTab('overview')" role="tab">Overview</button>
+    <button type="button" class="up-tab" data-tab="orders" onclick="switchTab('orders')" role="tab">Orders</button>
+    <button type="button" class="up-tab" data-tab="listings" onclick="switchTab('listings')" role="tab">Listings</button>
+    <button type="button" class="up-tab" data-tab="bookings" onclick="switchTab('bookings')" role="tab">Bookings</button>
+    <button type="button" class="up-tab" data-tab="reviews" onclick="switchTab('reviews')" role="tab">Reviews</button>
+    <button type="button" class="up-tab" data-tab="following" onclick="switchTab('following')" role="tab">Following</button>
+    <button type="button" class="up-tab" data-tab="wallet" onclick="switchTab('wallet')" role="tab">Wallet</button>
+  </div>
+
+  <!-- OVERVIEW panel -->
+  <div id="panel-overview" class="up-panel active">
+    <div class="up-stats" id="upOverviewStats">
+      <div class="up-stat"><div class="up-stat-val" id="statOrders">0</div><div class="up-stat-lbl">Orders</div></div>
+      <div class="up-stat"><div class="up-stat-val" id="statSpent">0</div><div class="up-stat-lbl">Spent (K)</div></div>
+      <div class="up-stat"><div class="up-stat-val" id="statListings">0</div><div class="up-stat-lbl">Listings</div></div>
+      <div class="up-stat"><div class="up-stat-val" id="statRating">&#8212;</div><div class="up-stat-lbl">Rating</div></div>
+    </div>
+
+    <div class="up-card">
+      <div class="up-card-title">Recent Activity</div>
+      <div class="up-timeline" id="upTimeline">
+        <div class="up-empty"><div class="up-empty-icon">&#128337;</div>Activity will appear here as you use SOKONI.</div>
+      </div>
+    </div>
+
+    <div class="up-card">
+      <div class="up-card-title">My Hubs <a href="index.html" class="up-card-link">Browse All</a></div>
+      <div class="up-quick-links" id="upQuickLinks">
+        <a class="up-ql" href="index.html"><span class="up-ql-emoji">&#128722;</span><span class="up-ql-label">Shop</span></a>
+        <a class="up-ql" href="seller.html"><span class="up-ql-emoji">&#128234;</span><span class="up-ql-label">Seller</span></a>
+        <a class="up-ql" href="services.html"><span class="up-ql-emoji">&#128295;</span><span class="up-ql-label">Services</span></a>
+        <a class="up-ql" href="delivery.html"><span class="up-ql-emoji">&#128666;</span><span class="up-ql-label">Delivery</span></a>
+        <a class="up-ql" href="property-hub.html"><span class="up-ql-emoji">&#127968;</span><span class="up-ql-label">Property</span></a>
+        <a class="up-ql" href="fitness-hub.html"><span class="up-ql-emoji">&#127947;</span><span class="up-ql-label">Fitness</span></a>
+      </div>
+    </div>
+
+    <!-- GROWTH & REWARDS card -->
+    <div class="up-card" style="margin-top:12px;">
+      <div class="up-card-title">Rewards &amp; Growth</div>
+      <div id="upLoyaltyBar" style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;">
+        <span style="font-size:26px;">&#127873;</span>
+        <div style="flex:1;">
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;">LOYALTY POINTS</div>
+          <div id="upLoyaltyPts" style="font-size:22px;font-weight:900;color:#71ff00;">0 pts</div>
+        </div>
+        <a href="loyalty.html" style="padding:8px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;">View &amp; Redeem</a>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <a href="loyalty.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:white;font-size:10px;font-weight:700;text-align:center;">
+          <span style="font-size:20px;">&#127941;</span>Loyalty
+        </a>
+        <a href="referral.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:white;font-size:10px;font-weight:700;text-align:center;">
+          <span style="font-size:20px;">&#128279;</span>Referrals
+        </a>
+        <a href="subscriptions.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:white;font-size:10px;font-weight:700;text-align:center;">
+          <span style="font-size:20px;">&#11088;</span>Subscribe
+        </a>
+        <a href="verification.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.18);border-radius:10px;text-decoration:none;color:#71ff00;font-size:10px;font-weight:700;text-align:center;">
+          <span style="font-size:20px;">&#10003;</span>Get Verified
+        </a>
+      </div>
+    </div>
+
+    <!-- ANALYTICS shortcut (for sellers) -->
+    <div id="upAnalyticsCard" class="up-card" style="margin-top:12px;display:none;">
+      <div class="up-card-title">Your Analytics</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <a href="seller-analytics.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:10px;text-decoration:none;color:white;font-size:11px;font-weight:800;">
+          <span style="font-size:18px;">&#128200;</span>Seller Analytics
+        </a>
+        <a href="business-analytics.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;">
+          <span style="font-size:18px;">&#128203;</span>Business
+        </a>
+        <a href="growth-dashboard.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;">
+          <span style="font-size:18px;">&#128202;</span>Growth
+        </a>
+        <a href="revenue.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;">
+          <span style="font-size:18px;">&#128181;</span>Revenue
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDERS panel -->
+  <div id="panel-orders" class="up-panel">
+    <div class="up-card">
+      <div class="up-card-title">My Orders <a href="track.html" class="up-card-link">Track All</a> &nbsp;<a href="scan.html" class="up-card-link">📷 Scan QR</a></div>
+      <div id="ordersPanel">
+        <div class="up-empty"><div class="up-empty-icon">&#128230;</div>Loading orders...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LISTINGS panel -->
+  <div id="panel-listings" class="up-panel">
+    <div class="up-card">
+      <div class="up-card-title">My Listings <a href="seller.html" class="up-card-link">Manage All</a></div>
+      <div id="listingsPanel">
+        <div class="up-empty"><div class="up-empty-icon">&#128230;</div>Loading listings...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOOKINGS panel -->
+  <div id="panel-bookings" class="up-panel">
+    <div class="up-card">
+      <div class="up-card-title">My Bookings <a href="services.html" class="up-card-link">Book More</a></div>
+      <div id="bookingsPanel">
+        <div class="up-empty"><div class="up-empty-icon">&#128197;</div>Loading bookings...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REVIEWS panel -->
+  <div id="panel-reviews" class="up-panel">
+    <div class="up-card">
+      <div class="up-card-title">Reviews About Me</div>
+      <div id="reviewsPanel">
+        <div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet. Complete transactions to earn reviews.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOLLOWING panel -->
+  <div id="panel-following" class="up-panel">
+    <div class="up-card">
+      <div class="up-card-title">Following <span id="followingCountBadge" style="font-size:12px;color:rgba(255,255,255,0.3);font-weight:600;"></span></div>
+      <div class="up-follow-grid" id="followingPanel">
+        <div class="up-empty" style="grid-column:1/-1;"><div class="up-empty-icon">&#128101;</div>You are not following anyone yet.<br><a href="services.html" style="color:#71ff00;text-decoration:none;">Browse providers</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WALLET panel -->
+  <div id="panel-wallet" class="up-panel">
+    <div class="up-wallet-balance">
+      <div class="up-wallet-lbl">Available Balance</div>
+      <div class="up-wallet-amt" id="walletBalance">KES 0.00</div>
+      <div class="up-wallet-sub" id="walletSub">Last updated just now</div>
+      <a href="wallet.html" class="up-wallet-btn">&#128181; Open Wallet</a>
+    </div>
+    <div class="up-card">
+      <div class="up-card-title">Recent Transactions <a href="wallet.html" class="up-card-link">See All</a></div>
+      <div id="walletTxPanel">
+        <div class="up-empty"><div class="up-empty-icon">&#128181;</div>No transactions yet.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">&#127968;</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">&#128717;</span><span>Categories</span></a>
+  <a href="flashsale.html" class="bnav-item"><span class="bnav-emoji">&#9889;</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">&#128172;</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item active-bnav"><span class="bnav-emoji">&#128100;</span><span>Profile</span></a>
+</nav>
+
+<!-- Settings Sheet -->
+<div class="up-settings-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+  <div class="up-settings-sheet">
+    <div class="up-settings-drag"></div>
+    <div class="up-settings-title">&#9881; Settings</div>
+
+    <!-- Account -->
+    <div class="up-settings-group">
+      <div class="up-settings-group-title">Account</div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Email</div><div class="up-settings-row-sub" id="settingsEmail">—</div></div>
+      </div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Phone</div><div class="up-settings-row-sub" id="settingsPhone">—</div></div>
+        <input type="tel" class="up-settings-input" id="settingsPhoneInput" placeholder="07XXXXXXXX" style="font-size:16px;">
+      </div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Password</div><div class="up-settings-row-sub">Change via email link</div></div>
+        <a href="login.html?reset=1" style="color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;">Reset &rarr;</a>
+      </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="up-settings-group">
+      <div class="up-settings-group-title">Notifications</div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Order Updates</div></div>
+        <input type="checkbox" class="up-checkbox" id="notifOrders" checked>
+      </div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">New Messages</div></div>
+        <input type="checkbox" class="up-checkbox" id="notifMessages" checked>
+      </div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Promotions &amp; Deals</div></div>
+        <input type="checkbox" class="up-checkbox" id="notifPromos">
+      </div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Booking Reminders</div></div>
+        <input type="checkbox" class="up-checkbox" id="notifBookings" checked>
+      </div>
+    </div>
+
+    <!-- Privacy -->
+    <div class="up-settings-group">
+      <div class="up-settings-group-title">Privacy</div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Show my profile publicly</div></div>
+        <input type="checkbox" class="up-checkbox" id="privPublic" checked>
+      </div>
+      <div class="up-settings-row">
+        <div><div class="up-settings-row-label">Show my reviews</div></div>
+        <input type="checkbox" class="up-checkbox" id="privReviews" checked>
+      </div>
+    </div>
+
+    <!-- Linked Hubs -->
+    <div class="up-settings-group">
+      <div class="up-settings-group-title">Linked Hubs</div>
+      <div class="up-settings-row"><div><div class="up-settings-row-label">&#128722; Marketplace (Buyer)</div></div><input type="checkbox" class="up-checkbox" id="hubBuyer" checked></div>
+      <div class="up-settings-row"><div><div class="up-settings-row-label">&#128234; Seller Hub</div></div><input type="checkbox" class="up-checkbox" id="hubSeller"></div>
+      <div class="up-settings-row"><div><div class="up-settings-row-label">&#128295; Services / Provider</div></div><input type="checkbox" class="up-checkbox" id="hubProvider"></div>
+      <div class="up-settings-row"><div><div class="up-settings-row-label">&#128664; Driver Hub</div></div><input type="checkbox" class="up-checkbox" id="hubDriver"></div>
+      <div class="up-settings-row"><div><div class="up-settings-row-label">&#127968; Property Agent</div></div><input type="checkbox" class="up-checkbox" id="hubAgent"></div>
+    </div>
+
+    <!-- Save Prefs -->
+    <button type="button" class="up-save-btn" style="margin-bottom:10px;" onclick="saveSettings()">&#128190; Save Preferences</button>
+
+    <!-- Danger zone -->
+    <div class="up-settings-group">
+      <div class="up-settings-group-title">Danger Zone</div>
+      <button type="button" class="up-danger-btn" onclick="deactivateAccount()">&#9888; Deactivate Account</button>
+      <button type="button" class="up-danger-btn" style="margin-top:8px;background:rgba(220,38,38,0.1);border-color:rgba(220,38,38,0.3);color:#f87171;" onclick="deleteAccountPermanently()">&#128465; Delete Account Permanently</button>
+    </div>
+
+    <button type="button" class="up-logout-btn" onclick="logoutUser()">&#128682; Log Out</button>
+    <button type="button" class="up-settings-close" onclick="closeSettings()">Close</button>
+  </div>
+</div>
+
+<!-- Role Add Modal -->
+<div class="up-role-modal" id="roleModal" onclick="if(event.target===this)closeRoleModal()">
+  <div class="up-role-sheet">
+    <div class="up-settings-drag"></div>
+    <div class="up-settings-title">Add a Role</div>
+    <div id="roleOptionsList"></div>
+    <button type="button" class="up-modal-close" onclick="closeRoleModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="demo-seed.js"></script>
+<script src="sokoni-permissions.js"></script>
+<script src="profile.js"></script>
+<script src="sokoni-invoice.js"></script>
+<script type="module" src="session-manager.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="nav-active.js" defer></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   UNIVERSAL PROFILE — main controller
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Helpers ── */
+function escHtml(s){
+  if(s==null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function upToast(msg, ok){
+  var t = document.getElementById('upToast');
+  if(!t) return;
+  t.textContent = msg;
+  t.style.background = ok===false ? '#ff4444' : '#71ff00';
+  t.style.color = ok===false ? '#fff' : '#000';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  t.style.opacity = '1';
+  clearTimeout(t._tmr);
+  t._tmr = setTimeout(function(){
+    t.style.transform='translateX(-50%) translateY(30px)';
+    t.style.opacity='0';
+  }, 2800);
+}
+
+function getUser(){
+  try{ return JSON.parse(localStorage.getItem('sokoniUser') || 'null'); }catch(e){ return null; }
+}
+function setUser(u){
+  localStorage.setItem('sokoniUser', JSON.stringify(u));
+}
+
+function timeAgo(ts){
+  if(!ts) return '';
+  var ms = ts.seconds ? ts.seconds*1000 : (typeof ts==='number'?ts:new Date(ts).getTime());
+  var secs = Math.floor((Date.now()-ms)/1000);
+  if(secs<60) return 'Just now';
+  if(secs<3600) return Math.floor(secs/60)+'m ago';
+  if(secs<86400) return Math.floor(secs/3600)+'h ago';
+  return Math.floor(secs/86400)+'d ago';
+}
+
+/* ── Role definitions ── */
+var ROLES = [
+  { key:'buyer',    label:'Buyer',            emoji:'&#128722;', chipClass:'chip-buyer',    hub:'index.html',    hubLabel:'Marketplace' },
+  { key:'seller',   label:'Seller',           emoji:'&#128234;', chipClass:'chip-seller',   hub:'seller.html',   hubLabel:'Seller Hub' },
+  { key:'provider', label:'Service Provider', emoji:'&#128295;', chipClass:'chip-provider', hub:'providers.html',hubLabel:'Services Hub' },
+  { key:'driver',   label:'Driver',           emoji:'&#128664;', chipClass:'chip-driver',   hub:'driver.html',   hubLabel:'Driver Hub' },
+  { key:'agent',    label:'Property Agent',   emoji:'&#127968;', chipClass:'chip-agent',    hub:'property.html', hubLabel:'Property Hub' },
+  { key:'business', label:'Business Owner',   emoji:'&#127970;', chipClass:'chip-business', hub:'seller.html',   hubLabel:'Business Hub' },
+];
+
+function getRoleDef(key){
+  return ROLES.find(function(r){ return r.key===key; }) || ROLES[0];
+}
+
+/* ── Auth guard ── */
+var _user = getUser();
+if(!_user || !_user.uid){
+  window.location.href = 'login.html';
+  throw new Error('Not authenticated');
+}
+
+/* ── Growth & Rewards cards ── */
+function _initGrowthCards(){
+  /* Loyalty points from sokoniLoyaltyPoints.total (new schema) or legacy sokoniPoints */
+  var lp = 0;
+  try {
+    var lpData = JSON.parse(localStorage.getItem('sokoniLoyaltyPoints'));
+    if(lpData && typeof lpData.total === 'number') lp = lpData.total;
+    else lp = parseInt(localStorage.getItem('sokoniPoints'),10) || 0;
+  } catch(e){ lp = 0; }
+  var ptsEl = document.getElementById('upLoyaltyPts');
+  if(ptsEl) ptsEl.textContent = lp.toLocaleString() + ' pts';
+
+  /* Show analytics card for sellers and admins */
+  var role = localStorage.getItem('userRole') || '';
+  var isSeller = role === 'seller' || role === 'admin' ||
+                 (localStorage.getItem('sokoniShopName') || '').length > 0;
+  var acEl = document.getElementById('upAnalyticsCard');
+  if(acEl && isSeller) acEl.style.display = '';
+}
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', initProfile);
+
+function initProfile(){
+  _user = getUser();
+  renderHeaderCard();
+  renderRoleSwitcher();
+  loadOverview();
+  loadOrders();
+  loadListings();
+  loadBookings();
+  loadReviews();
+  loadFollowing();
+  loadWallet();
+  loadSettingsForm();
+  renderRoleModal();
+  _initGrowthCards();
+
+  /* listen for Firestore profile updates */
+  if(window.firebaseDB){
+    listenFirestoreProfile(_user.uid);
+  } else {
+    document.addEventListener('sokoniAuthReady', function(e){
+      if(e.detail && e.detail.uid) listenFirestoreProfile(e.detail.uid);
+    });
+    setTimeout(function(){
+      if(window.firebaseDB) listenFirestoreProfile(_user.uid);
+    }, 3000);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   1. HEADER CARD
+══════════════════════════════════════════════════════════════ */
+function renderHeaderCard(){
+  _user = getUser();
+  if(!_user) return;
+
+  /* Name */
+  var nameEl = document.getElementById('upName');
+  if(nameEl) nameEl.textContent = _user.name || 'Sokoni User';
+
+  /* Handle */
+  var handleEl = document.getElementById('upHandle');
+  if(handleEl) handleEl.textContent = '@' + (_user.username || slugify(_user.name || 'user'));
+
+  /* Bio */
+  var bioEl = document.getElementById('upBio');
+  if(bioEl){
+    bioEl.textContent = _user.bio || 'Tap to add a bio...';
+    bioEl.style.color = _user.bio ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
+  }
+
+  /* Avatar */
+  var avatarEl = document.getElementById('upAvatar');
+  if(avatarEl && _user.avatarUrl){
+    avatarEl.src = _user.avatarUrl;
+  }
+
+  /* Cover */
+  if(_user.coverUrl){
+    var coverImg = document.getElementById('upCoverImg');
+    if(coverImg){ coverImg.src = _user.coverUrl; coverImg.style.display='block'; }
+  }
+
+  /* Verified */
+  var badge = document.getElementById('upVerifiedBadge');
+  if(badge) badge.style.display = _user.verified ? 'flex' : 'none';
+
+  /* Location */
+  if(_user.location){
+    document.getElementById('upMetaLocation').style.display = 'flex';
+    document.getElementById('upLocationText').textContent = escHtml(_user.location);
+  }
+
+  /* Joined date */
+  var joinedEl = document.getElementById('upJoinedText');
+  if(joinedEl){
+    if(_user.createdAt){
+      var d = _user.createdAt.seconds ? new Date(_user.createdAt.seconds*1000) : new Date(_user.createdAt);
+      joinedEl.textContent = 'Joined ' + d.toLocaleDateString('en-KE',{month:'long',year:'numeric'});
+    } else {
+      joinedEl.textContent = 'Joined 2026';
+    }
+  }
+
+  /* Followers / following */
+  var follEl = document.getElementById('upFollowersText');
+  var folwEl = document.getElementById('upFollowingText');
+  if(follEl) follEl.textContent = (_user.followersCount||0).toLocaleString();
+  if(folwEl) folwEl.textContent = (_user.followingCount||0).toLocaleString();
+
+  /* Role chips */
+  renderRoleChips();
+
+  /* Profile completion */
+  _renderProfileCompletion(_user);
+}
+
+function _renderProfileCompletion(u){
+  if(!u) return;
+  var wrap = document.getElementById('profileCompletionWrap');
+  var bar  = document.getElementById('profileCompletionBar');
+  var pct  = document.getElementById('profileCompletionPct');
+  var hint = document.getElementById('profileCompletionHint');
+  if(!wrap || !bar || !pct || !hint) return;
+
+  var checks = [
+    { label:'Profile photo',   done: !!(u.avatarUrl && !u.avatarUrl.includes('logosokoni')) },
+    { label:'Full name',       done: !!(u.name && u.name.trim().length > 1) },
+    { label:'Phone number',    done: !!(u.phone && u.phone.length >= 9) },
+    { label:'Location',        done: !!(u.location && u.location.trim()) },
+    { label:'Bio',             done: !!(u.bio && u.bio.trim().length >= 10) },
+    { label:'Email verified',  done: !!(u.email) },
+    { label:'Role selected',   done: !!(u.roles && u.roles.length > 1) },
+    { label:'Cover photo',     done: !!(u.coverUrl) },
+  ];
+
+  var done  = checks.filter(function(c){ return c.done; }).length;
+  var score = Math.round((done / checks.length) * 100);
+
+  if(score >= 100){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  bar.style.width  = score + '%';
+  bar.style.background = score >= 80 ? 'linear-gradient(90deg,#71ff00,#4fc800)'
+                       : score >= 50 ? 'linear-gradient(90deg,#fbbf24,#f59e0b)'
+                       :               'linear-gradient(90deg,#f87171,#ef4444)';
+  pct.textContent  = score + '%';
+  pct.style.color  = score >= 80 ? '#71ff00' : score >= 50 ? '#fbbf24' : '#f87171';
+
+  var missing = checks.filter(function(c){ return !c.done; }).map(function(c){ return c.label; });
+  hint.textContent = 'Add: ' + missing.slice(0,3).join(', ') + (missing.length > 3 ? ' + ' + (missing.length-3) + ' more' : '');
+}
+
+function renderRoleChips(){
+  _user = getUser();
+  var container = document.getElementById('upRoleChips');
+  if(!container) return;
+  var roles = _user.roles || ['buyer'];
+  container.innerHTML = roles.map(function(rk){
+    var rd = getRoleDef(rk);
+    return '<span class="up-role-chip '+escHtml(rd.chipClass)+'" title="'+escHtml(rd.hubLabel)+'">'+rd.emoji+' '+escHtml(rd.label)+'</span>';
+  }).join('');
+}
+
+function slugify(s){
+  return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+}
+
+/* Bio inline edit */
+function startBioEdit(){
+  var bioEl = document.getElementById('upBio');
+  var bioInput = document.getElementById('upBioInput');
+  if(!bioEl || !bioInput) return;
+  bioInput.value = _user.bio || '';
+  bioEl.style.display = 'none';
+  bioInput.style.display = 'block';
+  bioInput.focus();
+}
+
+function saveBioEdit(){
+  var bioEl = document.getElementById('upBio');
+  var bioInput = document.getElementById('upBioInput');
+  if(!bioEl || !bioInput) return;
+  var val = bioInput.value.trim();
+  bioInput.style.display = 'none';
+  bioEl.style.display = 'block';
+  if(val === (_user.bio||'')) return;
+  _user.bio = val;
+  setUser(_user);
+  bioEl.textContent = val || 'Tap to add a bio...';
+  bioEl.style.color = val ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
+  saveToFirestore({bio: val});
+  upToast('Bio updated!', true);
+}
+
+/* Avatar upload */
+function handleAvatarUpload(e){
+  var file = e.target.files && e.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var url = ev.target.result;
+    document.getElementById('upAvatar').src = url;
+    _user.avatarUrl = url;
+    setUser(_user);
+    saveToFirestore({avatarUrl: url});
+    upToast('Profile photo updated!', true);
+  };
+  reader.readAsDataURL(file);
+}
+
+/* Cover upload */
+function handleCoverUpload(e){
+  var file = e.target.files && e.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var url = ev.target.result;
+    var img = document.getElementById('upCoverImg');
+    img.src = url;
+    img.style.display = 'block';
+    _user.coverUrl = url;
+    setUser(_user);
+    saveToFirestore({coverUrl: url});
+    upToast('Cover photo updated!', true);
+  };
+  reader.readAsDataURL(file);
+}
+
+/* Inline edit form */
+function toggleInlineEdit(){
+  _user = getUser();
+  var form = document.getElementById('upInlineEdit');
+  if(!form) return;
+  var isOpen = form.classList.contains('open');
+  if(!isOpen){
+    document.getElementById('ieNameInput').value = escHtml(_user.name || '');
+    document.getElementById('ieHandleInput').value = escHtml(_user.username || slugify(_user.name||''));
+    document.getElementById('iePhoneInput').value = escHtml(_user.phone || '');
+    document.getElementById('ieLocationInput').value = escHtml(_user.location || '');
+    document.getElementById('ieTillInput').value = escHtml(_user.tillNumber || '');
+  }
+  form.classList.toggle('open', !isOpen);
+  var btn = document.querySelector('.up-edit-btn');
+  if(btn) btn.textContent = isOpen ? '&#9998; Edit Profile' : '&#10005; Close';
+}
+
+function saveInlineEdit(){
+  var name     = (document.getElementById('ieNameInput').value||'').trim();
+  var username = (document.getElementById('ieHandleInput').value||'').trim().replace(/^@/,'');
+  var phone    = (document.getElementById('iePhoneInput').value||'').trim();
+  var location = (document.getElementById('ieLocationInput').value||'').trim();
+  var till     = (document.getElementById('ieTillInput').value||'').replace(/\D/g,'').trim();
+
+  if(!name){ upToast('Name cannot be empty', false); return; }
+
+  _user = getUser();
+  _user.name = name;
+  _user.username = username || slugify(name);
+  if(phone) _user.phone = phone;
+  if(location) _user.location = location;
+  if(till) _user.tillNumber = till; else delete _user.tillNumber;
+  _user.updatedAt = new Date().toISOString();
+  setUser(_user);
+
+  saveToFirestore({name:name, username:_user.username, phone:phone, location:location, tillNumber:till||null, updatedAt:_user.updatedAt});
+  renderHeaderCard();
+  toggleInlineEdit();
+  upToast('Profile saved!', true);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   2. ROLE SWITCHER
+══════════════════════════════════════════════════════════════ */
+function renderRoleSwitcher(){
+  _user = getUser();
+  var roles = _user.roles && _user.roles.length ? _user.roles : ['buyer'];
+  var activeRole = _user.activeRole || roles[0] || 'buyer';
+  var rd = getRoleDef(activeRole);
+
+  var emojiEl = document.getElementById('rsActiveEmoji');
+  var nameEl  = document.getElementById('rsActiveName');
+  var hubEl   = document.getElementById('rsActiveHub');
+  if(emojiEl) emojiEl.innerHTML = rd.emoji;
+  if(nameEl)  nameEl.textContent = rd.label;
+  if(hubEl)   hubEl.innerHTML = 'Hub: <a href="'+escHtml(rd.hub)+'" style="color:#71ff00;text-decoration:none;">'+escHtml(rd.hubLabel)+'</a>';
+
+  var btnsEl = document.getElementById('rsBtns');
+  if(!btnsEl) return;
+  btnsEl.innerHTML = roles.map(function(rk){
+    var r = getRoleDef(rk);
+    var active = rk === activeRole ? ' rs-active-role' : '';
+    return '<button type="button" class="rs-btn'+active+'" onclick="switchRole(\''+escHtml(rk)+'\')">'+r.emoji+' '+escHtml(r.label)+'</button>';
+  }).join('') + '<button type="button" class="rs-add-btn" onclick="openRoleModal()">&#43; Add Role</button>';
+}
+
+function switchRole(roleKey){
+  _user = getUser();
+  _user.activeRole = roleKey;
+  setUser(_user);
+  renderRoleSwitcher();
+  window.dispatchEvent(new CustomEvent('sokoniRoleChanged', {detail:{role:roleKey}}));
+  var rd = getRoleDef(roleKey);
+  upToast('Switched to ' + rd.label, true);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TABS
+══════════════════════════════════════════════════════════════ */
+function switchTab(tabKey){
+  document.querySelectorAll('.up-tab').forEach(function(b){
+    b.classList.toggle('active', b.dataset.tab === tabKey);
+  });
+  document.querySelectorAll('.up-panel').forEach(function(p){
+    p.classList.toggle('active', p.id === 'panel-'+tabKey);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   3. OVERVIEW
+══════════════════════════════════════════════════════════════ */
+function loadOverview(){
+  /* orders count */
+  var orders = [];
+  try{ orders = JSON.parse(localStorage.getItem('sokoniOrders')||'[]'); }catch(e){}
+  document.getElementById('statOrders').textContent = orders.length;
+
+  /* total spent */
+  var spent = orders.reduce(function(acc,o){ return acc + Number(o.total||0); }, 0);
+  document.getElementById('statSpent').textContent = spent>=1000 ? (spent/1000).toFixed(1)+'K' : spent;
+
+  /* listings */
+  var listings = [];
+  try{ listings = JSON.parse(localStorage.getItem('sokoniProducts')||'[]'); }catch(e){}
+  document.getElementById('statListings').textContent = listings.length;
+
+  /* rating placeholder */
+  document.getElementById('statRating').textContent = _user.averageRating ? _user.averageRating.toFixed(1) : '—';
+
+  /* timeline */
+  buildTimeline(orders);
+}
+
+function buildTimeline(orders){
+  var el = document.getElementById('upTimeline');
+  if(!el) return;
+  var events = [];
+  orders.slice(0,5).forEach(function(o){
+    events.push({emoji:'&#128230;', text:'Placed order #'+escHtml(o.id||'—')+' · KES '+Number(o.total||0).toLocaleString(), ts:o.createdAt});
+  });
+  if(!events.length){
+    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128337;</div>Activity will appear here as you use SOKONI.</div>';
+    return;
+  }
+  el.innerHTML = events.map(function(ev){
+    return '<div class="up-tl-item"><div class="up-tl-icon">'+ev.emoji+'</div><div class="up-tl-body"><div class="up-tl-text">'+ev.text+'</div><div class="up-tl-time">'+timeAgo(ev.ts)+'</div></div></div>';
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ORDERS PANEL
+══════════════════════════════════════════════════════════════ */
+var STATUS_LABELS = {placed:'Placed',processing:'Processing',shipped:'Shipped',out_for_delivery:'Out for Delivery',delivered:'Delivered',completed:'Completed'};
+var STATUS_CLASS  = {placed:'status-placed',processing:'status-processing',shipped:'status-shipped',out_for_delivery:'status-out_for_delivery',delivered:'status-delivered',completed:'status-completed'};
+
+function loadOrders(){
+  var el = document.getElementById('ordersPanel');
+  if(!el) return;
+
+  /* Local orders */
+  var orders = [];
+  try{ orders = JSON.parse(localStorage.getItem('sokoniOrders')||'[]'); }catch(e){}
+
+  /* Firestore orders via SokoniDB */
+  var _rendered = false;
+  function _render(list){
+    if(!list.length){
+      el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>No orders yet. <a href="index.html" style="color:#71ff00;text-decoration:none;">Start shopping</a></div>';
+      return;
+    }
+    el.innerHTML = list.slice(0,10).map(function(o){
+      var href = o.deliveryRef
+        ? 'delivery-tracking.html?ref='+encodeURIComponent(o.deliveryRef)
+        : 'track.html?id='+encodeURIComponent(o.id||o._fsId||'');
+      var status = escHtml(o.status||'placed');
+      var dateStr = escHtml(String(o.date||''));
+      return '<div class="up-order-card" onclick="window.location.href=\''+escHtml(href)+'\'">'
+        +'<div><div class="up-order-title">'+escHtml(o.id||o._fsId||'Order')+'</div>'
+        +'<div class="up-order-sub">'+dateStr+(o.items&&o.items.length?' &middot; '+o.items.length+' item(s)':'')+'</div></div>'
+        +'<div class="up-order-right"><div class="up-order-amt">KES '+Number(o.total||0).toLocaleString()+'</div>'
+        +'<span class="up-status-badge '+(STATUS_CLASS[o.status||'placed']||'status-placed')+'">'+(STATUS_LABELS[o.status||'placed']||status)+'</span></div></div>';
+    }).join('');
+    document.getElementById('statOrders').textContent = list.length;
+  }
+
+  if(orders.length){ _render(orders); _rendered=true; }
+
+  /* live Firestore */
+  if(window.SokoniDB && _user && _user.uid){
+    try{
+      window.SokoniDB.listenUserOrders(_user.uid, function(fsOrders){
+        if(!fsOrders||!fsOrders.length) return;
+        var merged = [...fsOrders];
+        orders.forEach(function(lo){ if(!merged.find(function(fo){ return fo.id===lo.id; })) merged.push(lo); });
+        merged.sort(function(a,b){ return (b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0)-(a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0); });
+        try{ localStorage.setItem('sokoniOrders', JSON.stringify(merged)); }catch(e){}
+        _render(merged);
+        buildTimeline(merged);
+      });
+    }catch(e){}
+  } else if(!_rendered){
+    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>No orders yet. <a href="index.html" style="color:#71ff00;text-decoration:none;">Start shopping</a></div>';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LISTINGS PANEL
+══════════════════════════════════════════════════════════════ */
+function loadListings(){
+  var el = document.getElementById('listingsPanel');
+  if(!el) return;
+
+  var products = [];
+  try{ products = JSON.parse(localStorage.getItem('sokoniProducts')||'[]'); }catch(e){}
+
+  if(!products.length && !(_user.roles && (_user.roles.indexOf('seller')>-1 || _user.roles.indexOf('business')>-1))){
+    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128234;</div>No active listings.<br><a href="seller.html" style="color:#71ff00;text-decoration:none;">Open Seller Hub to list items</a></div>';
+    return;
+  }
+
+  /* Firestore listings */
+  function _render(list){
+    if(!list.length){
+      el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128234;</div>No listings yet. <a href="seller.html" style="color:#71ff00;text-decoration:none;">Add your first product</a></div>';
+      return;
+    }
+    el.innerHTML = '<div class="up-listing-grid">'+list.slice(0,12).map(function(p){
+      var imgSrc = (p.images && p.images[0]) || p.image || '';
+      var active = p.active !== false;
+      return '<div class="up-listing-card">'
+        +'<div class="up-listing-thumb">'+(imgSrc?'<img src="'+escHtml(imgSrc)+'" alt="'+escHtml(p.name)+'" loading="lazy">':'&#128230;')+'</div>'
+        +'<div class="up-listing-body">'
+        +'<div class="up-listing-name">'+escHtml(p.name||'Product')+'</div>'
+        +'<div class="up-listing-price">KES '+Number(p.price||0).toLocaleString()+'</div>'
+        +'<div class="up-listing-meta">'+(p.views||0)+' views</div>'
+        +'<div class="up-listing-toggle">'
+        +'<button type="button" class="up-toggle'+(active?' on':'')+'" onclick="toggleListing(\''+escHtml(p.id||p._id||'')+'\',this)" aria-label="Toggle listing active"></button>'
+        +'<span class="up-toggle-lbl">'+(active?'Active':'Paused')+'</span>'
+        +'</div></div></div>';
+    }).join('')+'</div>';
+    document.getElementById('statListings').textContent = list.length;
+  }
+
+  if(products.length){ _render(products); }
+
+  /* Firestore query */
+  if(window.firebaseDB && _user && _user.uid){
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      var db = window.firebaseDB;
+      var q = m.query(m.collection(db,'products'), m.where('sellerUid','==',_user.uid), m.limit(24));
+      m.onSnapshot(q, function(snap){
+        var list = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        if(list.length){ _render(list); }
+      }, function(){});
+    }).catch(function(){});
+  } else if(!products.length){
+    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128234;</div>No listings yet. <a href="seller.html" style="color:#71ff00;text-decoration:none;">Add your first product</a></div>';
+  }
+}
+
+function toggleListing(id, btn){
+  var isOn = btn.classList.contains('on');
+  btn.classList.toggle('on', !isOn);
+  var lbl = btn.nextElementSibling;
+  if(lbl) lbl.textContent = isOn ? 'Paused' : 'Active';
+  /* Firestore update */
+  if(window.firebaseDB && id){
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      var ref = m.doc(window.firebaseDB, 'products', id);
+      m.updateDoc(ref, {active: !isOn}).catch(function(){});
+    }).catch(function(){});
+  }
+  upToast(isOn ? 'Listing paused' : 'Listing active', true);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BOOKINGS PANEL
+══════════════════════════════════════════════════════════════ */
+function loadBookings(){
+  var el = document.getElementById('bookingsPanel');
+  if(!el) return;
+
+  var TYPE_LABEL = {ride:'&#128664; Ride',bnb:'&#127968; BnB',service:'&#128295; Service',booking:'&#9917; Booking',healthcare:'&#128138; Health',legal:'&#9878; Legal',rental:'&#128664; Car Rental',delivery:'&#128666; Delivery'};
+  var STATUS_COLOR = {confirmed:'rgba(113,255,0,0.15)',completed:'rgba(113,255,0,0.22)',cancelled:'rgba(255,77,77,0.15)',requested:'rgba(255,185,0,0.15)',payment_pending:'rgba(255,185,0,0.18)'};
+
+  function _render(bks){
+    if(!bks.length){
+      el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128197;</div>No bookings yet. <a href="services.html" style="color:#71ff00;text-decoration:none;">Browse services</a></div>';
+      return;
+    }
+    el.innerHTML = bks.slice(0,10).map(function(b){
+      var sc = STATUS_COLOR[b.status]||'rgba(255,255,255,0.07)';
+      var ts = b.createdAt && b.createdAt.seconds ? new Date(b.createdAt.seconds*1000) : new Date(b.createdAt||Date.now());
+      return '<div class="up-booking-card">'
+        +'<div class="up-booking-header">'
+        +'<span class="up-booking-type">'+(TYPE_LABEL[b.type]||b.type||'Booking')+(b.service?' &middot; '+escHtml(b.service):'')+'</span>'
+        +'<span style="font-size:10px;font-weight:800;background:'+sc+';color:white;padding:2px 9px;border-radius:6px;">'+(b.status||'requested').toUpperCase()+'</span>'
+        +'</div>'
+        +'<div class="up-booking-meta">'+(b.provider||b.providerName?escHtml(b.provider||b.providerName)+' &middot; ':'')+ts.toLocaleDateString('en-KE',{dateStyle:'medium'})+'</div>'
+        +(b.id||b.ref?'<div class="up-booking-ref">Ref: '+escHtml(b.id||b.ref)+'</div>':'')
+        +'</div>';
+    }).join('');
+  }
+
+  /* local */
+  var bks = [];
+  try{ bks = bks.concat(JSON.parse(localStorage.getItem('sokoniBookings')||'[]')); }catch(e){}
+  try{ var cb=JSON.parse(localStorage.getItem('sokoniCarBookings')||'[]'); bks=bks.concat(cb.map(function(b){ return Object.assign({},b,{type:'rental',service:escHtml((b.carMake||'')+(b.carModel?' '+b.carModel:''))||'Car',provider:'Car Hub'}); })); }catch(e){}
+  try{ var db=JSON.parse(localStorage.getItem('sokoniDeliveryRequests')||'[]'); bks=bks.concat(db.map(function(b){ return Object.assign({},b,{type:'delivery',service:b.vehicle&&b.vehicle.name?b.vehicle.name:'Delivery'}); })); }catch(e){}
+  try{ var hb=JSON.parse(localStorage.getItem('sokoniAppointments')||'[]'); bks=bks.concat(hb.map(function(b){ return Object.assign({},b,{type:'healthcare',service:b.service||'Appointment',provider:b.providerName}); })); }catch(e){}
+  bks.sort(function(a,b){ return new Date(b.createdAt||0)-new Date(a.createdAt||0); });
+  _render(bks);
+
+  /* Firestore live */
+  if(window.firebaseDB && _user && _user.uid){
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      var db = window.firebaseDB;
+      var q = m.query(m.collection(db,'bookings'), m.where('userId','==',_user.uid), m.orderBy('createdAt','desc'), m.limit(10));
+      m.onSnapshot(q, function(snap){
+        var fsb = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        if(fsb.length){ _render(fsb); }
+      }, function(){});
+    }).catch(function(){});
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   REVIEWS PANEL
+══════════════════════════════════════════════════════════════ */
+function loadReviews(){
+  var el = document.getElementById('reviewsPanel');
+  if(!el) return;
+
+  if(!window.firebaseDB || !_user || !_user.uid){
+    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet.</div>';
+    return;
+  }
+
+  import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+    var db = window.firebaseDB;
+    var q = m.query(m.collection(db,'reviews'), m.where('revieweeUid','==',_user.uid), m.orderBy('createdAt','desc'), m.limit(20));
+    m.onSnapshot(q, function(snap){
+      var reviews = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      if(!reviews.length){
+        el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet. Complete transactions to earn reviews.</div>';
+        return;
+      }
+      var avg = reviews.reduce(function(acc,r){ return acc+(r.rating||5); },0)/reviews.length;
+      document.getElementById('statRating').textContent = avg.toFixed(1);
+      el.innerHTML = reviews.map(function(r){
+        var stars = '&#11088;'.repeat(Math.min(5,Math.max(1,Math.round(r.rating||5))));
+        var ts = r.createdAt && r.createdAt.seconds ? new Date(r.createdAt.seconds*1000) : new Date(r.createdAt||Date.now());
+        return '<div class="up-review-card">'
+          +'<div class="up-review-header">'
+          +'<span class="up-reviewer">'+escHtml(r.reviewerName||'Anonymous')+'</span>'
+          +'<span class="up-review-date">'+ts.toLocaleDateString('en-KE',{dateStyle:'medium'})+'</span>'
+          +'</div>'
+          +'<div class="up-stars">'+stars+'</div>'
+          +(r.comment?'<div class="up-review-text" style="margin-top:6px;">'+escHtml(r.comment)+'</div>':'')
+          +'</div>';
+      }).join('');
+    }, function(){});
+  }).catch(function(){});
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FOLLOWING PANEL
+══════════════════════════════════════════════════════════════ */
+function loadFollowing(){
+  var el = document.getElementById('followingPanel');
+  var cntEl = document.getElementById('followingCountBadge');
+  if(!el) return;
+
+  /* localStorage following */
+  var my = {};
+  try{ my = JSON.parse(localStorage.getItem('sokoniFollowing')||'{}'); }catch(e){}
+  var entries = Object.values(my);
+
+  function _render(list){
+    if(cntEl) cntEl.textContent = list.length ? list.length+' following' : '';
+    if(!list.length){
+      el.innerHTML = '<div class="up-empty" style="grid-column:1/-1;"><div class="up-empty-icon">&#128101;</div>Not following anyone yet.<br><a href="services.html" style="color:#71ff00;text-decoration:none;">Browse providers</a></div>';
+      return;
+    }
+    el.innerHTML = list.map(function(e){
+      var icon  = e.type === 'provider' ? '&#128295;' : '&#128717;';
+      var label = e.type === 'provider' ? 'Provider' : 'Seller';
+      var link  = e.type === 'provider' ? 'providers.html' : 'seller-public.html?seller='+encodeURIComponent(e.entityId||'');
+      return '<a class="up-follow-card" href="'+escHtml(link)+'">'
+        +'<div class="up-follow-avatar">'+icon+'</div>'
+        +'<div><div class="up-follow-name">'+escHtml(e.entityName||e.entityId||'Unknown')+'</div>'
+        +'<div class="up-follow-type">'+escHtml(label)+'</div></div>'
+        +'<button type="button" class="up-unfollow-btn" onclick="unfollowEntity(event,\''+escHtml(e.entityId||'')+'\')">Unfollow</button>'
+        +'</a>';
+    }).join('');
+  }
+
+  _render(entries);
+
+  /* Firestore follows */
+  if(window.firebaseDB && _user && _user.uid){
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      var db = window.firebaseDB;
+      var q = m.query(m.collection(db,'follows'), m.where('followerUid','==',_user.uid), m.limit(50));
+      m.onSnapshot(q, function(snap){
+        var list = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        if(list.length) _render(list);
+      }, function(){});
+    }).catch(function(){});
+  }
+}
+
+function unfollowEntity(evt, entityId){
+  evt.preventDefault();
+  evt.stopPropagation();
+  if(!entityId) return;
+  /* local */
+  var my = {};
+  try{ my = JSON.parse(localStorage.getItem('sokoniFollowing')||'{}'); }catch(e){}
+  delete my[entityId];
+  localStorage.setItem('sokoniFollowing', JSON.stringify(my));
+  /* Firestore */
+  if(window.firebaseDB && _user && _user.uid){
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      var db = window.firebaseDB;
+      var q = m.query(m.collection(db,'follows'), m.where('followerUid','==',_user.uid), m.where('entityId','==',entityId));
+      m.getDocs(q).then(function(snap){ snap.forEach(function(d){ m.deleteDoc(d.ref); }); }).catch(function(){});
+    }).catch(function(){});
+  }
+  upToast('Unfollowed', true);
+  loadFollowing();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WALLET PANEL
+══════════════════════════════════════════════════════════════ */
+function loadWallet(){
+  if(!window.firebaseDB || !_user || !_user.uid) return;
+
+  import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+    var db = window.firebaseDB;
+    m.onSnapshot(m.doc(db,'wallets',_user.uid), function(snap){
+      if(!snap.exists()) return;
+      var data = snap.data();
+      var bal = data.balance || 0;
+      document.getElementById('walletBalance').textContent = 'KES ' + Number(bal).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+      document.getElementById('walletSub').textContent = 'Updated ' + timeAgo(data.updatedAt||null);
+
+      /* transactions */
+      var txEl = document.getElementById('walletTxPanel');
+      var txs = data.transactions || [];
+      if(!txs.length){ return; }
+      txEl.innerHTML = txs.slice(-5).reverse().map(function(tx){
+        var isIn = tx.type==='credit'||tx.amount>0;
+        var ts = tx.createdAt && tx.createdAt.seconds ? new Date(tx.createdAt.seconds*1000) : new Date(tx.createdAt||Date.now());
+        return '<div class="up-tx-item">'
+          +'<div class="up-tx-icon" style="background:'+(isIn?'rgba(113,255,0,0.08)':'rgba(255,77,77,0.08)')+';">'+(isIn?'&#8593;':'&#8595;')+'</div>'
+          +'<div style="flex:1;min-width:0;"><div class="up-tx-desc">'+escHtml(tx.description||tx.type||'Transaction')+'</div>'
+          +'<div class="up-tx-time">'+ts.toLocaleDateString('en-KE',{dateStyle:'medium'})+'</div></div>'
+          +'<div class="up-tx-amt '+(isIn?'up-tx-in':'up-tx-out')+'">'+(isIn?'+':'-')+'KES '+Math.abs(Number(tx.amount||0)).toLocaleString()+'</div>'
+          +'</div>';
+      }).join('');
+    }, function(){});
+  }).catch(function(){});
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4. SETTINGS
+══════════════════════════════════════════════════════════════ */
+function openSettings(){
+  document.getElementById('settingsOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSettings(){
+  document.getElementById('settingsOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function loadSettingsForm(){
+  _user = getUser();
+  var emailEl = document.getElementById('settingsEmail');
+  var phoneEl = document.getElementById('settingsPhone');
+  var phoneInput = document.getElementById('settingsPhoneInput');
+  if(emailEl) emailEl.textContent = escHtml(_user.email || '—');
+  if(phoneEl) phoneEl.textContent = escHtml(_user.phone || '—');
+  if(phoneInput) phoneInput.value = escHtml(_user.phone || '');
+
+  /* notification prefs */
+  var prefs = {};
+  try{ prefs = JSON.parse(localStorage.getItem('sokoniNotifPrefs')||'{}'); }catch(e){}
+  if('orders' in prefs){ var el=document.getElementById('notifOrders'); if(el) el.checked=prefs.orders; }
+  if('messages' in prefs){ var el=document.getElementById('notifMessages'); if(el) el.checked=prefs.messages; }
+  if('promos' in prefs){ var el=document.getElementById('notifPromos'); if(el) el.checked=prefs.promos; }
+  if('bookings' in prefs){ var el=document.getElementById('notifBookings'); if(el) el.checked=prefs.bookings; }
+
+  /* linked hubs from roles */
+  var roles = _user.roles || ['buyer'];
+  if(document.getElementById('hubBuyer'))   document.getElementById('hubBuyer').checked   = roles.indexOf('buyer')>-1;
+  if(document.getElementById('hubSeller'))  document.getElementById('hubSeller').checked  = roles.indexOf('seller')>-1;
+  if(document.getElementById('hubProvider'))document.getElementById('hubProvider').checked = roles.indexOf('provider')>-1;
+  if(document.getElementById('hubDriver'))  document.getElementById('hubDriver').checked  = roles.indexOf('driver')>-1;
+  if(document.getElementById('hubAgent'))   document.getElementById('hubAgent').checked   = roles.indexOf('agent')>-1;
+}
+
+function saveSettings(){
+  _user = getUser();
+  var phone = (document.getElementById('settingsPhoneInput').value||'').trim();
+  if(phone) _user.phone = phone;
+  document.getElementById('settingsPhone').textContent = escHtml(phone||_user.phone||'—');
+
+  /* notification prefs */
+  var prefs = {
+    orders:   document.getElementById('notifOrders').checked,
+    messages: document.getElementById('notifMessages').checked,
+    promos:   document.getElementById('notifPromos').checked,
+    bookings: document.getElementById('notifBookings').checked,
+  };
+  localStorage.setItem('sokoniNotifPrefs', JSON.stringify(prefs));
+
+  /* linked hubs → roles */
+  var roles = ['buyer']; /* buyer always */
+  if(document.getElementById('hubSeller').checked   && roles.indexOf('seller')<0)   roles.push('seller');
+  if(document.getElementById('hubProvider').checked && roles.indexOf('provider')<0) roles.push('provider');
+  if(document.getElementById('hubDriver').checked   && roles.indexOf('driver')<0)   roles.push('driver');
+  if(document.getElementById('hubAgent').checked    && roles.indexOf('agent')<0)    roles.push('agent');
+
+  _user.roles = roles;
+  if(roles.indexOf(_user.activeRole||'buyer')<0) _user.activeRole = 'buyer';
+  setUser(_user);
+  saveToFirestore({phone:phone||null, roles:roles, activeRole:_user.activeRole});
+  renderRoleSwitcher();
+  renderRoleChips();
+  renderRoleModal();
+  closeSettings();
+  upToast('Preferences saved!', true);
+}
+
+function deactivateAccount(_c){
+  if(!_c){_skConfirm('Are you sure you want to deactivate your account? You can reactivate by logging in again.',()=>deactivateAccount(true));return;}
+  saveToFirestore({deactivated:true, deactivatedAt: new Date().toISOString()});
+  logoutUser();
+}
+
+async function deleteAccountPermanently(_c){
+  if(!_c){_skConfirm('⚠️ PERMANENTLY DELETE your account? This cannot be undone. All your data will be removed.',()=>deleteAccountPermanently(true));return;}
+  var confirm2 = prompt('Type DELETE to permanently delete your account:');
+  if(confirm2 !== 'DELETE') return;
+  try{
+    var {getAuth,deleteUser} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    var auth = getAuth();
+    var user = auth.currentUser;
+    if(!user){ (window._skToast||alert)('Please sign in again before deleting your account.'); window.location.href='login.html'; return; }
+    /* Mark Firestore record for deletion (Cloud Function picks this up) */
+    saveToFirestore({deletionRequested:true, deletionRequestedAt: new Date().toISOString()});
+    /* Delete Firebase Auth user */
+    await deleteUser(user);
+    /* Wipe all local state */
+    ['sokoniUser','sokoniStore','sokoniMiniStore','sokoniNotifications',
+     'sokoniRecentSearches','sokoniLoyaltyPoints','sokoniEvents',
+     'sellerProducts','sokoniCart'].forEach(function(k){ localStorage.removeItem(k); });
+    (window._skToast||alert)('Your account has been deleted.');
+    window.location.href = 'index.html';
+  }catch(e){
+    if(e.code === 'auth/requires-recent-login'){
+      (window._skToast||alert)('For security, please sign out and sign back in before deleting your account.');
+      window.location.href = 'login.html?next=profile.html';
+    } else {
+      (window._skToast||alert)('Error: ' + e.message);
+    }
+  }
+}
+window.deleteAccountPermanently = deleteAccountPermanently;
+
+/* ══════════════════════════════════════════════════════════════
+   5. ROLE MODAL
+══════════════════════════════════════════════════════════════ */
+var ROLE_DESCS = {
+  buyer:    'Shop products, book services, track orders.',
+  seller:   'List products and manage your store.',
+  provider: 'Offer services and accept bookings.',
+  driver:   'Accept delivery and ride requests.',
+  agent:    'List and manage properties.',
+  business: 'Run a business with staff and inventory.',
+};
+
+function renderRoleModal(){
+  _user = getUser();
+  var roles = _user.roles || ['buyer'];
+  var listEl = document.getElementById('roleOptionsList');
+  if(!listEl) return;
+  listEl.innerHTML = ROLES.map(function(rd){
+    var hasRole = roles.indexOf(rd.key)>-1;
+    return '<div class="up-role-option'+(hasRole?' has-role':'')+'" onclick="addRole(\''+escHtml(rd.key)+'\')">'+
+      '<div class="up-role-option-emoji">'+rd.emoji+'</div>'+
+      '<div><div class="up-role-option-name">'+escHtml(rd.label)+(hasRole?' &#10003;':'')+'</div>'+
+      '<div class="up-role-option-desc">'+escHtml(ROLE_DESCS[rd.key]||rd.hubLabel)+'</div></div>'+
+      '</div>';
+  }).join('');
+}
+
+function openRoleModal(){
+  renderRoleModal();
+  document.getElementById('roleModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeRoleModal(){
+  document.getElementById('roleModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function addRole(roleKey){
+  _user = getUser();
+  var roles = _user.roles || ['buyer'];
+  if(roles.indexOf(roleKey)>-1){ closeRoleModal(); return; }
+  roles.push(roleKey);
+  _user.roles = roles;
+  setUser(_user);
+  saveToFirestore({roles:roles, updatedAt: new Date().toISOString()});
+  renderRoleSwitcher();
+  renderRoleChips();
+  closeRoleModal();
+  var rd = getRoleDef(roleKey);
+  upToast('Role added: '+rd.label, true);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIRESTORE SYNC
+══════════════════════════════════════════════════════════════ */
+function saveToFirestore(fields){
+  if(!_user || !_user.uid) return;
+  fields.updatedAt = fields.updatedAt || new Date().toISOString();
+  if(window.firebaseDB){
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      var ref = m.doc(window.firebaseDB,'users',_user.uid);
+      m.setDoc(ref, fields, {merge:true}).catch(function(err){ console.warn('Profile Firestore write:', err); });
+    }).catch(function(){});
+  }
+  /* also call legacy helper if available */
+  if(window.sokoniUpdateProfile){ try{ window.sokoniUpdateProfile(fields); }catch(e){} }
+}
+
+function listenFirestoreProfile(uid){
+  if(!window.firebaseDB) return;
+  import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+    var db = window.firebaseDB;
+    m.onSnapshot(m.doc(db,'users',uid), function(snap){
+      if(!snap.exists()) return;
+      var data = snap.data();
+      /* merge non-sensitive fields into localStorage user */
+      _user = getUser() || {};
+      if(data.name) _user.name = data.name;
+      if(data.username) _user.username = data.username;
+      if(data.bio) _user.bio = data.bio;
+      if(data.location) _user.location = data.location;
+      if(data.avatarUrl) _user.avatarUrl = data.avatarUrl;
+      if(data.coverUrl) _user.coverUrl = data.coverUrl;
+      if(data.roles) _user.roles = data.roles;
+      if(data.activeRole) _user.activeRole = data.activeRole;
+      if(data.verified) _user.verified = data.verified;
+      if(data.followersCount) _user.followersCount = data.followersCount;
+      if(data.followingCount) _user.followingCount = data.followingCount;
+      if(data.averageRating) _user.averageRating = data.averageRating;
+      if(data.createdAt) _user.createdAt = data.createdAt;
+      setUser(_user);
+      renderHeaderCard();
+      renderRoleSwitcher();
+    }, function(){});
+  }).catch(function(){});
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LOGOUT (global — also used by profile.js)
+══════════════════════════════════════════════════════════════ */
+function logoutUser(_c){
+  if(!_c){_skConfirm('Log out of SOKONI?',()=>logoutUser(true));return;}
+  localStorage.removeItem('sokoniUser');
+  localStorage.removeItem('sokoniCart');
+  window.location.href = 'login.html';
+}
+window.logoutUser = logoutUser;
+</script>
+<script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-orders.js"></script>
+</body>
+</html>
+
+
+
+

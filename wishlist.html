@@ -1,0 +1,469 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <script src="sokoni-security.js" defer></script>
+  <script src="sokoni-guards.js" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Wishlist</title>
+  <meta name="description" content="Your SOKONI wishlist — save products you love and buy them when you're ready.">
+  <meta property="og:title" content="SOKONI — Wishlist">
+  <meta property="og:description" content="Save your favourite products on SOKONI and never miss a deal.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    /* ── WISHLIST PREMIUM STYLES ── */
+    .wish-hero {
+      background: linear-gradient(135deg, rgba(236,72,153,0.09) 0%, rgba(168,85,247,0.05) 50%, transparent 100%);
+      border-bottom: 1px solid rgba(236,72,153,0.12);
+      padding: 28px 20px 20px;
+    }
+    .wish-hero-top {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; margin-bottom: 16px;
+    }
+    .wish-hero-left { display: flex; align-items: center; gap: 14px; }
+    .wish-hero-icon {
+      width: 52px; height: 52px; border-radius: 16px;
+      background: rgba(236,72,153,0.12); border: 1px solid rgba(236,72,153,0.28);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+      animation: wishPulse 3s ease-in-out infinite;
+    }
+    @keyframes wishPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(236,72,153,0.2); }
+      50%      { box-shadow: 0 0 0 8px rgba(236,72,153,0); }
+    }
+    .wish-hero-title { font-size: 22px; font-weight: 900; color: #fff; margin: 0 0 3px; }
+    .wish-hero-sub { font-size: 12px; color: rgba(255,255,255,0.45); margin: 0; }
+
+    /* Search bar inside hero */
+    .wish-search-wrap {
+      position: relative;
+    }
+    .wish-search-wrap i {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: rgba(255,255,255,0.3); font-size: 13px; pointer-events: none;
+    }
+    .wish-search-input {
+      width: 100%; padding: 11px 14px 11px 38px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; color: white; font-size: 13px; font-family: inherit;
+      outline: none; box-sizing: border-box; transition: border-color .2s;
+    }
+    .wish-search-input::placeholder { color: rgba(255,255,255,0.3); }
+    .wish-search-input:focus { border-color: rgba(236,72,153,0.4); }
+
+    /* Sort bar */
+    .wish-sort-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px 0; overflow-x: auto; scrollbar-width: none;
+    }
+    .wish-sort-bar::-webkit-scrollbar { display: none; }
+    .wish-sort-label { font-size: 11px; color: rgba(255,255,255,0.35); white-space: nowrap; flex-shrink: 0; }
+    .wish-filter-btn {
+      padding: 6px 14px; border-radius: 20px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.55); font-size: 11px; font-weight: 700;
+      cursor: pointer; font-family: inherit; white-space: nowrap; flex-shrink: 0;
+      transition: all .2s;
+    }
+    .wish-filter-btn:hover,
+    .wish-filter-btn.active { background: rgba(236,72,153,0.12); border-color: rgba(236,72,153,0.3); color: #ec4899; }
+
+    /* Grid */
+    .wish-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      padding: 14px 12px 100px;
+    }
+    @media(min-width: 480px)  { .wish-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media(min-width: 700px)  { .wish-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media(min-width: 1000px) { .wish-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media(min-width: 1280px) { .wish-grid { grid-template-columns: repeat(5, 1fr); } }
+
+    /* Wish card */
+    .wish-card {
+      background: rgba(16,16,16,0.96);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; overflow: hidden; cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+      animation: wishCardIn 0.3s ease;
+      position: relative;
+    }
+    @keyframes wishCardIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
+    .wish-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(236,72,153,0.3);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    }
+
+    /* Image */
+    .wish-img-wrap {
+      width: 100%; aspect-ratio: 1/1; overflow: hidden; position: relative;
+    }
+    .wish-img-wrap::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40%;
+      background: linear-gradient(to top, rgba(6,6,6,0.65) 0%, transparent 100%);
+      pointer-events: none;
+    }
+    .wish-img-wrap img {
+      width: 100%; height: 100%; object-fit: cover;
+      transition: transform .3s;
+    }
+    .wish-card:hover .wish-img-wrap img { transform: scale(1.07); }
+
+    /* Remove button */
+    .wish-remove-btn {
+      position: absolute; top: 8px; right: 8px; z-index: 3;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.7); font-size: 11px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px); transition: all .2s;
+    }
+    .wish-remove-btn:hover { background: rgba(255,60,60,0.7); border-color: rgba(255,60,60,0.5); color: white; }
+
+    /* Heart badge */
+    .wish-heart-badge {
+      position: absolute; top: 8px; left: 8px; z-index: 3;
+      font-size: 14px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+    }
+
+    /* Card body */
+    .wish-card-body { padding: 9px 10px 11px; }
+    .wish-card-name {
+      font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.9);
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; margin: 0 0 3px; line-height: 1.35;
+    }
+    .wish-card-cat {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+      color: rgba(255,255,255,0.3); margin: 0 0 6px;
+    }
+    .wish-card-price {
+      font-size: 13px; font-weight: 900; color: #71ff00; margin: 0 0 9px;
+    }
+
+    /* Action buttons */
+    .wish-btns { display: flex; gap: 6px; }
+    .wish-cart-btn {
+      flex: 1; padding: 8px 0; text-align: center;
+      background: linear-gradient(135deg, #71ff00, #4fc800);
+      color: #000; font-size: 10px; font-weight: 900; border: none;
+      border-radius: 8px; cursor: pointer; font-family: inherit;
+      transition: opacity .2s;
+    }
+    .wish-cart-btn:hover { opacity: .88; }
+    .wish-buynow-btn {
+      padding: 8px 10px; text-align: center;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.7); font-size: 10px; font-weight: 800; border-radius: 8px;
+      cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .2s;
+    }
+    .wish-buynow-btn:hover { background: rgba(255,255,255,0.12); color: white; }
+
+    /* Empty state */
+    .wish-empty {
+      grid-column: 1 / -1; text-align: center;
+      padding: 80px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+    }
+    .wish-empty-icon { font-size: 72px; }
+    .wish-empty h2 { color: white; font-size: 22px; font-weight: 900; margin: 0; }
+    .wish-empty p { color: rgba(255,255,255,0.4); font-size: 14px; margin: 0; }
+    .wish-empty-shop {
+      margin-top: 8px; padding: 14px 32px;
+      background: linear-gradient(135deg, #ec4899, #a855f7);
+      color: white; font-weight: 900; font-size: 14px; border-radius: 14px;
+      text-decoration: none; display: inline-block;
+    }
+
+    /* Cart badge on navbar */
+    .cart-badge-wrap { position: relative; display: inline-flex; }
+    .cart-count-badge {
+      position: absolute; top: -6px; right: -8px;
+      background: #71ff00; color: #000; font-size: 9px; font-weight: 900;
+      min-width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Mobile: horizontal card layout for single-column */
+    @media(max-width: 479px) {
+      .wish-card {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .wish-img-wrap {
+        width: 110px;
+        min-width: 110px;
+        aspect-ratio: unset;
+        height: auto;
+        flex-shrink: 0;
+      }
+      .wish-img-wrap::after { height: 100%; width: 40%; top: 0; right: 0; left: auto;
+        background: linear-gradient(to left, rgba(6,6,6,0.65) 0%, transparent 100%); }
+      .wish-card-body {
+        flex: 1;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-width: 0;
+      }
+      .wish-card-name { font-size: 12px; }
+      .wish-card-price { font-size: 14px; margin-bottom: 8px; }
+      .wish-btns { flex-wrap: wrap; gap: 5px; }
+      .wish-cart-btn { flex: unset; width: 100%; padding: 8px 0; }
+      .wish-buynow-btn { flex: 1; min-width: 0; padding: 8px 6px; text-align: center; }
+    }
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="logo-section">
+    <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></a>
+  </div>
+  <div class="search-bar">
+    <input type="text" id="wishSearch" placeholder="Search wishlist..." oninput="searchWishlist()">
+  </div>
+  <div class="wish-nav-actions" style="display:flex;gap:8px;align-items:center;">
+    <div class="cart-badge-wrap">
+      <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 <span id="cartBadge">0</span></a>
+    </div>
+    <a href="index.html" class="wishlist-nav-btn">🏠</a>
+  </div>
+</nav>
+
+<!-- WISHLIST HERO -->
+<section class="wish-hero">
+  <div class="wish-hero-top">
+    <div class="wish-hero-left">
+      <div class="wish-hero-icon">❤️</div>
+      <div>
+        <h1 class="wish-hero-title">My Wishlist</h1>
+        <p class="wish-hero-sub" id="wishCount">Loading...</p>
+      </div>
+    </div>
+  </div>
+  <div class="wish-search-wrap">
+    🔍
+    <input type="text" class="wish-search-input" id="wishSearchHero" placeholder="Search saved items..." oninput="searchWishlistHero(this.value)">
+  </div>
+</section>
+
+<!-- SORT BAR -->
+<div class="wish-sort-bar">
+  <span class="wish-sort-label">Sort:</span>
+  <button type="button" class="wish-filter-btn active" onclick="sortWish('default',this)">Latest</button>
+  <button type="button" class="wish-filter-btn" onclick="sortWish('low',this)">Price ↑</button>
+  <button type="button" class="wish-filter-btn" onclick="sortWish('high',this)">Price ↓</button>
+  <button type="button" class="wish-filter-btn" onclick="sortWish('name',this)">A–Z</button>
+</div>
+
+<!-- WISHLIST GRID -->
+<div id="wishlistContainer" class="wish-grid"></div>
+
+<div id="notificationContainer"></div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="flashsale.html" class="bnav-item"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item active-bnav"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* ── WISHLIST PREMIUM RENDER ── */
+var _wishData = [];
+try { _wishData = JSON.parse(localStorage.getItem("wishlist")) || []; } catch(e){}
+
+function showNotif(msg, type){
+  var c = document.getElementById("notificationContainer");
+  if(!c) return;
+  var n = document.createElement("div");
+  n.className = "notification " + type;
+  n.textContent = msg;
+  c.appendChild(n);
+  setTimeout(function(){ n.remove(); }, 3000);
+}
+
+function updateWishCount(list){
+  var el = document.getElementById("wishCount");
+  if(el) el.textContent = list.length + " item" + (list.length !== 1 ? "s" : "") + " saved";
+}
+
+function updateCartBadge(){
+  try {
+    var cart = JSON.parse(localStorage.getItem("cart")||"[]");
+    var el = document.getElementById("cartBadge");
+    if(el) el.textContent = cart.reduce(function(s,i){ return s+(i.qty||1); },0);
+  } catch(e){}
+}
+updateCartBadge();
+
+function renderWishlist(list){
+  var container = document.getElementById("wishlistContainer");
+  if(!container) return;
+  updateWishCount(list);
+
+  if(list.length === 0){
+    container.innerHTML = `<div class="wish-empty">
+      <div class="wish-empty-icon">❤️</div>
+      <h2>Your wishlist is empty</h2>
+      <p>Save products you love to buy later</p>
+      <a href="category.html?cat=all" class="wish-empty-shop">Browse Products</a>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(function(p, i){
+    var idx = _wishData.indexOf(p);
+    var currentPrice = Number(p.price) || 0;
+    var savedPrice   = Number(p.savedPrice) || currentPrice;
+    var origPrice    = Number(p.originalPrice) || 0;
+
+    /* price badge logic */
+    var priceBadge = '';
+    if (origPrice > currentPrice && origPrice > 0) {
+      var saved = origPrice - currentPrice;
+      priceBadge = '<span style="display:inline-block;background:rgba(113,255,0,.15);color:#71ff00;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:800;margin-left:6px;">-KES ' + saved.toLocaleString() + '</span>';
+    } else if (savedPrice > currentPrice && p.savedPrice) {
+      var drop = savedPrice - currentPrice;
+      priceBadge = '<span style="display:inline-block;background:rgba(113,255,0,.15);color:#71ff00;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:800;margin-left:6px;">↓ KES ' + drop.toLocaleString() + ' drop</span>';
+    }
+
+    var savedDate = p.savedAt ? new Date(p.savedAt).toLocaleDateString('en-KE', {day:'numeric',month:'short'}) : '';
+
+    return `<div class="wish-card">
+      <div class="wish-img-wrap">
+        <span class="wish-heart-badge">❤️</span>
+        <button class="wish-remove-btn" onclick="removeWishlist(${idx})" title="Remove">✕</button>
+        <img src="${p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy" onerror="this.src='assets/default-product.png'">
+      </div>
+      <div class="wish-card-body">
+        <h3 class="wish-card-name">${p.name}</h3>
+        <p class="wish-card-cat">${p.category ? p.category.charAt(0).toUpperCase()+p.category.slice(1) : 'Product'}${savedDate ? ' · Saved '+savedDate : ''}</p>
+        <p class="wish-card-price">KES ${currentPrice.toLocaleString()}${priceBadge}</p>
+        <div class="wish-btns">
+          <button class="wish-cart-btn" onclick="moveToCart(${idx})">🛒 Add to Cart</button>
+          <button class="wish-buynow-btn" onclick="buyNowWish(${idx})">Buy Now</button>
+          <button class="wish-share-btn" onclick="if(window.SokoniShare)SokoniShare.open({name:'${p.name.replace(/'/g,"\\'")}',price:${currentPrice},image:'${p.image||''}',url:window.location.href})" style="background:none;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);transition:all .2s;" title="Share">↑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function removeWishlist(index){
+  _wishData.splice(index, 1);
+  localStorage.setItem("wishlist", JSON.stringify(_wishData));
+  showNotif("Removed from wishlist", "error");
+  renderWishlist(_wishData);
+}
+
+function moveToCart(index){
+  var item = _wishData[index];
+  var cart = [];
+  try { cart = JSON.parse(localStorage.getItem("cart")||"[]"); } catch(e){}
+  cart.push(item);
+  localStorage.setItem("cart", JSON.stringify(cart));
+  _wishData.splice(index, 1);
+  localStorage.setItem("wishlist", JSON.stringify(_wishData));
+  updateCartBadge();
+  showNotif("Moved to cart 🛒", "success");
+  renderWishlist(_wishData);
+}
+
+function buyNowWish(index){
+  var item = _wishData[index];
+  var cart = [];
+  try { cart = JSON.parse(localStorage.getItem("cart")||"[]"); } catch(e){}
+  cart.push(item);
+  localStorage.setItem("cart", JSON.stringify(cart));
+  window.location.href = "checkout.html";
+}
+
+function searchWishlist(){
+  var val = document.getElementById("wishSearch").value.toLowerCase();
+  renderWishlist(val ? _wishData.filter(function(p){ return p.name.toLowerCase().includes(val); }) : _wishData);
+}
+
+function searchWishlistHero(val){
+  renderWishlist(val ? _wishData.filter(function(p){ return p.name.toLowerCase().includes(val); }) : _wishData);
+}
+
+function sortWish(type, btn){
+  document.querySelectorAll(".wish-filter-btn").forEach(function(b){ b.classList.remove("active"); });
+  if(btn) btn.classList.add("active");
+  var sorted = _wishData.slice();
+  if(type === "low")  sorted.sort(function(a,b){ return Number(a.price)-Number(b.price); });
+  if(type === "high") sorted.sort(function(a,b){ return Number(b.price)-Number(a.price); });
+  if(type === "name") sorted.sort(function(a,b){ return (a.name||"").localeCompare(b.name||""); });
+  renderWishlist(sorted);
+}
+
+window.removeWishlist = removeWishlist;
+window.moveToCart = moveToCart;
+window.buyNowWish = buyNowWish;
+window.searchWishlist = searchWishlist;
+window.searchWishlistHero = searchWishlistHero;
+window.sortWish = sortWish;
+
+renderWishlist(_wishData);
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="sokoni-share.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="demo-seed.js"></script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+

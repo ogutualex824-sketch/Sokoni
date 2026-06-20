@@ -1,0 +1,600 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Property — Houses, Apartments & Offices for Rent in Kenya</title>
+  <meta name="description" content="Find rental properties across Kenya. Houses, apartments, studios and offices. View photos, lease terms and pay rent online through Sokoni.">
+  <meta property="og:title" content="SOKONI Property — Houses, Apartments & Offices for Rent in Kenya">
+  <meta property="og:description" content="Find rental properties across Kenya on SOKONI. View photos, lease terms and pay rent online.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="landlord.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="compact-grid.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+
+  <style>
+    /* ── Property page overrides & polish ── */
+    .prop-select{
+      padding:9px 14px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:12px;
+      color:rgba(255,255,255,0.75);
+      font-size:13px;
+      font-weight:600;
+      outline:none;
+      cursor:pointer;
+      font-family:inherit;
+      transition:0.25s;
+      appearance:none;
+      -webkit-appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.35)'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;
+      background-position:right 12px center;
+      padding-right:32px;
+    }
+    .prop-select:hover,.prop-select:focus{
+      border-color:rgba(113,255,0,0.35);
+      background-color:rgba(113,255,0,0.07);
+    }
+    .prop-select option{
+      background:#1a1a1a;
+      color:rgba(255,255,255,0.85);
+    }
+
+    /* type pill active */
+    .prop-type-btn{ position:relative; overflow:hidden; }
+    .prop-type-btn::before{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(113,255,0,0.15),rgba(79,200,0,0.08));
+      opacity:0;transition:opacity 0.2s;
+    }
+    .prop-type-btn:hover::before{ opacity:1; }
+
+    /* CTA button */
+    .prop-cta-btn{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:11px 22px;
+      background:linear-gradient(135deg,#71ff00,#4fc800);
+      color:#000;
+      font-size:13px;font-weight:800;
+      border:none;border-radius:12px;
+      cursor:pointer;font-family:inherit;
+      transition:0.2s;text-decoration:none;
+      box-shadow:0 4px 16px rgba(113,255,0,0.25);
+    }
+    .prop-cta-btn:hover{ transform:translateY(-1px); box-shadow:0 6px 22px rgba(113,255,0,0.35); }
+
+    /* "View Details" card button */
+    .prop-inquire-btn{
+      padding:10px 20px !important;
+      background:linear-gradient(135deg,rgba(113,255,0,0.14),rgba(79,200,0,0.08)) !important;
+      border:1px solid rgba(113,255,0,0.35) !important;
+      border-radius:12px !important;
+      color:#71ff00 !important;
+      font-weight:800 !important;font-size:13px !important;
+      cursor:pointer;font-family:inherit;
+      transition:0.2s !important;
+      display:inline-flex;align-items:center;gap:6px;
+    }
+    .prop-inquire-btn:hover{
+      background:linear-gradient(135deg,rgba(113,255,0,0.22),rgba(79,200,0,0.14)) !important;
+      transform:translateY(-1px);
+      box-shadow:0 4px 14px rgba(113,255,0,0.2);
+    }
+
+    /* modal action buttons */
+    .prop-modal-btn{
+      display:flex;align-items:center;justify-content:center;gap:9px;
+      width:100%;padding:15px;
+      border:none;border-radius:14px;
+      font-size:15px;font-weight:800;font-family:inherit;
+      cursor:pointer;transition:0.2s;text-decoration:none;
+      margin-bottom:10px;
+    }
+    .prop-modal-btn-green{
+      background:linear-gradient(135deg,#71ff00,#4fc800);
+      color:#000;
+      box-shadow:0 4px 16px rgba(113,255,0,0.3);
+    }
+    .prop-modal-btn-green:hover{ transform:translateY(-2px); box-shadow:0 6px 22px rgba(113,255,0,0.4); }
+    .prop-modal-btn-wa{
+      background:linear-gradient(135deg,#25d366,#1da851);
+      color:#fff;
+      box-shadow:0 4px 14px rgba(37,211,102,0.25);
+    }
+    .prop-modal-btn-wa:hover{ transform:translateY(-2px); box-shadow:0 6px 20px rgba(37,211,102,0.35); }
+    .prop-modal-btn-outline{
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.1) !important;
+      color:rgba(255,255,255,0.65);
+    }
+    .prop-modal-btn-outline:hover{ background:rgba(255,255,255,0.08); color:white; }
+
+    /* close btn */
+    .detail-close-btn{
+      position:absolute;top:16px;right:16px;
+      width:36px;height:36px;
+      background:rgba(255,255,255,0.07);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:50%;
+      color:rgba(255,255,255,0.55);
+      font-size:18px;line-height:1;
+      cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      transition:0.2s;font-family:inherit;
+    }
+    .detail-close-btn:hover{ background:rgba(255,255,255,0.14); color:white; }
+
+    /* hero stats strip */
+    .prop-hero-stats{
+      display:flex;gap:24px;justify-content:center;flex-wrap:wrap;
+      margin-top:20px;
+    }
+    .prop-hero-stat{
+      text-align:center;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:14px;
+      padding:10px 20px;
+      min-width:90px;
+    }
+    .prop-hero-stat-num{
+      font-size:20px;font-weight:900;color:#71ff00;
+    }
+    .prop-hero-stat-lbl{
+      font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;
+    }
+
+    /* list property CTA strip */
+    .prop-list-cta{
+      display:flex;align-items:center;justify-content:space-between;
+      gap:16px;flex-wrap:wrap;
+      background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(79,200,0,0.03));
+      border:1px solid rgba(113,255,0,0.15);
+      border-radius:18px;
+      padding:18px 22px;
+      margin:16px 28px;
+    }
+    .prop-list-cta-text h3{ color:white;font-size:15px;font-weight:800;margin-bottom:4px; }
+    .prop-list-cta-text p{ color:rgba(255,255,255,0.4);font-size:13px; }
+
+    /* prop card amenity row */
+    .prop-amenity-row{ display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px; }
+
+    /* trust strip */
+    .prop-trust-strip{
+      display:flex;gap:14px;flex-wrap:wrap;
+      padding:14px 28px;
+      border-bottom:1px solid rgba(255,255,255,0.05);
+    }
+    .prop-trust-chip{
+      display:inline-flex;align-items:center;gap:7px;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.07);
+      border-radius:999px;
+      padding:7px 14px;
+      font-size:12px;font-weight:700;
+      color:rgba(255,255,255,0.55);
+    }
+    .prop-trust-chip i{ color:#71ff00;font-size:11px; }
+
+    /* modal info grid */
+    .prop-info-grid{
+      display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;
+    }
+    .prop-info-cell{
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.07);
+      border-radius:12px;padding:12px 14px;
+    }
+    .prop-info-cell-lbl{ font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px; }
+    .prop-info-cell-val{ font-size:14px;color:white;font-weight:800; }
+    .prop-info-cell-val.green{ color:#71ff00; }
+  </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"RealEstateAgent","name":"SOKONI Property — Houses for Rent in Kenya","description":"Find bedsitters, studios, 1BR, 2BR and 3BR apartments for rent in Nairobi, Mombasa, Kisumu and across Kenya. Contact landlords directly — no agent fees.","url":"https://mysokoni.co.ke/property.html","logo":"https://mysokoni.co.ke/assets/Sokonilogo2.png","telephone":"+254705726803","areaServed":{"@type":"Country","name":"Kenya"},"address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"}}</script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="navbar">
+  <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
+  <div class="search-bar">
+    <input type="text" id="propSearch" placeholder="Search by location, type or landlord..." oninput="searchProps()">
+  </div>
+  <div class="nav-actions">
+    <a href="landlord.html" class="prop-cta-btn" style="font-size:13px;">🔑 Landlord Portal</a>
+    <a href="index.html" class="cart-btn" style="text-decoration:none;">← Sokoni</a>
+  </div>
+</nav>
+
+<!-- PROPERTY HERO -->
+<section class="prop-hero">
+  <div class="prop-hero-bg"></div>
+  <div class="prop-hero-content">
+    <p style="color:#71ff00;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">🏘️ Real Estate Hub</p>
+    <h1 style="margin-bottom:8px;">🏠 Find Your Next Home</h1>
+    <p style="margin-bottom:20px;">Houses, apartments, studios & offices across Kenya — pay rent via M-Pesa</p>
+    <div class="prop-search-pills">
+      <button type="button" class="prop-type-btn active-prop-btn" onclick="filterProp('all',this)">🏘️ All</button>
+      <button type="button" class="prop-type-btn" onclick="filterProp('house',this)">🏡 Houses</button>
+      <button type="button" class="prop-type-btn" onclick="filterProp('apartment',this)">🏢 Apartments</button>
+      <button type="button" class="prop-type-btn" onclick="filterProp('studio',this)">🛋️ Studios</button>
+      <button type="button" class="prop-type-btn" onclick="filterProp('office',this)">🏦 Offices</button>
+      <button type="button" class="prop-type-btn" onclick="filterProp('bedsitter',this)">🛏️ Bedsitters</button>
+    </div>
+    <div class="prop-hero-stats">
+      <div class="prop-hero-stat"><div class="prop-hero-stat-num" id="statListings">0</div><div class="prop-hero-stat-lbl">Listings</div></div>
+      <div class="prop-hero-stat"><div class="prop-hero-stat-num">📱</div><div class="prop-hero-stat-lbl">M-Pesa Rent</div></div>
+      <div class="prop-hero-stat"><div class="prop-hero-stat-num">✅</div><div class="prop-hero-stat-lbl">Verified</div></div>
+      <div class="prop-hero-stat"><div class="prop-hero-stat-num">🇰🇪</div><div class="prop-hero-stat-lbl">Kenya-wide</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST STRIP -->
+<div class="prop-trust-strip">
+  <div class="prop-trust-chip">🛡️ Verified Landlords</div>
+  <div class="prop-trust-chip">📱 Pay Rent via M-Pesa</div>
+  <div class="prop-trust-chip">📄 Lease Agreements</div>
+  <div class="prop-trust-chip"><i class="fas fa-headset"></i> 24/7 Support</div>
+  <div class="prop-trust-chip">📍 Nairobi · Mombasa · Kisumu</div>
+</div>
+
+<!-- FILTER ROW -->
+<div class="prop-filter-row" style="align-items:center;">
+  <select id="propLocation" class="prop-select" onchange="searchProps()">
+    <option value="">📍 All Locations</option>
+    <option value="nairobi">📍 Nairobi</option>
+    <option value="westlands">📍 Westlands</option>
+    <option value="kilimani">📍 Kilimani</option>
+    <option value="kileleshwa">📍 Kileleshwa</option>
+    <option value="mombasa">📍 Mombasa</option>
+    <option value="kisumu">📍 Kisumu</option>
+    <option value="nakuru">📍 Nakuru</option>
+    <option value="eldoret">📍 Eldoret</option>
+    <option value="thika">📍 Thika</option>
+    <option value="nyeri">📍 Nyeri</option>
+    <option value="meru">📍 Meru</option>
+    <option value="embu">📍 Embu</option>
+    <option value="machakos">📍 Machakos</option>
+    <option value="naivasha">📍 Naivasha</option>
+    <option value="nanyuki">📍 Nanyuki</option>
+    <option value="kisii">📍 Kisii</option>
+    <option value="kericho">📍 Kericho</option>
+    <option value="kakamega">📍 Kakamega</option>
+    <option value="kitale">📍 Kitale</option>
+    <option value="bungoma">📍 Bungoma</option>
+    <option value="malindi">📍 Malindi</option>
+    <option value="isiolo">📍 Isiolo</option>
+    <option value="garissa">📍 Garissa</option>
+  </select>
+  <select id="propMaxRent" class="prop-select" onchange="searchProps()">
+    <option value="">💰 Any Budget</option>
+    <option value="10000">Under KES 10,000</option>
+    <option value="25000">Under KES 25,000</option>
+    <option value="50000">Under KES 50,000</option>
+    <option value="100000">Under KES 100,000</option>
+  </select>
+  <select id="propSort" class="prop-select" onchange="searchProps()">
+    <option value="newest">🕐 Newest First</option>
+    <option value="low">💸 Rent: Low → High</option>
+    <option value="high">💰 Rent: High → Low</option>
+  </select>
+  <div style="flex:1;"></div>
+  <span id="resultsCount" style="color:rgba(255,255,255,0.35);font-size:12px;font-weight:600;flex-shrink:0;"></span>
+</div>
+
+<!-- LIST PROPERTY CTA -->
+<div class="prop-list-cta">
+  <div class="prop-list-cta-text">
+    <h3>🏠 Own a property? List it on Sokoni</h3>
+    <p>Reach thousands of tenants · Collect rent via M-Pesa · Manage leases online</p>
+  </div>
+  <a href="landlord.html" class="prop-cta-btn">🔑 List Property</a>
+</div>
+
+<!-- LISTINGS -->
+<section style="padding:8px 28px 100px;max-width:1280px;margin:0 auto;">
+  <div id="propGrid" class="prop-grid"></div>
+</section>
+
+<!-- PROPERTY DETAIL MODAL -->
+<div id="propModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box prop-detail-modal" style="position:relative;">
+    <button type="button" class="detail-close-btn" onclick="document.getElementById('propModal').style.display='none'">✕</button>
+    <div id="propModalContent"></div>
+  </div>
+</div>
+
+<div id="notificationContainer"></div>
+
+<script>
+  let allProps = [];
+  let filteredProps = [];
+  let activeType = "all";
+
+  function loadProps(){
+    try { allProps = JSON.parse(localStorage.getItem("sokoniProperties_listings")) || []; } catch(e) { allProps = []; }
+    filteredProps = [...allProps];
+    const statEl = document.getElementById("statListings");
+    if(statEl) statEl.textContent = allProps.length || "0";
+    renderProps(filteredProps);
+  }
+
+  function renderProps(list){
+    const grid = document.getElementById("propGrid");
+    if(!grid) return;
+
+    const countEl = document.getElementById("resultsCount");
+    if(countEl) countEl.textContent = list.length ? `${list.length} propert${list.length===1?'y':'ies'} found` : "";
+
+    if(list.length === 0){
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:80px 20px;">
+          <div style="font-size:64px;margin-bottom:16px;">🏠</div>
+          <h2 style="color:white;margin-bottom:10px;">🏠 No properties listed yet</h2>
+          <p style="color:rgba(255,255,255,0.4);margin-bottom:24px;">Landlords — list your vacant properties and reach thousands of tenants on Sokoni</p>
+          <a href="landlord.html" class="prop-cta-btn" style="display:inline-flex;">🔑 List Your Property Free</a>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = list.map(p => `
+      <div class="prop-card" onclick="openPropDetail('${p.id}')">
+        <div class="prop-card-img-wrap">
+          <img src="${p.image||'assets/backG2.jpeg'}" alt="${p.title}" loading="lazy">
+          <div class="prop-type-tag">${p.type}</div>
+          <div class="prop-status-tag ${p.available ? 'prop-available' : 'prop-occupied'}">
+            ${p.available ? '✅ Available' : '❌ Occupied'}
+          </div>
+        </div>
+        <div class="prop-card-body">
+          <h3 class="prop-card-title">${p.title}</h3>
+          <p class="prop-card-location">📍 ${p.location}</p>
+          <div class="prop-card-specs">
+            ${p.bedrooms ? `<span><i class="fas fa-bed"></i> ${p.bedrooms} bed</span>` : ""}
+            ${p.bathrooms ? `<span><i class="fas fa-bath"></i> ${p.bathrooms} bath</span>` : ""}
+            ${p.size ? `<span><i class="fas fa-expand-arrows-alt"></i> ${p.size} sq ft</span>` : ""}
+          </div>
+          ${p.amenities && p.amenities.length ? `
+          <div class="prop-amenity-row">
+            ${p.amenities.slice(0,3).map(a=>`<span class="bnb-amenity-tag">${a}</span>`).join("")}
+            ${p.amenities.length>3 ? `<span class="bnb-amenity-tag">+${p.amenities.length-3}</span>` : ""}
+          </div>` : ""}
+          <div class="prop-card-footer">
+            <div>
+              <div class="prop-rent">KES ${Number(p.rent||0).toLocaleString()}<span>/mo</span></div>
+              <div class="prop-deposit">Deposit: KES ${Number(p.deposit||0).toLocaleString()}</div>
+            </div>
+            <button type="button" class="prop-inquire-btn" onclick="event.stopPropagation();openPropDetail('${p.id}')">
+              View Details <i class="fas fa-arrow-right" style="font-size:11px;"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function openPropDetail(id){
+    const p = allProps.find(p => p.id === id);
+    if(!p) return;
+    const phone = (p.landlordPhone||"").replace(/\s/g,"");
+    const waPhone = phone.startsWith("+") ? phone.slice(1) : phone.startsWith("07") ? "254"+phone.slice(1) : phone;
+    const waMsg = encodeURIComponent(`Hi, I saw your listing "${p.title}" on Sokoni and I'm interested. Is it available?`);
+
+    document.getElementById("propModalContent").innerHTML = `
+      <img loading="lazy" src="${p.image||'assets/backG2.jpeg'}" style="width:100%;height:220px;object-fit:cover;border-radius:18px;margin-bottom:18px;">
+      <h2 style="color:white;font-size:21px;font-weight:900;margin-bottom:6px;">${p.title}</h2>
+      <p style="color:rgba(255,255,255,0.45);margin-bottom:16px;font-size:13px;">
+        <i class="fas fa-map-marker-alt" style="color:#71ff00;margin-right:6px;"></i>${p.location}
+      </p>
+
+      <div class="prop-info-grid">
+        <div class="prop-info-cell">
+          <div class="prop-info-cell-lbl">Monthly Rent</div>
+          <div class="prop-info-cell-val green">KES ${Number(p.rent||0).toLocaleString()}</div>
+        </div>
+        <div class="prop-info-cell">
+          <div class="prop-info-cell-lbl">Deposit</div>
+          <div class="prop-info-cell-val">KES ${Number(p.deposit||0).toLocaleString()}</div>
+        </div>
+        <div class="prop-info-cell">
+          <div class="prop-info-cell-lbl">Type</div>
+          <div class="prop-info-cell-val" style="text-transform:capitalize;">${p.type||"—"}</div>
+        </div>
+        <div class="prop-info-cell">
+          <div class="prop-info-cell-lbl">Lease Term</div>
+          <div class="prop-info-cell-val">${p.leaseTerm||"Negotiable"}</div>
+        </div>
+        ${p.bedrooms ? `<div class="prop-info-cell"><div class="prop-info-cell-lbl">Bedrooms</div><div class="prop-info-cell-val">${p.bedrooms}</div></div>` : ""}
+        ${p.bathrooms ? `<div class="prop-info-cell"><div class="prop-info-cell-lbl">Bathrooms</div><div class="prop-info-cell-val">${p.bathrooms}</div></div>` : ""}
+        ${p.size ? `<div class="prop-info-cell"><div class="prop-info-cell-lbl">Size</div><div class="prop-info-cell-val">${p.size} sq ft</div></div>` : ""}
+        <div class="prop-info-cell">
+          <div class="prop-info-cell-lbl">Availability</div>
+          <div class="prop-info-cell-val" style="color:${p.available?'#71ff00':'#ff4444'}">${p.available?"✅ Available":"❌ Occupied"}</div>
+        </div>
+      </div>
+
+      ${p.description ? `<p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.75;margin-bottom:16px;">${p.description}</p>` : ""}
+
+      ${p.amenities && p.amenities.length ? `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Amenities</div>
+        <div class="bnb-amenity-row">${p.amenities.map(a=>`<span class="bnb-amenity-tag">${a}</span>`).join("")}</div>
+      </div>` : ""}
+
+      ${p.leaseFile ? `
+      <a href="${p.leaseFile}" download="lease_agreement.txt" style="display:inline-flex;align-items:center;gap:8px;color:#71ff00;font-weight:700;font-size:13px;margin-bottom:16px;text-decoration:none;">
+        📄 Download Lease Agreement
+      </a>` : ""}
+
+      <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.18);border-radius:14px;padding:16px;margin-bottom:18px;">
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Landlord Contact</div>
+        <div style="color:white;font-weight:800;font-size:15px;margin-bottom:3px;">${p.landlordName||"Landlord"}</div>
+        <div style="color:#71ff00;font-weight:700;">${p.landlordPhone||""}</div>
+      </div>
+
+      <!-- ACTION BUTTONS -->
+      ${waPhone ? `
+      <a href="https://wa.me/${waPhone}?text=${waMsg}" target="_blank" class="prop-modal-btn prop-modal-btn-wa" onclick="_trackPropertyInquiry('${p.id}','${(p.title||'').replace(/'/g,'')}','whatsapp')">
+        <i class="fab fa-whatsapp" style="font-size:18px;"></i> WhatsApp Landlord
+      </a>` : ""}
+
+      <a href="messages.html" class="prop-modal-btn prop-modal-btn-green">
+        💬 Message on Sokoni
+      </a>
+
+      ${p.available ? `
+      <button type="button" onclick="scheduleViewing('${p.id}')" class="prop-modal-btn prop-modal-btn-outline" style="border:1px solid rgba(255,255,255,0.1);">
+        <i class="fas fa-calendar-check" style="color:#71ff00;"></i> Schedule a Viewing
+      </button>` : ""}
+
+      <button type="button" onclick="document.getElementById('propModal').style.display='none'" class="prop-modal-btn prop-modal-btn-outline" style="margin-bottom:0;border:1px solid rgba(255,255,255,0.08);">
+        ← Back to Listings
+      </button>
+    `;
+    document.getElementById("propModal").style.display = "flex";
+  }
+
+  async function _trackPropertyInquiry(propId, propTitle, channel){
+    try{
+      var u=null; try{u=JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){}
+      var {initializeApp,getApps}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+      var {getFirestore,collection,addDoc,serverTimestamp}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var cfg={apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',authDomain:'sokoni-aeb26.firebaseapp.com',
+        projectId:'sokoni-aeb26',storageBucket:'sokoni-aeb26.firebasestorage.app',
+        messagingSenderId:'24799054989',appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4'};
+      var app=getApps().length?getApps()[0]:initializeApp(cfg);
+      var db=getFirestore(app);
+      await addDoc(collection(db,'propertyInquiries'),{
+        propertyId:propId, propertyTitle:propTitle, channel:channel,
+        uid:u?.uid||null, inquirerName:u?.name||null, inquirerPhone:u?.phone||null,
+        createdAt:serverTimestamp()
+      });
+    }catch(e){ /* non-critical — don't block WhatsApp link */ }
+  }
+  window._trackPropertyInquiry = _trackPropertyInquiry;
+
+  async function scheduleViewing(id){
+    const p = allProps.find(p => p.id === id);
+    if(!p) return;
+    try{
+      var u=null; try{u=JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){}
+      var {initializeApp,getApps}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+      var {getFirestore,collection,addDoc,serverTimestamp}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var cfg={apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',authDomain:'sokoni-aeb26.firebaseapp.com',
+        projectId:'sokoni-aeb26',storageBucket:'sokoni-aeb26.firebasestorage.app',
+        messagingSenderId:'24799054989',appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4'};
+      var app=getApps().length?getApps()[0]:initializeApp(cfg);
+      var db=getFirestore(app);
+      await addDoc(collection(db,'propertyViewings'),{
+        propertyId:p.id, propertyTitle:p.title||'', landlordPhone:p.landlordPhone||'',
+        uid:u?.uid||null, viewerName:u?.name||null, viewerPhone:u?.phone||null,
+        status:'pending', createdAt:serverTimestamp()
+      });
+      showNotif("📅 Viewing request sent to landlord!", "success");
+    }catch(e){
+      showNotif("📅 Viewing request sent!", "success");
+    }
+  }
+
+  function filterProp(type, btn){
+    activeType = type;
+    document.querySelectorAll(".prop-type-btn").forEach(b => b.classList.remove("active-prop-btn"));
+    if(btn) btn.classList.add("active-prop-btn");
+    searchProps();
+  }
+
+  function searchProps(){
+    const q       = (document.getElementById("propSearch")||{value:""}).value.toLowerCase();
+    const loc     = (document.getElementById("propLocation")||{value:""}).value.toLowerCase();
+    const maxRent = Number((document.getElementById("propMaxRent")||{value:""}).value) || Infinity;
+    const sort    = (document.getElementById("propSort")||{value:"newest"}).value;
+
+    let result = allProps.filter(p => {
+      const matchType   = activeType === "all" || (p.type||"").toLowerCase() === activeType;
+      const matchSearch = !q || p.title.toLowerCase().includes(q) || (p.location||"").toLowerCase().includes(q);
+      const matchLoc    = !loc || (p.location||"").toLowerCase().includes(loc);
+      const matchRent   = Number(p.rent||0) <= maxRent;
+      return matchType && matchSearch && matchLoc && matchRent;
+    });
+
+    if(sort === "low")    result.sort((a,b) => a.rent - b.rent);
+    if(sort === "high")   result.sort((a,b) => b.rent - a.rent);
+    if(sort === "newest") result.sort((a,b) => (b.listedAt||0) - (a.listedAt||0));
+
+    filteredProps = result;
+    renderProps(filteredProps);
+  }
+
+  function showNotif(msg, type){
+    const c = document.getElementById("notificationContainer");
+    if(!c) return;
+    const n = document.createElement("div");
+    n.className = `notification ${type}`;
+    n.textContent = msg;
+    c.appendChild(n);
+    setTimeout(()=>n.remove(), 3500);
+  }
+
+  loadProps();
+</script>
+<script src="scroll-memory.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="bnb.html" class="bnav-item"><span class="bnav-emoji">🏨</span><span>BnB</span></a>
+  <a href="property.html" class="bnav-item active-bnav"><span class="bnav-emoji">🏘️</span><span>Property</span></a>
+  <a href="landlord.html" class="bnav-item"><span class="bnav-emoji">🔑</span><span>Landlord</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

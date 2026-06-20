@@ -1,0 +1,3844 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+
+<head>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Kenya's #1 Online Marketplace | Buy & Sell Products</title>
+
+  <script src="security.js"></script>
+  <script>/* Capture ?ref=CODE from referral links — runs before any other JS */
+  (function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
+  <script src="seo.js" defer></script>
+  <!-- --- PERFORMANCE — DNS prefetch & preconnect --- -->
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="dns-prefetch" href="https://sokoni-aeb26.firebaseapp.com">
+  <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+  <link rel="dns-prefetch" href="https://storage.googleapis.com">
+
+  <!-- --- PRELOAD critical assets for faster paint --- -->
+  <link rel="preload" href="style.css" as="style">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preload" href="assets/Sokonilogo2.png" as="image" type="image/png">
+  <link rel="preload" href="script.js" as="script">
+
+  <!-- --- iOS Splash Screens --- -->
+  <link rel="apple-touch-startup-image" href="assets/Sokonilogo2.png">
+  <meta name="apple-touch-fullscreen" content="yes">
+
+  <!-- --- SEO --- -->
+  <meta name="description"
+    content="SOKONI is Kenya's leading online marketplace. Shop fashion, electronics, beauty, accessories and more. Fast delivery across Nairobi, Mombasa, Kisumu. Sell your products online today.">
+  <meta name="keywords"
+    content="online shopping Kenya, marketplace Kenya, buy online Kenya, sell online Kenya, Nairobi online shop, Mombasa online market, ecommerce Kenya, Sokoni marketplace, cheap products Kenya, fashion Kenya, electronics Kenya">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <meta name="author" content="SOKONI">
+  <link rel="canonical" href="https://mysokoni.co.ke/">
+
+  <!-- --- Open Graph (Facebook / WhatsApp) --- -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mysokoni.co.ke/">
+  <meta property="og:title" content="SOKONI — Kenya's #1 Online Marketplace">
+  <meta property="og:description"
+    content="Shop thousands of products from verified Kenyan sellers. Fast delivery, secure payments, easy returns.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:site_name" content="SOKONI">
+  <meta property="og:locale" content="en_KE">
+
+  <!-- --- Twitter Card --- -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SOKONI — Kenya's #1 Online Marketplace">
+  <meta name="twitter:description" content="Buy & sell online in Kenya. Fashion, electronics, beauty and more.">
+  <meta name="twitter:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+
+  <!-- --- PWA / Mobile --- -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="msapplication-TileColor" content="#16a34a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="application-name" content="SOKONI">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/icons/icon-96.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-180.png">
+
+  <!-- --- JSON-LD Structured Data --- -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "name": "SOKONI",
+        "url": "https://mysokoni.co.ke",
+        "logo": "https://mysokoni.co.ke/assets/Sokonilogo2.png",
+        "description": "Kenya's leading online marketplace connecting buyers and sellers",
+        "address": { "@type": "PostalAddress", "addressLocality": "Nairobi", "addressCountry": "KE" },
+        "contactPoint": { "@type": "ContactPoint", "telephone": "+254-705-726-803", "contactType": "customer service", "availableLanguage": ["English", "Swahili"] }
+      },
+      {
+        "@type": "WebSite",
+        "name": "SOKONI",
+        "url": "https://mysokoni.co.ke",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": { "@type": "EntryPoint", "urlTemplate": "https://mysokoni.co.ke/category.html?q={search_term_string}" },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "Store",
+        "name": "SOKONI Online Marketplace",
+        "url": "https://mysokoni.co.ke",
+        "image": "https://mysokoni.co.ke/assets/Sokonilogo2.png",
+        "priceRange": "KES 50 - KES 500,000",
+        "currenciesAccepted": "KES",
+        "paymentAccepted": "M-Pesa, Visa, Mastercard, PayPal",
+        "areaServed": "Kenya"
+      }
+    ]
+  }
+  </script>
+
+  <!-- Kenya flag — inline so it renders before deferred mobile.css loads -->
+  <style>
+  .ke-flag,.ke-flag-sm,.ke-flag-md,.ke-flag-lg,.emoji-ke,.mstat-ke-flag{display:inline-block!important;background:url('assets/kenya-flag.svg') center/cover no-repeat!important;vertical-align:middle!important;flex-shrink:0!important;border-radius:2px!important;box-shadow:0 0 0 1px rgba(255,255,255,0.15)!important;overflow:hidden!important;}
+  .ke-flag,.ke-flag-sm{width:20px!important;height:14px!important;}
+  .ke-flag-md{width:27px!important;height:18px!important;}
+  .ke-flag-lg{width:42px!important;height:28px!important;}
+  .mstat-ke-flag{width:42px!important;height:28px!important;border-radius:3px!important;}
+  .emoji-ke{width:22px!important;height:15px!important;font-size:0!important;color:transparent!important;line-height:0!important;}
+  </style>
+
+  <!-- CSS (non-critical loaded async to unblock render) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
+  <link rel="stylesheet" href="premium.css" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="compact-grid.css" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="mobile.css" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-hscroll.css">
+  <script src="market-actions.js" defer></script>
+  <script src="sokoni-pay.js" defer></script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+
+<body>
+
+  <!-- ── HOME SPLASH — creative colour journey ── -->
+  <style>
+    /* Colour palette used across all home splash animations */
+    :root {
+      --sc1: #71ff00;
+      /* SOKONI green  */
+      --sc2: #00d4ff;
+      /* ocean cyan    */
+      --sc3: #a855f7;
+      /* royal purple  */
+      --sc4: #f59e0b;
+      /* warm amber    */
+      --sc5: #ec4899;
+      /* rose          */
+    }
+
+    /* Progress bar follows the 5-colour theme */
+    #splashBarFill {
+      background: linear-gradient(90deg, var(--sc1), var(--sc2), var(--sc3), var(--sc4), var(--sc5), var(--sc1)) !important;
+      background-size: 300% 100% !important;
+      animation: splashBarShift 0.9s linear forwards !important;
+    }
+
+    @keyframes splashBarShift {
+      from {
+        width: 0%;
+        background-position: 0% 50%;
+      }
+
+      to {
+        width: 100%;
+        background-position: 200% 50%;
+      }
+    }
+
+    /* Loader ring cycles through the 5 colours */
+    #splashScreen .loader-ring {
+      border-color: rgba(255, 255, 255, 0.07) !important;
+      animation: spin 0.85s linear infinite,
+        homeRingColor 2.4s ease-in-out 0.3s infinite !important;
+    }
+
+    @keyframes homeRingColor {
+      0% {
+        border-top-color: var(--sc1);
+        box-shadow: 0 0 22px rgba(113, 255, 0, 0.35);
+      }
+
+      20% {
+        border-top-color: var(--sc2);
+        box-shadow: 0 0 22px rgba(0, 212, 255, 0.35);
+      }
+
+      40% {
+        border-top-color: var(--sc3);
+        box-shadow: 0 0 22px rgba(168, 85, 247, 0.35);
+      }
+
+      60% {
+        border-top-color: var(--sc4);
+        box-shadow: 0 0 22px rgba(245, 158, 11, 0.35);
+      }
+
+      80% {
+        border-top-color: var(--sc5);
+        box-shadow: 0 0 22px rgba(236, 72, 153, 0.35);
+      }
+
+      100% {
+        border-top-color: var(--sc1);
+        box-shadow: 0 0 22px rgba(113, 255, 0, 0.35);
+      }
+    }
+
+    /* Tagline shimmers through the colours */
+    #splashScreen .splash-tagline {
+      animation: fadeInUp 0.7s ease 0.55s both,
+        homeTaglineColor 3s ease-in-out 1s infinite !important;
+      letter-spacing: 2.5px;
+    }
+
+    @keyframes homeTaglineColor {
+
+      0%,
+      100% {
+        color: rgba(113, 255, 0, 0.85);
+      }
+
+      25% {
+        color: rgba(0, 212, 255, 0.85);
+      }
+
+      50% {
+        color: rgba(168, 85, 247, 0.85);
+      }
+
+      75% {
+        color: rgba(245, 158, 11, 0.85);
+      }
+    }
+
+    /* Glow ring behind logo breathes colour */
+    #splashScreen .splash-content::before {
+      animation: homeLogoGlow 3.2s ease-in-out 0.2s infinite !important;
+      width: 220px !important;
+      height: 220px !important;
+    }
+
+    @keyframes homeLogoGlow {
+
+      0%,
+      100% {
+        background: radial-gradient(circle, rgba(113, 255, 0, 0.14) 0%, transparent 68%);
+      }
+
+      25% {
+        background: radial-gradient(circle, rgba(0, 212, 255, 0.14) 0%, transparent 68%);
+      }
+
+      50% {
+        background: radial-gradient(circle, rgba(168, 85, 247, 0.14) 0%, transparent 68%);
+      }
+
+      75% {
+        background: radial-gradient(circle, rgba(245, 158, 11, 0.14) 0%, transparent 68%);
+      }
+    }
+
+    /* Logo gentle colour tint on entrance */
+    #splashScreen .splash-logo {
+      filter: drop-shadow(0 0 16px rgba(113, 255, 0, 0.4));
+      animation: splashLogoIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+        homeLogoTint 3s ease-in-out 0.8s infinite !important;
+    }
+
+    @keyframes homeLogoTint {
+
+      0%,
+      100% {
+        filter: drop-shadow(0 0 16px rgba(113, 255, 0, 0.4));
+      }
+
+      25% {
+        filter: drop-shadow(0 0 16px rgba(0, 212, 255, 0.35));
+      }
+
+      50% {
+        filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.35));
+      }
+
+      75% {
+        filter: drop-shadow(0 0 16px rgba(245, 158, 11, 0.35));
+      }
+    }
+    /* AUTO-HIDE via CSS — fires on compositor thread, immune to JS errors */
+    #splashScreen{animation:__skOut 0.75s cubic-bezier(0.4,0,0.2,1) 0.95s forwards;}
+    @keyframes __skOut{to{opacity:0;pointer-events:none;}}
+  </style>
+
+  <div id="splashScreen" class="splash-screen">
+    <canvas id="splashCanvas"></canvas>
+    <div class="splash-content" style="position:relative;z-index:2;">
+      <img src="assets/Sokonilogo2.png" class="splash-logo" alt="SOKONI" fetchpriority="high">
+      <div class="loader-ring"></div>
+      <div class="splash-tagline">Kenya's Global Marketplace</div>
+    </div>
+    <div id="splashBar">
+      <div id="splashBarFill"></div>
+    </div>
+  </div>
+  <!-- ── SPLASH CONTROL — CSS animation is primary hide; JS only cleans up after ── -->
+  <script>
+    (function(){
+      var splash = document.getElementById('splashScreen');
+      if(!splash) return;
+      /* Particles — in try/catch so any canvas error never blocks the CSS hide */
+      try {
+        var canvas = document.getElementById('splashCanvas');
+        if(canvas && canvas.getContext){
+          var ctx = canvas.getContext('2d');
+          if(ctx){
+            canvas.width  = window.innerWidth;
+            canvas.height = window.innerHeight;
+            var PAL = [[113,255,0],[0,212,255],[168,85,247],[245,158,11],[236,72,153]];
+            var pts = [];
+            for(var i=0;i<70;i++){
+              pts.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,
+                r:Math.random()*2.2+0.4,dx:(Math.random()-0.5)*0.55,dy:(Math.random()-0.5)*0.55,
+                a:Math.random()*0.45+0.08,ci:Math.floor(Math.random()*PAL.length),
+                ct:Math.random(),cs:0.002+Math.random()*0.003});
+            }
+            var aid;
+            function dp(){
+              ctx.clearRect(0,0,canvas.width,canvas.height);
+              pts.forEach(function(p){
+                p.ct+=p.cs; if(p.ct>=1){p.ct-=1;p.ci=(p.ci+1)%PAL.length;}
+                var n=(p.ci+1)%PAL.length,c0=PAL[p.ci],c1=PAL[n],t=p.ct;
+                ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+                ctx.fillStyle='rgba('+Math.round(c0[0]+(c1[0]-c0[0])*t)+','+Math.round(c0[1]+(c1[1]-c0[1])*t)+','+Math.round(c0[2]+(c1[2]-c0[2])*t)+','+p.a+')';
+                ctx.fill(); p.x+=p.dx; p.y+=p.dy;
+                if(p.x<0||p.x>canvas.width)p.dx*=-1;
+                if(p.y<0||p.y>canvas.height)p.dy*=-1;
+              });
+              aid=requestAnimationFrame(dp); window._splashAnimId=aid;
+            }
+            dp();
+          }
+        }
+      } catch(e){}
+      /* CSS animation handles the visual fade (0.95s delay + 0.75s fade).
+         JS just removes the element from layout once invisible.           */
+      function done(){
+        try{
+          splash.style.display='none';
+          document.body.style.overflow='';
+          if(window._splashAnimId) cancelAnimationFrame(window._splashAnimId);
+        }catch(e){}
+      }
+      setTimeout(done, 1800);  /* fires after CSS fade completes */
+      setTimeout(done, 3500);  /* hard failsafe                  */
+    })();
+  </script>
+
+  <!-- Network status toast -->
+  <div id="networkToast">
+    <span id="networkToastIcon">✅</span>
+    <span id="networkToastText">Back online</span>
+  </div>
+
+  <!-- Pull-to-refresh indicator -->
+  <div id="pullRefreshIndicator">
+    <span style="animation:spin 0.8s linear infinite;display:inline-block;">🔄</span>
+    Refreshing…
+  </div>
+  <div class="menu-toggle" onclick="toggleMobileMenu()">
+
+    ☰
+
+  </div>
+
+  <!-- NAVBAR -->
+
+  <nav class="navbar">
+
+
+    <button type="button" class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">🌙</button>
+
+    <div class="logo-section">
+      <img loading="lazy" src="assets/Sokonilogo2.png" alt="SOKONI" class="main-logo" id="sokoniMainLogo" onclick="_secretTap()" style="cursor:pointer;">
+    </div>
+
+    <!-- Location pill — mobile only, desktop hidden via CSS -->
+    <div class="nav-location" id="navLocation" onclick="pickDeliveryLocation()" title="Delivery location">
+      <span class="nav-loc-icon">📍</span>
+      <span class="nav-loc-text" id="navLocText">Nairobi</span>
+      <span class="nav-loc-chevron">▾</span>
+    </div>
+
+
+
+    <div class="search-bar">
+
+      <div class="search-suggestions" id="searchSuggestions">
+
+      </div>
+
+      <input type="search" placeholder="Search products, services..." id="searchInput" autocomplete="new-password"
+        oninput="searchProducts()" onkeyup="showSuggestions()"
+        onkeydown="if(event.key==='Enter'&&this.value.trim()){event.preventDefault();location.href='search.html?q='+encodeURIComponent(this.value.trim());}">
+
+    </div>
+
+
+
+    <div class="nav-actions">
+
+      <a href="messages.html" class="nav-messages-btn">
+        💬 <span id="unreadBadge" class="unread-dot" style="display:none;"></span>
+      </a>
+
+      <!-- ── NOTIFICATION BELL ── -->
+      <div class="n-bell-wrap" id="nBellWrap">
+        <button type="button" class="n-bell-btn" id="nBellBtn" onclick="sokoniNotif.toggle()" aria-label="Notifications" title="Notifications">
+          <span id="nBellIcon">🔔</span>
+          <span class="n-bell-dot" id="nBellDot"></span>
+        </button>
+        <div class="n-panel" id="nPanel" role="dialog" aria-label="Notification settings">
+          <div class="n-panel-arr"></div>
+          <div class="n-panel-head">
+            <span class="n-panel-ttl">🔔 Notifications</span>
+            <button type="button" class="n-panel-x" onclick="sokoniNotif.close()">✕</button>
+          </div>
+          <div class="n-status-row" id="nStatusRow">
+            <span class="n-sdot" id="nSDot">●</span>
+            <span id="nSTxt">Checking status…</span>
+          </div>
+          <div class="n-opts">
+            <button type="button" class="n-opt n-opt-en" id="nOptEnable" onclick="sokoniNotif.enable()">
+              <span class="n-opt-ico">✅</span>
+              <span class="n-opt-bd"><span class="n-opt-ttl">Enable Notifications</span><span class="n-opt-sub">Get alerts for deals &amp; orders</span></span>
+            </button>
+            <button type="button" class="n-opt n-opt-sn" onclick="sokoniNotif.snooze(60)">
+              <span class="n-opt-ico">⏰</span>
+              <span class="n-opt-bd"><span class="n-opt-ttl">Snooze 1 Hour</span><span class="n-opt-sub">Resume automatically after 60 min</span></span>
+            </button>
+            <button type="button" class="n-opt n-opt-sn" onclick="sokoniNotif.snooze(1440)">
+              <span class="n-opt-ico">🌙</span>
+              <span class="n-opt-bd"><span class="n-opt-ttl">Snooze 24 Hours</span><span class="n-opt-sub">Quiet until tomorrow</span></span>
+            </button>
+            <button type="button" class="n-opt n-opt-off" onclick="sokoniNotif.disable()">
+              <span class="n-opt-ico">🔕</span>
+              <span class="n-opt-bd"><span class="n-opt-ttl">Turn Off Permanently</span><span class="n-opt-sub">Stop all Sokoni notifications</span></span>
+            </button>
+          </div>
+          <a href="notifications.html" style="display:block;text-align:center;margin:10px 0 4px;padding:10px 0;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);border-radius:12px;color:#71ff00;font-size:13px;font-weight:700;text-decoration:none;">🔔 View All Notifications</a>
+          <p class="n-panel-foot">You can re-enable anytime in Profile → Settings</p>
+        </div>
+      </div>
+
+      <a href="profile.html" class="nav-points-btn" id="navPointsBtn" style="display:none;">
+        ⭐ <span id="navPoints">0</span> pts
+      </a>
+
+      <a href="wishlist.html" class="wishlist-nav-btn">
+
+        💗 Wishlist
+
+      </a>
+
+
+
+      <a href="cart.html" class="cart-btn" id="cartButton" style="text-decoration:none;position:relative;">🛒<span id="cartCount" style="display:none;position:absolute;top:-8px;right:-8px;background:#ff3d3d;color:#fff;font-size:10px;font-weight:900;min-width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;line-height:1;padding:0 4px;box-shadow:0 2px 6px rgba(255,61,61,0.5);pointer-events:none;">0</span></a>
+
+      <div id="authButtons">
+        <a href="login.html"><button type="button" class="login-btn">Login</button></a>
+      </div>
+
+      <a href="profile.html" class="nav-profile-avatar" id="navProfileAvatar" title="My Profile">
+        <span id="navProfileInitial">👤</span>
+      </a>
+
+    </div>
+
+  </nav>
+
+  <!-- MOBILE MENU -->
+
+  <!-- Overlay — tap outside menu to close -->
+  <div class="menu-overlay" id="menuOverlay" onclick="toggleMobileMenu()"></div>
+
+  <div class="mobile-menu" id="mobileMenu">
+    <button class="mmenu-close" onclick="toggleMobileMenu()" aria-label="Close menu">✕</button>
+
+    <div class="mmenu-auth" id="mmenuAuthRow">
+      <a href="login.html" id="mmenuLoginLink" class="mmenu-btn-login">🔑 Login</a>
+      <a href="signup.html" id="mmenuSignupLink" class="mmenu-btn-signup">✨ Create Account</a>
+    </div>
+    <div class="mmenu-user-row" id="mmenuUserRow" style="display:none">
+      <div class="mmenu-avatar" id="mmenuAvatar">👤</div>
+      <div class="mmenu-user-info">
+        <span class="mmenu-user-name" id="mmenuUserName">My Account</span>
+        <a href="profile.html" class="mmenu-user-link">View profile →</a>
+      </div>
+    </div>
+
+    <a href="index.html">🏠 Home</a>
+
+    <div class="mmenu-section">Shop</div>
+    <a href="category.html?cat=all">🛍️ All Categories</a>
+    <a href="flashsale.html">⚡ Flash Sale</a>
+    <a href="offer.html">🏪 Sell / List Product</a>
+
+    <div class="mmenu-section">Services &amp; Delivery</div>
+    <a href="services.html">🛠️ All Services</a>
+    <a href="food.html">🍔 Food &amp; Drinks</a>
+    <a href="delivery.html">🚛 Delivery</a>
+    <a href="driver.html">🚗 Driver Portal</a>
+
+    <div class="mmenu-section">Hubs</div>
+    <a href="healthcare.html">🏥 Healthcare</a>
+    <a href="banking.html">🏦 Banking &amp; Finance</a>
+    <a href="entertainment.html">🎬 Entertainment</a>
+    <a href="sports-hub.html">⚽ Sports Hub</a>
+    <a href="car-hub.html">🚗 Car Hub</a>
+    <a href="property-hub.html">🏘️ Property</a>
+    <a href="bnb-hub.html">🏨 BnB &amp; Stays</a>
+    <a href="legal-hub.html">⚖️ Legal Hub</a>
+    <a href="b2b.html">🤝 B2B</a>
+    <a href="tech-hub.html">📱 Tech Hub</a>
+    <a href="tech-hub.html">💻 Digital Services</a>
+    <a href="construction.html">🏗️ Construction</a>
+    <a href="education.html">📚 Education Hub</a>
+    <a href="jobs.html">💼 Jobs Board</a>
+    <a href="life-events.html">✨ Life Events</a>
+    <a href="trust.html">🛂 Trust Passport</a>
+    <a href="opportunity.html">💼 Earn with Sokoni</a>
+    <a href="fitness-hub.html">💪 Fitness Hub</a>
+    <a href="home-services.html">🏠 Home Services</a>
+    <a href="community.html">💬 Community</a>
+    <a href="unboxing.html">📦 Unboxing Wall</a>
+    <a href="reviews.html">⭐ Reviews</a>
+
+    <div class="mmenu-section">My Account</div>
+    <a href="profile.html">👤 My Profile</a>
+    <a href="notifications.html">🔔 Notifications</a>
+    <a href="loyalty.html">⭐ Loyalty Points</a>
+    <a href="referral.html">🎁 Refer &amp; Earn</a>
+    <a href="subscriptions.html">♾️ Subscriptions</a>
+    <a href="seller.html">🏪 Seller Dashboard</a>
+    <a href="cart.html">🛒 My Cart</a>
+    <a href="wishlist.html">❤️ Wishlist</a>
+    <a href="messages.html">💬 Messages</a>
+    <a href="track.html">📦 Track Order</a>
+    <a href="scan.html">📷 QR Scanner</a>
+    <a href="wallet.html">💳 SOKONI Wallet</a>
+    <a href="business-os.html">💼 Business OS</a>
+
+  </div>
+
+  <!-- GLASS HERO BANNER -->
+
+  <section class="glass-hero">
+    <div class="glass-hero-bg" style="position:absolute;inset:0;background:url('assets/backG1.jpeg') center/cover no-repeat;filter:brightness(0.45);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;z-index:0;"></div>
+    <div class="glass-hero-card">
+      <p class="glass-hero-badge" style="display:inline-flex;align-items:center;gap:6px;"><img src="assets/kenya-flag.svg" alt="Kenya" style="width:22px;height:15px;object-fit:cover;border-radius:3px;flex-shrink:0;"> Kenya's #1 Marketplace</p>
+      <h1>Shop Smarter on <span>SOKONI</span></h1>
+      <p class="glass-hero-sub">Buy locally. Receive today. Pay safely.</p>
+      <!-- Platform trust stats -->
+      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;margin-top:-4px;">
+        <span style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.75);display:flex;align-items:center;gap:4px;">✅ 50K+ Products</span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.2);">·</span>
+        <span style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.75);display:flex;align-items:center;gap:4px;">🏪 1,200+ Sellers</span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.2);">·</span>
+        <span style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.75);display:flex;align-items:center;gap:4px;">🚚 Same-Day Nairobi</span>
+      </div>
+
+      <!-- GOODS vs SERVICES split -->
+      <div
+        style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;max-width:540px;margin-left:auto;margin-right:auto;">
+        <a href="category.html?cat=all"
+          style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:14px;text-decoration:none;transition:all .2s;"
+          onmouseover="this.style.background='rgba(113,255,0,0.15)'"
+          onmouseout="this.style.background='rgba(113,255,0,0.08)'">
+          <span style="font-size:24px;">🛒</span>
+          <div style="text-align:left;">
+            <div style="font-size:13px;font-weight:900;color:#71ff00;">Shop Products</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.45);">Electronics, food, clothes &amp; more</div>
+          </div>
+        </a>
+        <a href="services.html"
+          style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.25);border-radius:14px;text-decoration:none;transition:all .2s;"
+          onmouseover="this.style.background='rgba(0,170,255,0.15)'"
+          onmouseout="this.style.background='rgba(0,170,255,0.08)'">
+          <span style="font-size:24px;">⚙️</span>
+          <div style="text-align:left;">
+            <div style="font-size:13px;font-weight:900;color:#00aaff;">Book Services</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.45);">Doctors, lawyers, mechanics &amp; more</div>
+          </div>
+        </a>
+      </div>
+
+      <div class="glass-hero-btns">
+        <a href="offer.html" class="glass-btn-green"
+          style="font-size:13px;display:inline-flex;align-items:center;gap:8px;">🚀 Start Selling / Offering <span
+            style="opacity:.65;font-size:11px;">→</span></a>
+        <a href="life-events.html"
+          style="display:inline-flex;align-items:center;gap:8px;padding:13px 20px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:14px;color:#71ff00;font-size:13px;font-weight:800;text-decoration:none;">✨ Life Goals</a>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,0.25);">Products · Services · Digital Goods ·
+        Wholesale</div>
+    </div>
+  </section>
+
+  <!-- --- SELLER STORIES (WhatsApp-style) --- -->
+  <section id="storiesSection" style="padding:18px 0 8px;overflow:hidden;">
+    <div style="padding:0 20px 10px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="font-size:13px;font-weight:900;color:white;">Stories</span>
+        <span style="font-size:9px;font-weight:900;letter-spacing:0.1em;color:#f59e0b;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:2px 7px;border-radius:999px;">⭐ PREMIUM</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:rgba(255,255,255,0.3);">Tap · 24h</span>
+        <button type="button" id="sRingBtnL" onclick="scrollStoriesRing(-1)"
+          style="display:none;width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);font-size:15px;cursor:pointer;line-height:1;flex-shrink:0;">‹</button>
+        <button type="button" id="sRingBtnR" onclick="scrollStoriesRing(1)"
+          style="display:none;width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);font-size:15px;cursor:pointer;line-height:1;flex-shrink:0;">›</button>
+      </div>
+    </div>
+    <div style="position:relative;overflow:hidden;">
+      <!-- Left fade + floating arrow -->
+      <div id="sRingNavL"
+        style="display:none;position:absolute;left:0;top:0;bottom:8px;width:56px;background:linear-gradient(to right,rgba(10,10,10,0.92) 45%,transparent);z-index:5;align-items:center;justify-content:center;pointer-events:none;">
+        <button type="button" onclick="scrollStoriesRing(-1)"
+          style="pointer-events:all;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(15,15,15,0.88);color:white;font-size:16px;cursor:pointer;backdrop-filter:blur(6px);">‹</button>
+      </div>
+      <div id="storiesRing"
+        style="display:flex;gap:14px;overflow-x:auto;padding:0 20px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;"
+        onscroll="updateRingNavBtns()"></div>
+      <!-- Right fade + floating arrow -->
+      <div id="sRingNavR"
+        style="display:none;position:absolute;right:0;top:0;bottom:8px;width:56px;background:linear-gradient(to left,rgba(10,10,10,0.92) 45%,transparent);z-index:5;align-items:center;justify-content:center;pointer-events:none;">
+        <button type="button" onclick="scrollStoriesRing(1)"
+          style="pointer-events:all;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(15,15,15,0.88);color:white;font-size:16px;cursor:pointer;backdrop-filter:blur(6px);">›</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STORY VIEWER — Full-screen WhatsApp style -->
+  <div id="storyViewer" style="display:none;position:fixed;inset:0;z-index:99998;background:#000;overflow:hidden;">
+
+    <!-- Full-screen media container -->
+    <div id="storyViewerMedia" style="position:absolute;inset:0;width:100%;height:100%;"></div>
+
+    <!-- Gradient overlays for readability -->
+    <div
+      style="position:absolute;top:0;left:0;right:0;height:160px;background:linear-gradient(to bottom,rgba(0,0,0,0.65),transparent);z-index:2;pointer-events:none;">
+    </div>
+    <div
+      style="position:absolute;bottom:0;left:0;right:0;height:200px;background:linear-gradient(to top,rgba(0,0,0,0.75),transparent);z-index:2;pointer-events:none;">
+    </div>
+
+    <!-- TOP OVERLAY: progress bars + seller info + close -->
+    <div style="position:absolute;top:0;left:0;right:0;z-index:10;padding:env(safe-area-inset-top,10px) 14px 0;">
+      <!-- Segmented progress bars -->
+      <div id="storyProgressRow" style="display:flex;gap:3px;margin-bottom:10px;padding-top:10px;"></div>
+      <!-- Seller row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="storyViewerAvatar"
+            style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:black;flex-shrink:0;border:2px solid rgba(255,255,255,0.3);">
+          </div>
+          <div>
+            <div id="storyViewerName"
+              style="font-size:13px;font-weight:800;color:white;text-shadow:0 1px 4px rgba(0,0,0,0.7);"></div>
+            <div id="storyViewerTime"
+              style="font-size:10px;color:rgba(255,255,255,0.6);text-shadow:0 1px 3px rgba(0,0,0,0.7);"></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="storyCounter" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);"></span>
+          <button type="button" id="storyMuteBtn" onclick="toggleStoryMute()" style="display:none;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.25);color:white;font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);">🔊</button>
+          <button type="button" onclick="closeStoryViewer()"
+            style="width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.25);color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAP ZONES: handled by the viewer click listener in script.js -->
+    <div style="position:absolute;left:0;top:0;bottom:0;width:35%;z-index:5;cursor:pointer;" title="Previous"></div>
+    <div style="position:absolute;right:0;top:0;bottom:0;width:35%;z-index:5;cursor:pointer;" title="Next"></div>
+
+    <!-- BOTTOM OVERLAY: caption + CTA -->
+    <div
+      style="position:absolute;bottom:0;left:0;right:0;z-index:10;padding:0 18px calc(env(safe-area-inset-bottom,0px) + 28px);">
+      <div id="storyViewerCaption"
+        style="font-size:14px;color:white;text-shadow:0 1px 6px rgba(0,0,0,0.9);font-weight:600;line-height:1.45;margin-bottom:10px;">
+      </div>
+      <div id="storyViewerCta"></div>
+    </div>
+
+    <!-- Hidden legacy elements (kept for JS compat) -->
+    <div id="storyBtnPrev" style="display:none;"></div>
+    <div id="storyBtnNext" style="display:none;"></div>
+  </div>
+
+  <!-- FLASH SALE BANNER -->
+
+  <section class="flash-sale-bar" id="flashSaleBar" style="display:none;">
+    <div class="flash-sale-inner">
+      <div class="flash-label">⚡ FLASH SALE</div>
+      <span class="flash-msg">Deals end in:</span>
+      <div class="flash-countdown">
+        <div class="cd-block"><span id="cdHours">00</span><small>HRS</small></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-block"><span id="cdMins">00</span><small>MIN</small></div>
+        <div class="cd-sep">:</div>
+        <div class="cd-block"><span id="cdSecs">00</span><small>SEC</small></div>
+      </div>
+      <a href="flashsale.html" class="flash-btn">Shop Flash Deals ›</a>
+    </div>
+  </section>
+
+  <!-- FLASH SALE PRODUCTS -->
+
+  <section class="flash-section" id="flashSection" style="display:none;">
+    <div class="section-title flash-title-row">
+      <div>
+        <h2>⚡ Flash Sale</h2>
+        <p class="section-sub">Top picks — ends in <span id="flashTimerMini">--:--:--</span></p>
+      </div>
+      <a href="flashsale.html" style="padding:7px 14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.28);
+              border-radius:10px;color:#ff6b6b;font-size:11px;font-weight:800;text-decoration:none;
+              white-space:nowrap;transition:all .2s;" onmouseover="this.style.background='rgba(239,68,68,0.18)'"
+        onmouseout="this.style.background='rgba(239,68,68,0.1)'">
+        See All ›
+      </a>
+    </div>
+    <div id="flashProductsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;padding:10px 16px 16px;"></div>
+  </section>
+
+  <!-- FEATURES STRIP -->
+
+  <section class="features-strip">
+
+    <div class="feature-item">
+      <div class="feature-icon">🚚</div>
+      <div class="feature-text">
+        <h4>Fast Delivery</h4>
+        <p>Nairobi same-day</p>
+      </div>
+    </div>
+
+    <div class="feature-item">
+      <div class="feature-icon">🔒</div>
+      <div class="feature-text">
+        <h4>Secure Payments</h4>
+        <p>M-Pesa · Visa · PayPal</p>
+      </div>
+    </div>
+
+    <div class="feature-item">
+      <div class="feature-icon">✅</div>
+      <div class="feature-text">
+        <h4>Verified Sellers</h4>
+        <p>All sellers are vetted</p>
+      </div>
+    </div>
+
+    <div class="feature-item">
+      <div class="feature-icon">📦</div>
+      <div class="feature-text">
+        <h4>Easy Returns</h4>
+        <p>7-day return policy</p>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- HUBS NAVIGATION ROW — quick access to every major platform hub -->
+  <section id="hubsNav" style="padding:6px 0 2px;border-bottom:1px solid rgba(255,255,255,0.04);">
+    <div style="padding:14px 20px 8px;display:flex;align-items:baseline;gap:10px;">
+      <span style="font-size:14px;font-weight:900;color:white;">All Hubs</span>
+      <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:.08em;text-transform:uppercase;">Everything Kenya needs</span>
+    </div>
+    <div style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;">
+      <a href="category.html?cat=all"   style="--hc:rgba(113,255,0,0.1);--hb:rgba(113,255,0,0.28);"  class="_hpill"><span>🛒</span><span>Marketplace</span></a>
+      <a href="services.html"           style="--hc:rgba(0,170,255,0.1);--hb:rgba(0,170,255,0.28);"  class="_hpill"><span>🔧</span><span>Services</span></a>
+      <a href="car-hub.html"            style="--hc:rgba(59,130,246,0.1);--hb:rgba(59,130,246,0.28);" class="_hpill"><span>🚗</span><span>Cars</span></a>
+      <a href="property-hub.html"       style="--hc:rgba(5,150,105,0.1);--hb:rgba(5,150,105,0.28);"  class="_hpill"><span>🏠</span><span>Property</span></a>
+      <a href="delivery.html"           style="--hc:rgba(34,197,94,0.1);--hb:rgba(34,197,94,0.28);"  class="_hpill"><span>🚚</span><span>Delivery</span></a>
+      <a href="jobs.html" style="--hc:rgba(124,58,237,0.1);--hb:rgba(124,58,237,0.28);" class="_hpill"><span>💼</span><span>Jobs</span></a>
+      <a href="businesses.html"         style="--hc:rgba(251,146,60,0.1);--hb:rgba(251,146,60,0.28);" class="_hpill"><span>🏪</span><span>Businesses</span></a>
+      <a href="healthcare.html"         style="--hc:rgba(0,200,120,0.1);--hb:rgba(0,200,120,0.28);"  class="_hpill"><span>🏥</span><span>Healthcare</span></a>
+      <a href="food.html"               style="--hc:rgba(234,88,12,0.1);--hb:rgba(234,88,12,0.28);"  class="_hpill"><span>🍔</span><span>Food</span></a>
+      <a href="entertainment.html"      style="--hc:rgba(219,39,119,0.1);--hb:rgba(219,39,119,0.28);" class="_hpill"><span>🎬</span><span>Entertainment</span></a>
+      <a href="sports-hub.html"         style="--hc:rgba(21,128,61,0.1);--hb:rgba(21,128,61,0.28);"  class="_hpill"><span>⚽</span><span>Sports</span></a>
+      <a href="banking.html"            style="--hc:rgba(234,179,8,0.1);--hb:rgba(234,179,8,0.28);"  class="_hpill"><span>🏦</span><span>Banking</span></a>
+      <a href="legal-hub.html"          style="--hc:rgba(226,185,111,0.1);--hb:rgba(226,185,111,0.28);" class="_hpill"><span>⚖️</span><span>Legal</span></a>
+      <a href="b2b.html"                style="--hc:rgba(20,184,166,0.1);--hb:rgba(20,184,166,0.28);" class="_hpill"><span>🤝</span><span>B2B</span></a>
+      <a href="bnb-hub.html"            style="--hc:rgba(255,107,53,0.1);--hb:rgba(255,107,53,0.28);" class="_hpill"><span>🏨</span><span>BnB &amp; Stays</span></a>
+      <a href="fitness-hub.html"        style="--hc:rgba(57,255,20,0.08);--hb:rgba(57,255,20,0.25);" class="_hpill"><span>💪</span><span>Fitness</span></a>
+      <a href="tech-hub.html"           style="--hc:rgba(168,85,247,0.1);--hb:rgba(168,85,247,0.28);" class="_hpill"><span>💻</span><span>Tech</span></a>
+      <a href="construction.html"       style="--hc:rgba(180,83,9,0.1);--hb:rgba(180,83,9,0.28);"   class="_hpill"><span>🏗️</span><span>Construction</span></a>
+      <a href="education.html"          style="--hc:rgba(14,165,233,0.1);--hb:rgba(14,165,233,0.28);" class="_hpill"><span>📚</span><span>Education</span></a>
+    </div>
+  </section>
+  <style>
+    ._hpill{display:inline-flex;flex-direction:column;align-items:center;gap:5px;padding:10px 13px;
+      flex-shrink:0;text-decoration:none;background:var(--hc,rgba(113,255,0,0.08));
+      border:1px solid var(--hb,rgba(113,255,0,0.25));border-radius:14px;min-width:68px;
+      transition:transform .15s,background .15s;}
+    ._hpill span:first-child{font-size:21px;line-height:1;}
+    ._hpill span:last-child{font-size:10px;font-weight:800;color:rgba(255,255,255,0.82);white-space:nowrap;text-align:center;}
+    ._hpill:active{transform:scale(0.94);}
+    @media(min-width:768px){._hpill:hover{transform:translateY(-2px);}}
+    #hubsNav::-webkit-scrollbar,#hubsNav div::-webkit-scrollbar{display:none;}
+  </style>
+
+  <!-- CATEGORIES -->
+
+  <section class="categories-section">
+
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>🛍️ Explore Sokoni</h2>
+        <p class="section-sub">Shop, rent, book — all in one place</p>
+      </div>
+      <a href="category.html?cat=all" class="see-all-link">All categories ›</a>
+    </div>
+
+    <div class="categories-premium">
+
+      <a href="category.html?cat=fashion" class="cat-card-premium cat-fashion">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">👗</div>
+        <div class="ccp-info"><h3>Fashion</h3><p>Clothing, shoes & style</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=electronics" class="cat-card-premium cat-electronics">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">📱</div>
+        <div class="ccp-info"><h3>Electronics</h3><p>Phones, gadgets & tech</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=beauty" class="cat-card-premium cat-beauty">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">💄</div>
+        <div class="ccp-info"><h3>Beauty</h3><p>Skincare, makeup & more</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=food" class="cat-card-premium cat-food">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">🛒</div>
+        <div class="ccp-info"><h3>Food & Groceries</h3><p>Fresh produce & more</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=accessories" class="cat-card-premium cat-accessories">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">👜</div>
+        <div class="ccp-info"><h3>Accessories</h3><p>Watches, bags & more</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=furniture" class="cat-card-premium cat-home">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">🏠</div>
+        <div class="ccp-info"><h3>Home & Living</h3><p>Furniture, decor & appliances</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=health" class="cat-card-premium cat-health">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">💊</div>
+        <div class="ccp-info"><h3>Health & Wellness</h3><p>Supplements & care</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=agriculture" class="cat-card-premium cat-agri">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">🌾</div>
+        <div class="ccp-info"><h3>Agriculture</h3><p>Farming, livestock & produce</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=books" class="cat-card-premium cat-books">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">📚</div>
+        <div class="ccp-info"><h3>Books & Education</h3><p>Learning & stationery</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="services.html" class="cat-card-premium cat-services">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">🛠️</div>
+        <div class="ccp-info"><h3>Services</h3><p>Repair, design, cleaning & more</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="sports-hub.html" class="cat-card-premium cat-sports">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">⚽</div>
+        <div class="ccp-info"><h3>Sports Hub</h3><p>Teams · Venues · Tournaments · Coaches</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="bnb-hub.html" class="cat-card-premium cat-bnb">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">🏨</div>
+        <div class="ccp-info"><h3>BnB & Stays</h3><p>Book hotels, BnBs & rooms</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="fitness-hub.html" class="cat-card-premium" style="--ccp-accent:#39ff14;">
+        <div class="ccp-glow" style="background:rgba(57,255,20,0.12);"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">💪</div>
+        <div class="ccp-info"><h3>Fitness Hub</h3><p>Gyms, coaches, workouts & equipment</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+      <a href="category.html?cat=all" class="cat-card-premium cat-all">
+        <div class="ccp-glow"></div>
+        <div class="ccp-icon" style="display:flex;align-items:center;justify-content:center;background:none;">🛍️</div>
+        <div class="ccp-info"><h3>All Products</h3><p>Browse everything on Sokoni</p></div>
+        <div class="ccp-arrow">›</div>
+      </a>
+
+    </div>
+
+    <!-- See All Categories button -->
+    <div style="text-align:center;padding:16px 20px 4px;">
+      <a href="category.html?cat=all" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:14px;color:rgba(255,255,255,0.7);font-size:13px;font-weight:800;text-decoration:none;transition:all .18s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.35)';this.style.color='#71ff00'" onmouseout="this.style.borderColor='rgba(255,255,255,0.12)';this.style.color='rgba(255,255,255,0.7)'">
+        🗂️ See All Categories &amp; Hubs ›
+      </a>
+    </div>
+
+  </section>
+
+  <!-- SOKONI HUBS — Healthcare, Entertainment, Delivery -->
+  <section class="hubs-hscroll-section" style="padding:0 28px 32px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <h2 style="font-size:17px;font-weight:900;color:white;">🏪 Sokoni Hubs</h2>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;"></span>
+      <a href="services.html"
+        style="font-size:12px;color:rgba(255,255,255,0.35);text-decoration:none;font-weight:600;">All services ›</a>
+    </div>
+    <div class="hubs-hscroll-wrap" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;">
+
+      <!-- LIFE EVENTS — featured full-width card -->
+      <a href="life-events.html"
+        style="display:flex;align-items:center;gap:16px;padding:22px 24px;background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,212,255,0.05),rgba(168,85,247,0.05));border:1px solid rgba(113,255,0,0.22);border-radius:20px;text-decoration:none;transition:transform .2s;grid-column:1/-1;position:relative;overflow:hidden;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:120px;opacity:0.05;line-height:1;">✨</div>
+        <span style="font-size:36px;flex-shrink:0;">✨</span>
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Life Events <span style="font-size:10px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;padding:2px 8px;border-radius:4px;margin-left:8px;font-weight:800;">NEW</span></div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);max-width:500px;line-height:1.6;">Tell Sokoni what you're trying to achieve — Starting a Business, Buying a Car, Moving House, Getting Married — and we connect all the right hubs for you.</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='life-events.html'" style="padding:9px 16px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.28);color:#71ff00;font-size:12px;font-weight:800;border-radius:10px;cursor:pointer;font-family:inherit;white-space:nowrap;">🚀 Start a Goal</button>
+        </div>
+      </a>
+
+      <a href="healthcare.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(0,200,120,0.1),rgba(0,100,200,0.07));border:1px solid rgba(0,200,120,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🏥</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Healthcare Hub</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Hospitals · Clinics · Pharmacy · Lab Tests ·
+            Medicine Delivery</div>
+        </div>
+        <span style="color:rgba(0,200,120,0.5);font-size:18px;">›</span>
+      </a>
+
+      <a href="entertainment.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(168,85,247,0.1),rgba(236,72,153,0.07));border:1px solid rgba(168,85,247,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🎵</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Entertainment Hub</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">DJs · MCs · Live Bands · Comedians · Photographers ·
+            Dancers</div>
+        </div>
+        <span style="color:rgba(0,200,120,0.5);font-size:18px;">›</span>
+      </a>
+
+      <a href="ride-book.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,170,255,0.06));border:1px solid rgba(113,255,0,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🛵</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Book a Ride</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Boda Boda · Tuk-Tuk · Car · E-Bike — Real-time tracking</div>
+        </div>
+        <span style="color:rgba(0,200,120,0.5);font-size:18px;">›</span>
+      </a>
+      <a href="driver.html"
+        style="display:flex;align-items:center;gap:14px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;text-decoration:none;"
+        onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+        <span style="font-size:24px;flex-shrink:0;">🚗</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:800;color:rgba(255,255,255,0.7);margin-bottom:2px;">Are you a Driver? Join here</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Fair pay · 88% earnings · Flexible hours</div>
+        </div>
+        <span style="color:rgba(255,255,255,0.25);font-size:16px;">›</span>
+      </a>
+
+      <a href="marketing-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(249,115,22,0.08),rgba(234,179,8,0.06));border:1px solid rgba(249,115,22,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🎯</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Marketing Hub</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Advertising · Social Media · Creative · SEO · Growth Tools · Professionals</div>
+        </div>
+        <span style="color:rgba(249,115,22,0.5);font-size:18px;">›</span>
+      </a>
+
+      <!-- REAL ESTATE HUB -->
+      <a href="property-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(0,170,255,0.09),rgba(113,255,0,0.05));border:1px solid rgba(0,170,255,0.2);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🏘️</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Real Estate Hub</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Rental Properties · BnB Stays · Apartment Manager ·
+            Tenant Portal · Rent via M-Pesa</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='property-hub.html'"
+            style="padding:7px 13px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.28);color:#00aaff;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏠 Rentals</button>
+          <button type="button" onclick="event.stopPropagation();location.href='bnb-hub.html'"
+            style="padding:7px 13px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🛏️ BnB</button>
+          <button type="button" onclick="event.stopPropagation();location.href='landlord.html'"
+            style="padding:7px 13px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🔑 Manage</button>
+        </div>
+      </a>
+
+      <!-- FOOD HUB -->
+      <a href="food.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(249,115,22,0.07));border:1px solid rgba(34,197,94,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🍽️</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Sokoni Eats <span
+              style="font-size:10px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Restaurants · Fast Food · Grocery · Home Chefs ·
+            Bakeries · Butcheries · M-Pesa · Real-time Tracking</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;">
+          <button type="button" onclick="event.stopPropagation();location.href='food.html?cat=restaurant'"
+            style="padding:7px 13px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.28);color:#22c55e;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🍽️ Restaurants</button>
+          <button type="button" onclick="event.stopPropagation();location.href='food.html?cat=fastfood'"
+            style="padding:7px 13px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🍔 Fast Food</button>
+          <button type="button" onclick="event.stopPropagation();location.href='food.html?cat=grocery'"
+            style="padding:7px 13px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#3b82f6;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🛒 Grocery</button>
+          <button type="button" onclick="event.stopPropagation();location.href='food-dashboard.html'"
+            style="padding:7px 13px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.22);color:#f59e0b;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏪 Sell Food</button>
+          <button type="button" onclick="event.stopPropagation();location.href='food-rider.html'"
+            style="padding:7px 13px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.22);color:#a855f7;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🛵 Become Rider</button>
+        </div>
+      </a>
+
+      <!-- BANKING HUB -->
+      <a href="banking.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(16,185,129,0.06));border:1px solid rgba(245,158,11,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;grid-column:1/-1;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🏦</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Banking Hub <span
+              style="font-size:10px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Business Loans · SACCOs · Insurance · Investments ·
+            M-Pesa Paybill · Microfinance · Forex · 18+ Partner Banks</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='banking.html?tab=loans'"
+            style="padding:7px 13px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.28);color:#f59e0b;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">💰 Loans</button>
+          <button type="button" onclick="event.stopPropagation();location.href='banking.html?tab=saccos'"
+            style="padding:7px 13px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:#10b981;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏛️ SACCOs</button>
+          <button type="button" onclick="event.stopPropagation();location.href='banking.html?tab=mpesa'"
+            style="padding:7px 13px;background:rgba(0,180,90,0.08);border:1px solid rgba(0,180,90,0.22);color:#00b45a;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📱 M-Pesa</button>
+        </div>
+      </a>
+
+      <!-- LEGAL HUB -->
+      <a href="legal-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(124,58,237,0.1),rgba(79,70,229,0.07));border:1px solid rgba(124,58,237,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">⚖️</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Legal Hub</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Verified Advocates · Document Generator · Court Help
+            · Know Your Rights · Demand Letters · NDAs</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='legal-hub.html'"
+            style="padding:7px 13px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.28);color:#a78bfa;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">👨‍⚖️ Lawyers</button>
+          <button type="button" onclick="event.stopPropagation();location.href='legal-hub.html#lawpane-documents'"
+            style="padding:7px 13px;background:rgba(79,70,229,0.1);border:1px solid rgba(79,70,229,0.25);color:#818cf8;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 Documents</button>
+        </div>
+      </a>
+
+      <!-- CAR HUB -->
+      <a href="car-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(249,115,22,0.1),rgba(234,88,12,0.07));border:1px solid rgba(249,115,22,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🚗</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Car Hub <span
+              style="font-size:10px;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.3);color:#f97316;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">RENT
+              · TRACK · NTSA</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Self-drive & Chauffeur · Sedans · SUVs · Pickups ·
+            GPS Tracking · NTSA Services · Pay with M-Pesa</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='car-hub.html'"
+            style="padding:7px 13px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.28);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🚗 Browse Cars</button>
+          <button type="button" onclick="event.stopPropagation();location.href='car-hub.html'"
+            style="padding:7px 13px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);color:#fbbf24;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">➕ List My Car</button>
+        </div>
+      </a>
+
+      <!-- TECH HUB -->
+      <a href="tech-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(14,165,233,0.07));border:1px solid rgba(0,212,255,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">📱</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Tech Hub <span style="font-size:10px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);color:#00d4ff;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Buy Phones &amp; Laptops · Book Repairs · Compare Devices · Hire Technicians · Ask the Hub</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='tech-hub.html'"
+            style="padding:7px 13px;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.28);color:#00d4ff;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📱 Devices</button>
+          <button type="button" onclick="event.stopPropagation();location.href='tech-hub.html#thpanel-repairs'"
+            style="padding:7px 13px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🔧 Repairs</button>
+        </div>
+      </a>
+
+      <!-- B2B + DIGITAL ROW -->
+      <a href="b2b.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(0,170,255,0.09),rgba(113,255,0,0.05));border:1px solid rgba(0,170,255,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🤝</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">B2B Wholesale Hub</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Bulk orders · Supplier deals · Request for Quote ·
+            Import &amp; export · Business-to-business Kenya</div>
+        </div>
+        <span style="color:rgba(0,200,120,0.5);font-size:18px;flex-shrink:0;">›</span>
+      </a>
+
+      <a href="tech-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(168,85,247,0.09),rgba(59,130,246,0.06));border:1px solid rgba(168,85,247,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">💻</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Digital & eSoko</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">eBooks · Online courses · Software · Templates ·
+            Digital downloads — instant delivery</div>
+        </div>
+        <span style="color:rgba(0,200,120,0.5);font-size:18px;flex-shrink:0;">›</span>
+      </a>
+
+      <!-- CONSTRUCTION HUB -->
+      <a href="construction.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(234,179,8,0.1),rgba(180,120,0,0.06));border:1px solid rgba(234,179,8,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🏗️</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Construction Hub <span
+              style="font-size:10px;background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.3);color:#fbbf24;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Cement · Steel · Timber · Roofing · Tiles · Paint ·
+            Bricks · Tools · PPE — Bulk & Retail</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='construction.html?cat=cement'"
+            style="padding:7px 13px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.28);color:#fbbf24;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🧱 Materials</button>
+          <button type="button" onclick="event.stopPropagation();location.href='construction.html?cat=tools'"
+            style="padding:7px 13px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);color:#fbbf24;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🔧 Tools</button>
+          <button type="button" onclick="event.stopPropagation();location.href='construction.html?cat=quote'"
+            style="padding:7px 13px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);color:#fbbf24;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📋 Quote</button>
+        </div>
+      </a>
+
+      <!-- CAR HUB -->
+      <a href="car-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(249,115,22,0.1),rgba(234,88,12,0.06));border:1px solid rgba(249,115,22,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;grid-column:1/-1;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🚘</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Car Hub <span
+              style="font-size:10px;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.3);color:#f97316;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Car Rental · NTSA Services · DL Application &
+            Renewal · Live Vehicle Tracking · Insurance · Garages</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='car-hub.html?tab=browse'"
+            style="padding:7px 13px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.28);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🚗 Rent</button>
+          <button type="button" onclick="event.stopPropagation();location.href='car-hub.html?tab=ntsa'"
+            style="padding:7px 13px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏛️ NTSA</button>
+          <button type="button" onclick="event.stopPropagation();location.href='car-hub.html?tab=mechanics'"
+            style="padding:7px 13px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🔧 Mechanics</button>
+          <button type="button" onclick="event.stopPropagation();location.href='car-hub.html?tab=tracking'"
+            style="padding:7px 13px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);color:#f97316;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📍 Track</button>
+        </div>
+      </a>
+
+      <!-- SPORTS HUB -->
+      <a href="sports-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(251,191,36,0.06));border:1px solid rgba(245,158,11,0.22);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🏆</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Sports Hub <span style="font-size:10px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Teams & Players · Book Venues · Tournaments · Coaches · Sports Gear · Community</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='sports-hub.html#sTournaments'" style="padding:7px 13px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.28);color:#f59e0b;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏆 Tournaments</button>
+          <button type="button" onclick="event.stopPropagation();location.href='sports-hub.html#sVenues'" style="padding:7px 13px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏟️ Venues</button>
+          <button type="button" onclick="event.stopPropagation();location.href='sports-hub.html#sCoaches'" style="padding:7px 13px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🎯 Coaches</button>
+        </div>
+      </a>
+
+      <!-- FITNESS HUB -->
+      <a href="fitness-hub.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(57,255,20,0.08),rgba(113,255,0,0.04));border:1px solid rgba(57,255,20,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">💪</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Fitness Hub <span style="font-size:10px;background:rgba(57,255,20,0.12);border:1px solid rgba(57,255,20,0.25);color:#39ff14;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Find Gyms · Book Coaches · Post Workouts · Buy Equipment · Manage Your Gym</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+          <button type="button" onclick="event.stopPropagation();location.href='fitness-hub.html'" style="padding:7px 13px;background:rgba(57,255,20,0.12);border:1px solid rgba(57,255,20,0.28);color:#39ff14;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">🏋️ Gyms</button>
+          <button type="button" onclick="event.stopPropagation();location.href='fitness-hub.html'" style="padding:7px 13px;background:rgba(57,255,20,0.07);border:1px solid rgba(57,255,20,0.2);color:#71ff00;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">💪 Workouts</button>
+        </div>
+      </a>
+
+      <!-- TRUST PASSPORT + OPPORTUNITY + COMMUNITY COMMERCE -->
+      <a href="trust.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(0,212,255,0.08),rgba(168,85,247,0.05));border:1px solid rgba(0,212,255,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🛂</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Trust Passport <span style="font-size:10px;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.25);color:#00d4ff;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">One verification — trusted across every hub. Marketplace, property, finance, legal & more.</div>
+        </div>
+        <span style="color:rgba(0,212,255,0.4);font-size:18px;">›</span>
+      </a>
+
+      <a href="opportunity.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,200,120,0.05));border:1px solid rgba(113,255,0,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">💼</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Earn with Sokoni <span style="font-size:10px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#71ff00;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Rider · Mechanic · Freelancer · Agent · Promoter · Affiliate — 8 ways to earn.</div>
+        </div>
+        <span style="color:rgba(113,255,0,0.4);font-size:18px;">›</span>
+      </a>
+
+      <!-- WALLET + HOME SERVICES + BUSINESS OS -->
+      <a href="wallet.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(52,211,153,0.05));border:1px solid rgba(16,185,129,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">💳</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">SOKONI Wallet <span style="font-size:10px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:#10b981;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">One wallet for everything — Pay, Send, Receive, Escrow. Powered by M-Pesa.</div>
+        </div>
+        <span style="color:rgba(16,185,129,0.4);font-size:18px;">›</span>
+      </a>
+
+      <a href="home-services.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(251,191,36,0.04));border:1px solid rgba(245,158,11,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">🏠</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Home Services <span style="font-size:10px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Plumbers, electricians, cleaners, painters, movers — vetted providers near you.</div>
+        </div>
+        <span style="color:rgba(245,158,11,0.4);font-size:18px;">›</span>
+      </a>
+
+      <a href="business-os.html"
+        style="display:flex;align-items:center;gap:14px;padding:20px;background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(129,140,248,0.04));border:1px solid rgba(99,102,241,0.18);border-radius:18px;text-decoration:none;transition:transform .2s;"
+        onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:32px;flex-shrink:0;">💼</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">Business OS <span style="font-size:10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:800;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Inventory, orders, CRM, accounting & staff — run your full business from SOKONI.</div>
+        </div>
+        <span style="color:rgba(99,102,241,0.4);font-size:18px;">›</span>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- QUICK LINKS STRIP -->
+  <section class="qlinks-section">
+    <div class="qlinks-label">⚡ Quick Links</div>
+    <div class="qlinks-row">
+      <!-- Hubs -->
+      <a href="life-events.html" class="qlink qlink-lime"><span>✨</span><span>Life Goals</span></a>
+      <a href="trust.html" class="qlink qlink-blue"><span>🛂</span><span>Passport</span></a>
+      <a href="opportunity.html" class="qlink qlink-lime"><span>💼</span><span>Earn</span></a>
+      <a href="sports-hub.html" class="qlink qlink-amber"><span>🏆</span><span>Sports</span></a>
+      <a href="fitness-hub.html" class="qlink qlink-green"><span>💪</span><span>Fitness</span></a>
+      <a href="wallet.html" class="qlink qlink-green"><span>💳</span><span>Wallet</span></a>
+      <a href="home-services.html" class="qlink qlink-amber"><span>🏠</span><span>Home Services</span></a>
+      <a href="business-os.html" class="qlink qlink-purple"><span>💼</span><span>Business OS</span></a>
+      <a href="food.html" class="qlink qlink-red"><span>🍽️</span><span>Order Food</span></a>
+      <a href="healthcare.html" class="qlink qlink-green"><span>🏥</span><span>Healthcare</span></a>
+      <a href="banking.html" class="qlink qlink-amber"><span>🏦</span><span>Banking</span></a>
+      <a href="legal-hub.html" class="qlink qlink-purple"><span>⚖️</span><span>Legal Hub</span></a>
+      <a href="entertainment.html" class="qlink qlink-violet"><span>🎵</span><span>Entertainment</span></a>
+      <!-- Commerce -->
+      <a href="car-hub.html" class="qlink qlink-orange"><span>🚗</span><span>Car Hub</span></a>
+      <a href="tech-hub.html" class="qlink qlink-blue"><span>📱</span><span>Tech Hub</span></a>
+      <a href="property-hub.html" class="qlink qlink-blue"><span>🏠</span><span>Rentals</span></a>
+      <a href="bnb-hub.html" class="qlink qlink-green"><span>🏨</span><span>BnB Stays</span></a>
+      <a href="b2b.html" class="qlink qlink-blue"><span>🤝</span><span>B2B Wholesale</span></a>
+      <a href="tech-hub.html" class="qlink qlink-violet"><span>💻</span><span>Digital Goods</span></a>
+      <!-- Tools -->
+      <a href="track.html" class="qlink qlink-violet"><span>📍</span><span>Track Orders</span></a>
+      <a href="ministore.html" class="qlink qlink-lime"><span>🛍️</span><span>My MiniStore</span></a>
+      <a href="requests.html" class="qlink qlink-blue"><span>🙋</span><span>Request Product</span></a>
+      <a href="community.html" class="qlink qlink-lime"><span>👥</span><span>Community</span></a>
+      <a href="unboxing.html" class="qlink qlink-amber"><span>📦</span><span>Unboxing</span></a>
+      <a href="loyalty.html" class="qlink qlink-amber"><span>⭐</span><span>Loyalty</span></a>
+      <a href="subscriptions.html" class="qlink qlink-lime"><span>👑</span><span>Upgrade</span></a>
+      <a href="referral.html" class="qlink qlink-orange"><span>🎁</span><span>Refer & Earn</span></a>
+      <a href="marketing-hub.html" class="qlink qlink-orange"><span>🎯</span><span>Marketing</span></a>
+    </div>
+  </section>
+
+  <!-- SERVICES SECTION -->
+  <section class="new-arrivals-section" id="servicesHomeSection">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>🔨 Services on Sokoni</h2>
+        <p class="section-sub">Hire skilled professionals across Kenya</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <a href="providers.html" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">✅ Verified Providers</a>
+        <a href="services.html" class="see-all-link">All services ›</a>
+      </div>
+    </div>
+    <div class="services-icon-grid">
+      <a href="cleaning.html" class="svc-icon-card svc-featured"><span>🧹</span>
+        <div>
+          <p class="svc-feat-title">Cleaning &amp; Laundry</p>
+          <p class="svc-feat-sub">Deep clean · Mamafua · Fumigation</p>
+        </div>
+      </a>
+      <a href="services.html?cat=plumbing" class="svc-icon-card"><span>🔧</span>
+        <p>Plumbing</p>
+      </a>
+      <a href="services.html?cat=electrical" class="svc-icon-card"><span>⚡</span>
+        <p>Electrical</p>
+      </a>
+      <a href="services.html?cat=phone-repair" class="svc-icon-card"><span>📱</span>
+        <p>Phone Repair</p>
+      </a>
+      <a href="services.html?cat=computer-repair" class="svc-icon-card"><span>💻</span>
+        <p>IT Repair</p>
+      </a>
+      <a href="services.html?cat=delivery-service" class="svc-icon-card"><span>🚚</span>
+        <p>Delivery</p>
+      </a>
+      <a href="services.html?cat=hair-beauty" class="svc-icon-card"><span>✂️</span>
+        <p>Hair & Beauty</p>
+      </a>
+      <a href="services.html?cat=catering" class="svc-icon-card"><span>🍳</span>
+        <p>Catering</p>
+      </a>
+      <a href="services.html?cat=photography" class="svc-icon-card"><span>📷</span>
+        <p>Photography</p>
+      </a>
+      <a href="services.html?cat=graphic-design" class="svc-icon-card"><span>🎨</span>
+        <p>Graphic Design</p>
+      </a>
+      <a href="services.html?cat=tutoring" class="svc-icon-card"><span>📚</span>
+        <p>Tutoring</p>
+      </a>
+      <a href="services.html?cat=events" class="svc-icon-card"><span>🎉</span>
+        <p>Events</p>
+      </a>
+      <a href="services.html?cat=videography" class="svc-icon-card"><span>📹</span>
+        <p>Videography</p>
+      </a>
+      <a href="services.html?cat=marketing" class="svc-icon-card svc-more"><span>➕</span>
+        <p>More...</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- OPPORTUNITY ENGINE -->
+  <section style="padding:0 12px 28px;">
+    <div style="background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,212,255,0.05));border:1px solid rgba(113,255,0,0.15);border-radius:20px;padding:20px 16px 16px;position:relative;overflow:hidden;">
+      <div style="position:absolute;top:-30px;right:-20px;font-size:80px;opacity:0.06;pointer-events:none;">💼</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <span style="font-size:11px;font-weight:800;color:#71ff00;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);padding:3px 10px;border-radius:20px;letter-spacing:0.5px;">EARN TODAY</span>
+      </div>
+      <h2 style="font-size:20px;font-weight:900;color:white;margin:6px 0 4px;line-height:1.25;">Turn What You Have<br>Into <span style="color:#71ff00;">Real Income</span></h2>
+      <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Motorbike, skills, space or time — Sokoni has an earning path for you.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <a href="driver.html" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:10px 12px;text-decoration:none;">
+          <span style="font-size:22px;">🏍️</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Delivery Rider</div><div style="font-size:10px;color:#71ff00;font-weight:700;">KES 800–2K/day</div></div>
+        </a>
+        <a href="seller.html" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:10px 12px;text-decoration:none;">
+          <span style="font-size:22px;">🛍️</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Sell Products</div><div style="font-size:10px;color:#71ff00;font-weight:700;">Free to list</div></div>
+        </a>
+        <a href="services.html" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:10px 12px;text-decoration:none;">
+          <span style="font-size:22px;">🔧</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Offer Services</div><div style="font-size:10px;color:#71ff00;font-weight:700;">Plumber · Tech · More</div></div>
+        </a>
+        <a href="landlord.html" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:10px 12px;text-decoration:none;">
+          <span style="font-size:22px;">🏠</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">List Property</div><div style="font-size:10px;color:#71ff00;font-weight:700;">Rent · Airbnb · Sale</div></div>
+        </a>
+        <a href="inventory.html" style="display:flex;align-items:center;gap:8px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:10px 12px;text-decoration:none;">
+          <span style="font-size:22px;">📦</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Inventory</div><div style="font-size:10px;color:#71ff00;font-weight:700;">AI-powered · Offline</div></div>
+        </a>
+      </div>
+      <a href="opportunity.html" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:11px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;">
+        See all 8 ways to earn →
+      </a>
+    </div>
+  </section>
+
+  <!-- FEATURED SELLERS -->
+
+  <section class="seller-section">
+
+    <div class="section-title">
+      <h2>⭐ Featured Sellers</h2>
+      <p class="section-sub">Trusted by thousands of buyers across Kenya</p>
+    </div>
+
+    <div class="seller-container">
+
+      <div class="seller-card seller-card-verified">
+        <div class="seller-badge verified-badge">✓ SOKONI VERIFIED</div>
+        <div class="seller-avatar">
+          <img loading="lazy" src="assets/logosokoni.png" alt="Kaspa Prints">
+        </div>
+        <h3>Kaspa Prints</h3>
+        <div class="seller-location-tag">📍 Nairobi</div>
+        <div class="seller-stars">⭐⭐⭐⭐⭐</div>
+        <p class="seller-rating-text">4.9 · 320 Sales</p>
+        <div class="seller-tags">
+          <span class="seller-tag">🖨️ Printing</span>
+          <span class="seller-tag">🎨 Branding</span>
+        </div>
+        <a href="category.html?cat=printing" class="seller-visit-btn">
+          🏪 Visit Store
+        </a>
+        <div class="seller-follow-row">
+          <button type="button" class="seller-follow-btn" id="_sfb_kaspa"
+            onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('kaspa_prints','Kaspa Prints',this,'store')">+ Follow</button>
+          <button type="button" class="seller-share-btn"
+            onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'kaspa_prints',name:'Kaspa Prints',category:'Printing & Branding',tagline:'Premium printing & branding in Nairobi',rating:4.9,tags:['Printing','Branding','T-Shirts'],type:'store'})">📣</button>
+        </div>
+      </div>
+
+      <div class="seller-card seller-card-verified">
+        <div class="seller-badge verified-badge">✓ SOKONI VERIFIED</div>
+        <div class="seller-avatar">
+          <img loading="lazy" src="assets/logosokoni.png" alt="Ken Shop">
+        </div>
+        <h3>KenShop</h3>
+        <div class="seller-location-tag">📍 Mombasa</div>
+        <div class="seller-stars">⭐⭐⭐⭐⭐</div>
+        <p class="seller-rating-text">4.8 · 210 Sales</p>
+        <div class="seller-tags">
+          <span class="seller-tag">👗 Fashion</span>
+          <span class="seller-tag">👟 Shoes</span>
+        </div>
+        <a href="category.html?cat=fashion" class="seller-visit-btn">
+          🏪 Visit Store
+        </a>
+        <div class="seller-follow-row">
+          <button type="button" class="seller-follow-btn" id="_sfb_kenshop"
+            onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('kenshop','KenShop',this,'store')">+ Follow</button>
+          <button type="button" class="seller-share-btn"
+            onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'kenshop',name:'KenShop',category:'Fashion & Shoes',tagline:'Top fashion & footwear from Mombasa',rating:4.8,tags:['Fashion','Shoes','Clothing'],type:'store'})">📣</button>
+        </div>
+      </div>
+
+      <div class="seller-card seller-card-verified">
+        <div class="seller-badge verified-badge">✓ SOKONI VERIFIED</div>
+        <div class="seller-avatar">
+          <img loading="lazy" src="assets/logosokoni.png" alt="Sokoni Electronics">
+        </div>
+        <h3>Sokoni Electronics</h3>
+        <div class="seller-location-tag">📍 Nairobi</div>
+        <div class="seller-stars">⭐⭐⭐⭐⭐</div>
+        <p class="seller-rating-text">4.7 · 185 Sales</p>
+        <div class="seller-tags">
+          <span class="seller-tag">📱 Phones</span>
+          <span class="seller-tag">💻 Laptops</span>
+        </div>
+        <a href="category.html?cat=electronics" class="seller-visit-btn">
+          🏪 Visit Store
+        </a>
+        <div class="seller-follow-row">
+          <button type="button" class="seller-follow-btn" id="_sfb_elec"
+            onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('sokoni_electronics','Sokoni Electronics',this,'store')">+ Follow</button>
+          <button type="button" class="seller-share-btn"
+            onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'sokoni_electronics',name:'Sokoni Electronics',category:'Phones & Laptops',tagline:'Best tech deals in Nairobi',rating:4.7,tags:['Phones','Laptops','Accessories'],type:'store'})">📣</button>
+        </div>
+      </div>
+
+      <div class="seller-card become-seller">
+        <div class="become-icon">🏪</div>
+        <h3>Become a Seller</h3>
+        <p class="seller-rating-text">Join 500+ sellers earning on Sokoni</p>
+        <div class="become-perks">
+          <span>✅ Free listings</span>
+          <span>💸 Fast payouts</span>
+          <span>📊 Analytics</span>
+        </div>
+        <a href="seller.html" class="seller-visit-btn green-btn">
+          <i class="fas fa-rocket"></i> Start Selling
+        </a>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- UNIVERSAL BUSINESS REGISTRATION CTA -->
+  <section style="padding:40px 20px;text-align:center;background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(113,255,0,0.04) 100%);border-top:1px solid rgba(255,255,255,0.05);">
+    <div style="font-size:11px;font-weight:700;color:rgba(113,255,0,0.6);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">For Business Owners</div>
+    <h2 style="font-size:24px;font-weight:900;color:white;margin:0 0 10px;">List Any Business on SOKONI</h2>
+    <p style="font-size:14px;color:rgba(255,255,255,0.45);margin:0 auto 20px;max-width:480px;">Gym, restaurant, mechanic, lawyer, dry cleaner, salon — any business type. Get listed in minutes and reach thousands of customers across Kenya.</p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <button onclick="HubRegister.open()" style="padding:13px 28px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+      <a href="onboarding-seller.html" style="padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-weight:800;font-size:14px;text-decoration:none;display:inline-block;">🛍️ Start Selling Products</a>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.2);">100+ business categories · Free to join · Paid plans from KES 500/month</div>
+  </section>
+
+  <!-- GET VERIFIED CTA -->
+  <section class="get-verified-section">
+    <div class="gv-badge-demo">
+      <span class="gv-check">✓</span>
+      SOKONI VERIFIED
+    </div>
+    <h2>Earn the Badge. Earn the Trust.</h2>
+    <p>Verified sellers get 3× more buyer clicks, priority placement in search, and a blue checkmark that signals credibility at a glance.</p>
+    <div class="gv-perks">
+      <div class="gv-perk"><span class="gv-perk-icon">🔵</span>Blue verified badge</div>
+      <div class="gv-perk"><span class="gv-perk-icon">🚀</span>Priority ranking</div>
+      <div class="gv-perk"><span class="gv-perk-icon">⭐</span>Featured placement</div>
+      <div class="gv-perk"><span class="gv-perk-icon">🛡️</span>Fraud protection</div>
+    </div>
+    <a href="seller.html" class="gv-cta">
+      Apply for Verification →
+    </a>
+    <div class="gv-stats">Only sellers with 10+ sales & valid ID qualify</div>
+  </section>
+
+  <!-- FEATURED SHOPS (dynamic from seller boosts) -->
+  <section class="seller-section" id="featuredShopsSection" style="display:none;">
+    <div class="section-title">
+      <h2>👑 Spotlight Shops</h2>
+      <p class="section-sub">Promoted stores — these sellers invested in reaching more buyers</p>
+    </div>
+    <div class="seller-container" id="featuredShopsGrid"></div>
+  </section>
+
+  <!-- B2B SECTION -->
+  <section class="new-arrivals-section" id="b2bSection">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>🤝 B2B Wholesale Marketplace</h2>
+        <p class="section-sub">Bulk orders, supplier deals and business-to-business trade</p>
+      </div>
+      <a href="b2b.html" class="see-all-link">Explore B2B ›</a>
+    </div>
+    <div class="b2b-strip">
+      <a href="b2b.html?cat=bulk" class="b2b-strip-card">
+        <div class="b2b-icon">📦</div>
+        <div class="b2b-info"><strong>Bulk Orders</strong>
+          <p>Wholesale pricing on 1,000+ products</p>
+        </div>
+        <div class="b2b-arrow">›</div>
+      </a>
+      <a href="b2b.html?tab=rfq" class="b2b-strip-card">
+        <div class="b2b-icon">📋</div>
+        <div class="b2b-info"><strong>Post a Request</strong>
+          <p>Suppliers bid on your bulk needs</p>
+        </div>
+        <div class="b2b-arrow">›</div>
+      </a>
+      <a href="b2b.html?cat=supplier" class="b2b-strip-card">
+        <div class="b2b-icon">🔍</div>
+        <div class="b2b-info"><strong>Find Suppliers</strong>
+          <p>Verified Kenyan manufacturers & distributors</p>
+        </div>
+        <div class="b2b-arrow">›</div>
+      </a>
+      <a href="loyalty.html" class="b2b-strip-card b2b-loyalty">
+        <div class="b2b-icon">⭐</div>
+        <div class="b2b-info"><strong>Loyalty Rewards</strong>
+          <p>Redeem points for discounts & digital gifts</p>
+        </div>
+        <div class="b2b-arrow">›</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- NEAR YOU SECTION -->
+  <section class="seller-section" id="nearbySection" style="display:none;">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2 id="nearbySectionTitle">📍 Sellers Near You</h2>
+        <p class="section-sub">Local sellers in your area — faster delivery, easy pickup</p>
+      </div>
+      <a href="category.html?cat=all" class="see-all-link">Browse All ›</a>
+    </div>
+    <div id="nearbyGrid" class="seller-container"></div>
+  </section>
+
+  <!-- NEW ARRIVALS -->
+
+  <section class="new-arrivals-section" id="newArrivalsSection" style="display:none;">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>✨ New Arrivals</h2>
+        <p class="section-sub">Just added by sellers — be the first to grab them</p>
+      </div>
+      <a href="category.html?cat=all&sort=newest" class="see-all-link">See all ›</a>
+    </div>
+    <div id="newArrivalsGrid" class="new-arrivals-grid"></div>
+  </section>
+
+  <!-- FASTEST SELLING -->
+  <section class="new-arrivals-section" id="fastestSellingSection" style="display:none;">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>🔥 Fastest Selling</h2>
+        <p class="section-sub">Products flying off the shelves — grab them before they're gone</p>
+      </div>
+      <a href="category.html?cat=all&sort=bestselling" class="see-all-link">See all ›</a>
+    </div>
+    <div id="fastestSellingGrid" class="new-arrivals-grid"></div>
+  </section>
+
+  <!-- BIGGEST DISCOUNTS -->
+  <section class="new-arrivals-section" id="biggestDiscountsSection" style="display:none;">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>🏷️ Big Discounts</h2>
+        <p class="section-sub">Biggest price cuts on Sokoni — save big today</p>
+      </div>
+      <a href="category.html?cat=all&sort=discount" class="see-all-link">See all ›</a>
+    </div>
+    <div id="biggestDiscountsGrid" class="new-arrivals-grid"></div>
+  </section>
+
+  <!-- TODAY'S PICKS -->
+  <section class="new-arrivals-section" id="todaysPicksSection" style="display:none;">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>📅 Today's Picks</h2>
+        <p class="section-sub">Hand-picked for today — refreshed every 24 hours</p>
+      </div>
+      <a href="category.html?cat=all&sort=picks" class="see-all-link">See all ›</a>
+    </div>
+    <div id="todaysPicksGrid" class="new-arrivals-grid"></div>
+  </section>
+
+  <!-- TRENDING PRODUCTS -->
+
+  <section class="trending-section" id="productsContainer-wrap" style="padding:0 0 8px;">
+
+    <!-- -- PREMIUM TRENDING HEADER -- -->
+    <div class="ptrend-header">
+      <div class="ptrend-title-block">
+        <div class="ptrend-label">
+          <span class="ptrend-live"></span>
+          <span>TRENDING NOW</span>
+        </div>
+        <h2 class="ptrend-h2">What Kenya's Buying 🔥</h2>
+      </div>
+      <div class="ptrend-meta">
+        <span class="ptrend-count" id="pTrendCount">— products</span>
+        <a href="category.html?cat=all" class="ptrend-see-all">See all ›</a>
+      </div>
+    </div>
+
+    <!-- -- FILTER PILLS (horizontal scroll) -- -->
+    <div class="ptrend-pills" id="pTrendPills">
+      <button type="button" class="ptrend-pill active" onclick="setFilter(this,'all')">🛒 All</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'electronics')">📱 Electronics</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'fashion')">👗 Fashion</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'beauty')">💄 Beauty</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'shoes')">👟 Shoes</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'food')">🛒 Groceries</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'computers')">💻 Computers</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'appliances')">🔌 Appliances</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'sports')">⚽ Sports</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'furniture')">🛋️ Furniture</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'printing')">🖨️ Printing</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'accessories')">👜 Accessories</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'construction')">🏗️ Construction</button>
+      <button type="button" class="ptrend-pill" onclick="setFilter(this,'gas')">🔥 Gas & Fuel</button>
+      <button type="button" class="ptrend-pill cat-filter-adult" onclick="accessAdultCat(this,'alcohol')">🔞
+        18+</button>
+      <div class="ptrend-loc-wrap">
+        <select class="ptrend-loc-select" id="locationFilter" onchange="filterByLocation(this.value)">
+          <option value="all">📍 All Locations</option>
+          <option value="nairobi">📍 Nairobi</option>
+          <option value="mombasa">📍 Mombasa</option>
+          <option value="kisumu">📍 Kisumu</option>
+          <option value="nakuru">📍 Nakuru</option>
+          <option value="eldoret">📍 Eldoret</option>
+          <option value="thika">📍 Thika</option>
+          <option value="nyeri">📍 Nyeri</option>
+          <option value="meru">📍 Meru</option>
+          <option value="embu">📍 Embu</option>
+          <option value="machakos">📍 Machakos</option>
+          <option value="naivasha">📍 Naivasha</option>
+          <option value="nanyuki">📍 Nanyuki</option>
+          <option value="kisii">📍 Kisii</option>
+          <option value="kericho">📍 Kericho</option>
+          <option value="kakamega">📍 Kakamega</option>
+          <option value="kitale">📍 Kitale</option>
+          <option value="bungoma">📍 Bungoma</option>
+          <option value="malindi">📍 Malindi</option>
+          <option value="isiolo">📍 Isiolo</option>
+          <option value="garissa">📍 Garissa</option>
+          <option value="worldwide">🌐 Worldwide</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- -- PRODUCTS GRID — PREMIUM LAYOUT -- -->
+    <div id="productsContainer" class="ptrend-grid"></div>
+
+    <!-- See All footer — shown on home page when filter hides products -->
+    <div id="trendingSeeAllFooter" style="display:none;text-align:center;padding:4px 28px 16px;">
+      <a href="category.html?cat=all" style="display:inline-flex;align-items:center;gap:8px;padding:11px 24px;
+              background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);
+              border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">
+        🛒 See All Products <span class="see-all-count" style="opacity:.6;"></span> →
+      </a>
+    </div>
+
+    <!-- VIEW ALL CTA -->
+    <div class="ptrend-view-all-row">
+      <a href="category.html?cat=all" class="ptrend-view-all-btn">
+        🛍️ Browse All Products
+      </a>
+      <a href="flashsale.html" class="ptrend-hot-btn">
+        ⚡ Hot Sales &amp; Deals
+      </a>
+      <a href="category.html?cat=all&sort=newest" class="ptrend-arrivals-btn">
+        ✨ All New Arrivals
+      </a>
+    </div>
+
+  </section>
+
+  <style>
+    .ptrend-view-all-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 4px 20px 24px;
+    }
+
+    .ptrend-view-all-btn,
+    .ptrend-hot-btn,
+    .ptrend-arrivals-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 22px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+      transition: all .18s;
+    }
+
+    @media(max-width:600px){
+      .ptrend-view-all-row {
+        flex-direction: column;
+        padding: 4px 16px 20px;
+        gap: 8px;
+      }
+      .ptrend-view-all-btn,
+      .ptrend-hot-btn,
+      .ptrend-arrivals-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 13px 16px;
+        border-radius: 13px;
+      }
+    }
+
+    .ptrend-view-all-btn {
+      background: linear-gradient(135deg, #71ff00, #4fc800);
+      color: #070707;
+    }
+
+    .ptrend-view-all-btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-2px);
+    }
+
+    .ptrend-hot-btn {
+      background: rgba(255, 80, 0, 0.1);
+      border: 1px solid rgba(255, 80, 0, 0.28);
+      color: #ff6020;
+    }
+
+    .ptrend-hot-btn:hover {
+      background: rgba(255, 80, 0, 0.18);
+      transform: translateY(-2px);
+    }
+
+    .ptrend-arrivals-btn {
+      background: rgba(113, 255, 0, 0.07);
+      border: 1px solid rgba(113, 255, 0, 0.2);
+      color: #71ff00;
+    }
+
+    .ptrend-arrivals-btn:hover {
+      background: rgba(113, 255, 0, 0.14);
+      transform: translateY(-2px);
+    }
+  </style>
+
+  <style>
+    /* -- PREMIUM TRENDING SECTION -- */
+    .ptrend-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 20px 20px 10px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .ptrend-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.35);
+      margin-bottom: 4px;
+    }
+
+    .ptrend-live {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #71ff00;
+      box-shadow: 0 0 5px #71ff00;
+      animation: ptLive 2s infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes ptLive {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: .5;
+        transform: scale(1.3);
+      }
+    }
+
+    .ptrend-h2 {
+      font-size: clamp(17px, 3.5vw, 24px);
+      font-weight: 900;
+      color: white;
+      line-height: 1.1;
+    }
+
+    .ptrend-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .ptrend-count {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.28);
+      font-weight: 600;
+    }
+
+    .ptrend-see-all {
+      font-size: 11px;
+      color: #71ff00;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 5px 12px;
+      border: 1px solid rgba(113, 255, 0, 0.2);
+      border-radius: 8px;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+
+    .ptrend-see-all:hover {
+      background: rgba(113, 255, 0, 0.08);
+    }
+
+    /* -- Filter pills -- */
+    .ptrend-pills {
+      display: flex;
+      gap: 5px;
+      padding: 0 20px 10px;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+      align-items: center;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
+    .ptrend-pills::-webkit-scrollbar {
+      display: none;
+    }
+
+    .ptrend-pill {
+      flex-shrink: 0;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      background: rgba(255, 255, 255, 0.03);
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .ptrend-pill:hover,
+    .ptrend-pill.active-filter,
+    .ptrend-pill.active {
+      background: rgba(113, 255, 0, 0.1);
+      border-color: rgba(113, 255, 0, 0.28);
+      color: #71ff00;
+    }
+
+    .ptrend-pill.cat-filter-adult {
+      border-color: rgba(255, 152, 0, 0.2);
+      color: rgba(255, 152, 0, 0.7);
+    }
+
+    .ptrend-loc-wrap {
+      flex-shrink: 0;
+      margin-left: 4px;
+    }
+
+    .ptrend-loc-select {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .ptrend-loc-select option {
+      background: #1a1a1a;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* -- PREMIUM PRODUCT GRID -- */
+    .ptrend-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: 10px;
+      padding: 0 20px 20px;
+    }
+    @media(min-width:900px){
+      .ptrend-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    }
+    @media(min-width:1400px){
+      .ptrend-grid { grid-template-columns: repeat(5, 1fr); }
+    }
+
+    /* -- PREMIUM PRODUCT CARD OVERRIDES -- */
+    .ptrend-grid .product-card {
+      border-radius: 16px !important;
+      border: 1px solid rgba(255, 255, 255, 0.07) !important;
+      background: rgba(255, 255, 255, 0.025) !important;
+      overflow: hidden !important;
+      cursor: pointer !important;
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
+      contain: layout style !important;
+      will-change: transform !important;
+      position: relative !important;
+    }
+
+    .ptrend-grid .product-card:hover {
+      transform: translateY(-3px) scale(1.01) !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+      border-color: rgba(113, 255, 0, 0.22) !important;
+    }
+
+    .ptrend-grid .product-img-wrap {
+      width: 100% !important;
+      /* height controlled by compact-grid.css via aspect-ratio */
+      height: auto !important;
+      overflow: hidden !important;
+      position: relative !important;
+    }
+
+    .ptrend-grid .product-img-wrap img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      transition: transform .3s ease !important;
+    }
+
+    .ptrend-grid .product-card:hover .product-img-wrap img {
+      transform: scale(1.05) !important;
+    }
+
+    /* Gradient overlay on image bottom */
+    .ptrend-grid .product-img-wrap::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 50%;
+      background: linear-gradient(to top, rgba(7, 7, 7, 0.75), transparent);
+      pointer-events: none;
+    }
+
+    .ptrend-grid .product-body {
+      padding: 10px 11px 4px !important;
+    }
+
+    .ptrend-grid .product-name {
+      font-size: 12px !important;
+      font-weight: 800 !important;
+      color: white !important;
+      line-height: 1.25 !important;
+      overflow: hidden !important;
+      max-height: 2.5em !important;
+      display: -webkit-box !important;
+      -webkit-line-clamp: 2 !important;
+      line-clamp: 2 !important;
+      -webkit-box-orient: vertical !important;
+      margin-bottom: 5px !important;
+    }
+
+    .ptrend-grid .price {
+      font-size: 15px !important;
+      font-weight: 900 !important;
+      color: #71ff00 !important;
+      margin: 0 0 4px !important;
+    }
+
+    .ptrend-grid .product-top-row {
+      margin-bottom: 2px !important;
+    }
+
+    /* Rating stars: compact */
+    .ptrend-grid .rating-stars {
+      font-size: 10px !important;
+    }
+
+    /* Description: hide to save space */
+    .ptrend-grid .product-desc {
+      display: none !important;
+    }
+
+    /* Location tag: tiny */
+    .ptrend-grid .loc-tag {
+      font-size: 9px !important;
+      padding: 1px 5px !important;
+    }
+
+    /* Boosts + trending badge */
+    .ptrend-grid .product-boosted {
+      border-color: rgba(113, 255, 0, 0.3) !important;
+      box-shadow: 0 0 16px rgba(113, 255, 0, 0.08) !important;
+    }
+
+    /* compact-grid.css handles all breakpoints — see that file */
+
+    /* -- 2-column portrait grid on mobile (override async compact-grid.css) -- */
+    @media (max-width: 600px) {
+      #productsContainer {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        flex-direction: unset !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
+        gap: 10px !important;
+        padding: 6px 12px 20px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      #productsContainer .product-img-wrap {
+        aspect-ratio: 4 / 5 !important;
+        height: auto !important;
+      }
+      #productsContainer .product-card {
+        flex: none !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        scroll-snap-align: unset !important;
+      }
+    }
+
+    /* -- Update old cat-filter-btn to use new pill style -- */
+    .trending-filters .cat-filter-btn {
+      display: none;
+    }
+
+    .trending-topbar {
+      display: none;
+    }
+
+    /* ── Image fallback: category-coloured gradient when image fails ── */
+    .product-img-wrap.img-failed {
+      background: linear-gradient(135deg, rgba(113,255,0,0.12), rgba(57,230,0,0.06)) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    .product-img-wrap.img-failed::before {
+      content: attr(data-emoji);
+      font-size: 38px;
+      line-height: 1;
+    }
+
+    /* ── Mobile layout: heading row ── */
+    @media (max-width: 600px) {
+      .ptrend-header {
+        padding: 0 14px 8px;
+      }
+      /* Card shadow on phone so they pop off dark background */
+      #productsContainer .product-card {
+        box-shadow: 0 6px 24px rgba(0,0,0,0.55) !important;
+        border-color: rgba(255,255,255,0.09) !important;
+      }
+      /* Subtle shimmer on image area while loading */
+      .product-img-wrap:not(.img-failed) {
+        background: linear-gradient(90deg,
+          rgba(255,255,255,0.04) 25%,
+          rgba(255,255,255,0.08) 50%,
+          rgba(255,255,255,0.04) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.4s infinite;
+      }
+      @keyframes shimmer {
+        0%   { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+    }
+  </style>
+
+  <!-- Count updater -->
+  <script>
+    (function patchTrendCount() {
+      const obs = new MutationObserver(() => {
+        const count = document.querySelectorAll("#productsContainer .product-card").length;
+        const el = document.getElementById("pTrendCount");
+        if (el && count > 0) el.textContent = count + " products";
+      });
+      const grid = document.getElementById("productsContainer");
+      if (grid) obs.observe(grid, { childList: true });
+    })();
+  </script>
+
+  <!-- hidden cart total/count updaters (still needed for navbar count) -->
+  <span id="cartTotal" style="display:none">0</span>
+  <ul id="cartItems" style="display:none"></ul>
+
+
+  <!-- ══ INSPIQ — PERSONALIZED FOR YOU FEED ══ -->
+  <section id="inspiqSection" style="padding:0 0 4px;">
+    <div style="padding:0 28px 0;">
+      <div
+        style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h2 style="font-size:17px;font-weight:900;color:white;margin:0;">📌 For You</h2>
+            <span
+              style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;text-transform:uppercase;letter-spacing:.06em;">InspIQ</span>
+            <span
+              style="width:7px;height:7px;border-radius:50%;background:#71ff00;box-shadow:0 0 6px #71ff00;animation:pulse-iq 2s infinite;flex-shrink:0;"></span>
+          </div>
+          <p style="font-size:11px;color:rgba(255,255,255,0.35);margin:3px 0 0;font-weight:400;" id="inspiqSubline">
+            Personalised deals &amp; ads based on what you love</p>
+        </div>
+        <button type="button"
+          onclick="document.getElementById('inspiqPicker').style.display=document.getElementById('inspiqPicker').style.display==='none'?'':'none';InspIQ.renderPicker('inspiqPicker')"
+          style="padding:6px 12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;border-radius:8px;cursor:pointer;font-family:inherit;">✨
+          Edit Interests</button>
+      </div>
+    </div>
+
+    <!-- Interest picker (shown to new users, hidden after picking) -->
+    <div id="inspiqPicker" style="padding:0 28px 12px;"></div>
+
+    <!-- Personalized content feed — capped at 20 on home page -->
+    <div id="inspiqFeed" style="padding:0 28px 8px;"></div>
+
+    <!-- Browse all button -->
+    <div id="inspiqBrowseMore" style="display:none;text-align:center;padding:0 28px 24px;">
+      <a href="inspiq.html" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;
+              background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(113,255,0,0.06));
+              border:1px solid rgba(113,255,0,0.28);border-radius:14px;
+              color:#71ff00;font-size:13px;font-weight:800;text-decoration:none;
+              transition:all .2s;"
+        onmouseover="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.18),rgba(113,255,0,0.1))'"
+        onmouseout="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.1),rgba(113,255,0,0.06))'">
+        📌 Browse Full InspIQ Feed →
+      </a>
+      <p style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:6px;">Hundreds of personalised picks — just for
+        you</p>
+    </div>
+  </section>
+
+  <style>
+    @keyframes pulse-iq {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: .5;
+        transform: scale(.85);
+      }
+    }
+  </style>
+
+  <!-- RECOMMENDED -->
+
+  <section class="recommended-section" id="recommendedSection" style="display:none;">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>✨ Recommended For You</h2>
+        <p class="section-sub">Picked based on what's trending on Sokoni</p>
+      </div>
+      <a href="category.html?cat=all" class="see-all-link">Browse all ›</a>
+    </div>
+    <div id="recommendedContainer" class="recommended-grid"></div>
+  </section>
+
+  <!-- MARKETPLACE STATS STRIP -->
+
+  <section class="marketplace-stats" id="marketplaceStats" style="display:flex;">
+    <div class="mstat-item">
+      <div class="mstat-num" id="statProductCount">500+</div>
+      <div class="mstat-label">Products Listed</div>
+    </div>
+    <div class="mstat-item">
+      <div class="mstat-num" id="statSellerCount">120+</div>
+      <div class="mstat-label">Active Sellers</div>
+    </div>
+    <div class="mstat-item">
+      <div class="mstat-num" style="display:flex;justify-content:center;font-size:36px;line-height:1;">🇰🇪</div>
+      <div class="mstat-label">Ships Kenya-wide</div>
+    </div>
+    <div class="mstat-item">
+      <div class="mstat-num">24/7</div>
+      <div class="mstat-label">Customer Support</div>
+    </div>
+    <div class="mstat-item">
+      <div class="mstat-num">4.9 ★</div>
+      <div class="mstat-label">Avg. Rating</div>
+    </div>
+    <div class="mstat-item">
+      <div class="mstat-num">M-Pesa</div>
+      <div class="mstat-label">Secure Payments</div>
+    </div>
+  </section>
+
+  <!-- SOKONI SOCIAL SECTION -->
+  <section class="sokoni-social-section">
+    <div class="social-section-content">
+      <div class="social-left">
+        <div class="social-badge">🌐 Follow us everywhere</div>
+        <h2>👥 Join the Sokoni Community</h2>
+        <p>Stay updated on deals, new sellers and marketplace news across Kenya</p>
+        <div class="social-handles">
+          <a href="https://instagram.com/sokoni.ke" target="_blank" class="social-handle-pill">
+            <i class="fab fa-instagram"></i> @sokoni.ke
+          </a>
+          <a href="https://tiktok.com/@sokoni.ke" target="_blank" class="social-handle-pill">
+            <i class="fab fa-tiktok"></i> @sokoni.ke
+          </a>
+          <a href="https://twitter.com/SokoniKe" target="_blank" class="social-handle-pill">
+            <i class="fab fa-x-twitter"></i> @SokoniKe
+          </a>
+          <a href="https://facebook.com/SokoniKe" target="_blank" class="social-handle-pill">
+            <i class="fab fa-facebook-f"></i> SokoniKe
+          </a>
+          <a href="https://youtube.com/@SokoniKenya" target="_blank" class="social-handle-pill">
+            <i class="fab fa-youtube"></i> SokoniKenya
+          </a>
+          <a href="https://wa.me/254705726803" target="_blank" class="social-handle-pill social-whatsapp">
+            <i class="fab fa-whatsapp"></i> WhatsApp Us
+          </a>
+        </div>
+      </div>
+      <div class="social-right">
+        <div class="social-share-card">
+          <h3>Spread the Love ❤️</h3>
+          <p>Help a friend discover Sokoni — share our marketplace and earn referral points</p>
+          <button type="button" class="social-share-btn" onclick="shareSOKONI()">
+            🔗 Share Sokoni
+          </button>
+          <a href="signup.html" class="social-join-btn">
+            👤 Create Free Account
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REVIEWS TEASER -->
+
+  <section class="reviews-teaser" id="reviewsTeaser">
+    <div class="rt-left">
+      <div class="rt-badge">⭐ Community Reviews</div>
+      <h2>⭐ What Sokoni Shoppers Say</h2>
+      <p class="section-sub">Join thousands of satisfied buyers across Kenya</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+        <a href="reviews.html" class="glass-btn-green"
+          style="display:inline-block;padding:12px 28px;font-size:14px;">Read All Reviews ›</a>
+        <a href="unboxing.html" style="display:inline-block;padding:12px 22px;font-size:14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;text-decoration:none;font-weight:700;">📦 Unboxing Wall</a>
+      </div>
+    </div>
+    <div id="homepageReviews" class="rt-right"></div>
+  </section>
+
+  <!-- PERSONALISED RECOMMENDATIONS — Picked For You -->
+  <div id="sk-recs-foryou" style="margin:0 0 8px;"></div>
+
+  <!-- PREMIUM FOOTER -->
+  <footer class="footer">
+    <div class="footer-container">
+
+      <!-- BRAND -->
+      <div class="footer-brand">
+        <img loading="lazy" src="assets/Sokonilogo2.png" alt="Sokoni" class="footer-logo">
+        <p>Kenya's #1 marketplace — buy, sell and grow with Sokoni. Connecting buyers, sellers and service providers nationwide.</p>
+        <div class="socials">
+          <a href="https://facebook.com/SokoniKe" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+          <a href="https://twitter.com/SokoniKe" target="_blank" title="Twitter / X"><i class="fab fa-x-twitter"></i></a>
+          <a href="https://instagram.com/sokoni.ke" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+          <a href="https://tiktok.com/@sokoni.ke" target="_blank" title="TikTok"><i class="fab fa-tiktok"></i></a>
+          <a href="https://youtube.com/@SokoniKenya" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+          <a href="https://wa.me/254705726803" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+        </div>
+      </div>
+
+      <!-- MARKETPLACE LINKS -->
+      <div class="footer-links">
+        <h3>Marketplace</h3>
+        <a href="category.html?cat=all">🏪 Shop All</a>
+        <a href="category.html?cat=fashion">👗 Fashion</a>
+        <a href="category.html?cat=electronics">📱 Electronics</a>
+        <a href="category.html?cat=food">🛒 Groceries</a>
+        <a href="flashsale.html">⚡ Flash Sales</a>
+        <a href="bnb-hub.html">🏨 BnB & Stays</a>
+        <a href="property-hub.html">🏠 Properties</a>
+        <a href="car-hub.html">🚗 Cars</a>
+      </div>
+
+      <!-- SELLER LINKS -->
+      <div class="footer-links">
+        <h3>Sell on Sokoni</h3>
+        <a href="seller.html">➕ Start Selling</a>
+        <a href="ministore.html">🏪 My Store</a>
+        <a href="seller.html">📢 Boost Product</a>
+        <a href="seller.html">⚡ Flash Sale</a>
+        <a href="seller.html">🧾 KRA Tax</a>
+        <a href="delivery.html">🚛 Delivery</a>
+        <a href="subscriptions.html">👑 Go Premium</a>
+      </div>
+
+      <!-- SUPPORT LINKS -->
+      <div class="footer-links">
+        <h3>Support</h3>
+        <a href="track.html">📦 Track Order</a>
+        <a href="cart.html">🛒 My Cart</a>
+        <a href="wishlist.html">❤️ Wishlist</a>
+        <a href="messages.html">💬 Messages</a>
+        <a href="profile.html">👤 My Account</a>
+        <a href="dispute.html">⚖️ File Dispute</a>
+        <a href="help.html">❓ Help Center</a>
+        <a href="trust.html">🛡️ Trust & Safety</a>
+        <a href="legal.html">📋 Legal</a>
+      </div>
+
+      <!-- CONTACT -->
+      <div class="footer-links">
+        <h3>Contact Us</h3>
+        <a href="https://maps.google.com/?q=Nairobi,Kenya" target="_blank">📍 Nairobi, Kenya</a>
+        <a href="https://wa.me/254705726803?text=Hello%20SOKONI%2C%20I%20have%20an%20enquiry" target="_blank">📧 info@sokoni.co.ke</a>
+        <a href="tel:+254705726803">📞 +254 705 726 803</a>
+        <a href="https://wa.me/254705726803" target="_blank"><i class="fab fa-whatsapp fa-fw"></i> WhatsApp Us</a>
+        <a href="https://instagram.com/sokoni.ke" target="_blank"><i class="fab fa-instagram fa-fw"></i> @sokoni.ke</a>
+        <a href="services.html">🛠️ Services Hub</a>
+      </div>
+
+    </div>
+
+    <!-- DIVIDER -->
+    <div style="border-top:1px solid rgba(255,255,255,0.06);margin:36px 0 24px;position:relative;z-index:2;"></div>
+
+    <!-- BOTTOM BAR -->
+    <div class="footer-bottom">
+      <p>© 2026 SOKONI. All rights reserved. Kenya's Global Marketplace.</p>
+
+      <div class="footer-legal-links">
+        <a href="legal.html#privacy">🔒 Privacy</a>
+        <span>·</span>
+        <a href="legal.html#terms">📋 Terms</a>
+        <span>·</span>
+        <a href="legal.html#cookies">🍪 Cookies</a>
+        <span>·</span>
+        <a href="legal.html#data">🛡️ Data</a>
+      </div>
+
+      <div class="payments">
+        <img loading="lazy" src="assets/mpesa.PNG" alt="M-Pesa">
+        <img loading="lazy" src="assets/visa.PNG" alt="Visa">
+        <img loading="lazy" src="assets/mastercard.PNG" alt="Mastercard">
+        <img loading="lazy" src="assets/paypal.PNG" alt="PayPal">
+      </div>
+
+      <p class="footer-credit">Made by <span>Kass.</span> 🔌</p>
+    </div>
+  </footer>
+
+  <!-- BOTTOM NAVIGATION -->
+  <nav class="bottom-nav">
+    <a href="index.html" class="bnav-item active-bnav">
+      <span class="bnav-emoji">🏠</span><span>Home</span>
+    </a>
+    <a href="category.html?cat=all" class="bnav-item">
+      <span class="bnav-emoji">🛍️</span><span>Shop</span>
+    </a>
+    <a href="services.html" class="bnav-item">
+      <span class="bnav-emoji">🛠️</span><span>Services</span>
+    </a>
+    <a href="community.html" class="bnav-item">
+      <span class="bnav-emoji">💬</span><span>Community</span>
+    </a>
+    <a href="profile.html" class="bnav-item" id="bnavProfile">
+      <span class="bnav-emoji">👤</span><span>Profile</span>
+    </a>
+  </nav>
+
+  <div id="notificationContainer">
+
+  </div>
+
+  <!-- PWA INSTALL PROMPT — compact bar (small popup the user sees) -->
+  <div id="pwaPrompt" class="pwa-install-prompt" style="display:none;">
+    <img loading="lazy" src="assets/logosokoni.png" class="pwa-logo" alt="SOKONI">
+    <div class="pwa-text">
+      <strong>Install SOKONI App</strong>
+      <span>Add to home screen for faster access</span>
+    </div>
+    <button type="button" id="pwaInstallBtn" class="pwa-install-btn">Install</button>
+    <button type="button" id="pwaDismissBtn" class="pwa-dismiss-btn">✕</button>
+  </div>
+
+  <script>
+    (function () {
+      var deferredPrompt = null;
+      var _pwaEl = null;
+      function _getEl() { return _pwaEl || (_pwaEl = document.getElementById("pwaPrompt")); }
+      function _dismissed() {
+        var t = parseInt(localStorage.getItem("pwaDismissedAt") || "0", 10);
+        return t && (Date.now() - t) < 7 * 24 * 60 * 60 * 1000;
+      }
+      function _showPrompt() {
+        if (_dismissed()) return;
+        if (window.matchMedia("(display-mode:standalone)").matches || window.navigator.standalone) return;
+        var el = _getEl();
+        if (el) el.style.display = "flex";
+        deferredPrompt = window._sokoniInstallEvent || null;
+      }
+
+      window.addEventListener("beforeinstallprompt", function () {
+        setTimeout(_showPrompt, 3000);
+      });
+
+      window.addEventListener("DOMContentLoaded", function () {
+        var installBtn = document.getElementById("pwaInstallBtn");
+        var dismissBtn = document.getElementById("pwaDismissBtn");
+        if (installBtn) {
+          installBtn.addEventListener("click", function () {
+            if (typeof window.sokoniInstall === "function") {
+              window.sokoniInstall();
+            }
+            var el = _getEl(); if (el) el.style.display = "none";
+            localStorage.setItem("pwaDismissedAt", (Date.now() + 999 * 24 * 60 * 60 * 1000).toString());
+          });
+        }
+        if (dismissBtn) {
+          dismissBtn.addEventListener("click", function () {
+            var el = _getEl(); if (el) el.style.display = "none";
+            localStorage.setItem("pwaDismissedAt", Date.now().toString());
+          });
+        }
+      });
+
+      window.addEventListener("appinstalled", function () {
+        var el = _getEl(); if (el) el.style.display = "none";
+      });
+    })();
+  </script>
+
+  <!-- SCRIPT -->
+
+  <script src="adult-gate.js"></script>
+  <!-- Demo seed: runs once, populates all localStorage with rich Kenyan demo data -->
+  <script src="demo-seed.js"></script>
+  <script src="script.js" defer></script>
+  <script>
+    function accessAdultCat(btn, cat) {
+      requireAgeVerification().then(ok => {
+        if (ok) window.location.href = `category.html?cat=${cat}`;
+      });
+    }
+    window.accessAdultCat = accessAdultCat;
+  </script>
+
+  <!-- ── Location picker — auto-detect + 80+ Kenyan locations + live search ── -->
+  <script>
+  (function(){
+    const KEY = 'sokoniDeliveryCity';
+
+    /* ── Comprehensive Kenya locations ── */
+    const CITIES = [
+      /* Nairobi & suburbs */
+      'Nairobi CBD','Westlands','Kilimani','Lavington','Karen','Langata',
+      'Kasarani','Roysambu','Ruaka','Ruiru','Kahawa West','Githurai',
+      'Embakasi','Donholm','South B','South C','Parklands','Gigiri',
+      'Runda','Muthaiga','Spring Valley','Kileleshwa','Ngumo','Rongai',
+      /* Coast */
+      'Mombasa','Nyali','Mtwapa','Bamburi','Likoni','Malindi','Watamu',
+      'Diani','Kwale','Lamu','Kilifi','Ukunda','Voi',
+      /* Western */
+      'Kisumu','Kondele','Mamboleo','Ahero','Maseno','Siaya','Bondo',
+      'Kakamega','Mumias','Webuye','Bungoma','Kitale','Eldoret',
+      'Turbo','Kapsabet','Iten','Nandi Hills',
+      /* Rift Valley */
+      'Nakuru','Naivasha','Gilgil','Molo','Kericho','Bomet','Sotik',
+      'Nyahururu','Maralal','Kabarnet','Eldama Ravine','Narok',
+      'Olpejeta','Nanyuki','Isiolo',
+      /* Central */
+      'Thika','Juja','Ruiru','Kiambu','Limuru','Kikuyu','Kerugoya',
+      'Muranga','Sagana','Nyeri','Karatina','Othaya',
+      /* Eastern */
+      'Machakos','Kitui','Mwingi','Makueni','Wote','Embu','Chuka',
+      'Meru','Nkubu','Moyale','Marsabit','Garissa','Wajir','Mandera',
+      /* South Eastern */
+      'Malaba','Busia','Migori','Kisii','Nyamira','Homa Bay','Kendu Bay',
+      /* South */
+      'Kajiado','Namanga','Loitokitok','Magadi'
+    ];
+
+    /* ─ restore saved location ─ */
+    var saved = localStorage.getItem(KEY);
+    if(saved){ var el=document.getElementById('navLocText'); if(el) el.textContent=saved; }
+
+    /* ─ set city helper ─ */
+    function setCity(city){
+      localStorage.setItem(KEY, city);
+      var el = document.getElementById('navLocText');
+      if(el) el.textContent = city;
+      closeSheet();
+    }
+    window._sokoniSetCity = setCity;
+
+    /* ─ close sheet ─ */
+    function closeSheet(){
+      var s = document.getElementById('locPickerSheet');
+      var b = document.getElementById('locPickerBackdrop');
+      if(s){ s.style.transform='translateY(105%)'; setTimeout(function(){ s&&s.remove(); b&&b.remove(); },320); }
+    }
+    window._sokoniCloseLocSheet = closeSheet;
+
+    /* ─ render city buttons filtered by query ─ */
+    function renderCities(query){
+      var grid = document.getElementById('locCityGrid');
+      if(!grid) return;
+      var q = (query||'').toLowerCase().trim();
+      var list = q ? CITIES.filter(function(c){ return c.toLowerCase().includes(q); }) : CITIES;
+      if(list.length === 0){
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">No locations found</div>';
+        return;
+      }
+      grid.innerHTML = list.map(function(c){
+        return '<button type="button" onclick="window._sokoniSetCity(\''+c.replace(/'/g,"\\'")+'\')" '
+          +'style="padding:11px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:11px;color:rgba(255,255,255,0.85);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:left;transition:all .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" '
+          +'onmousedown="this.style.background=\'rgba(113,255,0,0.1)\';this.style.borderColor=\'rgba(113,255,0,0.25)\'" '
+          +'onmouseup="this.style.background=\'rgba(255,255,255,0.04)\'" '
+          +'ontouchstart="this.style.background=\'rgba(113,255,0,0.1)\'" '
+          +'ontouchend="this.style.background=\'rgba(255,255,255,0.04)\'">'
+          +'📍 '+c+'</button>';
+      }).join('');
+    }
+    window._sokoniRenderLocs = renderCities;
+
+    /* ─ auto-detect via browser geolocation + Nominatim reverse geocode ─ */
+    function autoDetect(btn){
+      if(!navigator.geolocation){
+        if(btn){ btn.textContent='❌ Not supported'; }
+        return;
+      }
+      if(btn){ btn.innerHTML='<span style="animation:spin .8s linear infinite;display:inline-block;">⏳</span> Detecting…'; btn.disabled=true; }
+      navigator.geolocation.getCurrentPosition(
+        function(pos){
+          var lat=pos.coords.latitude, lng=pos.coords.longitude;
+          fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lng+'&zoom=10&accept-language=en')
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+              var addr = d.address || {};
+              var city = addr.city || addr.town || addr.village || addr.county || addr.state_district || 'Kenya';
+              /* Strip " County" suffix if present */
+              city = city.replace(/\s+County$/i,'').trim();
+              setCity(city);
+              if(btn){ btn.disabled=false; }
+            })
+            .catch(function(){
+              if(btn){ btn.innerHTML='📡 Use My Location'; btn.disabled=false; }
+            });
+        },
+        function(err){
+          if(btn){ btn.innerHTML='📡 Use My Location'; btn.disabled=false; }
+          if(err.code===1){ (window._skToast||alert)('Location permission denied. Please allow location access and try again.'); }
+        },
+        { timeout:8000, maximumAge:60000 }
+      );
+    }
+
+    /* ─ open bottom sheet ─ */
+    window.pickDeliveryLocation = function(){
+      if(document.getElementById('locPickerSheet')){ closeSheet(); return; }
+
+      /* Backdrop */
+      var backdrop = document.createElement('div');
+      backdrop.id = 'locPickerBackdrop';
+      backdrop.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.5);backdrop-filter:blur(3px);';
+      backdrop.onclick = closeSheet;
+
+      /* Sheet */
+      var sheet = document.createElement('div');
+      sheet.id = 'locPickerSheet';
+      sheet.style.cssText = [
+        'position:fixed;bottom:0;left:0;right:0;z-index:9999;',
+        'background:rgba(7,7,7,0.99);',
+        'border-radius:22px 22px 0 0;',
+        'padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));',
+        'backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);',
+        'border-top:1px solid rgba(113,255,0,0.18);',
+        'box-shadow:0 -8px 48px rgba(0,0,0,0.8);',
+        'max-height:82vh;display:flex;flex-direction:column;gap:0;'
+      ].join('');
+
+      sheet.innerHTML = [
+        /* handle */
+        '<div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,0.15);margin:0 auto 14px;flex-shrink:0;"></div>',
+        /* title row */
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0;">',
+          '<div style="font-size:15px;font-weight:900;color:white;">📍 Delivery Location</div>',
+          '<button type="button" onclick="window._sokoniCloseLocSheet()" style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;">✕</button>',
+        '</div>',
+        /* GPS auto-detect button */
+        '<button type="button" id="locGpsBtn" onclick="autoDetect(this)" style="width:100%;padding:13px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);border-radius:13px;color:#71ff00;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;">',
+          '📡 Use My Location <span style="font-size:10px;opacity:.6;font-weight:600;">(GPS auto-detect)</span>',
+        '</button>',
+        /* Search input */
+        '<div style="position:relative;margin-bottom:10px;flex-shrink:0;">',
+          '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;">🔍</span>',
+          '<input id="locSearchInput" type="text" placeholder="Type a city or area…" oninput="window._sokoniRenderLocs(this.value)" ',
+            'style="width:100%;padding:11px 14px 11px 38px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;" ',
+            'onfocus="this.style.borderColor=\'rgba(113,255,0,0.4)\'" onblur="this.style.borderColor=\'rgba(255,255,255,0.1)\'">',
+        '</div>',
+        /* City grid */
+        '<div id="locCityGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;padding-bottom:4px;"></div>'
+      ].join('');
+
+      document.body.appendChild(backdrop);
+      document.body.appendChild(sheet);
+
+      /* Populate grid */
+      renderCities('');
+
+      /* Animate in */
+      sheet.style.transform = 'translateY(105%)';
+      sheet.style.transition = 'transform .32s cubic-bezier(0.34,1.1,0.64,1)';
+      requestAnimationFrame(function(){
+        requestAnimationFrame(function(){ sheet.style.transform = 'translateY(0)'; });
+      });
+
+      /* Auto-focus search on desktop */
+      setTimeout(function(){ var inp=document.getElementById('locSearchInput'); if(inp&&window.innerWidth>600) inp.focus(); },400);
+    };
+  })();
+  </script>
+
+  <!-- removed — splash is now controlled exclusively by the premium splash block below -->
+  <script>void 0;</script>
+
+
+  <!-- LIVE SALES POPUP -->
+
+  <div id="livePopup" class="live-popup">
+
+  </div>
+
+  <!-- QUICK VIEW MODAL -->
+
+  <div id="quickViewModal" class="quick-view-modal">
+
+
+
+    <div class="quick-view-box">
+
+
+
+      <span class="close-quick-view" onclick="closeQuickView()">
+
+        ?
+
+      </span>
+
+
+
+      <img id="quickViewImage" alt="Product Image">
+
+
+
+      <h2 id="quickViewName">
+
+      </h2>
+
+
+
+      <p id="quickViewPrice">
+
+      </p>
+
+
+
+      <button type="button" id="quickViewCartBtn">
+
+        Add To Cart
+
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- back-to-top-btn removed — scroll-top.js handles this now -->
+
+  <!-- Scroll-to-top: LEFT side so chatbot (right:20px) never overlaps -->
+  <style>
+    #sokoniScrollTop {
+      left: 14px !important;
+      right: auto !important;
+      bottom: 80px !important;
+    }
+  </style>
+  <script src="scroll-memory.js" defer></script>
+  <script src="scroll-top.js" defer></script>
+  <script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+  <script src="sokoni-share.js" defer></script>
+  <script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+  <script src="inspiq.js" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      setTimeout(function () {
+        if (!window.InspIQ) return;
+        const persona = InspIQ.getPersona();
+        const top = InspIQ.getTopCategories(1)[0];
+        const subline = document.getElementById('inspiqSubline');
+        if (persona && top && subline) {
+          subline.innerHTML = `You&rsquo;re a <strong style="color:${top.color || '#71ff00'};">${persona.emoji} ${persona.name}</strong> &mdash; showing ${persona.tip}`;
+        }
+      }, 600);
+    });
+  </script>
+  <script>
+    /* ══ SECRET ADMIN ACCESS — 7 taps on logo within 2.5 seconds ══ */
+    (function () {
+      let _taps = 0, _t = null;
+      window._secretTap = function () {
+        _taps++;
+        clearTimeout(_t);
+        if (_taps >= 7) { _taps = 0; _showAdminLock(); return; }
+        _t = setTimeout(() => { _taps = 0; }, 2500);
+      };
+      /* Also: type "sokoni" anywhere while holding Ctrl+Shift → admin */
+      let _seq = '';
+      document.addEventListener('keydown', function (e) {
+        if (e.ctrlKey && e.shiftKey) {
+          _seq = (e.key || '').toLowerCase() === 's' || _seq ? _seq + (e.key || '').toLowerCase() : '';
+          if (_seq === 'sokoni') { _seq = ''; _showAdminLock(); }
+          if (_seq.length > 6) _seq = '';
+        } else { _seq = ''; }
+      });
+    })();
+  </script>
+
+  <!-- FOLLOW NOTIFICATIONS -->
+  <script>
+    (function () {
+      let myF = {};
+      try { myF = JSON.parse(localStorage.getItem("sokoniFollowing")) || {}; } catch (e) { }
+      if (!Object.keys(myF).length) return;
+
+      let notifs = [];
+      try { notifs = JSON.parse(localStorage.getItem("sokoniFollowNotifications")) || []; } catch (e) { }
+
+      const unread = notifs.filter(n => !n.read && myF[n.sellerName]);
+      if (!unread.length) return;
+
+      /* mark all read */
+      notifs.forEach(n => { if (myF[n.sellerName]) n.read = true; });
+      localStorage.setItem("sokoniFollowNotifications", JSON.stringify(notifs));
+
+      /* build banner */
+      const banner = document.createElement("div");
+      banner.id = "followNotifBanner";
+      banner.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;width:min(420px,calc(100vw - 24px));background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:18px;padding:16px 18px;box-shadow:0 16px 48px rgba(0,0,0,0.7);animation:fnSlideUp .4s cubic-bezier(0.34,1.56,0.64,1);";
+      banner.innerHTML = `
+    <style>@keyframes fnSlideUp{from{transform:translateX(-50%) translateY(40px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}</style>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:800;color:white;">🔔 ${unread.length} new from stores you follow</div>
+      <button type="button" onclick="document.getElementById('followNotifBanner').remove()" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:16px;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;">
+      ${unread.slice(0, 5).map(n => `
+        <a href="product.html" onclick="localStorage.setItem('selectedProduct',JSON.stringify({id:'${n.productId}',name:${JSON.stringify(n.productName)},price:${n.price || 0},image:${JSON.stringify(n.productImage || '')}}))" style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:10px 12px;text-decoration:none;">
+          ${n.productImage ? `<img loading="lazy" src="${n.productImage}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;">` : `<div style="width:40px;height:40px;border-radius:8px;background:rgba(113,255,0,0.12);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🛍️</div>`}
+          <div style="min-width:0;">
+            <div style="font-size:12px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.productName}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);">${n.sellerName} · ${n.price ? 'KES ' + Number(n.price).toLocaleString() : ''}</div>
+          </div>
+          <div style="font-size:11px;font-weight:800;color:#71ff00;flex-shrink:0;">NEW</div>
+        </a>
+      `).join("")}
+    </div>
+  `;
+      document.body.appendChild(banner);
+      setTimeout(() => {
+        if (banner.parentNode) { banner.style.opacity = "0"; banner.style.transition = "opacity .4s"; }
+        setTimeout(() => {
+          banner.remove();
+          /* After banner gone, show PWA install prompt if install event is available */
+          setTimeout(() => {
+            if (window._sokoniInstallEvent) {
+              var p = document.getElementById("pwaPrompt");
+              if (p && p.style.display === "none") p.style.display = "flex";
+            }
+          }, 1200);
+        }, 400);
+      }, 8000);
+    })();
+  </script>
+
+  <!-- --- PWA LIFE — Particles · Network · Ambient · Pull-refresh --- -->
+  <script>
+    (function () {
+
+      /* -- Network status toast -- */
+      function showNetworkToast(online) {
+        var toast = document.getElementById("networkToast");
+        var icon = document.getElementById("networkToastIcon");
+        var text = document.getElementById("networkToastText");
+        if (!toast) return;
+        toast.classList.remove("online", "offline", "show");
+        if (online) {
+          toast.classList.add("online");
+          if (icon) icon.textContent = "✅";
+          if (text) text.textContent = "Back online — shopping continues!";
+        } else {
+          toast.classList.add("offline");
+          if (icon) icon.textContent = "📵";
+          if (text) text.textContent = "No internet — browsing cached content";
+        }
+        void toast.offsetWidth;
+        toast.classList.add("show");
+        setTimeout(function () { toast.classList.remove("show"); }, 3500);
+      }
+
+      window.addEventListener("online", function () { showNetworkToast(true); });
+      window.addEventListener("offline", function () { showNetworkToast(false); });
+
+      /* -- Pull-to-refresh visual -- */
+      var ptr = document.getElementById("pullRefreshIndicator");
+      var ptStart = 0;
+      var ptActive = false;
+      document.addEventListener("touchstart", function (e) {
+        if (window.scrollY === 0) ptStart = e.touches[0].clientY;
+      }, { passive: true });
+      document.addEventListener("touchmove", function (e) {
+        if (window.scrollY > 0 || !ptStart) return;
+        var dy = e.touches[0].clientY - ptStart;
+        if (dy > 60 && ptr && !ptActive) {
+          ptActive = true;
+          ptr.classList.add("visible");
+        }
+      }, { passive: true });
+      document.addEventListener("touchend", function () {
+        ptStart = 0;
+        if (ptActive && ptr) {
+          setTimeout(function () {
+            ptr.classList.remove("visible");
+            ptActive = false;
+          }, 1000);
+        }
+      }, { passive: true });
+
+      /* -- Staggered card entrance animation -- */
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          var cards = document.querySelectorAll(".product-card, .cat-card, .hub-card");
+          cards.forEach(function (card, i) {
+            card.style.opacity = "0";
+            card.style.transform = "translateY(18px)";
+            card.style.transition = "opacity 0.4s ease " + (i * 0.04) + "s, transform 0.4s ease " + (i * 0.04) + "s";
+            setTimeout(function () {
+              card.style.opacity = "1";
+              card.style.transform = "translateY(0)";
+            }, 80 + i * 40);
+          });
+        }, 400);
+      });
+
+      /* PWA install prompt is handled entirely by sw-register.js — no duplicate handler here */
+
+      /* -- Story ring glow on index page (stories section) -- */
+      window.addEventListener("load", function () {
+        setTimeout(function () {
+          document.querySelectorAll("#storiesRing > div").forEach(function (ring) {
+            ring.classList.add("story-ring-glow");
+          });
+        }, 1500);
+      });
+
+      /* -- Micro-interaction: product card tap ripple -- */
+      document.addEventListener("click", function (e) {
+        var card = e.target.closest(".product-card");
+        if (!card) return;
+        var ripple = document.createElement("span");
+        ripple.style.cssText = "position:absolute;border-radius:50%;background:rgba(113,255,0,0.18);transform:scale(0);animation:rippleOut 0.5s linear;pointer-events:none;width:80px;height:80px;margin:-40px 0 0 -40px;";
+        var rect = card.getBoundingClientRect();
+        ripple.style.left = (e.clientX - rect.left) + "px";
+        ripple.style.top = (e.clientY - rect.top) + "px";
+        if (getComputedStyle(card).position === "static") card.style.position = "relative";
+        card.style.overflow = "hidden";
+        card.appendChild(ripple);
+        setTimeout(function () { ripple.remove(); }, 520);
+      });
+
+      /* inject ripple keyframe once */
+      if (!document.getElementById("rippleStyle")) {
+        var st = document.createElement("style");
+        st.id = "rippleStyle";
+        st.textContent = "@keyframes rippleOut{to{transform:scale(4);opacity:0;}}";
+        document.head.appendChild(st);
+      }
+
+    })();
+  </script>
+
+<!-- ══ NOTIFICATION BELL + DESKTOP FIXES ══ -->
+<style>
+/* ── Notification Bell ── */
+.n-bell-wrap{position:relative;display:inline-flex;align-items:center;flex-shrink:0;}
+.n-bell-btn{position:relative;width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;-webkit-tap-highlight-color:transparent;flex-shrink:0;padding:0;overflow:visible;}
+.n-bell-btn:hover,.n-bell-btn:active{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.3);}
+.n-bell-dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;border:2px solid rgba(6,6,6,0.9);display:none;pointer-events:none;}
+.n-bell-dot.on{display:block;background:#71ff00;box-shadow:0 0 6px rgba(113,255,0,0.8);}
+.n-bell-dot.sn{display:block;background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,0.7);}
+/* panel is fixed so navbar overflow:hidden can't clip it — JS sets top/right on open */
+.n-panel{position:fixed;top:70px;right:12px;width:min(300px,calc(100vw - 24px));background:rgba(10,12,22,0.97);border:1px solid rgba(255,255,255,0.1);border-radius:22px;padding:6px;backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);box-shadow:0 24px 64px rgba(0,0,0,0.75),0 0 0 1px rgba(113,255,0,0.05);z-index:10000;opacity:0;transform:translateY(-10px) scale(0.96);pointer-events:none;transition:opacity .2s,transform .2s;}
+.n-panel.open{opacity:1;transform:translateY(0) scale(1);pointer-events:all;}
+.n-panel-arr{position:absolute;top:-7px;right:16px;width:13px;height:13px;background:rgba(10,12,22,0.97);border-top:1px solid rgba(255,255,255,0.1);border-left:1px solid rgba(255,255,255,0.1);transform:rotate(45deg);border-radius:2px;}
+.n-panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;}
+.n-panel-ttl{font-size:13px;font-weight:900;color:white;letter-spacing:.01em;}
+.n-panel-x{width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;}
+.n-panel-x:hover{color:white;background:rgba(255,255,255,0.1);}
+.n-status-row{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:0 0 5px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:13px;font-size:11px;color:rgba(255,255,255,0.5);}
+.n-sdot{font-size:16px;line-height:1;flex-shrink:0;}
+.n-sdot.on{color:#71ff00;text-shadow:0 0 8px rgba(113,255,0,0.6);}
+.n-sdot.sn{color:#f59e0b;text-shadow:0 0 8px rgba(245,158,11,0.5);}
+.n-sdot.off{color:#ef4444;}
+.n-sdot.default{color:rgba(255,255,255,0.25);}
+.n-opts{display:flex;flex-direction:column;gap:2px;padding:4px 0;}
+.n-opt{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid transparent;border-radius:15px;background:transparent;width:100%;text-align:left;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;font-family:inherit;}
+.n-opt:hover,.n-opt:active{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.08);}
+.n-opt-en:hover,.n-opt-en:active{background:rgba(113,255,0,0.07) !important;border-color:rgba(113,255,0,0.2) !important;}
+.n-opt-sn:hover,.n-opt-sn:active{background:rgba(245,158,11,0.07) !important;border-color:rgba(245,158,11,0.2) !important;}
+.n-opt-off:hover,.n-opt-off:active{background:rgba(239,68,68,0.07) !important;border-color:rgba(239,68,68,0.18) !important;}
+.n-opt-ico{font-size:22px;flex-shrink:0;line-height:1;}
+.n-opt-bd{display:flex;flex-direction:column;gap:2px;}
+.n-opt-ttl{font-size:12px;font-weight:800;color:white;line-height:1.2;}
+.n-opt-sub{font-size:10px;color:rgba(255,255,255,0.35);line-height:1.3;}
+.n-panel-foot{text-align:center;font-size:9px;color:rgba(255,255,255,0.18);margin:6px 0 4px;padding:0 14px;}
+
+/* ── Hub sub-buttons (replacing nested anchors) ── */
+section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transparent;}
+
+/* ── Phone: floating menu + bell below navbar, never on header buttons ── */
+@media(max-width:767px){
+  .menu-toggle{
+    top:130px !important;
+    left:12px !important;
+    right:auto !important;
+    width:44px !important;
+    height:44px !important;
+    font-size:20px !important;
+    border-radius:14px !important;
+    z-index:9992 !important;
+    background:rgba(12,12,12,0.92) !important;
+    color:rgba(255,255,255,0.85) !important;
+    box-shadow:0 4px 18px rgba(0,0,0,0.6),0 0 0 1px rgba(113,255,0,0.14) !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+  }
+  #sokoni-bell-btn{
+    top:130px !important;
+    right:12px !important;
+    left:auto !important;
+    width:44px !important;
+    height:44px !important;
+  }
+  #sokoni-notif-drawer{top:182px !important;right:12px !important;}
+  /* Navbar bell hidden on mobile — floating bell takes over */
+  #nBellWrap{display:none !important;}
+  /* Login button: move out of navbar on mobile — it's in the mobile menu drawer */
+  #authButtons{display:none !important;}
+}
+
+/* ── Navbar sticky for all breakpoints not covered by mobile.css ── */
+@media(min-width:601px) and (max-width:767px){
+  .navbar{
+    position:sticky !important;
+    top:0 !important;
+    z-index:9990 !important;
+    overflow:visible !important;
+  }
+  .bottom-nav{display:flex !important;}
+  body{padding-bottom:calc(62px + env(safe-area-inset-bottom,0px)) !important;}
+}
+
+/* ── Desktop Fixes ── */
+@media(min-width:768px){
+
+  /* Navbar: sticky top, single row, no overflow */
+  .navbar{
+    position:sticky;
+    top:0;
+    z-index:9990;
+    flex-direction:row !important;
+    flex-wrap:nowrap !important;
+    gap:12px;
+    padding:0 28px;
+    height:60px;
+    overflow:visible;
+    align-items:center;
+  }
+  /* Hide the floating bell circle on desktop — navbar has its own bell */
+  #sokoni-bell-btn{display:none !important;}
+  /* Activity drawer stays available — triggered from navbar bell via JS */
+  #sokoni-notif-drawer{top:68px !important;right:12px !important;}
+
+  /* Search bar: expand to fill available space */
+  .navbar .search-bar{
+    flex:1;
+    max-width:440px;
+    width:auto !important;
+  }
+
+  /* Nav actions: single row, don't wrap */
+  .navbar .nav-actions{
+    flex-wrap:nowrap;
+    width:auto !important;
+    justify-content:flex-end;
+    gap:10px;
+  }
+
+  /* Location pill: show on desktop too for context */
+  .nav-location{display:flex !important;}
+
+  /* Hero: max-width on desktop */
+  .glass-hero{min-height:44vh;}
+  .glass-hero-card{max-width:720px;margin:0 auto;}
+
+  /* Hubs section: fixed 2-col grid on desktop */
+  section[style*="padding:0 28px 32px"] > div[style*="display:grid"]{
+    grid-template-columns:repeat(2,1fr) !important;
+  }
+
+  /* Hub cards with sub-buttons: prevent overflow on wide screens */
+  section[style*="padding:0 28px 32px"] a[style*="display:flex"]{
+    flex-wrap:nowrap;
+    overflow:hidden;
+  }
+
+  /* Quick links: wider row on desktop */
+  .qlinks-row{flex-wrap:wrap;}
+
+  /* Footer: extra bottom padding to clear the restored fixed bottom nav */
+  .footer{padding-bottom:80px;}
+}
+
+/* ── Notification close button: high-contrast so it's easy to tap ── */
+.n-panel-x{color:rgba(255,255,255,0.7) !important;font-size:14px !important;width:32px !important;height:32px !important;}
+
+/* ── Very narrow: hide hub sub-button rows to prevent overflow ── */
+@media(max-width:480px){
+  section[style*="padding:0 28px 32px"] a[style*="display:flex"] div[style*="display:flex;gap:"],
+  section[style*="padding:0 28px 32px"] a[style*="display:flex"] div[style*="display:flex;gap:8px"]{
+    display:none !important;
+  }
+}
+
+/* ══ PHONE LAYOUT FIXES ══ */
+@media(max-width:600px){
+
+  /* ── Hero: compact section padding on phone ── */
+  .glass-hero{ padding:28px 14px !important; min-height:auto !important; }
+  .glass-hero-card{ padding:28px 18px !important; border-radius:22px !important; }
+  .glass-hero-card h1{ font-size:28px !important; margin-bottom:10px !important; }
+  .glass-hero-sub{ font-size:13px !important; margin-bottom:18px !important; }
+  .glass-hero-badge{ font-size:11px !important; padding:5px 14px !important; margin-bottom:14px !important; }
+
+  /* ── Hero 2-col card grid: collapse to 1-col under 400px ── */
+  @media(max-width:400px){
+    .glass-hero-card > div[style*="grid-template-columns:1fr 1fr"]{
+      grid-template-columns:1fr !important;
+    }
+  }
+
+  /* ── Quick links: scrollable single row on phone ── */
+  .qlinks-row{
+    flex-wrap:nowrap !important;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch !important;
+    padding-bottom:6px !important;
+    gap:8px !important;
+  }
+  .qlinks-row a{
+    flex-shrink:0 !important;
+    font-size:11px !important;
+    padding:8px 12px !important;
+  }
+
+  /* ── Section headers: tighter on phone ── */
+  .section-title{ padding:0 16px !important; margin-bottom:14px !important; }
+
+  /* ── Footer: enough padding so nothing hides under bottom-nav ── */
+  .footer{ padding:32px 16px max(90px, calc(72px + env(safe-area-inset-bottom,0px))) !important; }
+  .footer-container{ gap:20px !important; }
+  .footer-brand p{ font-size:12px !important; }
+  .footer-bottom{
+    padding:16px 0 !important;
+    flex-direction:column !important;
+    gap:12px !important;
+    text-align:center !important;
+  }
+  .footer-legal-links{ flex-wrap:wrap !important; gap:6px 10px !important; justify-content:center !important; }
+  .payments{ justify-content:center !important; gap:8px !important; }
+  .payments img{ height:24px !important; }
+  .socials{ gap:8px !important; }
+  .socials a{ width:36px !important; height:36px !important; font-size:15px !important; }
+}
+</style>
+
+<!-- ══ NOTIFICATION JS ══ -->
+<script>
+(function(){
+  var KEY='sokoniNotifState', SNZ='sokoniNotifSnoozeUntil';
+
+  function getInfo(){
+    var perm = ('Notification' in window) ? Notification.permission : 'default';
+    var stored = localStorage.getItem(KEY);
+    var snoozeUntil = parseInt(localStorage.getItem(SNZ)||'0',10);
+    if(stored==='snoozed' && Date.now()>snoozeUntil){
+      localStorage.removeItem(KEY); localStorage.removeItem(SNZ); stored=null;
+    }
+    if(stored==='off') return {state:'off',label:'🔕 Notifications turned off',cls:'off'};
+    if(stored==='snoozed'){
+      var mins=Math.round((snoozeUntil-Date.now())/60000);
+      var tl=mins>59?Math.round(mins/60)+'h left':mins+'min left';
+      return {state:'snoozed',label:'😴 Snoozed · '+tl,cls:'sn'};
+    }
+    if(perm==='granted') return {state:'on',label:'✅ Notifications are on',cls:'on'};
+    if(perm==='denied') return {state:'blocked',label:'🚫 Blocked by browser — check site settings',cls:'off'};
+    return {state:'default',label:'💡 Tap Enable for deal &amp; order alerts',cls:'default'};
+  }
+
+  function render(){
+    var info=getInfo();
+    var bellIcon=document.getElementById('nBellIcon');
+    var dot=document.getElementById('nBellDot');
+    var sdot=document.getElementById('nSDot');
+    var stxt=document.getElementById('nSTxt');
+    var enBtn=document.getElementById('nOptEnable');
+    var bellMap={on:'🔔',snoozed:'😴',off:'🔕',blocked:'🔕',default:'🔔'};
+    if(bellIcon) bellIcon.textContent=bellMap[info.state]||'🔔';
+    if(dot){dot.className='n-bell-dot';if(info.state==='on')dot.classList.add('on');else if(info.state==='snoozed')dot.classList.add('sn');}
+    if(sdot){sdot.className='n-sdot '+info.cls;sdot.textContent='●';}
+    if(stxt) stxt.innerHTML=info.label;
+    if(enBtn) enBtn.style.display=(info.state==='on'||info.state==='blocked')?'none':'';
+  }
+
+  function _outsideClick(e){
+    var w=document.getElementById('nBellWrap');
+    if(w&&!w.contains(e.target)) close();
+  }
+
+  function toggle(){
+    var p=document.getElementById('nPanel');
+    var btn=document.getElementById('nBellBtn');
+    if(!p||!btn) return;
+    if(p.classList.contains('open')){ close(); return; }
+    /* Position panel below the bell button, right-aligned, never off-screen */
+    var rect=btn.getBoundingClientRect();
+    var panelW=Math.min(300,window.innerWidth-24);
+    var top=rect.bottom+8;
+    var right=Math.max(12,window.innerWidth-rect.right);
+    /* If panel would go below viewport, show above the button instead */
+    if(top+400>window.innerHeight) top=Math.max(8,rect.top-412);
+    p.style.top=top+'px';
+    p.style.right=right+'px';
+    p.style.width=panelW+'px';
+    /* Arrow position: align with bell button center */
+    var arr=p.querySelector('.n-panel-arr');
+    if(arr){
+      var bellCenterFromRight=window.innerWidth-rect.left-rect.width/2;
+      var arrowRight=Math.max(10,Math.min(panelW-24,bellCenterFromRight-right-6));
+      arr.style.right=arrowRight+'px';
+    }
+    render();
+    p.classList.add('open');
+    setTimeout(function(){ document.addEventListener('click',_outsideClick,true); },10);
+  }
+
+  function close(){
+    var p=document.getElementById('nPanel');
+    if(p) p.classList.remove('open');
+    document.removeEventListener('click',_outsideClick,true);
+  }
+
+  function enable(){
+    if(!('Notification' in window)){(window._skToast||alert)('Your browser does not support notifications.');return;}
+    Notification.requestPermission().then(function(perm){
+      if(perm==='granted'){
+        localStorage.removeItem(KEY); localStorage.removeItem(SNZ);
+        try{ new Notification('SOKONI 🔔',{body:"You'll get alerts for deals, orders & messages.",icon:'assets/icons/icon-192.png'}); }catch(e){}
+      }
+      render();
+      if(perm==='granted') close();
+    });
+  }
+
+  function snooze(minutes){
+    localStorage.setItem(KEY,'snoozed');
+    localStorage.setItem(SNZ,String(Date.now()+minutes*60000));
+    render(); close();
+    _toast((minutes>=1440?'🌙 Snoozed for 24 hours':'⏰ Snoozed for 1 hour'));
+  }
+
+  function disable(){
+    if(!_c){_skConfirm('Turn off Sokoni notifications permanently? You can re-enable anytime from the bell icon.',()=>_doDisableNotifs(true));return;}
+    localStorage.setItem(KEY,'off'); localStorage.removeItem(SNZ);
+    /* Kill running live-popup interval and hide any visible popup immediately */
+    if(window._livePopupInterval){ clearInterval(window._livePopupInterval); window._livePopupInterval=null; }
+    var lp=document.getElementById('livePopup'); if(lp) lp.style.display='none';
+    render(); close(); _toast('🔕 Notifications turned off');
+  }
+
+  function _toast(msg){
+    var t=document.createElement('div');
+    t.style.cssText='position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:rgba(10,12,22,0.96);border:1px solid rgba(255,255,255,0.12);color:white;font-size:12px;font-weight:700;padding:11px 22px;border-radius:100px;z-index:9100;backdrop-filter:blur(16px);box-shadow:0 8px 28px rgba(0,0,0,0.55);white-space:nowrap;font-family:inherit;pointer-events:none;transition:opacity .3s;';
+    t.textContent=msg;
+    document.body.appendChild(t);
+    setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},320);},2600);
+  }
+
+  window.addEventListener('DOMContentLoaded',render);
+
+  window.sokoniNotif={toggle:toggle,close:close,enable:enable,snooze:snooze,disable:disable};
+})();
+</script>
+
+<!-- ══ ADMIN LOCK OVERLAY (Pattern / PIN / Password) ══ -->
+<style>
+.idx-lock-overlay{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% -10%,rgba(113,255,0,0.1),transparent 55%),rgba(6,6,6,0.97);
+  padding:20px;overflow-y:auto;backdrop-filter:blur(8px);}
+.idx-lock-overlay.open{display:flex;}
+.idx-lock-box{background:rgba(255,255,255,0.04);border:1px solid rgba(113,255,0,0.18);border-radius:28px;
+  padding:32px 28px 24px;max-width:380px;width:100%;text-align:center;
+  backdrop-filter:blur(20px);transition:transform .1s;}
+.idx-lock-logo{height:44px;margin-bottom:14px;}
+.idx-lock-title{font-size:21px;font-weight:900;color:white;margin-bottom:2px;font-family:'Segoe UI',system-ui,sans-serif;}
+.idx-lock-sub{font-size:10px;color:rgba(255,255,255,0.28);margin-bottom:18px;
+  letter-spacing:.12em;text-transform:uppercase;font-family:'Segoe UI',system-ui,sans-serif;}
+.idx-lock-tabs{display:flex;gap:5px;margin-bottom:20px;background:rgba(255,255,255,0.04);border-radius:14px;padding:4px;}
+.idx-lock-tab{flex:1;padding:8px 4px;border:none;background:transparent;
+  color:rgba(255,255,255,0.35);font-size:11px;font-weight:700;border-radius:10px;
+  cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;
+  font-family:'Segoe UI',system-ui,sans-serif;}
+.idx-lock-tab.active{background:rgba(113,255,0,0.15);color:#71ff00;border:1px solid rgba(113,255,0,0.3);}
+.idx-lock-tab:hover:not(.active){color:rgba(255,255,255,0.65);}
+.idx-lock-mode{display:flex;flex-direction:column;align-items:center;justify-content:center;}
+/* Pattern */
+.idx-pat-hint{font-size:11px;color:rgba(255,255,255,0.28);margin-bottom:10px;font-family:'Segoe UI',system-ui,sans-serif;}
+.idx-pat-wrap{position:relative;width:240px;height:240px;touch-action:none;user-select:none;cursor:crosshair;}
+#idxPatCanvas{position:absolute;inset:0;width:100%;height:100%;}
+/* PIN */
+.idx-pin-dots{display:flex;justify-content:center;gap:14px;margin-bottom:20px;}
+.idx-pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);transition:.18s;}
+.idx-pin-dot.filled{background:#71ff00;border-color:#71ff00;box-shadow:0 0 10px rgba(113,255,0,0.5);}
+.idx-pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:278px;}
+.idx-pin-key{padding:16px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;font-size:20px;font-weight:700;color:white;cursor:pointer;
+  transition:all .12s;-webkit-tap-highlight-color:transparent;font-family:inherit;}
+.idx-pin-key:active,.idx-pin-key:hover{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;transform:scale(0.93);}
+/* Password */
+.idx-pw-wrap{position:relative;width:100%;max-width:280px;margin-bottom:12px;}
+.idx-pw-input{width:100%;padding:14px 46px 14px 16px;background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.1);border-radius:14px;font-size:16px;color:white;
+  outline:none;transition:.2s;font-family:inherit;}
+.idx-pw-input:focus{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.04);}
+.idx-pw-input::placeholder{color:rgba(255,255,255,0.25);}
+.idx-pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;font-size:16px;cursor:pointer;color:rgba(255,255,255,0.35);padding:4px;}
+.idx-unlock-btn{width:100%;max-width:280px;padding:14px;
+  background:linear-gradient(135deg,#71ff00,#4ac200);border:none;border-radius:14px;
+  font-size:15px;font-weight:900;color:#060606;cursor:pointer;font-family:inherit;
+  transition:transform .12s,box-shadow .12s;letter-spacing:.02em;}
+.idx-unlock-btn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(113,255,0,0.3);}
+.idx-unlock-btn:active{transform:scale(0.97);}
+.idx-lock-error{font-size:12px;color:#ff6464;min-height:18px;margin-top:10px;font-family:'Segoe UI',system-ui,sans-serif;}
+.idx-lock-close{font-size:12px;color:rgba(255,255,255,0.22);margin-top:14px;cursor:pointer;
+  background:none;border:none;font-family:inherit;display:block;width:100%;}
+.idx-lock-close:hover{color:rgba(255,255,255,0.55);}
+@media(min-width:769px){.idx-lock-box{padding:44px 40px 32px;}.idx-pat-wrap{width:260px;height:260px;}}
+</style>
+
+<div id="idxAdminLock" class="idx-lock-overlay">
+  <div class="idx-lock-box">
+    <img src="assets/Sokonilogo2.png" class="idx-lock-logo" onerror="this.style.display='none'" alt="SOKONI">
+    <div class="idx-lock-title">🔐 Admin Access</div>
+    <div class="idx-lock-sub">SOKONI Control Panel</div>
+    <div class="idx-lock-tabs">
+      <button class="idx-lock-tab" id="idxTab_pattern" onclick="_idxSwitchMode('pattern')">⬡ Pattern</button>
+      <button class="idx-lock-tab" id="idxTab_pin" onclick="_idxSwitchMode('pin')">● PIN</button>
+      <button class="idx-lock-tab" id="idxTab_password" onclick="_idxSwitchMode('password')">🔑 Password</button>
+    </div>
+    <!-- Pattern -->
+    <div id="idxMode_pattern" class="idx-lock-mode">
+      <div class="idx-pat-hint">Draw your unlock pattern (≥4 dots)</div>
+      <div class="idx-pat-wrap">
+        <canvas id="idxPatCanvas" width="240" height="240"></canvas>
+      </div>
+    </div>
+    <!-- PIN -->
+    <div id="idxMode_pin" class="idx-lock-mode" style="display:none">
+      <div class="idx-pin-dots">
+        <div class="idx-pin-dot" id="ipd0"></div><div class="idx-pin-dot" id="ipd1"></div>
+        <div class="idx-pin-dot" id="ipd2"></div><div class="idx-pin-dot" id="ipd3"></div>
+      </div>
+      <div class="idx-pin-pad">
+        <button class="idx-pin-key" onclick="_idxPinKey('1')">1</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('2')">2</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('3')">3</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('4')">4</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('5')">5</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('6')">6</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('7')">7</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('8')">8</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('9')">9</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('clr')">⌫</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('0')">0</button>
+        <button class="idx-pin-key" onclick="_idxPinKey('del')">✕</button>
+      </div>
+    </div>
+    <!-- Password -->
+    <div id="idxMode_password" class="idx-lock-mode" style="display:none">
+      <div class="idx-pw-wrap">
+        <input type="password" id="idxPwInput" class="idx-pw-input"
+               placeholder="Admin password"
+               onkeydown="if(event.key==='Enter')_idxCheckPw()"
+               autocomplete="current-password">
+        <button class="idx-pw-toggle" type="button" onclick="_idxTogglePw()" title="Show/hide">👁</button>
+      </div>
+      <button class="idx-unlock-btn" type="button" onclick="_idxCheckPw()">Unlock →</button>
+    </div>
+    <div class="idx-lock-error" id="idxLockError"></div>
+    <button class="idx-lock-close" onclick="_closeAdminLock()">✕ Cancel</button>
+  </div>
+</div>
+
+<script>
+/* ── Index page admin lock overlay ── */
+(function(){
+  var CRED_KEYS={pin:'sokoniAdminPinHash',pattern:'sokoniAdminPatternHash',password:'sokoniAdminPwHash'};
+  var DEFAULTS={pin:'2580',pattern:'0125876',password:'Sokoni@2025'};
+  var LOCK_ID='admin_lock';
+  var _iMode=(('ontouchstart' in window)||navigator.maxTouchPoints>0)?'pattern':'password';
+  var _iPin='';
+
+  async function _iSha256(t){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}
+  async function _iGetHash(mode){var h=localStorage.getItem(CRED_KEYS[mode]);if(!h){h=await _iSha256(DEFAULTS[mode]);localStorage.setItem(CRED_KEYS[mode],h);}return h;}
+
+  window._showAdminLock=function(){
+    var ov=document.getElementById('idxAdminLock');
+    if(ov){ov.classList.add('open');}
+    _idxSwitchMode(_iMode);
+    if(_iMode==='pattern') _iPatInit();
+  };
+  window._closeAdminLock=function(){
+    var ov=document.getElementById('idxAdminLock');
+    if(ov) ov.classList.remove('open');
+    _iPin=''; _iUpdateDots(); _iPatReset();
+    var inp=document.getElementById('idxPwInput');if(inp)inp.value='';
+    _iSetErr('');
+  };
+
+  function _iSetErr(m){var e=document.getElementById('idxLockError');if(e)e.textContent=m;}
+
+  async function _iTryUnlock(secret,mode){
+    var sec=window.SokoniSecurity;
+    var li=sec?sec.isLoginLocked(LOCK_ID):false;
+    if(li&&li.locked){_iSetErr('Too many attempts. Wait '+li.minsLeft+' min.');return;}
+    var entered=await _iSha256(String(secret));
+    var stored=await _iGetHash(mode);
+    if(entered===stored){
+      if(sec)sec.clearLoginLockout(LOCK_ID);
+      sessionStorage.setItem('sokoniAdminUnlocked','1');
+      sessionStorage.setItem('sokoniAdminTs',Date.now().toString());
+      window.location.href='admin.html';
+    } else {
+      var entry=sec?sec.recordFailedLogin(LOCK_ID):null;
+      if(entry&&entry.until){Object.values(CRED_KEYS).forEach(function(k){localStorage.removeItem(k);});_iSetErr('🔒 Too many attempts. Credentials wiped. Locked 15 min.');}
+      else{var left=entry?Math.max(0,5-entry.count):'?';_iSetErr('❌ Wrong '+mode+'. '+left+' attempt'+(left===1?'':'s')+' left.');}
+      var box=document.querySelector('.idx-lock-box');
+      if(box){[[-8,0],[8,80],[-4,160],[0,240]].forEach(function(p){setTimeout(function(){box.style.transform='translateX('+p[0]+'px)';},p[1]);});}
+    }
+  }
+
+  window._idxSwitchMode=function(mode){
+    _iMode=mode;
+    ['pattern','pin','password'].forEach(function(m){
+      var el=document.getElementById('idxMode_'+m);var tab=document.getElementById('idxTab_'+m);
+      if(el)el.style.display=(m===mode?'flex':'none');
+      if(tab)tab.classList.toggle('active',m===mode);
+    });
+    _iSetErr('');
+    if(mode==='pin'){_iPin='';_iUpdateDots();}
+    if(mode==='pattern')_iPatReset();
+    if(mode==='password'){var inp=document.getElementById('idxPwInput');if(inp){inp.value='';setTimeout(function(){inp.focus();},80);}}
+  };
+
+  window._idxPinKey=function(k){
+    _iSetErr('');
+    if(k==='del')_iPin='';else if(k==='clr')_iPin=_iPin.slice(0,-1);else if(_iPin.length<4)_iPin+=k;
+    _iUpdateDots();
+    if(_iPin.length===4){var p=_iPin;_iPin='';_iUpdateDots();_iTryUnlock(p,'pin');}
+  };
+  function _iUpdateDots(){for(var i=0;i<4;i++){var d=document.getElementById('ipd'+i);if(d)d.className='idx-pin-dot'+(_iPin.length>i?' filled':'');}}
+
+  window._idxCheckPw=function(){var v=(document.getElementById('idxPwInput')||{}).value||'';if(!v.trim())return;_iTryUnlock(v,'password');};
+  window._idxTogglePw=function(){var inp=document.getElementById('idxPwInput');if(inp)inp.type=(inp.type==='password'?'text':'password');};
+
+  /* Pattern */
+  var _iPS=[],_iPD=false,_iPC=null,_iPCtx=null,_iPCur={x:0,y:0};
+  var _DPOS=[{x:40,y:40},{x:120,y:40},{x:200,y:40},{x:40,y:120},{x:120,y:120},{x:200,y:120},{x:40,y:200},{x:120,y:200},{x:200,y:200}];
+  var _patInitDone=false;
+
+  function _iPatInit(){
+    if(_patInitDone)return;
+    _iPC=document.getElementById('idxPatCanvas');if(!_iPC)return;
+    _iPCtx=_iPC.getContext('2d');_iPatReset();_patInitDone=true;
+    _iPC.addEventListener('mousedown',_iPStart);_iPC.addEventListener('mousemove',_iPMove);_iPC.addEventListener('mouseup',_iPEnd);_iPC.addEventListener('mouseleave',_iPEnd);
+    _iPC.addEventListener('touchstart',function(e){e.preventDefault();_iPStart(e.touches[0]);},{passive:false});
+    _iPC.addEventListener('touchmove',function(e){e.preventDefault();_iPMove(e.touches[0]);},{passive:false});
+    _iPC.addEventListener('touchend',function(e){e.preventDefault();_iPEnd();},{passive:false});
+  }
+  function _iPRelPos(e){var r=_iPC.getBoundingClientRect();return{x:(e.clientX-r.left)*(_iPC.width/r.width),y:(e.clientY-r.top)*(_iPC.height/r.height)};}
+  function _iPHit(x,y){for(var i=0;i<9;i++){var d=_DPOS[i],dx=x-d.x,dy=y-d.y;if(Math.sqrt(dx*dx+dy*dy)<28)return i;}return -1;}
+  function _iPStart(e){var p=_iPRelPos(e),h=_iPHit(p.x,p.y);if(h===-1)return;_iPD=true;_iPS=[h];_iPCur=p;_iPDraw();}
+  function _iPMove(e){if(!_iPD)return;var p=_iPRelPos(e);_iPCur=p;var h=_iPHit(p.x,p.y);if(h!==-1&&_iPS.indexOf(h)===-1)_iPS.push(h);_iPDraw();}
+  function _iPEnd(){if(!_iPD)return;_iPD=false;if(_iPS.length<4){_iSetErr('Connect at least 4 dots');setTimeout(_iPatReset,1200);return;}var seq=_iPS.join('');_iTryUnlock(seq,'pattern').then(_iPatReset);}
+  function _iPatReset(){_iPS=[];_iPD=false;_iPDraw();}
+  function _iPDraw(){
+    if(!_iPCtx)return;
+    var W=_iPC.width,H=_iPC.height;_iPCtx.clearRect(0,0,W,H);
+    if(_iPS.length>0){_iPCtx.beginPath();_iPCtx.strokeStyle='rgba(113,255,0,0.55)';_iPCtx.lineWidth=3;_iPCtx.lineCap='round';_iPCtx.lineJoin='round';var p0=_DPOS[_iPS[0]];_iPCtx.moveTo(p0.x,p0.y);for(var j=1;j<_iPS.length;j++){var pj=_DPOS[_iPS[j]];_iPCtx.lineTo(pj.x,pj.y);}if(_iPD)_iPCtx.lineTo(_iPCur.x,_iPCur.y);_iPCtx.stroke();}
+    for(var i=0;i<9;i++){var d=_DPOS[i],a=_iPS.indexOf(i)!==-1;_iPCtx.beginPath();_iPCtx.arc(d.x,d.y,16,0,Math.PI*2);_iPCtx.strokeStyle=a?'rgba(113,255,0,0.35)':'rgba(255,255,255,0.1)';_iPCtx.lineWidth=1.5;_iPCtx.stroke();_iPCtx.beginPath();_iPCtx.arc(d.x,d.y,9,0,Math.PI*2);_iPCtx.fillStyle=a?'#71ff00':'rgba(255,255,255,0.38)';if(a){_iPCtx.shadowBlur=10;_iPCtx.shadowColor='#71ff00';}_iPCtx.fill();_iPCtx.shadowBlur=0;}
+  }
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script>
+/* Restore follow button states after SokoniSocial loads */
+document.addEventListener('DOMContentLoaded',function(){
+  var pairs=[
+    ['_sfb_kaspa','kaspa_prints'],
+    ['_sfb_kenshop','kenshop'],
+    ['_sfb_elec','sokoni_electronics']
+  ];
+  function restoreStates(){
+    if(!window.SokoniSocial) return;
+    pairs.forEach(function(p){
+      var btn=document.getElementById(p[0]);
+      if(btn&&SokoniSocial.isFollowing(p[1])){
+        btn.textContent='✓ Following';
+        btn.style.color='#71ff00';
+        btn.style.borderColor='rgba(113,255,0,0.4)';
+        btn.style.background='rgba(113,255,0,0.1)';
+      }
+    });
+  }
+  /* SokoniSocial is deferred — wait for it */
+  if(window.SokoniSocial) restoreStates();
+  else window.addEventListener('load',restoreStates);
+});
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     REAL-TIME PAYMENTS TOAST
+     Fires whenever a new M-Pesa payment is confirmed in
+     Firestore — visible to seller on home page in real time.
+═══════════════════════════════════════════════════════ -->
+<script type="module">
+(async function() {
+  /* Wait for Firebase Auth & Firestore to be ready */
+  let tries = 0;
+  while ((!window.firebaseAuth || !window.firebaseDB) && tries++ < 40) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+  if (!window.firebaseAuth || !window.firebaseDB) return;
+
+  const auth = window.firebaseAuth;
+  const db   = window.firebaseDB;
+
+  /* Only run for signed-in sellers */
+  auth.onAuthStateChanged(async user => {
+    if (!user) return;
+    const lsUser = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+    const isSeller = lsUser.registeredAs?.seller || lsUser.role === 'seller' || lsUser.isSeller;
+    if (!isSeller) return;
+
+    /* Request notification permission (non-intrusively, once) */
+    if (Notification.permission === 'default' && !sessionStorage._skNotifAsked) {
+      sessionStorage._skNotifAsked = '1';
+      setTimeout(async () => {
+        try { await Notification.requestPermission(); } catch(e) {}
+      }, 4000);
+    }
+
+    const { collection, query, where, orderBy, limit, onSnapshot }
+      = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+
+    /* Listen for new completed payments to this seller */
+    const qPay = query(
+      collection(db, 'sellerPayments'),
+      where('sellerUid', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+    let _firstPayLoad = true;
+    onSnapshot(qPay, snap => {
+      if (_firstPayLoad) { _firstPayLoad = false; return; }
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const p = change.doc.data();
+        const ts = p.createdAt?.toMillis?.() || 0;
+        if (Date.now() - ts > 120000) return;
+        _showPaymentToast(p);
+      });
+    });
+
+    /* Listen for new incoming orders to this seller */
+    const qOrders = query(
+      collection(db, 'orders'),
+      where('sellerUid', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(10)
+    );
+    let _firstOrderLoad = true;
+    onSnapshot(qOrders, snap => {
+      if (_firstOrderLoad) { _firstOrderLoad = false; return; }
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const o = change.doc.data();
+        const ts = o.createdAt?.toMillis?.() || 0;
+        if (Date.now() - ts > 120000) return;
+        _showOrderToast(o);
+      });
+    });
+  });
+
+  function _showPaymentToast(p) {
+    const existing = document.getElementById('_rtPayToast');
+    if (existing) existing.remove();
+
+    const t = document.createElement('div');
+    t.id = '_rtPayToast';
+    t.style.cssText = `
+      position:fixed;top:80px;right:16px;z-index:999998;
+      width:min(340px,calc(100vw - 32px));
+      background:#111;border:1px solid rgba(76,175,80,.4);
+      border-radius:18px;padding:14px 16px;
+      display:flex;align-items:flex-start;gap:12px;
+      box-shadow:0 12px 40px rgba(0,0,0,.7),0 0 0 1px rgba(76,175,80,.15);
+      animation:_rtIn .35s cubic-bezier(.34,1.56,.64,1);
+      font-family:'Segoe UI',system-ui,sans-serif;
+    `;
+
+    const style = document.createElement('style');
+    style.textContent = `@keyframes _rtIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}`;
+
+    const icon = document.createElement('div');
+    icon.style.cssText = 'width:44px;height:44px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;';
+    icon.textContent = '💚';
+
+    const body = document.createElement('div');
+    body.style.cssText = 'flex:1;min-width:0;';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:13px;font-weight:900;color:#4caf50;margin-bottom:3px;';
+    title.textContent = 'Payment Received!';
+
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:12px;color:rgba(255,255,255,.65);margin-bottom:3px;';
+    sub.textContent = 'KES ' + Number(p.amount || 0).toLocaleString() + (p.hub ? ' · ' + p.hub : '');
+
+    const code = document.createElement('div');
+    code.style.cssText = 'font-size:11px;color:rgba(255,255,255,.35);font-family:monospace;';
+    code.textContent = p.mpesaCode || '';
+
+    const close = document.createElement('button');
+    close.style.cssText = 'background:none;border:none;color:rgba(255,255,255,.3);font-size:18px;cursor:pointer;flex-shrink:0;padding:0;line-height:1;align-self:flex-start;';
+    close.textContent = '✕';
+    close.onclick = () => t.remove();
+
+    body.appendChild(title);
+    body.appendChild(sub);
+    if (p.mpesaCode) body.appendChild(code);
+    t.appendChild(style);
+    t.appendChild(icon);
+    t.appendChild(body);
+    t.appendChild(close);
+    document.body.appendChild(t);
+
+    /* Also trigger browser notification if permission granted */
+    if (Notification.permission === 'granted') {
+      new Notification('💚 Payment Received — SOKONI', {
+        body: 'KES ' + Number(p.amount || 0).toLocaleString() + (p.mpesaCode ? ' · ' + p.mpesaCode : ''),
+        icon: 'assets/logosokoni.png',
+      });
+    }
+
+    setTimeout(() => {
+      t.style.opacity = '0'; t.style.transition = 'opacity .4s';
+      setTimeout(() => t.remove(), 420);
+    }, 9000);
+  }
+
+  function _showOrderToast(o) {
+    const existing = document.getElementById('_rtOrderToast');
+    if (existing) existing.remove();
+
+    const t = document.createElement('div');
+    t.id = '_rtOrderToast';
+    t.style.cssText = `
+      position:fixed;top:80px;left:16px;z-index:999997;
+      width:min(320px,calc(100vw - 32px));
+      background:#111;border:1px solid rgba(113,195,255,.35);
+      border-radius:18px;padding:14px 16px;
+      display:flex;align-items:flex-start;gap:12px;
+      box-shadow:0 12px 40px rgba(0,0,0,.7);
+      animation:_rtInL .35s cubic-bezier(.34,1.56,.64,1);
+      font-family:'Segoe UI',system-ui,sans-serif;
+    `;
+
+    const style = document.createElement('style');
+    style.textContent = `@keyframes _rtInL{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:translateX(0)}}`;
+
+    const icon = document.createElement('div');
+    icon.style.cssText = 'width:44px;height:44px;background:rgba(113,195,255,.1);border:1px solid rgba(113,195,255,.25);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;';
+    icon.textContent = '🛒';
+
+    const body = document.createElement('div');
+    body.style.cssText = 'flex:1;min-width:0;';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:13px;font-weight:900;color:#71c3ff;margin-bottom:3px;';
+    title.textContent = 'New Order!';
+
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:12px;color:rgba(255,255,255,.65);margin-bottom:2px;';
+    const itemCount = Array.isArray(o.items) ? o.items.length : 1;
+    sub.textContent = (o.buyerName || 'Customer') + ' · ' + itemCount + ' item' + (itemCount > 1 ? 's' : '') + (o.total ? ' · KES ' + Number(o.total).toLocaleString() : '');
+
+    const ref = document.createElement('div');
+    ref.style.cssText = 'font-size:11px;color:rgba(255,255,255,.3);font-family:monospace;';
+    ref.textContent = o.id || '';
+
+    const close = document.createElement('button');
+    close.style.cssText = 'background:none;border:none;color:rgba(255,255,255,.3);font-size:18px;cursor:pointer;flex-shrink:0;padding:0;line-height:1;align-self:flex-start;';
+    close.textContent = '✕';
+    close.onclick = () => t.remove();
+
+    body.appendChild(title);
+    body.appendChild(sub);
+    if (o.id) body.appendChild(ref);
+    t.appendChild(style);
+    t.appendChild(icon);
+    t.appendChild(body);
+    t.appendChild(close);
+    document.body.appendChild(t);
+
+    if (Notification.permission === 'granted') {
+      new Notification('🛒 New Order — SOKONI', {
+        body: (o.buyerName || 'Customer') + (o.total ? ' · KES ' + Number(o.total).toLocaleString() : ''),
+        icon: 'assets/logosokoni.png',
+      });
+    }
+
+    setTimeout(() => {
+      t.style.opacity = '0'; t.style.transition = 'opacity .4s';
+      setTimeout(() => t.remove(), 420);
+    }, 9000);
+  }
+})();
+</script>
+
+<!-- ── PERSONALISED RECOMMENDATIONS ── -->
+<script src="sokoni-recommendations.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.SokoniRecs) return;
+  SokoniRecs.init().then(function () {
+    SokoniRecs.getForYou(8).then(function (items) {
+      SokoniRecs.renderWidget('sk-recs-foryou', items, 'Picked For You');
+    });
+  });
+});
+</script>
+
+<script src="sokoni-spotlight.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var _t = setInterval(function(){
+    if(window.SokoniSpotlight){ clearInterval(_t); document.dispatchEvent(new Event('sokoni-spotlight-ready')); }
+  }, 200);
+  setTimeout(function(){ clearInterval(_t); }, 8000);
+});
+</script>
+<script src="sokoni-featured.js" defer></script>
+<script>
+/* Inject featured listings + sponsored ads on the home page */
+document.addEventListener('DOMContentLoaded', function() {
+  var _try = 0;
+  var _t = setInterval(function() {
+    _try++;
+    if (_try > 20) { clearInterval(_t); return; }
+    if (window.SokoniFeatured && document.getElementById('productsContainer-wrap')) {
+      clearInterval(_t);
+      /* Inject sponsored strip before the trending section */
+      SokoniFeatured.injectHomeAds('marketplace', 'todaysPicksSection');
+    }
+  }, 400);
+});
+</script>
+<script defer src="kass-widget.js"></script>
+  <script defer src="hub-register.js"></script>
+  <!-- Enterprise v2.0 modules — event bus and observability must load first -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+  <script defer src="sokoni-webhook-engine.js"></script>
+  <script defer src="sokoni-search-pro.js"></script>
+</body>
+
+</html>
+
+
+
+

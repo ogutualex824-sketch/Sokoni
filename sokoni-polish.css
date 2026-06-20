@@ -1,0 +1,465 @@
+/* ================================================================
+   SOKONI POLISH v2 — Global Life & Density System
+   Loaded globally via style.css append + shared-header.js inject.
+   More life : micro-animations · glow · shimmer · hover states
+   More density : ~25% tighter spacing · more info per viewport
+================================================================ */
+
+/* ──────────────────────────────────────────────────────────────
+   DESIGN TOKENS
+────────────────────────────────────────────────────────────── */
+:root {
+  --pk-green:       #71ff00;
+  --pk-green-dim:   rgba(113,255,0,0.14);
+  --pk-green-glow:  rgba(113,255,0,0.35);
+  --pk-glass:       rgba(255,255,255,0.04);
+  --pk-border:      rgba(255,255,255,0.08);
+  --pk-border-g:    rgba(113,255,0,0.22);
+  --pk-ease:        cubic-bezier(0.4,0,0.2,1);
+  --pk-spring:      cubic-bezier(0.34,1.56,0.64,1);
+  --pk-shadow-card: 0 4px 20px rgba(0,0,0,0.32), 0 1px 0 rgba(255,255,255,0.04) inset;
+  --pk-shadow-lift: 0 10px 36px rgba(0,0,0,0.45), 0 0 0 1px rgba(113,255,0,0.13);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   KEYFRAMES
+────────────────────────────────────────────────────────────── */
+@keyframes pk-fade-up {
+  from { opacity:0; transform:translateY(14px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes pk-scale-in {
+  from { opacity:0; transform:scale(0.92); }
+  to   { opacity:1; transform:scale(1); }
+}
+@keyframes pk-glow-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(113,255,0,0.22); }
+  50%      { box-shadow: 0 0 18px 4px rgba(113,255,0,0.18); }
+}
+@keyframes pk-hero-sweep {
+  0%   { transform: translateX(-100%) skewX(-12deg); opacity:0; }
+  60%  { opacity: 0.08; }
+  100% { transform: translateX(300%) skewX(-12deg); opacity:0; }
+}
+@keyframes pk-float-sm {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@keyframes pk-number-pop {
+  0%   { transform: scale(0.8); opacity:0; }
+  60%  { transform: scale(1.12); }
+  100% { transform: scale(1); opacity:1; }
+}
+@keyframes pk-border-spin {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes promoEmojiFloat {
+  0%,100% { transform:translateY(0) scale(1); }
+  40%      { transform:translateY(-10px) scale(1.08); }
+  70%      { transform:translateY(3px) scale(0.96); }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   BODY — AMBIENT BACKGROUND GRADIENT
+────────────────────────────────────────────────────────────── */
+body {
+  background:
+    radial-gradient(ellipse at 10% 15%, rgba(113,255,0,0.04) 0%, transparent 45%),
+    radial-gradient(ellipse at 88% 78%, rgba(113,255,0,0.025) 0%, transparent 40%),
+    #080808 !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SCROLLBAR — GREEN ACCENT
+────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(113,255,0,0.28); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(113,255,0,0.55); }
+
+/* ──────────────────────────────────────────────────────────────
+   SELECTION
+────────────────────────────────────────────────────────────── */
+::selection      { background: rgba(113,255,0,0.22); color:#fff; }
+::-moz-selection { background: rgba(113,255,0,0.22); color:#fff; }
+
+/* ──────────────────────────────────────────────────────────────
+   TYPOGRAPHY — TIGHTER & SHARPER
+────────────────────────────────────────────────────────────── */
+h1,h2,h3,h4,h5,h6 {
+  line-height:1.18 !important;
+  letter-spacing:-0.022em !important;
+  font-weight:800 !important;
+}
+p { line-height:1.52; }
+
+/* ──────────────────────────────────────────────────────────────
+   SECTION TITLES — GREEN ACCENT BAR + TIGHT SPACING
+────────────────────────────────────────────────────────────── */
+.section-title {
+  margin-top:18px !important;
+  padding:0 16px !important;
+  margin-bottom:8px !important;
+}
+.section-title h2,
+.section-title h3 {
+  position:relative;
+  padding-left:12px !important;
+}
+.section-title h2::before,
+.section-title h3::before {
+  content:'';
+  position:absolute;
+  left:0; top:15%; bottom:15%;
+  width:3px;
+  background:linear-gradient(180deg, #71ff00, #4fc800);
+  border-radius:2px;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   CATEGORIES — DENSER GRID, CRISPER CARDS
+────────────────────────────────────────────────────────────── */
+.categories {
+  gap:10px !important;
+  padding:10px 14px 14px !important;
+}
+.category-card {
+  padding:14px 10px !important;
+  border-radius:16px !important;
+  transition:transform 0.17s var(--pk-ease), border-color 0.17s ease, background 0.17s ease, box-shadow 0.17s ease !important;
+}
+.category-card:hover {
+  transform:translateY(-4px) scale(1.02) !important;
+  border-color:var(--pk-border-g) !important;
+  background:rgba(113,255,0,0.07) !important;
+  box-shadow:0 8px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(113,255,0,0.10) !important;
+}
+.category-card:active { transform:scale(0.96) !important; }
+.category-card img { width:38px !important; height:38px !important; margin-bottom:7px !important; }
+.category-card span { font-size:11px !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   SERVICE ICON CARDS — DENSER
+────────────────────────────────────────────────────────────── */
+.services-icon-grid {
+  gap:8px !important;
+  padding:4px 14px 12px !important;
+}
+.svc-icon-card {
+  padding:12px 6px 10px !important;
+  border-radius:14px !important;
+  gap:5px !important;
+  transition:transform 0.17s var(--pk-ease), border-color 0.17s ease, background 0.17s ease, box-shadow 0.17s ease !important;
+}
+.svc-icon-card:hover {
+  transform:translateY(-3px) scale(1.04) !important;
+  border-color:rgba(113,255,0,0.28) !important;
+  background:rgba(113,255,0,0.07) !important;
+  box-shadow:0 6px 18px rgba(0,0,0,0.3) !important;
+}
+.svc-icon-card:active { transform:scale(0.94) !important; }
+.svc-icon-card span { font-size:26px !important; }
+.svc-icon-card p    { font-size:10px !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   UNIVERSAL CARD — HOVER LIFT + GREEN GLOW
+────────────────────────────────────────────────────────────── */
+.product-card,
+.seller-card,
+[class*="-card"]:not([class*="modal"]):not([class*="n-panel"]):not([class*="nd-item"]):not([class*="mmenu"]):not([class*="toast"]) {
+  transition:transform 0.18s var(--pk-ease), box-shadow 0.18s ease, border-color 0.18s ease !important;
+  will-change:transform;
+}
+.product-card:hover, .seller-card:hover {
+  transform:translateY(-4px) !important;
+  box-shadow:var(--pk-shadow-lift) !important;
+  border-color:rgba(113,255,0,0.18) !important;
+}
+.product-card:active { transform:scale(0.97) !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   PRODUCT CARD — TIGHTER INFO DISPLAY
+────────────────────────────────────────────────────────────── */
+.product-card h3 { padding:10px 10px 4px !important; font-size:13px !important; }
+.price           { padding:0 10px !important; font-size:15px !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   BUTTONS — UNIVERSAL MICRO-INTERACTIONS
+────────────────────────────────────────────────────────────── */
+button:not([class*="mmenu"]):not([class*="nd-"]):not([class*="n-opt"]):not([disabled]),
+.btn:not([disabled]) {
+  transition:transform 0.13s var(--pk-ease), box-shadow 0.13s ease, filter 0.13s ease !important;
+  -webkit-tap-highlight-color:transparent !important;
+}
+button:not([disabled]):not([class*="mmenu"]):hover { filter:brightness(1.1) !important; transform:translateY(-1px) !important; }
+button:not([disabled]):not([class*="mmenu"]):active { transform:scale(0.95) !important; filter:brightness(0.92) !important; }
+.btn:not([disabled]):hover  { filter:brightness(1.1) !important; transform:translateY(-1px) !important; }
+.btn:not([disabled]):active { transform:scale(0.95) !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   CTA / PRIMARY BUTTONS — GLOW PULSE
+────────────────────────────────────────────────────────────── */
+.hero button,
+[class*="-cta"]:not([disabled]),
+[class*="primary-btn"]:not([disabled]),
+[class*="submit-btn"]:not([disabled]) {
+  animation:pk-glow-pulse 3s ease-in-out infinite !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   INPUTS — CRISP FOCUS
+────────────────────────────────────────────────────────────── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+textarea, select {
+  transition:border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):focus,
+textarea:focus, select:focus {
+  border-color:rgba(113,255,0,0.5) !important;
+  box-shadow:0 0 0 3px rgba(113,255,0,0.10) !important;
+  outline:none !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   STATS & NUMBERS — GREEN GLOW
+────────────────────────────────────────────────────────────── */
+[class*="dash-stat-val"],
+[class*="-stat-n"],
+[class*="hd-val"],
+[class*="-number"]:not(input) {
+  color:var(--pk-green) !important;
+  text-shadow:0 0 16px rgba(113,255,0,0.28) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   PRICES — VIVID GREEN
+────────────────────────────────────────────────────────────── */
+.price,
+[class*="-price"]:not([class*="price-old"]):not([class*="crossed"]):not(input) {
+  color:var(--pk-green) !important;
+  text-shadow:0 0 14px rgba(113,255,0,0.22) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   HERO SECTIONS — LIGHT SWEEP SHIMMER
+────────────────────────────────────────────────────────────── */
+.hero,
+.glass-hero, .bk-hero, .hc-hero, .sv-hero, .fd-hero,
+.car-hero, .ent-hero, .sp-hero, .prop-hero, .bnb-hero,
+.law-hero, .ride-hero, .del-hero, .fn-hero {
+  position:relative !important;
+  overflow:hidden !important;
+}
+.hero::after,
+.glass-hero::after, .bk-hero::after, .hc-hero::after, .sv-hero::after,
+.car-hero::after, .ent-hero::after, .sp-hero::after, .fd-hero::after {
+  content:'';
+  position:absolute;
+  top:-20%; left:-30%;
+  width:60%; height:140%;
+  background:linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.06) 50%, transparent 60%);
+  animation:pk-hero-sweep 5s ease-in-out infinite;
+  pointer-events:none;
+  z-index:1;
+}
+.hero > *, .glass-hero > *, .bk-hero > *,
+.hc-hero > *, .sv-hero > *, .car-hero > *,
+.ent-hero > *, .sp-hero > * { position:relative; z-index:2; }
+
+/* ──────────────────────────────────────────────────────────────
+   BOTTOM NAV — ELECTRIC ACTIVE STATE
+────────────────────────────────────────────────────────────── */
+.bnav-item { transition:color 0.15s ease, transform 0.12s ease !important; }
+.bnav-item.active-bnav {
+  color:var(--pk-green) !important;
+  text-shadow:0 0 12px rgba(113,255,0,0.4) !important;
+}
+.bnav-item:hover:not(.active-bnav) { color:rgba(255,255,255,0.75) !important; }
+.bnav-item:active { transform:scale(0.88) !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   TAB BUTTONS — CRISP TRANSITIONS
+────────────────────────────────────────────────────────────── */
+[class*="-tab-btn"],
+[class*="-filter-btn"] {
+  transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease !important;
+}
+[class*="-tab-btn"]:active,
+[class*="-filter-btn"]:active { transform:scale(0.94) !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   IMAGES — HOVER ZOOM INSIDE CARDS
+────────────────────────────────────────────────────────────── */
+.product-card img,
+[class*="-card"] img:not([class*="avatar"]):not([class*="logo"]):not([class*="icon"]) {
+  transition:transform 0.25s var(--pk-ease) !important;
+  will-change:transform;
+}
+.product-card:hover img,
+[class*="-card"]:hover img:not([class*="avatar"]):not([class*="logo"]):not([class*="icon"]) {
+  transform:scale(1.05) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   NOTIFICATION DOT — LIVE PULSE
+────────────────────────────────────────────────────────────── */
+.sk-notif-dot.visible { animation:pk-glow-pulse 2.5s ease-in-out infinite !important; }
+#sokoni-bell-badge    { animation:pk-number-pop 0.4s var(--pk-spring) both !important; }
+.n-bell-dot.on        { animation:pk-glow-pulse 2.8s ease-in-out infinite !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   FLOATING BUTTONS — GENTLE FLOAT
+────────────────────────────────────────────────────────────── */
+#sokoni-wa-support      { animation:pk-float-sm 3.5s ease-in-out infinite !important; }
+.back-to-top-btn.visible { animation:pk-float-sm 3.5s ease-in-out infinite, bttFadeIn .25s ease both !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   FORMS — COMPACT
+────────────────────────────────────────────────────────────── */
+label { font-size:12px !important; font-weight:700 !important; margin-bottom:4px !important; display:block; }
+.form-group, .input-group { margin-bottom:12px !important; }
+
+/* ──────────────────────────────────────────────────────────────
+   MODALS — SMOOTH ENTRANCE
+────────────────────────────────────────────────────────────── */
+[class*="-modal"].active, [class*="-modal"].open,
+[id*="-modal"].active, [id*="-modal"].open {
+  animation:pk-scale-in 0.22s var(--pk-ease) both !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   TOAST / ALERTS — FADE UP
+────────────────────────────────────────────────────────────── */
+[class*="toast"]:not([class*="-track"]):not([class*="toast-track"]),
+[id*="toast"]:not([id*="-track"]) {
+  animation:pk-fade-up 0.22s var(--pk-ease) both !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   STAT CARDS — HOVER SCALE
+────────────────────────────────────────────────────────────── */
+[class*="-stat"]:not(p):not(span):not(label):not(input) {
+  transition:transform 0.17s ease !important;
+}
+[class*="-stat"]:not(p):not(span):not(label):not(input):hover {
+  transform:scale(1.04) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   BADGES / CHIPS — COMPACT
+────────────────────────────────────────────────────────────── */
+[class*="-badge"]:not(input):not(button):not(a[href]):not(select),
+[class*="-tag"]:not(input):not(button):not(a[href]):not(select),
+[class*="-chip"]:not(input):not(button):not(a[href]):not(select) {
+  padding:3px 9px !important;
+  font-size:10px !important;
+  font-weight:700 !important;
+  border-radius:999px !important;
+  letter-spacing:0.02em !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SHARED HEADER (sk-nav) — POLISH
+────────────────────────────────────────────────────────────── */
+#sk-top-nav { box-shadow:0 2px 20px rgba(0,0,0,0.4), 0 1px 0 rgba(113,255,0,0.06) !important; }
+.sk-nav-icon-btn {
+  transition:background 0.15s ease, transform 0.12s ease, color 0.15s ease !important;
+}
+.sk-nav-icon-btn:hover {
+  background:rgba(113,255,0,0.10) !important;
+  border-color:rgba(113,255,0,0.22) !important;
+  transform:scale(1.08) !important;
+  color:var(--pk-green) !important;
+}
+#sk-nav-cart:hover {
+  background:rgba(113,255,0,0.15) !important;
+  box-shadow:0 0 12px rgba(113,255,0,0.2) !important;
+}
+#sk-nav-avatar:hover {
+  background:rgba(113,255,0,0.15) !important;
+  border-color:rgba(113,255,0,0.35) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   CONSTRUCTION HUB — AMBER ACCENT POLISH
+────────────────────────────────────────────────────────────── */
+.cn-tab-btn.active, .cn-tab-btn:hover {
+  box-shadow:0 2px 14px rgba(245,158,11,0.3) !important;
+}
+.ctr-card:hover, .eq-card:hover {
+  border-color:rgba(245,158,11,0.35) !important;
+  box-shadow:0 8px 28px rgba(0,0,0,0.4), 0 0 0 1px rgba(245,158,11,0.12) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   HEALTHCARE HUB — TEAL ACCENT POLISH
+────────────────────────────────────────────────────────────── */
+.hc-tab-btn.active, .hc-tab-btn:hover {
+  box-shadow:0 2px 14px rgba(0,200,120,0.3) !important;
+}
+.spec-card:hover, .lab-card:hover {
+  border-color:rgba(0,200,120,0.3) !important;
+  box-shadow:0 8px 28px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,200,120,0.10) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   MOBILE DENSITY OVERRIDES
+────────────────────────────────────────────────────────────── */
+@media (max-width:767px) {
+  section, .section { margin-bottom:14px; }
+  .section-title { margin-top:16px !important; }
+
+  .categories {
+    grid-template-columns:repeat(4,1fr) !important;
+    gap:8px !important;
+    padding:8px 12px 12px !important;
+  }
+  .category-card { padding:12px 8px !important; }
+  .category-card img { width:32px !important; height:32px !important; }
+  .category-card span { font-size:9.5px !important; }
+
+  .services-icon-grid {
+    grid-template-columns:repeat(5,1fr) !important;
+    gap:6px !important;
+    padding:4px 10px 10px !important;
+  }
+  .svc-icon-card { padding:10px 4px 8px !important; }
+  .svc-icon-card span { font-size:22px !important; }
+  .svc-icon-card p    { font-size:9px !important; }
+
+  .product-card h3 { padding:8px 8px 3px !important; font-size:12px !important; }
+  .price           { font-size:13px !important; padding:0 8px !important; }
+
+  .hero { padding:20px 16px !important; min-height:150px !important; }
+  .hero-text h2 { font-size:28px !important; margin-bottom:6px !important; }
+  .hero-text p  { font-size:13px !important; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   DESKTOP DENSITY OVERRIDES
+────────────────────────────────────────────────────────────── */
+@media (min-width:768px) {
+  .section-title { margin-top:22px !important; }
+  .categories { gap:12px !important; padding:12px 20px 16px !important; }
+
+  [class*="-card"]:not([class*="modal"]):not([class*="nd-item"]):hover {
+    transform:translateY(-5px) scale(1.008) !important;
+    box-shadow:0 14px 44px rgba(0,0,0,0.4), 0 0 0 1px rgba(113,255,0,0.14) !important;
+  }
+  .hero::after, .glass-hero::after { animation-duration:6.5s !important; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   REDUCED MOTION SAFETY
+────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after {
+    animation-duration:0.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:0.01ms !important;
+  }
+}
+
+/* END SOKONI POLISH v2 */

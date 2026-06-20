@@ -1,0 +1,395 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Order Successful!</title>
+  <meta name="description" content="Your SOKONI order was placed successfully. Track your delivery or continue shopping.">
+  <meta property="og:title" content="SOKONI — Order Successful!">
+  <meta property="og:description" content="Order placed successfully on SOKONI. Track your delivery.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    .rating-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .rating-row {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .rating-row-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .star-row {
+      display: flex;
+      gap: 4px;
+    }
+    .star-btn {
+      background: none;
+      border: none;
+      font-size: 22px;
+      cursor: pointer;
+      color: rgba(255,255,255,0.18);
+      transition: color 0.12s, transform 0.12s;
+      padding: 0;
+      line-height: 1;
+    }
+    .star-btn:hover { transform: scale(1.15); }
+    .star-btn.lit { color: #ffc107; }
+    .rating-summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(113,255,0,0.06);
+      border: 1px solid rgba(113,255,0,0.15);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+    }
+    .rating-avg-big {
+      font-size: 22px;
+      font-weight: 900;
+      color: #ffc107;
+    }
+    @media(max-width: 520px) {
+      .rating-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="security.js"></script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<section class="success-page">
+  <div class="success-box">
+
+    <div class="success-animation">
+      <div class="success-circle">
+        ✓
+      </div>
+    </div>
+
+    <h1>Order Placed! 🎉</h1>
+    <p>Thank you for shopping with Sokoni. Your order is being processed.</p>
+
+    <div class="success-order-id" id="successOrderId">Looking up your order...</div>
+
+    <div class="success-points-earned" id="successPointsEarned" style="display:none;">
+      ⭐
+      <span id="pointsEarnedText">You earned 0 loyalty points!</span>
+    </div>
+
+    <div class="success-actions">
+      <a href="track.html" class="success-track-btn">📦 Track My Order</a>
+      <a href="index.html" class="success-continue-btn">Continue Shopping</a>
+    </div>
+
+    <div class="success-footer-note">
+      🔔 You can also leave a review after receiving your order
+      <a href="reviews.html" style="color:#71ff00;margin-left:6px;">Leave Review →</a>
+    </div>
+
+    <!-- SHARE & EARN POST-PURCHASE -->
+    <div id="successShareEarn" style="margin-top:20px;background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,200,100,0.04));border:1px solid rgba(113,255,0,0.28);border-radius:18px;padding:18px 20px;text-align:left;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:28px;">💸</span>
+        <div>
+          <div style="font-size:14px;font-weight:900;color:#71ff00;">Share &amp; Earn Cash!</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">Share SOKONI with friends &amp; earn 5–8% on every purchase they make</div>
+        </div>
+      </div>
+      <div id="sseRefBox" style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;">
+        <span style="font-size:11px;color:rgba(255,255,255,0.4);flex:1;">Your link:</span>
+        <span id="sseRefCode" style="font-size:12px;font-weight:800;color:#71ff00;letter-spacing:0.5px;"></span>
+        <button type="button" onclick="sseCopy()" style="padding:5px 12px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.3);border-radius:8px;color:#71ff00;font-size:11px;font-weight:700;cursor:pointer;">Copy</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" onclick="sseShareWA()" style="flex:1;padding:10px 14px;background:linear-gradient(135deg,#25D366,#128C7E);border:none;border-radius:12px;color:white;font-size:12px;font-weight:800;cursor:pointer;min-width:120px;">📱 Share on WhatsApp</button>
+        <button type="button" onclick="window.location.href='referral.html'" style="padding:10px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;">📊 My Earnings</button>
+      </div>
+    </div>
+    <script>
+    (function(){
+      var BASE='https://mysokoni.co.ke/index.html';
+      function getCode(){
+        try{
+          var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+          if(u&&u.refCode) return u.refCode;
+          var base=u&&u.name?u.name.replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,5):'USER';
+          var code='SK'+base+(Date.now()%10000);
+          if(u){ u.refCode=code; localStorage.setItem('sokoniUser',JSON.stringify(u)); }
+          return code;
+        }catch(e){ return 'SKSOKONI'; }
+      }
+      var code=getCode();
+      var el=document.getElementById('sseRefCode');
+      if(el) el.textContent=code;
+      var shareURL=BASE+'?ref='+code;
+      window.sseCopy=function(){
+        navigator.clipboard&&navigator.clipboard.writeText(shareURL).then(function(){
+          var btn=document.querySelector('#successShareEarn button');
+          if(btn){btn.textContent='✅ Copied!';setTimeout(function(){btn.textContent='Copy';},2000);}
+        });
+      };
+      window.sseShareWA=function(){
+        var msg='I just shopped on SOKONI — Kenya’s best marketplace! 🛒\nJoin via my link and let’s both save more:\n'+shareURL;
+        window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+      };
+    })();
+    </script>
+
+    <!-- UNBOXING WALL CTA -->
+    <div style="margin-top:20px;background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,170,255,0.04));border:1px dashed rgba(113,255,0,0.28);border-radius:18px;padding:18px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;text-align:left;">
+      <div style="font-size:34px;flex-shrink:0;">📸</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:900;margin-bottom:3px;">Got your package? Post your unboxing!</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;">Share a photo of your received order on the <strong style="color:#71ff00;">Unboxing Wall</strong> and earn <strong style="color:#71ff00;">+50 loyalty points</strong>. Your photo helps thousands of shoppers.</div>
+      </div>
+      <a href="unboxing.html" style="flex-shrink:0;padding:10px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border-radius:11px;text-decoration:none;font-size:12px;white-space:nowrap;">📦 Post Unboxing →</a>
+    </div>
+
+    <!-- Rate Seller -->
+    <div id="rateSellerBox" style="margin-top:24px;background:rgba(255,193,7,0.05);border:1px solid rgba(255,193,7,0.18);border-radius:18px;padding:22px;text-align:left;">
+      <div style="font-size:16px;font-weight:800;color:white;margin-bottom:4px;">⭐ Rate Your Seller</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Rate your experience across 4 areas — helps other buyers choose great sellers.</div>
+
+      <!-- 4-category star pickers -->
+      <div class="rating-grid">
+
+        <div class="rating-row">
+          <div class="rating-row-label">🚚 Delivery</div>
+          <div class="star-row" id="stars-delivery"></div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:5px;" id="hint-delivery">Was your order delivered as expected?</div>
+        </div>
+
+        <div class="rating-row">
+          <div class="rating-row-label">⚡ Response Time</div>
+          <div class="star-row" id="stars-response"></div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:5px;" id="hint-response">Did the seller reply quickly?</div>
+        </div>
+
+        <div class="rating-row">
+          <div class="rating-row-label">🔄 Returns</div>
+          <div class="star-row" id="stars-returns"></div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:5px;" id="hint-returns">Was the return process easy if needed?</div>
+        </div>
+
+        <div class="rating-row">
+          <div class="rating-row-label">😊 Satisfaction</div>
+          <div class="star-row" id="stars-satisfaction"></div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:5px;" id="hint-satisfaction">Overall experience with this seller?</div>
+        </div>
+
+      </div>
+
+      <!-- Live avg preview -->
+      <div class="rating-summary" id="ratingSummaryRow" style="display:none;">
+        <span class="rating-avg-big" id="ratingAvgDisplay">—</span>
+        <span>Overall rating</span>
+        <span style="color:#ffc107;" id="ratingStarsDisplay"></span>
+      </div>
+
+      <textarea id="ratingComment" rows="2" placeholder="Tell us more about your experience (optional)..." style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;resize:none;font-family:inherit;margin-bottom:12px;line-height:1.5;"></textarea>
+
+      <button type="button" onclick="submitSellerRating()" style="padding:12px 28px;background:linear-gradient(135deg,#ffc107,#e07000);color:black;font-weight:800;border:none;border-radius:12px;cursor:pointer;font-size:13px;font-family:inherit;">⭐ Submit Rating</button>
+      <div id="ratingMsg" style="margin-top:10px;font-size:13px;"></div>
+    </div>
+
+  </div>
+</section>
+
+<script>
+  /* ── Order ID ── */
+  let orders = [];
+  try { orders = JSON.parse(localStorage.getItem("sokoniOrders")) || []; } catch(e) {}
+  const latest = orders[0];
+  const idEl = document.getElementById("successOrderId");
+  if(latest && idEl){
+    idEl.innerHTML = `Order ID: <strong>${latest.id}</strong>`;
+    idEl.onclick = () => window.location.href = `track.html?id=${latest.id}`;
+    idEl.style.cursor = "pointer";
+  }
+
+  /* ── Points ── */
+  let pts = 0;
+  try { pts = JSON.parse(localStorage.getItem("sokoniPoints"))?.history?.[0]?.points || 0; } catch(e) {}
+  if(pts > 0){
+    document.getElementById("successPointsEarned").style.display = "flex";
+    document.getElementById("pointsEarnedText").textContent = `You earned ${pts} loyalty points! View your rewards →`;
+  }
+
+  /* ── Multi-dimensional Rating ── */
+  const CATEGORIES = [
+    { key:"delivery",     label:"🚚 Delivery",      hints:["Very late / missing","Delayed","Average timing","On time","Fast & perfect"] },
+    { key:"response",     label:"⚡ Response Time",  hints:["Never replied","Very slow","Took a while","Quick reply","Instant response"] },
+    { key:"returns",      label:"🔄 Returns",         hints:["Refused return","Difficult process","Acceptable","Smooth process","Hassle-free"] },
+    { key:"satisfaction", label:"😊 Satisfaction",   hints:["Very unhappy","Disappointed","Okay","Happy","Absolutely loved it!"] },
+  ];
+
+  const scores = { delivery:0, response:0, returns:0, satisfaction:0 };
+
+  function buildStarRow(catKey, hints){
+    const container = document.getElementById("stars-" + catKey);
+    if(!container) return;
+    container.innerHTML = [1,2,3,4,5].map(n =>
+      `<button type="button" class="star-btn" data-cat="${catKey}" data-n="${n}" onclick="pickCatStar('${catKey}',${n})">★</button>`
+    ).join("");
+  }
+
+  function pickCatStar(catKey, n){
+    scores[catKey] = n;
+    const container = document.getElementById("stars-" + catKey);
+    if(container){
+      container.querySelectorAll(".star-btn").forEach(btn => {
+        btn.classList.toggle("lit", Number(btn.dataset.n) <= n);
+      });
+    }
+    const hintEl = document.getElementById("hint-" + catKey);
+    const cat = CATEGORIES.find(c => c.key === catKey);
+    if(hintEl && cat) hintEl.textContent = cat.hints[n-1];
+
+    updateAvgDisplay();
+  }
+
+  function updateAvgDisplay(){
+    const filled = Object.values(scores).filter(v => v > 0);
+    if(!filled.length) return;
+    const avg = (filled.reduce((a,b)=>a+b,0) / filled.length).toFixed(1);
+    const rounded = Math.round(avg);
+    document.getElementById("ratingSummaryRow").style.display = "flex";
+    document.getElementById("ratingAvgDisplay").textContent = avg;
+    document.getElementById("ratingStarsDisplay").textContent = "★".repeat(rounded) + "☆".repeat(5-rounded);
+  }
+
+  function submitSellerRating(){
+    const filled = Object.values(scores).filter(v => v > 0).length;
+    if(filled < 2){
+      const msg = document.getElementById("ratingMsg");
+      msg.textContent = "Please rate at least 2 categories.";
+      msg.style.color = "#ff6b6b";
+      return;
+    }
+    if(!latest) return;
+
+    const avg = Object.values(scores).filter(v=>v>0).reduce((a,b)=>a+b,0) / Object.values(scores).filter(v=>v>0).length;
+    const sellerName = (latest.items && latest.items[0] && latest.items[0].sellerName) || "Sokoni Seller";
+    const user       = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+    const comment    = document.getElementById("ratingComment")?.value.trim() || "";
+
+    const entry = {
+      stars:        Math.round(avg),
+      avgScore:     parseFloat(avg.toFixed(1)),
+      delivery:     scores.delivery     || null,
+      responseTime: scores.response     || null,
+      returns:      scores.returns      || null,
+      satisfaction: scores.satisfaction || null,
+      comment,
+      buyerName: user?.name || "Anonymous",
+      orderId:   latest.id,
+      date:      new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
+      timestamp: Date.now()
+    };
+
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem("sokoniSellerRatings"))||{}; } catch(e){}
+    if(!all[sellerName]) all[sellerName] = [];
+    if(!all[sellerName].find(r => r.orderId === latest.id)){
+      all[sellerName].unshift(entry);
+      localStorage.setItem("sokoniSellerRatings", JSON.stringify(all));
+    }
+
+    /* Also save product ratings */
+    let prodRatings = {};
+    try { prodRatings = JSON.parse(localStorage.getItem("sokoniRatings"))||{}; } catch(e){}
+    (latest.items||[]).forEach(item => {
+      if(!prodRatings[item.id]) prodRatings[item.id] = [];
+      if(!prodRatings[item.id].find(r => r.orderId === latest.id)){
+        prodRatings[item.id].push({ stars: Math.round(avg), orderId: latest.id, timestamp: Date.now() });
+      }
+    });
+    localStorage.setItem("sokoniRatings", JSON.stringify(prodRatings));
+
+    /* Award +10 loyalty points for leaving a review */
+    const reviewPts = 10;
+    let ptsData = {total:0,history:[]};
+    try { ptsData = JSON.parse(localStorage.getItem("sokoniPoints"))||ptsData; } catch(e){}
+    const todayStr = new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"});
+    ptsData.total += reviewPts;
+    ptsData.history.unshift({points:reviewPts, orderId:latest?.id||"", date:todayStr, description:"⭐ Review bonus"});
+    localStorage.setItem("sokoniPoints", JSON.stringify(ptsData));
+
+    const msg = document.getElementById("ratingMsg");
+    msg.innerHTML = `✅ Thank you! You earned <strong style="color:#ffc107">+${reviewPts} loyalty pts</strong> for your review.`;
+    msg.style.color = "#71ff00";
+    document.getElementById("rateSellerBox").style.opacity = "0.6";
+    document.getElementById("rateSellerBox").style.pointerEvents = "none";
+  }
+
+  /* Build star rows on load */
+  CATEGORIES.forEach(c => buildStarRow(c.key, c.hints));
+
+  window.pickCatStar = pickCatStar;
+  window.submitSellerRating = submitSellerRating;
+</script>
+<script src="scroll-top.js" defer></script>
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="community.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Community</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

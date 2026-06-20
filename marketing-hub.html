@@ -1,0 +1,727 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Marketing Hub — Grow Your Brand in Kenya</title>
+<meta name="description" content="Find marketing professionals, book creative services, run ads, grow on social media, and track results — Kenya's central marketing growth platform.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#fb923c">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:100px;}
+
+/* ── NAV ── */
+.mh-nav{display:flex;align-items:center;gap:10px;padding:12px 18px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(16px);}
+.mh-logo{font-size:17px;font-weight:900;color:#fb923c;text-decoration:none;flex-shrink:0;}
+.mh-logo span{color:rgba(255,255,255,0.55);font-weight:400;}
+.mh-nav-links{display:flex;gap:8px;margin-left:auto;align-items:center;}
+.mh-nav-btn{padding:7px 13px;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;border:none;font-family:inherit;text-decoration:none;transition:all .18s;}
+.mh-nav-btn.outline{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);}
+.mh-nav-btn.outline:hover{border-color:rgba(255,255,255,0.22);color:white;}
+.mh-nav-btn.orange{background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.3);color:#fb923c;}
+.mh-nav-btn.orange:hover{background:rgba(249,115,22,0.2);}
+.mh-notif{width:36px;height:36px;border-radius:50%;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;position:relative;flex-shrink:0;}
+
+/* ── HERO ── */
+.mh-hero{background:linear-gradient(135deg,rgba(249,115,22,0.13),rgba(234,179,8,0.07),rgba(113,255,0,0.05));border-bottom:1px solid rgba(249,115,22,0.12);padding:48px 20px 36px;text-align:center;position:relative;overflow:hidden;}
+.mh-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(249,115,22,0.12),transparent);pointer-events:none;}
+.mh-hero-badge{display:inline-block;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.35);border-radius:999px;padding:5px 14px;font-size:11px;font-weight:800;color:#fb923c;margin-bottom:14px;letter-spacing:0.4px;text-transform:uppercase;}
+.mh-hero h1{font-size:clamp(22px,5vw,40px);font-weight:900;line-height:1.15;margin-bottom:10px;}
+.mh-hero h1 em{font-style:normal;background:linear-gradient(135deg,#fb923c,#fbbf24,#71ff00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.mh-hero-sub{font-size:14px;color:rgba(255,255,255,0.5);max-width:520px;margin:0 auto 24px;line-height:1.65;}
+.mh-search-row{display:flex;gap:8px;max-width:560px;margin:0 auto 24px;flex-wrap:wrap;}
+.mh-search-input{flex:1;min-width:200px;padding:13px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+.mh-search-input::placeholder{color:rgba(255,255,255,0.3);}
+.mh-search-input:focus{border-color:rgba(249,115,22,0.45);}
+.mh-search-btn{padding:13px 20px;background:linear-gradient(135deg,#fb923c,#f97316);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;flex-shrink:0;}
+.mh-hero-stats{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;}
+.mh-hstat{text-align:center;}
+.mh-hstat-val{font-size:20px;font-weight:900;color:#71ff00;}
+.mh-hstat-label{font-size:10px;color:rgba(255,255,255,0.35);font-weight:600;margin-top:2px;}
+
+/* ── CATEGORY TABS ── */
+.mh-tabs-wrap{position:sticky;top:57px;z-index:150;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);backdrop-filter:blur(12px);}
+.mh-tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 18px;scrollbar-width:none;}
+.mh-tabs::-webkit-scrollbar{display:none;}
+.mh-tab{flex-shrink:0;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);transition:all .18s;white-space:nowrap;font-family:inherit;}
+.mh-tab:hover{border-color:rgba(255,255,255,0.18);color:rgba(255,255,255,0.8);}
+.mh-tab.active{background:rgba(249,115,22,0.12);border-color:rgba(249,115,22,0.35);color:#fb923c;}
+
+/* ── BODY ── */
+.mh-body{max-width:1200px;margin:0 auto;padding:0 18px 60px;}
+
+/* ── SECTION HEADING ── */
+.mh-sec{font-size:14px;font-weight:900;color:white;margin:28px 0 14px;display:flex;align-items:center;gap:8px;}
+.mh-sec::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+/* ── SERVICES QUICK GRID ── */
+.mh-services-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:8px;}
+.mh-svc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 12px;text-align:center;cursor:pointer;transition:all .2s;text-decoration:none;display:block;}
+.mh-svc-card:hover{border-color:rgba(249,115,22,0.3);background:rgba(249,115,22,0.04);transform:translateY(-2px);}
+.mh-svc-icon{font-size:26px;margin-bottom:8px;}
+.mh-svc-title{font-size:12px;font-weight:800;color:white;margin-bottom:4px;line-height:1.3;}
+.mh-svc-price{font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;}
+
+/* ── CATEGORY OVERVIEW GRID ── */
+.mh-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
+.mh-cat-card{border-radius:16px;padding:18px;cursor:pointer;transition:all .2s;text-decoration:none;display:flex;flex-direction:column;gap:8px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);}
+.mh-cat-card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,0.15);}
+.mh-cat-icon{font-size:28px;}
+.mh-cat-label{font-size:13px;font-weight:900;color:white;}
+.mh-cat-desc{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.5;}
+.mh-cat-count{font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;display:inline-block;}
+
+/* ── CATEGORY SERVICES LIST ── */
+.mh-svc-pills{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 20px;}
+.mh-svc-pill{padding:7px 14px;border-radius:99px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);font-size:12px;color:rgba(255,255,255,0.65);cursor:pointer;transition:all .18s;font-family:inherit;}
+.mh-svc-pill:hover,.mh-svc-pill.active{background:rgba(249,115,22,0.1);border-color:rgba(249,115,22,0.3);color:#fb923c;}
+
+/* ── PROVIDER CARDS ── */
+.mh-providers-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;}
+.mh-pcard{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:20px;cursor:pointer;transition:all .2s;position:relative;}
+.mh-pcard:hover{border-color:rgba(249,115,22,0.25);transform:translateY(-3px);box-shadow:0 8px 32px rgba(249,115,22,0.07);}
+.mh-pcard.featured-card{border-color:rgba(249,115,22,0.22);background:rgba(249,115,22,0.04);}
+.mh-featured-flag{position:absolute;top:14px;right:14px;background:rgba(249,115,22,0.18);border:1px solid rgba(249,115,22,0.3);color:#fb923c;font-size:9px;font-weight:900;padding:3px 9px;border-radius:6px;text-transform:uppercase;letter-spacing:0.4px;}
+.mh-pcard-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;}
+.mh-avatar{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:white;flex-shrink:0;}
+.mh-pcard-info{flex:1;min-width:0;}
+.mh-pcard-name{font-size:14px;font-weight:900;color:white;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mh-pcard-loc{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:5px;}
+.mh-pcard-badges{display:flex;gap:5px;flex-wrap:wrap;}
+.mh-badge-verified{font-size:10px;font-weight:800;color:#71ff00;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);padding:2px 8px;border-radius:5px;}
+.mh-badge-cat{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:rgba(249,115,22,0.12);color:#fb923c;}
+.mh-pcard-services{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;}
+.mh-svc-tag{font-size:10px;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.55);}
+.mh-pcard-bottom{display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;gap:8px;}
+.mh-rating{display:flex;align-items:center;gap:5px;}
+.mh-stars{color:#fbbf24;font-size:12px;letter-spacing:1px;}
+.mh-rating-num{font-size:12px;font-weight:800;color:white;}
+.mh-review-count{font-size:10px;color:rgba(255,255,255,0.35);}
+.mh-price{font-size:12px;font-weight:900;color:#71ff00;}
+.mh-quote-btn{padding:8px 14px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);border-radius:9px;color:#fb923c;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .18s;white-space:nowrap;}
+.mh-quote-btn:hover{background:rgba(249,115,22,0.2);}
+.mh-chat-btn{padding:8px 12px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .18s;white-space:nowrap;}
+.mh-chat-btn:hover{background:rgba(113,255,0,0.14);}
+
+/* ── FEATURED BANNER ── */
+.mh-featured-banner{background:linear-gradient(135deg,rgba(249,115,22,0.1),rgba(113,255,0,0.06));border:1px solid rgba(249,115,22,0.2);border-radius:18px;padding:20px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:20px 0 28px;}
+.mh-fb-icon{font-size:40px;flex-shrink:0;}
+.mh-fb-body{flex:1;min-width:200px;}
+.mh-fb-title{font-size:15px;font-weight:900;color:white;margin-bottom:6px;}
+.mh-fb-sub{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;}
+.mh-fb-btn{padding:11px 20px;background:linear-gradient(135deg,#fb923c,#f97316);border:none;border-radius:11px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;text-decoration:none;display:inline-block;}
+
+/* ── STATS ROW ── */
+.mh-stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px;}
+.mh-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;}
+.mh-stat-val{font-size:24px;font-weight:900;color:#71ff00;margin-bottom:4px;}
+.mh-stat-label{font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;}
+
+/* ── EMPTY STATE ── */
+.mh-empty{text-align:center;padding:48px 24px;color:rgba(255,255,255,0.3);}
+.mh-empty-icon{font-size:40px;margin-bottom:12px;}
+.mh-empty-txt{font-size:14px;font-weight:700;}
+
+/* ── MODAL OVERLAY ── */
+.mh-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(12px);z-index:2000;display:flex;align-items:flex-end;justify-content:center;padding:0;}
+@media(min-width:600px){.mh-modal-overlay{align-items:center;padding:20px;}}
+.mh-modal{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:24px 24px 0 0;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;padding:24px 20px 32px;}
+@media(min-width:600px){.mh-modal{border-radius:24px;}}
+.mh-modal-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
+.mh-modal-title{font-size:17px;font-weight:900;color:white;line-height:1.3;}
+.mh-modal-close{background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;padding:0;line-height:1;}
+.mh-modal-close:hover{color:white;}
+.mh-input{width:100%;padding:13px 15px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;resize:vertical;}
+.mh-input::placeholder{color:rgba(255,255,255,0.3);}
+.mh-input:focus{border-color:rgba(249,115,22,0.45);}
+.mh-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);margin-bottom:5px;display:block;}
+.mh-submit{width:100%;padding:14px;background:linear-gradient(135deg,#fb923c,#f97316);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;margin-top:6px;}
+.mh-submit:hover{filter:brightness(1.1);}
+.mh-submit:disabled{opacity:0.5;cursor:not-allowed;}
+
+/* ── PROVIDER DETAIL ── */
+.mh-detail-avatar{width:64px;height:64px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:white;margin-bottom:14px;}
+.mh-detail-portfolio{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0;}
+.mh-portfolio-item{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;font-size:12px;color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:8px;}
+.mh-review-list{display:flex;flex-direction:column;gap:10px;margin:12px 0;}
+.mh-review-item{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 14px;}
+.mh-review-stars{color:#fbbf24;font-size:11px;margin-bottom:4px;}
+.mh-review-text{font-size:12px;color:rgba(255,255,255,0.6);line-height:1.6;margin-bottom:6px;}
+.mh-review-author{font-size:10px;color:rgba(255,255,255,0.3);}
+.mh-divider{height:1px;background:rgba(255,255,255,0.07);margin:18px 0;}
+
+/* ── SUCCESS TOAST ── */
+.mh-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid rgba(113,255,0,0.3);border-radius:14px;padding:14px 22px;font-size:13px;font-weight:700;color:#71ff00;z-index:3000;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,0.6);animation:toastIn .3s ease;max-width:90vw;}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(16px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+
+/* ── POST A PROJECT CTA ── */
+.mh-post-cta{background:linear-gradient(135deg,rgba(249,115,22,0.09),rgba(234,179,8,0.06));border:1px solid rgba(249,115,22,0.18);border-radius:20px;padding:28px;margin:28px 0;text-align:center;}
+.mh-post-cta h3{font-size:20px;font-weight:900;margin-bottom:8px;}
+.mh-post-cta p{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:20px;line-height:1.6;}
+.mh-cta-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+
+/* ── RESPONSIVE ── */
+@media(max-width:520px){
+  .mh-providers-grid{grid-template-columns:1fr;}
+  .mh-cat-grid{grid-template-columns:1fr 1fr;}
+  .mh-services-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));}
+  .mh-nav-links .mh-nav-btn.outline:not(.keep){display:none;}
+  .mh-search-row{flex-direction:column;}
+  .mh-search-btn{width:100%;}
+}
+</style>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Marketing Hub">
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-marketing.js"></script>
+<script src="sokoni-inbox.js"></script>
+
+<!-- ── NAV ── -->
+<nav class="mh-nav">
+  <a href="index.html" class="mh-logo">🎯 SOKONI <span>Marketing</span></a>
+  <div class="mh-nav-links">
+    <a href="marketing.html" class="mh-nav-btn outline">🚀 Boost Listing</a>
+    <a href="seller.html" class="mh-nav-btn outline keep">🏪 My Store</a>
+    <button class="mh-nav-btn orange" onclick="openPostProject()">💼 Post a Project</button>
+    <a href="notifications.html" class="mh-notif" title="Notifications" style="text-decoration:none;position:relative;">🔔<span id="mhNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
+  </div>
+</nav>
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('mhNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
+<!-- ── HERO ── -->
+<div class="mh-hero">
+  <div class="mh-hero-badge">📢 Kenya's Marketing Growth Platform</div>
+  <h1>Grow Your Brand<br>with <em>Expert Marketing</em></h1>
+  <p class="mh-hero-sub">Connect with top marketing professionals, book services, run campaigns, and track your growth — all in one place.</p>
+  <div class="mh-search-row">
+    <input class="mh-search-input" type="text" id="mhSearchInput" placeholder="Search services, agencies, freelancers..." oninput="onSearch()" onkeydown="if(event.key==='Enter')onSearch()">
+    <button class="mh-search-btn" onclick="onSearch()">Search</button>
+  </div>
+  <div class="mh-hero-stats">
+    <div class="mh-hstat"><div class="mh-hstat-val">120+</div><div class="mh-hstat-label">Providers</div></div>
+    <div class="mh-hstat"><div class="mh-hstat-val">8</div><div class="mh-hstat-label">Categories</div></div>
+    <div class="mh-hstat"><div class="mh-hstat-val">1,200+</div><div class="mh-hstat-label">Projects Done</div></div>
+    <div class="mh-hstat"><div class="mh-hstat-val">4.8★</div><div class="mh-hstat-label">Avg Rating</div></div>
+  </div>
+</div>
+
+<!-- ── CATEGORY TABS ── -->
+<div class="mh-tabs-wrap">
+  <div class="mh-tabs" id="mhTabs"></div>
+</div>
+
+<!-- ── MAIN BODY ── -->
+<div class="mh-body">
+  <div id="mhContent"></div>
+</div>
+
+<!-- ── PROVIDER DETAIL MODAL ── -->
+<div id="mhDetailModal" class="mh-modal-overlay" style="display:none;" onclick="if(event.target===this)closeDetail()">
+  <div class="mh-modal" id="mhDetailContent"></div>
+</div>
+
+<!-- ── QUOTE REQUEST MODAL ── -->
+<div id="mhQuoteModal" class="mh-modal-overlay" style="display:none;" onclick="if(event.target===this)closeQuote()">
+  <div class="mh-modal" id="mhQuoteContent"></div>
+</div>
+
+<!-- ── POST PROJECT MODAL ── -->
+<div id="mhProjectModal" class="mh-modal-overlay" style="display:none;" onclick="if(event.target===this)closePostProject()">
+  <div class="mh-modal" id="mhProjectContent"></div>
+</div>
+
+<script src="sokoni-pay.js" defer></script>
+<script src="auth.js" defer></script>
+
+<script>
+/* ============================================================
+   MARKETING HUB — UI Controller
+============================================================ */
+let _activeTab = 'all';
+let _activeService = '';
+let _searchQuery = '';
+let _quoteProviderId = null;
+
+// ---- INIT ----
+(async function init() {
+  renderTabs();
+  renderContent();
+  if (window.MKT?.loadFirestoreProviders) {
+    await MKT.loadFirestoreProviders();
+    renderContent(); // re-render with real data
+  }
+})();
+
+// ---- TABS ----
+function renderTabs() {
+  const wrap = document.getElementById('mhTabs');
+  wrap.innerHTML = MKT.CATEGORIES.map(c => `
+    <button class="mh-tab${_activeTab===c.id?' active':''}" onclick="selectTab('${c.id}')">
+      ${c.icon} ${c.label}
+    </button>
+  `).join('');
+}
+
+function selectTab(id) {
+  _activeTab = id;
+  _activeService = '';
+  renderTabs();
+  renderContent();
+  document.getElementById('mhContent').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ---- SEARCH ----
+function onSearch() {
+  _searchQuery = document.getElementById('mhSearchInput').value.trim();
+  _activeTab = 'all';
+  renderTabs();
+  renderContent();
+}
+
+// ---- MAIN CONTENT ----
+function renderContent() {
+  const el = document.getElementById('mhContent');
+  if (_searchQuery) {
+    renderSearchResults(el);
+    return;
+  }
+  if (_activeTab === 'all') renderAll(el);
+  else renderCategory(el, _activeTab);
+}
+
+function renderAll(el) {
+  const featured = MKT.PROVIDERS.filter(p => p.featured);
+  const catHTML = MKT.CATEGORIES.slice(1).map(c => {
+    const count = MKT.PROVIDERS.filter(p => p.category===c.id).length;
+    return `
+    <div class="mh-cat-card" onclick="selectTab('${c.id}')" style="border-color:rgba(${hexToRgb(c.color)},0.15);">
+      <div class="mh-cat-icon">${c.icon}</div>
+      <div class="mh-cat-label">${c.label}</div>
+      <div class="mh-cat-desc">${c.desc}</div>
+      <span class="mh-cat-count" style="background:rgba(${hexToRgb(c.color)},0.12);color:${c.color};">${count} provider${count!==1?'s':''}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="mh-featured-banner">
+      <div class="mh-fb-icon">🚀</div>
+      <div class="mh-fb-body">
+        <div class="mh-fb-title">The central growth platform for every SOKONI business</div>
+        <div class="mh-fb-sub">Find verified marketing professionals, book creative services, launch campaigns, and grow your brand — from advertising to analytics, all in one hub.</div>
+      </div>
+      <button class="mh-fb-btn" onclick="openPostProject()">💼 Post a Project</button>
+    </div>
+
+    <div class="mh-sec">📊 Platform at a Glance</div>
+    <div class="mh-stats-row">
+      <div class="mh-stat"><div class="mh-stat-val">120+</div><div class="mh-stat-label">Verified Providers</div></div>
+      <div class="mh-stat"><div class="mh-stat-val">8</div><div class="mh-stat-label">Service Categories</div></div>
+      <div class="mh-stat"><div class="mh-stat-val">1,200+</div><div class="mh-stat-label">Projects Completed</div></div>
+      <div class="mh-stat"><div class="mh-stat-val">KES 800</div><div class="mh-stat-label">Starting Price</div></div>
+      <div class="mh-stat"><div class="mh-stat-val">4.8★</div><div class="mh-stat-label">Avg Rating</div></div>
+    </div>
+
+    <div class="mh-sec">🗂️ Browse by Category</div>
+    <div class="mh-cat-grid">${catHTML}</div>
+
+    <div class="mh-sec">⚡ Popular Services</div>
+    <div class="mh-services-grid">${MKT.SERVICES_GRID.map(s => `
+      <div class="mh-svc-card" onclick="selectTab('${s.cat}')">
+        <div class="mh-svc-icon">${s.icon}</div>
+        <div class="mh-svc-title">${MKT.esc(s.title)}</div>
+        <div class="mh-svc-price">${s.price}</div>
+      </div>`).join('')}</div>
+
+    <div class="mh-sec">⭐ Featured Providers</div>
+    <div class="mh-providers-grid">${featured.map(p => providerCard(p)).join('')}</div>
+
+    ${postProjectCTA()}
+  `;
+}
+
+function renderCategory(el, catId) {
+  const cat = MKT.getCat(catId);
+  const providers = MKT.getProviders(catId);
+  const servicesHTML = (cat.services||[]).map(s => `
+    <button class="mh-svc-pill${_activeService===s?' active':''}" onclick="filterService('${MKT.esc(s)}')">${s}</button>
+  `).join('');
+
+  const filtered = _activeService
+    ? providers.filter(p => p.services.includes(_activeService))
+    : providers;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;padding:20px 0 4px;">
+      <div style="font-size:36px;">${cat.icon}</div>
+      <div>
+        <div style="font-size:20px;font-weight:900;">${cat.label}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:3px;">${cat.desc}</div>
+      </div>
+    </div>
+
+    <div class="mh-sec" style="margin-top:18px;">🗂️ Services</div>
+    <div class="mh-svc-pills">
+      <button class="mh-svc-pill${!_activeService?' active':''}" onclick="filterService('')">All</button>
+      ${servicesHTML}
+    </div>
+
+    <div class="mh-sec">👥 Providers ${_activeService?'· <span style="color:#fb923c;font-weight:700;">'+MKT.esc(_activeService)+'</span>':''}</div>
+    ${filtered.length
+      ? `<div class="mh-providers-grid">${filtered.map(p => providerCard(p)).join('')}</div>`
+      : `<div class="mh-empty"><div class="mh-empty-icon">🔍</div><div class="mh-empty-txt">No providers found for this filter</div></div>`
+    }
+
+    ${postProjectCTA()}
+  `;
+}
+
+function renderSearchResults(el) {
+  const results = MKT.getProviders('all', _searchQuery);
+  el.innerHTML = `
+    <div style="padding:20px 0 4px;">
+      <div style="font-size:15px;font-weight:900;margin-bottom:4px;">Search results for "<span style="color:#fb923c;">${MKT.esc(_searchQuery)}</span>"</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);">${results.length} provider${results.length!==1?'s':''} found</div>
+    </div>
+    ${results.length
+      ? `<div class="mh-providers-grid" style="margin-top:16px;">${results.map(p => providerCard(p)).join('')}</div>`
+      : `<div class="mh-empty"><div class="mh-empty-icon">🔍</div><div class="mh-empty-txt">No providers match "${MKT.esc(_searchQuery)}"</div><div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.3);">Try a different keyword or browse categories</div></div>`
+    }
+    ${postProjectCTA()}
+  `;
+}
+
+function filterService(svc) {
+  _activeService = svc;
+  renderContent();
+}
+
+// ---- PROVIDER CARD ----
+function providerCard(p) {
+  const cat = MKT.getCat(p.category);
+  const tags = p.services.slice(0,3).map(s => `<span class="mh-svc-tag">${MKT.esc(s)}</span>`).join('');
+  return `
+  <div class="mh-pcard${p.featured?' featured-card':''}" onclick="openDetail('${p.id}')">
+    ${p.featured ? '<div class="mh-featured-flag">⭐ Featured</div>' : ''}
+    <div class="mh-pcard-top">
+      <div class="mh-avatar" style="background:${p.color};">${MKT.esc(p.initials)}</div>
+      <div class="mh-pcard-info">
+        <div class="mh-pcard-name" title="${MKT.esc(p.name)}">${MKT.esc(p.name)}</div>
+        <div class="mh-pcard-loc">📍 ${MKT.esc(p.location)}</div>
+        <div class="mh-pcard-badges">
+          ${p.verified ? '<span class="mh-badge-verified">✓ Verified</span>' : ''}
+          ${cat ? `<span class="mh-badge-cat" style="background:rgba(${hexToRgb(cat.color)},0.12);color:${cat.color};">${cat.icon} ${cat.label}</span>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="mh-pcard-services">${tags}${p.services.length>3?`<span class="mh-svc-tag" style="color:rgba(255,255,255,0.3);">+${p.services.length-3} more</span>`:''}</div>
+    <div class="mh-pcard-bottom">
+      <div>
+        <div class="mh-rating">
+          <span class="mh-stars">${'★'.repeat(Math.floor(p.rating))}${p.rating%1>=0.5?'½':''}</span>
+          <span class="mh-rating-num">${p.rating}</span>
+          <span class="mh-review-count">(${p.reviews})</span>
+        </div>
+        <div class="mh-price">From KES ${p.priceFrom.toLocaleString()}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="mh-chat-btn" onclick="event.stopPropagation();if(window.SokoniInbox)SokoniInbox.openChat({otherUid:'${p.id}',otherName:'${p.name.replace(/'/g,'')}',type:'marketing',context:'${(p.services[0]||'').replace(/'/g,'')||'Marketing Service'}'});else window.location.href='messages.html';">💬</button>
+        <button class="mh-quote-btn" onclick="event.stopPropagation();openQuote('${p.id}')">Get Quote</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function postProjectCTA() {
+  return `
+  <div class="mh-post-cta">
+    <h3>🎯 Can't find what you need?</h3>
+    <p>Post your project and let verified marketing professionals come to you with tailored proposals.</p>
+    <div class="mh-cta-btns">
+      <button class="mh-fb-btn" onclick="openPostProject()">💼 Post a Project Free</button>
+      <a href="marketing.html" style="padding:11px 20px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:rgba(255,255,255,0.7);font-weight:700;font-size:13px;text-decoration:none;">🚀 Boost My Listing</a>
+    </div>
+  </div>`;
+}
+
+// ---- PROVIDER DETAIL MODAL ----
+function openDetail(id) {
+  const p = MKT.getProvider(id);
+  if (!p) return;
+  const cat = MKT.getCat(p.category);
+  const portfolioHTML = (p.portfolio||[]).map(item => `
+    <div class="mh-portfolio-item">${item}</div>
+  `).join('');
+  const svcPills = p.services.map(s => `<span class="mh-svc-pill" style="cursor:default;">${MKT.esc(s)}</span>`).join('');
+  const mockReviews = [
+    {stars:5, text:`Excellent work! Results exceeded expectations. Will definitely hire again.`, author:'James M. · Nairobi'},
+    {stars:5, text:`Professional, fast, and communicates well. Delivered on time.`, author:'Aisha K. · Mombasa'},
+    {stars:4, text:`Good quality and reasonable price. Satisfied with the outcome.`, author:'Peter O. · Kisumu'},
+  ];
+  const reviewsHTML = mockReviews.map(r => `
+    <div class="mh-review-item">
+      <div class="mh-review-stars">${'★'.repeat(r.stars)}</div>
+      <div class="mh-review-text">${MKT.esc(r.text)}</div>
+      <div class="mh-review-author">${MKT.esc(r.author)}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('mhDetailContent').innerHTML = `
+    <div class="mh-modal-head">
+      <div class="mh-modal-title">${MKT.esc(p.name)}</div>
+      <button class="mh-modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+      <div class="mh-detail-avatar" style="background:${p.color};">${MKT.esc(p.initials)}</div>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
+          ${p.verified?'<span class="mh-badge-verified">✓ Verified</span>':''}
+          ${cat?`<span class="mh-badge-cat" style="background:rgba(${hexToRgb(cat.color)},0.12);color:${cat.color};">${cat.icon} ${cat.label}</span>`:''}
+          ${p.featured?'<span style="font-size:10px;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.2);padding:2px 8px;border-radius:5px;">⭐ Featured</span>':''}
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:6px;">📍 ${MKT.esc(p.location)} · ⚡ Responds ${MKT.esc(p.responseTime)} · ✅ ${p.completedJobs} jobs</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="color:#fbbf24;font-size:13px;">${'★'.repeat(Math.floor(p.rating))}</span>
+          <span style="font-size:13px;font-weight:900;">${p.rating}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.35);">(${p.reviews} reviews)</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:rgba(255,255,255,0.6);line-height:1.75;margin-bottom:16px;">${MKT.esc(p.bio)}</div>
+
+    <div class="mh-divider"></div>
+    <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.55);margin-bottom:10px;">SERVICES OFFERED</div>
+    <div class="mh-svc-pills" style="margin-bottom:16px;">${svcPills}</div>
+
+    <div class="mh-divider"></div>
+    <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.55);margin-bottom:10px;">PORTFOLIO</div>
+    <div class="mh-detail-portfolio">${portfolioHTML}</div>
+
+    <div class="mh-divider"></div>
+    <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.55);margin-bottom:10px;">RECENT REVIEWS</div>
+    <div class="mh-review-list">${reviewsHTML}</div>
+
+    <div class="mh-divider"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Starting from</div>
+        <div style="font-size:22px;font-weight:900;color:#71ff00;">KES ${p.priceFrom.toLocaleString()}</div>
+      </div>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;">
+        <button onclick="if(window.SokoniInbox)SokoniInbox.openChat({otherUid:'${p.id}',otherName:'${p.name.replace(/'/g,'')}',type:'marketing',context:'${(p.services[0]||'').replace(/'/g,'')||'Marketing Service'}'});else window.location.href='messages.html';" style="flex-shrink:0;padding:13px 18px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:12px;color:#71ff00;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">💬 Message</button>
+        <button style="flex:1;padding:13px 28px;background:linear-gradient(135deg,#fb923c,#f97316);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;" onclick="closeDetail();openQuote('${p.id}')">💼 Request a Quote</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('mhDetailModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('mhDetailModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// ---- QUOTE REQUEST MODAL ----
+function openQuote(id) {
+  _quoteProviderId = id;
+  const p = MKT.getProvider(id);
+  if (!p) return;
+
+  const serviceOptions = p.services.map(s => `<option value="${MKT.esc(s)}">${MKT.esc(s)}</option>`).join('');
+  document.getElementById('mhQuoteContent').innerHTML = `
+    <div class="mh-modal-head">
+      <div class="mh-modal-title">💼 Request a Quote<br><span style="font-size:13px;color:rgba(255,255,255,0.45);font-weight:500;">${MKT.esc(p.name)}</span></div>
+      <button class="mh-modal-close" onclick="closeQuote()">✕</button>
+    </div>
+    <div style="background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.18);border-radius:12px;padding:12px 14px;margin-bottom:18px;display:flex;align-items:center;gap:10px;">
+      <div class="mh-avatar" style="background:${p.color};width:36px;height:36px;font-size:13px;border-radius:10px;">${MKT.esc(p.initials)}</div>
+      <div>
+        <div style="font-size:12px;font-weight:800;">${MKT.esc(p.name)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">⭐ ${p.rating} · ${p.completedJobs} jobs · From KES ${p.priceFrom.toLocaleString()}</div>
+      </div>
+    </div>
+    <label class="mh-label">Service needed *</label>
+    <select class="mh-input" id="qService" style="cursor:pointer;">
+      <option value="">Select a service...</option>
+      ${serviceOptions}
+    </select>
+    <label class="mh-label">Your name *</label>
+    <input class="mh-input" type="text" id="qName" placeholder="Full name">
+    <label class="mh-label">Phone number *</label>
+    <input class="mh-input" type="tel" id="qPhone" placeholder="07XX XXX XXX">
+    <label class="mh-label">Business / project name</label>
+    <input class="mh-input" type="text" id="qBusiness" placeholder="e.g. My Fashion Store">
+    <label class="mh-label">Budget range</label>
+    <select class="mh-input" id="qBudget" style="cursor:pointer;">
+      <option value="">Select budget...</option>
+      <option value="under-5k">Under KES 5,000</option>
+      <option value="5k-15k">KES 5,000 – 15,000</option>
+      <option value="15k-50k">KES 15,000 – 50,000</option>
+      <option value="50k-plus">KES 50,000+</option>
+      <option value="discuss">Open to discuss</option>
+    </select>
+    <label class="mh-label">Timeline</label>
+    <select class="mh-input" id="qTimeline" style="cursor:pointer;">
+      <option value="">Select timeline...</option>
+      <option value="asap">ASAP (within 48 hrs)</option>
+      <option value="1week">Within 1 week</option>
+      <option value="2weeks">Within 2 weeks</option>
+      <option value="1month">Within 1 month</option>
+      <option value="flexible">Flexible</option>
+    </select>
+    <label class="mh-label">Project brief *</label>
+    <textarea class="mh-input" id="qBrief" rows="4" placeholder="Describe what you need, your goals, target audience..."></textarea>
+    <button class="mh-submit" id="qSubmitBtn" onclick="submitQuote()">📩 Send Quote Request</button>
+    <p style="font-size:10px;color:rgba(255,255,255,0.25);text-align:center;margin-top:10px;">Provider will respond within ${MKT.esc(p.responseTime)}. Free to request — no commitment.</p>
+  `;
+  document.getElementById('mhQuoteModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeQuote() {
+  document.getElementById('mhQuoteModal').style.display = 'none';
+  document.body.style.overflow = '';
+  _quoteProviderId = null;
+}
+
+async function submitQuote() {
+  const svc    = document.getElementById('qService')?.value;
+  const name   = document.getElementById('qName')?.value.trim();
+  const phone  = document.getElementById('qPhone')?.value.trim();
+  const brief  = document.getElementById('qBrief')?.value.trim();
+  if (!svc || !name || !phone || !brief) {
+    showToast('⚠️ Please fill in all required fields', 'error');
+    return;
+  }
+  const btn = document.getElementById('qSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const p = MKT.getProvider(_quoteProviderId);
+  await MKT.saveBooking({
+    providerId: _quoteProviderId,
+    providerName: p?.name || '',
+    service: svc,
+    clientName: name,
+    clientPhone: phone,
+    business: document.getElementById('qBusiness')?.value.trim() || '',
+    budget: document.getElementById('qBudget')?.value || '',
+    timeline: document.getElementById('qTimeline')?.value || '',
+    brief: brief,
+    type: 'quote_request',
+  });
+  closeQuote();
+  showToast('✅ Quote request sent! The provider will contact you shortly.');
+}
+
+// ---- POST A PROJECT MODAL ----
+function openPostProject() {
+  document.getElementById('mhProjectContent').innerHTML = `
+    <div class="mh-modal-head">
+      <div class="mh-modal-title">💼 Post a Project</div>
+      <button class="mh-modal-close" onclick="closePostProject()">✕</button>
+    </div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;line-height:1.6;">Describe your project and verified providers will send you proposals. Free to post.</p>
+    <label class="mh-label">Project title *</label>
+    <input class="mh-input" type="text" id="ppTitle" placeholder="e.g. Need a Logo for my Business">
+    <label class="mh-label">Category *</label>
+    <select class="mh-input" id="ppCategory" style="cursor:pointer;">
+      <option value="">Select category...</option>
+      ${MKT.CATEGORIES.slice(1).map(c => `<option value="${c.id}">${c.icon} ${c.label}</option>`).join('')}
+    </select>
+    <label class="mh-label">Your name *</label>
+    <input class="mh-input" type="text" id="ppName" placeholder="Full name">
+    <label class="mh-label">Phone / WhatsApp *</label>
+    <input class="mh-input" type="tel" id="ppPhone" placeholder="07XX XXX XXX">
+    <label class="mh-label">Budget</label>
+    <select class="mh-input" id="ppBudget" style="cursor:pointer;">
+      <option value="">Select budget...</option>
+      <option value="under-5k">Under KES 5,000</option>
+      <option value="5k-15k">KES 5,000 – 15,000</option>
+      <option value="15k-50k">KES 15,000 – 50,000</option>
+      <option value="50k-plus">KES 50,000+</option>
+      <option value="discuss">Open to discuss</option>
+    </select>
+    <label class="mh-label">Project description *</label>
+    <textarea class="mh-input" id="ppDesc" rows="5" placeholder="Describe your project in detail — goals, deliverables, target audience, any specific requirements..."></textarea>
+    <button class="mh-submit" id="ppSubmitBtn" onclick="submitProject()">🚀 Post My Project</button>
+    <p style="font-size:10px;color:rgba(255,255,255,0.25);text-align:center;margin-top:10px;">Providers will contact you within 24 hours with proposals.</p>
+  `;
+  document.getElementById('mhProjectModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closePostProject() {
+  document.getElementById('mhProjectModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function submitProject() {
+  const title    = document.getElementById('ppTitle')?.value.trim();
+  const category = document.getElementById('ppCategory')?.value;
+  const name     = document.getElementById('ppName')?.value.trim();
+  const phone    = document.getElementById('ppPhone')?.value.trim();
+  const desc     = document.getElementById('ppDesc')?.value.trim();
+  if (!title || !category || !name || !phone || !desc) {
+    showToast('⚠️ Please fill in all required fields', 'error');
+    return;
+  }
+  const btn = document.getElementById('ppSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Posting...';
+  await MKT.saveBooking({
+    type: 'project_post',
+    title, category, clientName: name, clientPhone: phone,
+    budget: document.getElementById('ppBudget')?.value || '',
+    description: desc,
+  });
+  closePostProject();
+  showToast('✅ Project posted! Providers will contact you with proposals.');
+}
+
+// ---- TOAST ----
+function showToast(msg, type) {
+  const existing = document.querySelector('.mh-toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'mh-toast';
+  if (type === 'error') {
+    t.style.borderColor = 'rgba(239,68,68,0.4)';
+    t.style.color = '#f87171';
+  }
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.style.opacity='0', 3200);
+  setTimeout(() => t.remove(), 3600);
+}
+
+// ---- UTILITY ----
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+</script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'marketing', category:'advertising'})" style="padding:12px 28px;background:#c084fc;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

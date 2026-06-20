@@ -1,0 +1,852 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI BnB Hub — Short Stays, Hotels &amp; Accommodation Kenya</title>
+<meta name="description" content="Book Airbnb-style stays, hotels, guesthouses, vacation homes and serviced apartments across Kenya. Diani, Nairobi, Mombasa and more.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ef4444">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+
+/* NAV */
+.bh-nav{display:flex;align-items:center;gap:12px;padding:12px 18px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.bh-logo{font-size:18px;font-weight:900;color:#ef4444;text-decoration:none;}
+.bh-nav-links{display:flex;gap:8px;margin-left:auto;align-items:center;}
+.bh-nav-btn{padding:7px 14px;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;border:none;font-family:inherit;text-decoration:none;}
+.bh-nav-btn.outline{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);}
+.bh-nav-btn.red{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;}
+.bh-notif{width:36px;height:36px;border-radius:50%;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;position:relative;flex-shrink:0;}
+
+/* HERO */
+.bh-hero{background:linear-gradient(135deg,rgba(239,68,68,0.14),rgba(220,38,38,0.06));border-bottom:1px solid rgba(239,68,68,0.12);padding:44px 18px 36px;text-align:center;}
+.bh-hero h1{font-size:clamp(24px,5vw,38px);font-weight:900;margin-bottom:10px;line-height:1.2;}
+.bh-hero h1 span{color:#ef4444;}
+.bh-hero p{color:rgba(255,255,255,0.5);font-size:14px;max-width:520px;margin:0 auto 22px;}
+.bh-stats{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:22px;}
+.bh-stat{text-align:center;}
+.bh-stat-num{font-size:20px;font-weight:900;color:#ef4444;}
+.bh-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);}
+
+/* SEARCH */
+.bh-search-row{display:flex;max-width:700px;margin:0 auto;gap:8px;flex-wrap:wrap;}
+.bh-search-input{flex:1;min-width:180px;padding:13px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;font-family:inherit;outline:none;}
+.bh-search-input:focus{border-color:rgba(239,68,68,0.4);}
+.bh-search-btn{padding:13px 22px;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.bh-date-row{display:flex;gap:8px;flex-wrap:wrap;max-width:700px;margin:10px auto 0;}
+.bh-date-input{flex:1;min-width:140px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;outline:none;}
+.bh-date-input:focus{border-color:rgba(239,68,68,0.4);}
+.bh-guest-sel{min-width:120px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;font-family:inherit;outline:none;cursor:pointer;}
+
+/* BODY */
+.bh-body{max-width:1000px;margin:0 auto;padding:16px;}
+
+/* TYPE TABS */
+.bh-type-bar{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:14px;}
+.bh-type-bar::-webkit-scrollbar{display:none;}
+.bh-type{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
+.bh-type.active,.bh-type:hover{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:#ef4444;}
+
+/* FILTER ROW */
+.bh-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.bh-filter-sel{padding:9px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:13px;font-family:inherit;cursor:pointer;outline:none;min-width:110px;}
+.bh-filter-sel:focus{border-color:rgba(239,68,68,0.4);}
+.bh-filter-btn{padding:9px 16px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#ef4444;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;}
+.bh-filter-reset{padding:9px 14px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;font-family:inherit;}
+
+/* SECTION HEADER */
+.bh-sh{font-size:14px;font-weight:800;color:white;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+.bh-sh::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+/* LISTING GRID */
+.bh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px;}
+.bnb-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;overflow:hidden;cursor:pointer;transition:all .2s;position:relative;}
+.bnb-card:hover{border-color:rgba(239,68,68,0.3);transform:translateY(-2px);}
+.bnb-card-img{height:160px;display:flex;align-items:center;justify-content:center;font-size:64px;position:relative;}
+.bnb-card-img.airbnb{background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(220,38,38,0.08));}
+.bnb-card-img.hotel{background:linear-gradient(135deg,rgba(168,85,247,0.15),rgba(139,92,246,0.08));}
+.bnb-card-img.guesthouse{background:linear-gradient(135deg,rgba(34,197,94,0.15),rgba(16,185,129,0.08));}
+.bnb-card-img.serviced{background:linear-gradient(135deg,rgba(14,165,233,0.15),rgba(2,132,199,0.08));}
+.bnb-card-img.vacation{background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(217,119,6,0.08));}
+.bnb-card-img.holiday{background:linear-gradient(135deg,rgba(236,72,153,0.15),rgba(219,39,119,0.08));}
+.bnb-card-img.hostel{background:linear-gradient(135deg,rgba(107,114,128,0.15),rgba(75,85,99,0.08));}
+.bnb-card-img.villa{background:linear-gradient(135deg,rgba(245,158,11,0.18),rgba(234,88,12,0.09));}
+.bnb-type-badge{position:absolute;top:10px;left:10px;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:900;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.4);color:#ef4444;}
+.bnb-save-btn{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.4);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;backdrop-filter:blur(4px);}
+.bnb-featured{position:absolute;bottom:10px;left:10px;padding:3px 8px;background:rgba(245,158,11,0.9);border-radius:5px;font-size:9px;font-weight:900;color:black;}
+.bnb-card-body{padding:14px;}
+.bnb-price{font-size:18px;font-weight:900;color:#ef4444;margin-bottom:4px;}
+.bnb-title{font-size:13px;font-weight:800;color:white;margin-bottom:4px;line-height:1.3;}
+.bnb-loc{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+.bnb-specs{display:flex;gap:10px;font-size:11px;color:rgba(255,255,255,0.45);flex-wrap:wrap;}
+.bnb-rating{font-size:11px;color:#f59e0b;display:flex;align-items:center;gap:4px;margin-top:6px;}
+
+/* HOSTS */
+.bh-host-row{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;margin-bottom:24px;}
+.bh-host-row::-webkit-scrollbar{display:none;}
+.host-card{flex-shrink:0;width:160px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;text-align:center;transition:all .2s;}
+.host-card:hover{border-color:rgba(239,68,68,0.3);}
+
+/* DESTINATION GRID */
+.bh-dest-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:24px;}
+.dest-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;}
+.dest-card:hover{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.04);}
+
+/* EXPERIENCES */
+.exp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:24px;}
+.exp-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;overflow:hidden;transition:all .2s;}
+.exp-card:hover{border-color:rgba(239,68,68,0.3);transform:translateY(-2px);}
+.exp-card-img{height:110px;display:flex;align-items:center;justify-content:center;font-size:54px;}
+.exp-card-body{padding:14px;}
+.exp-card-title{font-size:13px;font-weight:800;color:white;margin-bottom:4px;}
+.exp-card-sub{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;line-height:1.5;}
+.exp-card-price{font-size:14px;font-weight:900;color:#ef4444;margin-bottom:10px;}
+.exp-book-btn{width:100%;padding:9px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:9px;color:#ef4444;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;}
+.exp-book-btn:hover{background:rgba(239,68,68,0.2);}
+
+/* HOST DASHBOARD */
+.bh-dash{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:24px;}
+.bh-dash-title{font-size:14px;font-weight:900;color:white;margin-bottom:14px;display:flex;align-items:center;gap:8px;justify-content:space-between;}
+.bh-my-listing{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;display:flex;gap:12px;align-items:center;margin-bottom:10px;}
+.bh-my-listing-icon{font-size:32px;flex-shrink:0;}
+.bh-my-listing-info{flex:1;}
+.bh-my-listing-title{font-size:13px;font-weight:800;color:white;}
+.bh-my-listing-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;}
+.bh-my-listing-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;margin-top:5px;display:inline-block;}
+
+/* CTA */
+.bh-cta{border-radius:16px;padding:20px;margin-bottom:14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.bh-cta.red{background:linear-gradient(135deg,rgba(239,68,68,0.08),rgba(220,38,38,0.04));border:1px solid rgba(239,68,68,0.18);}
+.bh-cta.green{background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(5,150,105,0.04));border:1px solid rgba(16,185,129,0.18);}
+.bh-cta-title{font-size:15px;font-weight:900;color:white;margin-bottom:4px;}
+.bh-cta-sub{font-size:12px;color:rgba(255,255,255,0.45);}
+.bh-cta-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.bh-cta-btn{padding:9px 18px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;text-decoration:none;border:none;font-family:inherit;}
+.bh-cta-btn.red{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);color:#ef4444;}
+.bh-cta-btn.green{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#10b981;}
+
+/* MODAL */
+#bhModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:flex-end;justify-content:center;animation:fadein .2s;}
+#bhModal.open{display:flex;}
+#bhModalBox{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.bh-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;margin-bottom:10px;outline:none;}
+.bh-input:focus{border-color:rgba(239,68,68,0.4);}
+.bh-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block;}
+.bh-submit{width:100%;padding:13px;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;border-radius:11px;color:white;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;cursor:pointer;background:none;border:none;font-family:inherit;}
+.bnav-emoji{font-size:18px;line-height:1;}
+.bnav-item.active-bnav{color:#ef4444;}
+
+@media(min-width:769px){.bottom-nav{display:none;}}
+</style>
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-bnb.js"></script>
+
+<!-- NAV -->
+<nav class="bh-nav">
+  <a href="index.html" class="bh-logo">&#127796; SOKONI BnB</a>
+  <div class="bh-nav-links">
+    <a href="property-hub.html" class="bh-nav-btn outline">&#127968; Property Hub</a>
+    <a href="bnb-manage.html" class="bh-nav-btn outline">&#127968; Manage</a>
+    <button class="bh-nav-btn red" onclick="openListStay()">&#128228; List a Stay</button>
+    <a href="notifications.html" class="bh-notif" title="Notifications" style="text-decoration:none;">&#128276;<span id="bhNotifBadge" style="position:absolute;top:-3px;right:-3px;width:16px;height:16px;border-radius:50%;background:#ef4444;font-size:9px;font-weight:900;display:none;align-items:center;justify-content:center;color:white;"></span></a>
+  </div>
+</nav>
+
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('bhNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
+<!-- HERO -->
+<div class="bh-hero">
+  <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:999px;font-size:11px;font-weight:700;color:#ef4444;margin-bottom:12px;">&#127796; Kenya's Short Stay Platform</div>
+  <h1>Find Your Perfect <span>Stay</span><br>Across Kenya</h1>
+  <p>Airbnbs, hotels, guesthouses, vacation homes and serviced apartments — book instantly, stay comfortably.</p>
+  <div class="bh-stats">
+    <div class="bh-stat"><div class="bh-stat-num" id="statListings">16+</div><div class="bh-stat-lbl">Stays</div></div>
+    <div class="bh-stat"><div class="bh-stat-num">8</div><div class="bh-stat-lbl">Verified Hosts</div></div>
+    <div class="bh-stat"><div class="bh-stat-num">6</div><div class="bh-stat-lbl">Destinations</div></div>
+    <div class="bh-stat"><div class="bh-stat-num">Instant</div><div class="bh-stat-lbl">Booking</div></div>
+  </div>
+  <div class="bh-search-row">
+    <input type="text" id="bhSearch" class="bh-search-input" placeholder="Search destination, property name...">
+    <button class="bh-search-btn" onclick="doSearch()">&#128269; Search</button>
+  </div>
+  <div class="bh-date-row">
+    <input type="date" id="bhCheckIn" class="bh-date-input" placeholder="Check-in" min="" onchange="setCheckInMin()">
+    <input type="date" id="bhCheckOut" class="bh-date-input" placeholder="Check-out">
+    <select class="bh-guest-sel" id="bhGuests">
+      <option value="1">1 Guest</option>
+      <option value="2">2 Guests</option>
+      <option value="3">3 Guests</option>
+      <option value="4">4+ Guests</option>
+      <option value="6">6+ Guests</option>
+      <option value="8">8+ Guests</option>
+    </select>
+  </div>
+</div>
+
+<!-- BODY -->
+<div class="bh-body">
+
+  <!-- TYPE TABS -->
+  <div class="bh-type-bar" id="typeBar"></div>
+
+  <!-- FILTERS -->
+  <div class="bh-filter-row">
+    <select class="bh-filter-sel" id="fCounty" onchange="applyFilters()">
+      <option value="">&#128205; All Destinations</option>
+      <option value="nairobi">Nairobi</option>
+      <option value="mombasa">Mombasa / Coast</option>
+      <option value="kisumu">Kisumu</option>
+      <option value="nakuru">Nakuru / Naivasha</option>
+      <option value="laikipia">Nanyuki / Laikipia</option>
+      <option value="kwale">Diani / Kwale</option>
+      <option value="malindi">Malindi</option>
+    </select>
+    <select class="bh-filter-sel" id="fMaxPrice" onchange="applyFilters()">
+      <option value="">&#128176; Max Price/night</option>
+      <option value="2000">Under KES 2,000</option>
+      <option value="5000">Under KES 5,000</option>
+      <option value="10000">Under KES 10,000</option>
+      <option value="20000">Under KES 20,000</option>
+    </select>
+    <select class="bh-filter-sel" id="fBeds" onchange="applyFilters()">
+      <option value="">&#128716; Bedrooms</option>
+      <option value="1">1+ Bed</option>
+      <option value="2">2+ Beds</option>
+      <option value="3">3+ Beds</option>
+    </select>
+    <button class="bh-filter-btn" onclick="applyFilters()">Apply</button>
+    <button class="bh-filter-reset" onclick="resetFilters()">&#10005; Reset</button>
+  </div>
+
+  <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:12px;" id="resultsCount"></div>
+
+  <!-- LISTINGS GRID -->
+  <div class="bh-sh">&#127796; Available Stays</div>
+  <div class="bh-grid" id="bnbGrid"></div>
+
+  <!-- EXPERIENCES SECTION -->
+  <div class="bh-sh" id="expSection">&#127937; Experiences &amp; Activities</div>
+  <div class="exp-grid" id="expGrid"></div>
+
+  <!-- HOST DASHBOARD -->
+  <div class="bh-sh">&#127968; My Listed Stays</div>
+  <div class="bh-dash" id="hostDash">
+    <div class="bh-dash-title">
+      <span>&#128228; Host Dashboard</span>
+      <button class="bh-nav-btn red" onclick="openListStay()" style="font-size:11px;">+ List a Stay</button>
+    </div>
+    <div id="myListingsContainer">
+      <div style="text-align:center;padding:24px 0;color:rgba(255,255,255,0.3);font-size:13px;">
+        <div style="font-size:40px;margin-bottom:10px;">&#127968;</div>
+        <div>No listings yet. List your first stay to earn income!</div>
+        <button class="bh-cta-btn red" style="margin-top:12px;" onclick="openListStay()">&#128228; List My Stay</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DESTINATIONS -->
+  <div class="bh-sh">&#128205; Popular Destinations</div>
+  <div class="bh-dest-grid" id="destGrid"></div>
+
+  <!-- TOP HOSTS -->
+  <div class="bh-sh">&#11088; Top Hosts</div>
+  <div class="bh-host-row" id="hostRow"></div>
+
+  <!-- CTA BANNERS -->
+  <div class="bh-cta red">
+    <div style="font-size:36px;flex-shrink:0;">&#127969;</div>
+    <div>
+      <div class="bh-cta-title">List Your Property on BnB Hub</div>
+      <div class="bh-cta-sub">Earn extra income by listing your apartment, villa, cottage or guesthouse on Kenya's growing short-stay platform.</div>
+      <div class="bh-cta-btns">
+        <button class="bh-cta-btn red" onclick="openListStay()">&#128228; List My Stay</button>
+      </div>
+    </div>
+  </div>
+  <div class="bh-cta green">
+    <div style="font-size:36px;flex-shrink:0;">&#127960;</div>
+    <div>
+      <div class="bh-cta-title">Looking to Buy or Rent Long-Term?</div>
+      <div class="bh-cta-sub">Houses, apartments, land, offices and commercial property are on the SOKONI Property Hub.</div>
+      <div class="bh-cta-btns">
+        <a href="property-hub.html" class="bh-cta-btn green">&#127968; Property Hub</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATION PANEL -->
+<div id="notifPanel" style="display:none;position:fixed;top:56px;right:12px;width:300px;max-height:380px;overflow-y:auto;background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;z-index:500;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div style="font-size:14px;font-weight:800;">&#128276; Notifications</div>
+    <button onclick="markAllNotifs()" style="font-size:11px;font-weight:700;color:#ef4444;background:none;border:none;cursor:pointer;">Mark All Read</button>
+  </div>
+  <div id="notifList"></div>
+</div>
+
+<!-- LISTING DETAIL MODAL -->
+<div id="bhModal"><div id="bhModalBox"><div id="bhModalContent"></div></div></div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">&#127968;</span><span>Home</span></a>
+  <a href="property-hub.html" class="bnav-item"><span class="bnav-emoji">&#127960;</span><span>Property</span></a>
+  <a href="bnb-hub.html" class="bnav-item active-bnav"><span class="bnav-emoji">&#127968;</span><span>BnB</span></a>
+  <button class="bnav-item" onclick="openListStay()"><span class="bnav-emoji">&#128228;</span><span>List</span></button>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">&#128736;</span><span>Services</span></a>
+</nav>
+
+<!-- SCRIPTS -->
+<script src="sokoni-pay.js"></script>
+<script>
+/* =====================================================
+   BnB Hub — Expanded Demo Data (16 listings)
+   ===================================================== */
+function escapeHTML(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+var BNB_LISTINGS = [
+  /* ---- DIANI BEACH (4) ---- */
+  {id:'d1',title:'Beachfront Villa Diani',location:'Diani Beach, Kwale',county:'kwale',type:'villa',pricePerNight:22000,maxGuests:8,bedrooms:4,bathrooms:3,rating:4.9,reviews:47,hostName:'James Ngugi',phone:'0712100001',emoji:'&#127958;',featured:true,amenities:['WiFi','Pool','AC','Kitchen','BBQ','Parking','Ocean View','Breakfast'],description:'Stunning 4-bedroom beachfront villa with private pool and direct ocean access. Fully staffed with a chef and housekeeper. Ideal for families and groups.'},
+  {id:'d2',title:'Diani Studio Apartment',location:'Diani Beach Road, Kwale',county:'kwale',type:'airbnb',pricePerNight:3500,maxGuests:2,bedrooms:1,bathrooms:1,rating:4.6,reviews:29,hostName:'Amina Wanjiku',phone:'0712100002',emoji:'&#127968;',amenities:['WiFi','AC','Kitchen','Parking'],description:'Clean and cosy studio apartment 5 minutes walk from the beach. Great for couples or solo travellers. Netflix included.'},
+  {id:'d3',title:'Diani Beach Cottage',location:'Galu Beach, Kwale',county:'kwale',type:'vacation',pricePerNight:7500,maxGuests:4,bedrooms:2,bathrooms:1,rating:4.7,reviews:22,hostName:'Tom Odhiambo',phone:'0712100003',emoji:'&#127796;',amenities:['WiFi','Garden','Kitchen','BBQ','Parking'],description:'Charming 2-bed cottage 50m from the beach, surrounded by lush tropical gardens. Perfect for families and small groups.'},
+  {id:'d4',title:'Diani Sea View Apartment',location:'Diani Beach, Kwale',county:'kwale',type:'serviced',pricePerNight:5500,maxGuests:4,bedrooms:2,bathrooms:2,rating:4.8,reviews:18,hostName:'Fatuma Hassan',phone:'0712100004',emoji:'&#127965;',amenities:['WiFi','AC','Pool','Kitchen','Balcony','Sea View'],description:'Modern 2-bedroom serviced apartment with breathtaking sea views. Swimming pool access, daily housekeeping included.'},
+
+  /* ---- NAIROBI (4) ---- */
+  {id:'n1',title:'Westlands Executive Apartment',location:'Westlands, Nairobi',county:'nairobi',type:'serviced',pricePerNight:8500,maxGuests:4,bedrooms:2,bathrooms:2,rating:4.8,reviews:63,hostName:'Grace Kamau',phone:'0712200001',emoji:'&#127970;',featured:true,amenities:['WiFi','AC','Gym','Pool','Parking','Kitchen','Security','Netflix'],description:'Sleek 2-bedroom serviced apartment in the heart of Westlands with gym, pool and 24-hr security. Walking distance to restaurants and shopping.'},
+  {id:'n2',title:'Kilimani Modern Studio',location:'Kilimani, Nairobi',county:'nairobi',type:'airbnb',pricePerNight:3800,maxGuests:2,bedrooms:1,bathrooms:1,rating:4.5,reviews:41,hostName:'Brian Otieno',phone:'0712200002',emoji:'&#127968;',amenities:['WiFi','AC','Kitchen','Washing Machine'],description:'Contemporary studio in the quiet Kilimani suburb. Well-furnished with fast WiFi, ideal for work trips or short stays.'},
+  {id:'n3',title:'Karen Luxury Villa',location:'Karen, Nairobi',county:'nairobi',type:'villa',pricePerNight:18000,maxGuests:10,bedrooms:5,bathrooms:4,rating:4.9,reviews:15,hostName:'David Mwangi',phone:'0712200003',emoji:'&#127958;',featured:true,amenities:['WiFi','Pool','Garden','Security','Parking','Kitchen','Staff','BBQ','Gym'],description:'Magnificent 5-bedroom villa in prestigious Karen with manicured gardens, private pool and full staff. Perfect for corporate retreats and large gatherings.'},
+  {id:'n4',title:'CBD Serviced Apartment',location:'Upper Hill, Nairobi CBD',county:'nairobi',type:'serviced',pricePerNight:4500,maxGuests:3,bedrooms:1,bathrooms:1,rating:4.4,reviews:88,hostName:'Lucy Wambui',phone:'0712200004',emoji:'&#127970;',amenities:['WiFi','AC','Breakfast','Parking','Security','Gym'],description:'Convenient 1-bedroom serviced apartment in Upper Hill, close to government offices and top hospitals. Daily breakfast included.'},
+
+  /* ---- MOMBASA OLD TOWN (2) ---- */
+  {id:'m1',title:'Riad-Style Old Town Guesthouse',location:'Old Town, Mombasa',county:'mombasa',type:'guesthouse',pricePerNight:5800,maxGuests:4,bedrooms:2,bathrooms:2,rating:4.8,reviews:33,hostName:'Zara Mohamed',phone:'0712300001',emoji:'&#127963;',amenities:['WiFi','Rooftop Terrace','Breakfast','Courtyard','AC'],description:'Beautifully restored 19th-century Swahili house with stunning rooftop terrace overlooking the old port. Authentic architecture, modern comfort.'},
+  {id:'m2',title:'Heritage Home Mombasa',location:'Old Town, Mombasa',county:'mombasa',type:'holiday',pricePerNight:4200,maxGuests:6,bedrooms:3,bathrooms:2,rating:4.6,reviews:21,hostName:'Ali Salim',phone:'0712300002',emoji:'&#127968;',amenities:['WiFi','Kitchen','Courtyard','AC','Breakfast'],description:'Traditional Swahili heritage home with carved wooden doors and hand-painted tiles. Immerse yourself in 600 years of coastal culture.'},
+
+  /* ---- NANYUKI / MOUNT KENYA (2) ---- */
+  {id:'ny1',title:'Mount Kenya Safari Lodge Cottage',location:'Nanyuki, Laikipia',county:'laikipia',type:'vacation',pricePerNight:12000,maxGuests:6,bedrooms:3,bathrooms:2,rating:4.9,reviews:28,hostName:'Peter Kariuki',phone:'0712400001',emoji:'&#127956;',featured:true,amenities:['WiFi','Fireplace','Game Drives','Kitchen','Breakfast','Parking','Laundry'],description:'Luxurious lodge-style cottage at the foot of Mount Kenya with stunning mountain views and wildlife encounters. Perfect base for safaris and hikes.'},
+  {id:'ny2',title:'Mountain Cabin Nanyuki',location:'Timau, Mount Kenya Region',county:'laikipia',type:'airbnb',pricePerNight:4500,maxGuests:4,bedrooms:2,bathrooms:1,rating:4.7,reviews:16,hostName:'Jane Njoroge',phone:'0712400002',emoji:'&#127959;',amenities:['Fireplace','Kitchen','Hiking Trails','Parking','BBQ'],description:'Cosy wooden mountain cabin at 2,400m elevation. Wake up to mist-covered highland vistas. Ideal for hikers and nature lovers seeking cool-climate retreats.'},
+
+  /* ---- MALINDI (2) ---- */
+  {id:'ml1',title:'Malindi Beach Cottage',location:'Silversands, Malindi',county:'malindi',type:'vacation',pricePerNight:5000,maxGuests:4,bedrooms:2,bathrooms:1,rating:4.6,reviews:19,hostName:'Roberto Marani',phone:'0712500001',emoji:'&#127796;',amenities:['WiFi','Beach Access','Kitchen','Garden','AC'],description:'Charming 2-bed beach cottage with direct access to Malindi\'s pristine white sand beach. Italian-managed, impeccably maintained.'},
+  {id:'ml2',title:'Malindi Resort Villa',location:'Casuarina Beach, Malindi',county:'malindi',type:'villa',pricePerNight:14000,maxGuests:8,bedrooms:4,bathrooms:3,rating:4.8,reviews:11,hostName:'Mary Achieng',phone:'0712500002',emoji:'&#127958;',amenities:['WiFi','Pool','Ocean View','AC','Kitchen','Staff','BBQ','Garden'],description:'Impressive 4-bedroom resort-style villa on Casuarina Beach. Private pool, full staff, and helicopter pad available. Absolute luxury on the Kenyan coast.'},
+
+  /* ---- KISUMU (2) ---- */
+  {id:'k1',title:'Lake Victoria View Apartment',location:'Milimani, Kisumu',county:'kisumu',type:'airbnb',pricePerNight:3200,maxGuests:3,bedrooms:1,bathrooms:1,rating:4.5,reviews:24,hostName:'Collins Ouma',phone:'0712600001',emoji:'&#127965;',amenities:['WiFi','AC','Lake View','Kitchen','Parking'],description:'Modern 1-bedroom apartment with magnificent Lake Victoria views from the balcony. Close to Kisumu City centre and Impala Sanctuary.'},
+  {id:'k2',title:'Kisumu Family Home',location:'Riat Hills, Kisumu',county:'kisumu',type:'vacation',pricePerNight:1500,maxGuests:8,bedrooms:3,bathrooms:2,rating:4.3,reviews:38,hostName:'Mama Akinyi',phone:'0712600002',emoji:'&#127968;',amenities:['WiFi','Garden','Kitchen','Parking','BBQ'],description:'Spacious family home in peaceful Riat Hills with panoramic views of Lake Victoria. Budget-friendly, perfect for large families and group getaways.'}
+];
+
+var BNB_TYPES = [
+  {id:'all',icon:'&#127968;',label:'All Types'},
+  {id:'airbnb',icon:'&#127968;',label:'Airbnb'},
+  {id:'villa',icon:'&#127958;',label:'Villa'},
+  {id:'serviced',icon:'&#127970;',label:'Serviced'},
+  {id:'guesthouse',icon:'&#127963;',label:'Guesthouse'},
+  {id:'vacation',icon:'&#127796;',label:'Vacation Home'},
+  {id:'holiday',icon:'&#127965;',label:'Holiday Home'},
+  {id:'hostel',icon:'&#127959;',label:'Hostel'}
+];
+
+var EXPERIENCES = [
+  {id:'e1',name:'Maasai Mara Safari',icon:'&#129429;',location:'Maasai Mara, Narok',desc:'Full-day game drive through the world-famous Maasai Mara. See the Big Five in their natural habitat.',price:8500,duration:'Full Day'},
+  {id:'e2',name:'Nairobi City Tour',icon:'&#127979;',location:'Nairobi CBD',desc:'Guided tour of Nairobi covering Karen Blixen Museum, Giraffe Centre, and Nairobi National Park.',price:3500,duration:'Half Day'},
+  {id:'e3',name:'Diani Snorkelling',icon:'&#127755;',location:'Diani Beach, Kwale',desc:'Explore Diani\'s vibrant coral reef with certified guides. Equipment provided. Marine park fees included.',price:2800,duration:'3 Hours'},
+  {id:'e4',name:'Mount Kenya Hike',icon:'&#9968;',location:'Mount Kenya, Kirinyaga',desc:'Guided trek to Point Lenana (4,985m). Includes accommodation, meals, park fees and an expert mountain guide.',price:22000,duration:'3-4 Days'},
+  {id:'e5',name:'Nairobi National Park',icon:'&#129409;',location:'Nairobi',desc:'Morning game drive through Africa\'s only national park inside a capital city. Lions, rhinos and giraffes.',price:4200,duration:'Half Day'},
+  {id:'e6',name:'Lamu Cultural Tour',icon:'&#9875;',location:'Lamu Island',desc:'Explore Lamu Old Town\'s UNESCO-listed streets, dhow sailing and traditional Swahili cuisine experience.',price:6500,duration:'Full Day'}
+];
+
+/* =====================================================
+   HOSTS
+   ===================================================== */
+var BNB_HOSTS = [
+  {id:'h1',name:'James Ngugi',icon:'&#128100;',listings:2,rating:4.9,verified:true,phone:'0712100001'},
+  {id:'h2',name:'Grace Kamau',icon:'&#128102;',listings:1,rating:4.8,verified:true,phone:'0712200001'},
+  {id:'h3',name:'David Mwangi',icon:'&#128100;',listings:1,rating:4.9,verified:true,phone:'0712200003'},
+  {id:'h4',name:'Zara Mohamed',icon:'&#128102;',listings:2,rating:4.8,verified:true,phone:'0712300001'},
+  {id:'h5',name:'Peter Kariuki',icon:'&#128100;',listings:2,rating:4.9,verified:true,phone:'0712400001'},
+  {id:'h6',name:'Mary Achieng',icon:'&#128102;',listings:1,rating:4.8,verified:true,phone:'0712500002'},
+  {id:'h7',name:'Tom Odhiambo',icon:'&#128100;',listings:1,rating:4.7,verified:false,phone:'0712100003'},
+  {id:'h8',name:'Mama Akinyi',icon:'&#128102;',listings:1,rating:4.3,verified:false,phone:'0712600002'}
+];
+
+/* =====================================================
+   STATE
+   ===================================================== */
+var _activeType = 'all';
+var _currentListing = null;
+var _savedListings = JSON.parse(localStorage.getItem('bnbSaved')||'[]');
+
+function fmt(n){return Number(n).toLocaleString();}
+function fmtPrice(p){return 'KES '+fmt(p)+'/night';}
+function isSaved(id){return _savedListings.includes(id);}
+function saveListing(id){
+  var i=_savedListings.indexOf(id);
+  if(i>-1){_savedListings.splice(i,1);}else{_savedListings.push(id);}
+  localStorage.setItem('bnbSaved',JSON.stringify(_savedListings));
+  return _savedListings.includes(id);
+}
+function calcNights(ci,co){
+  if(!ci||!co)return 0;
+  var d=(new Date(co)-new Date(ci))/(86400000);
+  return d>0?Math.round(d):0;
+}
+
+/* =====================================================
+   INIT
+   ===================================================== */
+function init(){
+  document.getElementById('bhCheckIn').min=new Date().toISOString().split('T')[0];
+  document.getElementById('statListings').textContent=BNB_LISTINGS.length+'+';
+  renderTypeTabs();
+  renderListings();
+  renderExperiences();
+  renderDestinations();
+  renderHosts();
+  renderMyListings();
+  updateNotifBadge();
+  var urlP=new URLSearchParams(window.location.search);
+  if(urlP.get('type')){_activeType=urlP.get('type');renderTypeTabs();renderListings();}
+  if(urlP.get('q')){document.getElementById('bhSearch').value=urlP.get('q');applyFilters();}
+}
+
+/* =====================================================
+   TYPE TABS
+   ===================================================== */
+function renderTypeTabs(){
+  document.getElementById('typeBar').innerHTML=BNB_TYPES.map(t=>
+    '<button class="bh-type '+((_activeType===t.id)?'active':'')+'" onclick="setType(\''+t.id+'\')">'+t.icon+' '+t.label+'</button>'
+  ).join('');
+}
+function setType(id){_activeType=id;renderTypeTabs();applyFilters();}
+window.setType=setType;
+
+/* =====================================================
+   FILTERS & SEARCH
+   ===================================================== */
+function getFiltered(){
+  var list=BNB_LISTINGS.slice();
+  if(_activeType&&_activeType!=='all')list=list.filter(function(p){return p.type===_activeType;});
+  var q=document.getElementById('bhSearch').value.trim().toLowerCase();
+  if(q)list=list.filter(function(p){return (p.title+p.location+p.county+(p.description||'')).toLowerCase().indexOf(q)>-1;});
+  var county=document.getElementById('fCounty').value;
+  if(county)list=list.filter(function(p){return (p.county||'').toLowerCase()===county;});
+  var maxPrice=document.getElementById('fMaxPrice').value;
+  if(maxPrice)list=list.filter(function(p){return p.pricePerNight<=parseInt(maxPrice);});
+  var beds=document.getElementById('fBeds').value;
+  if(beds)list=list.filter(function(p){return (p.bedrooms||0)>=parseInt(beds);});
+  var guests=document.getElementById('bhGuests').value;
+  if(guests)list=list.filter(function(p){return (p.maxGuests||1)>=parseInt(guests);});
+  return list;
+}
+
+function renderListings(){
+  var list=getFiltered();
+  document.getElementById('resultsCount').textContent=list.length+' stay'+(list.length!==1?'s':'')+' available';
+  if(!list.length){
+    document.getElementById('bnbGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:48px;color:rgba(255,255,255,0.3);"><div style="font-size:48px;margin-bottom:14px;">&#128269;</div><p style="font-size:15px;font-weight:700;">No stays found</p><p style="font-size:12px;margin-top:8px;">Try adjusting your filters.</p></div>';
+    return;
+  }
+  document.getElementById('bnbGrid').innerHTML=list.map(bnbCardHTML).join('');
+}
+window.renderListings=renderListings;
+
+function bnbCardHTML(p){
+  var saved=isSaved(p.id);
+  var typeLabel=BNB_TYPES.find(function(t){return t.id===p.type;})||{label:p.type};
+  return '<div class="bnb-card" onclick="openListing(\''+p.id+'\')">'+
+    '<div class="bnb-card-img '+(p.type)+'" style="font-size:54px;">'+
+      (p.emoji||'&#127968;')+
+      '<div class="bnb-type-badge">'+escapeHTML(typeLabel.label)+'</div>'+
+      '<button class="bnb-save-btn" onclick="event.stopPropagation();toggleSave(\''+p.id+'\',this)">'+(saved?'&#10084;&#65039;':'&#129293;')+'</button>'+
+      (p.featured?'<div class="bnb-featured">&#11088; Featured</div>':'')+
+    '</div>'+
+    '<div class="bnb-card-body">'+
+      '<div class="bnb-price">'+fmtPrice(p.pricePerNight)+'</div>'+
+      '<div class="bnb-title">'+escapeHTML(p.title)+'</div>'+
+      '<div class="bnb-loc">&#128205; '+escapeHTML(p.location)+'</div>'+
+      '<div class="bnb-specs">'+
+        (p.bedrooms>0?'<span>&#128716; '+p.bedrooms+' Bed'+(p.bedrooms!==1?'s':'')+'</span>':'')+
+        (p.maxGuests?'<span>&#128101; Up to '+p.maxGuests+'</span>':'')+
+      '</div>'+
+      '<div class="bnb-rating">&#11088; '+(p.rating||4.5)+' <span style="color:rgba(255,255,255,0.3);">('+p.reviews+' reviews)</span></div>'+
+    '</div>'+
+  '</div>';
+}
+window.bnbCardHTML=bnbCardHTML;
+
+function applyFilters(){renderListings();}
+window.applyFilters=applyFilters;
+function doSearch(){applyFilters();}
+window.doSearch=doSearch;
+function resetFilters(){
+  _activeType='all';
+  document.getElementById('bhSearch').value='';
+  document.getElementById('fCounty').value='';
+  document.getElementById('fMaxPrice').value='';
+  document.getElementById('fBeds').value='';
+  renderTypeTabs();renderListings();
+}
+window.resetFilters=resetFilters;
+function setCheckInMin(){var ci=document.getElementById('bhCheckIn').value;if(ci)document.getElementById('bhCheckOut').min=ci;}
+window.setCheckInMin=setCheckInMin;
+function toggleSave(id,btn){var saved=saveListing(id);btn.textContent=saved?'&#10084;&#65039;':'&#129293;';}
+window.toggleSave=toggleSave;
+
+/* =====================================================
+   LISTING DETAIL MODAL
+   ===================================================== */
+function openListing(id){
+  var p=BNB_LISTINGS.find(function(l){return l.id===id;});
+  if(!p)return;
+  var host=BNB_HOSTS.find(function(h){return h.phone===p.phone;})||{name:p.hostName,icon:'&#128100;',phone:p.phone,rating:4.5};
+  var amenHtml=(p.amenities||[]).map(function(a){return '<span style="font-size:11px;padding:4px 9px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.18);border-radius:6px;color:rgba(255,255,255,0.7);">'+escapeHTML(a)+'</span>';}).join('');
+  var today=new Date().toISOString().split('T')[0];
+  document.getElementById('bhModalContent').innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">'+
+      '<div style="font-size:16px;font-weight:900;">&#127796; '+escapeHTML(p.title)+'</div>'+
+      '<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);font-size:20px;">&#10005;</span>'+
+    '</div>'+
+    '<div style="height:140px;display:flex;align-items:center;justify-content:center;font-size:70px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.15);border-radius:14px;margin-bottom:14px;">'+p.emoji+'</div>'+
+    '<div style="font-size:22px;font-weight:900;color:#ef4444;margin-bottom:4px;">'+fmtPrice(p.pricePerNight)+'</div>'+
+    '<div style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:12px;">&#128205; '+escapeHTML(p.location)+' &nbsp;·&nbsp; Up to '+p.maxGuests+' guests</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">'+
+      (p.bedrooms>0?'<span style="font-size:12px;padding:4px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">&#128716; '+p.bedrooms+' bed'+(p.bedrooms!==1?'s':'')+'</span>':'')+
+      (p.bathrooms>0?'<span style="font-size:12px;padding:4px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">&#128703; '+p.bathrooms+' bath'+(p.bathrooms!==1?'s':'')+'</span>':'')+
+      '<span style="font-size:12px;padding:4px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">&#11088; '+(p.rating||4.5)+' ('+p.reviews+' reviews)</span>'+
+    '</div>'+
+    '<div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.7;margin-bottom:12px;">'+escapeHTML(p.description||'')+'</div>'+
+    (amenHtml?'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px;">'+amenHtml+'</div>':'')+
+    '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;margin-bottom:14px;">'+
+      '<div style="font-size:12px;font-weight:800;margin-bottom:10px;">&#128197; Check Availability &amp; Book</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+        '<div><label style="font-size:11px;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Check-in</label><input type="date" class="bh-input" id="bkIn" style="margin:0;" min="'+today+'" onchange="calcCost()"></div>'+
+        '<div><label style="font-size:11px;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Check-out</label><input type="date" class="bh-input" id="bkOut" style="margin:0;" onchange="calcCost()"></div>'+
+      '</div>'+
+      '<div id="costCalc" style="min-height:14px;margin-bottom:8px;font-size:13px;font-weight:900;color:#ef4444;"></div>'+
+      '<label class="bh-label">Full Name</label>'+
+      '<input type="text" class="bh-input" id="bkName" placeholder="Your name">'+
+      '<label class="bh-label">Phone *</label>'+
+      '<input type="tel" class="bh-input" id="bkPhone" placeholder="0712 345 678">'+
+      '<button class="bh-submit" onclick="submitBooking(\''+id+'\')">&#9989; Pay &amp; Book Now (M-Pesa)</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+      '<button onclick="callHostGated(\''+escapeHTML(p.phone)+'\',\''+escapeHTML(p.hostName)+'\',\''+escapeHTML(p.title)+'\')" style="flex:1;padding:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#ef4444;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">&#128222; Call Host</button>'+
+      '<button onclick="waHostGated(\''+escapeHTML(p.phone)+'\',\''+escapeHTML(p.hostName)+'\',\''+escapeHTML(p.title)+'\')" style="flex:1;padding:10px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">&#128172; WhatsApp Host</button>'+
+    '</div>'+
+    '<div style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;">Check-in: 2:00 PM &nbsp;·&nbsp; Check-out: 11:00 AM</div>';
+
+  _currentListing=p;
+  document.getElementById('bhModal').classList.add('open');
+}
+window.openListing=openListing;
+
+function calcCost(){
+  var ci=document.getElementById('bkIn')&&document.getElementById('bkIn').value;
+  var co=document.getElementById('bkOut')&&document.getElementById('bkOut').value;
+  var el=document.getElementById('costCalc');if(!el)return;
+  if(!ci||!co||new Date(co)<=new Date(ci)){el.textContent='';return;}
+  var nights=calcNights(ci,co);
+  var total=nights*((_currentListing&&_currentListing.pricePerNight)||0);
+  el.textContent=nights+' nights x KES '+fmt((_currentListing&&_currentListing.pricePerNight)||0)+' = KES '+fmt(total);
+}
+window.calcCost=calcCost;
+
+function submitBooking(listingId){
+  var p=BNB_LISTINGS.find(function(l){return l.id===listingId;});
+  if(!p)return;
+  var ci=document.getElementById('bkIn')&&document.getElementById('bkIn').value;
+  var co=document.getElementById('bkOut')&&document.getElementById('bkOut').value;
+  var name=document.getElementById('bkName')&&document.getElementById('bkName').value.trim();
+  var phone=document.getElementById('bkPhone')&&document.getElementById('bkPhone').value.trim();
+  if(!ci||!co||!phone){(window._skToast||alert)('Please select dates and enter your phone number.');return;}
+  if(new Date(co)<=new Date(ci)){(window._skToast||alert)('Check-out must be after check-in.');return;}
+  var nights=calcNights(ci,co);
+  var total=nights*p.pricePerNight;
+  var desc=nights+'N at '+p.title;
+
+  if(window.SokoniPay&&window.SokoniPay.platformBook){
+    SokoniPay.platformBook({
+      providerName:p.hostName,
+      category:'bnb',
+      serviceDesc:desc,
+      amount:total,
+      providerPhone:p.phone
+    });
+    /* save booking to Firestore */
+    if(window._saveBnBBooking){
+      window._saveBnBBooking({listingId:p.id,title:p.title,hostName:p.hostName,hostPhone:p.phone,guestName:name||'Guest',guestPhone:phone,checkIn:ci,checkOut:co,nights:nights,total:total,location:p.location});
+    }
+  } else {
+    (window._skToast||alert)('Payment module not loaded. Please refresh and try again.');
+  }
+}
+window.submitBooking=submitBooking;
+
+/* Payment-gated host contact */
+function callHostGated(phone,hostName,title){
+  if(!window.SokoniPay){window.location.href='tel:'+phone;return;}
+  SokoniPay.bookNow({providerName:hostName,category:'bnb',serviceDesc:'Enquiry: '+title,providerPhone:phone},function(){
+    window.location.href='tel:'+phone;
+  });
+}
+window.callHostGated=callHostGated;
+
+function waHostGated(phone,hostName,title){
+  if(!window.SokoniPay){window.open('https://wa.me/254'+phone.replace(/[^0-9]/g,'').replace(/^0/,''));return;}
+  SokoniPay.waConnect(phone,'Hi, I am interested in: '+title,{providerName:hostName,category:'bnb',serviceDesc:'Enquiry: '+title});
+}
+window.waHostGated=waHostGated;
+
+/* =====================================================
+   EXPERIENCES
+   ===================================================== */
+function renderExperiences(){
+  document.getElementById('expGrid').innerHTML=EXPERIENCES.map(function(e){
+    return '<div class="exp-card">'+
+      '<div class="exp-card-img" style="background:linear-gradient(135deg,rgba(239,68,68,0.12),rgba(220,38,38,0.05));">'+e.icon+'</div>'+
+      '<div class="exp-card-body">'+
+        '<div class="exp-card-title">'+escapeHTML(e.name)+'</div>'+
+        '<div style="font-size:10px;color:rgba(239,68,68,0.7);margin-bottom:4px;font-weight:700;">&#128205; '+escapeHTML(e.location)+' &nbsp;·&nbsp; '+escapeHTML(e.duration)+'</div>'+
+        '<div class="exp-card-sub">'+escapeHTML(e.desc)+'</div>'+
+        '<div class="exp-card-price">KES '+fmt(e.price)+' / person</div>'+
+        '<button class="exp-book-btn" onclick="bookExperience(\''+e.id+'\',\''+escapeHTML(e.name)+'\','+e.price+')">&#127932; Book Experience</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function bookExperience(id,name,price){
+  if(window.SokoniPay&&window.SokoniPay.bookNow){
+    SokoniPay.bookNow({
+      providerName:'SOKONI Experiences',
+      category:'bnb',
+      serviceDesc:name,
+      providerPhone:'0700000000'
+    },function(){
+      (window._skToast||alert)('Experience booking confirmed! Our team will contact you with details.');
+    });
+  } else {
+    (window._skToast||alert)('Book "'+name+'" — KES '+fmt(price)+'/person. Call 0700000000 to confirm.');
+  }
+}
+window.bookExperience=bookExperience;
+
+/* =====================================================
+   HOST DASHBOARD
+   ===================================================== */
+function renderMyListings(){
+  var myListings=[];
+  try{myListings=JSON.parse(localStorage.getItem('sokoniListedStays')||'[]');}catch(e){}
+  var container=document.getElementById('myListingsContainer');
+  if(!myListings.length){
+    container.innerHTML='<div style="text-align:center;padding:24px 0;color:rgba(255,255,255,0.3);font-size:13px;"><div style="font-size:40px;margin-bottom:10px;">&#127968;</div><div>No listings yet. List your first stay to earn income!</div><button class="bh-cta-btn red" style="margin-top:12px;" onclick="openListStay()">&#128228; List My Stay</button></div>';
+    return;
+  }
+  container.innerHTML=myListings.map(function(l,i){
+    return '<div class="bh-my-listing">'+
+      '<div class="bh-my-listing-icon">&#127968;</div>'+
+      '<div class="bh-my-listing-info">'+
+        '<div class="bh-my-listing-title">'+escapeHTML(l.title||'Unnamed Listing')+'</div>'+
+        '<div class="bh-my-listing-meta">&#128205; '+escapeHTML(l.location||'—')+' &nbsp;·&nbsp; KES '+fmt(l.price||0)+'/night</div>'+
+        '<div class="bh-my-listing-badge">&#9989; Submitted</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+window.renderMyListings=renderMyListings;
+
+/* =====================================================
+   LIST A STAY MODAL
+   ===================================================== */
+function openListStay(){
+  document.getElementById('bhModalContent').innerHTML=
+    '<div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">&#128228; List Your Stay<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">&#10005;</span></div>'+
+    '<label class="bh-label">Property Name *</label><input class="bh-input" id="lsTitle" placeholder="e.g. Beachfront Studio Diani">'+
+    '<label class="bh-label">Location *</label><input class="bh-input" id="lsLocation" placeholder="e.g. Diani Beach, Kwale">'+
+    '<label class="bh-label">Accommodation Type</label>'+
+    '<select class="bh-input" id="lsType">'+
+      '<option value="airbnb">Airbnb / Apartment</option>'+
+      '<option value="hotel">Hotel</option>'+
+      '<option value="guesthouse">Guest House</option>'+
+      '<option value="serviced">Serviced Apartment</option>'+
+      '<option value="villa">Villa</option>'+
+      '<option value="vacation">Vacation Home</option>'+
+      '<option value="holiday">Holiday Home</option>'+
+      '<option value="hostel">Hostel / Budget</option>'+
+    '</select>'+
+    '<label class="bh-label">Price per Night (KES) *</label><input class="bh-input" type="number" id="lsPrice" placeholder="e.g. 5000" style="font-size:16px;">'+
+    '<label class="bh-label">Max Guests</label><input class="bh-input" type="number" id="lsGuests" placeholder="2" min="1" style="font-size:16px;">'+
+    '<label class="bh-label">Your Phone *</label><input class="bh-input" id="lsPhone" placeholder="0712 345 678" type="tel">'+
+    '<label class="bh-label">Description</label><textarea class="bh-input" id="lsDesc" rows="3" placeholder="Describe your property..." style="font-size:16px;resize:vertical;"></textarea>'+
+    '<button class="bh-submit" onclick="submitListStay()">&#9989; Submit Listing</button>';
+  document.getElementById('bhModal').classList.add('open');
+}
+window.openListStay=openListStay;
+
+function submitListStay(){
+  var title=document.getElementById('lsTitle').value.trim();
+  var location=document.getElementById('lsLocation').value.trim();
+  var price=parseInt(document.getElementById('lsPrice').value)||0;
+  var phone=document.getElementById('lsPhone').value.trim();
+  if(!title||!location||!price||!phone){(window._skToast||alert)('Please fill all required fields.');return;}
+  var data={title:title,location:location,price:price,type:document.getElementById('lsType').value,maxGuests:parseInt(document.getElementById('lsGuests').value)||2,description:document.getElementById('lsDesc').value.trim(),phone:phone,submittedAt:Date.now()};
+
+  /* Save to localStorage */
+  var existing=[];try{existing=JSON.parse(localStorage.getItem('sokoniListedStays')||'[]');}catch(e){}
+  existing.push(data);
+  localStorage.setItem('sokoniListedStays',JSON.stringify(existing));
+
+  /* Save to Firestore */
+  if(window._saveBnBListing)window._saveBnBListing(data);
+
+  closeModal();
+  renderMyListings();
+  (window._skToast||alert)('&#9989; Your listing has been submitted! It will be reviewed and published shortly.');
+}
+window.submitListStay=submitListStay;
+
+/* =====================================================
+   DESTINATIONS & HOSTS
+   ===================================================== */
+function renderDestinations(){
+  var destinations=[
+    {name:'Nairobi',icon:'&#127961;',county:'nairobi'},
+    {name:'Diani Beach',icon:'&#127958;',county:'kwale'},
+    {name:'Mombasa',icon:'&#9973;',county:'mombasa'},
+    {name:'Kisumu',icon:'&#127754;',county:'kisumu'},
+    {name:'Nanyuki',icon:'&#9968;',county:'laikipia'},
+    {name:'Malindi',icon:'&#127796;',county:'malindi'}
+  ];
+  document.getElementById('destGrid').innerHTML=destinations.map(function(d){
+    var count=BNB_LISTINGS.filter(function(l){return l.county===d.county;}).length;
+    return '<div class="dest-card" onclick="setDestination(\''+d.county+'\')">'+
+      '<div style="font-size:30px;margin-bottom:8px;">'+d.icon+'</div>'+
+      '<div style="font-size:12px;font-weight:800;color:white;">'+d.name+'</div>'+
+      '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">'+count+' stay'+(count!==1?'s':'')+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+function setDestination(county){
+  document.getElementById('fCounty').value=county;
+  applyFilters();
+  document.getElementById('bnbGrid').scrollIntoView({behavior:'smooth'});
+}
+window.setDestination=setDestination;
+
+function renderHosts(){
+  document.getElementById('hostRow').innerHTML=BNB_HOSTS.map(function(h){
+    return '<div class="host-card">'+
+      '<div style="font-size:32px;margin-bottom:6px;">'+h.icon+'</div>'+
+      '<div style="font-size:12px;font-weight:800;color:white;">'+escapeHTML(h.name)+'</div>'+
+      '<div style="font-size:10px;color:rgba(255,255,255,0.35);">'+h.listings+' listing'+(h.listings!==1?'s':'')+' &middot; &#11088; '+h.rating+'</div>'+
+      (h.verified?'<div style="font-size:10px;font-weight:700;color:#22c55e;margin-top:3px;">&#9989; Verified</div>':'')+
+    '</div>';
+  }).join('');
+}
+
+/* =====================================================
+   NOTIFICATIONS (stub)
+   ===================================================== */
+function updateNotifBadge(){
+  var b=document.getElementById('bhNotifBadge');
+  if(b){b.style.display='none';}
+}
+function toggleNotifs(){
+  var p=document.getElementById('notifPanel');
+  p.style.display=(p.style.display==='none'||p.style.display==='')?'block':'none';
+  if(p.style.display==='block')renderNotifs();
+}
+window.toggleNotifs=toggleNotifs;
+function renderNotifs(){
+  document.getElementById('notifList').innerHTML='<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No notifications yet.</div>';
+}
+function markAllNotifs(){}
+window.markAllNotifs=markAllNotifs;
+
+/* =====================================================
+   MODAL
+   ===================================================== */
+function closeModal(){document.getElementById('bhModal').classList.remove('open');}
+window.closeModal=closeModal;
+document.getElementById('bhModal').addEventListener('click',function(e){if(e.target===document.getElementById('bhModal'))closeModal();});
+document.addEventListener('click',function(e){if(!e.target.closest('#notifPanel')&&!e.target.closest('.bh-notif'))document.getElementById('notifPanel').style.display='none';});
+
+/* =====================================================
+   FIRESTORE LIVE INJECT HOOK
+   ===================================================== */
+window.injectFirestoreListings=function(live){
+  /* merge Firestore listings into local array, deduplicate by id */
+  live.forEach(function(l){
+    if(!BNB_LISTINGS.find(function(x){return x.id===l.id;})){
+      BNB_LISTINGS.push({
+        id:l.id,title:l.title||'Untitled',location:l.location||'Kenya',county:(l.county||'nairobi').toLowerCase(),
+        type:l.type||'airbnb',pricePerNight:l.price||3000,maxGuests:l.maxGuests||2,
+        bedrooms:l.bedrooms||1,bathrooms:l.bathrooms||1,rating:l.rating||4.5,
+        reviews:l.reviews||0,hostName:l.hostName||'Host',phone:l.phone||'',
+        emoji:'&#127968;',amenities:l.amenities||[],description:l.description||''
+      });
+    }
+  });
+  document.getElementById('statListings').textContent=BNB_LISTINGS.length+'+';
+  renderListings();
+  renderDestinations();
+};
+
+init();
+</script>
+
+<!-- ANALYTICS & SW -->
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="scroll-top.js" defer></script>
+
+<!-- FIRESTORE MODULE -->
+<script type="module">
+import { db, auth } from './firebase.js';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+window._saveBnBListing = async function(data) {
+  try { await addDoc(collection(db,'bnbListings'), {...data, createdAt: serverTimestamp()}); } catch(e){}
+};
+
+window._saveBnBBooking = async function(bk) {
+  try { await addDoc(collection(db,'bookings'), {...bk, hub:'bnb', createdAt: serverTimestamp()}); } catch(e){}
+};
+
+const q = query(collection(db,'bnbListings'), orderBy('createdAt','desc'));
+onSnapshot(q, snap => {
+  const live = snap.docs.map(d=>({id:d.id,...d.data()}));
+  if(live.length && typeof window.injectFirestoreListings === 'function') window.injectFirestoreListings(live);
+});
+</script>
+  <!-- REGISTER CTA — universal fallback for other business types -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
+    <button onclick="HubRegister.open({hub:'bnb', category:'bnb'})" style="padding:10px 24px;background:#fb923c;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

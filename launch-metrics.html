@@ -1,0 +1,377 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI — Launch Metrics</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<meta name="theme-color" content="#080808">
+<script src="security.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;padding-bottom:40px;}
+.lm-nav{display:flex;align-items:center;gap:12px;padding:13px 18px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:10;backdrop-filter:blur(16px);}
+.lm-body{max-width:900px;margin:0 auto;padding:18px 14px;}
+.lm-auth{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:12px;text-align:center;}
+.lm-auth h2{font-size:18px;font-weight:900;}
+.lm-auth p{font-size:13px;color:rgba(255,255,255,0.4);}
+.lm-loading{display:flex;align-items:center;justify-content:center;min-height:60vh;font-size:13px;color:rgba(255,255,255,0.3);}
+.lm-main{display:none;}
+/* Period toggle */
+.lm-period{display:flex;gap:6px;margin-bottom:18px;}
+.lm-period-btn{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);font-family:inherit;transition:all .2s;}
+.lm-period-btn.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+/* KPI cards */
+.lm-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+@media(max-width:600px){.lm-kpis{grid-template-columns:repeat(2,1fr);}}
+.lm-kpi{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px;}
+.lm-kpi-label{font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+.lm-kpi-val{font-size:clamp(20px,4vw,28px);font-weight:900;color:#71ff00;line-height:1;}
+.lm-kpi-sub{font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px;}
+.lm-kpi-trend{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;margin-top:4px;}
+.lm-kpi-trend.up{color:#22c55e;}.lm-kpi-trend.down{color:#ff4444;}.lm-kpi-trend.flat{color:rgba(255,255,255,0.3);}
+/* Section title */
+.lm-section-title{font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:20px;}
+/* Tabs */
+.lm-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:16px;}
+.lm-tabs::-webkit-scrollbar{display:none;}
+.lm-tab{padding:9px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
+.lm-tab.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.lm-pane{display:none;}.lm-pane.active{display:block;}
+/* Table */
+.lm-table-wrap{overflow-x:auto;}
+table.lm-table{width:100%;border-collapse:collapse;font-size:12px;}
+.lm-table th{font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);}
+.lm-table td{padding:11px 12px;border-bottom:1px solid rgba(255,255,255,0.04);color:rgba(255,255,255,0.7);vertical-align:middle;}
+.lm-table tr:hover td{background:rgba(255,255,255,0.02);}
+.lm-table td:first-child{font-weight:700;}
+/* Funnel */
+.lm-funnel{display:flex;flex-direction:column;gap:8px;margin-bottom:4px;}
+.lm-funnel-row{display:grid;grid-template-columns:120px 1fr 60px;align-items:center;gap:10px;}
+.lm-funnel-lbl{font-size:11px;color:rgba(255,255,255,0.5);white-space:nowrap;}
+.lm-funnel-bar-wrap{height:22px;background:rgba(255,255,255,0.04);border-radius:6px;overflow:hidden;}
+.lm-funnel-bar{height:100%;background:linear-gradient(90deg,#71ff00,#5ccc00);border-radius:6px;transition:width .6s;}
+.lm-funnel-val{font-size:11px;font-weight:800;color:#71ff00;text-align:right;}
+/* Badges */
+.lm-badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:800;}
+.lm-badge.red{background:rgba(255,68,68,0.12);color:#ff4444;}
+.lm-badge.amber{background:rgba(245,158,11,0.12);color:#f59e0b;}
+.lm-badge.green{background:rgba(34,197,94,0.1);color:#22c55e;}
+/* Card */
+.lm-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;margin-bottom:14px;}
+/* Empty */
+.lm-empty{padding:32px;text-align:center;color:rgba(255,255,255,0.2);font-size:13px;}
+/* Export btn */
+.lm-export{padding:9px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.5);font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;float:right;}
+.lm-export:hover{border-color:rgba(113,255,0,0.3);color:#71ff00;}
+</style>
+</head>
+<body>
+
+<nav class="lm-nav">
+  <a href="admin.html" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:15px;flex-shrink:0;">←</a>
+  <span style="font-size:14px;font-weight:900;">Launch Metrics</span>
+  <button class="lm-export" onclick="exportCSV()" style="margin-left:auto;">Export CSV</button>
+</nav>
+
+<div class="lm-loading" id="lmLoading">Authenticating…</div>
+<div class="lm-auth" id="lmAuth">
+  <div style="font-size:40px;">🔒</div>
+  <h2>Admin Access Only</h2>
+  <p>You need admin privileges to view launch metrics.</p>
+  <a href="admin.html" style="padding:11px 22px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-size:13px;font-weight:800;text-decoration:none;margin-top:8px;">→ Admin Dashboard</a>
+</div>
+
+<div class="lm-body lm-main" id="lmMain">
+  <!-- Period toggle -->
+  <div class="lm-period">
+    <button class="lm-period-btn active" onclick="setPeriod(7,this)">7 Days</button>
+    <button class="lm-period-btn" onclick="setPeriod(30,this)">30 Days</button>
+    <button class="lm-period-btn" onclick="setPeriod(0,this)">All Time</button>
+    <span id="lmLastRefresh" style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.2);align-self:center;"></span>
+  </div>
+
+  <!-- KPIs -->
+  <div class="lm-kpis" id="lmKpis">
+    <div class="lm-kpi"><div class="lm-kpi-label">Users</div><div class="lm-kpi-val" id="k-users">…</div><div class="lm-kpi-sub">Registered accounts</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-label">Sellers</div><div class="lm-kpi-val" id="k-sellers">…</div><div class="lm-kpi-sub">Active shops</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-label">Drivers</div><div class="lm-kpi-val" id="k-drivers">…</div><div class="lm-kpi-sub">Active drivers</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-label">Orders</div><div class="lm-kpi-val" id="k-orders">…</div><div class="lm-kpi-sub">Total placed</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-label">Revenue</div><div class="lm-kpi-val" id="k-revenue">…</div><div class="lm-kpi-sub">KES total GMV</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-label">Commission</div><div class="lm-kpi-val" id="k-commission">…</div><div class="lm-kpi-sub">KES earned</div></div>
+  </div>
+
+  <!-- Secondary KPIs -->
+  <div class="lm-kpis" style="grid-template-columns:repeat(3,1fr);">
+    <div class="lm-kpi"><div class="lm-kpi-label">Rides</div><div class="lm-kpi-val" id="k-rides">…</div><div class="lm-kpi-sub">Booked</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-label">Deliveries</div><div class="lm-kpi-val" id="k-deliveries">…</div><div class="lm-kpi-sub">Completed</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-label">Conversion</div><div class="lm-kpi-val" id="k-conversion">…</div><div class="lm-kpi-sub">Signup→Order</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="lm-tabs">
+    <button class="lm-tab active" onclick="showLMTab('funnel',this)">📊 Funnel</button>
+    <button class="lm-tab" onclick="showLMTab('failures',this)">⚠️ Failures</button>
+    <button class="lm-tab" onclick="showLMTab('tickets',this)">🎫 Support</button>
+    <button class="lm-tab" onclick="showLMTab('events',this)">📋 All Events</button>
+  </div>
+
+  <!-- FUNNEL PANE -->
+  <div class="lm-pane active" id="lmP-funnel">
+    <div class="lm-card">
+      <div style="font-size:13px;font-weight:800;margin-bottom:14px;">Conversion Funnel</div>
+      <div class="lm-funnel" id="lmFunnel">
+        <div class="lm-empty">Loading…</div>
+      </div>
+    </div>
+    <div class="lm-card">
+      <div style="font-size:13px;font-weight:800;margin-bottom:14px;">Metric Timeline</div>
+      <div id="lmTimeline" class="lm-empty">Loading…</div>
+    </div>
+  </div>
+
+  <!-- FAILURES PANE -->
+  <div class="lm-pane" id="lmP-failures">
+    <div class="lm-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:800;">Failed Transactions</div>
+        <select id="lmFailureFilter" onchange="renderFailures()" style="padding:6px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:12px;font-family:inherit;outline:none;">
+          <option value="">All types</option>
+          <option value="payment">Payment</option>
+          <option value="order">Order</option>
+          <option value="delivery">Delivery</option>
+          <option value="ride">Ride</option>
+        </select>
+      </div>
+      <div class="lm-table-wrap"><table class="lm-table"><thead><tr><th>Type</th><th>User</th><th>Page</th><th>Severity</th><th>Time</th></tr></thead><tbody id="lmFailuresTbody"><tr><td colspan="5" style="text-align:center;padding:24px;color:rgba(255,255,255,0.2);">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- TICKETS PANE -->
+  <div class="lm-pane" id="lmP-tickets">
+    <div class="lm-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:800;">Support Tickets</div>
+        <select id="lmTicketFilter" onchange="renderTickets()" style="padding:6px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:12px;font-family:inherit;outline:none;">
+          <option value="">All</option>
+          <option value="open">Open</option>
+          <option value="critical">Critical</option>
+          <option value="payment">Payment</option>
+          <option value="order">Order</option>
+          <option value="delivery">Delivery</option>
+          <option value="account">Account</option>
+        </select>
+      </div>
+      <div class="lm-table-wrap"><table class="lm-table"><thead><tr><th>ID</th><th>Category</th><th>Priority</th><th>Name</th><th>Phone</th><th>Status</th><th>Time</th></tr></thead><tbody id="lmTicketsTbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:rgba(255,255,255,0.2);">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- EVENTS PANE -->
+  <div class="lm-pane" id="lmP-events">
+    <div class="lm-card">
+      <div style="font-size:13px;font-weight:800;margin-bottom:14px;">All Launch Events</div>
+      <div class="lm-table-wrap"><table class="lm-table"><thead><tr><th>Type</th><th>UID</th><th>Page</th><th>Data</th><th>Time</th></tr></thead><tbody id="lmEventsTbody"><tr><td colspan="5" style="text-align:center;padding:24px;color:rgba(255,255,255,0.2);">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, query, where, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+var CFG = { apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE', authDomain:'sokoni-aeb26.firebaseapp.com', projectId:'sokoni-aeb26', storageBucket:'sokoni-aeb26.appspot.com', messagingSenderId:'1012345678', appId:'1:1012345678:web:sokoni' };
+var app = initializeApp(CFG);
+var auth = getAuth(app);
+var db   = getFirestore(app);
+
+var _periodDays = 7;
+var _allMetrics = [], _allFailures = [], _allTickets = [];
+
+window._setLMPeriod = function(days) { _periodDays = days; loadData(); };
+
+onAuthStateChanged(auth, async function(user) {
+  document.getElementById('lmLoading').style.display = 'none';
+  if (!user) { document.getElementById('lmAuth').style.display = 'flex'; return; }
+  /* Check admin claim */
+  var tok = await user.getIdTokenResult();
+  if (!tok.claims.admin) { document.getElementById('lmAuth').style.display = 'flex'; return; }
+  document.getElementById('lmMain').style.display = 'block';
+  loadData();
+});
+
+async function loadData() {
+  var cutoff = _periodDays ? Date.now() - _periodDays * 86400000 : 0;
+  var [mSnap, fSnap, tSnap] = await Promise.all([
+    getDocs(query(collection(db,'launch_metrics'), orderBy('ts','desc'), limit(2000))),
+    getDocs(query(collection(db,'launch_failures'), orderBy('ts','desc'), limit(500))),
+    getDocs(query(collection(db,'support_tickets'), orderBy('ts','desc'), limit(500))),
+  ]);
+  _allMetrics  = mSnap.docs.map(function(d){ return d.data(); });
+  _allFailures = fSnap.docs.map(function(d){ return d.data(); });
+  _allTickets  = tSnap.docs.map(function(d){ return d.data(); });
+
+  var filt = cutoff ? function(r){ return r.ts >= cutoff; } : function(){ return true; };
+  renderKPIs(_allMetrics.filter(filt));
+  renderFunnel(_allMetrics.filter(filt));
+  renderTimeline(_allMetrics.filter(filt));
+  renderFailures();
+  renderTickets();
+  renderEvents(_allMetrics.filter(filt));
+
+  document.getElementById('lmLastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+window._loadData = loadData;
+
+function renderKPIs(rows) {
+  var counts = {};
+  var revenue = 0, commission = 0;
+  rows.forEach(function(r) {
+    counts[r.type] = (counts[r.type]||0)+1;
+    if (r.type==='revenue')    revenue    += Number(r.amount||0);
+    if (r.type==='commission') commission += Number(r.amount||0);
+  });
+  function set(id, val){ var el=document.getElementById(id); if(el) el.textContent=val; }
+  set('k-users',     counts.new_user     || 0);
+  set('k-sellers',   counts.new_seller   || 0);
+  set('k-drivers',   counts.new_driver   || 0);
+  set('k-orders',    (counts.order||0)+(counts.order_paid||0));
+  set('k-rides',    (counts.ride||0)+(counts.ride_complete||0));
+  set('k-deliveries', counts.delivery_complete || 0);
+  set('k-revenue',   revenue   ? 'KES '+revenue.toLocaleString()   : '—');
+  set('k-commission',commission ? 'KES '+commission.toLocaleString() : '—');
+  var users = counts.new_user||0, orders = counts.order||0;
+  set('k-conversion', users ? (orders/users*100).toFixed(1)+'%' : '—');
+}
+
+function renderFunnel(rows) {
+  var steps = [
+    {key:'new_user',      label:'Signed Up'},
+    {key:'new_seller',    label:'Became Seller'},
+    {key:'order',         label:'Order Placed'},
+    {key:'order_paid',    label:'Order Paid'},
+    {key:'delivery_complete', label:'Delivery Done'},
+    {key:'ride',          label:'Ride Booked'},
+    {key:'ride_complete', label:'Ride Complete'},
+  ];
+  var counts = {};
+  rows.forEach(function(r){ counts[r.type]=(counts[r.type]||0)+1; });
+  var max = Math.max.apply(null, steps.map(function(s){ return counts[s.key]||0; })) || 1;
+  var el = document.getElementById('lmFunnel');
+  el.innerHTML = steps.map(function(s) {
+    var v = counts[s.key]||0;
+    var pct = Math.round(v/max*100);
+    return '<div class="lm-funnel-row">' +
+      '<div class="lm-funnel-lbl">'+s.label+'</div>' +
+      '<div class="lm-funnel-bar-wrap"><div class="lm-funnel-bar" style="width:'+pct+'%"></div></div>' +
+      '<div class="lm-funnel-val">'+v+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderTimeline(rows) {
+  /* Group by day */
+  var days = {};
+  rows.forEach(function(r){
+    var d = new Date(r.ts).toLocaleDateString('en-KE',{month:'short',day:'numeric'});
+    if (!days[d]) days[d] = { orders:0, users:0, rides:0, deliveries:0 };
+    if (r.type==='new_user') days[d].users++;
+    if (r.type==='order'||r.type==='order_paid') days[d].orders++;
+    if (r.type==='ride'||r.type==='ride_complete') days[d].rides++;
+    if (r.type==='delivery_complete') days[d].deliveries++;
+  });
+  var el = document.getElementById('lmTimeline');
+  var keys = Object.keys(days).slice(-14);
+  if (!keys.length) { el.innerHTML='<div class="lm-empty">No activity yet.</div>'; return; }
+  el.innerHTML = '<div class="lm-table-wrap"><table class="lm-table"><thead><tr><th>Day</th><th>Users</th><th>Orders</th><th>Rides</th><th>Deliveries</th></tr></thead><tbody>' +
+    keys.reverse().map(function(d){
+      return '<tr><td>'+d+'</td><td>'+days[d].users+'</td><td>'+days[d].orders+'</td><td>'+days[d].rides+'</td><td>'+days[d].deliveries+'</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+window.renderFailures = function() {
+  var cutoff = _periodDays ? Date.now() - _periodDays * 86400000 : 0;
+  var filter = document.getElementById('lmFailureFilter').value;
+  var rows = _allFailures.filter(function(r){
+    return (!cutoff||r.ts>=cutoff) && (!filter||r.type===filter);
+  });
+  var tbody = document.getElementById('lmFailuresTbody');
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:24px;color:rgba(255,255,255,0.2);">No failures in this period ✅</td></tr>'; return; }
+  tbody.innerHTML = rows.slice(0,100).map(function(r){
+    var sev = r.severity==='high'||r.severity==='critical'
+      ? '<span class="lm-badge red">'+r.severity+'</span>'
+      : '<span class="lm-badge amber">'+(r.severity||'medium')+'</span>';
+    return '<tr><td>'+r.type+'</td><td style="font-family:monospace;font-size:11px;">'+(r.uid||'—')+'</td><td style="font-size:11px;color:rgba(255,255,255,0.4);">'+(r.page||'—')+'</td><td>'+sev+'</td><td style="color:rgba(255,255,255,0.35);font-size:11px;">'+_ago(r.ts)+'</td></tr>';
+  }).join('');
+};
+
+window.renderTickets = function() {
+  var filter = document.getElementById('lmTicketFilter').value;
+  var rows = _allTickets.filter(function(r){
+    if (!filter) return true;
+    if (filter==='open') return r.status==='open';
+    if (filter==='critical') return r.priority==='critical';
+    return r.category===filter;
+  });
+  var tbody = document.getElementById('lmTicketsTbody');
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:rgba(255,255,255,0.2);">No tickets.</td></tr>'; return; }
+  tbody.innerHTML = rows.slice(0,100).map(function(r){
+    var pBadge = r.priority==='critical'?'<span class="lm-badge red">critical</span>':r.priority==='high'?'<span class="lm-badge amber">high</span>':'<span class="lm-badge green">'+(r.priority||'medium')+'</span>';
+    var sttBadge = r.status==='resolved'?'<span class="lm-badge green">resolved</span>':'<span class="lm-badge amber">'+(r.status||'open')+'</span>';
+    return '<tr><td style="font-family:monospace;font-size:10px;color:#71ff00;">'+(r.id||'—')+'</td><td>'+(r.category||'—')+'</td><td>'+pBadge+'</td><td>'+(r.name||'—')+'</td><td style="font-size:11px;">'+(r.phone||'—')+'</td><td>'+sttBadge+'</td><td style="color:rgba(255,255,255,0.35);font-size:11px;">'+_ago(r.ts)+'</td></tr>';
+  }).join('');
+};
+
+function renderEvents(rows) {
+  var tbody = document.getElementById('lmEventsTbody');
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:24px;color:rgba(255,255,255,0.2);">No events.</td></tr>'; return; }
+  tbody.innerHTML = rows.slice(0,200).map(function(r){
+    var extra = Object.assign({},r); ['ts','uid','page','type','_col'].forEach(function(k){ delete extra[k]; });
+    var extraStr = JSON.stringify(extra);
+    return '<tr><td><span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;background:rgba(113,255,0,0.08);color:#71ff00;">'+r.type+'</span></td><td style="font-family:monospace;font-size:10px;color:rgba(255,255,255,0.35);">'+(r.uid||'—')+'</td><td style="font-size:10px;color:rgba(255,255,255,0.3);">'+(r.page||'—')+'</td><td style="font-size:10px;color:rgba(255,255,255,0.3);">'+extraStr.substring(0,60)+'</td><td style="color:rgba(255,255,255,0.3);font-size:10px;">'+_ago(r.ts)+'</td></tr>';
+  }).join('');
+}
+
+function _ago(ts) {
+  if (!ts) return '—';
+  var s = Math.round((Date.now()-ts)/1000);
+  if (s < 60)   return s+'s ago';
+  if (s < 3600)  return Math.round(s/60)+'m ago';
+  if (s < 86400) return Math.round(s/3600)+'h ago';
+  return Math.round(s/86400)+'d ago';
+}
+
+window.exportCSV = function() {
+  var rows = [['type','uid','page','ts','amount','severity','id','category','priority','name','phone','status']];
+  _allMetrics.concat(_allFailures).concat(_allTickets).forEach(function(r){
+    rows.push([r.type||'',r.uid||'',r.page||'',r.ts||'',r.amount||'',r.severity||'',r.id||'',r.category||'',r.priority||'',r.name||'',r.phone||'',r.status||'']);
+  });
+  var csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download='sokoni-launch-metrics.csv'; a.click();
+};
+</script>
+
+<script>
+function showLMTab(name, btn) {
+  document.querySelectorAll('.lm-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.lm-pane').forEach(function(p){ p.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('lmP-'+name).classList.add('active');
+}
+
+function setPeriod(days, btn) {
+  document.querySelectorAll('.lm-period-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  if (window._setLMPeriod) _setLMPeriod(days);
+}
+</script>
+<script src="sw-register.js" defer></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

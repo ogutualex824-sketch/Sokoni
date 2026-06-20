@@ -1,0 +1,1254 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Email Center</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="assets/logosokoni.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#060606;color:#fff;min-height:100vh;}
+.page-wrap{max-width:1100px;margin:0 auto;padding:80px 16px 100px;}
+
+/* ── Page header ── */
+.ec-header{display:flex;align-items:center;gap:14px;margin-bottom:28px;flex-wrap:wrap;}
+.ec-header-icon{width:44px;height:44px;border-radius:14px;background:rgba(113,255,0,0.1);
+  border:1px solid rgba(113,255,0,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;}
+.ec-header h1{font-size:22px;font-weight:900;flex:1;}
+.ec-header-sub{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
+
+/* ── Stat cards ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;}
+.stat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;
+  padding:16px;display:flex;flex-direction:column;gap:6px;transition:.2s;}
+.stat-card:hover{border-color:rgba(113,255,0,0.2);}
+.stat-icon{font-size:18px;opacity:.55;}
+.stat-val{font-size:24px;font-weight:900;color:#71ff00;}
+.stat-lbl{font-size:11px;color:rgba(255,255,255,0.35);font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
+
+/* ── Tabs ── */
+.tab-row{display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:2px;-ms-overflow-style:none;scrollbar-width:none;}
+.tab-row::-webkit-scrollbar{display:none;}
+.tab-btn{flex-shrink:0;padding:8px 16px;border:1px solid rgba(255,255,255,0.08);border-radius:20px;
+  background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;
+  cursor:pointer;transition:all .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+.tab-btn.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00;}
+.tab-btn:hover:not(.active){color:rgba(255,255,255,0.75);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* ── Section card ── */
+.section-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
+  border-radius:18px;padding:20px;margin-bottom:16px;}
+.section-title{font-size:13px;font-weight:800;color:rgba(255,255,255,0.7);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;
+  display:flex;align-items:center;gap:8px;}
+.section-title .badge{font-size:10px;background:rgba(113,255,0,0.12);
+  border:1px solid rgba(113,255,0,0.3);color:#71ff00;border-radius:20px;
+  padding:2px 8px;font-weight:700;}
+
+/* ── Toolbar row ── */
+.toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+.ec-search{flex:1;min-width:180px;padding:10px 14px;background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.09);border-radius:12px;font-size:14px;color:#fff;outline:none;font-size:16px;}
+.ec-search:focus{border-color:rgba(113,255,0,0.3);}
+.ec-select{padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);
+  border-radius:12px;font-size:14px;color:#fff;outline:none;font-family:inherit;font-size:16px;}
+.ec-select option{background:#0d1421;}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:12px;
+  font-size:13px;font-weight:700;border:none;cursor:pointer;transition:all .15s;font-family:inherit;}
+.btn-green{background:#71ff00;color:#050a10;}
+.btn-green:hover{background:#8aff30;}
+.btn-ghost{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.65);border:1px solid rgba(255,255,255,0.1);}
+.btn-ghost:hover{background:rgba(255,255,255,0.1);}
+.btn-danger{background:rgba(255,77,109,0.1);color:#ff4d6d;border:1px solid rgba(255,77,109,0.2);}
+.btn-danger:hover{background:rgba(255,77,109,0.2);}
+.btn-sm{padding:5px 11px;font-size:11px;border-radius:8px;}
+
+/* ── DMARC-tab action buttons (ec-btn aliases) ── */
+.ec-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:10px;
+  font-size:12px;font-weight:700;border:none;cursor:pointer;transition:all .15s;font-family:inherit;
+  background:#71ff00;color:#050a10;}
+.ec-btn:hover{background:#8aff30;}
+.ec-btn-ghost{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.65);
+  border:1px solid rgba(255,255,255,0.1) !important;}
+.ec-btn-ghost:hover{background:rgba(255,255,255,0.1);}
+
+/* ── Data table ── */
+.ec-table{width:100%;border-collapse:collapse;font-size:12px;}
+.ec-table th{text-align:left;padding:8px 10px;color:rgba(255,255,255,0.35);font-size:10px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,0.06);}
+.ec-table td{padding:10px;border-bottom:1px solid rgba(255,255,255,0.04);color:rgba(255,255,255,0.75);vertical-align:middle;}
+.ec-table tr:last-child td{border-bottom:none;}
+.ec-table tr:hover td{background:rgba(255,255,255,0.02);}
+.ec-table td .email-addr{font-family:'Courier New',monospace;font-size:11px;color:rgba(255,255,255,0.5);}
+
+/* ── Status badges ── */
+.badge-sent{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.25);}
+.badge-pending{background:rgba(255,180,0,0.1);color:#ffb400;border:1px solid rgba(255,180,0,0.25);}
+.badge-failed{background:rgba(255,77,109,0.1);color:#ff4d6d;border:1px solid rgba(255,77,109,0.25);}
+.badge-skipped{background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.08);}
+.badge-bounced{background:rgba(255,120,0,0.1);color:#ff7800;border:1px solid rgba(255,120,0,0.25);}
+.status-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;}
+
+/* ── Delivery comms section ── */
+.delivery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+.delivery-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;}
+.delivery-card h4{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+.delivery-card .dc-email{font-family:'Courier New',monospace;font-size:11px;color:#71ff00;margin-bottom:10px;}
+.dc-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.dc-row:last-child{border-bottom:none;}
+.dc-val{font-weight:700;color:rgba(255,255,255,0.85);}
+
+/* ── Template preview ── */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px;}
+.tpl-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;
+  padding:14px;cursor:pointer;transition:.15s;}
+.tpl-card:hover{border-color:rgba(113,255,0,0.3);background:rgba(113,255,0,0.03);}
+.tpl-card.selected{border-color:#71ff00;background:rgba(113,255,0,0.05);}
+.tpl-name{font-size:12px;font-weight:700;margin-bottom:3px;}
+.tpl-cat{font-size:10px;color:rgba(255,255,255,0.35);}
+.tpl-preview-frame{width:100%;height:520px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:#050a10;}
+
+/* ── Broadcast form ── */
+.form-row{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.form-row label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.06em;}
+.form-input{padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);
+  border-radius:12px;font-size:16px;color:#fff;outline:none;font-family:inherit;width:100%;}
+.form-input:focus{border-color:rgba(113,255,0,0.3);}
+.form-textarea{resize:vertical;min-height:100px;}
+
+/* ── Preferences table ── */
+.pref-row{display:flex;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.pref-row:last-child{border-bottom:none;}
+.pref-label{flex:1;font-size:13px;}
+.pref-count{font-size:12px;color:rgba(255,255,255,0.35);min-width:60px;text-align:right;margin-right:12px;}
+.pref-pct{font-size:12px;color:#71ff00;font-weight:700;min-width:45px;text-align:right;}
+
+/* ── Empty / loading ── */
+.ec-empty{text-align:center;padding:40px 20px;color:rgba(255,255,255,0.2);}
+.ec-empty i{font-size:32px;margin-bottom:12px;display:block;}
+.ec-loading{text-align:center;padding:32px;color:rgba(255,255,255,0.3);font-size:13px;}
+.spin{animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── Toast ── */
+.ec-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  background:#1a2535;border:1px solid rgba(113,255,0,0.3);color:#fff;
+  padding:10px 20px;border-radius:12px;font-size:13px;font-weight:600;
+  z-index:999;opacity:0;transition:.3s;pointer-events:none;}
+.ec-toast.show{opacity:1;}
+
+/* ── Pagination ── */
+.pagination{display:flex;align-items:center;gap:8px;justify-content:center;padding-top:16px;}
+.pg-btn{padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);
+  border-radius:8px;font-size:12px;color:rgba(255,255,255,0.55);cursor:pointer;}
+.pg-btn:hover{border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.pg-btn.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.pg-info{font-size:12px;color:rgba(255,255,255,0.3);}
+
+@media(max-width:600px){
+  .stat-grid{grid-template-columns:repeat(2,1fr);}
+  .delivery-grid{grid-template-columns:1fr 1fr;}
+  .ec-table td:nth-child(3),.ec-table th:nth-child(3){display:none;}
+  .tpl-grid{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- Top nav (from shared-header) -->
+<div id="shared-header-root"></div>
+
+<div class="page-wrap">
+
+  <!-- Page header -->
+  <div class="ec-header">
+    <div class="ec-header-icon">✉️</div>
+    <div style="flex:1;">
+      <h1>Email Center</h1>
+      <div class="ec-header-sub">Transactional Email · Analytics · Delivery Communications · Broadcast</div>
+    </div>
+    <button class="btn btn-green" id="refreshBtn" onclick="loadAll()">
+      <i class="fa-solid fa-rotate-right"></i> Refresh
+    </button>
+  </div>
+
+  <!-- Stats row -->
+  <div class="stat-grid" id="statsGrid">
+    <div class="stat-card"><div class="stat-icon">✉️</div><div class="stat-val" id="sTotalSent">—</div><div class="stat-lbl">Sent (7d)</div></div>
+    <div class="stat-card"><div class="stat-icon">📭</div><div class="stat-val" id="sQueued">—</div><div class="stat-lbl">Queued</div></div>
+    <div class="stat-card"><div class="stat-icon">❌</div><div class="stat-val" id="sFailed">—</div><div class="stat-lbl">Failed</div></div>
+    <div class="stat-card"><div class="stat-icon">👁️</div><div class="stat-val" id="sOpenRate">—</div><div class="stat-lbl">Open Rate</div></div>
+    <div class="stat-card"><div class="stat-icon">🔗</div><div class="stat-val" id="sClickRate">—</div><div class="stat-lbl">Click Rate</div></div>
+    <div class="stat-card"><div class="stat-icon">🚫</div><div class="stat-val" id="sBounces">—</div><div class="stat-lbl">Bounced</div></div>
+  </div>
+
+  <!-- Tab nav -->
+  <div class="tab-row">
+    <button class="tab-btn active" data-tab="logs">📋 Email Logs</button>
+    <button class="tab-btn" data-tab="queue">📥 Queue</button>
+    <button class="tab-btn" data-tab="delivery">🚚 Delivery Comms</button>
+    <button class="tab-btn" data-tab="broadcast">📢 Broadcast</button>
+    <button class="tab-btn" data-tab="templates">🎨 Templates</button>
+    <button class="tab-btn" data-tab="bounces">⚠️ Bounces</button>
+    <button class="tab-btn" data-tab="prefs">⚙️ Preferences</button>
+    <button class="tab-btn" data-tab="dmarc">🛡️ DMARC</button>
+  </div>
+
+  <!-- ══ EMAIL LOGS ══ -->
+  <div class="tab-panel active" id="tab-logs">
+    <div class="section-card">
+      <div class="section-title">Email Logs <span class="badge" id="logCountBadge">0</span></div>
+      <div class="toolbar">
+        <input class="ec-search" id="logSearch" placeholder="Search email, subject, template…" oninput="filterLogs()">
+        <select class="ec-select" id="logStatusFilter" onchange="filterLogs()">
+          <option value="">All Status</option>
+          <option value="sent">Sent</option>
+          <option value="failed">Failed</option>
+          <option value="skipped">Skipped</option>
+          <option value="bounced">Bounced</option>
+        </select>
+        <select class="ec-select" id="logCatFilter" onchange="filterLogs()">
+          <option value="">All Categories</option>
+          <option value="order">Order</option>
+          <option value="payment">Payment</option>
+          <option value="delivery">Delivery</option>
+          <option value="dispatch">Dispatch</option>
+          <option value="account">Account</option>
+          <option value="security">Security</option>
+          <option value="marketing">Marketing</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="exportLogs()"><i class="fa-solid fa-download"></i> Export</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="ec-table">
+          <thead><tr>
+            <th>To</th><th>Subject</th><th>Template</th><th>Category</th>
+            <th>Status</th><th>Provider</th><th>Time</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="logTbody">
+            <tr><td colspan="8" class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading logs…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="logPagination"></div>
+    </div>
+  </div>
+
+  <!-- ══ QUEUE ══ -->
+  <div class="tab-panel" id="tab-queue">
+    <div class="section-card">
+      <div class="section-title">Email Queue <span class="badge" id="queueCountBadge">0</span></div>
+      <div class="toolbar">
+        <select class="ec-select" id="queueStatusFilter" onchange="loadQueue()">
+          <option value="pending">Pending</option>
+          <option value="processing">Processing</option>
+          <option value="failed">Failed</option>
+          <option value="">All</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="retryFailedQueue()"><i class="fa-solid fa-rotate-right"></i> Retry All Failed</button>
+        <button class="btn btn-danger btn-sm" onclick="purgeQueue()"><i class="fa-solid fa-trash"></i> Purge Sent</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="ec-table">
+          <thead><tr>
+            <th>To</th><th>Subject</th><th>Status</th><th>Retries</th><th>Next Attempt</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="queueTbody">
+            <tr><td colspan="6" class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading queue…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ DELIVERY COMMUNICATIONS ══ -->
+  <div class="tab-panel" id="tab-delivery">
+    <div class="section-card">
+      <div class="section-title">Delivery Communications</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
+        Email volumes from all four operational delivery accounts in the last 7 days.
+      </p>
+      <div class="delivery-grid" id="deliveryCommsGrid">
+        <!-- delivery@ -->
+        <div class="delivery-card">
+          <h4>Delivery</h4>
+          <div class="dc-email">delivery@mysokoni.co.ke</div>
+          <div class="dc-row"><span>Dispatched</span><span class="dc-val" id="dc-delivery-dispatched">—</span></div>
+          <div class="dc-row"><span>Driver Assigned</span><span class="dc-val" id="dc-delivery-assigned">—</span></div>
+          <div class="dc-row"><span>Delayed</span><span class="dc-val" id="dc-delivery-delayed">—</span></div>
+          <div class="dc-row"><span>Failed</span><span class="dc-val" id="dc-delivery-failed">—</span></div>
+        </div>
+        <!-- dispatch@ -->
+        <div class="delivery-card">
+          <h4>Dispatch</h4>
+          <div class="dc-email">dispatch@mysokoni.co.ke</div>
+          <div class="dc-row"><span>Driver Jobs Sent</span><span class="dc-val" id="dc-dispatch-jobs">—</span></div>
+          <div class="dc-row"><span>Unassigned Alerts</span><span class="dc-val" id="dc-dispatch-alerts">—</span></div>
+          <div class="dc-row"><span>Escalations</span><span class="dc-val" id="dc-dispatch-overdue">—</span></div>
+        </div>
+        <!-- drivers@ -->
+        <div class="delivery-card">
+          <h4>Drivers</h4>
+          <div class="dc-email">drivers@mysokoni.co.ke</div>
+          <div class="dc-row"><span>Registrations</span><span class="dc-val" id="dc-drivers-welcome">—</span></div>
+          <div class="dc-row"><span>Approvals</span><span class="dc-val" id="dc-drivers-approved">—</span></div>
+          <div class="dc-row"><span>Doc Expiry Alerts</span><span class="dc-val" id="dc-drivers-docs">—</span></div>
+          <div class="dc-row"><span>Earnings Sent</span><span class="dc-val" id="dc-drivers-earnings">—</span></div>
+        </div>
+        <!-- tracking@ -->
+        <div class="delivery-card">
+          <h4>Tracking</h4>
+          <div class="dc-email">tracking@mysokoni.co.ke</div>
+          <div class="dc-row"><span>Live Links Sent</span><span class="dc-val" id="dc-tracking-links">—</span></div>
+          <div class="dc-row"><span>ETA Updates</span><span class="dc-val" id="dc-tracking-eta">—</span></div>
+          <div class="dc-row"><span>Driver Nearby</span><span class="dc-val" id="dc-tracking-nearby">—</span></div>
+          <div class="dc-row"><span>On the Way</span><span class="dc-val" id="dc-tracking-onway">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent delivery emails -->
+    <div class="section-card">
+      <div class="section-title">Recent Delivery Emails</div>
+      <div style="overflow-x:auto;">
+        <table class="ec-table">
+          <thead><tr>
+            <th>To</th><th>Template</th><th>Status</th><th>Time</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="deliveryLogTbody">
+            <tr><td colspan="5" class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ BROADCAST ══ -->
+  <div class="tab-panel" id="tab-broadcast">
+    <div class="section-card">
+      <div class="section-title">Send Broadcast Email</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
+        Send a custom email to one or more recipients. Large broadcasts are queued automatically.
+      </p>
+      <div class="form-row">
+        <label>Recipients (comma-separated emails or segment)</label>
+        <select class="form-input" id="bcSegment" onchange="updateBcTarget()">
+          <option value="custom">Custom email addresses</option>
+          <option value="all_sellers">All Sellers</option>
+          <option value="all_drivers">All Drivers</option>
+          <option value="all_users">All Users</option>
+        </select>
+      </div>
+      <div class="form-row" id="bcCustomRow">
+        <label>Email Addresses</label>
+        <input class="form-input" id="bcEmails" placeholder="user@email.com, another@email.com">
+      </div>
+      <div class="form-row">
+        <label>Subject</label>
+        <input class="form-input" id="bcSubject" placeholder="SOKONI — Important Update">
+      </div>
+      <div class="form-row">
+        <label>Category</label>
+        <select class="form-input" id="bcCategory">
+          <option value="marketing">Marketing</option>
+          <option value="system">System</option>
+          <option value="account">Account</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Message Body (HTML supported)</label>
+        <textarea class="form-input form-textarea" id="bcBody" placeholder="Write your message here. HTML is supported."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+        <button class="btn btn-ghost" onclick="previewBroadcast()"><i class="fa-solid fa-eye"></i> Preview</button>
+        <button class="btn btn-green" onclick="sendBroadcast()"><i class="fa-solid fa-paper-plane"></i> Send / Queue</button>
+      </div>
+      <div id="bcResult" style="display:none;margin-top:14px;padding:12px 14px;border-radius:10px;font-size:13px;"></div>
+    </div>
+
+    <!-- Preview modal -->
+    <div class="section-card" id="bcPreviewCard" style="display:none;">
+      <div class="section-title">Broadcast Preview</div>
+      <iframe id="bcPreviewFrame" style="width:100%;height:480px;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:#050a10;"></iframe>
+    </div>
+  </div>
+
+  <!-- ══ TEMPLATES ══ -->
+  <div class="tab-panel" id="tab-templates">
+    <div class="section-card">
+      <div class="section-title">Email Templates <span class="badge" id="tplCount">—</span></div>
+      <div class="toolbar">
+        <input class="ec-search" id="tplSearch" placeholder="Search templates…" oninput="filterTemplates()">
+        <select class="ec-select" id="tplCatFilter" onchange="filterTemplates()">
+          <option value="">All Categories</option>
+          <option value="account">Account</option>
+          <option value="order">Orders</option>
+          <option value="payment">Payments</option>
+          <option value="delivery">Delivery</option>
+          <option value="dispatch">Dispatch</option>
+          <option value="security">Security</option>
+          <option value="marketing">Marketing</option>
+        </select>
+      </div>
+      <div class="tpl-grid" id="tplGrid"></div>
+    </div>
+    <div class="section-card" id="tplPreviewCard" style="display:none;">
+      <div class="section-title" id="tplPreviewTitle">Template Preview</div>
+      <iframe class="tpl-preview-frame" id="tplPreviewFrame"></iframe>
+    </div>
+  </div>
+
+  <!-- ══ BOUNCES ══ -->
+  <div class="tab-panel" id="tab-bounces">
+    <div class="section-card">
+      <div class="section-title">Bounced Emails <span class="badge" id="bounceCount">0</span></div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
+        These addresses are blocked from future emails until removed.
+      </p>
+      <div style="overflow-x:auto;">
+        <table class="ec-table">
+          <thead><tr><th>Email</th><th>Bounced At</th><th>Actions</th></tr></thead>
+          <tbody id="bounceTbody">
+            <tr><td colspan="3" class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PREFERENCES ══ -->
+  <div class="tab-panel" id="tab-prefs">
+    <div class="section-card">
+      <div class="section-title">User Email Preferences Overview</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
+        Percentage of users who have opted in to each email category (where preferences exist).
+      </p>
+      <div id="prefsRows">
+        <div class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ DMARC REPORTS ══ -->
+  <div class="tab-panel" id="tab-dmarc">
+    <div class="section-card">
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>🛡️ DMARC Authentication Status</span>
+        <button class="ec-btn" id="dmarcLoadBtn" onclick="loadDmarcData()">Refresh</button>
+      </div>
+
+      <!-- Alert banner -->
+      <div id="dmarcAlertBanner" style="display:none;background:rgba(255,59,48,0.12);border:1px solid rgba(255,59,48,0.3);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-weight:700;color:#ff3b30;margin-bottom:6px;">⚠️ DMARC Failures Detected</div>
+        <div id="dmarcAlertList" style="font-size:12px;color:rgba(255,255,255,0.65);"></div>
+      </div>
+
+      <!-- Stat cards -->
+      <div id="dmarcStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-label">Overall Pass Rate</div><div class="stat-value" id="dmarcPassRateVal">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total Messages</div><div class="stat-value" id="dmarcTotalVal">—</div></div>
+        <div class="stat-card"><div class="stat-label">Failed</div><div class="stat-value" style="color:#ff3b30" id="dmarcFailVal">—</div></div>
+        <div class="stat-card"><div class="stat-label">Open Alerts</div><div class="stat-value" style="color:#fbbf24" id="dmarcAlertsVal">—</div></div>
+      </div>
+
+      <!-- Reports table -->
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:1px;margin-bottom:10px;">AGGREGATE REPORTS</div>
+      <div id="dmarcReportsBody">
+        <div class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading…</div>
+      </div>
+    </div>
+
+    <!-- Upload XML report -->
+    <div class="section-card">
+      <div class="section-title">Upload DMARC Report</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:14px;">
+        Download the XML from <strong>dmarc@mysokoni.co.ke</strong> inbox (sent by Google, Microsoft, Yahoo) and paste it here. The SOKONI parser will extract pass/fail rates and store results.
+      </p>
+      <textarea id="dmarcXmlInput" placeholder="Paste DMARC XML here (or the contents of the .xml file inside the ZIP attachment)..."
+        style="width:100%;min-height:120px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;
+               padding:12px;color:white;font-size:12px;font-family:monospace;resize:vertical;box-sizing:border-box;outline:none;"></textarea>
+      <button class="ec-btn" style="margin-top:10px;" onclick="uploadDmarcXml()">
+        <i class="fa-solid fa-upload"></i> Process Report
+      </button>
+      <div id="dmarcUploadResult" style="margin-top:10px;font-size:13px;"></div>
+    </div>
+
+    <!-- DNS Status -->
+    <div class="section-card">
+      <div class="section-title">DNS Authentication Records</div>
+      <table class="ec-table">
+        <thead><tr><th>Record</th><th>Type</th><th>Current Status</th><th>Action Required</th></tr></thead>
+        <tbody>
+          <tr><td>SPF</td><td>TXT @</td><td><span style="color:#fbbf24;">⚠️ Needs update</span></td><td>Remove +a +mx, add include:sendgrid.net, use -all</td></tr>
+          <tr><td>DKIM (HostPinnacle)</td><td>TXT default._domainkey</td><td><span style="color:#71ff00;">✅ Present</span></td><td>No action needed</td></tr>
+          <tr><td>DKIM (SendGrid s1)</td><td>CNAME s1._domainkey</td><td><span style="color:#ff3b30;">❌ Missing</span></td><td>Complete SendGrid domain authentication</td></tr>
+          <tr><td>DKIM (SendGrid s2)</td><td>CNAME s2._domainkey</td><td><span style="color:#ff3b30;">❌ Missing</span></td><td>Complete SendGrid domain authentication</td></tr>
+          <tr><td>DMARC</td><td>TXT _dmarc</td><td><span style="color:#fbbf24;">⚠️ p=none only</span></td><td>Upgrade to p=quarantine after SendGrid DKIM is live</td></tr>
+          <tr><td>MX</td><td>MX @</td><td><span style="color:#ff3b30;">❌ Self-referential</span></td><td>Set MX to HostPinnacle mail server (not mysokoni.co.ke)</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="https://sendgrid.com/settings/sender_auth" target="_blank" rel="noopener" class="ec-btn" style="text-decoration:none;">
+          Open SendGrid Domain Auth ↗
+        </a>
+        <button class="ec-btn ec-btn-ghost" onclick="window.runDmarcVerify()">
+          <i class="fa-solid fa-rotate"></i> Refresh DNS Status
+        </button>
+      </div>
+    </div>
+
+    <!-- Webhook Setup -->
+    <div class="section-card">
+      <div class="section-title">🔗 Webhook Configuration</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin:0 0 16px;">
+        Register these URLs in your external services to enable real-time event tracking and automated DMARC report ingestion.
+      </p>
+
+      <!-- SendGrid Event Webhook -->
+      <div style="margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.3);margin-bottom:6px;">SENDGRID EVENT WEBHOOK</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <code style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;font-size:12px;color:#71ff00;word-break:break-all;">
+            https://us-central1-sokoni-aeb26.cloudfunctions.net/emailWebhook
+          </code>
+          <button class="ec-btn ec-btn-ghost" style="flex-shrink:0;" onclick="navigator.clipboard.writeText('https://us-central1-sokoni-aeb26.cloudfunctions.net/emailWebhook').then(()=>showToast('Copied!'))">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+        <p style="font-size:11px;color:rgba(255,255,255,0.25);margin:6px 0 0;">
+          SendGrid → Settings → Mail Settings → Event Webhook → paste URL above, enable: Opens, Clicks, Bounces, Dropped
+        </p>
+      </div>
+
+      <!-- DMARC Report Webhook -->
+      <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.3);margin-bottom:6px;">DMARC INBOUND PARSE WEBHOOK</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <code style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;font-size:12px;color:#71ff00;word-break:break-all;">
+            https://us-central1-sokoni-aeb26.cloudfunctions.net/dmarcReportWebhook
+          </code>
+          <button class="ec-btn ec-btn-ghost" style="flex-shrink:0;" onclick="navigator.clipboard.writeText('https://us-central1-sokoni-aeb26.cloudfunctions.net/dmarcReportWebhook').then(()=>showToast('Copied!'))">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+        <p style="font-size:11px;color:rgba(255,255,255,0.25);margin:6px 0 0;">
+          SendGrid → Settings → Inbound Parse → Add Host &amp; URL → hostname: <strong>dmarc.mysokoni.co.ke</strong> → paste URL above
+        </p>
+      </div>
+    </div>
+
+    <!-- Step-by-step Setup Guide -->
+    <div class="section-card">
+      <div class="section-title">📋 Setup Checklist</div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="chk1" style="margin-top:3px;accent-color:#71ff00;">
+          <span><strong>Step 1 — SendGrid Domain Auth:</strong> Log in to SendGrid → Settings → Sender Authentication → Domain Authentication → authenticate <code>mysokoni.co.ke</code>. Copy the 3 CNAME records.</span>
+        </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="chk2" style="margin-top:3px;accent-color:#71ff00;">
+          <span><strong>Step 2 — Add CNAME records in HostPinnacle DNS:</strong>
+            <code>s1._domainkey</code>, <code>s2._domainkey</code>, <code>em</code> → values from SendGrid step above.
+          </span>
+        </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="chk3" style="margin-top:3px;accent-color:#71ff00;">
+          <span><strong>Step 3 — Update SPF in HostPinnacle DNS (TXT @):</strong><br>
+            <code style="background:rgba(255,255,255,0.05);padding:3px 6px;border-radius:4px;font-size:11px;display:inline-block;margin-top:4px;">v=spf1 ip4:46.165.235.143 include:relay.mailbaby.net include:sendgrid.net -all</code>
+          </span>
+        </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="chk4" style="margin-top:3px;accent-color:#71ff00;">
+          <span><strong>Step 4 — Update DMARC in HostPinnacle DNS (TXT _dmarc):</strong><br>
+            <code style="background:rgba(255,255,255,0.05);padding:3px 6px;border-radius:4px;font-size:11px;display:inline-block;margin-top:4px;">v=DMARC1; p=quarantine; rua=mailto:dmarc@mysokoni.co.ke; ruf=mailto:security@mysokoni.co.ke; fo=1; adkim=s; aspf=s; pct=100</code>
+          </span>
+        </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="chk5" style="margin-top:3px;accent-color:#71ff00;">
+          <span><strong>Step 5 — Register SendGrid Event Webhook:</strong> SendGrid → Settings → Mail Settings → Event Webhook → paste the URL from "Webhook Configuration" above.</span>
+        </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="chk6" style="margin-top:3px;accent-color:#71ff00;">
+          <span><strong>Step 6 — Register Inbound Parse Webhook:</strong> SendGrid → Settings → Inbound Parse → Add Host → hostname <code>dmarc.mysokoni.co.ke</code> → paste DMARC webhook URL above. Add MX record for <code>dmarc.mysokoni.co.ke</code> pointing to <code>mx.sendgrid.net</code>.</span>
+        </label>
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;">
+          <input type="checkbox" id="chk7" style="margin-top:3px;accent-color:#71ff00;">
+          <span><strong>Step 7 — After 30 days:</strong> Verify 100% DMARC pass rate in this tab, then upgrade _dmarc record to <code>p=reject</code>.</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<!-- Toast -->
+<div class="ec-toast" id="ecToast"></div>
+
+<!-- Shared header -->
+<script src="shared-header.js"></script>
+<script src="auth-guard.js"></script>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {
+  getFirestore, collection, query, where, orderBy, limit,
+  getDocs, doc, updateDoc, deleteDoc, writeBatch,
+  Timestamp, getCountFromServer
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+const fbCfg = {
+  apiKey:            "AIzaSyDuUa8j0kvN_RHFWv5EuKGxHU2nNnwDICI",
+  authDomain:        "sokoni-aeb26.firebaseapp.com",
+  projectId:         "sokoni-aeb26",
+  storageBucket:     "sokoni-aeb26.appspot.com",
+  messagingSenderId: "955060680750",
+  appId:             "1:955060680750:web:c6ea5b1e5ded4cb0c2b0f7"
+};
+const app  = initializeApp(fbCfg, 'email-center');
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const fns  = getFunctions(app, 'us-central1');
+
+/* ── Auth guard (admin only) ─────────────────────────── */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = 'login.html'; return; }
+  const token = await user.getIdTokenResult();
+  if (!token.claims.isAdmin && !token.claims.isSuperAdmin) {
+    location.href = 'index.html'; return;
+  }
+  window._ecUid = user.uid;
+  loadAll();
+});
+
+/* ── Global state ────────────────────────────────────── */
+let _logs = [], _filteredLogs = [], _logPage = 0;
+const PAGE_SIZE = 50;
+
+/* ── Toast ────────────────────────────────────────────── */
+window.showToast = function(msg, ms = 2800) {
+  const t = document.getElementById('ecToast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+};
+
+/* ── Tab switching ────────────────────────────────────── */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const panel = document.getElementById('tab-' + btn.dataset.tab);
+    if (panel) panel.classList.add('active');
+    if (btn.dataset.tab === 'queue')     loadQueue();
+    if (btn.dataset.tab === 'delivery')  loadDeliveryComms();
+    if (btn.dataset.tab === 'bounces')   loadBounces();
+    if (btn.dataset.tab === 'prefs')     loadPrefs();
+    if (btn.dataset.tab === 'templates') renderTemplates();
+    if (btn.dataset.tab === 'dmarc')     loadDmarcData();
+  });
+});
+
+/* ═════════════════════════════════════════════════════
+   LOAD ALL (stats + logs)
+═════════════════════════════════════════════════════ */
+window.loadAll = async function() {
+  await Promise.all([loadStats(), loadLogs()]);
+};
+
+/* ── Stats ───────────────────────────────────────────── */
+async function loadStats() {
+  const sevenDaysAgo = Timestamp.fromDate(new Date(Date.now() - 7 * 864e5));
+  const tryCount = async (q) => { try { const s = await getCountFromServer(q); return s.data().count; } catch { return 0; } };
+  const logsRef = collection(db, 'emailLogs');
+  const [totalSent, failed, opens, clicks, bounces, queuedCount] = await Promise.all([
+    tryCount(query(logsRef, where('status','==','sent'),   where('sentAt','>=',sevenDaysAgo))),
+    tryCount(query(logsRef, where('status','==','failed'), where('sentAt','>=',sevenDaysAgo))),
+    tryCount(query(logsRef, where('openedAt','!=',null),   where('sentAt','>=',sevenDaysAgo))),
+    tryCount(query(logsRef, where('clickedAt','!=',null),  where('sentAt','>=',sevenDaysAgo))),
+    tryCount(query(logsRef, where('status','==','bounced'))),
+    tryCount(query(collection(db,'emailQueue'), where('status','==','pending'))),
+  ]);
+  document.getElementById('sTotalSent').textContent  = totalSent.toLocaleString();
+  document.getElementById('sQueued').textContent     = queuedCount.toLocaleString();
+  document.getElementById('sFailed').textContent     = failed.toLocaleString();
+  document.getElementById('sOpenRate').textContent   = totalSent ? Math.round(opens/totalSent*100)+'%' : '—';
+  document.getElementById('sClickRate').textContent  = totalSent ? Math.round(clicks/totalSent*100)+'%' : '—';
+  document.getElementById('sBounces').textContent    = bounces.toLocaleString();
+}
+
+/* ── Email logs ──────────────────────────────────────── */
+async function loadLogs() {
+  document.getElementById('logTbody').innerHTML =
+    '<tr><td colspan="8" class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading logs…</td></tr>';
+  try {
+    const sevenDaysAgo = Timestamp.fromDate(new Date(Date.now() - 7 * 864e5));
+    const snap = await getDocs(query(
+      collection(db, 'emailLogs'),
+      where('sentAt', '>=', sevenDaysAgo),
+      orderBy('sentAt', 'desc'),
+      limit(500)
+    ));
+    _logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _filteredLogs = [..._logs];
+    _logPage = 0;
+    renderLogs();
+  } catch (e) {
+    document.getElementById('logTbody').innerHTML =
+      `<tr><td colspan="8" class="ec-empty"><i class="fa-solid fa-circle-exclamation"></i><br>Error: ${e.message}</td></tr>`;
+  }
+}
+
+window.filterLogs = function() {
+  const q    = (document.getElementById('logSearch').value || '').toLowerCase();
+  const st   = document.getElementById('logStatusFilter').value;
+  const cat  = document.getElementById('logCatFilter').value;
+  _filteredLogs = _logs.filter(l => {
+    if (st  && l.status   !== st)  return false;
+    if (cat && l.category !== cat) return false;
+    if (q && !JSON.stringify(l).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  _logPage = 0;
+  renderLogs();
+};
+
+function renderLogs() {
+  document.getElementById('logCountBadge').textContent = _filteredLogs.length;
+  const start = _logPage * PAGE_SIZE;
+  const page  = _filteredLogs.slice(start, start + PAGE_SIZE);
+  if (!page.length) {
+    document.getElementById('logTbody').innerHTML =
+      '<tr><td colspan="8" class="ec-empty"><i class="fa-regular fa-envelope"></i><br>No logs found</td></tr>';
+    document.getElementById('logPagination').innerHTML = '';
+    return;
+  }
+  document.getElementById('logTbody').innerHTML = page.map(l => `
+    <tr>
+      <td><span class="email-addr">${_esc(l.to)}</span></td>
+      <td>${_esc(l.subject || '').slice(0,50)}</td>
+      <td><code style="font-size:10px;color:rgba(255,255,255,0.45);">${_esc(l.template || '')}</code></td>
+      <td>${_esc(l.category || '')}</td>
+      <td><span class="status-badge badge-${l.status || 'sent'}">${_esc(l.status || 'sent')}</span></td>
+      <td>${_esc(l.provider || '')}</td>
+      <td>${_formatTs(l.sentAt)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="resendEmail('${_esc(l.id)}')">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+      </td>
+    </tr>`).join('');
+  renderLogPagination();
+}
+
+function renderLogPagination() {
+  const total  = Math.ceil(_filteredLogs.length / PAGE_SIZE);
+  if (total <= 1) { document.getElementById('logPagination').innerHTML = ''; return; }
+  let html = `<span class="pg-info">${_logPage*PAGE_SIZE+1}–${Math.min((_logPage+1)*PAGE_SIZE,_filteredLogs.length)} of ${_filteredLogs.length}</span>`;
+  if (_logPage > 0) html += `<button class="pg-btn" onclick="setLogPage(${_logPage-1})">‹</button>`;
+  for (let i=0;i<total;i++) {
+    if (Math.abs(i-_logPage)<3||i===0||i===total-1)
+      html += `<button class="pg-btn${i===_logPage?' active':''}" onclick="setLogPage(${i})">${i+1}</button>`;
+    else if (Math.abs(i-_logPage)===3) html += `<span class="pg-info">…</span>`;
+  }
+  if (_logPage < total-1) html += `<button class="pg-btn" onclick="setLogPage(${_logPage+1})">›</button>`;
+  document.getElementById('logPagination').innerHTML = html;
+}
+window.setLogPage = (n) => { _logPage = n; renderLogs(); };
+
+window.exportLogs = function() {
+  const rows = [['To','Subject','Template','Category','Status','Provider','SentAt','MessageId']];
+  _filteredLogs.forEach(l => rows.push([l.to,l.subject||'',l.template||'',l.category||'',l.status||'',l.provider||'',_formatTs(l.sentAt),l.messageId||'']));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `sokoni-email-logs-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+};
+
+window.resendEmail = async function(logId) {
+  try {
+    const fn = httpsCallable(fns, 'resendEmail');
+    await fn({ logId });
+    showToast('Email queued for resend');
+  } catch (e) { showToast('Resend failed: ' + e.message); }
+};
+
+/* ── Queue ───────────────────────────────────────────── */
+window.loadQueue = async function() {
+  document.getElementById('queueTbody').innerHTML =
+    '<tr><td colspan="6" class="ec-loading"><i class="fa-solid fa-circle-notch spin"></i>&nbsp;Loading queue…</td></tr>';
+  const st = document.getElementById('queueStatusFilter').value;
+  try {
+    let q = query(collection(db,'emailQueue'), orderBy('queuedAt','desc'), limit(100));
+    if (st) q = query(collection(db,'emailQueue'), where('status','==',st), orderBy('queuedAt','desc'), limit(100));
+    const snap = await getDocs(q);
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById('queueCountBadge').textContent = items.length;
+    if (!items.length) {
+      document.getElementById('queueTbody').innerHTML =
+        '<tr><td colspan="6" class="ec-empty"><i class="fa-regular fa-envelope"></i><br>Queue is empty</td></tr>';
+      return;
+    }
+    document.getElementById('queueTbody').innerHTML = items.map(i => `
+      <tr>
+        <td><span class="email-addr">${_esc(i.to)}</span></td>
+        <td>${_esc((i.subject||'').slice(0,50))}</td>
+        <td><span class="status-badge badge-${i.status||'pending'}">${_esc(i.status||'pending')}</span></td>
+        <td>${i.retryCount||0} / ${i.maxRetries||3}</td>
+        <td>${_formatTs(i.nextAttempt)}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="cancelQueueItem('${_esc(i.id)}')">
+            <i class="fa-solid fa-xmark"></i> Cancel
+          </button>
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    document.getElementById('queueTbody').innerHTML =
+      `<tr><td colspan="6" class="ec-empty">Error: ${_esc(e.message)}</td></tr>`;
+  }
+};
+
+window.cancelQueueItem = async function(id) {
+  if (!confirm('Cancel this queued email?')) return;
+  await updateDoc(doc(db,'emailQueue',id),{status:'cancelled'});
+  loadQueue();
+  showToast('Email cancelled');
+};
+
+window.retryFailedQueue = async function() {
+  if (!confirm('Retry all failed emails?')) return;
+  const snap = await getDocs(query(collection(db,'emailQueue'),where('status','==','failed'),limit(50)));
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.update(d.ref,{status:'pending',retryCount:0,nextAttempt:Timestamp.now()}));
+  await batch.commit();
+  loadQueue();
+  showToast(`${snap.size} emails set to retry`);
+};
+
+window.purgeQueue = async function() {
+  if (!confirm('Delete all sent/skipped/cancelled items from the queue?')) return;
+  const snap = await getDocs(query(collection(db,'emailQueue'),where('status','in',['sent','skipped','cancelled']),limit(200)));
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+  loadQueue();
+  showToast(`Purged ${snap.size} items`);
+};
+
+/* ── Delivery Communications ─────────────────────────── */
+async function loadDeliveryComms() {
+  const sevenDaysAgo = Timestamp.fromDate(new Date(Date.now() - 7 * 864e5));
+  const logsRef = collection(db,'emailLogs');
+  const tryCount = async (tpl) => {
+    try {
+      const s = await getCountFromServer(query(logsRef,
+        where('template','==',tpl), where('sentAt','>=',sevenDaysAgo)));
+      return s.data().count;
+    } catch { return '—'; }
+  };
+  const counts = await Promise.all([
+    tryCount('delivery-dispatched'), tryCount('driver-assigned'),
+    tryCount('delivery-delayed'),    tryCount('delivery-failed'),
+    tryCount('driver-new-job'),      tryCount('dispatch-unassigned-alert'),
+    tryCount('dispatch-overdue'),
+    tryCount('driver-welcome'),      tryCount('driver-approved'),
+    tryCount('driver-doc-expiry'),   tryCount('driver-earnings'),
+    tryCount('live-tracking-link'),  tryCount('eta-update'),
+    tryCount('driver-nearby'),       tryCount('driver-on-way'),
+  ]);
+  const ids = [
+    'dc-delivery-dispatched','dc-delivery-assigned','dc-delivery-delayed','dc-delivery-failed',
+    'dc-dispatch-jobs','dc-dispatch-alerts','dc-dispatch-overdue',
+    'dc-drivers-welcome','dc-drivers-approved','dc-drivers-docs','dc-drivers-earnings',
+    'dc-tracking-links','dc-tracking-eta','dc-tracking-nearby','dc-tracking-onway',
+  ];
+  ids.forEach((id,i) => { const el = document.getElementById(id); if (el) el.textContent = counts[i]; });
+
+  /* Load recent delivery emails */
+  try {
+    const snap = await getDocs(query(
+      logsRef,
+      where('category','in',['delivery','dispatch']),
+      orderBy('sentAt','desc'), limit(50)
+    ));
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById('deliveryLogTbody').innerHTML = items.length
+      ? items.map(l => `<tr>
+          <td><span class="email-addr">${_esc(l.to)}</span></td>
+          <td><code style="font-size:10px;color:rgba(255,255,255,0.45);">${_esc(l.template||'')}</code></td>
+          <td><span class="status-badge badge-${l.status||'sent'}">${_esc(l.status||'sent')}</span></td>
+          <td>${_formatTs(l.sentAt)}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="resendEmail('${_esc(l.id)}')"><i class="fa-solid fa-rotate-right"></i></button></td>
+        </tr>`).join('')
+      : '<tr><td colspan="5" class="ec-empty"><i class="fa-solid fa-truck"></i><br>No delivery emails yet</td></tr>';
+  } catch(e) {
+    document.getElementById('deliveryLogTbody').innerHTML = `<tr><td colspan="5" class="ec-empty">Error: ${_esc(e.message)}</td></tr>`;
+  }
+}
+
+/* ── Broadcast ───────────────────────────────────────── */
+window.updateBcTarget = function() {
+  const seg = document.getElementById('bcSegment').value;
+  document.getElementById('bcCustomRow').style.display = seg === 'custom' ? '' : 'none';
+};
+
+window.previewBroadcast = function() {
+  const body = document.getElementById('bcBody').value;
+  const subj = document.getElementById('bcSubject').value;
+  if (!body) return;
+  const card  = document.getElementById('bcPreviewCard');
+  const frame = document.getElementById('bcPreviewFrame');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${_esc(subj)}</title>
+    <style>body{background:#050a10;color:white;font-family:Arial,sans-serif;padding:20px;}</style></head>
+</body></html>`;
+  frame.srcdoc = html;
+  card.style.display = '';
+  card.scrollIntoView({ behavior: 'smooth' });
+};
+
+window.sendBroadcast = async function() {
+  const subject  = document.getElementById('bcSubject').value.trim();
+  const body     = document.getElementById('bcBody').value.trim();
+  const segment  = document.getElementById('bcSegment').value;
+  const category = document.getElementById('bcCategory').value;
+  if (!subject || !body) { showToast('Subject and body are required'); return; }
+  let targets = [];
+  if (segment === 'custom') {
+    targets = document.getElementById('bcEmails').value.split(',').map(e => e.trim()).filter(Boolean);
+    if (!targets.length) { showToast('Enter at least one email address'); return; }
+  } else {
+    /* Get emails from Firestore based on segment */
+    try {
+      let col, field;
+      if (segment === 'all_sellers') { col = 'sellers'; field = 'email'; }
+      else if (segment === 'all_drivers') { col = 'drivers'; field = 'email'; }
+      else { col = 'users'; field = 'email'; }
+      const snap = await getDocs(query(collection(db, col), limit(500)));
+      targets = snap.docs.map(d => d.data()[field]).filter(Boolean);
+    } catch(e) { showToast('Failed to load segment: '+e.message); return; }
+  }
+  if (!targets.length) { showToast('No recipients found'); return; }
+  if (!confirm(`Send broadcast to ${targets.length} recipients?`)) return;
+  try {
+    const fn = httpsCallable(fns, 'sendBroadcastEmail');
+    const result = await fn({ subject, html: body, to: targets, category });
+    const res = document.getElementById('bcResult');
+    res.style.display = '';
+    res.style.background = 'rgba(113,255,0,0.08)';
+    res.style.border = '1px solid rgba(113,255,0,0.2)';
+    res.style.color = '#71ff00';
+    res.textContent = `✅ ${result.data.queued || targets.length} emails queued successfully`;
+    showToast(`${targets.length} emails queued`);
+  } catch(e) {
+    const res = document.getElementById('bcResult');
+    res.style.display = '';
+    res.style.background = 'rgba(255,77,109,0.08)';
+    res.style.border = '1px solid rgba(255,77,109,0.2)';
+    res.style.color = '#ff4d6d';
+    res.textContent = '❌ Error: ' + e.message;
+  }
+};
+
+/* ── Templates ───────────────────────────────────────── */
+const TEMPLATE_DEFS = [
+  {name:'welcome',category:'account',label:'Welcome'},
+  {name:'email-verify',category:'account',label:'Email Verification'},
+  {name:'login-alert',category:'security',label:'Login Alert'},
+  {name:'password-reset',category:'security',label:'Password Reset'},
+  {name:'2fa-code',category:'security',label:'2FA Code'},
+  {name:'suspicious-login',category:'security',label:'Suspicious Login'},
+  {name:'seller-approved',category:'account',label:'Seller Approved'},
+  {name:'seller-rejected',category:'account',label:'Seller Rejected'},
+  {name:'product-approved',category:'account',label:'Product Approved'},
+  {name:'product-rejected',category:'account',label:'Product Rejected'},
+  {name:'order-confirmation',category:'order',label:'Order Confirmation'},
+  {name:'order-shipped',category:'order',label:'Order Shipped'},
+  {name:'order-delivered',category:'order',label:'Order Delivered'},
+  {name:'order-cancelled',category:'order',label:'Order Cancelled'},
+  {name:'refund-issued',category:'payment',label:'Refund Issued'},
+  {name:'payment-success',category:'payment',label:'Payment Success'},
+  {name:'payment-failed',category:'payment',label:'Payment Failed'},
+  {name:'seller-payout',category:'payment',label:'Seller Payout'},
+  {name:'subscription-renewal',category:'payment',label:'Subscription Renewal'},
+  {name:'subscription-expiring',category:'payment',label:'Subscription Expiring'},
+  {name:'dispute-opened',category:'order',label:'Dispute Opened'},
+  {name:'dispute-resolved',category:'order',label:'Dispute Resolved'},
+  {name:'delivery-dispatched',category:'delivery',label:'Delivery Dispatched'},
+  {name:'driver-assigned',category:'delivery',label:'Driver Assigned'},
+  {name:'driver-on-way',category:'delivery',label:'Driver On the Way'},
+  {name:'eta-update',category:'delivery',label:'ETA Update'},
+  {name:'delivery-delayed',category:'delivery',label:'Delivery Delayed'},
+  {name:'delivery-failed',category:'delivery',label:'Delivery Failed'},
+  {name:'driver-nearby',category:'delivery',label:'Driver Nearby'},
+  {name:'live-tracking-link',category:'delivery',label:'Live Tracking Link'},
+  {name:'driver-new-job',category:'dispatch',label:'Driver: New Job'},
+  {name:'dispatch-unassigned-alert',category:'dispatch',label:'Unassigned Alert'},
+  {name:'dispatch-overdue',category:'dispatch',label:'Overdue Delivery'},
+  {name:'driver-welcome',category:'account',label:'Driver Welcome'},
+  {name:'driver-approved',category:'account',label:'Driver Approved'},
+  {name:'driver-rejected',category:'account',label:'Driver Rejected'},
+  {name:'driver-doc-expiry',category:'account',label:'Driver Doc Expiry'},
+  {name:'driver-earnings',category:'payment',label:'Driver Earnings'},
+  {name:'driver-performance',category:'account',label:'Driver Performance'},
+  {name:'ticket-purchase',category:'order',label:'Ticket Purchase'},
+  {name:'event-reminder',category:'marketing',label:'Event Reminder'},
+  {name:'property-enquiry',category:'order',label:'Property Enquiry'},
+  {name:'booking-confirmation',category:'order',label:'Booking Confirmation'},
+  {name:'appointment-confirmation',category:'order',label:'Appointment Confirmed'},
+  {name:'appointment-reminder',category:'order',label:'Appointment Reminder'},
+  {name:'legal-consultation',category:'order',label:'Legal Consultation'},
+  {name:'price-drop',category:'marketing',label:'Price Drop Alert'},
+  {name:'back-in-stock',category:'marketing',label:'Back in Stock'},
+  {name:'review-request',category:'marketing',label:'Review Request'},
+  {name:'referral-reward',category:'marketing',label:'Referral Reward'},
+  {name:'security-alert',category:'security',label:'Security Alert'},
+  {name:'fraud-alert',category:'security',label:'Fraud Alert'},
+  {name:'maintenance-notice',category:'system',label:'Maintenance Notice'},
+];
+
+let _selectedTemplate = null;
+
+function renderTemplates(filterCat = '', search = '') {
+  document.getElementById('tplCount').textContent = TEMPLATE_DEFS.length;
+  const filtered = TEMPLATE_DEFS.filter(t =>
+    (!filterCat || t.category === filterCat) &&
+    (!search || t.name.includes(search) || t.label.toLowerCase().includes(search))
+  );
+  document.getElementById('tplGrid').innerHTML = filtered.map(t => `
+    <div class="tpl-card${_selectedTemplate === t.name ? ' selected' : ''}"
+         onclick="previewTemplate('${t.name}','${t.label}')">
+      <div class="tpl-name">${_esc(t.label)}</div>
+      <div class="tpl-cat">${_esc(t.category)}</div>
+    </div>`).join('');
+}
+
+window.filterTemplates = function() {
+  const cat    = document.getElementById('tplCatFilter').value;
+  const search = document.getElementById('tplSearch').value.toLowerCase();
+  renderTemplates(cat, search);
+};
+
+window.previewTemplate = function(name, label) {
+  _selectedTemplate = name;
+  /* Render preview via a data: URL using a sample data set */
+  const samples = {
+    name:'Test User', email:'test@mysokoni.co.ke', orderId:'ORD-001', amount:2500,
+    total:2500, ref:'TX123456', method:'M-Pesa', date:'20 Jun 2026',
+    productName:'SOKONI Product', productId:'prod-001', category:'Electronics', price:2500,
+    eventName:'Nairobi Music Festival', eventDate:'Jul 5 2026', venue:'Uhuru Park',
+    ticketType:'VIP', ticketId:'TKT-001', driverName:'James Otieno', eta:'2:45 PM',
+    deliveryId:'DEL-001', plan:'Pro', days:'7', expiryDate:'Jun 27 2026', nextDate:'Jul 20 2026',
+    storeName:'My Store', accountType:'Seller', lawyerName:'Advocate Wangari',
+    specialty:'Family Law', time:'3:00 PM', fee:5000, providerName:'Dr. Kimani',
+    propertyTitle:'3BR Apartment Kilimani', enquirerName:'John Kamau',
+    alertType:'Multiple failed logins', details:'5 failed login attempts in 60 seconds',
+    code:'482915', verifyUrl:'#', resetUrl:'#', device:'Chrome on macOS', ip:'41.90.xx.xx',
+    location:'Nairobi, Kenya', driverId:'DRV-001', vehicle:'Motorcycle', plate:'KAA 123A',
+    zone:'Westlands', pickup:'Westlands Mall', dropoff:'Karen Estate', distance:'12.4 km',
+    earnings:350, docName:'Driving Licence', fraudType:'Payment velocity anomaly', riskScore:78,
+    checkIn:'Jul 10 2026', checkOut:'Jul 15 2026', oldPrice:3500, newPrice:2500,
+    referredName:'Alice Wanjiru', bookingTitle:'Lakeview Villa', duration:'2 hours',
+    message:'I am interested in viewing the property this weekend.',
+    enquirerPhone:'0712345678', when:'tomorrow', daysUntil:1, eventId:'evt-001',
+    deliveries:23, avgPerTrip:280, payoutDate:'Jun 27 2026', mpesaRef:'QXZ123',
+    phone:'0712345678', period:'this week', completionRate:95, onTimeRate:88,
+    rating:4.7, positive:true,
+  };
+
+  /* Use CF to render (falls back to iframe with srcdoc) */
+  const iframe = document.getElementById('tplPreviewFrame');
+  iframe.srcdoc = '<div style="background:#050a10;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-family:Arial,sans-serif;">Loading preview…</div>';
+  const card  = document.getElementById('tplPreviewCard');
+  document.getElementById('tplPreviewTitle').textContent = `Preview: ${label}`;
+  card.style.display = '';
+  card.scrollIntoView({ behavior: 'smooth' });
+
+  /* Render via server-side onCall for accurate preview */
+  const fn = httpsCallable(fns, 'previewEmailTemplate');
+  fn({ name, data: samples }).then(r => {
+    if (r.data?.html) iframe.srcdoc = r.data.html;
+  }).catch(() => {
+    /* If CF not available, show placeholder */
+    iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <style>body{background:#050a10;color:rgba(255,255,255,0.5);font-family:Arial,sans-serif;
+      padding:40px;text-align:center;}</style></head>
+      <body><p style="font-size:14px;margin-bottom:8px;">Template: <strong style="color:#71ff00;">${_esc(name)}</strong></p>
+</body></html>`;
+  });
+
+  /* Re-render grid with selection */
+  renderTemplates(document.getElementById('tplCatFilter').value, document.getElementById('tplSearch').value.toLowerCase());
+};
+
+/* ── Bounces ─────────────────────────────────────────── */
+async function loadBounces() {
+  try {
+    const snap = await getDocs(query(collection(db,'emailBounces'), orderBy('bouncedAt','desc'), limit(100)));
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById('bounceCount').textContent = items.length;
+    document.getElementById('bounceTbody').innerHTML = items.length
+      ? items.map(b => `<tr>
+          <td><span class="email-addr">${_esc(b.email||b.id)}</span></td>
+          <td>${_formatTs(b.bouncedAt)}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="removeBounce('${_esc(b.id)}')">
+            <i class="fa-solid fa-rotate-left"></i> Unblock
+          </button></td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" class="ec-empty"><i class="fa-regular fa-circle-check"></i><br>No bounced emails</td></tr>';
+  } catch(e) {
+    document.getElementById('bounceTbody').innerHTML = `<tr><td colspan="3" class="ec-empty">Error: ${_esc(e.message)}</td></tr>`;
+  }
+}
+
+window.removeBounce = async function(id) {
+  if (!confirm('Unblock this email address?')) return;
+  await deleteDoc(doc(db,'emailBounces',id));
+  loadBounces();
+  showToast('Address unblocked');
+};
+
+/* ── Preferences overview ────────────────────────────── */
+async function loadPrefs() {
+  const container = document.getElementById('prefsRows');
+  try {
+    const snap = await getDocs(query(collection(db,'emailPreferences'), limit(200)));
+    const items = snap.docs.map(d => d.data());
+    const total = items.length;
+    if (!total) { container.innerHTML = '<div class="ec-empty"><i class="fa-solid fa-sliders"></i><br>No preference data yet</div>'; return; }
+    const cats = ['orders','payments','security','marketing','account'];
+    container.innerHTML = cats.map(cat => {
+      const optedIn = items.filter(p => p[cat] !== false).length;
+      const pct = Math.round(optedIn/total*100);
+      return `<div class="pref-row">
+        <div class="pref-label">${_capitalise(cat)}</div>
+        <div class="pref-count">${optedIn} / ${total}</div>
+        <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:4px;height:6px;margin:0 12px;">
+          <div style="background:#71ff00;height:100%;border-radius:4px;width:${pct}%;"></div>
+        </div>
+        <div class="pref-pct">${pct}%</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = `<div class="ec-empty">Error: ${_esc(e.message)}</div>`;
+  }
+}
+
+/* ── Helpers ─────────────────────────────────────────── */
+function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _formatTs(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('en-KE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+function _capitalise(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+
+/* Initial render of template grid */
+renderTemplates();
+
+/* ══════════════════════════════════════════════════════
+   DMARC REPORTS
+══════════════════════════════════════════════════════ */
+window.loadDmarcData = async function() {
+  const body   = document.getElementById('dmarcReportsBody');
+  const btn    = document.getElementById('dmarcLoadBtn');
+  if (btn) btn.disabled = true;
+
+  try {
+    const fn = httpsCallable(fns, 'getDmarcSummary');
+    const { data } = await fn({});
+
+    /* Stat cards */
+    const el = (id) => document.getElementById(id);
+    if (el('dmarcPassRateVal')) el('dmarcPassRateVal').textContent = data.totals.overallPassRate + '%';
+    if (el('dmarcTotalVal'))    el('dmarcTotalVal').textContent    = (data.totals.messages || 0).toLocaleString();
+    if (el('dmarcFailVal'))     el('dmarcFailVal').textContent     = (data.totals.failures || 0).toLocaleString();
+    if (el('dmarcAlertsVal'))   el('dmarcAlertsVal').textContent   = (data.alerts?.length || 0).toString();
+
+    /* Alert banner */
+    const banner = document.getElementById('dmarcAlertBanner');
+    if (banner && data.alerts?.length > 0) {
+      banner.style.display = '';
+      const alertHtml = data.alerts.map(a =>
+        `<div>• ${_esc(a.orgName)}: ${a.dmarcPassRate}% pass (${a.failCount} failures) — ${_esc(a.severity)}</div>`
+      ).join('');
+      document.getElementById('dmarcAlertList').innerHTML = alertHtml;
+    } else if (banner) {
+      banner.style.display = 'none';
+    }
+
+    /* Reports table */
+    if (!data.reports?.length) {
+      body.innerHTML = `<div style="text-align:center;padding:32px;color:rgba(255,255,255,0.3);">
+        No DMARC reports yet. Upload an XML report below or configure <code>rua=mailto:dmarc@mysokoni.co.ke</code> in your DMARC record.</div>`;
+      return;
+    }
+
+    const rows = data.reports.map(r => {
+      const passColor = r.dmarcPassRate >= 99 ? '#71ff00' : r.dmarcPassRate >= 95 ? '#fbbf24' : '#ff3b30';
+      return `<tr>
+        <td>${_esc(r.orgName)}</td>
+        <td>${r.totalMessages?.toLocaleString() || 0}</td>
+        <td style="color:${passColor};font-weight:700;">${r.dmarcPassRate ?? '—'}%</td>
+        <td>${r.dkimPassRate ?? '—'}%</td>
+        <td>${r.spfPassRate ?? '—'}%</td>
+        <td style="color:${r.failCount > 0 ? '#ff3b30' : 'rgba(255,255,255,0.4)'};">${r.failCount || 0}</td>
+        <td style="font-size:11px;color:rgba(255,255,255,0.4);">${r.beginDate ? r.beginDate.slice(0,10) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    body.innerHTML = `<table class="ec-table">
+      <thead><tr><th>Reporter</th><th>Messages</th><th>DMARC Pass</th><th>DKIM Pass</th><th>SPF Pass</th><th>Failures</th><th>Period Start</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  } catch (e) {
+    body.innerHTML = `<div style="color:rgba(255,255,255,0.4);font-size:13px;padding:16px;">Could not load DMARC data: ${_esc(e.message)}</div>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
+
+window.uploadDmarcXml = async function() {
+  const xml    = document.getElementById('dmarcXmlInput')?.value?.trim();
+  const result = document.getElementById('dmarcUploadResult');
+  if (!xml) { if (result) result.innerHTML = '<span style="color:#fbbf24;">Paste the XML first.</span>'; return; }
+  if (result) result.innerHTML = '<span style="color:rgba(255,255,255,0.5);">Processing…</span>';
+  try {
+    const fn = httpsCallable(fns, 'processDmarcReport');
+    const { data } = await fn({ xml });
+    if (result) result.innerHTML =
+      `<span style="color:#71ff00;">✅ Saved! ${data.totalMessages} messages from ${_esc(data.orgName)} — DMARC pass rate: ${data.dmarcPassRate}%` +
+      (data.failCount > 0 ? ` (${data.failCount} failures — check security@mysokoni.co.ke)` : '') + `</span>`;
+    document.getElementById('dmarcXmlInput').value = '';
+    setTimeout(loadDmarcData, 1000);
+  } catch (e) {
+    if (result) result.innerHTML = `<span style="color:#ff3b30;">Error: ${_esc(e.message)}</span>`;
+  }
+};
+
+/* Refresh DNS Status button — reloads DMARC report data from Firestore */
+window.runDmarcVerify = function() {
+  showToast('Refreshing DMARC data…');
+  loadDmarcData();
+};
+</script>
+
+<script src="sw-register.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

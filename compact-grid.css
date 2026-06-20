@@ -1,0 +1,1302 @@
+/*
+ * SOKONI COMPACT PREMIUM GRID SYSTEM
+ * Square cards · tap to open · buttons only on product page
+ * Mobile  : 2 cols  (large square, comfortable touch)
+ * Tablet  : 3 cols
+ * Desktop : 5 cols
+ */
+
+/* ════════════════════════════════════════════════════════
+   ROOT VARIABLES
+════════════════════════════════════════════════════════ */
+:root {
+  --card-radius:    12px;
+  --card-bg:        rgba(16,16,16,0.96);
+  --card-border:    rgba(255,255,255,0.07);
+  --card-hover-border: rgba(113,255,0,0.28);
+  --card-gap:       8px;
+  --name-size:      11.5px;
+  --price-size:     13px;
+  --meta-size:      9px;
+}
+
+/* ════════════════════════════════════════════════════════
+   UNIVERSAL GRID OVERRIDE
+════════════════════════════════════════════════════════ */
+.products-grid,
+.ptrend-grid,
+#productsContainer,
+#flashProductsGrid,
+.flash-products-grid,
+.sv-grid,
+.hc-grid,
+.lawyers-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap: var(--card-gap) !important;
+  padding: 8px 16px 20px !important;
+  width: 100% !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   UNIVERSAL CARD — square, premium glass look
+════════════════════════════════════════════════════════ */
+.products-grid .product-card,
+.ptrend-grid .product-card,
+#productsContainer .product-card,
+.flash-product-card,
+.b2-product-card,
+.hc-card {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: var(--card-radius) !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  will-change: transform !important;
+  -webkit-tap-highlight-color: transparent !important;
+  min-height: 0 !important;
+}
+/* lawyer-card keeps its own legal-hub styling — not overridden by compact grid */
+.lawyers-grid .lawyer-card {
+  cursor: pointer !important;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.products-grid .product-card:hover,
+.ptrend-grid .product-card:hover,
+#productsContainer .product-card:hover {
+  transform: translateY(-3px) scale(1.012) !important;
+  border-color: var(--card-hover-border) !important;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(113,255,0,0.08) !important;
+  z-index: 2 !important;
+}
+
+.products-grid .product-card:active,
+.ptrend-grid .product-card:active {
+  transform: scale(0.96) !important;
+  opacity: 0.9 !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   IMAGE WRAPPER — perfect square
+════════════════════════════════════════════════════════ */
+.products-grid .product-img-wrap,
+.ptrend-grid .product-img-wrap,
+#productsContainer .product-img-wrap {
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  overflow: hidden !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  height: auto !important;
+}
+
+.products-grid .product-card img,
+.products-grid .product-img-wrap img,
+.ptrend-grid .product-img-wrap img,
+#productsContainer .product-img-wrap img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  transition: transform 0.3s ease !important;
+}
+
+.products-grid .product-card:hover img,
+.ptrend-grid .product-card:hover img,
+#productsContainer .product-card:hover img {
+  transform: scale(1.07) !important;
+}
+
+/* Gradient overlay at image bottom — name/price readability */
+.products-grid .product-img-wrap::after,
+.ptrend-grid .product-img-wrap::after,
+#productsContainer .product-img-wrap::after {
+  content: '' !important;
+  position: absolute !important;
+  bottom: 0 !important; left: 0 !important; right: 0 !important;
+  height: 50% !important;
+  background: linear-gradient(to top, rgba(6,6,6,0.78) 0%, transparent 100%) !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   WISHLIST HEART — floats top-right on image
+════════════════════════════════════════════════════════ */
+.products-grid .product-card .compare-icon-btn,
+.ptrend-grid .product-card .compare-icon-btn {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 50% !important;
+  background: rgba(0,0,0,0.55) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  color: rgba(255,255,255,0.7) !important;
+  font-size: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  z-index: 5 !important;
+  opacity: 0 !important;
+  transition: opacity 0.18s, background 0.18s !important;
+  backdrop-filter: blur(6px) !important;
+}
+.products-grid .product-card:hover .compare-icon-btn,
+.ptrend-grid .product-card:hover .compare-icon-btn {
+  opacity: 1 !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   CATEGORY / LOCATION BADGE — overlaid top-left on image
+════════════════════════════════════════════════════════ */
+.products-grid .loc-tag,
+.ptrend-grid .loc-tag {
+  position: absolute !important;
+  top: 5px !important;
+  left: 5px !important;
+  z-index: 3 !important;
+  font-size: 8px !important;
+  font-weight: 800 !important;
+  padding: 2px 6px !important;
+  border-radius: 5px !important;
+  background: rgba(0,0,0,0.62) !important;
+  color: rgba(255,255,255,0.78) !important;
+  border: none !important;
+  backdrop-filter: blur(4px) !important;
+  white-space: nowrap !important;
+  max-width: 85% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   CARD BODY — compact info strip below image
+════════════════════════════════════════════════════════ */
+.products-grid .product-body,
+.ptrend-grid .product-body,
+#productsContainer .product-body {
+  padding: 7px 8px 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+/* Product name */
+.products-grid .product-name,
+.ptrend-grid .product-name,
+#productsContainer .product-name {
+  font-size: var(--name-size) !important;
+  font-weight: 700 !important;
+  color: rgba(255,255,255,0.93) !important;
+  line-height: 1.3 !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+}
+
+/* Price + rating row */
+.products-grid .product-top-row,
+.ptrend-grid .product-top-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin: 0 !important;
+  gap: 4px !important;
+}
+
+.products-grid .price,
+.ptrend-grid .price,
+#productsContainer .price {
+  font-size: var(--price-size) !important;
+  font-weight: 900 !important;
+  color: #71ff00 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+  letter-spacing: -0.2px !important;
+}
+
+.products-grid .rating-stars,
+.ptrend-grid .rating-stars {
+  font-size: 8px !important;
+  color: rgba(255,255,255,0.3) !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+/* Seller tag */
+.products-grid .seller-tag,
+.ptrend-grid .seller-tag {
+  font-size: 8px !important;
+  color: rgba(255,255,255,0.28) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  margin: 0 !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   HIDE EVERYTHING EXCEPT NAME + PRICE in grid
+════════════════════════════════════════════════════════ */
+.products-grid .product-desc,
+.ptrend-grid .product-desc,
+.products-grid .product-desc-text,
+.ptrend-grid .product-desc-text { display: none !important; }
+
+/* ALL BUTTON ROWS — fully hidden in listing grids */
+.products-grid .product-actions,
+.ptrend-grid .product-actions,
+#productsContainer .product-actions,
+.products-grid .pcard-actions,
+.ptrend-grid .pcard-actions,
+#productsContainer .pcard-actions,
+.products-grid .pcard-actions--compact,
+.ptrend-grid .pcard-actions--compact,
+#productsContainer .pcard-actions--compact,
+.products-grid .product-buttons,
+.ptrend-grid .product-buttons,
+#productsContainer .product-buttons,
+.products-grid .product-buttons-compact,
+.ptrend-grid .product-buttons-compact,
+#productsContainer .product-buttons-compact {
+  display: none !important;
+}
+
+/* Never show on hover either — open product page instead */
+.products-grid .product-card:hover .product-actions,
+.ptrend-grid .product-card:hover .product-actions,
+.products-grid .product-card:hover .pcard-actions,
+.ptrend-grid .product-card:hover .pcard-actions,
+.products-grid .product-card:hover .pcard-actions--compact,
+.ptrend-grid .product-card:hover .pcard-actions--compact {
+  display: none !important;
+}
+
+/* Hide extra badges in tight grid */
+.products-grid .seller-verified-badge,
+.ptrend-grid .seller-verified-badge,
+.products-grid .wishlist-demand-badge,
+.ptrend-grid .wishlist-demand-badge,
+.products-grid .wholesale-badge,
+.ptrend-grid .wholesale-badge {
+  display: none !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   BADGE OVERLAYS on image
+════════════════════════════════════════════════════════ */
+.product-img-wrap .product-badge,
+.product-img-wrap .prod-badge,
+.product-img-wrap .trending-badge,
+.product-img-wrap .flash-badge,
+.product-img-wrap .new-badge {
+  position: absolute !important;
+  top: 5px !important; right: 5px !important;
+  font-size: 7px !important; font-weight: 900 !important;
+  padding: 2px 6px !important; border-radius: 5px !important;
+  z-index: 4 !important; white-space: nowrap !important;
+  text-transform: uppercase !important; letter-spacing: 0.4px !important;
+}
+
+/* Flash sale discount badge */
+.flash-product-card .discount-badge {
+  position: absolute !important;
+  top: 5px !important; right: 5px !important;
+  font-size: 8px !important; font-weight: 900 !important;
+  background: rgba(255,50,50,0.9) !important;
+  color: white !important; padding: 2px 6px !important;
+  border-radius: 5px !important; z-index: 4 !important;
+}
+
+/* OOS overlay */
+.oos-overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  background: rgba(0,0,0,0.55) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  color: rgba(255,255,255,0.7) !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  z-index: 6 !important;
+  border-radius: var(--card-radius) !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   PRICE ROW (price + price change badge)
+════════════════════════════════════════════════════════ */
+.products-grid .price-row,
+.ptrend-grid .price-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  flex-wrap: nowrap !important;
+  margin: 0 !important;
+}
+
+.products-grid .price-change-badge,
+.ptrend-grid .price-change-badge {
+  font-size: 8px !important;
+  padding: 1px 4px !important;
+  border-radius: 4px !important;
+  font-weight: 800 !important;
+}
+
+/* ════════════════════════════════════════════════════════
+   DESKTOP LARGE — 5 cols
+════════════════════════════════════════════════════════ */
+@media (min-width: 1280px) {
+  :root { --name-size: 12px; --price-size: 13.5px; --card-gap: 10px; }
+  .products-grid,
+  .ptrend-grid,
+  #productsContainer,
+  #flashProductsGrid {
+    grid-template-columns: repeat(6, 1fr) !important;
+    padding: 10px 24px 24px !important;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1279px) {
+  :root { --name-size: 11.5px; --price-size: 13px; --card-gap: 9px; }
+  .products-grid,
+  .ptrend-grid,
+  #productsContainer,
+  #flashProductsGrid {
+    grid-template-columns: repeat(5, 1fr) !important;
+    padding: 8px 20px 20px !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   TABLET — 3 cols
+════════════════════════════════════════════════════════ */
+@media (min-width: 601px) and (max-width: 900px) {
+  :root { --name-size: 11px; --price-size: 12px; --card-gap: 8px; }
+  .products-grid,
+  .ptrend-grid,
+  #productsContainer,
+  #flashProductsGrid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    padding: 8px 14px 18px !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   MOBILE — horizontal swipe strip
+   Cards scroll left-right so each one is a comfortable
+   touch target; the peeking edge on the right signals
+   there are more products to swipe to.
+════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  :root { --name-size: 11px; --price-size: 13px; --card-gap: 8px; }
+
+  /* ════════════════════════════════════════════════════════
+     MAIN TRENDING GRID — 2-column portrait layout
+     "What Kenya's Buying": premium browsing, large images
+  ════════════════════════════════════════════════════════ */
+  .ptrend-grid,
+  #productsContainer {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    padding: 6px 12px 20px !important;
+    overflow: visible !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Portrait image — taller than square, more visual impact */
+  .ptrend-grid .product-img-wrap,
+  #productsContainer .product-img-wrap {
+    aspect-ratio: 4 / 5 !important;
+  }
+
+  /* 2-col cards: full column width, no fixed flex sizing */
+  .ptrend-grid .product-card,
+  #productsContainer .product-card {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-shadow:
+      0 6px 28px rgba(0,0,0,0.6),
+      0 0 0 1px rgba(255,255,255,0.08) !important;
+    border-radius: 16px !important;
+  }
+
+  /* Larger body text for bigger cards */
+  .ptrend-grid .product-body,
+  #productsContainer .product-body {
+    padding: 9px 10px 6px !important;
+  }
+  .ptrend-grid .product-name,
+  #productsContainer .product-name {
+    font-size: 12px !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+  }
+  .ptrend-grid .price,
+  #productsContainer .price {
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.3px !important;
+  }
+
+  /* Active: scale + neon glow */
+  .ptrend-grid .product-card:hover,
+  #productsContainer .product-card:hover {
+    transform: none !important;
+    box-shadow: 0 6px 28px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08) !important;
+  }
+  .ptrend-grid .product-card:active,
+  #productsContainer .product-card:active {
+    transform: scale(0.96) !important;
+    opacity: 0.9 !important;
+    transition: transform 0.1s, opacity 0.1s !important;
+    border-color: rgba(113,255,0,0.42) !important;
+    box-shadow: 0 2px 16px rgba(113,255,0,0.22), 0 0 0 1px rgba(113,255,0,0.22) !important;
+  }
+
+  /* ════ PORTRAIT CARD: name + price overlaid on image bottom ════ */
+
+  /* Hide product-body — info lives in the image overlay now */
+  .ptrend-grid .product-body,
+  #productsContainer .product-body {
+    display: none !important;
+  }
+
+  /* Show overlay */
+  .ptrend-grid .pcard-name-overlay,
+  #productsContainer .pcard-name-overlay {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1px !important;
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    padding: 44px 10px 9px !important;
+    background: linear-gradient(to top,
+      rgba(4,4,4,0.97) 0%,
+      rgba(4,4,4,0.75) 42%,
+      rgba(4,4,4,0.18) 72%,
+      transparent 100%) !important;
+    z-index: 2 !important;
+    pointer-events: none !important;
+  }
+
+  /* Category chip — tiny neon label */
+  .ptrend-grid .pcard-ov-cat,
+  #productsContainer .pcard-ov-cat {
+    display: block !important;
+    font-size: 8px !important;
+    font-weight: 800 !important;
+    color: rgba(113,255,0,0.72) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.1em !important;
+    margin-bottom: 2px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* Product name — bold white, 2-line clamp */
+  .ptrend-grid .pcard-ov-name,
+  #productsContainer .pcard-ov-name {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    font-size: 12.5px !important;
+    font-weight: 800 !important;
+    color: #fff !important;
+    line-height: 1.28 !important;
+    letter-spacing: -0.01em !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* Price + stars row */
+  .ptrend-grid .pcard-ov-bottom,
+  #productsContainer .pcard-ov-bottom {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+  }
+
+  /* Price — neon green, large */
+  .ptrend-grid .pcard-ov-price,
+  #productsContainer .pcard-ov-price {
+    font-size: 15px !important;
+    font-weight: 900 !important;
+    color: #71ff00 !important;
+    letter-spacing: -0.4px !important;
+    text-shadow: 0 0 12px rgba(113,255,0,0.45) !important;
+    white-space: nowrap !important;
+  }
+
+  /* Rating stars in overlay */
+  .ptrend-grid .pcard-ov-stars,
+  #productsContainer .pcard-ov-stars {
+    font-size: 9px !important;
+    color: rgba(255,193,7,0.9) !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+  .ptrend-grid .pcard-ov-rcount,
+  #productsContainer .pcard-ov-rcount {
+    color: rgba(255,255,255,0.35) !important;
+    font-size: 8px !important;
+  }
+
+  /* ════ ACTION STRIP: social proof + buttons ════ */
+  .ptrend-grid .pcard-mobile-strip,
+  #productsContainer .pcard-mobile-strip {
+    padding: 7px 10px 10px !important;
+    gap: 6px !important;
+  }
+
+  /* Social proof text */
+  .ptrend-grid .pcard-strip-info,
+  #productsContainer .pcard-strip-info {
+    font-size: 9.5px !important;
+    font-weight: 700 !important;
+    color: rgba(255,255,255,0.45) !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .ptrend-grid .pcard-m-wish,
+  #productsContainer .pcard-m-wish {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 14px !important;
+  }
+  .ptrend-grid .pcard-m-buy,
+  #productsContainer .pcard-m-buy {
+    height: 32px !important;
+    padding: 0 14px !important;
+    font-size: 11.5px !important;
+    border-radius: 16px !important;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     SECONDARY GRIDS — keep horizontal swipe strip
+  ════════════════════════════════════════════════════════ */
+  .products-grid {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch !important;
+    scroll-snap-type: x mandatory !important;
+    overscroll-behavior-x: contain !important;
+    gap: 8px !important;
+    padding: 6px 12px 16px !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  .products-grid::-webkit-scrollbar { display: none !important; }
+
+  /* Fixed-width swipe cards */
+  .products-grid .product-card {
+    flex: 0 0 162px !important;
+    width: 162px !important;
+    min-width: 162px !important;
+    max-width: 162px !important;
+    scroll-snap-align: start !important;
+    align-self: flex-start !important;
+    box-shadow:
+      0 4px 20px rgba(0,0,0,0.65),
+      0 0 0 1px rgba(255,255,255,0.07) !important;
+    border-radius: 14px !important;
+  }
+
+  .products-grid .product-body {
+    padding: 8px 9px 10px !important;
+  }
+  .products-grid .product-name {
+    font-size: 11px !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+  }
+  .products-grid .price {
+    font-size: 13px !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.3px !important;
+  }
+  .products-grid .product-card:hover {
+    transform: none !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.07) !important;
+  }
+  .products-grid .product-card:active {
+    transform: scale(0.95) !important;
+    opacity: 0.88 !important;
+    transition: transform 0.1s, opacity 0.1s !important;
+    border-color: rgba(113,255,0,0.4) !important;
+    box-shadow: 0 2px 12px rgba(113,255,0,0.18), 0 0 0 1px rgba(113,255,0,0.2) !important;
+  }
+
+  /* ════ PREMIUM MOBILE ACTION STRIP ════ */
+
+  .pcard-mobile-strip {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 5px 7px 8px !important;
+    gap: 5px !important;
+    border-top: 1px solid rgba(255,255,255,0.07) !important;
+    background: rgba(255,255,255,0.02) !important;
+  }
+
+  /* Strip info / category tag */
+  .pcard-cat-tag,
+  .pcard-strip-info {
+    font-size: 8.5px !important;
+    font-weight: 800 !important;
+    color: rgba(113,255,0,0.55) !important;
+    letter-spacing: 0.15px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+    text-transform: uppercase !important;
+  }
+
+  .pcard-m-btns {
+    display: flex !important;
+    gap: 5px !important;
+    flex-shrink: 0 !important;
+    align-items: center !important;
+  }
+
+  /* Heart — glowing circle */
+  .pcard-m-wish {
+    width: 28px !important;
+    height: 28px !important;
+    background: rgba(255,30,80,0.1) !important;
+    border: 1px solid rgba(255,45,85,0.32) !important;
+    border-radius: 50% !important;
+    color: #ff4d6d !important;
+    font-size: 13px !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    box-shadow: 0 0 8px rgba(255,45,85,0.18) !important;
+    transition: transform 0.12s ease, box-shadow 0.12s ease !important;
+  }
+  .pcard-m-wish:active {
+    transform: scale(0.85) !important;
+    box-shadow: 0 0 16px rgba(255,45,85,0.45) !important;
+  }
+
+  /* Buy — neon gradient pill with glow */
+  .pcard-m-buy {
+    height: 28px !important;
+    padding: 0 11px !important;
+    background: linear-gradient(135deg, #71ff00 0%, #39e600 100%) !important;
+    border: none !important;
+    border-radius: 14px !important;
+    color: #050e05 !important;
+    font-size: 10.5px !important;
+    font-weight: 900 !important;
+    cursor: pointer !important;
+    font-family: inherit !important;
+    white-space: nowrap !important;
+    letter-spacing: 0.01em !important;
+    box-shadow: 0 2px 10px rgba(113,255,0,0.32) !important;
+    transition: filter 0.12s ease, transform 0.12s ease !important;
+  }
+  .pcard-m-buy:active {
+    filter: brightness(0.88) !important;
+    transform: scale(0.92) !important;
+    box-shadow: 0 1px 6px rgba(113,255,0,0.2) !important;
+  }
+
+  .pcard-m-buy:disabled,
+  .pcard-m-wish:disabled {
+    opacity: 0.32 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   SMALL TABLET PORTRAIT — 601px to 767px
+   3-col grid (from tablet query) + portrait overlay style
+   Smooths the jarring 2-col → 3-col jump at the 600px boundary
+════════════════════════════════════════════════════════ */
+@media (min-width: 601px) and (max-width: 767px) {
+  /* Portrait image ratio */
+  .ptrend-grid .product-img-wrap,
+  #productsContainer .product-img-wrap {
+    aspect-ratio: 4 / 5 !important;
+  }
+
+  /* Hide body — info lives in overlay */
+  .ptrend-grid .product-body,
+  #productsContainer .product-body {
+    display: none !important;
+  }
+
+  /* Show overlay */
+  .ptrend-grid .pcard-name-overlay,
+  #productsContainer .pcard-name-overlay {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1px !important;
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    padding: 44px 10px 9px !important;
+    background: linear-gradient(to top,
+      rgba(4,4,4,0.97) 0%,
+      rgba(4,4,4,0.75) 42%,
+      rgba(4,4,4,0.18) 72%,
+      transparent 100%) !important;
+    z-index: 2 !important;
+    pointer-events: none !important;
+  }
+
+  .ptrend-grid .pcard-ov-cat,
+  #productsContainer .pcard-ov-cat {
+    display: block !important;
+    font-size: 8px !important;
+    font-weight: 800 !important;
+    color: rgba(113,255,0,0.72) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.1em !important;
+    margin-bottom: 2px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .ptrend-grid .pcard-ov-name,
+  #productsContainer .pcard-ov-name {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    font-size: 12.5px !important;
+    font-weight: 800 !important;
+    color: #fff !important;
+    line-height: 1.28 !important;
+    letter-spacing: -0.01em !important;
+    margin-bottom: 4px !important;
+  }
+
+  .ptrend-grid .pcard-ov-bottom,
+  #productsContainer .pcard-ov-bottom {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+  }
+
+  .ptrend-grid .pcard-ov-price,
+  #productsContainer .pcard-ov-price {
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    color: #71ff00 !important;
+    letter-spacing: -0.4px !important;
+    text-shadow: 0 0 12px rgba(113,255,0,0.45) !important;
+    white-space: nowrap !important;
+  }
+
+  .ptrend-grid .pcard-ov-stars,
+  #productsContainer .pcard-ov-stars {
+    font-size: 9px !important;
+    color: rgba(255,193,7,0.9) !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  .ptrend-grid .pcard-ov-rcount,
+  #productsContainer .pcard-ov-rcount {
+    color: rgba(255,255,255,0.35) !important;
+    font-size: 8px !important;
+  }
+
+  .ptrend-grid .pcard-mobile-strip,
+  #productsContainer .pcard-mobile-strip {
+    display: flex !important;
+    padding: 7px 10px 10px !important;
+    gap: 6px !important;
+  }
+
+  .ptrend-grid .pcard-strip-info,
+  #productsContainer .pcard-strip-info {
+    font-size: 9.5px !important;
+    font-weight: 700 !important;
+    color: rgba(255,255,255,0.45) !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .ptrend-grid .pcard-m-wish,
+  #productsContainer .pcard-m-wish {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 14px !important;
+  }
+
+  .ptrend-grid .pcard-m-buy,
+  #productsContainer .pcard-m-buy {
+    height: 32px !important;
+    padding: 0 14px !important;
+    font-size: 11.5px !important;
+    border-radius: 16px !important;
+  }
+}
+
+/* Desktop: hide the mobile strip and the portrait overlay */
+.pcard-mobile-strip  { display: none; }
+.pcard-name-overlay  { display: none; }
+
+/* ════════════════════════════════════════════════════════
+   VERY SMALL PHONES (< 360px) — slightly narrower cards
+════════════════════════════════════════════════════════ */
+@media (max-width: 359px) {
+  :root { --name-size: 10px; --price-size: 12px; --card-gap: 6px; }
+
+  /* Trending: 2-col grid stays, tighten gap/padding */
+  .ptrend-grid,
+  #productsContainer {
+    gap: 7px !important;
+    padding: 4px 10px 14px !important;
+  }
+
+  /* Secondary swipe grids: narrower cards */
+  .products-grid {
+    gap: 6px !important;
+    padding: 4px 10px 14px !important;
+  }
+
+  .products-grid .product-card {
+    flex: 0 0 148px !important;
+    width: 148px !important;
+    min-width: 148px !important;
+    max-width: 148px !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   SECTION HEADERS — "What Kenya's Buying"
+════════════════════════════════════════════════════════ */
+
+/* Header row: title on left, count+see-all on right */
+.ptrend-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 16px 16px 6px !important;
+  gap: 8px !important;
+}
+
+.ptrend-title-block { flex: 1; min-width: 0; }
+
+/* "TRENDING NOW" label with live dot */
+.ptrend-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: rgba(255,255,255,0.38) !important;
+  margin-bottom: 3px !important;
+}
+
+.ptrend-live {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #71ff00 !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 0 6px rgba(113,255,0,0.7) !important;
+  animation: ptrendPulse 1.6s ease-in-out infinite !important;
+}
+
+@keyframes ptrendPulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:0.45; transform:scale(0.65); }
+}
+
+.ptrend-h2 {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  color: white !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.15 !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Right side: count + see all */
+.ptrend-meta {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 3px !important;
+  flex-shrink: 0 !important;
+}
+
+.ptrend-count {
+  font-size: 10px !important;
+  color: rgba(255,255,255,0.3) !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+}
+
+.ptrend-see-all {
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  color: #71ff00 !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  padding: 3px 8px !important;
+  background: rgba(113,255,0,0.08) !important;
+  border: 1px solid rgba(113,255,0,0.2) !important;
+  border-radius: 99px !important;
+  transition: background .15s !important;
+}
+.ptrend-see-all:hover { background: rgba(113,255,0,0.15) !important; }
+
+/* ── Filter pills row: horizontally scrollable, no wrap ── */
+.ptrend-pills {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 16px 10px !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-x: contain !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  flex-wrap: nowrap !important;
+}
+.ptrend-pills::-webkit-scrollbar { display: none !important; }
+
+.ptrend-pill {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  padding: 7px 14px !important;
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 99px !important;
+  color: rgba(255,255,255,0.65) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+  transition: all .15s ease !important;
+}
+
+.ptrend-pill:hover {
+  background: rgba(255,255,255,0.1) !important;
+  color: white !important;
+}
+
+.ptrend-pill.active,
+.ptrend-pill.active-filter {
+  background: rgba(113,255,0,0.14) !important;
+  border-color: rgba(113,255,0,0.38) !important;
+  color: #71ff00 !important;
+  box-shadow: 0 0 8px rgba(113,255,0,0.18) !important;
+}
+
+/* Location select inside pills row */
+.ptrend-loc-wrap {
+  flex-shrink: 0 !important;
+  margin-left: 4px !important;
+}
+
+.ptrend-loc-select {
+  padding: 7px 10px !important;
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 99px !important;
+  color: rgba(255,255,255,0.65) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  font-family: inherit !important;
+  cursor: pointer !important;
+  outline: none !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+}
+
+/* View all row */
+.ptrend-view-all-row {
+  display: flex !important;
+  gap: 8px !important;
+  padding: 10px 16px 4px !important;
+  flex-wrap: wrap !important;
+}
+
+.ptrend-view-all-btn,
+.ptrend-hot-btn,
+.ptrend-arrivals-btn {
+  flex: 1 !important;
+  min-width: 120px !important;
+  padding: 11px 14px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  text-decoration: none !important;
+  text-align: center !important;
+  transition: all .15s ease !important;
+  white-space: nowrap !important;
+  border: 1px solid !important;
+}
+
+.ptrend-view-all-btn {
+  background: rgba(113,255,0,0.09) !important;
+  border-color: rgba(113,255,0,0.22) !important;
+  color: #71ff00 !important;
+}
+.ptrend-view-all-btn:hover {
+  background: rgba(113,255,0,0.16) !important;
+}
+
+.ptrend-hot-btn {
+  background: rgba(249,115,22,0.08) !important;
+  border-color: rgba(249,115,22,0.22) !important;
+  color: #fb923c !important;
+}
+.ptrend-hot-btn:hover {
+  background: rgba(249,115,22,0.15) !important;
+}
+
+.ptrend-arrivals-btn {
+  background: rgba(168,85,247,0.08) !important;
+  border-color: rgba(168,85,247,0.22) !important;
+  color: #c084fc !important;
+}
+.ptrend-arrivals-btn:hover {
+  background: rgba(168,85,247,0.15) !important;
+}
+
+/* ── Mobile overrides ── */
+@media (max-width: 600px) {
+  .ptrend-header { padding: 14px 12px 4px !important; }
+  .ptrend-h2     { font-size: 15px !important; }
+  .ptrend-pills  { padding: 4px 10px 8px !important; gap: 5px !important; }
+  .ptrend-pill   { padding: 6px 11px !important; font-size: 11px !important; }
+  .ptrend-loc-select { font-size: 16px !important; padding: 6px 8px !important; }
+  .ptrend-view-all-row { padding: 8px 10px 4px !important; gap: 6px !important; }
+  .ptrend-view-all-btn,
+  .ptrend-hot-btn,
+  .ptrend-arrivals-btn {
+    padding: 10px 10px !important;
+    font-size: 11px !important;
+    border-radius: 10px !important;
+    min-width: 100px !important;
+  }
+  .ptrend-meta { gap: 2px !important; }
+  .ptrend-see-all { font-size: 11px !important; padding: 2px 7px !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   FLASH SALE GRID
+════════════════════════════════════════════════════════ */
+.flash-products-grid,
+#flashProductsGrid {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+  overflow-x: visible !important;
+  flex-direction: unset !important;
+  flex-wrap: unset !important;
+}
+@media (max-width: 600px) {
+  .flash-products-grid,
+  #flashProductsGrid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    overflow-x: visible !important;
+    flex-direction: unset !important;
+    flex-wrap: unset !important;
+  }
+}
+.flash-product-card .product-buttons { display: none !important; }
+
+/* ════════════════════════════════════════════════════════
+   CATEGORY PAGE GRID
+════════════════════════════════════════════════════════ */
+.cat-products-grid,
+#catProductsGrid,
+.category-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap: var(--card-gap) !important;
+  padding: 10px 16px 80px !important;
+}
+@media (max-width: 600px) {
+  .cat-products-grid,
+  #catProductsGrid,
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    padding: 6px 10px 80px !important;
+    gap: 6px !important;
+  }
+}
+@media (min-width: 601px) and (max-width: 900px) {
+  .cat-products-grid,
+  #catProductsGrid,
+  .category-grid { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   SERVICE CARDS
+════════════════════════════════════════════════════════ */
+.sv-grid {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+.sv-card-emoji { height: 80px !important; font-size: 36px !important; }
+.sv-card-title { font-size: 11px !important; }
+.sv-card-seller{ font-size: 9px !important; }
+.sv-card-price { font-size: 12px !important; margin-bottom: 6px !important; }
+.sv-book-btn   { padding: 8px !important; font-size: 11px !important; }
+
+@media (max-width: 600px) {
+  .sv-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; padding: 4px 10px 12px !important; }
+  .sv-card-emoji { height: 64px !important; font-size: 28px !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   HEALTHCARE GRID
+════════════════════════════════════════════════════════ */
+.hc-grid {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+@media (max-width: 600px) {
+  .hc-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   LAWYER CARDS GRID
+════════════════════════════════════════════════════════ */
+.lawyers-grid {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+@media (max-width: 600px) {
+  .lawyers-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   PROPERTY / BNB GRIDS
+════════════════════════════════════════════════════════ */
+.prop-grid,
+.bnb-grid,
+.cr-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+}
+@media (max-width: 600px) {
+  .prop-grid,
+  .bnb-grid,
+  .cr-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   SCROLLBAR POLISH
+════════════════════════════════════════════════════════ */
+body::-webkit-scrollbar { width: 4px; }
+body::-webkit-scrollbar-track { background: #0a0a0a; }
+body::-webkit-scrollbar-thumb { background: rgba(113,255,0,0.3); border-radius: 2px; }
+body::-webkit-scrollbar-thumb:hover { background: rgba(113,255,0,0.5); }
+
+/* ════════════════════════════════════════════════════════
+   REMOVE EXCESSIVE PAGE PADDING
+════════════════════════════════════════════════════════ */
+.sv-body,
+.cr-body,
+.hc-body {
+  padding-top: 16px !important;
+  padding-bottom: 80px !important;
+}
+.law-body { padding-top: 20px !important; }
+
+.cat-page-header { padding: 16px 24px 14px !important; }
+@media (max-width: 600px) {
+  .cat-page-header { padding: 10px 12px 10px !important; }
+}
+
+/* ════════════════════════════════════════════════════════
+   LIGHT MODE
+════════════════════════════════════════════════════════ */
+body.light-mode .products-grid .product-name,
+body.light-mode .ptrend-grid  .product-name { color: #0a0a0a !important; }
+
+body.light-mode .products-grid .price,
+body.light-mode .ptrend-grid  .price { color: #1a8a00 !important; }
+
+body.light-mode .products-grid .rating-stars,
+body.light-mode .ptrend-grid  .rating-stars { color: rgba(0,0,0,0.4) !important; }
+
+body.light-mode .products-grid .seller-tag,
+body.light-mode .ptrend-grid  .seller-tag { color: rgba(0,0,0,0.45) !important; }
+
+body.light-mode .products-grid .loc-tag,
+body.light-mode .ptrend-grid  .loc-tag {
+  background: rgba(0,0,0,0.08) !important;
+  color: #444 !important;
+}
+
+body.light-mode .products-grid .product-card,
+body.light-mode .ptrend-grid  .product-card {
+  background: #fff !important;
+  border-color: rgba(0,0,0,0.1) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07) !important;
+}
+
+body.light-mode .products-grid .product-img-wrap::after,
+body.light-mode .ptrend-grid  .product-img-wrap::after {
+  background: linear-gradient(to top, rgba(235,235,235,0.88) 0%, transparent 100%) !important;
+}
+
+body.light-mode .products-grid .product-name,
+body.light-mode .ptrend-grid  .product-name { color: #111 !important; }
+
+/* ════════════════════════════════════════════════════════
+   LIGHT MODE — Stories section keeps dark shell
+════════════════════════════════════════════════════════ */
+body.light-mode #storiesSection {
+  background: linear-gradient(135deg,#0d130d,#111a11) !important;
+  border-radius: 16px !important;
+  margin: 0 12px 4px !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important;
+}

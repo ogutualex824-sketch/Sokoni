@@ -1,0 +1,163 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Login</title>
+  <meta name="description" content="Sign in to your SOKONI account — Kenya's #1 online marketplace.">
+  <meta property="og:title" content="SOKONI — Login">
+  <meta property="og:description" content="Sign in to your SOKONI account — Kenya's #1 online marketplace.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="stylesheet" href="auth.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+<script src="shared-header.js" defer></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+  <div class="auth-bg"></div>
+
+  <section class="auth-page">
+    <div class="auth-card">
+
+      <div class="auth-logo-wrap">
+        <img loading="lazy" src="assets/Sokonilogo2.png" class="auth-logo" alt="Sokoni">
+      </div>
+
+      <!-- Security trust strip -->
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.18);border-radius:20px;font-size:10px;font-weight:700;color:rgba(113,255,0,0.85);letter-spacing:0.4px;">🔒 256-bit SSL</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(0,180,255,0.07);border:1px solid rgba(0,180,255,0.18);border-radius:20px;font-size:10px;font-weight:700;color:rgba(0,180,255,0.85);letter-spacing:0.4px;">🔐 Firebase Auth</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.45);letter-spacing:0.4px;">🛡️ Privacy Protected</span>
+      </div>
+
+      <h2 class="auth-title">👋 Welcome Back</h2>
+      <p class="auth-sub">Sign in to your Sokoni account</p>
+
+      <div id="authMsg" class="auth-msg"></div>
+
+      <div class="auth-field">
+        📧
+        <input type="email" id="loginEmail" placeholder="Email address" onkeydown="if(event.key==='Enter')loginUser()">
+      </div>
+
+      <div class="auth-field">
+        🔒
+        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginUser()">
+      </div>
+
+      <button type="button" class="auth-btn" onclick="loginUser()">
+        Sign In →
+      </button>
+
+      <p style="text-align:center;margin:10px 0 0;font-size:13px;">
+        <a href="javascript:void(0)" onclick="document.getElementById('resetModal').style.display='flex'"
+           style="color:rgba(113,255,0,0.7);text-decoration:none;">Forgot password?</a>
+      </p>
+
+      <p class="auth-switch">
+        Don't have an account? <a href="signup.html">Create Account</a>
+      </p>
+
+      <a href="index.html" class="auth-skip">
+        🏪 Continue as Guest
+      </a>
+
+      <!-- Employee Login Divider -->
+      <div style="margin:22px 0 0;border-top:1px solid rgba(255,255,255,0.07);padding-top:18px;text-align:center;">
+        <p style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:10px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">Employee Access</p>
+        <div style="background:rgba(0,180,255,0.06);border:1px solid rgba(0,180,255,0.18);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;text-align:left;">
+          <span style="font-size:22px;line-height:1;">🪪</span>
+          <div>
+            <p style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);margin:0 0 3px;">Shop Employee?</p>
+            <p style="font-size:12px;color:rgba(255,255,255,0.4);margin:0;line-height:1.4;">Use the email &amp; password your shop owner created for you. You'll be taken directly to your store dashboard.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Password reset modal -->
+  <div id="resetModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:32px 24px;max-width:380px;width:100%;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;">
+      <h3 style="margin:0 0 6px;font-size:18px;font-weight:900;">🔑 Reset Password</h3>
+      <p style="font-size:13px;color:rgba(255,255,255,0.45);margin:0 0 20px;line-height:1.5;">Enter your email and date of birth to verify your identity.</p>
+
+      <!-- Step 1: Verify identity -->
+      <div id="resetStep1">
+        <div class="auth-field">
+          📧
+          <input type="email" id="resetEmail" placeholder="Your email address">
+        </div>
+        <div class="auth-field" style="margin-bottom:16px;">
+          🎂
+          <input type="date" id="resetDobDate" placeholder="Date of birth" style="color-scheme:dark;">
+        </div>
+        <button onclick="requestPasswordReset()" style="width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;margin-bottom:10px;">Verify Identity</button>
+      </div>
+
+      <!-- Step 2: New password -->
+      <div id="resetStep2" style="display:none;">
+        <div class="auth-field">
+          🔒
+          <input type="password" id="newPassword" placeholder="New password (min 8 chars)">
+        </div>
+        <div class="auth-field">
+          🔒
+          <input type="password" id="confirmPassword" placeholder="Confirm new password">
+        </div>
+        <button onclick="completePasswordReset()" style="width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;margin-bottom:10px;">Set New Password</button>
+      </div>
+
+      <button onclick="document.getElementById('resetModal').style.display='none'" style="width:100%;padding:10px;background:transparent;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+
+  <script src="demo-seed.js"></script>
+  <script src="sokoni-security.js"></script>
+  <script src="sokoni-alerts.js"></script>
+  <script type="module" src="firebase.js"></script>
+  <script type="module" src="session-manager.js"></script>
+  <script src="auth.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+

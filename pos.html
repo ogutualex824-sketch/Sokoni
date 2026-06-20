@@ -1,0 +1,1036 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#080808">
+  <title>SOKONI SmartPOS</title>
+  <link rel="icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="pos.css">
+  <link rel="stylesheet" href="pos-bos.css">
+  <link rel="stylesheet" href="pos-mobile.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     SETUP WIZARD
+════════════════════════════════════════════════════════════ -->
+<div id="pos-wizard">
+  <div class="wizard-box">
+    <div class="wizard-logo">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI" onerror="this.style.display='none'">
+      <h1>SmartPOS</h1>
+      <p>Kenya's most powerful point of sale system</p>
+    </div>
+    <div class="wizard-steps">
+      <div class="wizard-step active" id="wstep-1"></div>
+      <div class="wizard-step" id="wstep-2"></div>
+      <div class="wizard-step" id="wstep-3"></div>
+      <div class="wizard-step" id="wstep-4"></div>
+      <div class="wizard-step" id="wstep-5"></div>
+    </div>
+
+    <!-- Step 1: Business Info -->
+    <div class="wizard-panel active" id="wpanel-1">
+      <div class="wizard-title">Set up your business</div>
+      <div class="wizard-sub">Enter your details — takes less than 2 minutes</div>
+      <div class="wiz-field">
+        <div class="wiz-label">BUSINESS NAME *</div>
+        <input class="wiz-input" id="biz-name" placeholder="e.g. Kamau Supermarket" autocomplete="organization">
+      </div>
+      <div class="wiz-row">
+        <div class="wiz-field">
+          <div class="wiz-label">BUSINESS TYPE *</div>
+          <select class="wiz-select" id="biz-type">
+            <option value="">Select...</option>
+            <option value="supermarket">Supermarket</option>
+            <option value="minimart">Mini-Mart / Duka</option>
+            <option value="wholesale">Wholesale</option>
+            <option value="pharmacy">Pharmacy</option>
+            <option value="electronics">Electronics Shop</option>
+            <option value="hardware">Hardware Store</option>
+            <option value="boutique">Boutique / Clothing</option>
+            <option value="general">General Retail</option>
+          </select>
+        </div>
+        <div class="wiz-field">
+          <div class="wiz-label">COUNTY</div>
+          <select class="wiz-select" id="biz-county">
+            <option value="Nairobi">Nairobi</option>
+            <option value="Mombasa">Mombasa</option>
+            <option value="Kisumu">Kisumu</option>
+            <option value="Nakuru">Nakuru</option>
+            <option value="Eldoret">Eldoret</option>
+            <option value="Thika">Thika / Kiambu</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="wiz-field">
+        <div class="wiz-label">BUSINESS ADDRESS</div>
+        <input class="wiz-input" id="biz-address" placeholder="Street, Town">
+      </div>
+      <div class="wiz-row">
+        <div class="wiz-field">
+          <div class="wiz-label">PHONE NUMBER</div>
+          <input class="wiz-input" id="biz-phone" placeholder="0700 000 000" type="tel">
+        </div>
+        <div class="wiz-field">
+          <div class="wiz-label">KRA PIN</div>
+          <input class="wiz-input" id="biz-pin" placeholder="A000000000Z">
+        </div>
+      </div>
+      <button class="wiz-btn wiz-btn-primary" onclick="SPos.wizard.next()">Continue →</button>
+    </div>
+
+    <!-- Step 2: M-PESA -->
+    <div class="wizard-panel" id="wpanel-2">
+      <div class="wizard-title">Connect M-PESA</div>
+      <div class="wizard-sub">Enter your Daraja API credentials from Safaricom Business</div>
+      <div class="wiz-row">
+        <div class="wiz-field">
+          <div class="wiz-label">SHORT CODE TYPE *</div>
+          <select class="wiz-select" id="mpesa-type" onchange="SPos.wizard.onMpesaTypeChange(this.value)">
+            <option value="till">Till Number (Buy Goods)</option>
+            <option value="paybill">Paybill Number</option>
+          </select>
+        </div>
+        <div class="wiz-field">
+          <div class="wiz-label">SHORT CODE *</div>
+          <input class="wiz-input" id="mpesa-shortcode" placeholder="e.g. 247247" inputmode="numeric">
+        </div>
+      </div>
+      <div class="wiz-field" id="mpesa-account-row" style="display:none">
+        <div class="wiz-label">DEFAULT ACCOUNT REFERENCE</div>
+        <input class="wiz-input" id="mpesa-account" placeholder="Account reference">
+      </div>
+      <div class="wiz-field">
+        <div class="wiz-label">CONSUMER KEY *</div>
+        <input class="wiz-input" id="mpesa-ck" placeholder="Paste consumer key" autocomplete="off">
+      </div>
+      <div class="wiz-field">
+        <div class="wiz-label">CONSUMER SECRET *</div>
+        <input class="wiz-input" id="mpesa-cs" placeholder="Paste consumer secret" type="password" autocomplete="off">
+      </div>
+      <div class="wiz-field">
+        <div class="wiz-label">LIPA NA M-PESA PASSKEY *</div>
+        <input class="wiz-input" id="mpesa-passkey" placeholder="Paste passkey" type="password" autocomplete="off">
+      </div>
+      <div class="wiz-note">🔒 Credentials are stored encrypted. Never exposed in the browser after setup.</div>
+      <div class="wiz-row" style="margin-top:16px">
+        <button class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.skip()">Skip for now</button>
+        <button class="wiz-btn wiz-btn-primary" id="mpesa-verify-btn" onclick="SPos.wizard.verifyMpesa()">Verify & Connect</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Printer -->
+    <div class="wizard-panel" id="wpanel-3">
+      <div class="wizard-title">Set up receipt printer</div>
+      <div class="wizard-sub">Connect a thermal printer (optional)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <button id="wiz-printer-bt" class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.connectPrinter('bluetooth')" style="padding:14px;font-size:12px">
+          📡<br><strong>Bluetooth</strong><br><small id="wiz-bt-note" style="color:var(--txt3)">Wireless thermal</small>
+        </button>
+        <button id="wiz-printer-usb" class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.connectPrinter('usb')" style="padding:14px;font-size:12px">
+          🔌<br><strong>USB</strong><br><small id="wiz-usb-note" style="color:var(--txt3)">Direct cable</small>
+        </button>
+        <button class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.connectPrinter('network')" style="padding:14px;font-size:12px">
+          🌐<br><strong>Network / IP</strong><br><small style="color:var(--txt3)">Ethernet printer</small>
+        </button>
+        <button class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.connectPrinter('browser')" style="padding:14px;font-size:12px">
+          🖨️<br><strong>Browser Print</strong><br><small style="color:var(--txt3)">Any printer / PDF</small>
+        </button>
+      </div>
+      <div id="printer-network-row" style="display:none;margin-bottom:12px">
+        <div class="wiz-row">
+          <div class="wiz-field"><div class="wiz-label">PRINTER IP</div><input class="wiz-input" id="printer-ip" placeholder="192.168.1.100"></div>
+          <div class="wiz-field"><div class="wiz-label">PORT</div><input class="wiz-input" id="printer-port" value="9100"></div>
+        </div>
+        <button class="wiz-btn wiz-btn-ghost" style="margin-top:8px;padding:10px" onclick="SPos.wizard.connectPrinterNetwork()">Connect</button>
+      </div>
+      <div id="printer-status" style="font-size:12px;color:var(--txt2);margin-bottom:10px;min-height:18px"></div>
+      <div class="wiz-field">
+        <div class="wiz-label">PAPER WIDTH</div>
+        <select class="wiz-select" id="paper-width">
+          <option value="58">58mm (32 columns — most common)</option>
+          <option value="80">80mm (42 columns)</option>
+        </select>
+      </div>
+      <div class="wiz-row" style="margin-top:16px">
+        <button class="wiz-btn wiz-btn-ghost" onclick="SPos.wizard.skip()">Skip</button>
+        <button class="wiz-btn wiz-btn-primary" onclick="SPos.wizard.testAndNext()">Test & Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Create Cashier -->
+    <div class="wizard-panel" id="wpanel-4">
+      <div class="wizard-title">Create admin account</div>
+      <div class="wizard-sub">Your first cashier — you can add more later in Settings</div>
+      <div class="wiz-field"><div class="wiz-label">YOUR NAME *</div><input class="wiz-input" id="cashier-name" placeholder="e.g. Manager / Owner"></div>
+      <div class="wiz-row">
+        <div class="wiz-field"><div class="wiz-label">4-DIGIT PIN *</div><input class="wiz-input" id="cashier-pin" type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••"></div>
+        <div class="wiz-field"><div class="wiz-label">CONFIRM PIN *</div><input class="wiz-input" id="cashier-pin2" type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••"></div>
+      </div>
+      <button class="wiz-btn wiz-btn-primary" style="margin-top:8px" onclick="SPos.wizard.createCashier()">Create Account →</button>
+    </div>
+
+    <!-- Step 5: Done -->
+    <div class="wizard-panel" id="wpanel-5">
+      <div class="wiz-success">
+        <div class="check">🎉</div>
+        <h2>You're all set!</h2>
+        <p>SOKONI SmartPOS is ready.<br>Start selling right now.</p>
+        <div style="margin-top:16px;padding:14px;background:var(--card);border-radius:12px;text-align:left;font-size:12px;color:var(--txt2);line-height:2">
+          ⌨️ Hardware barcode scanner works automatically<br>
+          📦 Demo products loaded — replace with yours<br>
+          💾 All sales saved offline, sync when connected<br>
+          🖨️ Settings → Test Print to verify printer
+        </div>
+        <button class="wiz-btn wiz-btn-primary" style="margin-top:20px" onclick="SPos.wizard.finish()">Start Selling →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     MAIN POS APP
+════════════════════════════════════════════════════════════ -->
+<div id="pos-app" class="hidden">
+
+  <div class="pos-offline-bar hidden" id="offline-bar">📶 Offline — sales saved locally, will sync when connected</div>
+
+  <header class="pos-header">
+    <img src="assets/logosokoni.png" class="pos-header-logo" alt="" onerror="this.style.display='none'">
+    <div>
+      <div class="pos-brand" id="hdr-biz-name">SOKONI SmartPOS</div>
+      <div class="pos-branch" id="branch-name-el">Main Branch</div>
+    </div>
+    <div class="pos-header-spacer"></div>
+    <div class="pos-header-info">
+      <div id="pos-clock" class="pos-time">00:00</div>
+      <div class="pos-online-dot" id="pos-online-dot"></div>
+      <div class="pos-shift-badge closed" id="shift-badge" onclick="SPos.shift.showDialog()" style="cursor:pointer">No Shift</div>
+      <div class="pos-cashier-pill" onclick="SPos.cashier.showSwitchDialog()">
+        <div class="pos-cashier-avatar" id="cashier-avatar">?</div>
+        <div class="pos-cashier-name" id="cashier-name-hdr">Login</div>
+      </div>
+      <button class="pos-header-btn" onclick="SPos.ui.showAlerts()" title="Low stock alerts">🔔</button>
+    </div>
+  </header>
+
+  <nav class="pos-tabs">
+    <button class="pos-tab active" data-tab="pos" onclick="SPos.ui.switchTab('pos')"><span class="tab-icon">🛒</span><span>Checkout</span></button>
+    <button class="pos-tab" data-tab="inventory" onclick="SPos.ui.switchTab('inventory')"><span class="tab-icon">📦</span><span>Inventory</span></button>
+    <button class="pos-tab" data-tab="reports" onclick="SPos.ui.switchTab('reports')"><span class="tab-icon">📊</span><span>Reports</span></button>
+    <button class="pos-tab" data-tab="customers" onclick="SPos.ui.switchTab('customers')"><span class="tab-icon">👤</span><span>Customers</span></button>
+    <button class="pos-tab" data-tab="bos"      onclick="SPos.ui.switchTab('bos')">     <span class="tab-icon">📡</span><span>BOS Hub</span></button>
+    <button class="pos-tab" data-tab="finance"  onclick="SPos.ui.switchTab('finance')"> <span class="tab-icon">💰</span><span>Finance</span></button>
+    <button class="pos-tab" data-tab="repair"   onclick="SPos.ui.switchTab('repair')">  <span class="tab-icon">🔧</span><span>Repairs</span></button>
+    <button class="pos-tab" data-tab="audit"    onclick="SPos.ui.switchTab('audit')">   <span class="tab-icon">📋</span><span>Audit</span></button>
+    <button class="pos-tab" data-tab="settings" onclick="SPos.ui.switchTab('settings')"><span class="tab-icon">⚙️</span><span>Settings</span></button>
+  </nav>
+
+  <div class="pos-content">
+
+    <!-- POS Checkout -->
+    <div id="panel-pos" class="pos-panel active">
+      <aside class="pos-products">
+        <div class="pos-search-bar">
+          <input class="pos-search-input" id="product-search" placeholder="Search or scan barcode..."
+                 oninput="SPos._debouncedProductSearch(this.value)"
+                 onkeydown="if(event.key==='Enter')SPos.products.searchEnter(this.value)">
+          <button class="pos-scan-btn" id="scan-btn" onclick="SPos.barcode.toggleScanner()" title="Camera scan">📷</button>
+        </div>
+        <div class="pos-categories" id="category-chips">
+          <div class="cat-chip active" data-cat="" onclick="SPos.products.filterCategory(this,'')">All</div>
+        </div>
+        <div class="pos-product-grid" id="product-grid">
+          <div class="pos-empty"><div class="empty-icon">📦</div><p>Loading...</p></div>
+        </div>
+      </aside>
+
+      <section class="pos-cart">
+        <div class="pos-cart-header">
+          <span class="pos-cart-title">Cart</span>
+          <span class="pos-cart-count" id="cart-count">0 items</span>
+          <button class="pos-cart-clear" onclick="SPos.cart.clear()">Clear</button>
+        </div>
+        <div class="pos-cart-items" id="cart-items">
+          <div class="cart-empty"><div class="cart-empty-icon">🛒</div><p>Scan or tap products<br>to add to cart</p></div>
+        </div>
+        <div class="pos-cart-footer">
+          <div class="cart-totals">
+            <div class="cart-total-row" id="row-subtotal" style="display:none"><span>Subtotal</span><span class="cart-total-val" id="cart-subtotal">KES 0.00</span></div>
+            <div class="cart-total-row discount" id="row-discount" style="display:none"><span>Discount</span><span class="cart-total-val" id="cart-discount">-KES 0.00</span></div>
+            <div class="cart-total-row" id="row-tax" style="display:none"><span>VAT</span><span class="cart-total-val" id="cart-tax">KES 0.00</span></div>
+            <div class="cart-total-row main"><span>TOTAL</span><span class="cart-total-val" id="cart-total">KES 0.00</span></div>
+          </div>
+          <div class="cart-actions">
+            <button class="cart-action-btn" onclick="SPos.cart.discount()">% Discount</button>
+            <button class="cart-action-btn" onclick="SPos.cart.hold()">⏸ Hold</button>
+            <button class="cart-action-btn" onclick="SPos.cart.recall()">📋 Recall</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="pos-payment">
+        <div class="pos-pay-header">
+          <div class="pos-pay-label">AMOUNT DUE</div>
+          <div class="pos-pay-total"><small>KES </small><span id="pay-total-display">0.00</span></div>
+        </div>
+        <div class="pos-customer-row">
+          <button class="pos-customer-btn" id="customer-btn" onclick="SPos.customers.selectDialog()">👤 Walk-in Customer</button>
+        </div>
+        <div class="pos-pay-methods">
+          <div class="pay-methods-label">PAYMENT METHOD</div>
+          <div class="pay-method-grid">
+            <button class="pay-method-btn active" data-method="cash" onclick="SPos.payment.setMethod('cash')"><span class="method-icon">💵</span>Cash</button>
+            <button class="pay-method-btn mpesa" data-method="mpesa" onclick="SPos.payment.setMethod('mpesa')"><span class="method-icon">📱</span>M-PESA</button>
+            <button class="pay-method-btn" data-method="card" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card</button>
+            <button class="pay-method-btn" data-method="split" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split</button>
+          </div>
+          <!-- Terminal status indicator — populated by PosTerminals -->
+          <div id="terminal-status-bar" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;padding:2px 0"></div>
+        </div>
+        <div class="pos-numpad">
+          <div class="numpad-display">
+            <span class="numpad-display-label" id="numpad-label">Amount tendered</span>
+            <span class="numpad-display-val" id="numpad-val">0</span>
+          </div>
+          <div class="numpad-grid">
+            <button class="numpad-key" onclick="SPos.payment.numpad('7')">7</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('8')">8</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('9')">9</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('4')">4</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('5')">5</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('6')">6</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('1')">1</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('2')">2</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('3')">3</button>
+            <button class="numpad-key dot" onclick="SPos.payment.numpad('.')">.</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('0')">0</button>
+            <button class="numpad-key back" onclick="SPos.payment.numpad('back')">⌫</button>
+            <button class="numpad-key clear-num" onclick="SPos.payment.numpad('clear')">Clear</button>
+            <button class="numpad-key" onclick="SPos.payment.numpad('exact')" style="font-size:11px;font-weight:800;color:var(--green)">Exact</button>
+          </div>
+        </div>
+        <button class="pos-pay-btn" id="pay-btn" onclick="SPos.payment.process()" disabled>Charge KES 0.00</button>
+      </aside>
+    </div>
+
+    <!-- Inventory -->
+    <div id="panel-inventory" class="pos-panel">
+      <div class="inv-toolbar">
+        <input class="inv-search" id="inv-search" placeholder="Search inventory..." oninput="SPos._debouncedInvSearch(this.value)">
+        <button class="inv-btn inv-btn-green" onclick="SPos.inv.addProductDialog()">+ Add Product</button>
+        <button class="inv-btn ai-import-btn" onclick="SPos.bos.openAIImport()">🤖 AI Import</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.inv.stockInDialog()">Stock In</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.inv.purchaseOrderDialog()">Purchase Order</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.inv.exportCSV()">Export CSV</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.inv.printLabels()">Print Labels</button>
+      </div>
+      <div class="inv-tabs">
+        <button class="inv-tab active" data-inv-tab="products" onclick="SPos.inv.showTab('products',this)">All Products</button>
+        <button class="inv-tab" data-inv-tab="low-stock" onclick="SPos.inv.showTab('low-stock',this)">Low Stock</button>
+        <button class="inv-tab" data-inv-tab="expiry" onclick="SPos.inv.showTab('expiry',this)">Expiry Alerts</button>
+        <button class="inv-tab" data-inv-tab="movements" onclick="SPos.inv.showTab('movements',this)">Movements</button>
+        <button class="inv-tab" data-inv-tab="suppliers" onclick="SPos.inv.showTab('suppliers',this)">Suppliers</button>
+      </div>
+      <div class="inv-body" id="inv-body"><div class="pos-empty" style="padding:60px 20px"><div class="empty-icon">📦</div><p>Loading...</p></div></div>
+    </div>
+
+    <!-- Reports -->
+    <div id="panel-reports" class="pos-panel">
+      <div class="rep-header">
+        <strong style="font-size:14px;font-weight:800;white-space:nowrap">Reports</strong>
+        <input class="rep-date-input" type="date" id="rep-date-from">
+        <span style="color:var(--txt2);font-size:12px">to</span>
+        <input class="rep-date-input" type="date" id="rep-date-to">
+        <button class="inv-btn inv-btn-green" onclick="SPos.reports.setRange('today')">Generate</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.reports.printReport()">Print</button>
+        <div style="flex:1"></div>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('today')">Today</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('week')">Week</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('month')">Month</button>
+      </div>
+      <div class="inv-tabs" style="margin:0;padding:0 12px;border-bottom:1px solid var(--border)">
+        <button class="inv-tab rep-subtab active" data-subtab="summary" onclick="SPos.reports.switchSubTab('summary')">Summary</button>
+        <button class="inv-tab rep-subtab" data-subtab="transactions" onclick="SPos.reports.switchSubTab('transactions')">Transaction List</button>
+      </div>
+      <div class="rep-body" id="reports-body"><div class="pos-empty"><div class="empty-icon">📊</div><p>Select a date range and click Generate</p></div></div>
+    </div>
+
+    <!-- Customers -->
+    <div id="panel-customers" class="pos-panel">
+      <div class="inv-toolbar">
+        <input class="inv-search" id="cust-search" placeholder="Search customers..." oninput="SPos._debouncedCustSearch(this.value)">
+        <button class="inv-btn inv-btn-green" onclick="SPos.customers.addDialog()">+ Add Customer</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.customers.exportCSV()">Export</button>
+      </div>
+      <div class="inv-body" id="customers-body"><div class="pos-empty"><div class="empty-icon">👤</div><p>No customers yet</p></div></div>
+    </div>
+
+    <!-- Finance Module -->
+    <div id="panel-finance" class="pos-panel">
+      <div class="bos-panel-body">
+        <div id="finance-hub-body"></div>
+      </div>
+    </div>
+
+    <!-- Repair Center -->
+    <div id="panel-repair" class="pos-panel">
+      <div class="bos-panel-body">
+        <div id="repair-body"></div>
+      </div>
+    </div>
+
+    <!-- Audit & Compliance -->
+    <div id="panel-audit" class="pos-panel">
+      <div class="bos-panel-body">
+        <div id="audit-hub-body"></div>
+      </div>
+    </div>
+
+    <!-- BOS Hub -->
+    <div id="panel-bos" class="pos-panel">
+      <div class="bos-panel-body">
+        <div class="bos-topbar">
+          <div>
+            <div class="bos-panel-title">Business Operating System</div>
+            <div class="bos-panel-sub">Real-time intelligence for your business</div>
+          </div>
+          <button class="bos-refresh-btn" onclick="SPos.ui.switchTab('bos')">↻ Refresh</button>
+        </div>
+        <div id="bos-quick-actions"></div>
+        <div id="bos-analytics-body" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="panel-settings" class="pos-panel">
+      <div class="settings-body">
+        <div class="settings-section">
+          <div class="settings-section-title">BUSINESS PROFILE</div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Business Name</strong><span>Shown on receipts</span></div><input class="settings-input" id="s-biz-name"></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Address</strong></div><input class="settings-input" id="s-biz-address"></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Phone</strong></div><input class="settings-input" id="s-biz-phone"></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>KRA PIN</strong></div><input class="settings-input" id="s-biz-pin"></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Receipt Footer</strong></div><input class="settings-input" id="s-receipt-footer" placeholder="Thank you!"></div>
+          <div class="settings-row"><div></div><button class="settings-save-btn" onclick="SPos.settings.save()">Save</button></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">PRINTER</div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="SPos.printerSetup()">Connect</button><button class="inv-btn inv-btn-outline" onclick="PosPrinter.testPrint(SPos.state.settings).catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Paper Width</strong></div><select class="settings-input" id="s-paper-width" onchange="SPos.settings.savePaperWidth(this.value)"><option value="58">58mm</option><option value="80">80mm</option></select></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Auto-print receipts</strong><span>After every sale</span></div><label class="toggle"><input type="checkbox" id="s-auto-print" onchange="SPos.settings.saveToggle('autoPrint',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Open Cash Drawer</strong><span>After cash payment</span></div><label class="toggle"><input type="checkbox" id="s-cash-drawer" onchange="SPos.settings.saveToggle('openCashDrawer',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">TAX &amp; LOYALTY</div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Default VAT Rate (%)</strong></div><input class="settings-input" id="s-tax-rate" type="number" min="0" max="100" value="16" style="width:80px"></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Tax-inclusive prices</strong><span>Prices already include VAT</span></div><label class="toggle"><input type="checkbox" id="s-tax-inclusive" onchange="SPos.settings.saveToggle('taxInclusive',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Loyalty Points</strong><span>Points per KES 100</span></div><input class="settings-input" id="s-loyalty-rate" type="number" min="0" value="1" style="width:80px"></div>
+          <div class="settings-row"><div></div><button class="settings-save-btn" onclick="SPos.settings.save()">Save</button></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">CASHIERS</div>
+          <div id="cashiers-list"></div>
+          <div class="settings-row"><div></div><button class="settings-save-btn" onclick="SPos.cashier.addDialog()">+ Add Cashier</button></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">CATEGORIES</div>
+          <div id="cats-manager-container"></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">💳 DEVICES</div>
+          <div id="devices-hub-body" style="min-height:60px"><div style="padding:16px 0;color:var(--txt2);font-size:13px">Loading devices...</div></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">M-PESA</div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Credentials</strong><span id="mpesa-config-status">Not configured</span></div><button class="settings-save-btn" onclick="SPos.mpesa.setupDialog()">Configure</button></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">DATA &amp; SYNC</div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Sync to Cloud</strong><span>Push offline sales to Firestore</span></div><button class="settings-save-btn" onclick="SPos.sync.run()">Sync Now</button></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Export Backup</strong></div><button class="inv-btn inv-btn-outline" onclick="SPos.data.exportAll()">Export JSON</button></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Reset POS</strong><span style="color:var(--red)">Clears all local data</span></div><button class="settings-danger-btn" onclick="SPos.data.resetDialog()">Reset</button></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">🎙 VOICE CASHIER</div>
+          <div id="voice-panel-container"></div>
+          <div class="settings-row">
+            <div class="settings-row-label"><strong>Enable Voice Commands</strong><span>English &amp; Kiswahili</span></div>
+            <button class="settings-save-btn" onclick="PosVoice.toggle()" id="voice-toggle-btn">🎤 Toggle Voice</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">🔐 BIOMETRIC LOGIN</div>
+          <div class="settings-row">
+            <div class="settings-row-label"><strong>Register Biometric</strong><span>Face ID / Fingerprint for cashier login</span></div>
+            <button class="settings-save-btn" onclick="SPos.settings.registerBiometric()">Register</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">📱 MARKETING</div>
+          <div class="settings-row">
+            <div class="settings-row-label"><strong>Marketing Hub</strong><span>WhatsApp broadcasts, birthday promos</span></div>
+            <button class="settings-save-btn" onclick="SPos.modal.open('marketing-modal')">Open</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">🔌 PLUGINS</div>
+          <div id="plugins-manager-body"></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">🛒 SELF-CHECKOUT KIOSK</div>
+          <div class="settings-row">
+            <div class="settings-row-label"><strong>Open Kiosk Mode</strong><span>Customer-facing self-checkout screen</span></div>
+            <button class="settings-save-btn" onclick="window.open('pos-kiosk.html','_blank')">Open Kiosk</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">🏷️ BARCODE LABELS</div>
+          <div class="settings-row">
+            <div class="settings-row-label"><strong>Label Designer</strong><span>Print barcodes, QR codes, shelf labels</span></div>
+            <button class="settings-save-btn" onclick="SPos.modal.open('labels-modal')">Design Labels</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">🔍 WARRANTY CHECKER</div>
+          <div id="warranty-check-container"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════ MODALS ════ -->
+
+<!-- Camera scanner -->
+<div class="modal-overlay scanner-modal" id="scanner-modal">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-header"><span class="modal-title">Scan Barcode</span><button class="modal-close" onclick="SPos.barcode.closeScanner()">✕</button></div>
+    <div class="modal-body" style="padding:12px">
+      <video id="scanner-video" playsinline muted style="width:100%;border-radius:10px;background:#000;display:block;aspect-ratio:4/3"></video>
+      <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--txt2)">Hardware scanner works automatically. Camera requires browser support.</div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <input class="form-input" style="flex:1" id="manual-barcode" placeholder="Type barcode + Enter" onkeydown="if(event.key==='Enter'&&this.value.trim()){SPos.barcode.manualEntry(this.value.trim());this.value=''}">
+        <button class="inv-btn inv-btn-green" onclick="if(document.getElementById('manual-barcode').value.trim()){SPos.barcode.manualEntry(document.getElementById('manual-barcode').value.trim());document.getElementById('manual-barcode').value=''}">Go</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- M-PESA payment -->
+<div class="modal-overlay" id="mpesa-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><span class="modal-title">M-PESA Payment</span><button class="modal-close" onclick="SPos.modal.close('mpesa-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="wiz-field"><div class="wiz-label">CUSTOMER PHONE NUMBER</div><input class="wiz-input" id="mpesa-phone" placeholder="0712 345 678" type="tel" maxlength="12" inputmode="numeric"></div>
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">Amount: <strong style="color:#00a84e;font-size:20px">KES <span id="mpesa-amount-disp">0</span></strong></div>
+      <div class="mpesa-steps" id="mpesa-steps">
+        <div class="mpesa-step" id="mpesa-step-1"><div class="mpesa-step-icon">📱</div><div class="mpesa-step-text"><strong>STK Push sent</strong><span>M-PESA prompt sent to customer</span></div></div>
+        <div class="mpesa-step" id="mpesa-step-2"><div class="mpesa-step-icon">⏳</div><div class="mpesa-step-text"><strong>Waiting for PIN</strong><span>Customer enters M-PESA PIN</span></div></div>
+        <div class="mpesa-step" id="mpesa-step-3"><div class="mpesa-step-icon">✅</div><div class="mpesa-step-text"><strong>Payment confirmed</strong><span>Transaction complete</span></div></div>
+      </div>
+      <div id="mpesa-result" style="display:none;margin-top:12px;font-size:13px;padding:10px 12px;border-radius:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.mpesa.cancelSTK()">Cancel</button>
+      <button class="modal-btn" id="mpesa-send-btn" onclick="SPos.mpesa.sendSTK()" style="background:#00a84e;color:#fff;flex:2">📱 Send M-PESA Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Discount -->
+<div class="modal-overlay" id="discount-modal">
+  <div class="modal" style="max-width:320px">
+    <div class="modal-header"><span class="modal-title">Apply Discount</span><button class="modal-close" onclick="SPos.modal.close('discount-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="modal-btn modal-btn-ghost" id="disc-pct-btn" onclick="SPos.cart.setDiscountType('pct')">% Percentage</button>
+        <button class="modal-btn modal-btn-ghost" id="disc-amt-btn" onclick="SPos.cart.setDiscountType('amt')">KES Amount</button>
+      </div>
+      <input class="wiz-input" id="disc-value" type="number" min="0" placeholder="0" style="font-size:28px;text-align:center;font-weight:900;height:64px">
+      <div style="font-size:11px;color:var(--txt2);text-align:center;margin-top:6px">Quick: </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=5;SPos.cart.setDiscountType('pct')">5%</button>
+        <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=10;SPos.cart.setDiscountType('pct')">10%</button>
+        <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=15;SPos.cart.setDiscountType('pct')">15%</button>
+        <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=20;SPos.cart.setDiscountType('pct')">20%</button>
+        <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=25;SPos.cart.setDiscountType('pct')">25%</button>
+        <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=50;SPos.cart.setDiscountType('pct')">50%</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.cart.removeDiscount()">Remove</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.cart.applyDiscount()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Product -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><span class="modal-title" id="product-modal-title">Add Product</span><button class="modal-close" onclick="SPos.modal.close('product-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="prod-id">
+      <div class="form-grid">
+        <div class="form-field full"><label class="form-label">PRODUCT NAME *</label><input class="form-input" id="prod-name" placeholder="e.g. Unga Pembe 2kg"></div>
+        <div class="form-field"><label class="form-label">BARCODE</label><div style="display:flex;gap:6px"><input class="form-input" id="prod-barcode" placeholder="Scan or type" style="flex:1"><button class="pos-scan-btn" onclick="SPos.barcode.scanForField('prod-barcode')">📷</button></div></div>
+        <div class="form-field"><label class="form-label">SKU</label><input class="form-input" id="prod-sku" placeholder="Internal code"></div>
+        <div class="form-field"><label class="form-label">SELLING PRICE (KES) *</label><input class="form-input" id="prod-price" type="number" min="0" placeholder="0.00"></div>
+        <div class="form-field"><label class="form-label">COST PRICE (KES)</label><input class="form-input" id="prod-cost" type="number" min="0" placeholder="0.00"></div>
+        <div class="form-field"><label class="form-label">CURRENT STOCK</label><input class="form-input" id="prod-stock" type="number" min="0" value="0"></div>
+        <div class="form-field"><label class="form-label">LOW STOCK ALERT AT</label><input class="form-input" id="prod-low-stock" type="number" min="0" placeholder="e.g. 5"></div>
+        <div class="form-field"><label class="form-label">UNIT</label><select class="form-select" id="prod-unit"><option value="piece">Piece</option><option value="kg">Kg</option><option value="g">Grams</option><option value="litre">Litre</option><option value="ml">ml</option><option value="packet">Packet</option><option value="bottle">Bottle</option><option value="box">Box</option><option value="bag">Bag</option><option value="strip">Strip</option><option value="bar">Bar</option><option value="pair">Pair</option></select></div>
+        <div class="form-field"><label class="form-label">CATEGORY</label><select class="form-select" id="prod-category"></select></div>
+        <div class="form-field"><label class="form-label">VAT RATE (%)</label><input class="form-input" id="prod-tax" type="number" min="0" max="100" value="0"></div>
+        <div class="form-field"><label class="form-label">EXPIRY DATE</label><input class="form-input" id="prod-expiry" type="date"></div>
+        <div class="form-field"><label class="form-label">BATCH / LOT NO.</label><input class="form-input" id="prod-batch" placeholder="Batch number"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('product-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.inv.saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cashier PIN -->
+<div class="modal-overlay" id="pin-modal">
+  <div class="modal" style="max-width:280px">
+    <div class="modal-header"><span class="modal-title">Cashier Login</span></div>
+    <div class="modal-body" style="text-align:center">
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Enter your 4-digit PIN</div>
+      <div class="pin-dots"><div class="pin-dot" id="pd-1"></div><div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div><div class="pin-dot" id="pd-4"></div></div>
+      <div id="pin-error" style="color:var(--red);font-size:11px;min-height:16px;margin-bottom:6px"></div>
+      <div class="pin-grid">
+        <button class="pin-key" onclick="SPos.cashier.pin('1')">1</button><button class="pin-key" onclick="SPos.cashier.pin('2')">2</button><button class="pin-key" onclick="SPos.cashier.pin('3')">3</button>
+        <button class="pin-key" onclick="SPos.cashier.pin('4')">4</button><button class="pin-key" onclick="SPos.cashier.pin('5')">5</button><button class="pin-key" onclick="SPos.cashier.pin('6')">6</button>
+        <button class="pin-key" onclick="SPos.cashier.pin('7')">7</button><button class="pin-key" onclick="SPos.cashier.pin('8')">8</button><button class="pin-key" onclick="SPos.cashier.pin('9')">9</button>
+        <button class="pin-key" onclick="SPos.cashier.pin('clear')" style="color:var(--txt2)">C</button><button class="pin-key" onclick="SPos.cashier.pin('0')">0</button><button class="pin-key back" onclick="SPos.cashier.pin('back')">⌫</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Customer select / add -->
+<div class="modal-overlay" id="customer-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><span class="modal-title">Customer</span><button class="modal-close" onclick="SPos.modal.close('customer-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-field" style="margin-bottom:10px">
+        <label class="form-label">SEARCH EXISTING</label>
+        <input class="form-input" id="cust-modal-search" placeholder="Phone or name..." oninput="SPos.customers.modalSearch(this.value)">
+        <div id="cust-modal-results" style="margin-top:6px"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:6px">
+        <div class="form-label" style="margin-bottom:8px">ADD NEW CUSTOMER</div>
+        <div class="form-grid">
+          <div class="form-field"><label class="form-label">NAME</label><input class="form-input" id="cust-modal-name" placeholder="Full name"></div>
+          <div class="form-field"><label class="form-label">PHONE *</label><input class="form-input" id="cust-modal-phone" placeholder="0712345678" type="tel"></div>
+          <div class="form-field full"><label class="form-label">EMAIL</label><input class="form-input" id="cust-modal-email" type="email" placeholder="email@example.com"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.customers.selectWalkin()">Walk-in</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.customers.saveAndSelect()">Save &amp; Select</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shift modal -->
+<div class="modal-overlay" id="shift-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><span class="modal-title" id="shift-modal-title">Shift</span><button class="modal-close" onclick="SPos.modal.close('shift-modal')">✕</button></div>
+    <div class="modal-body" id="shift-modal-body"></div>
+    <div class="modal-footer"><button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('shift-modal')">Cancel</button><button class="modal-btn modal-btn-primary" id="shift-modal-btn" onclick="SPos.shift.modalAction()">Confirm</button></div>
+  </div>
+</div>
+
+<!-- Unknown barcode -->
+<div class="modal-overlay" id="unknown-barcode-modal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header"><span class="modal-title">Unknown Barcode</span><button class="modal-close" onclick="SPos.modal.close('unknown-barcode-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">Barcode <strong id="unknown-barcode-val" style="color:var(--txt);font-family:monospace;font-size:14px"></strong> is not registered. Add as a new product?</div>
+      <div class="form-field" style="margin-bottom:10px"><label class="form-label">PRODUCT NAME *</label><input class="form-input" id="ub-name" placeholder="Product name"></div>
+      <div class="form-grid">
+        <div class="form-field"><label class="form-label">PRICE (KES) *</label><input class="form-input" id="ub-price" type="number" min="0" placeholder="0"></div>
+        <div class="form-field"><label class="form-label">INITIAL STOCK</label><input class="form-input" id="ub-stock" type="number" min="0" value="0"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('unknown-barcode-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.inv.registerUnknownBarcode()">Register &amp; Add to Cart</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stock In -->
+<div class="modal-overlay" id="stock-in-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header"><span class="modal-title">Stock In</span><button class="modal-close" onclick="SPos.modal.close('stock-in-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-field"><label class="form-label">PRODUCT</label><input class="form-input" id="si-product-search" placeholder="Search product..." oninput="SPos.inv.stockInSearch(this.value)"><div id="si-product-results" style="margin-top:6px"></div><input type="hidden" id="si-product-id"></div>
+      <div class="form-grid" style="margin-top:10px">
+        <div class="form-field"><label class="form-label">QUANTITY *</label><input class="form-input" id="si-qty" type="number" min="1" value="1"></div>
+        <div class="form-field"><label class="form-label">COST PRICE (KES)</label><input class="form-input" id="si-cost" type="number" min="0" placeholder="0"></div>
+        <div class="form-field"><label class="form-label">EXPIRY DATE</label><input class="form-input" id="si-expiry" type="date"></div>
+        <div class="form-field"><label class="form-label">NOTES</label><input class="form-input" id="si-notes" placeholder="Invoice number..."></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('stock-in-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.inv.confirmStockIn()">Add Stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="max-width:320px">
+    <div class="modal-header"><span class="modal-title" id="confirm-title">Confirm</span><button class="modal-close" onclick="SPos.modal.close('confirm-modal')">✕</button></div>
+    <div class="modal-body"><div id="confirm-body" style="font-size:13px;color:var(--txt2);line-height:1.7"></div></div>
+    <div class="modal-footer"><button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('confirm-modal')">Cancel</button><button class="modal-btn modal-btn-danger" id="confirm-ok-btn">Confirm</button></div>
+  </div>
+</div>
+
+<!-- ════ AI IMPORT MODAL ════ -->
+<div class="modal-overlay" id="ai-import-modal">
+  <div class="modal" style="max-width:780px;width:95vw">
+    <div class="modal-header">
+      <span class="modal-title">🤖 AI Product Import</span>
+      <button class="modal-close" onclick="SPos.modal.close('ai-import-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px">
+      <div class="ai-drop-zone" id="ai-drop-zone" onclick="document.getElementById('ai-file-input').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.preventDefault();this.classList.remove('drag-over');SPos.bos.handleFileDrop(event)">
+        <div class="ai-drop-icon">📁</div>
+        <div class="ai-drop-title">Drop file here or click to browse</div>
+        <div class="ai-drop-sub">Excel (.xlsx/.csv), PDF price list, or photo of products/invoice</div>
+        <input type="file" id="ai-file-input" accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.webp,.heic" style="display:none" onchange="SPos.bos.handleFileSelect(this.files[0])">
+      </div>
+      <div id="ai-status-msg" class="ai-status-info" style="margin-top:8px;font-size:12px;min-height:18px"></div>
+      <div id="ai-preview-body" style="margin-top:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('ai-import-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" id="ai-confirm-btn" onclick="PosAI.confirmImport()">Import Products</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ PAYMENT SUCCESS OVERLAY ════ -->
+<div class="modal-overlay success-overlay" id="success-overlay">
+  <div class="modal success-modal">
+    <div class="suc-checkmark">✓</div>
+    <div class="suc-title">Payment Received!</div>
+    <div class="suc-total" id="suc-total">KES 0.00</div>
+    <div class="suc-meta">
+      <span id="suc-method" class="suc-method-badge">CASH</span>
+      <span class="suc-dot">·</span>
+      <span id="suc-receipt-no" style="font-size:11px;color:var(--txt2)"></span>
+    </div>
+    <div class="suc-meta" style="font-size:12px;color:var(--txt2)">
+      <span id="suc-customer"></span>
+      <span class="suc-dot">·</span>
+      <span id="suc-cashier"></span>
+    </div>
+    <div id="suc-change-row" class="suc-change-row" style="display:none">
+      Change: <strong id="suc-change" style="color:var(--green)">KES 0.00</strong>
+    </div>
+    <div id="suc-mpesa-row" class="suc-meta" style="display:none;font-size:11px;color:var(--txt2)">
+      M-PESA Ref: <strong id="suc-mpesa-ref"></strong>
+    </div>
+    <div class="suc-actions">
+      <button class="suc-btn whatsapp" id="suc-whatsapp-btn">
+        <span>📱</span> WhatsApp Receipt
+      </button>
+      <button class="suc-btn print" id="suc-print-btn">
+        <span>🖨️</span> Print Receipt
+      </button>
+      <button class="suc-btn delivery" id="suc-delivery-btn" style="display:none">
+        <span>🚚</span> Dispatch Delivery
+      </button>
+    </div>
+    <button class="suc-close-btn" onclick="document.getElementById('success-overlay').classList.remove('open')">Tap to close</button>
+  </div>
+</div>
+
+<!-- ════ MARKETPLACE MODAL ════ -->
+<div class="modal-overlay" id="marketplace-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><span class="modal-title">🛍️ Sokoni Marketplace Orders</span><button class="modal-close" onclick="SPos.modal.close('marketplace-modal')">✕</button></div>
+    <div class="modal-body"><div id="mkt-orders-body"><div class="pos-empty"><div class="empty-icon">⏳</div><p>Loading orders...</p></div></div></div>
+    <div class="modal-footer"><button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('marketplace-modal')">Close</button><button class="modal-btn modal-btn-primary" onclick="PosBoss.marketplace.renderOrders('mkt-orders-body')">↻ Refresh</button></div>
+  </div>
+</div>
+
+<!-- ════ PUSH PRODUCTS TO MARKETPLACE ════ -->
+<div class="modal-overlay" id="push-products-modal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header"><span class="modal-title">📤 List Products on Sokoni</span><button class="modal-close" onclick="SPos.modal.close('push-products-modal')">✕</button></div>
+    <div class="modal-body"><div id="push-products-list"></div></div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('push-products-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" id="push-confirm-btn" onclick="PosBoss.hub.confirmPush()">Push to Marketplace</button>
+    </div>
+  </div>
+</div>
+
+<!-- Marketing Modal -->
+<div class="modal-overlay" id="marketing-modal">
+  <div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header"><span class="modal-title">📱 Marketing Automation</span><button class="modal-close" onclick="SPos.modal.close('marketing-modal')">✕</button></div>
+    <div class="modal-body"><div id="marketing-hub-body"></div></div>
+  </div>
+</div>
+
+<!-- Label Designer Modal -->
+<div class="modal-overlay" id="labels-modal">
+  <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header"><span class="modal-title">🏷️ Barcode &amp; Label Designer</span><button class="modal-close" onclick="SPos.modal.close('labels-modal')">✕</button></div>
+    <div class="modal-body"><div id="labels-designer-body"></div></div>
+  </div>
+</div>
+
+<!-- AI Pricing Modal -->
+<div class="modal-overlay" id="ai-pricing-modal">
+  <div class="modal" style="max-width:700px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header"><span class="modal-title">🤖 AI Pricing Optimization</span><button class="modal-close" onclick="SPos.modal.close('ai-pricing-modal')">✕</button></div>
+    <div class="modal-body"><div id="ai-pricing-body"><div class="bos-loading">Analyzing prices…</div></div></div>
+  </div>
+</div>
+
+<!-- ════ ADD CASHIER MODAL ════ -->
+<div class="modal-overlay" id="cashier-add-modal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header"><span class="modal-title">Add Cashier</span><button class="modal-close" onclick="SPos.modal.close('cashier-add-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-field"><label class="form-label">CASHIER NAME *</label><input class="form-input" id="new-cashier-name" placeholder="e.g. Jane Wanjiku"></div>
+      <div class="form-field"><label class="form-label">ROLE</label>
+        <select class="form-select" id="new-cashier-role">
+          <option value="cashier">Cashier</option>
+          <option value="manager">Manager</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-grid">
+        <div class="form-field"><label class="form-label">4-DIGIT PIN *</label><input class="form-input" id="new-cashier-pin" type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••"></div>
+        <div class="form-field"><label class="form-label">CONFIRM PIN *</label><input class="form-input" id="new-cashier-pin2" type="password" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="••••"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('cashier-add-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.cashier.saveNew()">Create Cashier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ ADD SUPPLIER MODAL ════ -->
+<div class="modal-overlay" id="supplier-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header"><span class="modal-title">Add Supplier</span><button class="modal-close" onclick="SPos.modal.close('supplier-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-field"><label class="form-label">SUPPLIER NAME *</label><input class="form-input" id="sup-name" placeholder="e.g. Twiga Foods"></div>
+      <div class="form-grid">
+        <div class="form-field"><label class="form-label">PHONE</label><input class="form-input" id="sup-phone" placeholder="+254..." type="tel"></div>
+        <div class="form-field"><label class="form-label">EMAIL</label><input class="form-input" id="sup-email" placeholder="orders@..." type="email"></div>
+      </div>
+      <div class="form-field"><label class="form-label">ADDRESS</label><input class="form-input" id="sup-address" placeholder="Street, Town"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('supplier-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.inv.saveSupplier()">Save Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ PURCHASE ORDER MODAL ════ -->
+<div class="modal-overlay" id="po-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><span class="modal-title">New Purchase Order</span><button class="modal-close" onclick="SPos.modal.close('po-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="form-field"><label class="form-label">SUPPLIER</label>
+          <select class="form-select" id="po-supplier"></select>
+        </div>
+        <div class="form-field"><label class="form-label">NOTES / INVOICE REF</label>
+          <input class="form-input" id="po-notes" placeholder="Invoice number...">
+        </div>
+      </div>
+      <table class="data-table" style="margin-bottom:8px">
+        <thead><tr><th>Product</th><th>Qty</th><th>Cost (KES)</th><th></th></tr></thead>
+        <tbody id="po-items-body"></tbody>
+      </table>
+      <button class="inv-btn inv-btn-outline" onclick="SPos.po._addLine()">+ Add Item</button>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('po-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.po.save()">Save Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ M-PESA CONFIG MODAL ════ -->
+<div class="modal-overlay" id="mpesa-config-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><span class="modal-title">M-PESA Configuration</span><button class="modal-close" onclick="SPos.modal.close('mpesa-config-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="form-field">
+          <label class="form-label">SHORT CODE TYPE *</label>
+          <select class="form-input" id="cfg-mpesa-type">
+            <option value="CustomerBuyGoodsOnline">Till Number (Buy Goods)</option>
+            <option value="CustomerPayBillOnline">Paybill Number</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">SHORT CODE *</label>
+          <input class="form-input" id="cfg-mpesa-shortcode" placeholder="e.g. 247247" inputmode="numeric" style="font-size:16px">
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">CONSUMER KEY *</label>
+        <input class="form-input" id="cfg-mpesa-ck" placeholder="Paste consumer key" autocomplete="off" style="font-size:16px">
+      </div>
+      <div class="form-field">
+        <label class="form-label">CONSUMER SECRET *</label>
+        <input class="form-input" id="cfg-mpesa-cs" type="password" placeholder="Paste consumer secret" autocomplete="off" style="font-size:16px">
+      </div>
+      <div class="form-field">
+        <label class="form-label">PASSKEY *</label>
+        <input class="form-input" id="cfg-mpesa-passkey" type="password" placeholder="Paste Lipa Na M-PESA passkey" autocomplete="off" style="font-size:16px">
+      </div>
+      <div class="form-field">
+        <label class="form-label">ENVIRONMENT</label>
+        <select class="form-input" id="cfg-mpesa-env" style="font-size:16px">
+          <option value="production">Production</option>
+          <option value="sandbox">Sandbox (Testing)</option>
+        </select>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:8px">🔒 Credentials are saved to your Firestore account — never stored in the browser.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('mpesa-config-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" id="cfg-mpesa-save-btn" onclick="SPos.mpesa.saveConfig()">Save & Verify</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ SPLIT PAYMENT MODAL ════ -->
+<div class="modal-overlay" id="split-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><span class="modal-title">Split Payment</span><button class="modal-close" onclick="SPos.modal.close('split-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:13px;color:var(--text-muted)">CART TOTAL</div>
+        <div id="split-total" style="font-size:28px;font-weight:700;color:var(--accent)">KES 0.00</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">CASH PORTION (KES)</label>
+        <input class="form-input" id="split-cash" type="number" min="0" step="1" placeholder="0" oninput="SPos.split.onCashInput()" style="font-size:18px;text-align:right">
+      </div>
+      <div class="form-field">
+        <label class="form-label">M-PESA PORTION (KES)</label>
+        <input class="form-input" id="split-mpesa" type="number" min="0" step="1" placeholder="0" oninput="SPos.split.onMpesaInput()" style="font-size:18px;text-align:right">
+      </div>
+      <div id="split-warn" style="color:var(--red);font-size:12px;text-align:center;display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('split-modal')">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.split.proceed()">Proceed</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ CARD PAYMENT MODAL ════ -->
+<div class="modal-overlay" id="card-payment-modal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <span class="modal-title">💳 Card Payment</span>
+      <button class="modal-close" onclick="SPos.payment.cancelCard()">✕</button>
+    </div>
+    <div style="padding:20px">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:13px;color:var(--txt2)">Total to charge</div>
+        <div style="font-size:32px;font-weight:800;color:var(--green)" id="card-pay-amount">KES 0.00</div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:4px">Terminal: <strong id="card-pay-terminal">—</strong></div>
+      </div>
+      <!-- Step indicator -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;background:var(--surface,#f8f9fa);border-radius:12px;min-height:80px;justify-content:center">
+        <div style="font-size:36px" id="card-pay-step-icon">⏳</div>
+        <div style="font-size:13px;color:var(--txt2);text-align:center" id="card-pay-step-text">Initializing...</div>
+      </div>
+      <!-- Result (shown after terminal responds) -->
+      <div id="card-pay-result" style="display:none;margin-top:14px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" id="card-cancel-btn" onclick="SPos.payment.cancelCard()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ TERMINAL PAIRING WIZARD MODAL ════ -->
+<div class="modal-overlay" id="terminal-wizard-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <span class="modal-title">Pair New Device</span>
+      <button class="modal-close" onclick="SPos.modal.close('terminal-wizard-modal')">✕</button>
+    </div>
+    <div style="padding:20px" id="terminal-wizard-body">
+      <div style="text-align:center;padding:20px;color:var(--txt2)">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<style>
+.terminal-type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.terminal-type-card{border:1px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:background .15s,border-color .15s}
+.terminal-type-card:hover{background:var(--primary-10,#e8f5e9);border-color:var(--primary,#00a84e)}
+@media(max-width:400px){.terminal-type-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<!-- ══ Core database layer ══ -->
+<script src="pos-db.js"></script>
+<!-- ══ Enterprise resilience (load before pos.js) ══ -->
+<script src="pos-resilience.js"></script>
+<script src="pos-idempotency.js"></script>
+<script src="pos-health.js"></script>
+<script src="pos-sync.js"></script>
+<!-- ══ POS modules ══ -->
+<script src="pos-printer.js"></script>
+<script src="pos-barcode.js"></script>
+<script src="pos-ai.js"></script>
+<script src="pos-analytics.js"></script>
+<script src="pos-boss.js"></script>
+<script src="pos-plugins.js"></script>
+<script src="pos-voice.js"></script>
+<script src="pos-ai-engine.js"></script>
+<script src="pos-finance.js"></script>
+<script src="pos-audit.js"></script>
+<script src="pos-modules.js"></script>
+<script src="pos-scanner.js"></script>
+<script src="pos-mobile.js"></script>
+<script src="pos-terminals.js"></script>
+<script src="pos.js"></script>
+<!-- ══ Scale + observability stack ══ -->
+<script defer src="sokoni-scale.js"></script>
+<script defer src="sokoni-queue.js"></script>
+<script defer src="sokoni-cache.js"></script>
+<script defer src="sokoni-monitor.js"></script>
+<script defer src="sokoni-qr.js"></script>
+<script defer src="sokoni-barcode.js"></script>
+<script defer src="sokoni-receipt.js"></script>
+<!-- ══ Enterprise v2.0: dashboard stack ══ -->
+<script defer src="sokoni-event-bus.js"></script>
+<script defer src="sokoni-observability.js"></script>
+<script defer src="sokoni-gateway.js"></script>
+<script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

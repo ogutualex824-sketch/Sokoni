@@ -1,0 +1,911 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Verification Admin — SOKONI</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <meta name="theme-color" content="#71ff00">
+  <script src="security.js"></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #080808; color: white; min-height: 100vh; }
+
+    /* ── AUTH GUARD SPLASH ── */
+    #va-auth-check {
+      position: fixed; inset: 0; background: #080808; z-index: 9999;
+      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+    }
+    #va-auth-check .va-spinner {
+      width: 36px; height: 36px; border: 3px solid rgba(113,255,0,0.15);
+      border-top-color: #71ff00; border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    #va-auth-check p { font-size: 13px; color: rgba(255,255,255,0.35); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TOP BAR ── */
+    .va-topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 12px 24px; background: rgba(8,8,8,0.97);
+      border-bottom: 1px solid rgba(113,255,0,0.12);
+      position: sticky; top: 0; z-index: 200; backdrop-filter: blur(14px);
+    }
+    .va-topbar-left { display: flex; align-items: center; gap: 14px; }
+    .va-topbar-logo { height: 30px; }
+    .va-topbar-title {
+      font-size: 13px; font-weight: 800; color: #71ff00; letter-spacing: .04em;
+      text-transform: uppercase; border-left: 2px solid rgba(113,255,0,0.3); padding-left: 14px;
+    }
+    .va-topbar-right { display: flex; align-items: center; gap: 12px; }
+    .va-admin-pill {
+      font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 20px;
+      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.25);
+      color: #71ff00; letter-spacing: .04em;
+    }
+    .va-back-link {
+      font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.4);
+      text-decoration: none; padding: 6px 12px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08); transition: all .2s;
+    }
+    .va-back-link:hover { color: white; border-color: rgba(255,255,255,0.2); }
+
+    /* ── MAIN WRAPPER ── */
+    .va-wrap { max-width: 1400px; margin: 0 auto; padding: 28px 24px 80px; }
+
+    /* ── STATS DASHBOARD ── */
+    .va-stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px;
+    }
+    @media(max-width:900px) { .va-stats-grid { grid-template-columns: repeat(2,1fr); } }
+    @media(max-width:480px) { .va-stats-grid { grid-template-columns: 1fr 1fr; } }
+    .va-stat-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 20px 18px; position: relative; overflow: hidden;
+    }
+    .va-stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--sc, rgba(113,255,0,0.5));
+    }
+    .va-stat-icon { font-size: 20px; margin-bottom: 10px; color: var(--sc, #71ff00); opacity: .7; }
+    .va-stat-num { font-size: 32px; font-weight: 900; color: white; line-height: 1; margin-bottom: 6px; }
+    .va-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 600; letter-spacing: .03em; }
+
+    /* ── SECTION HEADER ── */
+    .va-section-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .va-section-title { font-size: 17px; font-weight: 900; }
+    .va-section-sub { font-size: 12px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+
+    /* ── FILTER TABS ── */
+    .va-filter-tabs {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .va-filter-tab {
+      padding: 7px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+      background: transparent; color: rgba(255,255,255,0.45); font-size: 12px; font-weight: 700;
+      cursor: pointer; font-family: inherit; transition: all .18s; white-space: nowrap;
+    }
+    .va-filter-tab:hover { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.7); }
+    .va-filter-tab.active {
+      background: rgba(113,255,0,0.12); border-color: rgba(113,255,0,0.35);
+      color: #71ff00;
+    }
+
+    /* ── APPLICATIONS LIST ── */
+    .va-apps-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .va-app-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 18px 20px; transition: border-color .2s;
+      position: relative;
+    }
+    .va-app-card:hover { border-color: rgba(255,255,255,0.13); }
+    .va-app-card.status-pending    { border-left: 3px solid rgba(255,152,0,0.5); }
+    .va-app-card.status-under_review { border-left: 3px solid rgba(0,170,255,0.5); }
+    .va-app-card.status-approved   { border-left: 3px solid rgba(113,255,0,0.5); }
+    .va-app-card.status-rejected   { border-left: 3px solid rgba(239,68,68,0.5); }
+
+    .va-app-top {
+      display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
+    }
+    .va-app-avatar {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      background: rgba(255,255,255,0.06); display: flex; align-items: center;
+      justify-content: center; font-size: 16px; font-weight: 900; color: white;
+    }
+    .va-app-info { flex: 1; min-width: 0; }
+    .va-app-name { font-size: 14px; font-weight: 900; margin-bottom: 2px; }
+    .va-app-sub { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 6px; }
+    .va-app-meta-row {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px;
+    }
+    .va-app-meta-item { font-size: 11px; color: rgba(255,255,255,0.35); display: flex; align-items: center; gap: 5px; }
+    .va-app-meta-item i { font-size: 10px; }
+
+    /* tier badge */
+    .va-tier-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
+      border: 1px solid; letter-spacing: .02em;
+    }
+    /* status badge */
+    .va-status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 8px;
+      letter-spacing: .03em; text-transform: uppercase;
+    }
+    .va-status-badge.pending       { background: rgba(255,152,0,0.1); color: #ff9800; border: 1px solid rgba(255,152,0,0.2); }
+    .va-status-badge.under_review  { background: rgba(0,170,255,0.1); color: #00aaff; border: 1px solid rgba(0,170,255,0.2); }
+    .va-status-badge.approved      { background: rgba(113,255,0,0.1); color: #71ff00; border: 1px solid rgba(113,255,0,0.2); }
+    .va-status-badge.rejected      { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+
+    /* ref badge */
+    .va-ref { font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.04); padding: 3px 8px; border-radius: 6px; }
+
+    /* action buttons row */
+    .va-app-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .va-act-btn {
+      padding: 7px 14px; border-radius: 9px; border: 1px solid; font-size: 12px; font-weight: 800;
+      cursor: pointer; font-family: inherit; transition: all .18s; display: flex; align-items: center; gap: 6px;
+    }
+    .va-act-btn.approve { background: rgba(113,255,0,0.08); border-color: rgba(113,255,0,0.3); color: #71ff00; }
+    .va-act-btn.approve:hover { background: rgba(113,255,0,0.18); }
+    .va-act-btn.reject  { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); color: #ef4444; }
+    .va-act-btn.reject:hover  { background: rgba(239,68,68,0.15); }
+    .va-act-btn.details { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); }
+    .va-act-btn.details:hover { background: rgba(255,255,255,0.08); color: white; }
+    .va-act-btn.schedule { background: rgba(0,170,255,0.07); border-color: rgba(0,170,255,0.2); color: #00aaff; }
+    .va-act-btn.schedule:hover { background: rgba(0,170,255,0.15); }
+    .va-act-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── EMPTY / LOADING ── */
+    .va-empty {
+      text-align: center; padding: 60px 24px; color: rgba(255,255,255,0.3); font-size: 13px;
+    }
+    .va-empty i { font-size: 40px; display: block; margin-bottom: 14px; color: rgba(255,255,255,0.12); }
+    .va-spinner-sm {
+      width: 20px; height: 20px; border: 2px solid rgba(113,255,0,0.2);
+      border-top-color: #71ff00; border-radius: 50%; animation: spin .7s linear infinite;
+      display: inline-block; vertical-align: middle;
+    }
+
+    /* ── MODAL OVERLAY ── */
+    .va-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
+      z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    .va-modal-overlay.open { display: flex; }
+    .va-modal {
+      background: #111; border: 1px solid rgba(255,255,255,0.1); border-radius: 22px;
+      width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto;
+      padding: 32px 28px; position: relative;
+    }
+    @media(max-width:600px){ .va-modal { padding: 20px 16px; } }
+    .va-modal-close {
+      position: absolute; top: 16px; right: 16px; width: 34px; height: 34px;
+      border-radius: 50%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.5); font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .2s; font-family: inherit;
+    }
+    .va-modal-close:hover { background: rgba(255,255,255,0.1); color: white; }
+    .va-modal-title { font-size: 18px; font-weight: 900; margin-bottom: 4px; }
+    .va-modal-ref { font-size: 12px; color: rgba(255,255,255,0.35); margin-bottom: 22px; font-family: monospace; }
+
+    .va-detail-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 22px;
+    }
+    @media(max-width:480px){ .va-detail-grid { grid-template-columns: 1fr; } }
+    .va-detail-item {}
+    .va-detail-label { font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+    .va-detail-val { font-size: 13px; color: rgba(255,255,255,0.8); word-break: break-word; }
+
+    .va-modal-field { margin-bottom: 14px; }
+    .va-modal-label { display: block; font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.4); margin-bottom: 6px; letter-spacing: .02em; }
+    .va-modal-input, .va-modal-select, .va-modal-textarea {
+      width: 100%; padding: 11px 14px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 11px; color: white; font-size: 14px; outline: none; font-family: inherit;
+      transition: border-color .2s; -webkit-appearance: none; appearance: none;
+    }
+    .va-modal-input:focus, .va-modal-select:focus, .va-modal-textarea:focus {
+      border-color: rgba(113,255,0,0.4);
+    }
+    .va-modal-select { cursor: pointer; }
+    .va-modal-select option { background: #1a1a1a; }
+    .va-modal-textarea { min-height: 90px; resize: vertical; line-height: 1.5; font-size: 13px; }
+
+    .va-reject-field { display: none; }
+    .va-reject-field.show { display: block; }
+
+    .va-modal-save-btn {
+      width: 100%; padding: 14px; background: linear-gradient(135deg, #71ff00, #00cc44);
+      color: #000; font-weight: 900; font-size: 14px; border: none; border-radius: 12px;
+      cursor: pointer; font-family: inherit; margin-top: 20px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all .2s;
+    }
+    .va-modal-save-btn:hover { filter: brightness(1.08); }
+    .va-modal-save-btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+
+    .va-modal-msg {
+      margin-top: 12px; padding: 10px 14px; border-radius: 10px; font-size: 13px;
+      display: none;
+    }
+    .va-modal-msg.ok  { display: block; background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2); color: #71ff00; }
+    .va-modal-msg.err { display: block; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #ef4444; }
+
+    /* ── DIVIDER ── */
+    .va-divider { border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 32px 0; }
+
+    /* ── ADMIN LOG ── */
+    .va-log-list { display: flex; flex-direction: column; gap: 8px; }
+    .va-log-item {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 16px; background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05); border-radius: 12px;
+    }
+    .va-log-icon { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 13px;
+      background: rgba(255,255,255,0.05);
+    }
+    .va-log-body { flex: 1; min-width: 0; }
+    .va-log-action { font-size: 12px; font-weight: 700; color: white; margin-bottom: 2px; }
+    .va-log-meta { font-size: 11px; color: rgba(255,255,255,0.3); }
+    .va-log-time { font-size: 10px; color: rgba(255,255,255,0.2); margin-left: auto; flex-shrink: 0; }
+
+    /* ── TOAST ── */
+    #va-toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.3);
+      color: #71ff00; font-size: 13px; font-weight: 700; padding: 12px 24px;
+      border-radius: 14px; z-index: 9000; pointer-events: none;
+      transition: transform .3s ease, opacity .3s ease; opacity: 0; white-space: nowrap;
+    }
+    #va-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #va-toast.err { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); color: #ef4444; }
+  </style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- Auth guard splash -->
+<div id="va-auth-check">
+  <div class="va-spinner"></div>
+  <p>Verifying admin access…</p>
+</div>
+
+<!-- Toast -->
+<div id="va-toast"></div>
+
+<!-- ══ TOP BAR ══ -->
+<nav class="va-topbar" style="display:none" id="va-main-ui">
+  <div class="va-topbar-left">
+    <a href="index.html"><img src="assets/Sokonilogo2.png" alt="SOKONI" class="va-topbar-logo"></a>
+    <div class="va-topbar-title"><i class="fa-solid fa-shield-halved"></i> Verification Admin</div>
+  </div>
+  <div class="va-topbar-right">
+    <span class="va-admin-pill"><i class="fa-solid fa-user-shield"></i> Admin</span>
+    <a href="index.html" class="va-back-link"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+  </div>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<div class="va-wrap" id="va-content" style="display:none">
+
+  <!-- ── STATS DASHBOARD ── -->
+  <div class="va-stats-grid" id="va-stats">
+    <div class="va-stat-card" style="--sc:rgba(255,152,0,0.6)">
+      <div class="va-stat-icon"><i class="fa-solid fa-clock"></i></div>
+      <div class="va-stat-num" id="stat-pending">—</div>
+      <div class="va-stat-label">Pending Review</div>
+    </div>
+    <div class="va-stat-card" style="--sc:rgba(113,255,0,0.6)">
+      <div class="va-stat-icon"><i class="fa-solid fa-circle-check"></i></div>
+      <div class="va-stat-num" id="stat-approved-month">—</div>
+      <div class="va-stat-label">Approved This Month</div>
+    </div>
+    <div class="va-stat-card" style="--sc:rgba(239,68,68,0.6)">
+      <div class="va-stat-icon"><i class="fa-solid fa-circle-xmark"></i></div>
+      <div class="va-stat-num" id="stat-rejected">—</div>
+      <div class="va-stat-label">Rejected</div>
+    </div>
+    <div class="va-stat-card" style="--sc:rgba(168,85,247,0.6)">
+      <div class="va-stat-icon"><i class="fa-solid fa-badge-check"></i></div>
+      <div class="va-stat-num" id="stat-total">—</div>
+      <div class="va-stat-label">Total Verified</div>
+    </div>
+  </div>
+
+  <!-- ── APPLICATIONS ── -->
+  <div class="va-section-header">
+    <div>
+      <div class="va-section-title">Verification Requests</div>
+      <div class="va-section-sub">Ordered by submission date — newest first</div>
+    </div>
+    <button class="va-act-btn details" onclick="loadApplications()" style="flex-shrink:0">
+      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+    </button>
+  </div>
+
+  <div class="va-filter-tabs" id="va-filter-tabs">
+    <button class="va-filter-tab active" data-filter="all" onclick="setFilter('all',this)">All</button>
+    <button class="va-filter-tab" data-filter="pending" onclick="setFilter('pending',this)">Pending</button>
+    <button class="va-filter-tab" data-filter="under_review" onclick="setFilter('under_review',this)">Under Review</button>
+    <button class="va-filter-tab" data-filter="approved" onclick="setFilter('approved',this)">Approved</button>
+    <button class="va-filter-tab" data-filter="rejected" onclick="setFilter('rejected',this)">Rejected</button>
+  </div>
+
+  <div class="va-apps-list" id="va-apps-list">
+    <div class="va-empty"><span class="va-spinner-sm"></span> <span style="margin-left:10px;vertical-align:middle;">Loading applications…</span></div>
+  </div>
+
+  <hr class="va-divider">
+
+  <!-- ── ADMIN ACTIVITY LOG ── -->
+  <div class="va-section-header">
+    <div>
+      <div class="va-section-title">Admin Activity Log</div>
+      <div class="va-section-sub">Last 20 verification-related actions by admins</div>
+    </div>
+  </div>
+  <div class="va-log-list" id="va-log-list">
+    <div class="va-empty"><span class="va-spinner-sm"></span> <span style="margin-left:10px;vertical-align:middle;">Loading log…</span></div>
+  </div>
+
+</div><!-- /va-wrap -->
+
+<!-- ══════════════════ DETAILS MODAL ══════════════════ -->
+<div class="va-modal-overlay" id="va-modal" onclick="handleModalOverlayClick(event)">
+  <div class="va-modal">
+    <button class="va-modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+    <div class="va-modal-title" id="modal-title">Application Details</div>
+    <div class="va-modal-ref" id="modal-ref"></div>
+
+    <!-- Full data grid -->
+    <div class="va-detail-grid" id="modal-detail-grid"></div>
+
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin-bottom:20px;">
+
+    <!-- Admin controls -->
+    <div class="va-modal-field">
+      <label class="va-modal-label">Status</label>
+      <select class="va-modal-select" id="modal-status" onchange="onStatusChange()">
+        <option value="pending">Pending</option>
+        <option value="under_review">Under Review</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+
+    <div class="va-modal-field">
+      <label class="va-modal-label">Admin Notes</label>
+      <textarea class="va-modal-textarea" id="modal-notes" placeholder="Internal notes (not shown to applicant)…"></textarea>
+    </div>
+
+    <div class="va-modal-field va-reject-field" id="modal-reject-field">
+      <label class="va-modal-label">Rejection Reason <span style="color:#ef4444;">*</span></label>
+      <textarea class="va-modal-textarea" id="modal-reject-reason" placeholder="Explain why the application is being rejected (shown to applicant)…"></textarea>
+    </div>
+
+    <div class="va-modal-msg" id="modal-msg"></div>
+    <button class="va-modal-save-btn" id="modal-save-btn" onclick="saveApplication()">
+      <i class="fa-solid fa-floppy-disk"></i> Save Changes
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     FIREBASE + LOGIC
+══════════════════════════════════════════════════ -->
+<script type="module">
+  const FIREBASE_VER = "10.12.2";
+  const FB_CFG = {
+    apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+    authDomain:        "sokoni-aeb26.firebaseapp.com",
+    projectId:         "sokoni-aeb26",
+    storageBucket:     "sokoni-aeb26.firebasestorage.app",
+    messagingSenderId: "24799054989",
+    appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4"
+  };
+
+  /* ─── Firebase lazy init ─── */
+  let _db = null;
+  async function getDB() {
+    if (_db) return _db;
+    const { initializeApp, getApps } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-app.js`);
+    const { getFirestore }           = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+    const apps = getApps();
+    const app  = apps.find(a => a.name === "sokoni-va") || initializeApp(FB_CFG, "sokoni-va");
+    _db = getFirestore(app);
+    return _db;
+  }
+
+  /* ─── TIER CONFIG ─── */
+  const TIER_CFG = {
+    "Verified Business":       { color: "#71ff00", border: "rgba(113,255,0,0.3)",  bg: "rgba(113,255,0,0.08)",  emoji: "✅" },
+    "Verified Professional":   { color: "#00aaff", border: "rgba(0,170,255,0.3)",  bg: "rgba(0,170,255,0.08)",  emoji: "🎓" },
+    "Verified Driver":         { color: "#f97316", border: "rgba(249,115,22,0.3)", bg: "rgba(249,115,22,0.08)", emoji: "🚗" },
+    "Verified Doctor":         { color: "#ef4444", border: "rgba(239,68,68,0.3)",  bg: "rgba(239,68,68,0.08)",  emoji: "🏥" },
+    "Verified Lawyer":         { color: "#a855f7", border: "rgba(168,85,247,0.3)", bg: "rgba(168,85,247,0.08)", emoji: "⚖️" },
+    "Verified Property Agent": { color: "#eab308", border: "rgba(234,179,8,0.3)",  bg: "rgba(234,179,8,0.08)",  emoji: "🏘️" }
+  };
+
+  function tierBadgeHtml(type) {
+    const t = TIER_CFG[type] || { color: "#71ff00", border: "rgba(113,255,0,0.3)", bg: "rgba(113,255,0,0.08)", emoji: "?" };
+    return `<span class="va-tier-badge" style="color:${t.color};border-color:${t.border};background:${t.bg};">${t.emoji} ${escHtml(type)}</span>`;
+  }
+  function statusBadgeHtml(status) {
+    const labels = { pending: "Pending", under_review: "Under Review", approved: "Approved", rejected: "Rejected" };
+    return `<span class="va-status-badge ${status}">${labels[status] || status}</span>`;
+  }
+  function escHtml(str) {
+    return String(str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+  function fmtDate(ts) {
+    if (!ts) return "—";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString("en-KE", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+  }
+
+  /* ─── AUTH GUARD — verified via Firebase Auth ID token claim, NOT localStorage ─── */
+  (async function authGuard() {
+    const deny = (msg) => {
+      document.getElementById("va-auth-check").innerHTML =
+        `<i class="fa-solid fa-lock" style="font-size:40px;color:rgba(239,68,68,0.6);"></i>
+         <p style="color:#ef4444;font-weight:700;">${msg}</p>
+         <p style="font-size:12px;color:rgba(255,255,255,0.3);">Redirecting…</p>`;
+      setTimeout(() => { window.location.href = "index.html"; }, 1800);
+    };
+    try {
+      const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const { getAuth, onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+      const app = getApps().find(a => a.name === "sokoni-va") ||
+                  initializeApp(FB_CFG, "sokoni-va");
+      const auth = getAuth(app);
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) { deny("Sign in required"); return; }
+        /* Force-refresh token to get latest custom claims */
+        const token = await user.getIdTokenResult(true);
+        if (token.claims.admin !== true) { deny("Admin access required"); return; }
+        /* Passed — store verified uid for Firestore writes */
+        window._vaAdminUid = user.uid;
+        document.getElementById("va-auth-check").style.display = "none";
+        document.getElementById("va-main-ui").style.display = "";
+        document.getElementById("va-content").style.display = "";
+        boot();
+      });
+    } catch (e) {
+      console.error("Auth guard error:", e);
+      deny("Auth error");
+    }
+  })();
+
+  /* ─── STATE ─── */
+  let allApps       = [];
+  let currentFilter = "all";
+  let currentDocId  = null;
+  let currentAppData = null;
+
+  /* ─── BOOT ─── */
+  async function boot() {
+    await Promise.all([loadStats(), loadApplications(), loadAdminLog()]);
+  }
+
+  /* ─── STATS ─── */
+  async function loadStats() {
+    try {
+      const db = await getDB();
+      const { collection, getDocs, query, where, orderBy, getCountFromServer } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+
+      const reqColl = collection(db, "verificationRequests");
+      const verColl = collection(db, "verifications");
+
+      const [pendingSnap, rejSnap, verSnap, allReqSnap] = await Promise.all([
+        getDocs(query(reqColl, where("status", "==", "pending"))),
+        getDocs(query(reqColl, where("status", "==", "rejected"))),
+        getDocs(query(verColl, where("status", "==", "approved"))),
+        getDocs(query(reqColl, where("status", "==", "approved")))
+      ]);
+
+      // approved this month
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      let approvedMonth = 0;
+      allReqSnap.forEach(doc => {
+        const d = doc.data();
+        const ts = d.approvedAt || d.createdAt;
+        if (ts && ts.toDate && ts.toDate() >= monthStart) approvedMonth++;
+      });
+
+      document.getElementById("stat-pending").textContent       = pendingSnap.size;
+      document.getElementById("stat-approved-month").textContent = approvedMonth;
+      document.getElementById("stat-rejected").textContent      = rejSnap.size;
+      document.getElementById("stat-total").textContent         = verSnap.size;
+    } catch(err) {
+      console.error("Stats error:", err);
+    }
+  }
+
+  /* ─── LOAD APPLICATIONS ─── */
+  window.loadApplications = async function() {
+    const list = document.getElementById("va-apps-list");
+    list.innerHTML = `<div class="va-empty"><span class="va-spinner-sm"></span> <span style="margin-left:10px;vertical-align:middle;">Loading…</span></div>`;
+    try {
+      const db = await getDB();
+      const { collection, query, orderBy, getDocs } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+      const q = query(collection(db, "verificationRequests"), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      allApps = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderApps();
+    } catch(err) {
+      console.error("Load apps error:", err);
+      list.innerHTML = `<div class="va-empty"><i class="fa-solid fa-wifi"></i><div>Could not load — check connection</div></div>`;
+    }
+  };
+
+  /* ─── FILTER ─── */
+  window.setFilter = function(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll(".va-filter-tab").forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    renderApps();
+  };
+
+  function renderApps() {
+    const list = document.getElementById("va-apps-list");
+    const filtered = currentFilter === "all" ? allApps : allApps.filter(a => a.status === currentFilter);
+
+    if (!filtered.length) {
+      list.innerHTML = `<div class="va-empty"><i class="fa-solid fa-inbox"></i><div>No applications found for this filter.</div></div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(a => {
+      const t = TIER_CFG[a.verifyType] || { color: "#71ff00", bg: "rgba(113,255,0,0.1)", emoji: "?" };
+      const initials = (a.practiceName || a.fullName || "?").split(" ").slice(0,2).map(w=>w[0]||"").join("").toUpperCase();
+      const isApproved = a.status === "approved";
+      const isRejected = a.status === "rejected";
+
+      return `
+      <div class="va-app-card status-${a.status||"pending"}" id="card-${a.id}">
+        <div class="va-app-top">
+          <div class="va-app-avatar" style="background:${t.bg};color:${t.color};">${initials}</div>
+          <div class="va-app-info" style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+              <div class="va-app-name">${escHtml(a.fullName || "—")}</div>
+              ${statusBadgeHtml(a.status || "pending")}
+            </div>
+            <div class="va-app-sub">${escHtml(a.practiceName || "")} &bull; ${escHtml(a.county || "")} ${escHtml(a.address ? "· " + a.address : "")}</div>
+            <div class="va-app-meta-row">
+              ${tierBadgeHtml(a.verifyType)}
+              <span class="va-app-meta-item"><i class="fa-solid fa-envelope"></i> ${escHtml(a.email || "")}</span>
+              <span class="va-app-meta-item"><i class="fa-solid fa-phone"></i> ${escHtml(a.phone || "")}</span>
+              <span class="va-ref">${escHtml(a.refNumber || "—")}</span>
+              <span class="va-app-meta-item"><i class="fa-solid fa-calendar"></i> ${fmtDate(a.createdAt)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="va-app-actions">
+          ${!isApproved ? `<button class="va-act-btn approve" onclick="quickApprove('${a.id}')"><i class="fa-solid fa-circle-check"></i> Approve</button>` : ""}
+          ${!isRejected ? `<button class="va-act-btn reject"  onclick="quickReject('${a.id}')"><i class="fa-solid fa-circle-xmark"></i> Reject</button>` : ""}
+          <button class="va-act-btn details"  onclick="openModal('${a.id}')"><i class="fa-solid fa-eye"></i> Details</button>
+          <button class="va-act-btn schedule" onclick="scheduleCall('${a.id}')"><i class="fa-solid fa-phone"></i> Schedule Call</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  /* ─── QUICK APPROVE ─── */
+  window.quickApprove = async function(docId) {
+    if(!_c){_skConfirm('Approve this application?',()=>_doApprove(_appId,true));return;}
+    const a = allApps.find(x => x.id === docId);
+    if (!a) return;
+    await performApproval(docId, a, "");
+  };
+
+  /* ─── QUICK REJECT ─── */
+  window.quickReject = async function(docId) {
+    const reason = prompt("Enter rejection reason (shown to applicant):");
+    if (!reason) return;
+    await performRejection(docId, allApps.find(x=>x.id===docId), reason);
+  };
+
+  /* ─── PERFORM APPROVAL ─── */
+  async function performApproval(docId, a, adminNotes) {
+    try {
+      const db = await getDB();
+      const { doc, updateDoc, setDoc, addDoc, collection, serverTimestamp } =
+        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+
+      const now = serverTimestamp();
+      const adminUser = (() => { try { return JSON.parse(localStorage.getItem("sokoniUser")||"{}"); } catch { return {}; } })();
+      const adminEmail = adminUser.email || "admin";
+
+      // 1. Update request
+      await updateDoc(doc(db, "verificationRequests", docId), {
+        status: "approved", approvedAt: now, approvedBy: adminEmail,
+        adminNotes: adminNotes || ""
+      });
+
+      // 2. Write verifications record
+      const uid = a.uid || docId;
+      await setDoc(doc(db, "verifications", uid), {
+        name: a.fullName, business: a.practiceName, tier: a.verifyType,
+        verifyType: a.verifyType, county: a.county, description: a.description,
+        approvedAt: now, approvedBy: adminEmail, status: "approved", uid
+      });
+
+      // 3. Update user record
+      if (a.uid) {
+        await updateDoc(doc(db, "users", a.uid), {
+          verifiedTier: a.verifyType, verifiedAt: now, isVerified: true
+        }).catch(() => {});
+      }
+
+      // 4. Send notification
+      await addDoc(collection(db, "notifications"), {
+        userId: a.uid || uid, type: "verification_approved",
+        title: "You're Verified!",
+        body: `Your ${a.verifyType} verification has been approved. Your badge is now live on SOKONI.`,
+        read: false, createdAt: now
+      });
+
+      // 5. Admin log
+      await addDoc(collection(db, "adminLog"), {
+        action: `verify_approved: ${a.refNumber}`,
+        adminEmail, targetUser: a.fullName, tier: a.verifyType,
+        docId, createdAt: now
+      });
+
+      // Update local state
+      const idx = allApps.findIndex(x=>x.id===docId);
+      if (idx !== -1) allApps[idx].status = "approved";
+      renderApps();
+      showToast("Application approved and badge issued", false);
+      closeModal();
+      loadStats();
+      loadAdminLog();
+
+    } catch(err) {
+      console.error("Approval error:", err);
+      showToast("Error: " + err.message, true);
+    }
+  }
+
+  /* ─── PERFORM REJECTION ─── */
+  async function performRejection(docId, a, reason) {
+    if (!a) return;
+    try {
+      const db = await getDB();
+      const { doc, updateDoc, addDoc, collection, serverTimestamp } =
+        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+
+      const now = serverTimestamp();
+      const adminUser = (() => { try { return JSON.parse(localStorage.getItem("sokoniUser")||"{}"); } catch { return {}; } })();
+      const adminEmail = adminUser.email || "admin";
+
+      await updateDoc(doc(db, "verificationRequests", docId), {
+        status: "rejected", rejectionReason: reason,
+        rejectedAt: now, rejectedBy: adminEmail
+      });
+
+      await addDoc(collection(db, "notifications"), {
+        userId: a.uid || docId, type: "verification_rejected",
+        title: "Verification Update",
+        body: `Your ${a.verifyType} verification was not approved. Reason: ${reason}. You may re-apply after addressing the issue.`,
+        read: false, createdAt: now
+      });
+
+      await addDoc(collection(db, "adminLog"), {
+        action: `verify_rejected: ${a.refNumber}`,
+        adminEmail, targetUser: a.fullName, reason,
+        docId, createdAt: now
+      });
+
+      const idx = allApps.findIndex(x=>x.id===docId);
+      if (idx !== -1) { allApps[idx].status = "rejected"; allApps[idx].rejectionReason = reason; }
+      renderApps();
+      showToast("Application rejected", false);
+      closeModal();
+      loadStats();
+      loadAdminLog();
+
+    } catch(err) {
+      console.error("Reject error:", err);
+      showToast("Error: " + err.message, true);
+    }
+  }
+
+  /* ─── OPEN MODAL ─── */
+  window.openModal = function(docId) {
+    const a = allApps.find(x => x.id === docId);
+    if (!a) return;
+    currentDocId   = docId;
+    currentAppData = a;
+
+    document.getElementById("modal-title").textContent = escHtml(a.fullName || "Application");
+    document.getElementById("modal-ref").textContent   = a.refNumber || "";
+
+    // Detail grid
+    const fields = [
+      ["Full Name",       a.fullName],
+      ["Business / Practice", a.practiceName],
+      ["Email",          a.email],
+      ["Phone",          a.phone],
+      ["National ID",    a.idNumber],
+      ["KRA PIN",        a.kraPin || "—"],
+      ["Verification Tier", a.verifyType],
+      ["County",         a.county],
+      ["Address",        a.address],
+      ["Links",          a.links || "—"],
+      ["Submitted",      fmtDate(a.createdAt)],
+      ["Current Status", a.status],
+    ];
+    document.getElementById("modal-detail-grid").innerHTML = fields.map(([l,v]) =>
+      `<div class="va-detail-item"><div class="va-detail-label">${l}</div><div class="va-detail-val">${escHtml(v||"—")}</div></div>`
+    ).join("") + `<div class="va-detail-item" style="grid-column:1/-1"><div class="va-detail-label">Description</div><div class="va-detail-val" style="white-space:pre-wrap;">${escHtml(a.description||"")}</div></div>`;
+
+    document.getElementById("modal-status").value = a.status || "pending";
+    document.getElementById("modal-notes").value  = a.adminNotes || "";
+    document.getElementById("modal-reject-reason").value = a.rejectionReason || "";
+    document.getElementById("modal-msg").className = "va-modal-msg";
+    onStatusChange();
+
+    document.getElementById("va-modal").classList.add("open");
+    document.body.style.overflow = "hidden";
+  };
+
+  window.closeModal = function() {
+    document.getElementById("va-modal").classList.remove("open");
+    document.body.style.overflow = "";
+    currentDocId = null; currentAppData = null;
+  };
+
+  window.handleModalOverlayClick = function(e) {
+    if (e.target === document.getElementById("va-modal")) closeModal();
+  };
+
+  window.onStatusChange = function() {
+    const s = document.getElementById("modal-status").value;
+    document.getElementById("modal-reject-field").classList.toggle("show", s === "rejected");
+  };
+
+  /* ─── SAVE APPLICATION ─── */
+  window.saveApplication = async function() {
+    if (!currentDocId || !currentAppData) return;
+
+    const newStatus = document.getElementById("modal-status").value;
+    const adminNotes = document.getElementById("modal-notes").value.trim();
+    const rejectReason = document.getElementById("modal-reject-reason").value.trim();
+    const msgEl = document.getElementById("modal-msg");
+    const saveBtn = document.getElementById("modal-save-btn");
+
+    if (newStatus === "rejected" && !rejectReason) {
+      msgEl.className = "va-modal-msg err";
+      msgEl.textContent = "Please enter a rejection reason.";
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="va-spinner-sm"></span> Saving…';
+    msgEl.className = "va-modal-msg";
+
+    if (newStatus === "approved" && currentAppData.status !== "approved") {
+      await performApproval(currentDocId, currentAppData, adminNotes);
+    } else if (newStatus === "rejected" && currentAppData.status !== "rejected") {
+      await performRejection(currentDocId, currentAppData, rejectReason);
+    } else {
+      // status change only (e.g. pending -> under_review, or updating notes)
+      try {
+        const db = await getDB();
+        const { doc, updateDoc, addDoc, collection, serverTimestamp } =
+          await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+        const adminEmail = (() => { try { return JSON.parse(localStorage.getItem("sokoniUser")||"{}").email||"admin"; } catch { return "admin"; } })();
+
+        await updateDoc(doc(db, "verificationRequests", currentDocId), {
+          status: newStatus, adminNotes,
+          ...(newStatus === "rejected" ? { rejectionReason: rejectReason } : {})
+        });
+
+        await addDoc(collection(db, "adminLog"), {
+          action: `verify_status_update: ${currentAppData.refNumber} → ${newStatus}`,
+          adminEmail, targetUser: currentAppData.fullName,
+          docId: currentDocId, createdAt: serverTimestamp()
+        });
+
+        const idx = allApps.findIndex(x=>x.id===currentDocId);
+        if (idx !== -1) { allApps[idx].status = newStatus; allApps[idx].adminNotes = adminNotes; }
+        renderApps();
+        msgEl.className = "va-modal-msg ok";
+        msgEl.textContent = "Changes saved.";
+        loadAdminLog();
+      } catch(err) {
+        msgEl.className = "va-modal-msg err";
+        msgEl.textContent = "Error: " + err.message;
+      }
+    }
+
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
+  };
+
+  /* ─── SCHEDULE CALL ─── */
+  window.scheduleCall = function(docId) {
+    const a = allApps.find(x => x.id === docId);
+    if (!a) return;
+    const mailto = `mailto:${a.email}?subject=SOKONI Verification Video Call — ${a.refNumber}&body=Dear ${a.fullName},%0A%0AThank you for applying for SOKONI ${a.verifyType} verification.%0A%0AWe would like to invite you to a short verification video call. Please reply with your availability.%0A%0ARegards,%0ASOKONI Verification Team`;
+    window.open(mailto, "_blank");
+  };
+
+  /* ─── ADMIN LOG ─── */
+  async function loadAdminLog() {
+    const logList = document.getElementById("va-log-list");
+    try {
+      const db = await getDB();
+      const { collection, query, orderBy, limit, getDocs } =
+        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+
+      const q = query(collection(db, "adminLog"), orderBy("createdAt", "desc"), limit(20));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        logList.innerHTML = `<div class="va-empty"><i class="fa-solid fa-scroll"></i><div>No admin actions yet.</div></div>`;
+        return;
+      }
+
+      const iconMap = {
+        "verify_approved": { icon: "fa-circle-check", color: "#71ff00" },
+        "verify_rejected": { icon: "fa-circle-xmark", color: "#ef4444" },
+        "verify_status_update": { icon: "fa-arrows-rotate", color: "#00aaff" }
+      };
+
+      logList.innerHTML = snap.docs.map(doc => {
+        const d = doc.data();
+        const actionKey = Object.keys(iconMap).find(k => (d.action||"").startsWith(k)) || "verify";
+        const ic = iconMap[actionKey] || { icon: "fa-shield-halved", color: "#71ff00" };
+        return `
+        <div class="va-log-item">
+          <div class="va-log-icon" style="color:${ic.color};background:rgba(255,255,255,0.04);">
+            <i class="fa-solid ${ic.icon}"></i>
+          </div>
+          <div class="va-log-body">
+            <div class="va-log-action">${escHtml(d.action||"—")}</div>
+            <div class="va-log-meta">${escHtml(d.adminEmail||"")} &bull; ${escHtml(d.targetUser||"")}</div>
+          </div>
+          <div class="va-log-time">${fmtDate(d.createdAt)}</div>
+        </div>`;
+      }).join("");
+
+    } catch(err) {
+      console.error("Log error:", err);
+      logList.innerHTML = `<div class="va-empty"><i class="fa-solid fa-wifi"></i><div>Could not load log.</div></div>`;
+    }
+  }
+
+  /* ─── TOAST ─── */
+  function showToast(msg, isErr=false) {
+    const t = document.getElementById("va-toast");
+    t.textContent = msg;
+    t.className = isErr ? "err show" : "show";
+    setTimeout(() => { t.className = isErr ? "err" : ""; }, 3200);
+  }
+
+  /* expose boot for refresh button */
+  window._vaLoadApplications = loadApplications;
+</script>
+  <script defer src="kass-widget.js"></script>
+
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+

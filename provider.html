@@ -1,0 +1,2092 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Provider Dashboard — SOKONI</title>
+  <meta name="description" content="Manage your service bookings, availability and earnings on SOKONI.">
+  <meta property="og:title" content="Provider Dashboard — SOKONI">
+  <meta property="og:description" content="Manage bookings, set availability and track earnings as a SOKONI service provider.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI Provider">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <script src="sokoni-pay.js" defer></script>
+  <script src="inventory-manager.js" defer></script>
+  <style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:90px;}
+
+/* ── NAV ── */
+.pv-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(113,255,0,0.1);position:sticky;top:0;z-index:200;backdrop-filter:blur(20px);}
+.pv-nav-logo{height:30px;}
+.pv-nav-right{display:flex;gap:8px;align-items:center;}
+.pv-nav-link{color:rgba(255,255,255,0.5);text-decoration:none;font-size:12px;font-weight:700;padding:7px 13px;border:1px solid rgba(255,255,255,0.09);border-radius:10px;transition:all .2s;background:transparent;cursor:pointer;font-family:inherit;}
+.pv-nav-link:hover{color:white;border-color:rgba(255,255,255,0.2);}
+.pv-status-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:800;border:none;cursor:pointer;font-family:inherit;transition:all .25s;}
+.pv-status-available{background:rgba(57,255,20,0.12);border:1px solid rgba(57,255,20,0.3);color:#39ff14;}
+.pv-status-busy{background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.3);color:#ff6464;}
+.pv-status-appt{background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.28);color:#ff9800;}
+.pv-status-dot{width:8px;height:8px;border-radius:50%;animation:pulseDot 1.5s infinite;}
+.dot-available{background:#39ff14;box-shadow:0 0 8px rgba(57,255,20,0.7);}
+.dot-busy{background:#ff6464;animation:none;}
+.dot-appt{background:#ff9800;}
+@keyframes pulseDot{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.4);opacity:.7;}}
+
+/* ── SETUP WIZARD ── */
+.setup-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.95);backdrop-filter:blur(20px);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;}
+.setup-box{background:#0f0f0f;border:1px solid rgba(113,255,0,0.2);border-radius:24px;padding:32px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;}
+.setup-logo{height:34px;margin-bottom:20px;}
+.setup-step{display:none !important;}
+.setup-step.active{display:block !important;animation:fadeIn .3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.setup-title{font-size:22px;font-weight:900;color:white;margin-bottom:6px;}
+.setup-sub{font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:24px;line-height:1.6;}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px;}
+.cat-btn{padding:16px 10px;border-radius:14px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;}
+.cat-btn:hover,.cat-btn.sel{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.08);}
+.cat-btn .cb-icon{font-size:28px;margin-bottom:6px;}
+.cat-btn .cb-label{font-size:12px;font-weight:800;color:white;}
+.cat-btn.sel .cb-label{color:#71ff00;}
+.setup-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:12px;}
+.setup-input:focus{border-color:rgba(113,255,0,0.4);}
+.setup-input::placeholder{color:rgba(255,255,255,0.25);}
+.setup-select{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;cursor:pointer;margin-bottom:12px;}
+.setup-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;}
+.setup-btn{width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:15px;border:none;border-radius:13px;cursor:pointer;font-family:inherit;transition:filter .2s;margin-top:6px;}
+.setup-btn:hover{filter:brightness(1.07);}
+.setup-back{display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.35);font-size:12px;font-weight:700;background:none;border:none;cursor:pointer;font-family:inherit;margin-bottom:16px;padding:0;}
+.setup-back:hover{color:rgba(255,255,255,0.6);}
+.setup-progress{display:flex;gap:6px;margin-bottom:24px;}
+.sp-dot{height:4px;flex:1;border-radius:2px;background:rgba(255,255,255,0.08);}
+.sp-dot.done{background:#71ff00;}
+.sp-dot.active{background:rgba(113,255,0,0.4);}
+
+/* ── MAIN DASHBOARD ── */
+.pv-body{max-width:1100px;margin:0 auto;padding:20px;}
+
+/* ── HEADER CARD ── */
+.pv-header-card{background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,0,0,0));border:1px solid rgba(113,255,0,0.18);border-radius:22px;padding:22px 24px;margin-bottom:20px;display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;}
+.pv-avatar{width:70px;height:70px;border-radius:18px;background:linear-gradient(135deg,rgba(113,255,0,0.2),rgba(0,200,80,0.12));display:flex;align-items:center;justify-content:center;font-size:34px;flex-shrink:0;border:2px solid rgba(113,255,0,0.25);}
+.pv-header-info{flex:1;min-width:0;}
+.pv-provider-name{font-size:22px;font-weight:900;color:white;margin-bottom:3px;}
+.pv-provider-cat{font-size:13px;font-weight:700;margin-bottom:8px;}
+.pv-verified-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;}
+.pv-header-stats{display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;}
+.pv-hstat{text-align:center;}
+.pv-hstat-val{font-size:18px;font-weight:900;color:#71ff00;}
+.pv-hstat-lbl{font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;}
+.pv-header-actions{display:flex;flex-direction:column;gap:7px;align-items:flex-end;flex-shrink:0;}
+
+/* ── TABS ── */
+.pv-tabs{display:flex;gap:3px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:4px;margin-bottom:20px;overflow-x:auto;scrollbar-width:none;}
+.pv-tabs::-webkit-scrollbar{display:none;}
+.pv-tab{flex-shrink:0;padding:9px 16px;border-radius:10px;border:none;background:transparent;color:rgba(255,255,255,0.45);font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.pv-tab.active{background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);}
+.pv-pane{display:none;}
+.pv-pane.active{display:block;}
+
+/* ── SECTION HEADING ── */
+.pv-sec-h{font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.05em;margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+.pv-sec-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.06);}
+
+/* ── STAT CARDS ── */
+.pv-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px;}
+.pv-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px;text-align:center;}
+.pv-stat-val{font-size:24px;font-weight:900;margin-bottom:4px;}
+.pv-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+
+/* ── BOOKING CARD ── */
+.bk-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;transition:border-color .2s;}
+.bk-card:hover{border-color:rgba(113,255,0,0.22);}
+.bk-time-block{text-align:center;flex-shrink:0;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:10px 14px;min-width:70px;}
+.bk-time{font-size:16px;font-weight:900;color:#71ff00;}
+.bk-date{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+.bk-info{flex:1;min-width:0;}
+.bk-client{font-size:14px;font-weight:800;color:white;margin-bottom:2px;}
+.bk-service{font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:5px;}
+.bk-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:rgba(255,255,255,0.3);}
+.bk-meta i{color:rgba(113,255,0,0.5);margin-right:2px;}
+.bk-ref{font-size:10px;font-weight:800;color:rgba(113,255,0,0.6);background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.15);border-radius:5px;padding:1px 6px;}
+.bk-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+.bk-confirm{padding:8px 14px;background:rgba(57,255,20,0.12);border:1px solid rgba(57,255,20,0.3);color:#71ff00;font-size:11px;font-weight:800;border-radius:9px;cursor:pointer;font-family:inherit;}
+.bk-decline{padding:8px 10px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.2);color:#ff6464;font-size:11px;font-weight:800;border-radius:9px;cursor:pointer;font-family:inherit;}
+.bk-wa{padding:8px 10px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;font-size:11px;font-weight:800;border-radius:9px;cursor:pointer;font-family:inherit;}
+.bk-status-badge{font-size:9px;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.bk-pending{background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.25);color:#ff9800;}
+.bk-confirmed{background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.25);color:#71ff00;}
+.bk-done{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);}
+.bk-cancelled{background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.2);color:#ff6464;}
+
+/* ── AVAILABILITY ── */
+.av-status-row{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+.av-status-btn{flex:1;min-width:120px;padding:13px 10px;border-radius:14px;border:1px solid;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;text-align:center;transition:all .22s;}
+.av-available{background:rgba(57,255,20,0.05);border-color:rgba(57,255,20,0.2);color:rgba(57,255,20,0.6);}
+.av-available.active{background:rgba(57,255,20,0.12);border-color:rgba(57,255,20,0.4);color:#71ff00;box-shadow:0 0 14px rgba(57,255,20,0.15);}
+.av-busy{background:rgba(255,80,80,0.05);border-color:rgba(255,80,80,0.18);color:rgba(255,100,100,0.6);}
+.av-busy.active{background:rgba(255,80,80,0.12);border-color:rgba(255,80,80,0.35);color:#ff6464;box-shadow:0 0 14px rgba(255,80,80,0.15);}
+.av-appt{background:rgba(255,152,0,0.05);border-color:rgba(255,152,0,0.18);color:rgba(255,180,0,0.6);}
+.av-appt.active{background:rgba(255,152,0,0.1);border-color:rgba(255,152,0,0.35);color:#ff9800;}
+.av-status-icon{font-size:20px;margin-bottom:5px;}
+
+/* ── SCHEDULE ROWS (replaces old day/hour grid) ── */
+.sched-row{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:13px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.02);margin-bottom:8px;flex-wrap:wrap;transition:background .18s,border-color .18s;}
+.sched-row.sched-open{background:rgba(113,255,0,0.04);border-color:rgba(113,255,0,0.14);}
+.sched-day{font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);min-width:36px;}
+.sched-row.sched-open .sched-day{color:#71ff00;}
+.sked-tog{width:40px;height:23px;border-radius:999px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s;font-family:inherit;padding:0;}
+.sked-tog.on{background:rgba(113,255,0,0.4);}
+.sked-tog.off{background:rgba(255,255,255,0.12);}
+.sked-tog::after{content:'';position:absolute;top:3px;width:17px;height:17px;border-radius:50%;background:white;transition:left .2s;}
+.sked-tog.on::after{left:20px;}
+.sked-tog.off::after{left:3px;}
+.sched-times{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.sched-time-sel{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:white;font-size:16px;font-weight:700;padding:6px 10px;font-family:inherit;outline:none;cursor:pointer;min-width:72px;}
+.sched-time-sel:focus{border-color:rgba(113,255,0,0.4);}
+.sched-sep{font-size:11px;color:rgba(255,255,255,0.28);white-space:nowrap;}
+.sched-closed{font-size:11px;color:rgba(255,255,255,0.22);font-style:italic;margin-left:4px;}
+/* legacy kept for blocked-date chips */
+.date-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.25);color:#ff6464;font-size:11px;font-weight:700;}
+.date-chip button{background:none;border:none;color:inherit;cursor:pointer;padding:0;font-size:15px;line-height:1;}
+.av-notice-banner{background:linear-gradient(135deg,rgba(255,80,80,0.08),rgba(255,100,0,0.05));border:1px solid rgba(255,80,80,0.2);border-radius:14px;padding:14px 18px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.55);display:none;}
+.av-notice-banner.show{display:block;}
+
+/* ── SERVICE MENU ── */
+.svc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.svc-name{flex:1;font-size:13px;font-weight:800;color:white;}
+.svc-duration{font-size:11px;color:rgba(255,255,255,0.4);}
+.svc-price{font-size:15px;font-weight:900;color:#71ff00;}
+.svc-toggle{width:36px;height:20px;border-radius:999px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s;}
+.svc-toggle.on{background:rgba(57,255,20,0.3);}
+.svc-toggle.off{background:rgba(255,255,255,0.1);}
+.svc-toggle::after{content:'';position:absolute;top:2px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s;}
+.svc-toggle.on::after{left:18px;}
+.svc-toggle.off::after{left:2px;}
+.add-svc-form{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-top:12px;display:none;}
+.pv-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+.pv-input:focus{border-color:rgba(113,255,0,0.4);}
+.pv-input::placeholder{color:rgba(255,255,255,0.25);}
+.pv-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* ── PROFILE ── */
+.profile-field{margin-bottom:14px;}
+.profile-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
+
+/* ── EARNINGS ── */
+.earn-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+.earn-kpi{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;}
+.earn-kpi-val{font-size:22px;font-weight:900;margin-bottom:3px;}
+.earn-kpi-lbl{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;}
+
+/* ── CALENDAR ── */
+.cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px;}
+.cal-day{border-radius:10px;padding:8px 4px;text-align:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);}
+.cal-day-name{font-size:9px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:4px;}
+.cal-day-num{font-size:14px;font-weight:900;color:rgba(255,255,255,0.7);margin-bottom:4px;}
+.cal-day.today .cal-day-num{color:#71ff00;}
+.cal-day.today{border-color:rgba(113,255,0,0.25);}
+.cal-slot{font-size:8px;padding:2px 5px;border-radius:4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.cal-slot.booked{background:rgba(57,255,20,0.12);color:#71ff00;}
+.cal-slot.pending{background:rgba(255,152,0,0.12);color:#ff9800;}
+.cal-slot.blocked{background:rgba(255,80,80,0.1);color:#ff6464;}
+
+/* ── TOAST ── */
+.pv-toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(80px);opacity:0;background:#111;border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-size:13px;font-weight:700;padding:11px 22px;border-radius:50px;z-index:10000;transition:transform .3s,opacity .3s;pointer-events:none;white-space:nowrap;}
+.pv-toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+
+/* ── EMPTY STATE ── */
+.pv-empty{text-align:center;padding:50px 20px;color:rgba(255,255,255,0.2);}
+.pv-empty i{font-size:40px;margin-bottom:14px;display:block;color:rgba(113,255,0,0.2);}
+.pv-empty p{font-size:13px;}
+
+@media(max-width:600px){.pv-header-card{flex-direction:column;}.pv-grid2{grid-template-columns:1fr;}.pv-header-actions{flex-direction:row;align-items:center;}.story-enhance-row{grid-template-columns:1fr;}}
+
+/* ── STORIES TAB ── */
+.story-dropzone{border:2px dashed rgba(113,255,0,0.25);border-radius:20px;padding:36px 24px;text-align:center;cursor:pointer;transition:all .25s;background:rgba(113,255,0,0.02);position:relative;}
+.story-dropzone:hover,.story-dropzone.drag-over{border-color:rgba(113,255,0,0.6);background:rgba(113,255,0,0.06);}
+.story-dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.story-upload-icon{font-size:42px;margin-bottom:12px;}
+.story-upload-label{font-size:14px;font-weight:800;color:white;margin-bottom:6px;}
+.story-upload-sub{font-size:11px;color:rgba(255,255,255,0.35);}
+.story-preview-box{border-radius:18px;overflow:hidden;background:#111;border:1px solid rgba(255,255,255,0.08);margin-bottom:16px;position:relative;}
+.story-preview-box canvas,.story-preview-box img{width:100%;max-height:380px;object-fit:cover;display:block;}
+.story-ai-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.72);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+.story-ai-ring{width:52px;height:52px;border-radius:50%;border:3px solid rgba(113,255,0,0.15);border-top-color:#71ff00;animation:spinRing .8s linear infinite;}
+@keyframes spinRing{to{transform:rotate(360deg);}}
+.story-ai-label{font-size:13px;font-weight:800;color:#71ff00;letter-spacing:.04em;}
+.story-ai-sub{font-size:10px;color:rgba(255,255,255,0.4);}
+.story-ba-toggle{display:flex;gap:0;border-radius:9px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);margin-bottom:12px;width:fit-content;}
+.story-ba-btn{padding:7px 18px;font-size:11px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .2s;}
+.story-ba-btn.on{background:rgba(113,255,0,0.15);color:#71ff00;}
+.story-ba-btn.off{background:transparent;color:rgba(255,255,255,0.35);}
+.story-caption{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;resize:none;min-height:60px;margin-bottom:12px;}
+.story-caption:focus{border-color:rgba(113,255,0,0.4);}
+.story-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.story-filter-pill{padding:6px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.story-filter-pill.active{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.1);color:#71ff00;}
+.story-publish-btn{width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:14px;border:none;border-radius:13px;cursor:pointer;font-family:inherit;transition:filter .2s;}
+.story-publish-btn:hover{filter:brightness(1.08);}
+.story-publish-btn:disabled{opacity:.45;cursor:not-allowed;filter:none;}
+.stories-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:24px;}
+.story-card{border-radius:16px;overflow:hidden;background:#111;border:1px solid rgba(255,255,255,0.07);position:relative;cursor:pointer;transition:transform .2s;}
+.story-card:hover{transform:translateY(-3px);}
+.story-card-img{width:100%;height:200px;object-fit:cover;display:block;}
+.story-card-info{padding:10px 12px;}
+.story-card-caption{font-size:11px;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+.story-card-meta{font-size:10px;color:rgba(255,255,255,0.3);margin-top:3px;}
+.story-card-badge{position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-size:9px;font-weight:900;padding:3px 8px;border-radius:999px;}
+.story-card-del{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border:none;color:rgba(255,255,255,0.6);width:26px;height:26px;border-radius:50%;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.story-enhance-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.story-enhance-item label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+.story-enhance-item input[type=range]{width:100%;accent-color:#71ff00;}
+
+/* ── BOOKING FILTER CHIPS ── */
+.day-chip{padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.day-chip:hover{border-color:rgba(255,255,255,0.22);color:rgba(255,255,255,0.72);}
+.day-chip.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+
+/* ── NOTIFICATION BADGE ON TABS ── */
+.pv-badge{display:inline-flex;align-items:center;justify-content:center;background:#ff4444;color:white;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;margin-left:5px;}
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="splash.js"></script>
+
+<!-- SETUP WIZARD (shown on first visit / new provider) -->
+<div class="setup-overlay" id="setupOverlay">
+  <div class="setup-box">
+    <img loading="lazy" src="assets/Sokonilogo2.png" class="setup-logo" alt="SOKONI">
+
+    <!-- Step 0: Goods or Services? -->
+    <div class="setup-step active" id="step0">
+      <div class="setup-title">What are you offering?</div>
+      <div class="setup-sub">Pick the right path — your dashboard will be built around your type.</div>
+      <div class="pv-grid2" style="gap:12px;margin-bottom:20px;">
+        <button type="button" onclick="chooseType(‘services’)" style="padding:24px 12px;border-radius:14px;border:1px solid rgba(0,170,255,0.25);background:rgba(0,170,255,0.07);cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;" onmouseover="this.style.background=’rgba(0,170,255,0.14)’" onmouseout="this.style.background=’rgba(0,170,255,0.07)’">
+          <div style="font-size:34px;margin-bottom:8px;">⚙️</div>
+          <div style="font-size:14px;font-weight:900;color:#00aaff;margin-bottom:4px;">A Service</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5;">Haircuts, legal advice, car repair, DJ, doctor, etc.</div>
+        </button>
+        <button type="button" onclick="chooseType(‘goods’)" style="padding:24px 12px;border-radius:14px;border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.07);cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;" onmouseover="this.style.background=’rgba(113,255,0,0.14)’" onmouseout="this.style.background=’rgba(113,255,0,0.07)’">
+          <div style="font-size:34px;margin-bottom:8px;">🛒</div>
+          <div style="font-size:14px;font-weight:900;color:#71ff00;margin-bottom:4px;">A Product</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5;">Physical goods, digital downloads, wholesale items.</div>
+        </button>
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.25);text-align:center;line-height:1.6;">Already selling products? <a href="seller.html" style="color:rgba(113,255,0,0.6);">Go to Seller Dashboard →</a></div>
+    </div>
+
+    <!-- Step 1: Service Category -->
+    <div class="setup-step" id="step1" style="display:none;">
+      <div class="setup-progress"><div class="sp-dot active"></div><div class="sp-dot"></div><div class="sp-dot"></div></div>
+      <button type="button" class="setup-back" onclick="goStep(0)">← Back</button>
+      <div class="setup-title">What type of service?</div>
+      <div class="setup-sub">Choose your category — your dashboard will be tailored to match.</div>
+      <div class="cat-grid" id="catGrid"></div>
+      <div id="setupMsg1" style="font-size:12px;color:#ff9800;min-height:14px;margin-bottom:8px;"></div>
+      <button type="button" class="setup-btn" onclick="goStep(2)">Next →</button>
+    </div>
+
+    <!-- Step 2: Basic Info -->
+    <div class="setup-step" id="step2" style="display:none;">
+      <div class="setup-progress"><div class="sp-dot done"></div><div class="sp-dot active"></div><div class="sp-dot"></div></div>
+      <button type="button" class="setup-back" onclick="goStep(1)">← Back</button>
+      <div class="setup-title" id="step2Title">Your Details</div>
+      <div class="setup-sub">Tell us about yourself. This appears on your public profile.</div>
+      <label class="setup-label">Your Name / Business Name *</label>
+      <input class="setup-input" id="sName" placeholder="e.g. Kevin Njoroge Barbershop">
+      <label class="setup-label">Phone (WhatsApp) *</label>
+      <input class="setup-input" type="tel" id="sPhone" placeholder="07XXXXXXXX">
+      <label class="setup-label">Location / Area *</label>
+      <input class="setup-input" id="sLocation" placeholder="e.g. Westlands, Nairobi">
+      <div id="catFields"></div>
+      <div id="setupMsg2" style="font-size:12px;color:#ff9800;min-height:14px;margin-bottom:8px;"></div>
+      <button type="button" class="setup-btn" onclick="goStep(3)">Next →</button>
+    </div>
+
+    <!-- Step 3: Working Hours -->
+    <div class="setup-step" id="step3" style="display:none;">
+      <div class="setup-progress"><div class="sp-dot done"></div><div class="sp-dot done"></div><div class="sp-dot active"></div></div>
+      <button type="button" class="setup-back" onclick="goStep(2)">← Back</button>
+      <div class="setup-title">Working Hours</div>
+      <div class="setup-sub">Set your open & close times per day. Clients see exactly when you're available.</div>
+      <div id="setupSchedRows" style="margin-bottom:18px;"></div>
+      <div style="margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Blocked Dates <span style="font-weight:400;text-transform:none;letter-spacing:0;">(holidays / days off)</span></div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+          <input type="date" id="setupBlockDate" class="setup-input" style="margin-bottom:0;flex:1;min-width:130px;">
+          <button type="button" onclick="addSetupBlockDate()" style="padding:10px 16px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.25);color:#ff6464;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Block Date</button>
+        </div>
+        <div id="setupBlockedList" style="display:flex;gap:6px;flex-wrap:wrap;min-height:24px;"></div>
+      </div>
+      <button type="button" class="setup-btn" onclick="finishSetup()">✅ Launch My Dashboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── NAV ── -->
+<nav class="pv-nav" id="mainNav" style="display:none;">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="pv-nav-logo" alt="SOKONI"></a>
+  <div style="flex:1;padding:0 16px;">
+    <div style="font-size:13px;font-weight:800;color:white;" id="navProviderName">Provider Dashboard</div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.4);" id="navProviderCat"></div>
+  </div>
+  <div class="pv-nav-right">
+    <button type="button" class="pv-status-pill pv-status-available" id="statusPill" onclick="cycleStatus()">
+      <span class="pv-status-dot dot-available" id="statusDot"></span>
+      <span id="statusLabel">Available</span>
+    </button>
+    <a href="index.html" class="pv-nav-link">← SOKONI</a>
+  </div>
+</nav>
+
+<!-- ── MAIN DASHBOARD ── -->
+<div class="pv-body" id="mainDash" style="display:none;">
+
+  <!-- Header card -->
+  <div class="pv-header-card">
+    <div class="pv-avatar" id="dashAvatar">⚽</div>
+    <div class="pv-header-info">
+      <div class="pv-provider-name" id="dashName">—</div>
+      <div class="pv-provider-cat" id="dashCat">—</div>
+      <div style="margin-top:4px;">
+        <span class="pv-verified-badge">✓ SOKONI Verified</span>
+        <span style="margin-left:8px;font-size:10px;color:rgba(255,255,255,0.3);" id="dashLocation"></span>
+      </div>
+      <div class="pv-header-stats" id="dashStats"></div>
+    </div>
+    <div class="pv-header-actions">
+      <button type="button" onclick="cycleStatus()" class="pv-status-pill pv-status-available" id="statusPill2">
+        <span class="pv-status-dot dot-available" id="statusDot2"></span>
+        <span id="statusLabel2">Available</span>
+      </button>
+      <button type="button" onclick="showTab('availability')" style="padding:8px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.55);border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">⏰ Set Hours</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="pv-tabs">
+    <button type="button" class="pv-tab active" onclick="showTab('overview',this)">📊 Overview</button>
+    <button type="button" class="pv-tab" onclick="showTab('bookings',this)">📅 Bookings</button>
+    <button type="button" class="pv-tab" onclick="showTab('availability',this)">⏰ Availability</button>
+    <button type="button" class="pv-tab" onclick="showTab('services',this)">🛠️ Services</button>
+    <button type="button" class="pv-tab" onclick="showTab('profile',this)">👤 Profile</button>
+    <button type="button" class="pv-tab" onclick="showTab('earnings',this)">💰 Earnings</button>
+    <button type="button" class="pv-tab" onclick="showTab('stories',this)" style="color:#f472b6;">📸 Stories</button>
+    <button type="button" class="pv-tab" id="inventoryTab" onclick="SokoniInventory.openForProvider()" style="display:none;color:#fbbf24;">📦 Inventory</button>
+  </div>
+
+  <!-- ═══ TAB: OVERVIEW ═══ -->
+  <div id="pane-overview" class="pv-pane active">
+    <div class="pv-stats-grid" id="overviewStats"></div>
+    <div class="pv-sec-h">📅 Today's Bookings</div>
+    <div id="todayBookings"></div>
+    <div class="pv-sec-h" style="margin-top:20px;">📆 This Week</div>
+    <div class="cal-week" id="calWeek"></div>
+    <div class="pv-sec-h" style="margin-top:20px;">⚡ Quick Actions</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">
+      <button type="button" onclick="showTab('bookings')" style="padding:14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.18);border-radius:13px;color:#71ff00;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;" onmouseover="this.style.background='rgba(113,255,0,0.12)'" onmouseout="this.style.background='rgba(113,255,0,0.07)'">📋 View All Bookings</button>
+      <button type="button" onclick="showTab('availability')" style="padding:14px;background:rgba(0,170,255,0.07);border:1px solid rgba(0,170,255,0.18);border-radius:13px;color:#00aaff;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;">⏰ Update Availability</button>
+      <button type="button" onclick="showTab('services')" style="padding:14px;background:rgba(168,85,247,0.07);border:1px solid rgba(168,85,247,0.18);border-radius:13px;color:#c084fc;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;">➕ Add Service</button>
+      <button type="button" onclick="notifyAllClients()" style="padding:14px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:13px;color:#25d366;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;">💬 Notify Clients</button>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: BOOKINGS ═══ -->
+  <div id="pane-bookings" class="pv-pane">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="day-chip active" onclick="filterBookings('all',this)">All</button>
+        <button type="button" class="day-chip" onclick="filterBookings('pending',this)">⏳ Pending</button>
+        <button type="button" class="day-chip" onclick="filterBookings('confirmed',this)">✅ Confirmed</button>
+        <button type="button" class="day-chip" onclick="filterBookings('done',this)">☑️ Done</button>
+        <button type="button" class="day-chip" onclick="filterBookings('cancelled',this)">✗ Cancelled</button>
+      </div>
+      <button type="button" onclick="openAddBookingForm()" style="padding:8px 16px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:12px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;">+ Add Booking</button>
+    </div>
+    <div id="bookingsList"></div>
+  </div>
+
+  <!-- ═══ TAB: AVAILABILITY ═══ -->
+  <div id="pane-availability" class="pv-pane">
+    <div class="pv-sec-h">Live Status</div>
+    <div class="av-status-row">
+      <button type="button" class="av-status-btn av-available active" id="avBtnAvail" onclick="setStatus('available')"><div class="av-status-icon">🟢</div>Available<div style="font-size:9px;margin-top:3px;opacity:.7;">Taking bookings</div></button>
+      <button type="button" class="av-status-btn av-busy" id="avBtnBusy" onclick="setStatus('busy')"><div class="av-status-icon">🔴</div>Busy<div style="font-size:9px;margin-top:3px;opacity:.7;">Fully booked today</div></button>
+      <button type="button" class="av-status-btn av-appt" id="avBtnAppt" onclick="setStatus('appointment')"><div class="av-status-icon">📅</div>By Appointment<div style="font-size:9px;margin-top:3px;opacity:.7;">Pre-book only</div></button>
+    </div>
+    <div class="av-notice-banner" id="avNoticeBanner">
+      🔴 You are currently set to <strong>Busy</strong>. New booking requests are paused. Switch to Available when you're ready.
+    </div>
+
+    <div class="pv-sec-h">Working Hours</div>
+    <div id="avSchedRows" style="margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+      <button type="button" onclick="saveAvailability()" style="padding:10px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:13px;border:none;border-radius:11px;cursor:pointer;font-family:inherit;">💾 Save Hours</button>
+      <button type="button" onclick="blockOutToday()" style="padding:10px 18px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.2);color:#ff6464;font-size:12px;font-weight:700;border-radius:11px;cursor:pointer;font-family:inherit;">🔴 Block Today</button>
+      <button type="button" onclick="openAllDayAv()" style="padding:10px 18px;background:rgba(57,255,20,0.06);border:1px solid rgba(57,255,20,0.2);color:#71ff00;font-size:12px;font-weight:700;border-radius:11px;cursor:pointer;font-family:inherit;">✅ Open All Week</button>
+    </div>
+
+    <div class="pv-sec-h">Blocked Dates</div>
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:12px;">
+        <div>
+          <div class="profile-label">Block a Date (holiday / away day)</div>
+          <input type="date" class="pv-input" id="blockDateInput" style="margin-bottom:0;">
+        </div>
+        <button type="button" onclick="addBlockDate()" style="padding:11px 18px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.25);color:#ff6464;border-radius:11px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">Block Date</button>
+      </div>
+      <div id="blockedDatesList" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: SERVICES ═══ -->
+  <div id="pane-services" class="pv-pane">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <button type="button" onclick="toggleAddSvc()" style="padding:9px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:12px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;">➕ Add Service</button>
+      <div style="font-size:13px;font-weight:800;color:rgba(255,255,255,0.55);">Your Service Menu</div>
+    </div>
+    <div id="servicesList"></div>
+    <div class="add-svc-form" id="addSvcForm">
+      <div style="font-size:13px;font-weight:800;margin-bottom:14px;color:white;">➕ New Service</div>
+      <div class="pv-grid2">
+        <div><div class="profile-label">Service Name *</div><input class="pv-input" id="svcName" placeholder="e.g. Fade Cut"></div>
+        <div><div class="profile-label">Price (KES) *</div><input class="pv-input" type="number" id="svcPrice" placeholder="e.g. 400"></div>
+      </div>
+      <div class="pv-grid2">
+        <div><div class="profile-label">Duration (minutes)</div><input class="pv-input" type="number" id="svcDuration" placeholder="e.g. 45"></div>
+        <div><div class="profile-label">Category Tag</div><input class="pv-input" id="svcTag" placeholder="e.g. Haircut, Consult"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" onclick="saveNewService()" style="flex:1;padding:11px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:11px;cursor:pointer;font-family:inherit;font-size:13px;">Save Service</button>
+        <button type="button" onclick="toggleAddSvc()" style="padding:11px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);border-radius:11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: PROFILE ═══ -->
+  <div id="pane-profile" class="pv-pane">
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:22px;margin-bottom:16px;">
+      <div class="pv-sec-h">Basic Info</div>
+      <div class="profile-field"><div class="profile-label">Display Name</div><input class="pv-input" id="pfName" placeholder="Your name or business name"></div>
+      <div class="pv-grid2">
+        <div class="profile-field"><div class="profile-label">Phone (WhatsApp)</div><input class="pv-input" id="pfPhone" placeholder="07XXXXXXXX"></div>
+        <div class="profile-field"><div class="profile-label">Location</div><input class="pv-input" id="pfLocation" placeholder="Area, City"></div>
+      </div>
+      <div class="profile-field">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <div class="profile-label" style="margin:0;">Bio / Description</div>
+          <button type="button" id="pvAIBioBtn"
+            onclick="pvGenerateAIBio(this)"
+            style="padding:5px 12px;background:linear-gradient(135deg,rgba(113,255,0,0.12),rgba(79,200,0,0.08));
+                   border:1px solid rgba(113,255,0,0.28);border-radius:8px;color:#71ff00;
+                   font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;
+                   -webkit-tap-highlight-color:transparent;touch-action:manipulation;">
+            ✨ AI Write
+          </button>
+        </div>
+        <textarea class="pv-input" id="pfBio" rows="3" placeholder="Tell clients about your experience and specialties..." style="resize:vertical;"></textarea>
+      </div>
+      <div id="catProfileFields"></div>
+      <button type="button" onclick="saveProfile()" style="padding:11px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:13px;border:none;border-radius:11px;cursor:pointer;font-family:inherit;">💾 Save Profile</button>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:22px;">
+      <div class="pv-sec-h">Public Listing</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:14px;line-height:1.7;">Your profile is visible across SOKONI's hubs. Share your booking link directly with clients.</div>
+      <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:13px;font-weight:800;color:#71ff00;" id="bookingLinkDisplay">sokoni.app/book/—</span>
+        <div style="display:flex;gap:7px;">
+          <button type="button" onclick="copyBookingLink()" style="padding:8px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>
+          <button type="button" onclick="shareToWhatsApp()" style="padding:8px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;"><i class="fab fa-whatsapp"></i> Share</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:22px;margin-top:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div class="pv-sec-h" style="margin-bottom:2px;">🔗 Linked Social Accounts</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Connect your social accounts to grow your client base &amp; SOKONI</div>
+        </div>
+        <button type="button" id="pvEditSocialBtn" onclick="pvToggleSocial()" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:10px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">✏️ Edit</button>
+      </div>
+      <div id="pvSocialDisplay"></div>
+      <div id="pvSocialForm" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div><label style="font-size:16px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">📸 Instagram</label><input type="text" id="pvsl_instagram" placeholder="@yourhandle" style="width:100%;padding:10px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;box-sizing:border-box;"></div>
+          <div><label style="font-size:16px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">🎵 TikTok</label><input type="text" id="pvsl_tiktok" placeholder="@yourhandle" style="width:100%;padding:10px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;box-sizing:border-box;"></div>
+          <div><label style="font-size:16px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">𝕏 Twitter/X</label><input type="text" id="pvsl_twitter" placeholder="@yourhandle" style="width:100%;padding:10px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;box-sizing:border-box;"></div>
+          <div><label style="font-size:16px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">👤 Facebook</label><input type="text" id="pvsl_facebook" placeholder="page-name" style="width:100%;padding:10px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;box-sizing:border-box;"></div>
+          <div><label style="font-size:16px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">▶️ YouTube</label><input type="text" id="pvsl_youtube" placeholder="@channel" style="width:100%;padding:10px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;box-sizing:border-box;"></div>
+          <div><label style="font-size:16px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">💼 LinkedIn</label><input type="text" id="pvsl_linkedin" placeholder="your-profile" style="width:100%;padding:10px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;box-sizing:border-box;"></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button type="button" onclick="pvSaveSocial()" style="flex:1;padding:11px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;border-radius:11px;color:black;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">💾 Save Social Links</button>
+          <button type="button" onclick="pvToggleSocial()" style="padding:11px 18px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.5);font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <script>
+    (function(){
+      var _ICONS={instagram:'📸',tiktok:'🎵',twitter:'𝕏',facebook:'👤',youtube:'▶️',linkedin:'💼'};
+      var _LBLS={instagram:'Instagram',tiktok:'TikTok',twitter:'Twitter/X',facebook:'Facebook',youtube:'YouTube',linkedin:'LinkedIn'};
+      var _SURLS={
+        instagram:function(h){return 'https://instagram.com/'+h.replace('@','');},
+        tiktok:function(h){return 'https://tiktok.com/@'+h.replace('@','');},
+        twitter:function(h){return 'https://twitter.com/'+h.replace('@','');},
+        facebook:function(h){return 'https://facebook.com/'+h;},
+        youtube:function(h){return 'https://youtube.com/@'+h.replace('@','');},
+        linkedin:function(h){return 'https://linkedin.com/in/'+h;}
+      };
+      var _KEY='sokoniProvider';
+      function _gu(){try{return JSON.parse(localStorage.getItem(_KEY)||'{}');}catch(e){return{};}}
+      window.pvToggleSocial=function(){
+        var fm=document.getElementById('pvSocialForm');
+        var dp=document.getElementById('pvSocialDisplay');
+        var bt=document.getElementById('pvEditSocialBtn');
+        if(fm.style.display==='none'){
+          var u=_gu();
+          ['instagram','tiktok','twitter','facebook','youtube','linkedin'].forEach(function(k){
+            var el=document.getElementById('pvsl_'+k);
+            if(el) el.value=u['social_'+k]||'';
+          });
+          fm.style.display='block';dp.style.display='none';bt.textContent='✕ Close';
+        } else {
+          fm.style.display='none';dp.style.display='block';bt.textContent='✏️ Edit';
+        }
+      };
+      window.pvSaveSocial=function(){
+        var u=_gu();
+        ['instagram','tiktok','twitter','facebook','youtube','linkedin'].forEach(function(k){
+          var el=document.getElementById('pvsl_'+k);
+          if(el) u['social_'+k]=el.value.trim();
+        });
+        localStorage.setItem(_KEY,JSON.stringify(u));
+        _pvRSD();window.pvToggleSocial();
+      };
+      function _pvRSD(){
+        var u=_gu();var dp=document.getElementById('pvSocialDisplay');if(!dp)return;
+        var linked=Object.keys(_ICONS).filter(function(k){return u['social_'+k];});
+        if(!linked.length){
+          dp.innerHTML='<div style="font-size:13px;color:rgba(255,255,255,0.3);text-align:center;padding:12px;">No social accounts linked — click ✏️ Edit to connect yours</div>';
+          return;
+        }
+        dp.innerHTML=linked.map(function(k){
+          return '<a href="'+_SURLS[k](u['social_'+k])+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;padding:7px 13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;text-decoration:none;margin:3px;">'+_ICONS[k]+' '+_LBLS[k]+' <span style="color:rgba(255,255,255,0.4);">'+u['social_'+k]+'</span></a>';
+        }).join('');
+      }
+      document.addEventListener('DOMContentLoaded',function(){setTimeout(_pvRSD,300);});
+    })();
+    </script>
+
+    <div style="background:rgba(220,38,38,0.04);border:1px solid rgba(220,38,38,0.2);border-radius:18px;padding:22px;margin-top:16px;">
+      <div style="font-size:13px;font-weight:800;color:#ef4444;margin-bottom:6px;">⚠️ Danger Zone</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;line-height:1.7;">Permanently deletes your provider profile, bookings and services from this device. Cannot be undone.</div>
+      <button type="button" onclick="deleteProviderAccount()" style="padding:10px 22px;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.35);color:#ef4444;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🗑️ Delete My Account</button>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: EARNINGS ═══ -->
+  <div id="pane-earnings" class="pv-pane">
+    <div class="earn-kpi-grid" id="earnKpis"></div>
+
+    <!-- ── Earnings Charts ── -->
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px 18px;margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">📈 Earnings Trend — Last 6 Months</div>
+      <div style="position:relative;height:180px;">
+        <canvas id="provEarnChart"></canvas>
+      </div>
+    </div>
+    <div class="pv-grid2" style="gap:14px;margin-bottom:18px;">
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:14px 16px;">
+        <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">🍩 Revenue by Service</div>
+        <div style="position:relative;height:150px;"><canvas id="provServicesChart"></canvas></div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:14px 16px;">
+        <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">⭐ Rating Breakdown</div>
+        <div style="position:relative;height:150px;"><canvas id="provRatingChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="pv-sec-h">Recent Transactions</div>
+    <div id="earnTransList"></div>
+    <div style="margin-top:16px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.18);border-radius:14px;padding:16px 18px;">
+      <div style="font-size:13px;font-weight:800;color:#ff9800;margin-bottom:6px;">💸 Outstanding Commission</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">SOKONI earns a small completion commission on each service. Pay via M-PESA Paybill <strong style="color:white;">522522</strong>, Account: your booking ref.</div>
+      <button type="button" onclick="window.open('https://wa.me/254705726803?text=I+want+to+pay+my+SOKONI+commission','_blank')" style="padding:9px 18px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;"><i class="fab fa-whatsapp"></i> Pay Commission via WhatsApp</button>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: STORIES ═══ -->
+  <div id="pane-stories" class="pv-pane">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+      <div>
+        <div style="font-size:15px;font-weight:900;color:white;">📸 Stories & Showcase</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">Upload photos or videos — AI enhances them in seconds. Visible to clients browsing your profile.</div>
+      </div>
+      <div style="font-size:11px;color:rgba(244,114,182,0.7);background:rgba(244,114,182,0.08);border:1px solid rgba(244,114,182,0.2);padding:5px 12px;border-radius:999px;font-weight:700;">✨ AI-Powered Editor</div>
+    </div>
+
+    <!-- Upload Zone -->
+    <div class="story-dropzone" id="storyDropzone" ondragover="storyDragOver(event)" ondragleave="storyDragLeave(event)" ondrop="storyDrop(event)">
+      <input type="file" id="storyFileInput" accept="image/*,video/mp4,video/quicktime,video/webm,video/*" onchange="storyFileChosen(this.files[0])">
+      <div class="story-upload-icon">📷</div>
+      <div class="story-upload-label">Drop a photo or video here</div>
+      <div class="story-upload-sub">JPG, PNG, WEBP, MP4 · Max 20MB · Tap or drag to upload</div>
+    </div>
+
+    <!-- Editor Panel — hidden until file chosen -->
+    <div id="storyEditorPanel" style="display:none;margin-top:18px;">
+
+      <!-- Preview with AI overlay -->
+      <div class="story-preview-box" id="storyPreviewBox">
+        <canvas id="storyCanvas"></canvas>
+        <div class="story-ai-overlay" id="storyAiOverlay">
+          <div class="story-ai-ring"></div>
+          <div class="story-ai-label">✨ AI Editing…</div>
+          <div class="story-ai-sub" id="storyAiStep">Analysing your photo</div>
+        </div>
+      </div>
+
+      <!-- Before / After toggle -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <div class="story-ba-toggle">
+          <button type="button" class="story-ba-btn off" id="btnBefore" onclick="storyShowBefore()">Before</button>
+          <button type="button" class="story-ba-btn on"  id="btnAfter"  onclick="storyShowAfter()">After ✨</button>
+        </div>
+        <div id="storyEnhanceLabel" style="font-size:11px;color:rgba(255,255,255,0.35);"></div>
+      </div>
+
+      <!-- Style filters -->
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Style</div>
+      <div class="story-filter-row" id="storyFilterRow"></div>
+
+      <!-- Fine-tune sliders -->
+      <details style="margin-bottom:14px;">
+        <summary style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Fine-tune ▾</summary>
+        <div class="story-enhance-row" style="margin-top:10px;">
+          <div class="story-enhance-item"><label>Brightness <span id="lblBright">1.1</span></label><input type="range" id="slBright" min="0.5" max="1.8" step="0.05" value="1.1" oninput="storyReapply()"></div>
+          <div class="story-enhance-item"><label>Contrast <span id="lblContrast">1.1</span></label><input type="range" id="slContrast" min="0.5" max="2" step="0.05" value="1.1" oninput="storyReapply()"></div>
+          <div class="story-enhance-item"><label>Saturation <span id="lblSat">1.2</span></label><input type="range" id="slSat" min="0.5" max="2.5" step="0.05" value="1.2" oninput="storyReapply()"></div>
+          <div class="story-enhance-item"><label>Sharpness <span id="lblSharp">1</span></label><input type="range" id="slSharp" min="0" max="3" step="0.5" value="1" oninput="storyReapply()"></div>
+        </div>
+      </details>
+
+      <!-- Caption -->
+      <textarea class="story-caption" id="storyCaption" placeholder="Write a caption for this story… e.g. '3-bedroom apartment in Westlands, KES 45,000/mo 🏠'"></textarea>
+
+      <!-- Publish button -->
+      <button type="button" class="story-publish-btn" id="storyPublishBtn" onclick="storyPublish()">🚀 Publish Story</button>
+      <div id="storyPublishMsg" style="font-size:12px;min-height:16px;margin-top:8px;text-align:center;"></div>
+    </div>
+
+    <!-- Published stories grid -->
+    <div id="storiesSection" style="display:none;margin-top:32px;">
+      <div class="pv-sec-h">📖 Your Stories <span id="storiesCount" style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:400;"></span></div>
+      <div class="stories-grid" id="storiesGrid"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ADD BOOKING MODAL -->
+<div id="addBookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(10px);z-index:500;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="width:100%;max-width:480px;background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:24px 24px 0 0;padding:24px 20px 40px;max-height:85vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <div style="font-size:15px;font-weight:900;color:white;">Add a Booking</div>
+      <button type="button" onclick="document.getElementById('addBookingModal').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div class="profile-label">Client Name *</div><input class="pv-input" id="abClient" placeholder="Client name">
+    <div class="profile-label">Client Phone</div><input class="pv-input" type="tel" id="abPhone" placeholder="07XXXXXXXX">
+    <div class="pv-grid2">
+      <div><div class="profile-label">Date *</div><input class="pv-input" type="date" id="abDate"></div>
+      <div><div class="profile-label">Time *</div><input class="pv-input" type="time" id="abTime"></div>
+    </div>
+    <div class="profile-label">Service</div>
+    <select class="pv-input" id="abService" style="cursor:pointer;"></select>
+    <div class="profile-label">Notes</div><input class="pv-input" id="abNotes" placeholder="Any special requirements…">
+    <button type="button" onclick="saveManualBooking()" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;margin-top:4px;">✅ Add Booking</button>
+  </div>
+</div>
+
+<div class="pv-toast" id="pvToast"></div>
+
+<script>
+/* ═══ CATEGORY CONFIGURATIONS ═══ */
+const CATS = {
+  /* ── PERSONAL SERVICES ── */
+  'hair-beauty':   { icon:'💇', label:'Barber / Salon',            color:'#f472b6', hub:'services.html',    extraFields:[{id:'rate',label:'Starting Price (KES)',ph:'e.g. 400'},{id:'walk_ins',label:'Walk-ins?',type:'select',opts:['Yes','No','Weekends Only']}] },
+  'photography':   { icon:'📸', label:'Photographer / Videographer',color:'#60aaff', hub:'services.html',    extraFields:[{id:'rate',label:'Starting Package (KES)',ph:'e.g. 10000'},{id:'specialty',label:'Type',ph:'e.g. Weddings, Events, Studio'}] },
+  'cleaning':      { icon:'🧹', label:'Cleaner / Housekeeper',      color:'#34d399', hub:'services.html',    extraFields:[{id:'rate',label:'Rate (KES/visit)',ph:'e.g. 1500'},{id:'specialty',label:'Service Type',ph:'e.g. Domestic, Office'}] },
+  'fitness':       { icon:'🏋️', label:'Personal Trainer',           color:'#4ade80', hub:'services.html',    extraFields:[{id:'rate',label:'Session Rate (KES)',ph:'e.g. 1500'},{id:'specialty',label:'Training Type',ph:'e.g. Cardio, Weights, Yoga'}] },
+  'tutoring':      { icon:'📚', label:'Tutor / Coach',              color:'#fb923c', hub:'services.html',    extraFields:[{id:'rate',label:'Rate (KES/hour)',ph:'e.g. 1000'},{id:'subjects',label:'Subjects / Skills',ph:'e.g. Maths, Python, French'}] },
+  'catering':      { icon:'🍳', label:'Caterer / Private Chef',     color:'#f59e0b', hub:'services.html',    extraFields:[{id:'rate',label:'Per-head Rate (KES)',ph:'e.g. 800'},{id:'min_guests',label:'Minimum Guests',ph:'e.g. 10'}] },
+  /* ── TECHNICAL SERVICES ── */
+  'mechanic':      { icon:'🔧', label:'Mechanic / Garage',          color:'#f97316', hub:'car-hub.html?tab=mechanics', manageDashboard:'car-hub.html?tab=mechanics', extraFields:[{id:'rate',label:'Hourly Rate (KES)',ph:'e.g. 2000'},{id:'mobile',label:'Mobile Service?',type:'select',opts:['Yes — I come to you','No — Workshop only','Both']}] },
+  'electrical':    { icon:'⚡', label:'Electrician',                 color:'#fcd34d', hub:'services.html',    extraFields:[{id:'rate',label:'Rate (KES/job)',ph:'e.g. 2000'},{id:'license',label:'ERC License No.',ph:'e.g. ERC-1234'}] },
+  'plumbing':      { icon:'🚿', label:'Plumber',                    color:'#38bdf8', hub:'services.html',    extraFields:[{id:'rate',label:'Rate (KES/job)',ph:'e.g. 1500'},{id:'emergency',label:'24/7 Emergency?',type:'select',opts:['Yes','No']}] },
+  'construction':  { icon:'🧱', label:'Contractor / Materials',     color:'#fbbf24', hub:'construction.html',extraFields:[{id:'rate',label:'Day Rate / Min Order (KES)',ph:'e.g. 15000'},{id:'specialty',label:'Speciality',ph:'e.g. Masonry, Steel, Tiling'}] },
+  /* ── PROFESSIONAL SERVICES ── */
+  'healthcare':    { icon:'🏥', label:'Doctor / Clinic',            color:'#00c878', hub:'healthcare.html',  extraFields:[{id:'rate',label:'Consultation Fee (KES)',ph:'e.g. 500'},{id:'specialty',label:'Specialisation',ph:'e.g. General, Dentist, Paeds'}] },
+  'legal':         { icon:'⚖️', label:'Advocate / Lawyer',          color:'#a78bfa', hub:'legal-hub.html',   extraFields:[{id:'rate',label:'Consultation Rate (KES/hr)',ph:'e.g. 5000'},{id:'lsk',label:'LSK / Bar Number',ph:'e.g. LSK/A/1234'}] },
+  'accounting':    { icon:'📊', label:'Accountant / Tax Consultant', color:'#34d399', hub:'services.html',    extraFields:[{id:'rate',label:'Monthly Retainer (KES)',ph:'e.g. 8000'},{id:'specialty',label:'Speciality',ph:'e.g. Tax, Audit, Payroll'}] },
+  'marketing':     { icon:'📢', label:'Marketing / Social Media',   color:'#f97316', hub:'marketing.html',   extraFields:[{id:'rate',label:'Monthly Rate (KES)',ph:'e.g. 15000'},{id:'specialty',label:'Speciality',ph:'e.g. Social Media, SEO, Branding'}] },
+  /* ── EVENTS & ENTERTAINMENT ── */
+  'entertainment': { icon:'🎧', label:'DJ / MC / Performer',        color:'#c084fc', hub:'entertainment.html',extraFields:[{id:'rate',label:'Starting Fee (KES)',ph:'e.g. 5000'},{id:'genre',label:'Genre / Type',ph:'e.g. Afrobeats, MC, Band'}] },
+  'events':        { icon:'🎉', label:'Event Planner / Decorator',  color:'#ec4899', hub:'services.html',    extraFields:[{id:'rate',label:'Starting Package (KES)',ph:'e.g. 30000'},{id:'specialty',label:'Event Type',ph:'e.g. Weddings, Corporate, Birthdays'}] },
+  /* ── FOOD & ACCOMMODATION ── */
+  'food':          { icon:'🍽️', label:'Restaurant / Food Business', color:'#ef4444', hub:'food.html',        extraFields:[{id:'rate',label:'Avg Meal Price (KES)',ph:'e.g. 500'},{id:'cuisine',label:'Cuisine Type',ph:'e.g. Kenyan, Italian, Fast Food'}] },
+  'bnb':           { icon:'🏡', label:'BnB / Short-Stay Host',      color:'#71ff00', hub:'bnb.html',         extraFields:[{id:'rate',label:'Nightly Rate (KES)',ph:'e.g. 3500'},{id:'rooms',label:'No. of Rooms / Units',ph:'e.g. 2'}], manageDashboard:'bnb-manage.html' },
+  'landlord':      { icon:'🏠', label:'Landlord / Property Rental', color:'#00aaff', hub:'property.html',    extraFields:[{id:'rate',label:'Monthly Rent (KES)',ph:'e.g. 25000'},{id:'units',label:'No. of Units',ph:'e.g. 5'}], manageDashboard:'landlord.html' },
+  /* ── TRANSPORT & LOGISTICS ── */
+  'delivery':      { icon:'🛵', label:'Delivery Driver',            color:'#71ff00', hub:'driver.html',      extraFields:[{id:'vehicle',label:'Vehicle Type',type:'select',opts:['Motorcycle','E-Bike','Car/Van','Pickup','Bicycle']},{id:'area',label:'Coverage Area',ph:'e.g. Nairobi CBD, Westlands'}] },
+  'car-rental':    { icon:'🚗', label:'Car Hire / Rental Owner',    color:'#f97316', hub:'car-hub.html',  extraFields:[{id:'rate',label:'Daily Rate (KES)',ph:'e.g. 3500'},{id:'fleet',label:'Fleet Size',ph:'e.g. 3 vehicles'}], manageDashboard:'car-hub.html' },
+  /* ── DIGITAL & COMMERCE ── */
+  'digital':       { icon:'💻', label:'Digital Goods / Content Creator', color:'#818cf8', hub:'tech-hub.html', extraFields:[{id:'rate',label:'Avg Product Price (KES)',ph:'e.g. 500'},{id:'specialty',label:'Type',ph:'e.g. eBooks, Courses, Software, Templates'}] },
+  'b2b':           { icon:'🤝', label:'Wholesale / B2B Supplier',   color:'#00aaff', hub:'b2b.html',         extraFields:[{id:'min_order',label:'Minimum Order (KES)',ph:'e.g. 50000'},{id:'products',label:'Products / Category',ph:'e.g. Electronics, Groceries'}] },
+  /* ── SPORTS ── */
+  'sports':        { icon:'⚽', label:'Sports / Turf / Coaching',   color:'#39ff14', hub:'sports-hub.html',  extraFields:[{id:'rate',label:'Hourly Rate (KES)',ph:'e.g. 3500'},{id:'sport',label:'Sport / Activity',ph:'e.g. Football, Basketball, Swimming'}], manageDashboard:'sports-hub.html' },
+  /* ── TECH REPAIR ── */
+  'phone-repair':   { icon:'📱', label:'Phone Repair / Technician',  color:'#60aaff', hub:'services.html',    extraFields:[{id:'rate',label:'Starting Price (KES)',ph:'e.g. 500'},{id:'specialty',label:'Repairs Offered',ph:'e.g. Screen, Battery, Software'}] },
+  'computer-repair':{ icon:'💻', label:'IT / Computer Repair',        color:'#818cf8', hub:'services.html',    extraFields:[{id:'rate',label:'Rate (KES/job)',ph:'e.g. 2000'},{id:'specialty',label:'Speciality',ph:'e.g. Laptops, Networks, Software'}] },
+  /* ── CREATIVE ── */
+  'graphic-design': { icon:'🎨', label:'Graphic Designer',            color:'#f472b6', hub:'services.html',    extraFields:[{id:'rate',label:'Starting Price (KES)',ph:'e.g. 3000'},{id:'specialty',label:'Services',ph:'e.g. Logos, Flyers, Branding'}] },
+  'videography':    { icon:'🎬', label:'Videographer / Editor',        color:'#c084fc', hub:'services.html',    extraFields:[{id:'rate',label:'Starting Package (KES)',ph:'e.g. 8000'},{id:'specialty',label:'Type',ph:'e.g. Events, Weddings, Corporate'}] },
+  /* ── HOME ── */
+  'home-repairs':   { icon:'🏠', label:'Home Repairs / Handyman',     color:'#f97316', hub:'services.html',    extraFields:[{id:'rate',label:'Rate (KES/job)',ph:'e.g. 2000'},{id:'specialty',label:'Work Type',ph:'e.g. Painting, Tiling, Carpentry'}] },
+  /* ── HOST / EMCEE ── */
+  'mc':             { icon:'🎤', label:'MC / Host / Emcee',            color:'#e879f9', hub:'entertainment.html',extraFields:[{id:'rate',label:'Event Rate (KES)',ph:'e.g. 8000'},{id:'specialty',label:'Event Types',ph:'e.g. Weddings, Corporate, Concerts'}] },
+};
+
+/* ═══ STATE ═══ */
+let _profile = null;
+let _bookings = [];
+let _services = [];
+let _selectedCat = null;
+let _setupHours = {};   /* legacy — kept so old localStorage data loads */
+let _setupSchedule = {};
+let _avDay = 'Mon';
+let _bkFilter = 'all';
+
+/* ═══ STORAGE ═══ */
+function _saveProfileData(){ if(_profile) localStorage.setItem('sokoniProviderProfile', JSON.stringify(_profile)); }
+function loadProfile(){ try{ return JSON.parse(localStorage.getItem('sokoniProviderProfile')||'null'); }catch(e){ return null; } }
+function saveBookings(){ localStorage.setItem('sokoniProviderBookings', JSON.stringify(_bookings)); }
+function loadBookings(){ try{ return JSON.parse(localStorage.getItem('sokoniProviderBookings')||'[]'); }catch(e){ return []; } }
+function saveSvcList(){ localStorage.setItem('sokoniProviderServices', JSON.stringify(_services)); }
+function loadSvcList(){ try{ return JSON.parse(localStorage.getItem('sokoniProviderServices')||'[]'); }catch(e){ return []; } }
+
+/* ═══ SETUP WIZARD ═══ */
+/* ── Step 0: Goods vs Services choice ── */
+function chooseType(type){
+  if(type === 'goods'){
+    /* Redirect product sellers to seller.html */
+    window.location.href = 'seller.html';
+    return;
+  }
+  /* Services — go to category picker */
+  goStep(1);
+}
+window.chooseType = chooseType;
+
+function buildCatGrid(){
+  document.getElementById('catGrid').innerHTML = Object.entries(CATS).map(([k,c])=>`
+    <div class="cat-btn${_selectedCat===k?' sel':''}" data-cat="${k}" onclick="selectCat('${k}')">
+      <div class="cb-icon">${c.icon}</div>
+      <div class="cb-label">${c.label}</div>
+    </div>`).join('');
+}
+
+function selectCat(key){
+  _selectedCat = key;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('sel'));
+  document.querySelector('.cat-btn[data-cat="'+key+'"]')?.classList.add('sel');
+}
+
+function goStep(n){
+  if(n===2 && !_selectedCat){ document.getElementById('setupMsg1').textContent='⚠️ Please choose a service category'; return; }
+  if(n===3){
+    const name=document.getElementById('sName').value.trim(), phone=document.getElementById('sPhone').value.trim(), loc=document.getElementById('sLocation').value.trim();
+    if(!name||!phone||!loc){ document.getElementById('setupMsg2').textContent='⚠️ Fill all required fields'; return; }
+  }
+  document.querySelectorAll('.setup-step').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+  const target = document.getElementById('step'+n);
+  target.classList.add('active');
+  target.style.display='block';
+  if(n===2) buildCatFields();
+  if(n===3) buildSetupHours();
+}
+
+function buildCatFields(){
+  const cat = CATS[_selectedCat];
+  document.getElementById('step2Title').textContent = cat.icon+' '+cat.label+' Details';
+  document.getElementById('catFields').innerHTML = (cat.extraFields||[]).map(f=>`
+    <label class="setup-label">${f.label}</label>
+    ${f.type==='select'
+      ? `<select class="setup-input" id="sf_${f.id}">${(f.opts||[]).map(o=>`<option>${o}</option>`).join('')}</select>`
+      : `<input class="setup-input" id="sf_${f.id}" placeholder="${f.ph||''}">`
+    }`).join('');
+}
+
+/* ═══ SCHEDULE HELPERS ═══ */
+const _DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+/* 30-min slots 05:00–23:30 */
+const _TIMES = (()=>{const t=[];for(let h=5;h<=23;h++){t.push(`${String(h).padStart(2,'0')}:00`);if(h<23)t.push(`${String(h).padStart(2,'0')}:30`);}return t;})();
+
+function _defaultSchedule(){
+  const s={};
+  _DAYS.forEach((d,i)=>{ s[d]={open:i<5,from:'08:00',to:'17:00'}; });
+  return s;
+}
+
+function _timeOpts(sel){
+  return _TIMES.map(t=>`<option${t===sel?' selected':''}>${t}</option>`).join('');
+}
+
+function _renderSchedRows(containerId, schedule, ns){
+  const c=document.getElementById(containerId); if(!c) return;
+  c.innerHTML=_DAYS.map(day=>{
+    const s=schedule[day]||{open:false,from:'08:00',to:'17:00'};
+    return `<div class="sched-row${s.open?' sched-open':''}" id="${ns}_row_${day}">
+      <span class="sched-day">${day}</span>
+      <button type="button" class="sked-tog ${s.open?'on':'off'}" onclick="_togDay('${day}','${ns}')" title="Toggle open/closed"></button>
+      ${s.open
+        ? `<div class="sched-times">
+            <span class="sched-sep">Opens</span>
+            <select class="sched-time-sel" id="${ns}_from_${day}" onchange="_updTime('${day}','from','${ns}')">
+              ${_timeOpts(s.from)}
+            </select>
+            <span class="sched-sep">—</span>
+            <select class="sched-time-sel" id="${ns}_to_${day}" onchange="_updTime('${day}','to','${ns}')">
+              ${_timeOpts(s.to)}
+            </select>
+           </div>`
+        : `<span class="sched-closed">Closed all day</span>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function _togDay(day, ns){
+  const sched = ns==='setup' ? _setupSchedule : _avSchedule;
+  sched[day].open = !sched[day].open;
+  _renderSchedRows(ns==='setup'?'setupSchedRows':'avSchedRows', sched, ns);
+}
+
+function _updTime(day, field, ns){
+  const sched = ns==='setup' ? _setupSchedule : _avSchedule;
+  const el = document.getElementById(`${ns}_${field}_${day}`);
+  if(el) sched[day][field] = el.value;
+}
+
+/* setup wizard */
+function buildSetupHours(){
+  if(!_setupSchedule || !Object.keys(_setupSchedule).length) _setupSchedule = _defaultSchedule();
+  _renderSchedRows('setupSchedRows', _setupSchedule, 'setup');
+  _renderSetupBlockedList();
+}
+
+let _setupBlockedDates = [];
+
+function addSetupBlockDate(){
+  const inp=document.getElementById('setupBlockDate');
+  if(!inp||!inp.value) return;
+  if(!_setupBlockedDates.includes(inp.value)){ _setupBlockedDates.push(inp.value); _renderSetupBlockedList(); }
+  inp.value='';
+}
+function _removeSetupBlock(d){ _setupBlockedDates=_setupBlockedDates.filter(x=>x!==d); _renderSetupBlockedList(); }
+function _renderSetupBlockedList(){
+  const c=document.getElementById('setupBlockedList'); if(!c) return;
+  c.innerHTML=_setupBlockedDates.length
+    ? _setupBlockedDates.map(d=>`<span class="date-chip">${d}<button type="button" onclick="_removeSetupBlock('${d}')">×</button></span>`).join('')
+    : `<span style="font-size:11px;color:rgba(255,255,255,0.2);">No dates blocked yet</span>`;
+}
+
+/* availability tab — uses _avSchedule (loaded from profile) */
+let _avSchedule = {};
+function buildAvHours(){
+  if(!_avSchedule||!Object.keys(_avSchedule).length){
+    _avSchedule = (_profile&&_profile.schedule) ? JSON.parse(JSON.stringify(_profile.schedule)) : _defaultSchedule();
+  }
+  _renderSchedRows('avSchedRows', _avSchedule, 'av');
+}
+function openAllDayAv(){
+  _DAYS.forEach(d=>{ _avSchedule[d]={open:true,from:'08:00',to:'17:00'}; });
+  _renderSchedRows('avSchedRows',_avSchedule,'av');
+}
+
+function finishSetup(){
+  const name=document.getElementById('sName').value.trim();
+  const phone=document.getElementById('sPhone').value.trim();
+  const loc=document.getElementById('sLocation').value.trim();
+  const cat=CATS[_selectedCat];
+  const extras={};
+  (cat.extraFields||[]).forEach(f=>{ const el=document.getElementById('sf_'+f.id); if(el) extras[f.id]=el.value; });
+  _profile = {
+    cat: _selectedCat, name, phone, location:loc, bio:'', extras,
+    status:'available',
+    schedule: _setupSchedule,
+    blockedDates: _setupBlockedDates,
+    createdAt:Date.now(),
+    id:'PRV'+Date.now().toString(36).toUpperCase()
+  };
+  _saveProfileData();
+  _services = [];
+  saveSvcList();
+  _bookings = [];
+  saveBookings();
+  /* Publish availability to localStorage so hub pages can read it */
+  _publishAvailability();
+  /* Send application to admin pending queue */
+  const app = {
+    id: _profile.id, name: _profile.name, phone: _profile.phone,
+    location: _profile.location, type: cat?.label||_selectedCat,
+    hub: 'service', category: 'Service Provider',
+    status: 'pending', submittedAt: new Date().toLocaleDateString('en-KE')
+  };
+  let apps=[]; try{apps=JSON.parse(localStorage.getItem('sokoniPendingApplications'))||[];}catch(e){}
+  if(!apps.some(a=>a.id===app.id)){ apps.unshift(app); localStorage.setItem('sokoniPendingApplications',JSON.stringify(apps)); }
+
+  /* ── Firestore: write provider profile + pending application ── */
+  (function(){
+    try{
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+        const db=window.firebaseDB; if(!db) return;
+        const u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+        const uid=u?(u.uid||u.id||null):null;
+        const ts=m.serverTimestamp();
+        /* Save provider profile (keyed by profile.id so no-uid fallback still works) */
+        m.setDoc(m.doc(db,'providers',_profile.id),Object.assign({},_profile,{uid:uid||null,updatedAt:ts})).catch(function(){});
+        /* Save pending application to Firestore for admin review */
+        m.setDoc(m.doc(db,'applications',app.id),Object.assign({},app,{uid:uid||null,createdAt:ts})).catch(function(){});
+        /* Update user document to mark as provider */
+        if(uid){
+          m.updateDoc(m.doc(db,'users',uid),{'registeredAs.provider':true,providerProfileId:_profile.id}).catch(function(){});
+          const uu=JSON.parse(localStorage.getItem('sokoniUser')||'{}');
+          uu.registeredAs=Object.assign(uu.registeredAs||{},{provider:true});
+          uu.providerProfileId=_profile.id;
+          localStorage.setItem('sokoniUser',JSON.stringify(uu));
+        }
+      }).catch(function(){});
+    }catch(e){}
+  })();
+
+  document.getElementById('setupOverlay').style.display='none';
+  initDashboard();
+}
+
+function _getDefaultServices(cat){
+  const map = {
+    'hair-beauty':   [{name:'Fade Cut',price:400,duration:30},{name:'Shave',price:250,duration:20},{name:'Line-up',price:150,duration:15},{name:'Kids Cut',price:300,duration:25},{name:'Braid / Loc',price:1200,duration:120}],
+    'mechanic':      [{name:'Oil Change',price:2500,duration:60},{name:'Brake Service',price:5000,duration:120},{name:'Diagnostic',price:1500,duration:45},{name:'Tyre Change',price:800,duration:30}],
+    'entertainment': [{name:'Club Night (4hr)',price:25000,duration:240},{name:'Wedding (6hr)',price:50000,duration:360},{name:'Private Party (3hr)',price:15000,duration:180},{name:'Corporate Event',price:30000,duration:300}],
+    'healthcare':    [{name:'General Consultation',price:500,duration:20},{name:'Follow-up',price:300,duration:15},{name:'Specialist',price:1500,duration:30},{name:'Lab Test Package',price:2000,duration:0}],
+    'legal':         [{name:'Initial Consultation',price:5000,duration:60},{name:'Document Drafting',price:8000,duration:90},{name:'Court Filing',price:15000,duration:120},{name:'Legal Advice (1hr)',price:3000,duration:60}],
+    'food':          [{name:'Set Lunch',price:600,duration:0},{name:'Catering (per head)',price:1200,duration:0},{name:'Private Dining',price:5000,duration:0},{name:'Food Delivery',price:150,duration:0}],
+    'photography':   [{name:'Event Coverage (4hr)',price:12000,duration:240},{name:'Portrait Session',price:5000,duration:90},{name:'Wedding Package',price:35000,duration:480},{name:'Product Photos',price:3000,duration:60}],
+    'cleaning':      [{name:'Standard Clean',price:1500,duration:180},{name:'Deep Clean',price:3500,duration:360},{name:'Office Clean',price:5000,duration:240},{name:'Laundry & Ironing',price:800,duration:120}],
+    'fitness':       [{name:'1-on-1 Session (1hr)',price:1500,duration:60},{name:'6-Session Package',price:8000,duration:360},{name:'Online Coaching/mo',price:5000,duration:0},{name:'Group Class',price:600,duration:60}],
+    'catering':      [{name:'Lunch (per head)',price:800,duration:0},{name:'Dinner (per head)',price:1200,duration:0},{name:'Full Event Catering',price:50000,duration:0},{name:'Chef at Home',price:8000,duration:0}],
+    'delivery':      [{name:'CBD Delivery',price:200,duration:30},{name:'Westlands',price:300,duration:45},{name:'Same-day Nairobi',price:500,duration:120},{name:'Intercity Delivery',price:1500,duration:480}],
+    'sports':        [{name:'1hr Slot',price:3500,duration:60},{name:'2hr Slot',price:6500,duration:120},{name:'Half-day',price:15000,duration:300},{name:'Coaching Session',price:2000,duration:60}],
+    'electrical':    [{name:'Fault Repair',price:1500,duration:60},{name:'Full House Wiring',price:25000,duration:480},{name:'Solar Install',price:45000,duration:480},{name:'CCTV Install',price:15000,duration:240}],
+    'plumbing':      [{name:'Leak Repair',price:1500,duration:60},{name:'Pipe Install',price:4000,duration:120},{name:'Bathroom Fitting',price:20000,duration:480},{name:'Emergency Callout',price:3000,duration:60}],
+    'construction':  [{name:'Foundation Work (per m2)',price:3500,duration:0},{name:'Roofing',price:50000,duration:0},{name:'Plastering (per room)',price:8000,duration:0},{name:'Full House Build Quote',price:0,duration:0}],
+    'accounting':    [{name:'Monthly Bookkeeping',price:8000,duration:0},{name:'KRA Tax Filing',price:5000,duration:0},{name:'Payroll Processing',price:6000,duration:0},{name:'Audit Report',price:25000,duration:0}],
+    'marketing':     [{name:'Social Media Management/mo',price:15000,duration:0},{name:'Logo & Branding',price:12000,duration:0},{name:'SEO Package/mo',price:20000,duration:0},{name:'Content Creation',price:8000,duration:0}],
+    'events':        [{name:'Wedding Planning',price:80000,duration:0},{name:'Corporate Event',price:50000,duration:0},{name:'Birthday Package',price:20000,duration:0},{name:'Décor Only',price:15000,duration:0}],
+    'bnb':           [{name:'Standard Room (1 night)',price:3500,duration:0},{name:'Deluxe Room (1 night)',price:5500,duration:0},{name:'Full Unit (1 night)',price:8000,duration:0},{name:'Weekly Rate',price:22000,duration:0}],
+    'landlord':      [{name:'1BR Apartment',price:18000,duration:0},{name:'2BR Apartment',price:28000,duration:0},{name:'Bedsitter / Studio',price:10000,duration:0},{name:'Commercial Space',price:50000,duration:0}],
+    'car-rental':    [{name:'Economy Car (per day)',price:3500,duration:0},{name:'SUV (per day)',price:7000,duration:0},{name:'Minibus (per day)',price:10000,duration:0},{name:'Airport Transfer',price:3000,duration:0}],
+    'ride':          [{name:'Short Trip (up to 5km)',price:200,duration:0},{name:'Medium Trip (5–15km)',price:500,duration:0},{name:'Long Trip (15km+)',price:1000,duration:0},{name:'Airport Pickup',price:2500,duration:0}],
+    'digital':       [{name:'eBook / PDF',price:500,duration:0},{name:'Online Course',price:2500,duration:0},{name:'Software / Template',price:1500,duration:0},{name:'Design Assets Pack',price:1000,duration:0}],
+    'b2b':           [{name:'Bulk Enquiry (per unit)',price:0,duration:0},{name:'Minimum Order Pack',price:50000,duration:0},{name:'Sample Pack',price:5000,duration:0},{name:'Annual Supply Contract',price:0,duration:0}],
+    'tutoring':      [{name:'1hr Private Lesson',price:1000,duration:60},{name:'4-Lesson Package',price:3500,duration:240},{name:'Exam Prep (5 days)',price:8000,duration:300},{name:'Online Session (1hr)',price:800,duration:60}],
+    'phone-repair':  [{name:'Screen Replacement',price:3500,duration:60},{name:'Battery Swap',price:1500,duration:30},{name:'Software Fix / Unlock',price:1000,duration:45},{name:'Data Recovery',price:4000,duration:120}],
+    'computer-repair':[{name:'Virus Removal',price:2000,duration:120},{name:'OS Reinstall',price:3000,duration:180},{name:'Hardware Repair',price:5000,duration:240},{name:'Network Setup',price:4000,duration:90}],
+    'graphic-design':[{name:'Logo Design',price:5000,duration:0},{name:'Flyer / Poster',price:2000,duration:0},{name:'Brand Identity Pack',price:15000,duration:0},{name:'Social Media Kit',price:8000,duration:0}],
+    'videography':   [{name:'Event Coverage (4hr)',price:12000,duration:240},{name:'Highlight Reel (edit)',price:8000,duration:0},{name:'Corporate Video',price:25000,duration:0},{name:'Wedding Film',price:40000,duration:0}],
+    'home-repairs':  [{name:'Painting (per room)',price:5000,duration:0},{name:'Tiling (per m²)',price:1200,duration:0},{name:'Door / Window Fix',price:2000,duration:60},{name:'General Handyman (1hr)',price:1500,duration:60}],
+    'mc':            [{name:'Wedding MC',price:20000,duration:0},{name:'Corporate Event',price:15000,duration:0},{name:'Birthday Party',price:10000,duration:0},{name:'Concert / Festival Host',price:30000,duration:0}],
+  };
+  const svcList = map[cat] || [{name:'Standard Service',price:1000,duration:60}];
+  return svcList.map((s,i)=>({...s, id:'SVC'+i, active:true}));
+}
+
+function _seedDemoBookings(cat){
+  const names=['Brian Kamau','Mary Njoki','James Otieno','Grace Wanjiru','Samuel Kibet'];
+  const services=_services.slice(0,3);
+  const today=new Date().toISOString().slice(0,10);
+  const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  return [
+    {id:'BK001',client:names[0],phone:'0712345678',date:today,time:'09:00',service:services[0]?.name||'Service',notes:'',status:'confirmed',ref:'SKN-BK001',createdAt:Date.now()-3600000},
+    {id:'BK002',client:names[1],phone:'0723456789',date:today,time:'11:00',service:services[1]?.name||'Service',notes:'First visit',status:'pending',ref:'SKN-BK002',createdAt:Date.now()-7200000},
+    {id:'BK003',client:names[2],phone:'0734567890',date:tomorrow,time:'14:00',service:services[0]?.name||'Service',notes:'',status:'confirmed',ref:'SKN-BK003',createdAt:Date.now()-86400000},
+    {id:'BK004',client:names[3],phone:'0745678901',date:today,time:'07:00',service:services[2]?.name||'Service',notes:'',status:'done',ref:'SKN-BK004',createdAt:Date.now()-10800000},
+    {id:'BK005',client:names[4],phone:'0756789012',date:tomorrow,time:'10:00',service:services[1]?.name||'Service',notes:'',status:'pending',ref:'SKN-BK005',createdAt:Date.now()-3600000},
+  ];
+}
+
+/* ═══ DASHBOARD INIT ═══ */
+function initDashboard(){
+  _profile = loadProfile(); if(!_profile){ showSetupWizard(); return; }
+  document.getElementById('setupOverlay').style.display='none';
+  _bookings = loadBookings();
+  _services = loadSvcList();
+  _selectedCat = _profile.cat;
+  _avDay = 'Mon';
+  const cat = CATS[_selectedCat]||CATS['hair-beauty'];
+  document.getElementById('mainNav').style.display='flex';
+  document.getElementById('mainDash').style.display='block';
+  document.getElementById('navProviderName').textContent=_profile.name;
+  document.getElementById('navProviderCat').textContent=cat.label;
+  document.getElementById('dashAvatar').textContent=cat.icon;
+  document.getElementById('dashName').textContent=_profile.name;
+  document.getElementById('dashCat').innerHTML=`<span style="color:${cat.color}">${cat.icon} ${cat.label}</span>`;
+  document.getElementById('dashLocation').textContent='📍 '+(_profile.location||'');
+  document.getElementById('dashStats').innerHTML=[
+    {val:_bookings.filter(b=>b.status==='confirmed'||b.status==='pending').length,lbl:'Active Bookings'},
+    {val:_bookings.filter(b=>b.status==='done').length,lbl:'Completed'},
+    {val:'KES '+(_bookings.filter(b=>b.status==='done').length*1200).toLocaleString(),lbl:'Earned'},
+    {val:_services.filter(s=>s.active).length,lbl:'Services'},
+  ].map(s=>`<div class="pv-hstat"><div class="pv-hstat-val">${s.val}</div><div class="pv-hstat-lbl">${s.lbl}</div></div>`).join('');
+  document.getElementById('bookingLinkDisplay').textContent='sokoni.app/book/'+_profile.id;
+  /* Set profile fields */
+  document.getElementById('pfName').value=_profile.name||'';
+  document.getElementById('pfPhone').value=_profile.phone||'';
+  document.getElementById('pfLocation').value=_profile.location||'';
+  document.getElementById('pfBio').value=_profile.bio||'';
+  _buildCatProfileFields();
+  /* Init status */
+  _applyStatus(_profile.status||'available');
+  /* Show Inventory tab for categories that manage physical stock */
+  const _invCats = new Set(['pharmacy','dispensary','food','catering','car-rental','ride','mechanic','construction','cleaning','digital','bnb','landlord','hardware','fitness','sports','healthcare']);
+  const _invBtn = document.getElementById('inventoryTab');
+  if(_invBtn && _invCats.has(_profile.cat||'')) _invBtn.style.display='';
+  /* Render all panes */
+  renderOverview(); renderBookingsList(); renderAvailability(); renderServicesList(); renderEarnings();
+  /* URL param — jump to a tab */
+  const tab=new URLSearchParams(location.search).get('tab');
+  if(tab) showTab(tab);
+}
+
+function showSetupWizard(){
+  const catFromUrl = new URLSearchParams(location.search).get('cat');
+  if(catFromUrl && CATS[catFromUrl]){
+    _selectedCat = catFromUrl;
+    /* If cat is provided → skip step 0, go straight to category picker */
+    buildCatGrid();
+    _avDay='Mon';
+    document.getElementById('setupOverlay').style.display='flex';
+    goStep(1); // skip goods/services question since cat already known
+    return;
+  }
+  /* No cat param → show goods vs services choice first */
+  buildCatGrid();
+  _avDay='Mon';
+  document.querySelectorAll('.setup-step').forEach(s=>{ s.classList.remove('active'); s.style.display='none'; });
+  const s0 = document.getElementById('step0');
+  s0.classList.add('active'); s0.style.display='block';
+  document.getElementById('setupOverlay').style.display='flex';
+}
+
+/* ═══ TAB SWITCHING ═══ */
+function showTab(name, btn){
+  document.querySelectorAll('.pv-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.pv-tab').forEach(t=>t.classList.remove('active'));
+  const pane=document.getElementById('pane-'+name); if(pane) pane.classList.add('active');
+  const tabBtn=btn||(document.querySelector(`.pv-tab[onclick*="'${name}'"]`));
+  if(tabBtn) tabBtn.classList.add('active');
+  if(name==='earnings') setTimeout(function(){ if(typeof renderEarnings==='function') renderEarnings(); },50);
+}
+window.showTab=showTab;
+
+/* ═══ OVERVIEW ═══ */
+function renderOverview(){
+  const today=new Date().toISOString().slice(0,10);
+  const todayBk=_bookings.filter(b=>b.date===today);
+  const pending=_bookings.filter(b=>b.status==='pending').length;
+  document.getElementById('overviewStats').innerHTML=[
+    {val:todayBk.length,lbl:"Today's Bookings",color:'#71ff00'},
+    {val:pending,lbl:'Pending Approval',color:'#ff9800'},
+    {val:_bookings.filter(b=>b.status==='confirmed').length,lbl:'Confirmed',color:'#00aaff'},
+    {val:_bookings.filter(b=>b.status==='done').length,lbl:'Completed Total',color:'#a78bfa'},
+    {val:'KES '+(_bookings.filter(b=>b.status==='done').length*1200).toLocaleString(),lbl:'Est. Earnings',color:'#71ff00'},
+    {val:_services.filter(s=>s.active).length,lbl:'Active Services',color:'#00c878'},
+  ].map(s=>`<div class="pv-stat"><div class="pv-stat-val" style="color:${s.color};">${s.val}</div><div class="pv-stat-lbl">${s.lbl}</div></div>`).join('');
+  const tEl=document.getElementById('todayBookings');
+  if(!todayBk.length){ tEl.innerHTML=`<div class="pv-empty" style="padding:30px 20px;">📅<p>No bookings today.</p></div>`; }
+  else tEl.innerHTML=todayBk.map(b=>_renderBookingCard(b,true)).join('');
+  _renderCalWeek();
+}
+
+function _renderCalWeek(){
+  const now=new Date(); const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  document.getElementById('calWeek').innerHTML=Array.from({length:7},(_,i)=>{
+    const d=new Date(now); d.setDate(now.getDate()-now.getDay()+i);
+    const iso=d.toISOString().slice(0,10);
+    const isToday=iso===now.toISOString().slice(0,10);
+    const dayBk=_bookings.filter(b=>b.date===iso);
+    return `<div class="cal-day${isToday?' today':''}">
+      <div class="cal-day-name">${days[d.getDay()]}</div>
+      <div class="cal-day-num">${d.getDate()}</div>
+      ${dayBk.slice(0,3).map(b=>`<div class="cal-slot ${b.status}">${b.time} ${b.client.split(' ')[0]}</div>`).join('')}
+      ${dayBk.length>3?`<div style="font-size:8px;color:rgba(255,255,255,0.3);text-align:center;">+${dayBk.length-3} more</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+/* ═══ BOOKINGS ═══ */
+function _renderBookingCard(b, compact){
+  const svc=_services.find(s=>s.name===b.service);
+  return `<div class="bk-card">
+    <div class="bk-time-block"><div class="bk-time">${b.time}</div><div class="bk-date">${b.date}</div></div>
+    <div class="bk-info">
+      <div class="bk-client">${b.client} <span class="bk-status-badge bk-${b.status}">${b.status}</span></div>
+      <div class="bk-service">${b.service}${svc?' · '+svc.duration+'min · KES '+svc.price.toLocaleString():''}</div>
+      <div class="bk-meta">
+        ${b.phone?`<span>📞${b.phone}</span>`:''}
+        ${b.notes?`<span><i class="fas fa-sticky-note"></i>${b.notes}</span>`:''}
+        <span class="bk-ref">${b.ref}</span>
+      </div>
+    </div>
+    <div class="bk-actions">
+      ${b.status==='pending'?`<button type="button" class="bk-confirm" onclick="confirmBooking('${b.id}')">✅ Confirm</button><button type="button" class="bk-decline" onclick="declineBooking('${b.id}')">✗</button>`:''}
+      ${b.phone?`<button type="button" class="bk-wa" onclick="waBooking('${b.id}')"><i class="fab fa-whatsapp"></i></button>`:''}
+    </div>
+  </div>`;
+}
+
+function renderBookingsList(){
+  const list=_bkFilter==='all'?_bookings:_bookings.filter(b=>b.status===_bkFilter);
+  const el=document.getElementById('bookingsList');
+  if(!list.length){ el.innerHTML=`<div class="pv-empty">📅<p>No ${_bkFilter==='all'?'':_bkFilter+' '}bookings.</p></div>`; return; }
+  const sorted=[...list].sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  el.innerHTML=sorted.map(b=>_renderBookingCard(b,false)).join('');
+}
+
+function filterBookings(f, btn){
+  _bkFilter=f;
+  document.querySelectorAll('#pane-bookings .day-chip').forEach(c=>c.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderBookingsList();
+}
+window.filterBookings=filterBookings;
+
+function confirmBooking(id){
+  const b=_bookings.find(x=>x.id===id); if(!b) return;
+  b.status='confirmed'; saveBookings(); renderBookingsList(); renderOverview();
+  pvToast('✅ '+b.client+' confirmed for '+b.time);
+  if(b.phone){ const wa=b.phone.replace(/^0/,'254').replace(/\D/g,''); const msg=encodeURIComponent(`✅ *Booking Confirmed!*\n\nHi ${b.client}!\nYour booking at ${_profile.name} is confirmed.\n📅 Date: ${b.date}\n⏰ Time: ${b.time}\n💼 Service: ${b.service}\n📍 Ref: ${b.ref}\n\nSee you soon! 🙏`); window.open('https://wa.me/'+wa+'?text='+msg,'_blank'); }
+  if(window.SokoniPay && SokoniPay.saveCommission){
+    var _svc = _services && _services.find(s=>s.name===b.service);
+    var _price = _svc ? (_svc.price||0) : 0;
+    var _cPct = 10;
+    var _cCut = Math.round(_price * _cPct / 100);
+    SokoniPay.saveCommission({ref:b.ref||b.id,providerName:(_profile&&_profile.name)||'Provider',category:'services',commissionPct:_cPct,sokoniCut:_cCut,providerNet:_price-_cCut,serviceTotal:_price,status:_price>0?'auto_collected':'pending',note:'Provider booking: '+b.service+' for '+b.client,createdAt:Date.now()});
+  }
+}
+window.confirmBooking=confirmBooking;
+
+function declineBooking(id){
+  const b=_bookings.find(x=>x.id===id); if(!b) return;
+  b.status='cancelled'; saveBookings(); renderBookingsList(); renderOverview();
+  pvToast('Booking from '+b.client+' cancelled.');
+}
+window.declineBooking=declineBooking;
+
+function waBooking(id){
+  const b=_bookings.find(x=>x.id===id); if(!b||!b.phone) return;
+  const wa=b.phone.replace(/^0/,'254').replace(/\D/g,'');
+  const msg=encodeURIComponent(`Hi ${b.client}! This is ${_profile.name} from SOKONI. Regarding your booking for ${b.service} on ${b.date} at ${b.time}. Ref: ${b.ref}`);
+  window.open('https://wa.me/'+wa+'?text='+msg,'_blank');
+}
+window.waBooking=waBooking;
+
+function openAddBookingForm(){
+  const modal=document.getElementById('addBookingModal');
+  modal.style.display='flex';
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('abDate').min=today; document.getElementById('abDate').value=today;
+  document.getElementById('abService').innerHTML=_services.filter(s=>s.active).map(s=>`<option value="${s.name}">${s.name} — KES ${s.price.toLocaleString()}</option>`).join('');
+}
+window.openAddBookingForm=openAddBookingForm;
+
+function saveManualBooking(){
+  const client=document.getElementById('abClient').value.trim(), phone=document.getElementById('abPhone').value.trim();
+  const date=document.getElementById('abDate').value, time=document.getElementById('abTime').value;
+  const service=document.getElementById('abService').value;
+  if(!client||!date||!time){ pvToast('⚠️ Fill client name, date and time'); return; }
+  const bk={id:'BK'+Date.now(),client,phone,date,time,service,notes:document.getElementById('abNotes').value,status:'confirmed',ref:'SKN-'+Date.now().toString(36).toUpperCase().slice(-6),createdAt:Date.now()};
+  _bookings.unshift(bk); saveBookings();
+  document.getElementById('addBookingModal').style.display='none';
+  renderBookingsList(); renderOverview();
+  pvToast('✅ Booking added for '+client);
+}
+window.saveManualBooking=saveManualBooking;
+
+/* ═══ AVAILABILITY ═══ */
+let _currentStatus='available';
+function cycleStatus(){
+  const cycle=['available','busy','appointment'];
+  _currentStatus=cycle[(cycle.indexOf(_currentStatus)+1)%cycle.length];
+  _applyStatus(_currentStatus);
+  if(_profile){ _profile.status=_currentStatus; _saveProfileData(); _publishAvailability(); }
+  pvToast('Status: '+_currentStatus);
+}
+window.cycleStatus=cycleStatus;
+
+function setStatus(s){
+  _currentStatus=s;
+  _applyStatus(s);
+  if(_profile){ _profile.status=s; _saveProfileData(); _publishAvailability(); }
+  pvToast('Status set to: '+s);
+}
+window.setStatus=setStatus;
+
+function _applyStatus(s){
+  _currentStatus=s;
+  const labels={available:'Available',busy:'Busy',appointment:'By Appointment'};
+  const pillClass={available:'pv-status-available',busy:'pv-status-busy',appointment:'pv-status-appt'};
+  const dotClass={available:'dot-available',busy:'dot-busy',appointment:'dot-appt'};
+  ['statusPill','statusPill2'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.className='pv-status-pill '+pillClass[s]; } });
+  ['statusLabel','statusLabel2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=labels[s]; });
+  ['statusDot','statusDot2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.className='pv-status-dot '+dotClass[s]; });
+  ['avBtnAvail','avBtnBusy','avBtnAppt'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
+  const map={available:'avBtnAvail',busy:'avBtnBusy',appointment:'avBtnAppt'};
+  document.getElementById(map[s])?.classList.add('active');
+  const banner=document.getElementById('avNoticeBanner');
+  if(banner){ banner.classList.toggle('show', s==='busy'); banner.textContent='🔴 You are set to Busy. New bookings paused. Switch back to Available when ready.'; }
+}
+
+function renderAvailability(){
+  if(!_avSchedule||!Object.keys(_avSchedule).length){
+    _avSchedule = (_profile&&_profile.schedule) ? JSON.parse(JSON.stringify(_profile.schedule)) : _defaultSchedule();
+  }
+  _renderSchedRows('avSchedRows', _avSchedule, 'av');
+  _renderBlockedDates();
+}
+
+function saveAvailability(){
+  if(!_profile) return;
+  _profile.schedule = _avSchedule;
+  _saveProfileData(); _publishAvailability(); pvToast('✅ Hours saved!');
+}
+window.saveAvailability=saveAvailability;
+
+function blockOutToday(){
+  if(!_profile) return;
+  const todayIdx = new Date().getDay(); // 0=Sun
+  const map={0:'Sun',1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat'};
+  const d = map[todayIdx];
+  if(!_avSchedule[d]) _avSchedule[d]={open:false,from:'08:00',to:'17:00'};
+  _avSchedule[d].open = false;
+  _renderSchedRows('avSchedRows',_avSchedule,'av');
+  saveAvailability(); pvToast('🔴 '+d+' set to Closed');
+}
+window.blockOutToday=blockOutToday;
+
+function addBlockDate(){
+  const d=document.getElementById('blockDateInput').value;
+  if(!d||!_profile) return;
+  if(!_profile.blockedDates) _profile.blockedDates=[];
+  if(!_profile.blockedDates.includes(d)) _profile.blockedDates.push(d);
+  saveProfile(); _renderBlockedDates(); pvToast('📅 '+d+' blocked');
+}
+window.addBlockDate=addBlockDate;
+window._togDay=_togDay;
+window._updTime=_updTime;
+window.addSetupBlockDate=addSetupBlockDate;
+window._removeSetupBlock=_removeSetupBlock;
+window.openAllDayAv=openAllDayAv;
+window.buildAvHours=buildAvHours;
+
+function removeBlockDate(d){
+  if(!_profile||!_profile.blockedDates) return;
+  _profile.blockedDates=_profile.blockedDates.filter(x=>x!==d);
+  saveProfile(); _renderBlockedDates();
+}
+window.removeBlockDate=removeBlockDate;
+
+function _renderBlockedDates(){
+  const el=document.getElementById('blockedDatesList'); if(!el) return;
+  const dates=(_profile&&_profile.blockedDates)||[];
+  el.innerHTML=dates.length?dates.map(d=>`<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.2);border-radius:6px;padding:3px 8px;font-size:11px;color:#ff6464;">${d}<button type="button" onclick="removeBlockDate('${d}')" style="background:none;border:none;color:rgba(255,100,100,0.6);cursor:pointer;padding:0;font-size:12px;line-height:1;">✕</button></span>`).join(''):`<span style="font-size:12px;color:rgba(255,255,255,0.25);">No blocked dates</span>`;
+}
+
+/* ═══ SERVICES ═══ */
+function renderServicesList(){
+  const el=document.getElementById('servicesList'); if(!el) return;
+  if(!_services.length){ el.innerHTML=`<div class="pv-empty">🛠️<p>No services yet. Add your first service above.</p></div>`; return; }
+  el.innerHTML=_services.map((s,i)=>`
+    <div class="svc-card">
+      <div style="flex:1;min-width:0;">
+        <div class="svc-name">${s.name}</div>
+        <div class="svc-duration" style="margin-top:2px;">${s.duration?s.duration+' min · ':''}<span class="svc-price">KES ${s.price.toLocaleString()}</span></div>
+      </div>
+      <button type="button" class="svc-toggle ${s.active?'on':'off'}" onclick="toggleSvc(${i})" title="${s.active?'Active — click to disable':'Disabled — click to enable'}"></button>
+      <button type="button" onclick="deleteSvc(${i})" style="padding:6px 10px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.15);color:#ff6464;border-radius:7px;font-size:11px;cursor:pointer;font-family:inherit;">✕</button>
+    </div>`).join('');
+}
+
+function toggleSvc(i){ _services[i].active=!_services[i].active; saveSvcList(); renderServicesList(); pvToast((_services[i].active?'Enabled':'Disabled')+': '+_services[i].name); }
+function deleteSvc(i){ const n=_services[i].name; _services.splice(i,1); saveSvcList(); renderServicesList(); pvToast('Removed: '+n); }
+window.toggleSvc=toggleSvc; window.deleteSvc=deleteSvc;
+
+function toggleAddSvc(){ const f=document.getElementById('addSvcForm'); f.style.display=f.style.display==='none'?'block':'none'; }
+window.toggleAddSvc=toggleAddSvc;
+
+function saveNewService(){
+  const name=document.getElementById('svcName').value.trim(), price=Number(document.getElementById('svcPrice').value), dur=Number(document.getElementById('svcDuration').value)||0;
+  if(!name||!price){ pvToast('⚠️ Enter service name and price'); return; }
+  _services.push({id:'SVC'+Date.now(),name,price,duration:dur,tag:document.getElementById('svcTag').value,active:true});
+  saveSvcList(); renderServicesList(); toggleAddSvc();
+  document.getElementById('svcName').value=''; document.getElementById('svcPrice').value=''; document.getElementById('svcDuration').value=''; document.getElementById('svcTag').value='';
+  pvToast('✅ Service added: '+name);
+}
+window.saveNewService=saveNewService;
+
+/* ═══ PROFILE FIELDS ═══ */
+function _buildCatProfileFields(){
+  const cat=CATS[_selectedCat]; if(!cat) return;
+  const el=document.getElementById('catProfileFields'); if(!el) return;
+  const manageLink = cat.manageDashboard
+    ? `<div style="margin:12px 0;background:rgba(0,170,255,0.06);border:1px solid rgba(0,170,255,0.18);border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div><div style="font-size:12px;font-weight:800;color:#00aaff;">Full Management Dashboard</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Advanced tools for ${cat.label} management</div></div>
+        <a href="${cat.manageDashboard}" style="padding:8px 16px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:9px;font-size:12px;font-weight:700;text-decoration:none;">Open Full Dashboard →</a>
+      </div>` : '';
+  el.innerHTML='<div style="margin-top:4px;margin-bottom:4px;height:1px;background:rgba(255,255,255,0.06);"></div>'
+    +(cat.extraFields||[]).map(f=>`
+    <div class="profile-field">
+      <div class="profile-label">${f.label}</div>
+      ${f.type==='select'
+        ? `<select class="pv-input" id="pf_${f.id}" style="cursor:pointer;">${(f.opts||[]).map(o=>`<option${(_profile.extras||{})[f.id]===o?' selected':''}>${o}</option>`).join('')}</select>`
+        : `<input class="pv-input" id="pf_${f.id}" placeholder="${f.ph||''}" value="${(_profile.extras||{})[f.id]||''}">`
+      }
+    </div>`).join('')+manageLink;
+}
+
+function saveProfile(){
+  if(!_profile) return;
+  _profile.name=document.getElementById('pfName').value.trim()||_profile.name;
+  _profile.phone=document.getElementById('pfPhone').value.trim()||_profile.phone;
+  _profile.location=document.getElementById('pfLocation').value.trim()||_profile.location;
+  _profile.bio=document.getElementById('pfBio').value||'';
+  const cat=CATS[_selectedCat];
+  (cat?.extraFields||[]).forEach(f=>{ const el=document.getElementById('pf_'+f.id); if(el&&_profile.extras) _profile.extras[f.id]=el.value; });
+  localStorage.setItem('sokoniProviderProfile', JSON.stringify(_profile));
+  _publishAvailability();
+  document.getElementById('dashName').textContent=_profile.name;
+  pvToast('✅ Profile saved!');
+}
+window.saveProfile=saveProfile;
+
+/* ═══ EARNINGS ═══ */
+function renderEarnings(){
+  const done=_bookings.filter(b=>b.status==='done');
+  const totalEarned=done.reduce((s,b)=>{ const svc=_services.find(x=>x.name===b.service); return s+(svc?svc.price:1200); },0);
+  const commRate=0.10;
+  const commission=Math.round(totalEarned*commRate);
+  const net=totalEarned-commission;
+  document.getElementById('earnKpis').innerHTML=[
+    {val:'KES '+totalEarned.toLocaleString(),lbl:'Gross Earned',color:'#71ff00'},
+    {val:'KES '+commission.toLocaleString(),lbl:'SOKONI Commission (10%)',color:'#ff9800'},
+    {val:'KES '+net.toLocaleString(),lbl:'Net Earnings',color:'#00c878'},
+    {val:done.length,lbl:'Jobs Completed',color:'#a78bfa'},
+  ].map(s=>`<div class="earn-kpi"><div class="earn-kpi-val" style="color:${s.color};">${s.val}</div><div class="earn-kpi-lbl">${s.lbl}</div></div>`).join('');
+  if(typeof window._updateProvCharts==='function'){
+    var now=new Date(),monthEarn=Array(6).fill(0),monthLabels=[];
+    for(var _mi=5;_mi>=0;_mi--){
+      var _mt=new Date(now.getFullYear(),now.getMonth()-_mi,1);
+      monthLabels.push(_mt.toLocaleString('en-KE',{month:'short'}));
+    }
+    done.forEach(function(b){
+      if(!b.date) return;
+      try{ var _d=new Date(b.date),diff=(now.getFullYear()-_d.getFullYear())*12+(now.getMonth()-_d.getMonth());
+        if(diff>=0&&diff<6){ var _s=_services.find(function(x){return x.name===b.service;}); monthEarn[5-diff]+=(_s?_s.price:1200); } }catch(e){}
+    });
+    var svcMap={};
+    done.forEach(function(b){ var _s=_services.find(function(x){return x.name===b.service;}); var amt=_s?_s.price:1200; svcMap[b.service]=(svcMap[b.service]||0)+amt; });
+    var ratingDist=[0,0,0,0,0];
+    done.forEach(function(b){ if(b.rating>=1&&b.rating<=5) ratingDist[Math.round(b.rating)-1]++; });
+    window._updateProvCharts({monthEarn,monthLabels,svcMap,ratingDist,totalEarned,net});
+  }
+  /* Recent done bookings */
+  const el=document.getElementById('earnTransList');
+  if(!done.length){ el.innerHTML=`<div class="pv-empty">💰<p>No completed bookings yet.</p></div>`; return; }
+  el.innerHTML=done.slice(0,10).map(b=>{
+    const svc=_services.find(x=>x.name===b.service);
+    const amt=svc?svc.price:1200;
+    return `<div class="bk-card" style="border-color:rgba(57,255,20,0.1);">
+      <div class="bk-time-block"><div class="bk-time">${b.time}</div><div class="bk-date">${b.date}</div></div>
+      <div class="bk-info">
+        <div class="bk-client">${b.client} <span class="bk-status-badge bk-done">Done</span></div>
+        <div class="bk-service">${b.service}</div>
+        <div class="bk-meta"><span class="bk-ref">${b.ref}</span></div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:16px;font-weight:900;color:#71ff00;">KES ${amt.toLocaleString()}</div>
+        <div style="font-size:10px;color:rgba(255,152,0,0.7);">−KES ${Math.round(amt*commRate).toLocaleString()} comm.</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══ UTILITIES ═══ */
+function _publishAvailability(){
+  if(!_profile) return;
+  let pub={}; try{ pub=JSON.parse(localStorage.getItem('sokoniProviderAvailability')||'{}'); }catch(e){}
+  pub[_profile.phone||_profile.id]={ id:_profile.id, name:_profile.name, cat:_profile.cat, phone:_profile.phone, location:_profile.location, status:_profile.status||'available', hours:_profile.hours||{}, blockedDates:_profile.blockedDates||[], updatedAt:Date.now() };
+  localStorage.setItem('sokoniProviderAvailability', JSON.stringify(pub));
+}
+
+function notifyAllClients(){
+  const upcoming=_bookings.filter(b=>b.status==='confirmed'&&b.phone&&b.date>=new Date().toISOString().slice(0,10));
+  if(!upcoming.length){ pvToast('No upcoming confirmed clients with phone numbers'); return; }
+  upcoming.forEach((b,i)=>setTimeout(()=>{
+    const wa=b.phone.replace(/^0/,'254').replace(/\D/g,'');
+    const msg=encodeURIComponent(`Hi ${b.client}! 👋 Reminder from ${_profile.name} on SOKONI. Your booking: ${b.service} on ${b.date} at ${b.time}. See you soon! Ref: ${b.ref}`);
+    window.open('https://wa.me/'+wa+'?text='+msg,'_blank');
+  }, i*500));
+  pvToast('📣 Sending WhatsApp reminders to '+upcoming.length+' clients…');
+}
+window.notifyAllClients=notifyAllClients;
+
+function copyBookingLink(){ if(!_profile) return; navigator.clipboard?.writeText('https://sokoni.app/book/'+_profile.id).catch(()=>{}); pvToast('📋 Link copied!'); }
+function shareToWhatsApp(){ if(!_profile) return; const msg=encodeURIComponent('📋 Book me on SOKONI: https://sokoni.app/book/'+_profile.id+'\n\n'+_profile.name+' · '+CATS[_selectedCat]?.label); window.open('https://wa.me/?text='+msg,'_blank'); }
+window.copyBookingLink=copyBookingLink; window.shareToWhatsApp=shareToWhatsApp;
+
+function deleteProviderAccount(){
+  if(!_c){_skConfirm('Delete your provider account? This removes your profile and services permanently.',()=>_doDelProvider(true));return;}
+  ['sokoniProviderProfile','sokoniProviderBookings','sokoniProviderServices','sokoniProviderAvailability'].forEach(k=>localStorage.removeItem(k));
+  window.location.href='index.html';
+}
+window.deleteProviderAccount=deleteProviderAccount;
+
+let _pvToastTimer=null;
+function pvToast(msg){ const t=document.getElementById('pvToast'); if(!t) return; clearTimeout(_pvToastTimer); t.textContent=msg; t.classList.add('show'); _pvToastTimer=setTimeout(()=>t.classList.remove('show'),3000); }
+
+/* ── AI Bio Generator ── */
+function pvGenerateAIBio(btn){
+  const name    = document.getElementById('pfName')?.value.trim() || (_profile?.name) || 'My Business';
+  const cat     = _profile?.catLabel || _selectedCat || 'services';
+  const loc     = document.getElementById('pfLocation')?.value.trim() || (_profile?.location) || 'Nairobi';
+
+  if(btn){ btn.textContent='✨ Writing…'; btn.disabled=true; }
+
+  const openers = [
+    `Professional ${cat} provider based in ${loc}.`,
+    `Trusted ${cat} specialist serving clients across ${loc}.`,
+    `Experienced ${cat} expert with a passion for quality work.`,
+  ];
+  const middles = [
+    ` ${name} delivers reliable, high-quality results every time.`,
+    ` Known for punctuality, professionalism, and excellent client satisfaction.`,
+    ` Committed to exceeding client expectations on every job.`,
+  ];
+  const closers = [
+    ' Book directly through SOKONI — fast response guaranteed.',
+    ' Available 7 days a week. Message for a free quote.',
+    ' Competitive rates · Verified · 5-star rated on SOKONI.',
+  ];
+  const bio =
+    openers[Math.floor(Math.random()*openers.length)] +
+    middles[Math.floor(Math.random()*middles.length)] +
+    closers[Math.floor(Math.random()*closers.length)];
+
+  setTimeout(()=>{
+    const bioEl = document.getElementById('pfBio');
+    if(bioEl){ bioEl.value = bio; bioEl.style.borderColor='rgba(113,255,0,0.4)'; }
+    if(btn){ btn.textContent='✨ AI Write'; btn.disabled=false; }
+    pvToast('✨ AI bio generated!');
+  }, 900);
+}
+window.pvGenerateAIBio = pvGenerateAIBio;
+
+/* ═══ INIT ═══ */
+(function(){
+  const existing = loadProfile();
+  if(existing){
+    _profile = existing;
+    initDashboard();
+  } else {
+    showSetupWizard();
+  }
+})();
+
+/* ═══════════════════════════════════════════
+   STORIES + AI EDITOR
+═══════════════════════════════════════════ */
+(function(){
+
+/* Category-specific AI enhancement presets */
+const AI_PRESETS = {
+  'landlord':     { name:'Real Estate', bright:1.15, contrast:1.12, sat:1.18, warmth:8,  sharp:1, label:'Bright & welcoming spaces' },
+  'bnb':          { name:'Short Stay',  bright:1.18, contrast:1.10, sat:1.22, warmth:10, sharp:1, label:'Cosy & inviting look' },
+  'property':     { name:'Real Estate', bright:1.15, contrast:1.12, sat:1.18, warmth:8,  sharp:1, label:'Bright & welcoming spaces' },
+  'food':         { name:'Food',        bright:1.08, contrast:1.15, sat:1.45, warmth:12, sharp:1.5, label:'Vibrant & appetising colours' },
+  'catering':     { name:'Food',        bright:1.08, contrast:1.15, sat:1.45, warmth:12, sharp:1.5, label:'Vibrant & appetising colours' },
+  'hair-beauty':  { name:'Beauty',      bright:1.12, contrast:1.05, sat:1.30, warmth:6,  sharp:0.5, label:'Soft & warm finish' },
+  'fitness':      { name:'Sport',       bright:1.05, contrast:1.25, sat:1.15, warmth:-4, sharp:2,   label:'Punchy & high-energy' },
+  'sports':       { name:'Sport',       bright:1.05, contrast:1.25, sat:1.15, warmth:-4, sharp:2,   label:'Punchy & high-energy' },
+  'healthcare':   { name:'Clinical',    bright:1.10, contrast:1.08, sat:0.90, warmth:-6, sharp:1,   label:'Clean, crisp & professional' },
+  'legal':        { name:'Professional',bright:1.08, contrast:1.10, sat:0.85, warmth:0,  sharp:1,   label:'Sharp & authoritative' },
+  'photography':  { name:'Cinematic',   bright:1.05, contrast:1.20, sat:1.10, warmth:2,  sharp:1.5, label:'Cinematic depth & detail' },
+  'videography':  { name:'Cinematic',   bright:1.05, contrast:1.20, sat:1.10, warmth:2,  sharp:1.5, label:'Cinematic depth & detail' },
+  'construction': { name:'Industrial',  bright:1.08, contrast:1.18, sat:1.05, warmth:4,  sharp:2,   label:'Crisp & detailed' },
+  'mechanic':     { name:'Industrial',  bright:1.08, contrast:1.18, sat:1.05, warmth:4,  sharp:2,   label:'Crisp & detailed' },
+  'entertainment':{ name:'Vivid',       bright:1.05, contrast:1.15, sat:1.50, warmth:5,  sharp:1,   label:'Bold & vibrant stage' },
+  'mc':           { name:'Vivid',       bright:1.05, contrast:1.15, sat:1.50, warmth:5,  sharp:1,   label:'Bold & vibrant stage' },
+  'car-rental':   { name:'Automotive',  bright:1.10, contrast:1.20, sat:1.12, warmth:-2, sharp:2,   label:'Sleek & showroom-ready' },
+  'ride':         { name:'Automotive',  bright:1.10, contrast:1.20, sat:1.12, warmth:-2, sharp:2,   label:'Sleek & showroom-ready' },
+  'default':      { name:'Auto',        bright:1.10, contrast:1.10, sat:1.15, warmth:4,  sharp:1,   label:'Balanced enhancement' },
+};
+
+const EXTRA_FILTERS = [
+  { id:'auto',      label:'✨ Auto',     bright:1.10, contrast:1.10, sat:1.15, warmth:4  },
+  { id:'warm',      label:'🌅 Warm',     bright:1.12, contrast:1.08, sat:1.20, warmth:14 },
+  { id:'cool',      label:'❄️ Cool',     bright:1.08, contrast:1.12, sat:1.05, warmth:-12},
+  { id:'vivid',     label:'🎨 Vivid',    bright:1.05, contrast:1.18, sat:1.55, warmth:5  },
+  { id:'natural',   label:'🌿 Natural',  bright:1.06, contrast:1.06, sat:1.08, warmth:3  },
+  { id:'dramatic',  label:'🎬 Dramatic', bright:0.95, contrast:1.45, sat:1.20, warmth:-3 },
+  { id:'bright',    label:'☀️ Bright',   bright:1.30, contrast:1.05, sat:1.10, warmth:8  },
+  { id:'bw',        label:'⚫ B&W',      bright:1.05, contrast:1.25, sat:0.0,  warmth:0  },
+];
+
+let _origImage   = null;   // original Image object
+let _storyCanvas = null;
+let _storyCtx    = null;
+let _activeFilter= 'auto';
+let _aiDone      = false;
+
+function _getCatPreset(){
+  const cat = _profile?.cat || 'default';
+  return AI_PRESETS[cat] || AI_PRESETS['default'];
+}
+
+/* ── Drag & drop helpers ── */
+window.storyDragOver  = function(e){ e.preventDefault(); document.getElementById('storyDropzone').classList.add('drag-over'); };
+window.storyDragLeave = function(){ document.getElementById('storyDropzone').classList.remove('drag-over'); };
+window.storyDrop      = function(e){ e.preventDefault(); storyDragLeave(); const f=e.dataTransfer?.files?.[0]; if(f) storyFileChosen(f); };
+
+window.storyFileChosen = function(file){
+  if(!file) return;
+  if(file.size > 20*1024*1024){ (window._skToast||alert)('File too large — max 20 MB'); return; }
+
+  _aiDone = false;
+  document.getElementById('storyEditorPanel').style.display = 'block';
+  document.getElementById('storyAiOverlay').style.display   = 'flex';
+  document.getElementById('storyPublishBtn').disabled        = true;
+
+  if(file.type.startsWith('video/')){
+    _handleVideoUpload(file);
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      _origImage = img;
+      _setupCanvas(img);
+      _drawOriginal();
+      _runAiEdit();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+function _handleVideoUpload(file){
+  /* For videos: show thumbnail frame + mark as "AI Trimmed & Captioned" */
+  const url = URL.createObjectURL(file);
+  const vid  = document.createElement('video');
+  vid.src = url; vid.muted = true; vid.playsInline = true;
+  vid.addEventListener('loadeddata', function(){
+    vid.currentTime = 0.5;
+  });
+  vid.addEventListener('seeked', function(){
+    const cvs = document.getElementById('storyCanvas');
+    cvs.width  = vid.videoWidth  || 1280;
+    cvs.height = vid.videoHeight || 720;
+    _storyCanvas = cvs;
+    _storyCtx    = cvs.getContext('2d');
+    _storyCtx.drawImage(vid, 0, 0, cvs.width, cvs.height);
+    _origImage = null;
+    _runAiEdit(true);
+    URL.revokeObjectURL(url);
+  });
+  vid.load();
+}
+
+function _setupCanvas(img){
+  const cvs = document.getElementById('storyCanvas');
+  const maxW = 900, maxH = 700;
+  let w = img.naturalWidth, h = img.naturalHeight;
+  if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+  if(h > maxH){ w = Math.round(w * maxH / h); h = maxH; }
+  cvs.width  = w;
+  cvs.height = h;
+  _storyCanvas = cvs;
+  _storyCtx    = cvs.getContext('2d');
+}
+
+function _drawOriginal(){
+  if(!_origImage || !_storyCtx) return;
+  _storyCtx.filter = 'none';
+  _storyCtx.drawImage(_origImage, 0, 0, _storyCanvas.width, _storyCanvas.height);
+}
+
+function _buildCssFilter(bright, contrast, sat, warmth, sharp){
+  const hue   = warmth !== 0 ? ` hue-rotate(${warmth}deg)` : '';
+  const blur  = sharp  < 1   ? ` blur(${(1-sharp)*0.4}px)` : '';
+  return `brightness(${bright}) contrast(${contrast}) saturate(${sat})${hue}${blur}`;
+}
+
+function _applyEnhancement(preset){
+  if(!_storyCtx || !_origImage) return;
+  _storyCtx.filter = _buildCssFilter(preset.bright, preset.contrast, preset.sat, preset.warmth, preset.sharp||1);
+  _storyCtx.drawImage(_origImage, 0, 0, _storyCanvas.width, _storyCanvas.height);
+  _storyCtx.filter = 'none';
+  /* Subtle SOKONI watermark */
+  _storyCtx.save();
+  _storyCtx.globalAlpha = 0.32;
+  _storyCtx.fillStyle   = '#ffffff';
+  _storyCtx.font        = `bold ${Math.max(11, Math.round(_storyCanvas.width*0.022))}px 'Segoe UI',sans-serif`;
+  _storyCtx.textAlign   = 'right';
+  _storyCtx.fillText('SOKONI', _storyCanvas.width - 10, _storyCanvas.height - 10);
+  _storyCtx.restore();
+}
+
+const AI_STEPS = [
+  'Analysing your photo',
+  'Detecting lighting conditions',
+  'Enhancing colours & contrast',
+  'Applying smart sharpening',
+  'Adding finishing touches',
+];
+function _runAiEdit(isVideo){
+  const stepEl   = document.getElementById('storyAiStep');
+  const overlay  = document.getElementById('storyAiOverlay');
+  const preset   = _getCatPreset();
+  let   step     = 0;
+  const interval = setInterval(function(){
+    if(stepEl) stepEl.textContent = AI_STEPS[step] || AI_STEPS[AI_STEPS.length-1];
+    step++;
+  }, 380);
+
+  setTimeout(function(){
+    clearInterval(interval);
+    if(stepEl) stepEl.textContent = 'Done!';
+
+    if(!isVideo) _applyEnhancement(preset);
+
+    setTimeout(function(){
+      overlay.style.display = 'none';
+      _aiDone = true;
+
+      /* sync sliders to preset */
+      _setSlidersFromPreset(preset);
+
+      /* show enhance label */
+      const lbl = document.getElementById('storyEnhanceLabel');
+      if(lbl) lbl.textContent = '✨ ' + preset.label;
+
+      /* build filter pills */
+      _buildFilterPills(preset);
+
+      /* unlock publish */
+      document.getElementById('storyPublishBtn').disabled = false;
+    }, 400);
+  }, AI_STEPS.length * 380 + 200);
+}
+
+function _setSlidersFromPreset(p){
+  const sb = document.getElementById('slBright'),   sc = document.getElementById('slContrast');
+  const ss = document.getElementById('slSat'),       sh = document.getElementById('slSharp');
+  const lb = document.getElementById('lblBright'),   lc = document.getElementById('lblContrast');
+  const ls = document.getElementById('lblSat'),      lh = document.getElementById('lblSharp');
+  if(sb){ sb.value=p.bright;  lb.textContent=p.bright.toFixed(2);  }
+  if(sc){ sc.value=p.contrast;lc.textContent=p.contrast.toFixed(2);}
+  if(ss){ ss.value=p.sat;     ls.textContent=p.sat.toFixed(2);     }
+  if(sh){ sh.value=p.sharp||1;lh.textContent=(p.sharp||1).toFixed(1);}
+}
+
+function _buildFilterPills(catPreset){
+  const row = document.getElementById('storyFilterRow');
+  if(!row) return;
+  /* Insert cat preset as first pill */
+  const catPill = { id:'cat', label:'✨ ' + catPreset.name, bright:catPreset.bright, contrast:catPreset.contrast, sat:catPreset.sat, warmth:catPreset.warmth };
+  const allFilters = [catPill, ...EXTRA_FILTERS.filter(f=>f.id!=='auto')];
+  _activeFilter = 'cat';
+  row.innerHTML = allFilters.map(f=>`
+    <button type="button" class="story-filter-pill${f.id===_activeFilter?' active':''}" onclick="storyApplyFilter('${f.id}',${f.bright},${f.contrast},${f.sat},${f.warmth})">${f.label}</button>
+  `).join('');
+}
+
+window.storyApplyFilter = function(id, bright, contrast, sat, warmth){
+  _activeFilter = id;
+  document.querySelectorAll('.story-filter-pill').forEach(p=>p.classList.remove('active'));
+  const btn = document.querySelector(`.story-filter-pill[onclick*="'${id}'"]`);
+  if(btn) btn.classList.add('active');
+  const sharp = parseFloat(document.getElementById('slSharp')?.value||1);
+  _applyCombined(bright, contrast, sat, warmth, sharp);
+  _setSlidersFromPreset({bright, contrast, sat, warmth, sharp});
+};
+
+window.storyReapply = function(){
+  const bright   = parseFloat(document.getElementById('slBright')?.value||1.1);
+  const contrast = parseFloat(document.getElementById('slContrast')?.value||1.1);
+  const sat      = parseFloat(document.getElementById('slSat')?.value||1.2);
+  const sharp    = parseFloat(document.getElementById('slSharp')?.value||1);
+  document.getElementById('lblBright').textContent   = bright.toFixed(2);
+  document.getElementById('lblContrast').textContent = contrast.toFixed(2);
+  document.getElementById('lblSat').textContent      = sat.toFixed(2);
+  document.getElementById('lblSharp').textContent    = sharp.toFixed(1);
+  /* infer warmth from active filter */
+  const preset = _getCatPreset();
+  const warmth = preset.warmth || 0;
+  _applyCombined(bright, contrast, sat, warmth, sharp);
+};
+
+function _applyCombined(bright, contrast, sat, warmth, sharp){
+  if(!_origImage || !_storyCtx) return;
+  _storyCtx.filter = _buildCssFilter(bright, contrast, sat, warmth, sharp);
+  _storyCtx.drawImage(_origImage, 0, 0, _storyCanvas.width, _storyCanvas.height);
+  _storyCtx.filter = 'none';
+  _storyCtx.save();
+  _storyCtx.globalAlpha = 0.32;
+  _storyCtx.fillStyle   = '#ffffff';
+  _storyCtx.font        = `bold ${Math.max(11,Math.round(_storyCanvas.width*0.022))}px 'Segoe UI',sans-serif`;
+  _storyCtx.textAlign   = 'right';
+  _storyCtx.fillText('SOKONI', _storyCanvas.width-10, _storyCanvas.height-10);
+  _storyCtx.restore();
+}
+
+let _showingBefore = false;
+window.storyShowBefore = function(){
+  _showingBefore = true;
+  document.getElementById('btnBefore').classList.add('on');   document.getElementById('btnBefore').classList.remove('off');
+  document.getElementById('btnAfter').classList.add('off');   document.getElementById('btnAfter').classList.remove('on');
+  _drawOriginal();
+};
+window.storyShowAfter = function(){
+  _showingBefore = false;
+  document.getElementById('btnAfter').classList.add('on');    document.getElementById('btnAfter').classList.remove('off');
+  document.getElementById('btnBefore').classList.add('off');  document.getElementById('btnBefore').classList.remove('on');
+  storyReapply();
+};
+
+/* ── Publish story ── */
+window.storyPublish = async function(){
+  if(!_storyCanvas) return;
+  const caption  = (document.getElementById('storyCaption')?.value||'').trim();
+  const msg      = document.getElementById('storyPublishMsg');
+  const btn      = document.getElementById('storyPublishBtn');
+  if(btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+
+  /* Thumbnail from canvas (always works — image or video frame) */
+  const dataUrl  = _storyCanvas.toDataURL('image/jpeg', 0.88);
+
+  /* If original file was a video, upload it to Firebase Storage */
+  let videoUrl = '';
+  const rawFile = document.getElementById('storyFileInput')?.files?.[0];
+  if(rawFile && rawFile.type.startsWith('video/') && window.SokoniUpload){
+    if(msg){ msg.style.color='#a855f7'; msg.textContent='⬆️ Uploading video…'; }
+    try {
+      videoUrl = await window.SokoniUpload.uploadToStorage(
+        rawFile,
+        `provider-stories/${Date.now()}_${rawFile.name}`,
+        pct => { if(msg) msg.textContent = `⬆️ Uploading… ${pct}%`; }
+      );
+    } catch(e) {
+      console.warn('[Provider] Story video upload failed:', e);
+    }
+  }
+
+  const story = {
+    id:       'STR' + Date.now().toString(36).toUpperCase(),
+    img:      dataUrl,
+    videoUrl: videoUrl,
+    caption:  caption || 'New story',
+    cat:      _profile?.cat || '',
+    name:     _profile?.name || 'Provider',
+    ts:       Date.now(),
+  };
+  const all = _loadStories();
+  all.unshift(story);
+  _saveStories(all.slice(0, 30));
+
+  /* reset editor */
+  document.getElementById('storyEditorPanel').style.display = 'none';
+  document.getElementById('storyFileInput').value = '';
+  document.getElementById('storyCaption').value   = '';
+  _origImage = null; _aiDone = false;
+  if(btn) { btn.disabled = false; btn.textContent = '🚀 Publish Story'; }
+
+  if(msg){ msg.style.color='#71ff00'; msg.textContent='✅ Story published! Visible to clients browsing your profile.'; setTimeout(()=>msg.textContent='',4000); }
+  renderStories();
+};
+
+/* ── Storage ── */
+function _loadStories(){
+  try{ return JSON.parse(localStorage.getItem('sokoniProviderStories')||'[]'); }catch(e){ return []; }
+}
+function _saveStories(arr){
+  localStorage.setItem('sokoniProviderStories', JSON.stringify(arr));
+}
+
+/* ── Render published grid ── */
+function renderStories(){
+  const all = _loadStories();
+  const sec = document.getElementById('storiesSection');
+  const grid= document.getElementById('storiesGrid');
+  const cnt = document.getElementById('storiesCount');
+  if(!sec||!grid) return;
+  if(!all.length){ sec.style.display='none'; return; }
+  sec.style.display = 'block';
+  if(cnt) cnt.textContent = `(${all.length})`;
+  grid.innerHTML = all.map(s=>{
+    const age = Math.round((Date.now()-s.ts)/60000);
+    const ageLbl = age < 60 ? age+'m ago' : age < 1440 ? Math.round(age/60)+'h ago' : Math.round(age/1440)+'d ago';
+    return `
+    <div class="story-card">
+      <img class="story-card-img" src="${s.img}" alt="story" loading="lazy">
+      <div class="story-card-badge">LIVE</div>
+      <button type="button" class="story-card-del" onclick="storyDelete('${s.id}')" title="Delete">✕</button>
+      <div class="story-card-info">
+        <div class="story-card-caption">${s.caption}</div>
+        <div class="story-card-meta">${ageLbl}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.storyDelete = function(id){
+  if(!_c){_skConfirm('Delete this story?',()=>_doDelStory(_sid,true));return;}
+  _saveStories(_loadStories().filter(s=>s.id!==id));
+  renderStories();
+};
+
+/* Load stories when Stories tab opens */
+const _origShowTab = window.showTab;
+window.showTab = function(name, btn){
+  _origShowTab(name, btn);
+  if(name==='stories') renderStories();
+};
+
+})();
+</script>
+<script src="nav-active.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+
+<script type="module" src="sokoni-upload.js"></script>
+<!-- ═══ FIRESTORE REAL-TIME WIRING ═══ -->
+<script type="module">
+import SokoniDB from './sokoni-db.js';
+
+let _bookingsUnsubscribe = null;
+let _providerUnsubscribe = null;
+
+/* ── Hook finishSetup to also write to Firestore ── */
+const _origFinishSetup = window.finishSetup;
+window.finishSetup = async function() {
+  if (_origFinishSetup) _origFinishSetup();
+  try {
+    const profile = JSON.parse(localStorage.getItem('sokoniProviderProfile') || 'null');
+    if (!profile) return;
+    /* Save provider profile */
+    await SokoniDB.saveProvider(profile);
+    /* Submit application to admin queue in Firestore */
+    const cat = (window.CATS || {})[profile.cat] || {};
+    const app = {
+      id: profile.id, name: profile.name, phone: profile.phone,
+      location: profile.location, type: cat.label || profile.cat,
+      hub: 'service', category: 'Service Provider',
+      status: 'pending', submittedAt: new Date().toLocaleDateString('en-KE')
+    };
+    await SokoniDB.saveApplication(app);
+    console.log('[Provider] Profile & application saved to Firestore.');
+    setupProviderListeners(profile);
+  } catch(e) {
+    console.warn('[Provider] Firestore setup failed:', e.message);
+  }
+};
+
+/* ── Hook cycleStatus / setStatus to also sync to Firestore ── */
+const _origCycleStatus = window.cycleStatus;
+window.cycleStatus = function() {
+  if (_origCycleStatus) _origCycleStatus();
+  syncStatusToFirestore();
+};
+const _origSetStatus = window.setStatus;
+window.setStatus = function(s) {
+  if (_origSetStatus) _origSetStatus(s);
+  syncStatusToFirestore();
+};
+
+function syncStatusToFirestore() {
+  try {
+    const profile = JSON.parse(localStorage.getItem('sokoniProviderProfile') || 'null');
+    if (!profile) return;
+    const id = profile.phone.toString().replace(/\D/g, '');
+    SokoniDB.updateProviderStatus(id, profile.status || 'available')
+      .catch(e => console.warn('[Provider] status sync:', e.message));
+  } catch(e) {}
+}
+
+/* ── Set up Firestore listeners once dashboard is loaded ── */
+function setupProviderListeners(profile) {
+  if (!profile) return;
+  const providerId = profile.phone.toString().replace(/\D/g, '');
+
+  /* Listen for new bookings from Firestore */
+  if (_bookingsUnsubscribe) _bookingsUnsubscribe();
+  _bookingsUnsubscribe = SokoniDB.listenProviderBookings(providerId, fsBookings => {
+    if (!fsBookings.length) return;
+    /* Merge with localStorage bookings — Firestore is authoritative */
+    let lsBk = [];
+    try { lsBk = JSON.parse(localStorage.getItem('sokoniProviderBookings') || '[]'); } catch(e) {}
+    const fsIds = new Set(fsBookings.map(b => b.id));
+    const merged = [...fsBookings, ...lsBk.filter(b => !fsIds.has(b.id))];
+    localStorage.setItem('sokoniProviderBookings', JSON.stringify(merged));
+    /* Update in-memory array used by the dashboard */
+    if (window._bookings !== undefined) {
+      window._bookings = merged;
+      if (typeof renderBookings === 'function') renderBookings();
+      if (typeof renderOverview === 'function') renderOverview();
+    }
+    /* Badge: count pending */
+    const pending = fsBookings.filter(b => b.status === 'pending').length;
+    if (pending > 0) {
+      const tab = document.querySelector('.pv-tab[onclick*="bookings"]');
+      if (tab && !tab.querySelector('.pv-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'pv-badge';
+        badge.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;background:#ff4444;color:white;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;margin-left:5px;';
+        badge.textContent = pending;
+        tab.appendChild(badge);
+      }
+    }
+  });
+
+  /* Listen for status updates pushed from admin (e.g. approval) */
+  if (_providerUnsubscribe) _providerUnsubscribe();
+  _providerUnsubscribe = SokoniDB.listenProvider(providerId, fsProfile => {
+    if (fsProfile.status && fsProfile.status !== window._currentStatus) {
+      /* Admin changed provider status remotely */
+      if (typeof setStatus === 'function') setStatus(fsProfile.status);
+    }
+    /* If application was approved, show a toast */
+    if (fsProfile.approvalStatus === 'approved' &&
+        localStorage.getItem('sokoni_approval_notified') !== fsProfile.id) {
+      localStorage.setItem('sokoni_approval_notified', fsProfile.id);
+      if (typeof pvToast === 'function') pvToast('🎉 Your application was approved!');
+    }
+  });
+}
+
+/* ── Auto-init if profile already exists ── */
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    try {
+      const profile = JSON.parse(localStorage.getItem('sokoniProviderProfile') || 'null');
+      if (profile) setupProviderListeners(profile);
+    } catch(e) {}
+  }, 800);
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<script>
+(function(){
+  var _ec,_sc,_rc;
+  function _init(){
+    if(typeof Chart==='undefined') return false;
+    Chart.defaults.color='rgba(255,255,255,0.38)';
+    Chart.defaults.borderColor='rgba(255,255,255,0.06)';
+    var ee=document.getElementById('provEarnChart');
+    if(ee&&!_ec){
+      _ec=new Chart(ee,{type:'bar',data:{labels:[],datasets:[{label:'Earnings',data:[],backgroundColor:'rgba(113,255,0,0.25)',borderColor:'#71ff00',borderWidth:2,borderRadius:7,hoverBackgroundColor:'rgba(113,255,0,0.45)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:10,callbacks:{label:function(c){return 'KES '+Number(c.parsed.y).toLocaleString();}}}},scales:{x:{grid:{display:false},ticks:{color:'rgba(255,255,255,0.38)'}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'rgba(255,255,255,0.38)',callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
+    }
+    var se=document.getElementById('provServicesChart');
+    if(se&&!_sc){
+      _sc=new Chart(se,{type:'doughnut',data:{labels:['No bookings'],datasets:[{data:[1],backgroundColor:['rgba(167,139,250,0.5)'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{boxWidth:9,padding:7,font:{size:10},color:'rgba(255,255,255,0.5)'}},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:10,callbacks:{label:function(c){return c.label+': KES '+Number(c.raw||0).toLocaleString();}}}}}});
+    }
+    var re=document.getElementById('provRatingChart');
+    if(re&&!_rc){
+      _rc=new Chart(re,{type:'bar',data:{labels:['1★','2★','3★','4★','5★'],datasets:[{data:[0,0,0,0,1],backgroundColor:['rgba(248,113,113,0.8)','rgba(251,146,60,0.8)','rgba(251,191,36,0.8)','rgba(113,255,0,0.6)','rgba(113,255,0,0.9)'],borderWidth:0,borderRadius:5}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:8,callbacks:{label:function(c){return c.parsed.x+' reviews';}}}},scales:{x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'rgba(255,255,255,0.35)',stepSize:1}},y:{grid:{display:false},ticks:{color:'rgba(255,255,255,0.55)',font:{size:12}}}}}});
+    }
+    return true;
+  }
+  window._updateProvCharts=function(d){
+    window._provLastData=d;
+    if(!_init()){setTimeout(function(){if(window._provLastData)window._updateProvCharts(window._provLastData);},600);return;}
+    if(_ec){_ec.data.labels=d.monthLabels||[];_ec.data.datasets[0].data=d.monthEarn||[];_ec.update();}
+    if(_sc){
+      var sm=d.svcMap||{},entries=Object.entries(sm).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+      if(entries.length){
+        var cols=['rgba(167,139,250,0.85)','rgba(56,189,248,0.85)','rgba(113,255,0,0.85)','rgba(251,191,36,0.85)','rgba(248,113,113,0.85)'];
+        _sc.data.labels=entries.map(function(e){return e[0];});
+        _sc.data.datasets[0].data=entries.map(function(e){return e[1];});
+        _sc.data.datasets[0].backgroundColor=entries.map(function(_,i){return cols[i%5];});
+      }
+      _sc.update();
+    }
+    if(_rc){_rc.data.datasets[0].data=d.ratingDist||[0,0,0,0,0];_rc.update();}
+  };
+})();
+</script><script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

@@ -1,0 +1,320 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Join SOKONI — Accept Invite</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#080808">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.j-wrap{width:100%;max-width:440px;}
+.j-logo{text-align:center;margin-bottom:24px;}
+.j-logo img{height:36px;opacity:.9;}
+.j-logo-txt{font-size:20px;font-weight:900;color:#71ff00;letter-spacing:-0.5px;}
+.j-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:28px 24px;}
+.j-org{display:flex;align-items:center;gap:12px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:14px;padding:14px;margin-bottom:20px;}
+.j-org-icon{font-size:28px;flex-shrink:0;}
+.j-org-name{font-size:14px;font-weight:900;color:#fff;}
+.j-org-role{font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;margin-top:2px;}
+.j-h1{font-size:20px;font-weight:900;margin-bottom:6px;}
+.j-sub{font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:22px;line-height:1.5;}
+.j-label{font-size:11px;font-weight:800;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;display:block;}
+.j-input{width:100%;padding:13px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:16px;outline:none;font-family:inherit;transition:border-color .2s;margin-bottom:14px;}
+.j-input:focus{border-color:rgba(113,255,0,0.4);}
+.j-input[readonly]{opacity:.55;cursor:not-allowed;}
+.j-btn{width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#5ccc00);border:none;border-radius:13px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;transition:opacity .2s;margin-top:4px;}
+.j-btn:disabled{opacity:.4;cursor:not-allowed;}
+.j-divider{display:flex;align-items:center;gap:12px;margin:16px 0;color:rgba(255,255,255,0.2);font-size:12px;}
+.j-divider::before,.j-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.08);}
+.j-signin-btn{width:100%;padding:13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:13px;color:rgba(255,255,255,0.7);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.j-alert{padding:12px 14px;border-radius:12px;font-size:13px;font-weight:600;line-height:1.5;margin-bottom:14px;}
+.j-alert.error{background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.25);color:#ff8a8a;}
+.j-alert.success{background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);color:#71ff00;}
+.j-state{text-align:center;padding:40px 20px;}
+.j-state-icon{font-size:48px;margin-bottom:16px;}
+.j-state-h{font-size:18px;font-weight:900;margin-bottom:8px;}
+.j-state-p{font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6;}
+.j-perm-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:20px;font-size:11px;color:rgba(255,255,255,0.5);margin:3px;}
+</style>
+</head>
+<body>
+
+<div class="j-wrap">
+  <div class="j-logo">
+    <div class="j-logo-txt">SOKONI</div>
+  </div>
+
+  <!-- Loading -->
+  <div id="j-loading" class="j-card" style="text-align:center;padding:40px 20px;">
+    <div style="font-size:32px;margin-bottom:12px;">⏳</div>
+    <div style="font-size:14px;color:rgba(255,255,255,0.4);">Loading invite…</div>
+  </div>
+
+  <!-- Invalid / expired / already used -->
+  <div id="j-invalid" class="j-card j-state" style="display:none;">
+    <div class="j-state-icon">❌</div>
+    <div class="j-state-h">Invite unavailable</div>
+    <div class="j-state-p" id="j-invalid-msg">This invite link is invalid, expired, or has already been used.</div>
+  </div>
+
+  <!-- Success -->
+  <div id="j-done" class="j-card j-state" style="display:none;">
+    <div class="j-state-icon">🎉</div>
+    <div class="j-state-h">You're in!</div>
+    <div class="j-state-p" id="j-done-msg">Redirecting to your dashboard…</div>
+    <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;margin-top:20px;">
+      <div id="j-done-bar" style="height:100%;background:#71ff00;border-radius:99px;width:0%;transition:width 2.5s;"></div>
+    </div>
+  </div>
+
+  <!-- Main form -->
+  <div id="j-form" class="j-card" style="display:none;">
+    <!-- Org badge -->
+    <div class="j-org" id="j-org-badge">
+      <div class="j-org-icon" id="j-org-icon">🏢</div>
+      <div>
+        <div class="j-org-name" id="j-org-name">SOKONI</div>
+        <div class="j-org-role" id="j-org-role">Staff Member</div>
+      </div>
+    </div>
+
+    <div id="j-alert" class="j-alert error" style="display:none;"></div>
+
+    <!-- New account tab -->
+    <div id="j-tab-new">
+      <h1 class="j-h1">Accept your invite</h1>
+      <p class="j-sub" id="j-desc">Create your work account using your invited email address.</p>
+
+      <label class="j-label">Your full name</label>
+      <input class="j-input" id="j-name" type="text" placeholder="e.g. Jane Wanjiku" autocomplete="name">
+
+      <label class="j-label">Work email</label>
+      <input class="j-input" id="j-email" type="email" readonly autocomplete="email">
+
+      <label class="j-label">Create a password</label>
+      <input class="j-input" id="j-pass" type="password" placeholder="At least 8 characters" autocomplete="new-password">
+
+      <label class="j-label">Confirm password</label>
+      <input class="j-input" id="j-pass2" type="password" placeholder="Repeat password" autocomplete="new-password">
+
+      <button class="j-btn" id="j-create-btn" onclick="doCreate()">Create account &amp; join →</button>
+
+      <div class="j-divider">Already have an account?</div>
+      <button class="j-signin-btn" onclick="showSignIn()">Sign in with existing account</button>
+    </div>
+
+    <!-- Sign-in tab (for existing accounts) -->
+    <div id="j-tab-signin" style="display:none;">
+      <h1 class="j-h1">Sign in to accept</h1>
+      <p class="j-sub">Sign in with the email that received this invite.</p>
+
+      <label class="j-label">Email</label>
+      <input class="j-input" id="j-si-email" type="email" readonly>
+
+      <label class="j-label">Password</label>
+      <input class="j-input" id="j-si-pass" type="password" placeholder="Your SOKONI password" autocomplete="current-password">
+
+      <button class="j-btn" id="j-si-btn" onclick="doSignIn()">Sign in &amp; join →</button>
+      <div class="j-divider">New to SOKONI?</div>
+      <button class="j-signin-btn" onclick="showCreate()">Create a new account instead</button>
+    </div>
+
+    <!-- Permissions preview -->
+    <div id="j-perms" style="margin-top:20px;padding:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;">
+      <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;">What you can access</div>
+      <div id="j-perms-chips"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="firebase.js"></script>
+<script type="module">
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile }
+                                          from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { doc, getDoc }                   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFunctions, httpsCallable }   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+/* ─── Use globals set by firebase.js (loaded before this script) ─── */
+const _auth = window.firebaseAuth;
+const _db   = window.firebaseDB;
+const _fns  = getFunctions(window.firebaseApp, 'us-central1');
+
+if (!_auth || !_db) {
+  document.getElementById('j-loading').style.display = 'none';
+  document.getElementById('j-invalid').style.display = '';
+  document.getElementById('j-invalid-msg').textContent = 'Firebase failed to initialise. Please refresh.';
+}
+
+/* ─── Parse URL ─── */
+const params  = new URLSearchParams(location.search);
+const token   = params.get('t') || '';
+const invType = params.get('type') || 'shop'; // 'shop' | 'platform'
+
+const ROLE_LABELS = {
+  /* shop */     cashier:'💰 Cashier', manager:'📊 Manager', inventory:'📦 Inventory Clerk', support:'💬 Support Agent',
+  /* platform */ moderator:'🚩 Moderator', driverCoordinator:'🚕 Driver Coordinator',
+                 financeReviewer:'💸 Finance Reviewer', contentManager:'📝 Content Manager'
+};
+const ROLE_PERMS = {
+  cashier:         ['Process orders','View payments','POS terminal'],
+  manager:         ['Full store access','Products & stock','Orders & analytics'],
+  inventory:       ['Add/edit products','Manage stock levels','Bulk uploads'],
+  support:         ['Customer messages','Reviews & Q&A','Dispute handling'],
+  moderator:       ['Flag & review content','Suspend accounts','Verify sellers'],
+  driverCoordinator:['Approve drivers','Driver applications','Ride oversight'],
+  financeReviewer: ['View commissions','Billing reports','Revenue data (read-only)'],
+  contentManager:  ['Community posts','Events','Featured content'],
+};
+const ORG_ICONS = { shop:'🏪', platform:'🌐' };
+
+/* ─── Load invite ─── */
+let inviteData = null;
+async function loadInvite() {
+  if (!token) return showInvalid('No invite token in this link.');
+  try {
+    const col  = invType === 'platform' ? 'platformInvites' : 'shopInvites';
+    const snap = await getDoc(doc(_db, col, token));
+    if (!snap.exists()) return showInvalid('This invite link is not valid.');
+    const d = snap.data();
+    if (d.status !== 'pending') return showInvalid('This invite has already been used or was revoked.');
+    if (d.expiresAt.toDate() < new Date()) return showInvalid('This invite expired. Ask for a new link.');
+    inviteData = d;
+    renderForm(d);
+  } catch(err) {
+    showInvalid('Could not load invite: ' + err.message);
+  }
+}
+
+function renderForm(d) {
+  document.getElementById('j-loading').style.display = 'none';
+  document.getElementById('j-form').style.display    = '';
+
+  const orgName = invType === 'platform' ? 'SOKONI Platform Team' : (d.shopName || 'Shop');
+  document.getElementById('j-org-icon').textContent  = ORG_ICONS[invType] || '🏢';
+  document.getElementById('j-org-name').textContent  = orgName;
+  document.getElementById('j-org-role').textContent  = ROLE_LABELS[d.role] || d.role;
+  document.getElementById('j-desc').textContent      = orgName + ' has invited you to join as ' + (ROLE_LABELS[d.role] || d.role) + '.';
+  document.getElementById('j-email').value           = d.email;
+  document.getElementById('j-si-email').value        = d.email;
+
+  const perms = (ROLE_PERMS[d.role] || []).map(p => `<span class="j-perm-chip">✓ ${p}</span>`).join('');
+  document.getElementById('j-perms-chips').innerHTML = perms;
+}
+
+function showInvalid(msg) {
+  document.getElementById('j-loading').style.display  = 'none';
+  document.getElementById('j-invalid').style.display  = '';
+  document.getElementById('j-invalid-msg').textContent = msg;
+}
+
+function showAlert(msg, type='error') {
+  const el = document.getElementById('j-alert');
+  el.className = 'j-alert ' + type;
+  el.textContent = msg;
+  el.style.display = '';
+}
+function clearAlert() { document.getElementById('j-alert').style.display = 'none'; }
+
+window.showSignIn = () => {
+  document.getElementById('j-tab-new').style.display    = 'none';
+  document.getElementById('j-tab-signin').style.display = '';
+  clearAlert();
+};
+window.showCreate = () => {
+  document.getElementById('j-tab-signin').style.display = 'none';
+  document.getElementById('j-tab-new').style.display    = '';
+  clearAlert();
+};
+
+async function acceptInvite() {
+  const fn = invType === 'platform' ? 'acceptPlatformInvite' : 'acceptShopInvite';
+  const res = await httpsCallable(_fns, fn)({ token });
+  return res.data;
+}
+
+function setLoading(btnId, loading, label) {
+  const b = document.getElementById(btnId);
+  if (b) { b.disabled = loading; b.textContent = loading ? 'Please wait…' : label; }
+}
+
+window.doCreate = async () => {
+  clearAlert();
+  const name  = document.getElementById('j-name').value.trim();
+  const email = inviteData?.email || '';
+  const pass  = document.getElementById('j-pass').value;
+  const pass2 = document.getElementById('j-pass2').value;
+  if (!name)         return showAlert('Enter your full name.');
+  if (pass.length < 8) return showAlert('Password must be at least 8 characters.');
+  if (pass !== pass2) return showAlert('Passwords do not match.');
+
+  setLoading('j-create-btn', true, 'Create account & join →');
+  try {
+    const cred = await createUserWithEmailAndPassword(_auth, email, pass);
+    await updateProfile(cred.user, { displayName: name });
+    const result = await acceptInvite();
+    await storeSessionAndRedirect(result, cred.user);
+  } catch(err) {
+    if (err.code === 'auth/email-already-in-use') {
+      showAlert('This email already has a SOKONI account. Sign in instead.');
+      showSignIn();
+    } else {
+      showAlert(err.message || 'Something went wrong. Try again.');
+    }
+    setLoading('j-create-btn', false, 'Create account & join →');
+  }
+};
+
+window.doSignIn = async () => {
+  clearAlert();
+  const email = inviteData?.email || '';
+  const pass  = document.getElementById('j-si-pass').value;
+  if (!pass) return showAlert('Enter your password.');
+
+  setLoading('j-si-btn', true, 'Sign in & join →');
+  try {
+    const cred = await signInWithEmailAndPassword(_auth, email, pass);
+    const result = await acceptInvite();
+    await storeSessionAndRedirect(result, cred.user);
+  } catch(err) {
+    showAlert(err.message || 'Sign-in failed. Check your password.');
+    setLoading('j-si-btn', false, 'Sign in & join →');
+  }
+};
+
+async function storeSessionAndRedirect(result, user) {
+  /* Show success state */
+  document.getElementById('j-form').style.display = 'none';
+  document.getElementById('j-done').style.display = '';
+  setTimeout(() => { document.getElementById('j-done-bar').style.width = '100%'; }, 50);
+
+  /* For shop employees: store session so initEmployeeSession() picks it up */
+  if (invType === 'shop' && result.role) {
+    localStorage.setItem('sokoniEmployeeSession', JSON.stringify({
+      isEmployee:   true,
+      uid:          user.uid,
+      email:        user.email,
+      name:         user.displayName || '',
+      employeeRole: result.role,
+      shopOwnerId:  result.shopOwnerId || '',
+      shopName:     result.shopName || 'My Shop'
+    }));
+  }
+
+  const dest = invType === 'platform' ? 'admin.html' : 'seller.html?employee=1';
+  document.getElementById('j-done-msg').textContent = 'Taking you to your dashboard…';
+  setTimeout(() => { location.href = dest; }, 2500);
+}
+
+/* Boot */
+loadInvite();
+</script>
+<script src="sw-register.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

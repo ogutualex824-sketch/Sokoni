@@ -1,0 +1,1476 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Construction Hub — Cement, Steel, Timber, Tiles & Building Materials Kenya</title>
+  <meta property="og:title" content="SOKONI Construction Hub — Building Materials Kenya">
+  <meta property="og:description" content="Buy cement, steel, timber, roofing, tiles and all building materials in Kenya on SOKONI.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta name="description" content="Buy cement, steel, timber, roofing, tiles, paint, bricks and all building materials in Kenya. Compare prices, get quotes, bulk orders with delivery. SOKONI Construction Hub.">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f59e0b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI Build">
+  <script src="security.js"></script><link rel="stylesheet" href="style.css">
+  <script src="seo.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:white;min-height:100vh;padding-bottom:80px;}
+    :root{--amber:#f59e0b;--amber2:#d97706;--amber-glow:rgba(245,158,11,0.2);}
+
+    /*  Nav  */
+    .cn-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(245,158,11,0.15);position:sticky;top:0;z-index:200;backdrop-filter:blur(14px);}
+    .cn-nav-logo{height:34px;}
+    .cn-nav-right{display:flex;gap:8px;align-items:center;}
+    .cn-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;font-weight:700;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;background:none;cursor:pointer;font-family:inherit;}
+    .cn-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .cn-nav-sell{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+
+    /*  Hero  */
+    .cn-hero{position:relative;overflow:hidden;padding:56px 24px 48px;text-align:center;border-bottom:1px solid rgba(245,158,11,0.1);}
+    .cn-hero-bg{position:absolute;inset:0;background:linear-gradient(135deg,rgba(245,158,11,0.09),rgba(180,83,9,0.06),transparent);z-index:0;}
+    .cn-hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 55% at 50% 100%,rgba(245,158,11,0.1),transparent);}
+    .cn-hero-content{position:relative;z-index:1;}
+    .cn-badge{display:inline-block;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);border-radius:999px;padding:6px 16px;font-size:12px;font-weight:800;color:#f59e0b;margin-bottom:16px;text-transform:uppercase;letter-spacing:.06em;}
+    .cn-hero h1{font-size:clamp(26px,6vw,46px);font-weight:900;line-height:1.05;margin-bottom:12px;}
+    .cn-hero h1 span{background:linear-gradient(135deg,#f59e0b,#fbbf24,#fcd34d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .cn-hero p{color:rgba(255,255,255,0.5);font-size:15px;max-width:600px;margin:0 auto 28px;line-height:1.7;}
+    .cn-search{display:flex;max-width:560px;margin:0 auto;gap:8px;}
+    .cn-search input{flex:1;padding:14px 18px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+    .cn-search input::placeholder{color:rgba(255,255,255,0.35);}
+    .cn-search input:focus{border-color:rgba(245,158,11,0.4);}
+    .cn-search-btn{padding:14px 22px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:12px;color:black;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+
+    /*  Stats  */
+    .cn-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));background:rgba(245,158,11,0.04);border-bottom:1px solid rgba(245,158,11,0.1);padding:14px 24px;}
+    .cn-stat{text-align:center;padding:8px 4px;border-right:1px solid rgba(245,158,11,0.08);}
+    .cn-stat:last-child{border-right:none;}
+    .cn-stat-val{font-size:18px;font-weight:900;color:#f59e0b;}
+    .cn-stat-lbl{font-size:10px;color:rgba(255,255,255,0.38);margin-top:2px;}
+
+    /*  Body  */
+    .cn-body{max-width:1200px;margin:0 auto;padding:28px 24px 60px;}
+
+    /*  Category tiles  */
+    .cn-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:28px;}
+    .cn-cat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 10px;text-align:center;cursor:pointer;transition:all .2s;text-decoration:none;display:block;}
+    .cn-cat:hover,.cn-cat.active{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.3);}
+    .cn-cat .cn-cat-icon{font-size:26px;margin-bottom:7px;}
+    .cn-cat .cn-cat-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.65);}
+    .cn-cat.active .cn-cat-label{color:#f59e0b;}
+
+    /*  Section heading  */
+    .cn-sec-h{font-size:15px;font-weight:800;color:white;margin:28px 0 16px;display:flex;align-items:center;gap:8px;}
+    .cn-sec-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+    /*  Product / material cards  */
+    .cn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;}
+    .cn-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;overflow:hidden;transition:transform .2s,border-color .2s;position:relative;}
+    .cn-card:hover{transform:translateY(-3px);border-color:rgba(245,158,11,0.25);}
+    .cn-card-img{width:100%;height:160px;display:flex;align-items:center;justify-content:center;font-size:64px;position:relative;}
+    .cn-brand-badge{position:absolute;top:10px;left:10px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;}
+    .cn-bulk-badge{position:absolute;top:10px;right:10px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;background:rgba(0,200,120,0.15);border:1px solid rgba(0,200,120,0.25);color:#00c878;}
+    .cn-card-body{padding:14px 16px 16px;}
+    .cn-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:3px;}
+    .cn-card-supplier{font-size:11px;color:rgba(255,255,255,0.38);margin-bottom:8px;}
+    .cn-card-specs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
+    .cn-spec{font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);}
+    .cn-price-row{display:flex;align-items:baseline;gap:8px;margin-bottom:4px;}
+    .cn-price{font-size:20px;font-weight:900;color:#f59e0b;}
+    .cn-price-unit{font-size:11px;color:rgba(255,255,255,0.35);}
+    .cn-bulk-price{font-size:11px;color:#00c878;margin-bottom:8px;}
+    .cn-rating{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;}
+    .cn-rating .star{color:#fbbf24;}
+    .cn-btns{display:flex;gap:8px;}
+    .cn-btn-cart{flex:1;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:10px;color:black;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;}
+    .cn-btn-quote{padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;color:#f59e0b;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+    .cn-btn-wa{padding:10px 12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:10px;color:#25d366;font-size:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:flex;align-items:center;}
+
+    /*  Supplier cards  */
+    .sup-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+    .sup-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px;transition:all .2s;}
+    .sup-card:hover{border-color:rgba(245,158,11,0.25);transform:translateY(-2px);}
+    .sup-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+    .sup-avatar{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(180,83,9,0.1));border:1px solid rgba(245,158,11,0.2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+    .sup-name{font-size:14px;font-weight:800;color:white;margin-bottom:2px;}
+    .sup-location{font-size:11px;color:rgba(255,255,255,0.38);}
+    .sup-stars{color:#fbbf24;font-size:11px;}
+    .sup-cats{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:8px;}
+    .sup-cat{font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.15);color:#f59e0b;}
+    .sup-book-btn{width:100%;padding:9px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:9px;color:black;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;}
+
+    /*  Quote form  */
+    .quote-form{background:rgba(255,255,255,0.02);border:1px solid rgba(245,158,11,0.15);border-radius:18px;padding:24px;}
+    .cn-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+    .cn-input:focus{border-color:rgba(245,158,11,0.45);}
+    .cn-input::placeholder{color:rgba(255,255,255,0.28);}
+    .cn-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .cn-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+    .cn-submit{padding:13px 28px;background:linear-gradient(135deg,#f59e0b,#d97706);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;}
+
+    /*  Price guide table  */
+    .price-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .price-table th{padding:10px 14px;background:rgba(245,158,11,0.08);color:#f59e0b;font-weight:800;text-align:left;border-bottom:1px solid rgba(245,158,11,0.15);}
+    .price-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.7);}
+    .price-table tr:hover td{background:rgba(255,255,255,0.02);}
+    .price-table .price-val{color:#f59e0b;font-weight:800;}
+
+    /*  Filter pills  */
+    .cn-pills{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:20px;}
+    .cn-pill{padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.55);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;}
+    .cn-pill:hover,.cn-pill.active{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+
+    /*  Alert box  */
+    .cn-alert{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:12px;padding:14px 16px;font-size:12px;color:rgba(255,255,255,0.6);line-height:1.7;margin-bottom:20px;}
+    .cn-alert strong{color:#f59e0b;}
+
+    /*  Modal  */
+    .cn-modal{position:fixed;inset:0;background:rgba(0,0,0,0.82);backdrop-filter:blur(12px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+    .cn-modal-box{background:#111;border:1px solid rgba(245,158,11,0.2);border-radius:22px;padding:28px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;position:relative;}
+    .cn-modal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:rgba(255,255,255,0.35);font-size:20px;cursor:pointer;}
+    .cn-modal-btn{width:100%;padding:13px;background:linear-gradient(135deg,#f59e0b,#d97706);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-top:6px;}
+
+    @media(max-width:600px){
+      .cn-grid{grid-template-columns:1fr 1fr;}
+      .cn-grid2{grid-template-columns:1fr;}
+      .cn-cats{grid-template-columns:repeat(3,1fr);}
+    }
+    /* ── Tab system ── */
+    .cn-tab-nav{display:flex;gap:4px;padding:12px 24px;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(245,158,11,0.12);position:sticky;top:62px;z-index:100;backdrop-filter:blur(14px);}
+    .cn-tab-nav::-webkit-scrollbar{display:none;}
+    .cn-tab-btn{flex-shrink:0;padding:8px 18px;border-radius:10px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+    .cn-tab-btn.active{background:rgba(245,158,11,0.14);border-color:rgba(245,158,11,0.35);color:#f59e0b;}
+    .cn-tab-panel{display:none;}
+    .cn-tab-panel.active{display:block;}
+    /* ── Contractor cards ── */
+    .ctr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+    .ctr-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;overflow:hidden;transition:all .25s;}
+    .ctr-card:hover{transform:translateY(-3px);border-color:rgba(245,158,11,0.3);}
+    .ctr-avatar{width:56px;height:56px;border-radius:14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+    .ctr-name{font-size:15px;font-weight:900;color:white;margin-bottom:2px;}
+    .ctr-type{font-size:11px;color:#f59e0b;font-weight:700;margin-bottom:2px;}
+    .ctr-loc{font-size:11px;color:rgba(255,255,255,0.38);}
+    .ctr-chips{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0;}
+    .ctr-chip{font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);color:#f59e0b;}
+    .ctr-actions{display:flex;gap:6px;margin-top:12px;}
+    .ctr-btn{flex:1;padding:9px;border:none;border-radius:9px;font-weight:800;font-size:11px;cursor:pointer;font-family:inherit;}
+    .ctr-btn-book{background:linear-gradient(135deg,#f59e0b,#d97706);color:black;}
+    .ctr-btn-wa{background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.25);color:#25d366;}
+    /* ── Equipment cards ── */
+    .eq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+    .eq-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px 18px;transition:all .2s;}
+    .eq-card:hover{border-color:rgba(245,158,11,0.25);transform:translateY(-2px);}
+    .eq-icon{font-size:36px;margin-bottom:10px;}
+    .eq-name{font-size:14px;font-weight:900;color:white;margin-bottom:3px;}
+    .eq-owner{font-size:11px;color:rgba(255,255,255,0.38);margin-bottom:6px;}
+    .eq-rate{font-size:18px;font-weight:900;color:#f59e0b;margin-bottom:6px;}
+    .eq-specs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
+    .eq-spec{font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);color:rgba(255,255,255,0.5);}
+    /* ── RFQ ── */
+    .rfq-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px 18px;margin-bottom:10px;}
+    /* ── Dashboard ── */
+    .dash-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px;}
+    .dash-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:18px;text-align:center;}
+    .dash-stat-val{font-size:24px;font-weight:900;color:#f59e0b;margin-bottom:4px;}
+    .dash-stat-lbl{font-size:9px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.04em;}
+    .dash-proj-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
+    @media(max-width:600px){.dash-stats{grid-template-columns:repeat(2,1fr);}.eq-grid{grid-template-columns:1fr 1fr;}.ctr-grid{grid-template-columns:1fr;}}
+  </style>
+<script src="sokoni-pay.js" defer></script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<!--  Nav  -->
+<nav class="cn-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="cn-nav-logo" alt="Sokoni"></a>
+  <div class="cn-nav-right">
+    <a href="javascript:history.back()" class="cn-nav-link">← Back</a>
+    <a href="index.html" class="cn-nav-link">🏠 Home</a>
+    <a href="services.html" class="cn-nav-link" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.25);color:#f59e0b;">🛠️ Services</a>
+    <a href="seller.html" class="cn-nav-link cn-nav-sell">➕ Sell Materials</a>
+    <a href="provider.html?cat=construction" class="cn-nav-link" style="background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.2);color:#00aaff;"><i class="fas fa-hard-hat"></i> Hire Contractors</a>
+  </div>
+</nav>
+
+<!--  Hero  -->
+<div class="cn-hero">
+  <div class="cn-hero-bg"></div>
+  <div class="cn-hero-content">
+    <div class="cn-badge">🏗️ SOKONI Construction Hub</div>
+    <h1>Kenya's Building<br><span>Materials Marketplace</span></h1>
+    <p>Cement, steel, timber, roofing, tiles, paint, tools and everything you need to build — from verified suppliers across Kenya. Compare prices, get bulk quotes, delivered to site.</p>
+    <div class="cn-search">
+      <input type="text" id="cnSearch" placeholder="Search e.g. 'Bamburi cement Nairobi', 'steel 12mm', 'roofing sheets'..." oninput="filterProducts()">
+      <button type="button" class="cn-search-btn" onclick="filterProducts()">🔍 Search</button>
+    </div>
+  </div>
+</div>
+
+<!--  Stats  -->
+<div class="cn-stats">
+  <div class="cn-stat"><div class="cn-stat-val">340+</div><div class="cn-stat-lbl">Products Listed</div></div>
+  <div class="cn-stat"><div class="cn-stat-val">45+</div><div class="cn-stat-lbl">Verified Suppliers</div></div>
+  <div class="cn-stat"><div class="cn-stat-val">4.8 ⭐</div><div class="cn-stat-lbl">Avg. Rating</div></div>
+  <div class="cn-stat"><div class="cn-stat-val">Bulk</div><div class="cn-stat-lbl">Wholesale Prices</div></div>
+  <div class="cn-stat"><div class="cn-stat-val">M-PESA</div><div class="cn-stat-lbl">Easy Payment</div></div>
+  <div class="cn-stat"><div class="cn-stat-val">Delivery</div><div class="cn-stat-lbl">To Your Site</div></div>
+</div>
+
+<!-- ── Tab Nav ── -->
+<div class="cn-tab-nav" id="cnTabNav">
+  <button type="button" class="cn-tab-btn active" onclick="cnShowTab('materials',this)">🏗️ Materials</button>
+  <button type="button" class="cn-tab-btn" onclick="cnShowTab('contractors',this)">👷 Contractors</button>
+  <button type="button" class="cn-tab-btn" onclick="cnShowTab('equipment',this)">🚜 Equipment</button>
+  <button type="button" class="cn-tab-btn" onclick="cnShowTab('rfq',this)">📋 RFQ</button>
+  <button type="button" class="cn-tab-btn" onclick="cnShowTab('projects',this)">📐 Projects</button>
+  <button type="button" class="cn-tab-btn" onclick="cnShowTab('dashboard',this)">📊 Dashboard</button>
+</div>
+
+<!-- ── Materials Tab Panel (existing content) ── -->
+<div id="cntabpanel-materials" class="cn-tab-panel active">
+<div class="cn-body">
+
+  <!--  Category tiles  -->
+  <div class="cn-sec-h" style="margin-top:8px;">🏗️ Browse by Category</div>
+  <div class="cn-cats" id="cnCatGrid">
+    <a class="cn-cat active" onclick="return setCat('',this)" href="javascript:void(0)"><div class="cn-cat-icon">🏠</div><div class="cn-cat-label">All</div></a>
+    <a class="cn-cat" onclick="return setCat('cement',this)" href="javascript:void(0)"><div class="cn-cat-icon">🏗️</div><div class="cn-cat-label">Cement</div></a>
+    <a class="cn-cat" onclick="return setCat('steel',this)" href="javascript:void(0)"><div class="cn-cat-icon">🔩</div><div class="cn-cat-label">Steel & Iron</div></a>
+    <a class="cn-cat" onclick="return setCat('timber',this)" href="javascript:void(0)"><div class="cn-cat-icon">🪵</div><div class="cn-cat-label">Timber</div></a>
+    <a class="cn-cat" onclick="return setCat('roofing',this)" href="javascript:void(0)"><div class="cn-cat-icon">🏠</div><div class="cn-cat-label">Roofing</div></a>
+    <a class="cn-cat" onclick="return setCat('bricks',this)" href="javascript:void(0)"><div class="cn-cat-icon">🧱</div><div class="cn-cat-label">Bricks & Blocks</div></a>
+    <a class="cn-cat" onclick="return setCat('tiles',this)" href="javascript:void(0)"><div class="cn-cat-icon">🔲</div><div class="cn-cat-label">Tiles & Floors</div></a>
+    <a class="cn-cat" onclick="return setCat('paint',this)" href="javascript:void(0)"><div class="cn-cat-icon">🎨</div><div class="cn-cat-label">Paint</div></a>
+    <a class="cn-cat" onclick="return setCat('plumbing-materials',this)" href="javascript:void(0)"><div class="cn-cat-icon">🔧</div><div class="cn-cat-label">Plumbing</div></a>
+    <a class="cn-cat" onclick="return setCat('electrical-materials',this)" href="javascript:void(0)"><div class="cn-cat-icon">⚡</div><div class="cn-cat-label">Electrical</div></a>
+    <a class="cn-cat" onclick="return setCat('windows-doors',this)" href="javascript:void(0)"><div class="cn-cat-icon">🚪</div><div class="cn-cat-label">Windows & Doors</div></a>
+    <a class="cn-cat" onclick="return setCat('construction-tools',this)" href="javascript:void(0)"><div class="cn-cat-icon">🔨</div><div class="cn-cat-label">Tools</div></a>
+    <a class="cn-cat" onclick="return setCat('sand-gravel',this)" href="javascript:void(0)"><div class="cn-cat-icon">⛏️</div><div class="cn-cat-label">Sand & Gravel</div></a>
+    <a class="cn-cat" onclick="return setCat('safety-ppe',this)" href="javascript:void(0)"><div class="cn-cat-icon">⛑️</div><div class="cn-cat-label">Safety & PPE</div></a>
+  </div>
+
+  <!--  Alert  -->
+  <div class="cn-alert">
+    <strong>📋 Bulk Orders:</strong> All suppliers offer bulk discounts. Click <strong>Get Quote</strong> on any product or use the quote form below for custom quantities. Delivery to site available across Nairobi, Mombasa, Kisumu, Nakuru &amp; Eldoret.
+  </div>
+
+  <!--  Filter pills  -->
+  <div class="cn-pills" id="cnFilterPills">
+    <button type="button" class="cn-pill active" onclick="filterLoc('',this)">📍 All Locations</button>
+    <button type="button" class="cn-pill" onclick="filterLoc('nairobi',this)">📍 Nairobi</button>
+    <button type="button" class="cn-pill" onclick="filterLoc('mombasa',this)">📍 Mombasa</button>
+    <button type="button" class="cn-pill" onclick="filterLoc('kisumu',this)">📍 Kisumu</button>
+    <button type="button" class="cn-pill" onclick="filterLoc('nakuru',this)">📍 Nakuru</button>
+  </div>
+
+  <!--  Products grid  -->
+  <div class="cn-sec-h" id="cnResultLabel">All Building Materials</div>
+  <div class="cn-grid" id="cnGrid"></div>
+  <div id="cnEmpty" style="display:none;text-align:center;padding:60px 0;color:rgba(255,255,255,0.25);">
+    <div style="font-size:48px;margin-bottom:12px;">🧱</div>
+    <p>No products found in this category.<br>Be the first to list building materials!</p>
+    <a href="seller.html" style="display:inline-block;margin-top:16px;padding:10px 22px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">List Your Materials →</a>
+  </div>
+
+  <!--  Price Guide  -->
+  <div class="cn-sec-h" style="margin-top:36px;">
+    📊 Kenya Market Price Guide
+    <span style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.28);color:#71ff00;margin-left:4px;">🤖 AI-Managed</span>
+    <span id="priceLastUpdated" style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.3);margin-left:6px;"></span>
+  </div>
+  <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.12);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:8px;">
+    <span style="color:#71ff00;font-size:14px;">🤖</span>
+    Prices are tracked and adjusted automatically using AI market intelligence — reflecting Kenya's inflation index, fuel costs, USD/KES exchange rate, and seasonal demand. Refreshed hourly.
+  </div>
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;overflow:hidden;margin-bottom:28px;">
+    <table class="price-table" id="priceTable"></table>
+  </div>
+
+  <!--  Verified Suppliers  -->
+  <div class="cn-sec-h">🤝 Verified Suppliers</div>
+  <div class="sup-grid" id="suppliersGrid"></div>
+
+  <!--  Bulk Quote Form  -->
+  <div class="cn-sec-h" style="margin-top:36px;" id="quoteSection">📋 Get a Bulk Quote</div>
+  <div class="quote-form">
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;">Fill in your requirements and verified suppliers will send you competitive quotes within 2 hours.</p>
+    <div class="cn-grid2">
+      <div>
+        <label class="cn-label">Your Name *</label>
+        <input type="text" id="qName" class="cn-input" placeholder="Full name">
+      </div>
+      <div>
+        <label class="cn-label">Phone Number *</label>
+        <input type="tel" id="qPhone" class="cn-input" placeholder="07XXXXXXXX">
+      </div>
+      <div>
+        <label class="cn-label">Project Location *</label>
+        <input type="text" id="qLocation" class="cn-input" placeholder="e.g. Ruiru, Kiambu County">
+      </div>
+      <div>
+        <label class="cn-label">Project Type *</label>
+        <select id="qProjectType" class="cn-input">
+          <option value="">Select project type</option>
+          <option>Residential House (1-2 floors)</option>
+          <option>Residential House (3+ floors)</option>
+          <option>Commercial Building</option>
+          <option>Renovation / Extension</option>
+          <option>Road / Infrastructure</option>
+          <option>Industrial / Warehouse</option>
+          <option>Perimeter Wall / Fence</option>
+          <option>Other</option>
+        </select>
+      </div>
+    </div>
+    <label class="cn-label">Materials Needed (list each item and quantity) *</label>
+    <textarea id="qMaterials" class="cn-input" style="min-height:90px;resize:vertical;" placeholder="e.g.&#10;Bamburi cement — 500 bags&#10;Y12 steel bars — 2 tonnes&#10;Corrugated iron sheets (gauge 30) — 200 sheets&#10;Burnt bricks — 5,000 pieces"></textarea>
+    <label class="cn-label">Delivery Required?</label>
+    <select id="qDelivery" class="cn-input">
+      <option value="yes">Yes — deliver to site</option>
+      <option value="self">No — I will collect</option>
+      <option value="either">Either works</option>
+    </select>
+    <label class="cn-label">Budget Range (KES)</label>
+    <select id="qBudget" class="cn-input">
+      <option value="">Prefer not to say</option>
+      <option>Under KES 50,000</option>
+      <option>KES 50,000 – 200,000</option>
+      <option>KES 200,000 – 500,000</option>
+      <option>KES 500,000 – 1,000,000</option>
+      <option>Over KES 1,000,000</option>
+    </select>
+    <button type="button" class="cn-submit" onclick="submitQuote()">📋 Request Quotes from Suppliers</button>
+    <div id="qMsg" style="font-size:12px;margin-top:10px;min-height:16px;"></div>
+  </div>
+
+</div><!-- end cn-body -->
+</div><!-- end cntabpanel-materials -->
+
+<!-- ══════════════════════════════════════════════════════════
+     CONTRACTORS TAB
+══════════════════════════════════════════════════════════ -->
+<div id="cntabpanel-contractors" class="cn-tab-panel">
+  <div class="cn-body">
+    <div class="cn-sec-h" style="margin-top:8px;">👷 Find Verified Contractors</div>
+
+    <!-- Filter chips -->
+    <div class="cn-pills" style="margin-bottom:18px;" id="ctrTypeFilter">
+      <button type="button" class="cn-pill active" onclick="filterContractors('all',this)">🔨 All Types</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('electrician',this)">⚡ Electricians</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('plumber',this)">🔧 Plumbers</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('welder',this)">🔥 Welders</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('carpenter',this)">🪵 Carpenters</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('painter',this)">🎨 Painters</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('roofer',this)">🏠 Roofers</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('mason',this)">🧱 Masons</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('architect',this)">📐 Architects</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('engineer',this)">⚙️ Engineers</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('qs',this)">📊 QS</button>
+      <button type="button" class="cn-pill" onclick="filterContractors('interior',this)">🛋️ Interior</button>
+    </div>
+
+    <div class="ctr-grid" id="ctrGrid"></div>
+
+    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.12);border-radius:14px;padding:20px;margin-top:28px;text-align:center;">
+      <div style="font-size:20px;margin-bottom:8px;">🏗️ Are you a Contractor?</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:14px;">Join Sokoni Construction Hub — get project leads, manage bookings &amp; grow your business.</p>
+      <button type="button" class="cn-submit" style="max-width:260px;padding:11px 24px;" onclick="openJoinContractorModal()">➕ Register as Contractor</button>
+    </div>
+  </div>
+</div><!-- end contractors -->
+
+<!-- ══════════════════════════════════════════════════════════
+     EQUIPMENT TAB
+══════════════════════════════════════════════════════════ -->
+<div id="cntabpanel-equipment" class="cn-tab-panel">
+  <div class="cn-body">
+    <div class="cn-sec-h" style="margin-top:8px;">🚜 Equipment Rental</div>
+    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:18px;">Rent heavy machinery, tools and equipment from verified owners across Kenya. Daily, weekly &amp; project rates.</p>
+
+    <!-- Category filter -->
+    <div class="cn-pills" id="eqCatFilter">
+      <button type="button" class="cn-pill active" onclick="filterEquipment('all',this)">🔧 All Equipment</button>
+      <button type="button" class="cn-pill" onclick="filterEquipment('earthmoving',this)">🚜 Earthmoving</button>
+      <button type="button" class="cn-pill" onclick="filterEquipment('lifting',this)">🏗️ Cranes & Lifting</button>
+      <button type="button" class="cn-pill" onclick="filterEquipment('concrete',this)">⚙️ Concrete</button>
+      <button type="button" class="cn-pill" onclick="filterEquipment('scaffolding',this)">🪜 Scaffolding</button>
+      <button type="button" class="cn-pill" onclick="filterEquipment('power',this)">⚡ Power & Generators</button>
+      <button type="button" class="cn-pill" onclick="filterEquipment('compaction',this)">🔨 Compaction</button>
+      <button type="button" class="cn-pill" onclick="filterEquipment('tools',this)">🛠️ Power Tools</button>
+    </div>
+
+    <div class="eq-grid" id="eqGrid" style="margin-top:16px;"></div>
+
+    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.12);border-radius:14px;padding:20px;margin-top:28px;text-align:center;">
+      <div style="font-size:20px;margin-bottom:8px;">🚜 List Your Equipment</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:14px;">Earn KES daily renting out idle machinery and tools.</p>
+      <button type="button" class="cn-submit" style="max-width:260px;padding:11px 24px;" onclick="openListEquipmentModal()">➕ List Equipment for Rent</button>
+    </div>
+  </div>
+</div><!-- end equipment -->
+
+<!-- ══════════════════════════════════════════════════════════
+     RFQ TAB
+══════════════════════════════════════════════════════════ -->
+<div id="cntabpanel-rfq" class="cn-tab-panel">
+  <div class="cn-body">
+    <div class="cn-sec-h" style="margin-top:8px;">📋 Request for Quotation (RFQ)</div>
+    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Post your project requirements — verified suppliers and contractors submit their best quotes within 2 hours.</p>
+
+    <!-- New RFQ form -->
+    <div class="quote-form" id="rfqForm">
+      <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:16px;">📝 Post New RFQ</div>
+      <div class="cn-grid2">
+        <div>
+          <label class="cn-label">Your Name *</label>
+          <input type="text" id="rfqName" class="cn-input" placeholder="Full name">
+        </div>
+        <div>
+          <label class="cn-label">Phone *</label>
+          <input type="tel" id="rfqPhone" class="cn-input" placeholder="07XXXXXXXX">
+        </div>
+        <div>
+          <label class="cn-label">RFQ Type *</label>
+          <select id="rfqType" class="cn-input">
+            <option value="">Select type</option>
+            <option value="materials">Building Materials</option>
+            <option value="contractor">Contractor Services</option>
+            <option value="equipment">Equipment Rental</option>
+            <option value="full-project">Full Project (Materials + Labour)</option>
+            <option value="design">Design & Architecture</option>
+          </select>
+        </div>
+        <div>
+          <label class="cn-label">Project Location *</label>
+          <input type="text" id="rfqLocation" class="cn-input" placeholder="e.g. Westlands, Nairobi">
+        </div>
+        <div>
+          <label class="cn-label">Budget Range (KES)</label>
+          <select id="rfqBudget" class="cn-input">
+            <option value="">Prefer not to say</option>
+            <option>Under KES 50,000</option>
+            <option>KES 50,000 – 200,000</option>
+            <option>KES 200,000 – 500,000</option>
+            <option>KES 500,000 – 1,000,000</option>
+            <option>Over KES 1,000,000</option>
+          </select>
+        </div>
+        <div>
+          <label class="cn-label">Required By</label>
+          <input type="date" id="rfqDeadline" class="cn-input">
+        </div>
+      </div>
+      <label class="cn-label">Project Description *</label>
+      <textarea id="rfqDesc" class="cn-input" style="min-height:100px;resize:vertical;" placeholder="Describe your project in detail — materials needed, quantities, scope of work, site access, special requirements..."></textarea>
+      <label class="cn-label">Preferred Response</label>
+      <select id="rfqPref" class="cn-input">
+        <option value="whatsapp">WhatsApp me a quote</option>
+        <option value="call">Phone call from suppliers</option>
+        <option value="platform">Quotes on Sokoni platform</option>
+      </select>
+      <button type="button" class="cn-submit" onclick="submitRFQ()">📋 Post My RFQ — Get Free Quotes</button>
+      <div id="rfqMsg" style="font-size:12px;margin-top:10px;min-height:16px;"></div>
+    </div>
+
+    <!-- Active RFQs -->
+    <div class="cn-sec-h" style="margin-top:32px;">📌 Active RFQs (Open for Bids)</div>
+    <div id="rfqActiveList">
+      <div class="rfq-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+          <div>
+            <div style="font-size:14px;font-weight:900;color:white;">3-Bedroom House — Full Materials</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.38);">📍 Ruiru, Kiambu · Posted 2 hours ago</div>
+          </div>
+          <span style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:5px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;">OPEN</span>
+        </div>
+        <p style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;">Cement (400 bags), Y12 steel (1.5t), roofing sheets (180pcs), timber (200pcs), bricks (8,000). Site delivery required to Ruiru.</p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-size:11px;font-weight:700;color:#f59e0b;">Budget: KES 500K – 1M</span>
+          <span style="font-size:10px;color:rgba(255,255,255,0.3);">· 4 quotes received</span>
+        </div>
+      </div>
+      <div class="rfq-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+          <div>
+            <div style="font-size:14px;font-weight:900;color:white;">Electrical Wiring — 20-Unit Apartment</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.38);">📍 Westlands, Nairobi · Posted 5 hours ago</div>
+          </div>
+          <span style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:5px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;">OPEN</span>
+        </div>
+        <p style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;">Full electrical installation for 20-unit apartment block G+4. Supply and install. Must be certified electrician. Project starts Feb 2025.</p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-size:11px;font-weight:700;color:#f59e0b;">Budget: KES 200K – 500K</span>
+          <span style="font-size:10px;color:rgba(255,255,255,0.3);">· 2 quotes received</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- end rfq -->
+
+<!-- ══════════════════════════════════════════════════════════
+     PROJECTS TAB
+══════════════════════════════════════════════════════════ -->
+<div id="cntabpanel-projects" class="cn-tab-panel">
+  <div class="cn-body">
+    <div class="cn-sec-h" style="margin-top:8px;">📐 Project Management</div>
+    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Track your construction projects — materials budget, contractor assignments, milestones, and site documents.</p>
+
+    <!-- Create project form -->
+    <div class="quote-form" id="projCreateForm">
+      <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:16px;">➕ Create New Project</div>
+      <div class="cn-grid2">
+        <div>
+          <label class="cn-label">Project Name *</label>
+          <input type="text" id="projName" class="cn-input" placeholder="e.g. My 3BR Home in Ruiru">
+        </div>
+        <div>
+          <label class="cn-label">Project Type *</label>
+          <select id="projType" class="cn-input">
+            <option value="">Select type</option>
+            <option>Residential — New Build</option>
+            <option>Residential — Renovation</option>
+            <option>Commercial Building</option>
+            <option>Perimeter Wall</option>
+            <option>Road / Infrastructure</option>
+            <option>Industrial / Warehouse</option>
+          </select>
+        </div>
+        <div>
+          <label class="cn-label">Location *</label>
+          <input type="text" id="projLoc" class="cn-input" placeholder="Site address">
+        </div>
+        <div>
+          <label class="cn-label">Total Budget (KES) *</label>
+          <input type="number" id="projBudget" class="cn-input" placeholder="e.g. 2500000">
+        </div>
+        <div>
+          <label class="cn-label">Start Date</label>
+          <input type="date" id="projStart" class="cn-input">
+        </div>
+        <div>
+          <label class="cn-label">Target Completion</label>
+          <input type="date" id="projEnd" class="cn-input">
+        </div>
+      </div>
+      <label class="cn-label">Project Notes</label>
+      <textarea id="projNotes" class="cn-input" style="min-height:70px;resize:vertical;" placeholder="Key notes, specifications, special requirements..."></textarea>
+      <button type="button" class="cn-submit" onclick="createProject()">🏗️ Create Project</button>
+      <div id="projMsg" style="font-size:12px;margin-top:10px;min-height:16px;"></div>
+    </div>
+
+    <!-- Projects list -->
+    <div class="cn-sec-h" style="margin-top:28px;">📋 My Projects</div>
+    <div id="projList">
+      <div style="text-align:center;padding:48px 0;color:rgba(255,255,255,0.22);">
+        <div style="font-size:42px;margin-bottom:10px;">📐</div>
+        <p style="font-size:13px;">No projects yet.<br>Create your first project above to start tracking.</p>
+      </div>
+    </div>
+  </div>
+</div><!-- end projects -->
+
+<!-- ══════════════════════════════════════════════════════════
+     DASHBOARD TAB
+══════════════════════════════════════════════════════════ -->
+<div id="cntabpanel-dashboard" class="cn-tab-panel">
+  <div class="cn-body">
+    <div class="cn-sec-h" style="margin-top:8px;">📊 My Dashboard</div>
+
+    <!-- Toggle client/contractor view -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;">
+      <button type="button" class="cn-pill active" id="dashViewClient" onclick="setDashView('client',this)">🏘️ Client View</button>
+      <button type="button" class="cn-pill" id="dashViewContractor" onclick="setDashView('contractor',this)">👷 Contractor View</button>
+    </div>
+
+    <!-- CLIENT VIEW -->
+    <div id="dashClient">
+      <div class="dash-stats">
+        <div class="dash-stat"><div class="dash-stat-val" id="dActiveProj">0</div><div class="dash-stat-lbl">Active Projects</div></div>
+        <div class="dash-stat"><div class="dash-stat-val" id="dTotalSpend">KES 0</div><div class="dash-stat-lbl">Total Spend</div></div>
+        <div class="dash-stat"><div class="dash-stat-val" id="dOpenRFQ">0</div><div class="dash-stat-lbl">Open RFQs</div></div>
+        <div class="dash-stat"><div class="dash-stat-val" id="dSavedSuppliers">0</div><div class="dash-stat-lbl">Saved Suppliers</div></div>
+      </div>
+
+      <div class="cn-sec-h">📦 Recent Orders</div>
+      <div id="dashRecentOrders">
+        <div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);">
+          <div style="font-size:36px;margin-bottom:8px;">📦</div>
+          <p style="font-size:12px;">No orders yet. Browse <a href="javascript:void(0)" onclick="cnShowTab('materials')" style="color:#f59e0b;">Materials</a> to place your first order.</p>
+        </div>
+      </div>
+
+      <div class="cn-sec-h" style="margin-top:24px;">📋 My RFQs</div>
+      <div id="dashMyRFQs">
+        <div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);">
+          <div style="font-size:36px;margin-bottom:8px;">📋</div>
+          <p style="font-size:12px;">No RFQs posted yet. Go to <a href="javascript:void(0)" onclick="cnShowTab('rfq')" style="color:#f59e0b;">RFQ tab</a> to request quotes.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTRACTOR VIEW -->
+    <div id="dashContractor" style="display:none;">
+      <div class="dash-stats">
+        <div class="dash-stat"><div class="dash-stat-val" id="dMyLeads">0</div><div class="dash-stat-lbl">New Leads</div></div>
+        <div class="dash-stat"><div class="dash-stat-val" id="dActiveJobs">0</div><div class="dash-stat-lbl">Active Jobs</div></div>
+        <div class="dash-stat"><div class="dash-stat-val" id="dEarnings">KES 0</div><div class="dash-stat-lbl">This Month</div></div>
+        <div class="dash-stat"><div class="dash-stat-val" id="dRating">—</div><div class="dash-stat-lbl">Avg Rating</div></div>
+      </div>
+
+      <div class="cn-sec-h">📋 Available RFQs in My Area</div>
+      <div id="dashAvailRFQ">
+        <div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);">
+          <div style="font-size:36px;margin-bottom:8px;">🔍</div>
+          <p style="font-size:12px;">Complete your contractor profile to see matching RFQs in your area.</p>
+        </div>
+      </div>
+
+      <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.12);border-radius:14px;padding:18px;margin-top:18px;text-align:center;">
+        <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">Not registered as a contractor yet?</p>
+        <button type="button" class="cn-submit" style="max-width:240px;padding:10px 20px;" onclick="openJoinContractorModal()">👷 Register Now — Free</button>
+      </div>
+    </div>
+  </div>
+</div><!-- end dashboard -->
+
+<!-- ══════════════════════════════════════════════════════════
+     JOIN CONTRACTOR MODAL
+══════════════════════════════════════════════════════════ -->
+<div id="joinCtrModal" class="cn-modal" style="display:none;" onclick="if(event.target===this)closeJoinCtrModal()">
+  <div class="cn-modal-box">
+    <button type="button" class="cn-modal-close" onclick="closeJoinCtrModal()">✕</button>
+    <h2 style="font-size:16px;font-weight:900;color:white;margin-bottom:4px;">👷 Register as a Contractor</h2>
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:16px;">Get project leads, manage bookings &amp; grow your construction business on Sokoni.</div>
+    <div class="cn-grid2">
+      <div>
+        <label class="cn-label">Full Name *</label>
+        <input type="text" id="ctrRegName" class="cn-input" placeholder="Your name / company name">
+      </div>
+      <div>
+        <label class="cn-label">Phone *</label>
+        <input type="tel" id="ctrRegPhone" class="cn-input" placeholder="07XXXXXXXX">
+      </div>
+      <div>
+        <label class="cn-label">Contractor Type *</label>
+        <select id="ctrRegType" class="cn-input">
+          <option value="">Select type</option>
+          <option value="electrician">Electrician</option>
+          <option value="plumber">Plumber</option>
+          <option value="welder">Welder / Fabricator</option>
+          <option value="carpenter">Carpenter / Joiner</option>
+          <option value="painter">Painter / Decorator</option>
+          <option value="roofer">Roofer</option>
+          <option value="mason">Mason / Bricklayer</option>
+          <option value="architect">Architect</option>
+          <option value="engineer">Structural Engineer</option>
+          <option value="qs">Quantity Surveyor (QS)</option>
+          <option value="interior">Interior Designer</option>
+          <option value="project-manager">Project Manager</option>
+          <option value="general">General Contractor</option>
+        </select>
+      </div>
+      <div>
+        <label class="cn-label">City / Town *</label>
+        <select id="ctrRegCity" class="cn-input">
+          <option value="">Select city</option>
+          <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
+          <option>Nakuru</option><option>Eldoret</option><option>Thika</option>
+          <option>Machakos</option><option>Nyeri</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <label class="cn-label">Years of Experience</label>
+    <select id="ctrRegExp" class="cn-input">
+      <option value="1">1-2 years</option>
+      <option value="3">3-5 years</option>
+      <option value="6">6-10 years</option>
+      <option value="10+">10+ years</option>
+    </select>
+    <label class="cn-label">Brief Bio / Services Offered</label>
+    <textarea id="ctrRegBio" class="cn-input" style="min-height:70px;resize:vertical;" placeholder="Describe your expertise, certifications, past projects..."></textarea>
+    <button type="button" class="cn-modal-btn" onclick="submitContractorReg()">✅ Submit Registration</button>
+    <div id="ctrRegMsg" style="font-size:12px;margin-top:8px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     LIST EQUIPMENT MODAL
+══════════════════════════════════════════════════════════ -->
+<div id="listEqModal" class="cn-modal" style="display:none;" onclick="if(event.target===this)closeListEqModal()">
+  <div class="cn-modal-box">
+    <button type="button" class="cn-modal-close" onclick="closeListEqModal()">✕</button>
+    <h2 style="font-size:16px;font-weight:900;color:white;margin-bottom:4px;">🚜 List Equipment for Rent</h2>
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:16px;">Earn daily income from idle machinery and tools.</div>
+    <div class="cn-grid2">
+      <div>
+        <label class="cn-label">Owner Name *</label>
+        <input type="text" id="eqOwner" class="cn-input" placeholder="Your name / company">
+      </div>
+      <div>
+        <label class="cn-label">Phone *</label>
+        <input type="tel" id="eqPhone" class="cn-input" placeholder="07XXXXXXXX">
+      </div>
+      <div>
+        <label class="cn-label">Equipment Name *</label>
+        <input type="text" id="eqNameInput" class="cn-input" placeholder="e.g. Caterpillar 320 Excavator">
+      </div>
+      <div>
+        <label class="cn-label">Category *</label>
+        <select id="eqCat" class="cn-input">
+          <option value="">Select category</option>
+          <option value="earthmoving">Earthmoving</option>
+          <option value="lifting">Cranes &amp; Lifting</option>
+          <option value="concrete">Concrete Equipment</option>
+          <option value="scaffolding">Scaffolding</option>
+          <option value="power">Power &amp; Generators</option>
+          <option value="compaction">Compaction</option>
+          <option value="tools">Power Tools</option>
+        </select>
+      </div>
+      <div>
+        <label class="cn-label">Daily Rate (KES) *</label>
+        <input type="number" id="eqRate" class="cn-input" placeholder="e.g. 25000">
+      </div>
+      <div>
+        <label class="cn-label">Location *</label>
+        <input type="text" id="eqLoc" class="cn-input" placeholder="Where is equipment based?">
+      </div>
+    </div>
+    <label class="cn-label">Specifications / Capacity</label>
+    <textarea id="eqSpecs" class="cn-input" style="min-height:60px;resize:vertical;" placeholder="Bucket size, lifting capacity, year, brand, condition..."></textarea>
+    <button type="button" class="cn-modal-btn" onclick="submitEquipmentListing()">🚜 List My Equipment</button>
+    <div id="eqListMsg" style="font-size:12px;margin-top:8px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<!--  Cart / Order Modal  -->
+<div id="cnModal" class="cn-modal" style="display:none;" onclick="if(event.target===this)closeCnModal()">
+  <div class="cn-modal-box">
+    <button type="button" class="cn-modal-close" onclick="closeCnModal()">✕</button>
+    <h2 style="font-size:17px;font-weight:900;color:white;margin-bottom:4px;" id="cnModalTitle">🛒 Order Product</h2>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;" id="cnModalSub"></div>
+    <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:14px;margin-bottom:14px;" id="cnModalPrice"></div>
+    <label class="cn-label">Your Name *</label>
+    <input type="text" id="cnOrderName" class="cn-input" placeholder="Full name">
+    <label class="cn-label">Phone *</label>
+    <input type="tel" id="cnOrderPhone" class="cn-input" placeholder="07XXXXXXXX">
+    <label class="cn-label">Quantity *</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+      <input type="number" id="cnOrderQty" class="cn-input" style="margin:0;" min="1" value="1" oninput="updateOrderTotal()">
+      <span id="cnOrderUnit" style="font-size:12px;color:rgba(255,255,255,0.4);white-space:nowrap;"></span>
+    </div>
+    <div id="cnOrderTotal" style="font-size:14px;font-weight:800;color:#f59e0b;margin-bottom:10px;"></div>
+    <label class="cn-label">Delivery to Site?</label>
+    <select id="cnOrderDelivery" class="cn-input">
+      <option value="yes">Yes — deliver to my site</option>
+      <option value="self">No — I'll collect</option>
+    </select>
+    <input type="text" id="cnOrderAddr" class="cn-input" placeholder="Delivery address / site location">
+    <button type="button" class="cn-modal-btn" onclick="submitOrder()">💳 Place Order via M-PESA</button>
+    <div id="cnOrderMsg" style="font-size:12px;margin-top:8px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="construction.html" class="bnav-item active-bnav"><i class="fas fa-hard-hat"></i><span>Build Hub</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* ————————————————— DATA ————————————————— */
+const PRODUCTS = [
+  /* CEMENT */
+  { id:"BM01", name:"Bamburi Cement — 50kg Bag", cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#1a1400,#2a2000)", price:680, unit:"bag", bulkPrice:"KES 660/bag (50+ bags)", rating:4.9, reviews:534, supplier:"Bamburi Cement Ltd", location:"nairobi", brand:"Bamburi", specs:["50kg bag","CEM II","32.5N grade","Nairobi stock"], inStock:true },
+  { id:"BM02", name:"Savannah Cement — 50kg Bag",  cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#1a1200,#2a1c00)", price:640, unit:"bag", bulkPrice:"KES 620/bag (100+ bags)", rating:4.7, reviews:312, supplier:"Savannah Cement KE", location:"nairobi", brand:"Savannah", specs:["50kg bag","Portland","42.5R grade"], inStock:true },
+  { id:"BM03", name:"East African Portland Cement", cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#180f00,#281800)", price:660, unit:"bag", bulkPrice:"KES 640/bag (50+ bags)", rating:4.8, reviews:445, supplier:"EAPCC Nairobi", location:"nairobi", brand:"EAPC", specs:["50kg bag","Blended","42.5N","KEBS certified"], inStock:true },
+  { id:"BM04", name:"Mombasa Cement — 50kg", cat:"cement", emoji:"🏗️", bg:"linear-gradient(135deg,#0f1a0f,#152a15)", price:650, unit:"bag", bulkPrice:"KES 630/bag (100+)", rating:4.7, reviews:201, supplier:"Coast Builders Supply", location:"mombasa", brand:"Mombasa Cement", specs:["50kg bag","CEM I","42.5N","Coast stock"], inStock:true },
+
+  /* STEEL */
+  { id:"BM05", name:"Y12 Steel Rebar — 12mm x 12m", cat:"steel", emoji:"🔩", bg:"linear-gradient(135deg,#101018,#181828)", price:850, unit:"bar", bulkPrice:"KES 800/bar (1 tonne+)", rating:4.8, reviews:288, supplier:"National Steel KE", location:"nairobi", brand:"National Steel", specs:["12mm dia","Grade 500","12m length","BS 4449"], inStock:true },
+  { id:"BM06", name:"Y16 Steel Rebar — 16mm x 12m", cat:"steel", emoji:"🔩", bg:"linear-gradient(135deg,#0f0f18,#15152a)", price:1550, unit:"bar", bulkPrice:"KES 1,480/bar (500kg+)", rating:4.9, reviews:176, supplier:"National Steel KE", location:"nairobi", brand:"National Steel", specs:["16mm dia","Grade 500","12m length","BS 4449"], inStock:true },
+  { id:"BM07", name:"Box Profile Roofing Sheet — Gauge 28", cat:"steel", emoji:"🏠", bg:"linear-gradient(135deg,#0a0f1a,#10182a)", price:1200, unit:"sheet", bulkPrice:"KES 1,100/sheet (50+)", rating:4.7, reviews:390, supplier:"Mabati Rolling Mills", location:"nairobi", brand:"Mabati", specs:["Gauge 28","3.6m length","Anti-rust coat","30yr warranty"], inStock:true },
+  { id:"BM08", name:"Iron Sheet — Corrugated Gauge 30", cat:"roofing", emoji:"🏠", bg:"linear-gradient(135deg,#0f1010,#1a1c1c)", price:980, unit:"sheet", bulkPrice:"KES 920/sheet (100+)", rating:4.6, reviews:412, supplier:"Mabati Rolling Mills", location:"nairobi", brand:"Mabati", specs:["Gauge 30","3m length","Pre-painted","Roof & cladding"], inStock:true },
+
+  /* TIMBER */
+  { id:"BM09", name:"Cypress Timber — 2x4 inch x 12ft", cat:"timber", emoji:"🪵", bg:"linear-gradient(135deg,#1a0c00,#2a1200)", price:280, unit:"piece", bulkPrice:"KES 260/pc (100+)", rating:4.7, reviews:198, supplier:"Gilgil Timber Merchants", location:"nakuru", brand:"Gilgil Timber", specs:["2x4 inch","12ft length","Kiln-dried","Cypress"], inStock:true },
+  { id:"BM10", name:"Hardboard / Plywood 18mm — 8x4ft", cat:"timber", emoji:"🪵", bg:"linear-gradient(135deg,#1a0900,#2a1000)", price:3200, unit:"sheet", bulkPrice:"KES 3,000/sheet (20+)", rating:4.8, reviews:134, supplier:"Pan African Timbers", location:"nairobi", brand:"Pan African", specs:["18mm thick","8x4ft","Grade A","Moisture resistant"], inStock:true },
+  { id:"BM11", name:"Cedar Timber — 2x6 inch x 12ft", cat:"timber", emoji:"🪵", bg:"linear-gradient(135deg,#150a00,#201000)", price:420, unit:"piece", bulkPrice:"KES 390/pc (100+)", rating:4.8, reviews:87, supplier:"Timau Timber KE", location:"nairobi", brand:"Timau", specs:["2x6 inch","12ft","Cedar","Treated"], inStock:true },
+
+  /* BRICKS & BLOCKS */
+  { id:"BM12", name:"Burnt Bricks — Standard (Each)", cat:"bricks", emoji:"🧱", bg:"linear-gradient(135deg,#1a0800,#2a1000)", price:18, unit:"brick", bulkPrice:"KES 16/brick (5,000+)", rating:4.6, reviews:445, supplier:"Kiambu Brickworks", location:"nairobi", brand:"Kiambu Bricks", specs:["230x110x76mm","Strength: 7N/mm²","KEBS certified","Nairobi delivery"], inStock:true },
+  { id:"BM13", name:"Hollow Block 6-inch (Each)", cat:"bricks", emoji:"🧱", bg:"linear-gradient(135deg,#100c00,#1c1200)", price:85, unit:"block", bulkPrice:"KES 78/block (1,000+)", rating:4.7, reviews:312, supplier:"Nairobi Block Suppliers", location:"nairobi", brand:"NBS", specs:["6 inch / 150mm","Hollow concrete","N5 class","Load-bearing rated"], inStock:true },
+  { id:"BM14", name:"Quarry Stone — Per Tonne", cat:"sand-gravel", emoji:"⛏️", bg:"linear-gradient(135deg,#0f0f0a,#1a1a10)", price:4500, unit:"tonne", bulkPrice:"KES 4,000/t (10t+)", rating:4.8, reviews:156, supplier:"Mlolongo Quarries", location:"nairobi", brand:"Mlolongo", specs:["20-40mm aggregate","Washed","Concrete grade","Delivery available"], inStock:true },
+  { id:"BM15", name:"River Sand — Per Tonne", cat:"sand-gravel", emoji:"⛏️", bg:"linear-gradient(135deg,#1a1500,#2a2000)", price:3800, unit:"tonne", bulkPrice:"KES 3,500/t (5t+)", rating:4.6, reviews:234, supplier:"Athi River Sand KE", location:"nairobi", brand:"ARS", specs:["Sharp sand","Masonry grade","Washed","Delivery 24hrs"], inStock:true },
+
+  /* TILES */
+  { id:"BM16", name:"Porcelain Floor Tiles 60x60cm", cat:"tiles", emoji:"🔲", bg:"linear-gradient(135deg,#0a0a10,#10101c)", price:1800, unit:"m²", bulkPrice:"KES 1,650/m² (100m²+)", rating:4.9, reviews:445, supplier:"Ramco Athi River", location:"nairobi", brand:"Ramco", specs:["60x60cm","R10 anti-slip","8mm thick","Box = 1.44m²"], inStock:true },
+  { id:"BM17", name:"Wall Tiles 30x45cm — Gloss White", cat:"tiles", emoji:"🔲", bg:"linear-gradient(135deg,#0a0a0a,#121212)", price:950, unit:"m²", bulkPrice:"KES 880/m² (50m²+)", rating:4.7, reviews:287, supplier:"Crown Paints Stores", location:"nairobi", brand:"Crown", specs:["30x45cm","Gloss white","6mm","Box = 1.35m²"], inStock:true },
+
+  /* PAINT */
+  { id:"BM18", name:"Crown Paints Emulsion — 20L", cat:"paint", emoji:"🎨", bg:"linear-gradient(135deg,#1a001a,#2a002a)", price:4800, unit:"tin", bulkPrice:"KES 4,500/tin (10+)", rating:4.9, reviews:678, supplier:"Crown Paints Kenya", location:"nairobi", brand:"Crown Paints", specs:["20L bucket","Interior emulsion","250m² coverage","50+ colours"], inStock:true },
+  { id:"BM19", name:"Duracoat Weathershield — 20L", cat:"paint", emoji:"🎨", bg:"linear-gradient(135deg,#001a1a,#002a2a)", price:6200, unit:"tin", bulkPrice:"KES 5,900/tin (10+)", rating:4.8, reviews:334, supplier:"Crown Paints Kenya", location:"nairobi", brand:"Duracoat", specs:["20L","Exterior weathershield","15yr durability","Mould-resistant"], inStock:true },
+
+  /* PLUMBING MATERIALS */
+  { id:"BM20", name:"PPR Pipe 20mm x 4m", cat:"plumbing-materials", emoji:"🔧", bg:"linear-gradient(135deg,#001a00,#002a00)", price:380, unit:"pipe", bulkPrice:"KES 350/pipe (50+)", rating:4.7, reviews:198, supplier:"Plumbers World KE", location:"nairobi", brand:"Wavin", specs:["20mm OD","4m length","PN20 rated","Hot & cold water"], inStock:true },
+  { id:"BM21", name:"uPVC Drainage Pipe 110mm x 3m", cat:"plumbing-materials", emoji:"🔧", bg:"linear-gradient(135deg,#001500,#002500)", price:1200, unit:"pipe", bulkPrice:"KES 1,100/pipe (20+)", rating:4.8, reviews:145, supplier:"Plumbers World KE", location:"nairobi", brand:"Boremaster", specs:["110mm ID","3m length","Class C","Drainage/sewer"], inStock:true },
+
+  /* ELECTRICAL MATERIALS */
+  { id:"BM22", name:"Conduit Pipe 20mm — 3m (10-pack)", cat:"electrical-materials", emoji:"⚡", bg:"linear-gradient(135deg,#001800,#002a00)", price:850, unit:"pack", bulkPrice:"KES 800/pack (10+)", rating:4.7, reviews:167, supplier:"Kenwest Cables", location:"nairobi", brand:"Kenwest", specs:["20mm","3m length","10 pipes/pack","Light duty"], inStock:true },
+  { id:"BM23", name:"2.5mm Twin & Earth Cable — 100m", cat:"electrical-materials", emoji:"⚡", bg:"linear-gradient(135deg,#0a001a,#15002a)", price:8500, unit:"roll", bulkPrice:"KES 8,000/roll (5+)", rating:4.9, reviews:289, supplier:"Kenwest Cables", location:"nairobi", brand:"Kenwest", specs:["2.5mm","100m roll","PVC insulated","IEC 60227"], inStock:true },
+
+  /* TOOLS */
+  { id:"BM24", name:"Angle Grinder 850W — 4.5 inch", cat:"construction-tools", emoji:"🔨", bg:"linear-gradient(135deg,#0a0a1a,#12122a)", price:4500, unit:"piece", bulkPrice:"KES 4,200/pc (5+)", rating:4.8, reviews:312, supplier:"Hardware World Nairobi", location:"nairobi", brand:"DeWalt", specs:["850W","4.5 inch disc","Variable speed","Safety guard"], inStock:true },
+  { id:"BM25", name:"Concrete Mixer 120L Electric", cat:"construction-tools", emoji:"⚙️", bg:"linear-gradient(135deg,#100a00,#1e1200)", price:28000, unit:"machine", bulkPrice:"KES 26,000 (2+ units)", rating:4.9, reviews:88, supplier:"Equipment World KE", location:"nairobi", brand:"Altrad", specs:["120L drum","1.1kW motor","Tipping drum","On wheels"], inStock:true },
+
+  /* PPE & SAFETY */
+  { id:"BM26", name:"Safety Helmet (Hard Hat) — Class B", cat:"safety-ppe", emoji:"⛑️", bg:"linear-gradient(135deg,#1a1500,#2a2200)", price:450, unit:"piece", bulkPrice:"KES 380/pc (50+)", rating:4.8, reviews:234, supplier:"SafetyFirst Kenya", location:"nairobi", brand:"JSP", specs:["Class B","EN 397","High-vis option","Adjustable"], inStock:true },
+  { id:"BM27", name:"Safety Boots Steel-Toe — Size 40-47", cat:"safety-ppe", emoji:"⛑️", bg:"linear-gradient(135deg,#0f0f00,#1a1a00)", price:2800, unit:"pair", bulkPrice:"KES 2,500/pair (20+)", rating:4.7, reviews:178, supplier:"SafetyFirst Kenya", location:"nairobi", brand:"Bata Industrials", specs:["Steel toe cap","Oil-resistant sole","EN ISO 20345","UK sizes 7–11"], inStock:true },
+
+  /* WINDOWS & DOORS */
+  { id:"BM28", name:"Aluminium Window 1.2x1.0m — Sliding", cat:"windows-doors", emoji:"🚪", bg:"linear-gradient(135deg,#0a0f1a,#10182a)", price:7500, unit:"piece", bulkPrice:"KES 7,000/pc (10+)", rating:4.8, reviews:145, supplier:"Alumex Kenya", location:"nairobi", brand:"Alumex", specs:["1.2x1.0m","Sliding type","6mm clear glass","Powder-coated"], inStock:true },
+  { id:"BM29", name:"Steel Security Door — 900x2100mm", cat:"windows-doors", emoji:"🚪", bg:"linear-gradient(135deg,#100a00,#1c1200)", price:18000, unit:"piece", bulkPrice:"KES 16,500/pc (5+)", rating:4.9, reviews:98, supplier:"Security Doors KE", location:"nairobi", brand:"Saferoom", specs:["900x2100mm","3-point lock","Anti-pick hinges","Powder-coated"], inStock:true },
+
+  /* ROOFING */
+  { id:"BM30", name:"Gerard Stone-Coated Roof Tile", cat:"roofing", emoji:"🏠", bg:"linear-gradient(135deg,#1a0a00,#2a1200)", price:850, unit:"m²", bulkPrice:"KES 800/m² (50m²+)", rating:4.9, reviews:267, supplier:"Gerard Roofing KE", location:"nairobi", brand:"Gerard", specs:["Stone-coated steel","50yr warranty","Wind resistant","All colours"], inStock:true },
+];
+
+const SUPPLIERS = [
+  { id:"S01", name:"Bamburi Cement Ltd", emoji:"🏗️", cats:["Cement","Aggregates"], location:"nairobi", area:"nairobi", rating:4.9, reviews:1200, phone:"0800720011", verified:true, bio:"Kenya's #1 cement brand. Nationwide distribution. Same-day dispatch for Nairobi orders." },
+  { id:"S02", name:"Mabati Rolling Mills", emoji:"🔩", cats:["Roofing Sheets","Steel Profiles","Box Profiles"], location:"nairobi", area:"nairobi", rating:4.8, reviews:890, phone:"0703720010", verified:true, bio:"East Africa's premier steel roofing manufacturer. Gauge 28–34, all profiles, nationwide delivery." },
+  { id:"S03", name:"Crown Paints Kenya", emoji:"🎨", cats:["Interior Paint","Exterior Paint","Primers","Varnish"], location:"nairobi", area:"nairobi", rating:4.9, reviews:1450, phone:"0704506000", verified:true, bio:"Kenya's leading paint brand since 1962. 200+ colours, technical support & applicator network." },
+  { id:"S04", name:"National Steel KE", emoji:"🔩", cats:["Steel Rebar","Structural Steel","Wire Mesh"], location:"nairobi", area:"nairobi", rating:4.8, reviews:567, phone:"0722203500", verified:true, bio:"Certified steel supplier. Y10–Y32 rebar, BRC mesh. Bulk deliveries countrywide." },
+  { id:"S05", name:"Ramco Athi River", emoji:"🔲", cats:["Floor Tiles","Wall Tiles","Sanitaryware"], location:"nairobi", area:"nairobi", rating:4.9, reviews:780, phone:"0737000000", verified:true, bio:"Kenya's largest tile importer and distributor. 500+ designs. Free delivery within Nairobi." },
+  { id:"S06", name:"Kiambu Brickworks", emoji:"🧱", cats:["Burnt Bricks","Concrete Blocks","Pavers"], location:"nairobi", area:"nairobi", rating:4.7, reviews:334, phone:"0712456789", verified:true, bio:"KEBS-certified brick manufacturer. 1M+ bricks monthly. Bulk orders direct from factory." },
+  { id:"S07", name:"Pan African Timbers", emoji:"🪵", cats:["Plywood","Hardboard","Timber","Poles"], location:"nairobi", area:"nairobi", rating:4.8, reviews:445, phone:"0722334455", verified:true, bio:"Premium timber importer. Cypress, cedar, pine. Kiln-dried. Cut-to-size service." },
+  { id:"S08", name:"Plumbers World KE", emoji:"🔧", cats:["PPR Pipes","uPVC","Fittings","Water Tanks"], location:"nairobi", area:"nairobi", rating:4.7, reviews:234, phone:"0733445566", verified:false, bio:"Full range plumbing materials. Wavin, Boremaster, Georg Fischer brands. Fast delivery." },
+  { id:"S09", name:"Coast Builders Supply", emoji:"🏗️", cats:["Cement","Steel","Roofing","General Hardware"], location:"mombasa", area:"mombasa", rating:4.8, reviews:312, phone:"0722567890", verified:true, bio:"Mombasa's one-stop building materials supplier. All brands, competitive prices, coast delivery." },
+  { id:"S10", name:"Kisumu Hardware Hub", emoji:"🔨", cats:["Tools","Cement","Steel","Tiles"], location:"kisumu", area:"kisumu", rating:4.7, reviews:198, phone:"0733678901", verified:true, bio:"Western Kenya's leading hardware supplier. All major brands in stock. Delivery across Lake region." },
+];
+
+const PRICE_GUIDE_BASE = [
+  { material:"Bamburi Cement 50kg",     unit:"Bag",   baseR:680,  baseW:640,  vol:"medium", sector:"cement"    },
+  { material:"Savannah Cement 50kg",    unit:"Bag",   baseR:640,  baseW:610,  vol:"low",    sector:"cement"    },
+  { material:"Y12 Steel Rebar (per bar)",unit:"Bar",  baseR:850,  baseW:800,  vol:"high",   sector:"steel"     },
+  { material:"Y16 Steel Rebar (per bar)",unit:"Bar",  baseR:1550, baseW:1450, vol:"high",   sector:"steel"     },
+  { material:"Corrugated Iron Sheet G30",unit:"Sheet",baseR:980,  baseW:920,  vol:"medium", sector:"steel"     },
+  { material:"Box Profile G28",          unit:"Sheet",baseR:1200, baseW:1100, vol:"low",    sector:"steel"     },
+  { material:"Burnt Bricks (standard)", unit:"Piece", baseR:18,   baseW:15,   vol:"low",    sector:"bricks"    },
+  { material:'Hollow Block 6"',          unit:"Piece",baseR:85,   baseW:75,   vol:"medium", sector:"bricks"    },
+  { material:"River Sand",               unit:"Tonne",baseR:3800, baseW:3400, vol:"high",   sector:"aggregate" },
+  { material:"Quarry Stone (20-40mm)",   unit:"Tonne",baseR:4500, baseW:4000, vol:"medium", sector:"aggregate" },
+  { material:"Crown Paints Emulsion 20L",unit:"Tin",  baseR:4800, baseW:4400, vol:"low",    sector:"paint"     },
+  { material:"Cypress Timber 2x4 12ft", unit:"Piece", baseR:280,  baseW:250,  vol:"medium", sector:"timber"    },
+  { material:"Porcelain Tiles 60x60",   unit:"m²",    baseR:1800, baseW:1600, vol:"low",    sector:"tiles"     },
+  { material:"PPR Pipe 20mm 4m",        unit:"Pipe",  baseR:380,  baseW:330,  vol:"low",    sector:"plumbing"  },
+  { material:"2.5mm T&E Cable 100m",    unit:"Roll",  baseR:8500, baseW:7800, vol:"high",   sector:"electrical"},
+];
+
+/* AI Market Intelligence — economic factor simulation */
+let PRICE_GUIDE = [];
+
+function computeAIMarketPrices(){
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,0))/(1000*60*60*24));
+  const hour = now.getHours();
+
+  /* macro factors: inflation crawl (0.4% monthly), USD/KES drift, fuel cost */
+  const monthIdx = now.getFullYear()*12 + now.getMonth() - (2026*12 + 0);
+  const inflationMult = 1 + monthIdx * 0.004;
+
+  /* sector-specific AI demand signals (seeded on day so stable within a day) */
+  const seed = dayOfYear * 137 + hour * 7;
+  const rng = (offset) => {
+    const x = Math.sin(seed + offset) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  /* seasonal demand: construction peaks Mar-May and Sep-Nov */
+  const month = now.getMonth();
+  const seasonalBoost = (month>=2&&month<=4)||(month>=8&&month<=10) ? 1.03 : 1.0;
+
+  PRICE_GUIDE = PRICE_GUIDE_BASE.map((item, i) => {
+    const volFactor = item.vol==="high" ? 0.06 : item.vol==="medium" ? 0.04 : 0.025;
+    const sectorDrift = {
+      steel: 1 + (rng(i*3+1)-0.48)*0.08,     /* steel: forex-sensitive */
+      cement: 1 + (rng(i*3+2)-0.5)*0.04,
+      timber: 1 + (rng(i*3+3)-0.52)*0.05,
+      aggregate: 1 + (rng(i*3+4)-0.47)*0.06, /* sand: fuel-cost sensitive */
+      paint: 1 + (rng(i*3+5)-0.5)*0.04,
+      tiles: 1 + (rng(i*3+6)-0.5)*0.04,
+      bricks: 1 + (rng(i*3+7)-0.5)*0.03,
+      plumbing: 1 + (rng(i*3+8)-0.5)*0.04,
+      electrical: 1 + (rng(i*3+9)-0.48)*0.06,
+    }[item.sector] || 1;
+
+    const dailyNoise = (rng(i*17+11)-0.5)*volFactor;
+    const mult = inflationMult * sectorDrift * seasonalBoost * (1 + dailyNoise);
+
+    const retail    = Math.round(item.baseR * mult / 5) * 5;
+    const wholesale = Math.round(item.baseW * mult / 5) * 5;
+
+    /* derive trend vs base */
+    const delta = (retail - item.baseR) / item.baseR;
+    const trend = delta > 0.015 ? "up" : delta < -0.015 ? "down" : "stable";
+
+    return { material:item.material, unit:item.unit, retail:`KES ${retail.toLocaleString()}`, wholesale:`KES ${wholesale.toLocaleString()}`, trend };
+  });
+
+  /* update timestamp label */
+  const el = document.getElementById("priceLastUpdated");
+  if(el){
+    const opts = {day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"};
+    el.textContent = `Last updated: ${now.toLocaleString("en-KE",opts)}`;
+  }
+}
+
+/* ————————————————— STATE ————————————————— */
+let _activeCat = "", _activeLoc = "", _orderTarget = null;
+
+/* ————————————————— RENDER ————————————————— */
+function filterProducts(){
+  const q = (document.getElementById("cnSearch")?.value||"").toLowerCase();
+  let list = PRODUCTS;
+  if(_activeCat) list = list.filter(p=>p.cat===_activeCat);
+  if(_activeLoc) list = list.filter(p=>p.location===_activeLoc||p.area===_activeLoc);
+  if(q) list = list.filter(p=>p.name.toLowerCase().includes(q)||p.brand.toLowerCase().includes(q)||(p.supplier||"").toLowerCase().includes(q));
+
+  const label = document.getElementById("cnResultLabel");
+  if(label) label.textContent = `${_activeCat ? CAT_NAME[_activeCat]||_activeCat : "All Building Materials"} (${list.length} products)`;
+
+  const grid = document.getElementById("cnGrid");
+  const empty = document.getElementById("cnEmpty");
+  if(!list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
+  empty.style.display="none";
+
+  grid.innerHTML = list.map((p)=>`
+    <div class="cn-card">
+      <div class="cn-card-img" style="background:${p.bg};">
+        <span class="cn-brand-badge">${p.brand}</span>
+        ${p.bulkPrice?`<span class="cn-bulk-badge">📦 Bulk</span>`:""}
+        <span style="font-size:60px;">${p.emoji}</span>
+      </div>
+      <div class="cn-card-body">
+        <div class="cn-card-name">${p.name}</div>
+        <div class="cn-card-supplier">🏪 ${p.supplier} — 📍 ${p.location.charAt(0).toUpperCase()+p.location.slice(1)}</div>
+        <div class="cn-card-specs">${(p.specs||[]).slice(0,3).map(s=>`<span class="cn-spec">${s}</span>`).join("")}</div>
+        <div class="cn-price-row"><div class="cn-price">KES ${p.price.toLocaleString()}</div><div class="cn-price-unit">/ ${p.unit}</div></div>
+        ${p.bulkPrice?`<div class="cn-bulk-price">📦 Bulk: ${p.bulkPrice}</div>`:""}
+        <div class="cn-rating"><span class="star">⭐</span> ${p.rating} <span>(${p.reviews} reviews)</span></div>
+        <div class="cn-btns">
+          <button type="button" class="cn-btn-cart" onclick="openOrder('${p.id}')">🛒 Order Now</button>
+          <button type="button" class="cn-btn-quote" onclick="openQuoteFor('${p.name}')">📋 Quote</button>
+          <a class="cn-btn-wa" href="https://wa.me/254${p.phone||'722200000'}?text=${encodeURIComponent('Hi! I found '+p.name+' on SOKONI Construction Hub. I need a price quote for bulk order. Please advise.')}" target="_blank"><i class="fab fa-whatsapp"></i></a>
+        </div>
+      </div>
+    </div>`).join("");
+}
+
+const CAT_NAME = { cement:"Cement", steel:"Steel & Iron", timber:"Timber & Wood", roofing:"Roofing", bricks:"Bricks & Blocks", tiles:"Tiles & Flooring", paint:"Paint & Coatings", "plumbing-materials":"Plumbing Materials", "electrical-materials":"Electrical Materials", "windows-doors":"Windows & Doors", "construction-tools":"Tools & Equipment", "sand-gravel":"Sand, Gravel & Aggregates", "safety-ppe":"Safety Gear & PPE" };
+
+function setCat(cat, btn){
+  _activeCat = cat;
+  document.querySelectorAll(".cn-cat").forEach(c=>c.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  filterProducts();
+  if(cat) document.getElementById("cnResultLabel")?.scrollIntoView({behavior:"smooth",block:"start"});
+  return false;
+}
+
+function filterLoc(loc, btn){
+  _activeLoc = loc;
+  document.querySelectorAll("#cnFilterPills .cn-pill").forEach(p=>p.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  filterProducts();
+}
+
+/* ————————————————— PRICE TABLE ————————————————— */
+function renderPriceTable(){
+  const tb = document.getElementById("priceTable");
+  if(!tb) return;
+  computeAIMarketPrices();
+  tb.innerHTML = `<thead><tr>
+    <th>Material</th><th>Unit</th><th>Retail Price</th><th>Wholesale (Bulk)</th><th>AI Signal</th>
+  </tr></thead><tbody>` +
+  PRICE_GUIDE.map(r=>`<tr>
+    <td>${r.material}</td>
+    <td style="color:rgba(255,255,255,0.4);">${r.unit}</td>
+    <td class="price-val">${r.retail}</td>
+    <td style="color:#00c878;font-weight:700;">${r.wholesale}</td>
+    <td>${r.trend==="up"?'<span style="color:#ff9800;">📈 Rising</span>':r.trend==="down"?'<span style="color:#71ff00;">📉 Falling</span>':'<span style="color:rgba(255,255,255,0.4);">➡️ Stable</span>'}</td>
+  </tr>`).join("") + `</tbody>`;
+}
+
+/* ————————————————— SUPPLIERS ————————————————— */
+function renderSuppliers(){
+  const grid = document.getElementById("suppliersGrid");
+  if(!grid) return;
+  grid.innerHTML = SUPPLIERS.map(s=>{
+    const stars = "⭐".repeat(Math.round(s.rating));
+    return `<div class="sup-card">
+      <div class="sup-top">
+        <div class="sup-avatar">${s.emoji}</div>
+        <div>
+          <div class="sup-name">${s.name} ${s.verified?`<span style="font-size:9px;background:rgba(0,200,120,0.12);color:#00c878;padding:2px 6px;border-radius:4px;border:1px solid rgba(0,200,120,0.2);">✅ Verified</span>`:""}</div>
+          <div class="sup-location">📍 ${s.location.charAt(0).toUpperCase()+s.location.slice(1)}</div>
+          <div class="sup-stars">${stars} <span style="font-size:10px;color:rgba(255,255,255,0.35);">${s.rating} (${s.reviews})</span></div>
+        </div>
+      </div>
+      <div class="sup-cats">${(s.cats||[]).map(c=>`<span class="sup-cat">${c}</span>`).join("")}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:10px;line-height:1.5;">${s.bio}</div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="sup-book-btn" style="flex:1;" onclick="contactSupplier('${s.id}')">📋 Get Quote</button>
+        <a href="tel:${s.phone}" style="padding:9px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:9px;color:#f59e0b;text-decoration:none;display:flex;align-items:center;">📞</a>
+        <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.name+'! I found you on SOKONI Construction Hub. Please send me a price list and availability.')}" target="_blank" style="padding:9px 12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:9px;color:#25d366;text-decoration:none;display:flex;align-items:center;"><i class="fab fa-whatsapp"></i></a>
+      </div>
+<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('con_${s.id}','${s.name.replace(/'/g,"\\'")}',this,'construction')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'con_${s.id}',name:'${s.name.replace(/'/g,"\\'")}',category:'construction',type:'supplier'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
+    </div>`;
+  }).join("");
+}
+
+function contactSupplier(id){
+  const s = SUPPLIERS.find(x=>x.id===id); if(!s) return;
+  if(typeof SokoniPay!=='undefined'){
+    SokoniPay.waConnect(s.phone, 'Hi '+s.name+'! I found you on SOKONI Construction Hub. Please send me your price list and availability for bulk materials.', {
+      providerName: s.name,
+      category: 'construction',
+      serviceDesc: 'Bulk materials quote — '+(s.cats||[]).join(', ')
+    });
+    return;
+  }
+  document.getElementById('quoteSection')?.scrollIntoView({behavior:'smooth'});
+}
+
+/* ————————————————— ORDER MODAL ————————————————— */
+function openOrder(id){
+  _orderTarget = PRODUCTS.find(p=>p.id===id); if(!_orderTarget) return;
+  const p = _orderTarget;
+  document.getElementById("cnModalTitle").textContent = p.name;
+  document.getElementById("cnModalSub").textContent = `Supplier: ${p.supplier} — ${p.location}`;
+  document.getElementById("cnModalPrice").innerHTML = `
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+      <div><div style="font-size:10px;color:rgba(255,255,255,0.4);">Unit Price</div><div style="font-size:18px;font-weight:900;color:#f59e0b;">KES ${p.price.toLocaleString()} / ${p.unit}</div></div>
+      ${p.bulkPrice?`<div><div style="font-size:10px;color:rgba(255,255,255,0.4);">Bulk Price</div><div style="font-size:14px;font-weight:700;color:#00c878;">${p.bulkPrice}</div></div>`:""}
+    </div>`;
+  document.getElementById("cnOrderUnit").textContent = p.unit;
+  document.getElementById("cnOrderQty").value = 1;
+  document.getElementById("cnOrderMsg").textContent = "";
+  updateOrderTotal();
+  document.getElementById("cnModal").style.display = "flex";
+}
+function closeCnModal(){ document.getElementById("cnModal").style.display="none"; }
+
+function updateOrderTotal(){
+  if(!_orderTarget) return;
+  const qty = Number(document.getElementById("cnOrderQty")?.value||1);
+  const total = _orderTarget.price * qty;
+  document.getElementById("cnOrderTotal").textContent = qty > 0 ? `Total: KES ${total.toLocaleString()}` : "";
+}
+
+function submitOrder(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('const_order',10,300000)){(window._skToast||alert)('Too many order attempts. Please wait 5 minutes.');return;}
+  const name = document.getElementById("cnOrderName").value.trim();
+  const phone = document.getElementById("cnOrderPhone").value.trim();
+  const qty = Number(document.getElementById("cnOrderQty").value||0);
+  const addr = document.getElementById("cnOrderAddr").value.trim();
+  const msgEl = document.getElementById("cnOrderMsg");
+  if(!name||!phone||qty<1){ msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; return; }
+  const ref = "BM"+Date.now();
+  const order = { ref, product:_orderTarget.name, supplier:_orderTarget.supplier, qty, unit:_orderTarget.unit, unitPrice:_orderTarget.price, total:_orderTarget.price*qty, clientName:name, phone, addr, delivery:document.getElementById("cnOrderDelivery").value, createdAt:Date.now() };
+  let orders=[]; try{orders=JSON.parse(localStorage.getItem("sokoniBuildOrders"))||[];}catch(e){}
+  orders.unshift(order); localStorage.setItem("sokoniBuildOrders",JSON.stringify(orders));
+  if(window.SokoniConstruct) SokoniConstruct.saveOrder({...order, orderType:'material', id:ref}).catch(e=>console.warn('[CN] order:',e.message));
+  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'order',buyerName:name,buyerPhone:phone,items:[{name:_orderTarget.name,category:'Building Materials',qty:qty,price:_orderTarget.price}],subtotal:order.total,total:order.total,paymentMethod:'M-Pesa (Pending Confirmation)',paymentRef:ref,sellerName:_orderTarget.supplier,date:new Date().toISOString(),notes:addr});},700);
+  msgEl.innerHTML=`✅ Order placed! Ref: <strong style="color:#f59e0b;">${ref}</strong><br>The supplier will confirm &amp; send M-PESA payment details to ${phone} within 1 hour.`;
+  msgEl.style.color="#00c878";
+  setTimeout(closeCnModal, 3500);
+}
+
+function openQuoteFor(name){ document.getElementById("qMaterials").value = name+" — "; document.getElementById("quoteSection").scrollIntoView({behavior:"smooth"}); document.getElementById("qMaterials").focus(); }
+
+/* ————————————————— BULK QUOTE ————————————————— */
+function submitQuote(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('const_quote',10,300000)){(window._skToast||alert)('Too many quote attempts. Please wait 5 minutes.');return;}
+  const name = document.getElementById("qName").value.trim();
+  const phone = document.getElementById("qPhone").value.trim();
+  const loc = document.getElementById("qLocation").value.trim();
+  const mats = document.getElementById("qMaterials").value.trim();
+  const msgEl = document.getElementById("qMsg");
+  if(!name||!phone||!loc||!mats){ msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; return; }
+  const ref="QUOTE"+Date.now();
+  const quote={ref,name,phone,location:loc,projectType:document.getElementById("qProjectType").value,materials:mats,delivery:document.getElementById("qDelivery").value,budget:document.getElementById("qBudget").value,createdAt:Date.now()};
+  let quotes=[]; try{quotes=JSON.parse(localStorage.getItem("sokoniBuildQuotes"))||[];}catch(e){}
+  quotes.unshift(quote); localStorage.setItem("sokoniBuildQuotes",JSON.stringify(quotes));
+  if(window.SokoniConstruct) SokoniConstruct.saveRFQ({...quote, id:ref, rfqType:'materials'}).catch(e=>console.warn('[CN] rfq:',e.message));
+  msgEl.innerHTML=`✅ Quote request submitted! Ref: <strong style="color:#f59e0b;">${ref}</strong><br>Up to 3 verified suppliers will contact ${phone} within 2 hours with competitive quotes.`;
+  msgEl.style.color="#00c878";
+}
+
+/* ════════════════════════════════════════════════════════════
+   TAB SYSTEM
+════════════════════════════════════════════════════════════ */
+function cnShowTab(tab, btn){
+  document.querySelectorAll('.cn-tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.cn-tab-btn').forEach(b=>b.classList.remove('active'));
+  const panel = document.getElementById('cntabpanel-'+tab);
+  if(panel) panel.classList.add('active');
+  if(btn) btn.classList.add('active');
+  else {
+    document.querySelectorAll('.cn-tab-btn').forEach(b=>{
+      if(b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+tab+"'")) b.classList.add('active');
+    });
+  }
+  if(tab==='contractors') renderContractors();
+  if(tab==='equipment') renderEquipment();
+  if(tab==='dashboard') loadDashboard();
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONTRACTOR DATA
+════════════════════════════════════════════════════════════ */
+const DEMO_CONTRACTORS = [
+  {id:'c01',name:'JobFit Electricals',type:'electrician',icon:'⚡',city:'Nairobi',rating:4.9,reviews:87,exp:'8 yrs',tags:['Wiring','DB Boards','Solar','KPLC Certified'],phone:'0722111001',verified:true,price:'From KES 2,500/job'},
+  {id:'c02',name:'Mombasa Sparks Ltd',type:'electrician',icon:'⚡',city:'Mombasa',rating:4.8,reviews:54,exp:'12 yrs',tags:['Commercial','Industrial','Standby Generators'],phone:'0711222001',verified:true,price:'From KES 3,000/job'},
+  {id:'c03',name:'FlowFix Plumbers',type:'plumber',icon:'🔧',city:'Nairobi',rating:4.9,reviews:134,exp:'10 yrs',tags:['Pipe Laying','Drainage','Boiler Install','Water Tanks'],phone:'0733333001',verified:true,price:'From KES 1,800/job'},
+  {id:'c04',name:'AquaServe Plumbing',type:'plumber',icon:'🔧',city:'Kisumu',rating:4.7,reviews:41,exp:'6 yrs',tags:['Residential','Sewer Lines','Borehole'],phone:'0741444001',verified:false,price:'From KES 1,500/job'},
+  {id:'c05',name:'IronArc Welding',type:'welder',icon:'🔥',city:'Nairobi',rating:4.8,reviews:63,exp:'15 yrs',tags:['Structural Steel','Gate & Grill','Staircase','Fabrication'],phone:'0755555001',verified:true,price:'From KES 3,500/job'},
+  {id:'c06',name:'Nakuru Metal Works',type:'welder',icon:'🔥',city:'Nakuru',rating:4.7,reviews:28,exp:'9 yrs',tags:['Roofing Frames','Security Grills','Custom Fab'],phone:'0712666001',verified:false,price:'From KES 2,500/job'},
+  {id:'c07',name:'Elegance Carpentry',type:'carpenter',icon:'🪵',city:'Nairobi',rating:4.9,reviews:112,exp:'14 yrs',tags:['Fitted Wardrobes','Kitchen Cabinets','Staircases','Doors'],phone:'0722777001',verified:true,price:'From KES 5,000/job'},
+  {id:'c08',name:'Timber Touch Joinery',type:'carpenter',icon:'🪵',city:'Eldoret',rating:4.8,reviews:47,exp:'7 yrs',tags:['Furnitures','Office Partitions','Window Frames'],phone:'0733888001',verified:false,price:'From KES 3,500/job'},
+  {id:'c09',name:'ColorPro Painters',type:'painter',icon:'🎨',city:'Nairobi',rating:4.8,reviews:89,exp:'11 yrs',tags:['Interior','Exterior','Texture Paint','Epoxy Floors'],phone:'0711999001',verified:true,price:'From KES 35/m²'},
+  {id:'c10',name:'Coast Coat Painters',type:'painter',icon:'🎨',city:'Mombasa',rating:4.7,reviews:36,exp:'5 yrs',tags:['Residential','Industrial Coatings','Anti-Rust'],phone:'0744000001',verified:false,price:'From KES 30/m²'},
+  {id:'c11',name:'RoofMaster Kenya',type:'roofer',icon:'🏠',city:'Nairobi',rating:4.9,reviews:78,exp:'13 yrs',tags:['Mabati','Decra','Roofing Felt','Box Gutters'],phone:'0755111002',verified:true,price:'From KES 180/m²'},
+  {id:'c12',name:'Kisumu Roofing Pro',type:'roofer',icon:'🏠',city:'Kisumu',rating:4.7,reviews:31,exp:'7 yrs',tags:['Corrugated','Box Profile','Repairs'],phone:'0766222002',verified:false,price:'From KES 150/m²'},
+  {id:'c13',name:'StoneBlock Masons',type:'mason',icon:'🧱',city:'Nairobi',rating:4.9,reviews:145,exp:'18 yrs',tags:['Stone Masonry','Brick','Blocks','Plaster & Screed'],phone:'0722333002',verified:true,price:'From KES 250/m²'},
+  {id:'c14',name:'Thika Bricklayers',type:'mason',icon:'🧱',city:'Thika',rating:4.7,reviews:52,exp:'9 yrs',tags:['Residential','Perimeter Walls','Retaining Walls'],phone:'0733444002',verified:false,price:'From KES 200/m²'},
+  {id:'c15',name:'DesignBuild Architects',type:'architect',icon:'📐',city:'Nairobi',rating:5.0,reviews:34,exp:'12 yrs',tags:['Residential','Commercial','3D Rendering','Planning Approvals'],phone:'0711555002',verified:true,price:'From KES 50,000/project'},
+  {id:'c16',name:'Kisumu Plans Studio',type:'architect',icon:'📐',city:'Kisumu',rating:4.8,reviews:19,exp:'8 yrs',tags:['House Plans','Extensions','NCA Registered'],phone:'0722666002',verified:true,price:'From KES 35,000/project'},
+  {id:'c17',name:'StructPro Engineers',type:'engineer',icon:'⚙️',city:'Nairobi',rating:5.0,reviews:27,exp:'16 yrs',tags:['Structural Reports','Foundation Design','Approvals','EIA'],phone:'0733777002',verified:true,price:'From KES 40,000/project'},
+  {id:'c18',name:'DataCost QS',type:'qs',icon:'📊',city:'Nairobi',rating:4.9,reviews:41,exp:'10 yrs',tags:['BoQ','Cost Estimation','Valuations','Variation Orders'],phone:'0744888002',verified:true,price:'From KES 30,000/project'},
+  {id:'c19',name:'StyleSpace Interiors',type:'interior',icon:'🛋️',city:'Nairobi',rating:4.9,reviews:58,exp:'9 yrs',tags:['Residential Design','Office Fit-Out','3D Visualisation','Furniture'],phone:'0755999002',verified:true,price:'From KES 80,000/project'},
+  {id:'c20',name:'BuildRight PM',type:'project-manager',icon:'📋',city:'Nairobi',rating:4.8,reviews:22,exp:'14 yrs',tags:['Site Management','Contractor Coordination','Programme','Cost Control'],phone:'0711000003',verified:true,price:'From KES 60,000/project'},
+];
+
+let _activeCtrType = 'all';
+function filterContractors(type, btn){
+  _activeCtrType = type;
+  document.querySelectorAll('#ctrTypeFilter .cn-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderContractors();
+}
+
+function renderContractors(){
+  const grid = document.getElementById('ctrGrid');
+  if(!grid) return;
+  const list = _activeCtrType==='all' ? DEMO_CONTRACTORS : DEMO_CONTRACTORS.filter(c=>c.type===_activeCtrType);
+  if(!list.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:36px 0;text-align:center;">No contractors found for this type.</p>'; return; }
+  grid.innerHTML = list.map(c=>`
+    <div class="ctr-card">
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:16px 16px 0;">
+        <div class="ctr-avatar">${c.icon}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="ctr-name">${c.name} ${c.verified?'<span style="font-size:9px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.3);color:#00c878;padding:1px 6px;border-radius:4px;">✓ Verified</span>':''}</div>
+          <div class="ctr-type">${c.icon} ${c.type.charAt(0).toUpperCase()+c.type.slice(1)}</div>
+          <div class="ctr-loc">📍 ${c.city} · ${c.exp} · ⭐ ${c.rating} (${c.reviews} reviews)</div>
+        </div>
+      </div>
+      <div style="padding:0 16px;">
+        <div class="ctr-chips">${c.tags.map(t=>`<span class="ctr-chip">${t}</span>`).join('')}</div>
+        <div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:10px;">${c.price}</div>
+      </div>
+      <div class="ctr-actions" style="padding:0 16px 16px;">
+        <button class="ctr-btn ctr-btn-book" onclick="bookContractor('${c.id}')">📅 Book Now</button>
+        <button class="ctr-btn ctr-btn-wa" onclick="waContractor('${c.phone}','${c.name}')">💬 WhatsApp</button>
+      </div>
+    </div>`).join('');
+}
+
+function bookContractor(id){
+  const c = DEMO_CONTRACTORS.find(x=>x.id===id); if(!c) return;
+  if(window.SokoniPay) SokoniPay.bookNow({service:'Contractor Booking',provider:c.name,amount:0,phone:c.phone});
+  else (window._skToast||alert)(`To book ${c.name}, call/WhatsApp: ${c.phone}`);
+}
+function waContractor(phone, name){
+  const msg = encodeURIComponent(`Hi ${name}, I found you on Sokoni Construction Hub and I'd like to discuss a project.`);
+  window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${msg}`,'_blank');
+}
+
+/* ════════════════════════════════════════════════════════════
+   EQUIPMENT DATA
+════════════════════════════════════════════════════════════ */
+const DEMO_EQUIPMENT = [
+  {id:'eq01',name:'CAT 320 Excavator',cat:'earthmoving',icon:'🚜',owner:'HeavyLift KE',city:'Nairobi',rate:28000,rateUnit:'day',specs:['20T class','0.9m³ bucket','AC cab','GPS fitted'],phone:'0722100001',available:true},
+  {id:'eq02',name:'Komatsu PC200 Excavator',cat:'earthmoving',icon:'🚜',owner:'Naks Plant Hire',city:'Nakuru',rate:24000,rateUnit:'day',specs:['20T','0.8m³','Good condition'],phone:'0733200001',available:true},
+  {id:'eq03',name:'Backhoe Loader (JCB 3CX)',cat:'earthmoving',icon:'🚧',owner:'SiteReady Ltd',city:'Nairobi',rate:18000,rateUnit:'day',specs:['4WD','Extendable arm','Pallet forks available'],phone:'0744300001',available:true},
+  {id:'eq04',name:'Motor Grader — CAT 140M',cat:'earthmoving',icon:'🛤️',owner:'RoadWorks KE',city:'Nairobi',rate:35000,rateUnit:'day',specs:['147HP','6.7m blade','GPS grade control'],phone:'0755400001',available:false},
+  {id:'eq05',name:'50T Mobile Crane (Liebherr LTM)',cat:'lifting',icon:'🏗️',owner:'Crane Nation',city:'Nairobi',rate:65000,rateUnit:'day',specs:['50 tonne','50m boom','Rigging available'],phone:'0766500001',available:true},
+  {id:'eq06',name:'15T Rough Terrain Crane',cat:'lifting',icon:'🏗️',owner:'MomentumLift',city:'Mombasa',rate:42000,rateUnit:'day',specs:['15T','All-terrain','Compact'],phone:'0711600001',available:true},
+  {id:'eq07',name:'Concrete Mixer Truck (8m³)',cat:'concrete',icon:'🚚',owner:'ReadyMix Ltd',city:'Nairobi',rate:15000,rateUnit:'day',specs:['8m³ drum','Self-loading','Transit mix'],phone:'0722700001',available:true},
+  {id:'eq08',name:'Concrete Pump (Schwing S28)',cat:'concrete',icon:'⚙️',owner:'PumpPro KE',city:'Nairobi',rate:25000,rateUnit:'day',specs:['28m boom','100m³/hr','Truck-mounted'],phone:'0733800001',available:true},
+  {id:'eq09',name:'Concrete Vibrator — Electric',cat:'concrete',icon:'⚙️',owner:'ToolRent Kenya',city:'Nairobi',rate:1500,rateUnit:'day',specs:['50mm poker','Electric','2m flexible hose'],phone:'0744900001',available:true},
+  {id:'eq10',name:'Ringlock Scaffolding (200m²)',cat:'scaffolding',icon:'🪜',owner:'ScaffPro Kenya',city:'Nairobi',rate:8000,rateUnit:'day',specs:['200m² set','Ringlock system','Delivered & erected'],phone:'0755010001',available:true},
+  {id:'eq11',name:'Cuplock Scaffolding System',cat:'scaffolding',icon:'🪜',owner:'SafeScaff Ltd',city:'Mombasa',rate:6500,rateUnit:'day',specs:['150m² set','Cuplock','Heavy-duty boards'],phone:'0766020001',available:true},
+  {id:'eq12',name:'250 KVA Generator (Cummins)',cat:'power',icon:'⚡',owner:'PowerGen KE',city:'Nairobi',rate:12000,rateUnit:'day',specs:['250 KVA','3-phase','Soundproofed','Fuel included'],phone:'0711030001',available:true},
+  {id:'eq13',name:'100 KVA Diesel Generator',cat:'power',icon:'⚡',owner:'SiteGen Ltd',city:'Nakuru',rate:7500,rateUnit:'day',specs:['100 KVA','Perkins engine','Single phase'],phone:'0722040001',available:true},
+  {id:'eq14',name:'Plate Compactor (Honda GX)',cat:'compaction',icon:'🔨',owner:'ToolRent Kenya',city:'Nairobi',rate:2000,rateUnit:'day',specs:['Honda GX160','500kg force','Hire includes fuel'],phone:'0744900001',available:true},
+  {id:'eq15',name:'Smooth Drum Roller (3T)',cat:'compaction',icon:'🛤️',owner:'CompactPro',city:'Nairobi',rate:14000,rateUnit:'day',specs:['3 tonne','Walk-behind','Water sprinkler'],phone:'0733050001',available:true},
+  {id:'eq16',name:'Hilti Rotary Hammer (TE-7)',cat:'tools',icon:'🛠️',owner:'ToolRent Kenya',city:'Nairobi',rate:800,rateUnit:'day',specs:['SDS-Plus','2kg','Drill/Chisel modes'],phone:'0744900001',available:true},
+  {id:'eq17',name:'Core Drill Machine',cat:'tools',icon:'⚙️',owner:'DrillMaster KE',city:'Nairobi',rate:2500,rateUnit:'day',specs:['Core drill','150mm capacity','Water-cooled'],phone:'0755060001',available:true},
+  {id:'eq18',name:'Angle Grinder 9-inch (Makita)',cat:'tools',icon:'🛠️',owner:'ToolRent Kenya',city:'Nairobi',rate:500,rateUnit:'day',specs:['Makita 9-inch','2200W','Discs included'],phone:'0744900001',available:true},
+];
+
+let _activeEqCat = 'all';
+function filterEquipment(cat, btn){
+  _activeEqCat = cat;
+  document.querySelectorAll('#eqCatFilter .cn-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderEquipment();
+}
+
+function renderEquipment(){
+  const grid = document.getElementById('eqGrid');
+  if(!grid) return;
+  const list = _activeEqCat==='all' ? DEMO_EQUIPMENT : DEMO_EQUIPMENT.filter(e=>e.cat===_activeEqCat);
+  if(!list.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:36px 0;text-align:center;">No equipment in this category.</p>'; return; }
+  grid.innerHTML = list.map(e=>`
+    <div class="eq-card">
+      <div class="eq-icon">${e.icon}</div>
+      <div class="eq-name">${e.name}</div>
+      <div class="eq-owner">📍 ${e.city} · ${e.owner} ${e.available?'<span style="font-size:9px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.3);color:#00c878;padding:1px 6px;border-radius:4px;">Available</span>':'<span style="font-size:9px;background:rgba(255,100,0,0.1);border:1px solid rgba(255,100,0,0.3);color:#ff6400;padding:1px 6px;border-radius:4px;">On Hire</span>'}</div>
+      <div class="eq-rate">KES ${e.rate.toLocaleString()}<span style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.4);">/${e.rateUnit}</span></div>
+      <div class="eq-specs">${e.specs.map(s=>`<span class="eq-spec">${s}</span>`).join('')}</div>
+      <button class="ctr-btn ctr-btn-book" style="width:100%;margin-top:4px;" onclick="bookEquipment('${e.id}')">🚜 Hire Now</button>
+    </div>`).join('');
+}
+
+function bookEquipment(id){
+  const e = DEMO_EQUIPMENT.find(x=>x.id===id); if(!e) return;
+  if(window.SokoniPay) SokoniPay.bookNow({service:'Equipment Rental',provider:e.owner,amount:e.rate,phone:e.phone});
+  else {
+    const msg = encodeURIComponent(`Hi, I'd like to hire your ${e.name} listed on Sokoni Construction Hub. Please confirm availability and terms.`);
+    window.open(`https://wa.me/254${e.phone.replace(/^0/,'')}?text=${msg}`,'_blank');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   RFQ (TAB)
+════════════════════════════════════════════════════════════ */
+function submitRFQ(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('cn_rfq',5,300000)){(window._skToast||alert)('Too many RFQ attempts.');return;}
+  const name=document.getElementById('rfqName').value.trim();
+  const phone=document.getElementById('rfqPhone').value.trim();
+  const type=document.getElementById('rfqType').value;
+  const loc=document.getElementById('rfqLocation').value.trim();
+  const desc=document.getElementById('rfqDesc').value.trim();
+  const msgEl=document.getElementById('rfqMsg');
+  if(!name||!phone||!type||!loc||!desc){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';return;}
+  const ref='RFQ'+Date.now();
+  const rfq={ref,id:ref,name,phone,rfqType:type,location:loc,description:desc,budget:document.getElementById('rfqBudget').value,deadline:document.getElementById('rfqDeadline').value,preference:document.getElementById('rfqPref').value,createdAt:Date.now()};
+  let saved=[]; try{saved=JSON.parse(localStorage.getItem('sokoniRFQs'))||[];}catch(e){}
+  saved.unshift(rfq); localStorage.setItem('sokoniRFQs',JSON.stringify(saved));
+  if(window.SokoniConstruct) SokoniConstruct.saveRFQ(rfq).catch(e=>console.warn('[CN] RFQ:',e.message));
+  msgEl.innerHTML=`✅ RFQ Posted! Ref: <strong style="color:#f59e0b;">${ref}</strong><br>Verified suppliers will respond within 2 hours to ${phone}.`;
+  msgEl.style.color='#00c878';
+  document.getElementById('rfqForm').querySelectorAll('input,select,textarea').forEach(el=>{if(el.type!=='submit')el.value='';});
+}
+
+/* ════════════════════════════════════════════════════════════
+   PROJECT MANAGEMENT
+════════════════════════════════════════════════════════════ */
+function createProject(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('cn_proj',10,300000)){(window._skToast||alert)('Too many requests.');return;}
+  const name=document.getElementById('projName').value.trim();
+  const type=document.getElementById('projType').value;
+  const loc=document.getElementById('projLoc').value.trim();
+  const budget=document.getElementById('projBudget').value;
+  const msgEl=document.getElementById('projMsg');
+  if(!name||!type||!loc){msgEl.textContent='⚠️ Fill Name, Type and Location';msgEl.style.color='#ff9800';return;}
+  const proj={id:'PROJ'+Date.now(),name,type,location:loc,budget:Number(budget)||0,startDate:document.getElementById('projStart').value,endDate:document.getElementById('projEnd').value,notes:document.getElementById('projNotes').value.trim(),status:'planning',createdAt:Date.now()};
+  let projs=[]; try{projs=JSON.parse(localStorage.getItem('sokoniProjects'))||[];}catch(e){}
+  projs.unshift(proj); localStorage.setItem('sokoniProjects',JSON.stringify(projs));
+  if(window.SokoniConstruct) SokoniConstruct.saveProject(proj).catch(e=>console.warn('[CN] proj:',e.message));
+  msgEl.innerHTML=`✅ Project created: <strong style="color:#f59e0b;">${name}</strong>. Go to Dashboard to track it.`;
+  msgEl.style.color='#00c878';
+  renderProjList();
+  document.getElementById('projName').value='';
+}
+
+function renderProjList(){
+  const list = document.getElementById('projList'); if(!list) return;
+  let projs=[]; try{projs=JSON.parse(localStorage.getItem('sokoniProjects'))||[];}catch(e){}
+  if(!projs.length){ list.innerHTML='<div style="text-align:center;padding:48px 0;color:rgba(255,255,255,0.22);"><div style="font-size:42px;margin-bottom:10px;">📐</div><p style="font-size:13px;">No projects yet.</p></div>'; return; }
+  list.innerHTML = projs.slice(0,5).map(p=>`
+    <div class="dash-proj-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+        <div style="font-size:14px;font-weight:900;color:white;">${p.name}</div>
+        <span style="font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;">${p.status}</span>
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.38);">📍 ${p.location} · ${p.type}</div>
+      ${p.budget?`<div style="font-size:12px;font-weight:700;color:#f59e0b;margin-top:4px;">Budget: KES ${Number(p.budget).toLocaleString()}</div>`:''}
+    </div>`).join('');
+}
+
+/* ════════════════════════════════════════════════════════════
+   DASHBOARD
+════════════════════════════════════════════════════════════ */
+let _dashView='client';
+function setDashView(view, btn){
+  _dashView=view;
+  document.querySelectorAll('#cntabpanel-dashboard .cn-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.getElementById('dashClient').style.display = view==='client'?'block':'none';
+  document.getElementById('dashContractor').style.display = view==='contractor'?'block':'none';
+}
+
+function loadDashboard(){
+  let orders=[]; try{orders=JSON.parse(localStorage.getItem('sokoniBuildOrders'))||[];}catch(e){}
+  let projs=[]; try{projs=JSON.parse(localStorage.getItem('sokoniProjects'))||[];}catch(e){}
+  let rfqs=[]; try{rfqs=JSON.parse(localStorage.getItem('sokoniRFQs'))||[];}catch(e){}
+
+  const activeProj = document.getElementById('dActiveProj'); if(activeProj) activeProj.textContent=projs.length;
+  const totalSpend = orders.reduce((s,o)=>s+(o.total||0),0);
+  const spendEl = document.getElementById('dTotalSpend'); if(spendEl) spendEl.textContent='KES '+totalSpend.toLocaleString();
+  const rfqEl = document.getElementById('dOpenRFQ'); if(rfqEl) rfqEl.textContent=rfqs.length;
+
+  const ordersEl = document.getElementById('dashRecentOrders');
+  if(ordersEl){
+    if(!orders.length){ ordersEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">📦</div><p style="font-size:12px;">No orders yet.</p></div>'; }
+    else ordersEl.innerHTML=orders.slice(0,3).map(o=>`<div class="dash-proj-card"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:13px;font-weight:800;color:white;">${o.product||o.ref}</span><span style="font-size:11px;color:#f59e0b;">KES ${(o.total||0).toLocaleString()}</span></div><div style="font-size:11px;color:rgba(255,255,255,0.38);">Ref: ${o.ref} · Qty: ${o.qty} ${o.unit||''}</div></div>`).join('');
+  }
+
+  const rfqListEl = document.getElementById('dashMyRFQs');
+  if(rfqListEl){
+    if(!rfqs.length){ rfqListEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">📋</div><p style="font-size:12px;">No RFQs yet.</p></div>'; }
+    else rfqListEl.innerHTML=rfqs.slice(0,3).map(r=>`<div class="dash-proj-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${r.rfqType||'RFQ'} — ${r.location}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">Ref: ${r.ref}</div></div>`).join('');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   CONTRACTOR REGISTRATION MODAL
+════════════════════════════════════════════════════════════ */
+function openJoinContractorModal(){ document.getElementById('joinCtrModal').style.display='flex'; }
+function closeJoinCtrModal(){ document.getElementById('joinCtrModal').style.display='none'; }
+function submitContractorReg(){
+  const name=document.getElementById('ctrRegName').value.trim();
+  const phone=document.getElementById('ctrRegPhone').value.trim();
+  const type=document.getElementById('ctrRegType').value;
+  const city=document.getElementById('ctrRegCity').value;
+  const msgEl=document.getElementById('ctrRegMsg');
+  if(!name||!phone||!type||!city){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';return;}
+  const reg={id:'CTR'+Date.now(),name,phone,type,city,experience:document.getElementById('ctrRegExp').value,bio:document.getElementById('ctrRegBio').value.trim(),status:'pending',createdAt:Date.now()};
+  if(window.SokoniConstruct) SokoniConstruct.saveContractor(reg).catch(e=>console.warn('[CN] ctr:',e.message));
+  msgEl.innerHTML=`✅ Registration submitted! We'll verify &amp; activate your profile within 24 hours.`;
+  msgEl.style.color='#00c878';
+  setTimeout(closeJoinCtrModal, 2500);
+}
+
+/* ════════════════════════════════════════════════════════════
+   EQUIPMENT LISTING MODAL
+════════════════════════════════════════════════════════════ */
+function openListEquipmentModal(){ document.getElementById('listEqModal').style.display='flex'; }
+function closeListEqModal(){ document.getElementById('listEqModal').style.display='none'; }
+function submitEquipmentListing(){
+  const owner=document.getElementById('eqOwner').value.trim();
+  const phone=document.getElementById('eqPhone').value.trim();
+  const eqName=document.getElementById('eqNameInput').value.trim();
+  const cat=document.getElementById('eqCat').value;
+  const rate=document.getElementById('eqRate').value;
+  const loc=document.getElementById('eqLoc').value.trim();
+  const msgEl=document.getElementById('eqListMsg');
+  if(!owner||!phone||!eqName||!cat||!rate||!loc){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';return;}
+  const listing={id:'EQ'+Date.now(),owner,phone,name:eqName,cat,rate:Number(rate),location:loc,specs:document.getElementById('eqSpecs').value.trim(),available:true,createdAt:Date.now()};
+  if(window.SokoniConstruct) SokoniConstruct.saveEquipment(listing).catch(e=>console.warn('[CN] eq:',e.message));
+  msgEl.innerHTML=`✅ Equipment listed! We'll review and activate within 24 hours.`;
+  msgEl.style.color='#00c878';
+  setTimeout(closeListEqModal, 2500);
+}
+
+/* ════════════════════════════════════════════════════════════
+   URL PARAM + INIT
+════════════════════════════════════════════════════════════ */
+const urlCat = new URLSearchParams(window.location.search).get("cat")||"";
+const urlTab = new URLSearchParams(window.location.search).get("tab")||"";
+if(urlCat==="tools") _activeCat="construction-tools";
+else if(urlCat==="quote"){ document.getElementById("quoteSection")?.scrollIntoView({behavior:"smooth"}); }
+else if(urlCat) _activeCat=urlCat;
+if(_activeCat){
+  const btn = document.querySelector(`.cn-cat[onclick*="'${_activeCat}'"]`);
+  if(btn){ document.querySelector(".cn-cat.active")?.classList.remove("active"); btn.classList.add("active"); }
+}
+if(urlTab){ cnShowTab(urlTab); }
+
+/* ————————————————— INIT ————————————————— */
+filterProducts();
+renderPriceTable();
+renderSuppliers();
+renderProjList();
+/* refresh AI prices every hour */
+setInterval(renderPriceTable, 60*60*1000);
+
+window.setCat=setCat; window.filterLoc=filterLoc; window.filterProducts=filterProducts;
+window.openOrder=openOrder; window.closeCnModal=closeCnModal; window.updateOrderTotal=updateOrderTotal;
+window.submitOrder=submitOrder; window.openQuoteFor=openQuoteFor; window.submitQuote=submitQuote;
+window.contactSupplier=contactSupplier;
+window.cnShowTab=cnShowTab;
+window.filterContractors=filterContractors; window.filterEquipment=filterEquipment;
+window.bookContractor=bookContractor; window.waContractor=waContractor; window.bookEquipment=bookEquipment;
+window.submitRFQ=submitRFQ; window.createProject=createProject;
+window.setDashView=setDashView;
+window.openJoinContractorModal=openJoinContractorModal; window.closeJoinCtrModal=closeJoinCtrModal; window.submitContractorReg=submitContractorReg;
+window.openListEquipmentModal=openListEquipmentModal; window.closeListEqModal=closeListEqModal; window.submitEquipmentListing=submitEquipmentListing;
+</script>
+<script src="scroll-memory.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script type="module">import SokoniConstruct from './sokoni-construct.js'; window.SokoniConstruct = SokoniConstruct;</script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'construction', category:'contractor'})" style="padding:12px 28px;background:#fb923c;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

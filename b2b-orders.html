@@ -1,0 +1,397 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Purchase Orders â€” SOKONI B2B</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00aaff">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.ob-body{max-width:900px;margin:0 auto;padding:14px 16px;}
+
+/* FILTER BAR */
+.ob-filter{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:6px;margin-bottom:14px;}
+.ob-filter::-webkit-scrollbar{display:none;}
+.ob-pill{padding:7px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
+.ob-pill.active{background:rgba(0,170,255,0.1);border-color:rgba(0,170,255,0.3);color:#00aaff;}
+
+/* ORDER LIST */
+.ob-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .2s;}
+.ob-card:hover{border-color:rgba(0,170,255,0.25);}
+.ob-card-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.ob-card-id{font-size:13px;font-weight:800;color:white;font-family:monospace;}
+.ob-card-total{font-size:16px;font-weight:900;color:#71ff00;}
+.ob-card-sup{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:6px;}
+.ob-status-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;}
+.ob-card-meta{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;}
+.ob-meta-item{font-size:10px;color:rgba(255,255,255,0.35);}
+.ob-meta-item strong{color:rgba(255,255,255,0.7);}
+
+/* ORDER DETAIL */
+.ob-detail{display:none;}
+.ob-detail.active{display:block;}
+.ob-list-view{display:block;}
+.ob-list-view.hidden{display:none;}
+
+.ob-detail-hd{background:linear-gradient(135deg,rgba(0,170,255,0.08),rgba(113,255,0,0.04));border:1px solid rgba(0,170,255,0.15);border-radius:16px;padding:18px;margin-bottom:14px;}
+.ob-detail-id{font-size:20px;font-weight:900;color:white;font-family:monospace;}
+.ob-detail-sup{font-size:13px;color:rgba(255,255,255,0.5);margin:4px 0 10px;}
+
+/* STATUS TIMELINE */
+.ob-timeline{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:14px;}
+.ob-timeline-title{font-size:13px;font-weight:800;margin-bottom:14px;}
+.ob-step{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
+.ob-step:last-child{margin-bottom:0;}
+.ob-step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:2px;}
+.ob-step-dot.done{background:rgba(34,197,94,0.15);border:2px solid #22c55e;}
+.ob-step-dot.active{background:rgba(0,170,255,0.15);border:2px solid #00aaff;animation:pulse-blue 1.5s infinite;}
+.ob-step-dot.pending{background:rgba(255,255,255,0.03);border:2px solid rgba(255,255,255,0.15);}
+@keyframes pulse-blue{0%,100%{box-shadow:0 0 0 0 rgba(0,170,255,0)}50%{box-shadow:0 0 0 6px rgba(0,170,255,0.15)}}
+.ob-step-line{position:absolute;left:13px;top:28px;width:2px;height:12px;background:rgba(255,255,255,0.07);}
+.ob-step-label{font-size:13px;font-weight:800;color:white;}
+.ob-step-sub{font-size:11px;color:rgba(255,255,255,0.35);}
+.ob-step-wrap{position:relative;}
+
+/* ITEMS TABLE */
+.ob-items{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:14px;}
+.ob-item-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;}
+.ob-item-row:last-child{border-bottom:none;}
+
+/* INVOICE */
+.ob-inv-card{background:rgba(113,255,0,0.03);border:1px solid rgba(113,255,0,0.12);border-radius:13px;padding:14px;margin-bottom:14px;}
+
+/* ACTION BUTTONS */
+.ob-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.ob-btn{padding:10px 18px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .2s;}
+.ob-btn.blue{background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.3);color:#00aaff;}
+.ob-btn.green{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;}
+.ob-btn.red{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#ef4444;}
+.ob-btn.grey{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);}
+
+.ob-section-title{font-size:13px;font-weight:800;color:white;margin:0 0 10px;display:flex;align-items:center;gap:8px;}
+.ob-section-title::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+.ob-empty{text-align:center;padding:48px 24px;color:rgba(255,255,255,0.3);}
+
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#00aaff;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-b2b.js"></script>
+
+<nav class="fn">
+  <button id="fnBack" onclick="goBack()" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;cursor:pointer;flex-shrink:0;">â†</button>
+  <span style="font-size:14px;font-weight:800;flex:1;" id="fnTitle">ðŸ“¦ Purchase Orders</span>
+  <button onclick="refreshOrders()" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">â†» Refresh</button>
+</nav>
+
+<div class="ob-body">
+
+  <!-- LIST VIEW -->
+  <div class="ob-list-view" id="listView">
+    <!-- FILTER -->
+    <div class="ob-filter" id="filterBar"></div>
+    <!-- SEARCH -->
+    <input type="text" id="ordSearch" placeholder="Search by order ID or supplier..." style="width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;margin-bottom:14px;" oninput="renderOrders()">
+    <!-- LIST -->
+    <div id="ordList"></div>
+  </div>
+
+  <!-- DETAIL VIEW -->
+  <div class="ob-detail" id="detailView"></div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="b2b.html" class="bnav-item"><i class="fas fa-handshake"></i><span>B2B</span></a>
+  <a href="b2b-dashboard.html" class="bnav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+  <a href="b2b-orders.html" class="bnav-item active"><i class="fas fa-box"></i><span>Orders</span></a>
+</nav>
+
+<script>
+const B = window.SokoniB2B;
+let _activeFilter = 'all';
+let _activeOrder = null;
+
+const TIMELINE_STEPS = [
+  {key:'pending',   icon:'â³', label:'Order Placed',       sub:'PO generated and sent to supplier'},
+  {key:'confirmed', icon:'âœ…', label:'Confirmed',           sub:'Supplier confirmed the order'},
+  {key:'processing',icon:'âš™', label:'Processing',          sub:'Supplier is preparing your order'},
+  {key:'dispatched',icon:'ðŸšš', label:'Dispatched',          sub:'Order is on the way to you'},
+  {key:'delivered', icon:'ðŸ“¦', label:'Delivered',           sub:'Order received and completed'},
+];
+
+const STATUS_ORDER = ['pending','confirmed','processing','dispatched','delivered','cancelled'];
+
+function init() {
+  buildFilterBar();
+  /* Check for URL param */
+  const p = new URLSearchParams(window.location.search);
+  const id = p.get('id');
+  if (id) {
+    const order = B.getOrders().find(o=>o.id===id);
+    if (order) { openDetail(order); return; }
+  }
+  renderOrders();
+}
+
+function buildFilterBar() {
+  const filters = [
+    {key:'all',label:'All'},
+    {key:'pending',label:'â³ Pending'},
+    {key:'confirmed',label:'âœ… Confirmed'},
+    {key:'processing',label:'âš™ Processing'},
+    {key:'dispatched',label:'ðŸšš Dispatched'},
+    {key:'delivered',label:'ðŸ“¦ Delivered'},
+    {key:'cancelled',label:'âœ— Cancelled'},
+  ];
+  document.getElementById('filterBar').innerHTML = filters.map(f=>`
+    <button class="ob-pill ${_activeFilter===f.key?'active':''}" onclick="setFilter('${f.key}',this)">${f.label}</button>`).join('');
+}
+
+function setFilter(key, btn) {
+  _activeFilter = key;
+  document.querySelectorAll('.ob-pill').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  renderOrders();
+}
+window.setFilter = setFilter;
+
+function renderOrders() {
+  const q = (document.getElementById('ordSearch').value||'').toLowerCase();
+  const orders = B.getOrders().filter(o=>{
+    const matchF = _activeFilter==='all' || o.status===_activeFilter;
+    const matchQ = !q || o.id.toLowerCase().includes(q) || (o.supplierName||'').toLowerCase().includes(q);
+    return matchF && matchQ;
+  });
+
+  if (!orders.length) {
+    document.getElementById('ordList').innerHTML = `
+      <div class="ob-empty">
+        <div style="font-size:48px;margin-bottom:14px;">ðŸ“¦</div>
+        <p style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.5);">${_activeFilter==='all'?'No orders yet':'No '+_activeFilter+' orders'}</p>
+        <p style="margin-top:8px;font-size:13px;">Orders are created automatically when you accept a quote.</p>
+        <a href="b2b.html?tab=rfqs" style="display:inline-block;margin-top:16px;padding:11px 24px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.3);border-radius:10px;color:#00aaff;font-weight:800;font-size:13px;">Browse Open RFQs â†’</a>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('ordList').innerHTML = orders.map(o=>{
+    const st = B.ORDER_STATUS[o.status]||{label:o.status,icon:'ðŸ“¦',color:'white'};
+    return `
+    <div class="ob-card" onclick="openDetailById('${o.id}')">
+      <div class="ob-card-hd">
+        <div><div class="ob-card-id">${o.id}</div><div class="ob-card-sup">ðŸ­ ${o.supplierName||'â€”'}</div></div>
+        <div class="ob-card-total">KES ${B.fmt(o.total)}</div>
+      </div>
+      <div><span class="ob-status-badge" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.icon} ${st.label}</span></div>
+      <div class="ob-card-meta">
+        <div class="ob-meta-item">Ref: <strong>${o.trackingRef||'â€”'}</strong></div>
+        <div class="ob-meta-item">Date: <strong>${o.createdAt?new Date(o.createdAt).toLocaleDateString():''}</strong></div>
+        ${o.items?.length?`<div class="ob-meta-item">Items: <strong>${o.items.length}</strong></div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openDetailById(id) {
+  const order = B.getOrders().find(o=>o.id===id);
+  if (order) openDetail(order);
+}
+window.openDetailById = openDetailById;
+
+function openDetail(order) {
+  _activeOrder = order;
+  document.getElementById('listView').classList.add('hidden');
+  const detail = document.getElementById('detailView');
+  detail.classList.add('active');
+  document.getElementById('fnTitle').textContent = order.id;
+
+  const st = B.ORDER_STATUS[order.status]||{label:order.status,icon:'ðŸ“¦',color:'white'};
+  const invoice = B.getInvoices().find(i=>i.orderId===order.id);
+
+  /* Timeline */
+  const stepKeys = ['pending','confirmed','processing','dispatched','delivered'];
+  const curIdx = stepKeys.indexOf(order.status);
+  const timelineHTML = TIMELINE_STEPS.map((step,i)=>{
+    let cls = 'pending';
+    if (order.status==='cancelled') cls='pending';
+    else if (i < curIdx || order.status===step.key) { cls = i===curIdx ? 'active' : 'done'; }
+    return `
+    <div class="ob-step">
+      <div class="ob-step-wrap">
+        <div class="ob-step-dot ${cls}">${cls==='done'?'âœ“':step.icon}</div>
+      </div>
+      <div>
+        <div class="ob-step-label" style="color:${cls==='pending'?'rgba(255,255,255,0.3)':cls==='active'?'#00aaff':'white'};">${step.label}</div>
+        <div class="ob-step-sub">${step.sub}</div>
+        ${cls==='active'?'<div style="font-size:10px;color:#00aaff;margin-top:2px;font-weight:700;">â† Current Status</div>':''}
+      </div>
+    </div>`;
+  }).join('');
+
+  /* Items */
+  const items = order.items||[{name:order.product||'Products',qty:order.qty||1,price:order.total||0}];
+  const itemsHTML = items.map(it=>`
+    <div class="ob-item-row">
+      <span style="color:rgba(255,255,255,0.7);">${it.name||'Item'}</span>
+      <span style="color:rgba(255,255,255,0.4);">${it.qty||1} Ã— KES ${B.fmt(it.price||0)}</span>
+      <span style="font-weight:800;color:white;">KES ${B.fmt((it.qty||1)*(it.price||0))}</span>
+    </div>`).join('');
+
+  detail.innerHTML = `
+    <!-- HEADER -->
+    <div class="ob-detail-hd">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <div class="ob-detail-id">${order.id}</div>
+          <div class="ob-detail-sup">ðŸ­ ${order.supplierName||'â€”'}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:24px;font-weight:900;color:#71ff00;">KES ${B.fmt(order.total)}</div>
+          <span class="ob-status-badge" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.icon} ${st.label}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);">ðŸ“… Placed: <strong style="color:rgba(255,255,255,0.6);">${order.createdAt?new Date(order.createdAt).toLocaleDateString():''}</strong></div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);">ðŸ· Ref: <strong style="color:rgba(255,255,255,0.6);">${order.trackingRef||'â€”'}</strong></div>
+        ${order.deliveryLocation?`<div style="font-size:11px;color:rgba(255,255,255,0.35);">ðŸ“ Delivery: <strong style="color:rgba(255,255,255,0.6);">${order.deliveryLocation}</strong></div>`:''}
+      </div>
+      <div class="ob-actions" style="margin-top:12px;">
+        ${order.status!=='cancelled'&&order.status!=='delivered'?`<button class="ob-btn red" onclick="cancelOrder('${order.id}')">âœ— Cancel</button>`:''}
+        ${invoice?`<button class="ob-btn green" onclick="viewInvoice('${order.id}')">ðŸ§¾ View Invoice</button>`:`<button class="ob-btn blue" onclick="genInvoice('${order.id}')">ðŸ§¾ Generate Invoice</button>`}
+        ${order.supplierName?`<button class="ob-btn grey" onclick="contactSupplier()">ðŸ’¬ Contact Supplier</button>`:''}
+        <a href="b2b-supplier.html?id=${order.supplierId||''}" class="ob-btn grey" style="text-decoration:none;">ðŸ­ Supplier Profile</a>
+      </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div class="ob-timeline">
+      <div class="ob-timeline-title">ðŸ“ Order Progress</div>
+      ${order.status==='cancelled'?`<div style="text-align:center;padding:16px;color:#ef4444;font-weight:800;">âœ— This order was cancelled</div>`:timelineHTML}
+    </div>
+
+    <!-- ITEMS -->
+    <div class="ob-items">
+      <div class="ob-section-title">ðŸ“‹ Order Items</div>
+      ${itemsHTML}
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;">
+        <strong style="font-size:14px;">Total</strong>
+        <strong style="font-size:16px;color:#71ff00;">KES ${B.fmt(order.total)}</strong>
+      </div>
+    </div>
+
+    ${invoice?`
+    <!-- INVOICE -->
+    <div class="ob-inv-card">
+      <div class="ob-section-title">ðŸ§¾ Invoice</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:14px;font-weight:900;font-family:monospace;color:white;">${invoice.number}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Issued: ${invoice.issuedAt?new Date(invoice.issuedAt).toLocaleDateString():''}</div>
+        </div>
+        <span style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;background:${invoice.status==='paid'?'rgba(34,197,94,0.1)':'rgba(245,158,11,0.1)'};border:1px solid ${invoice.status==='paid'?'rgba(34,197,94,0.25)':'rgba(245,158,11,0.25)'};color:${invoice.status==='paid'?'#22c55e':'#f59e0b'};">${invoice.status==='paid'?'âœ… Paid':'â³ Awaiting Payment'}</span>
+      </div>
+    </div>`:''}
+
+    <!-- PAYMENT INFO -->
+    ${order.paymentTerms?`
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:14px;margin-bottom:14px;">
+      <div class="ob-section-title">ðŸ’³ Payment Terms</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.5);">${order.paymentTerms}</p>
+    </div>`:''}
+
+    <!-- NOTES -->
+    ${order.notes?`
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:14px;margin-bottom:14px;">
+      <div class="ob-section-title">ðŸ“ Notes</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.5);">${order.notes}</p>
+    </div>`:''}
+  `;
+}
+
+function goBack() {
+  if (_activeOrder) {
+    _activeOrder = null;
+    document.getElementById('listView').classList.remove('hidden');
+    document.getElementById('detailView').classList.remove('active');
+    document.getElementById('fnTitle').textContent = 'ðŸ“¦ Purchase Orders';
+    history.replaceState(null,'',window.location.pathname);
+  } else {
+    window.location.href = 'b2b-dashboard.html';
+  }
+}
+window.goBack = goBack;
+
+function cancelOrder(orderId) {
+  if(!_c){_skConfirm('Cancel this order? This action will notify the supplier.',()=>_doB2BCancelOrder(_oid,true));return;}
+  B.updateOrderStatus(orderId, 'cancelled');
+  const order = B.getOrders().find(o=>o.id===orderId);
+  if (order) openDetail(order);
+  else goBack();
+}
+window.cancelOrder = cancelOrder;
+
+function genInvoice(orderId) {
+  const inv = B.generateInvoice(orderId);
+  (window._skToast||alert)(`ðŸ§¾ Invoice ${inv.number} generated!`);
+  const order = B.getOrders().find(o=>o.id===orderId);
+  if (order) openDetail(order);
+}
+window.genInvoice = genInvoice;
+
+function viewInvoice(orderId) {
+  const inv = B.getInvoices().find(i=>i.orderId===orderId);
+  if (!inv) return;
+  const order = B.getOrders().find(o=>o.id===orderId)||{};
+  (window._skToast||alert)(`ðŸ§¾ Invoice Details\n\nNumber: ${inv.number}\nOrder: ${orderId}\nAmount: KES ${B.fmt(order.total||0)}\nIssued: ${inv.issuedAt?new Date(inv.issuedAt).toLocaleDateString():''}\nStatus: ${inv.status==='paid'?'Paid':'Awaiting Payment'}`);
+}
+window.viewInvoice = viewInvoice;
+
+function contactSupplier() {
+  const order = _activeOrder;
+  if (!order) return;
+  const thread = 'order_' + order.id;
+  window.location.href = `b2b-chat.html?thread=${thread}&name=Order ${order.id} â€“ ${order.supplierName||'Supplier'}`;
+}
+window.contactSupplier = contactSupplier;
+
+function refreshOrders() {
+  if (_activeOrder) {
+    const updated = B.getOrders().find(o=>o.id===_activeOrder.id);
+    if (updated) openDetail(updated);
+  } else {
+    renderOrders();
+  }
+}
+window.refreshOrders = refreshOrders;
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+

@@ -1,0 +1,217 @@
+name: Deploy — Staging → Production
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy target"
+        required: true
+        default: "staging"
+        type: choice
+        options: ["staging", "production"]
+      skip_tests:
+        description: "Skip smoke tests (emergency only)"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  FIREBASE_PROJECT: sokoni-aeb26
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # STAGING — Auto-deploys on every push to main
+  # ─────────────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → Staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event.inputs.target == 'staging'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci && cd functions && npm ci
+
+      - name: CF syntax check
+        run: node --check functions/index.js
+
+      - name: Deploy to staging channel
+        run: |
+          npx -y firebase-tools hosting:channel:deploy staging \
+            --project $FIREBASE_PROJECT \
+            --expires 7d
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Cloud Functions (staging)
+        run: |
+          npx -y firebase-tools deploy --only functions \
+            --project $FIREBASE_PROJECT
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Firestore rules + indexes
+        run: |
+          npx -y firebase-tools deploy --only firestore \
+            --project $FIREBASE_PROJECT
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Post staging URL to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "🚀 **Staging preview deployed!**\n\nhttps://sokoni-aeb26--staging.web.app\n\n*Expires in 7 days.*"
+            })
+
+  # ─────────────────────────────────────────────────────────────
+  # SMOKE TESTS AGAINST STAGING
+  # ─────────────────────────────────────────────────────────────
+  smoke-staging:
+    name: Smoke Test Staging
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: "!github.event.inputs.skip_tests"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests against staging
+        run: node test-smoke.js
+        env:
+          SMOKE_BASE_URL: "https://sokoni-aeb26--staging.web.app"
+
+  # ─────────────────────────────────────────────────────────────
+  # PRODUCTION — Requires manual approval + passing smoke tests
+  # ─────────────────────────────────────────────────────────────
+  deploy-production:
+    name: Deploy → Production
+    runs-on: ubuntu-latest
+    needs: smoke-staging
+    if: github.event.inputs.target == 'production' || (github.ref == 'refs/heads/main' && needs.smoke-staging.result == 'success')
+    environment:
+      name: production          # requires manual approval in GitHub Environments
+      url: https://mysokoni.co.ke
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci && cd functions && npm ci
+
+      - name: Final CF syntax check
+        run: node --check functions/index.js
+
+      - name: Deploy hosting to production
+        run: |
+          npx -y firebase-tools hosting:clone \
+            $FIREBASE_PROJECT:staging \
+            $FIREBASE_PROJECT:live
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Cloud Functions (production)
+        run: |
+          npx -y firebase-tools deploy --only functions \
+            --project $FIREBASE_PROJECT
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Firestore rules + indexes
+        run: |
+          npx -y firebase-tools deploy --only firestore,storage \
+            --project $FIREBASE_PROJECT
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Apply Cloud Monitoring alert policies
+        # Idempotent — gcloud upserts policies by displayName.
+        # Requires GCP_SA_KEY secret (JSON service-account key with roles/monitoring.alertPolicyEditor).
+        # Set once: gh secret set GCP_SA_KEY < path/to/sa-key.json
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "⚠️  GCP_SA_KEY not set — skipping alert policy sync"
+            exit 0
+          fi
+          echo '${{ secrets.GCP_SA_KEY }}' > /tmp/gcp-key.json
+          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json --quiet
+          gcloud config set project $FIREBASE_PROJECT --quiet
+          node monitoring/apply-alerts.js || echo "⚠️  Alert sync failed — non-blocking"
+          rm -f /tmp/gcp-key.json
+        env:
+          NOTIFICATION_CHANNEL_ID: ${{ secrets.GCP_MONITORING_CHANNEL_ID }}
+
+      - name: Tag release
+        run: |
+          git config user.email "ci@mysokoni.co.ke"
+          git config user.name "SOKONI CI"
+          git tag -a "release-$(date +%Y%m%d-%H%M)" -m "Production deploy $(date)"
+          git push --tags
+
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"✅ SOKONI deployed to production — commit ${{ github.sha }}\"}" \
+            || true
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"❌ SOKONI production deploy FAILED — ${{ github.sha }} — manual rollback required\"}" \
+            || true
+
+  # ─────────────────────────────────────────────────────────────
+  # ROLLBACK JOB (manual trigger only)
+  # ─────────────────────────────────────────────────────────────
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'rollback'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rollback to previous hosting release
+        run: |
+          echo "Rolling back Firebase Hosting to previous release..."
+          npx -y firebase-tools hosting:releases:list \
+            --project $FIREBASE_PROJECT --limit 2 | \
+            tail -1 | awk '{print $1}' | \
+            xargs -I{} npx -y firebase-tools hosting:rollback --version {} \
+            --project $FIREBASE_PROJECT
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

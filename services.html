@@ -1,0 +1,2146 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Services — SOKONI</title>
+  <meta name="description" content="Book professional services on SOKONI — doctors, lawyers, mechanics, cleaners and more across Kenya.">
+  <meta property="og:title" content="Services — SOKONI">
+  <meta property="og:description" content="Find and book verified service providers on SOKONI — Kenya's #1 marketplace.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://storage.googleapis.com">
+  <script src="security.js"></script><link rel="stylesheet" href="style.css">
+  <script src="seo.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
+
+    .sv-nav {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 0 24px; height: 60px; background: rgba(8,8,8,0.97);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 200;
+      backdrop-filter: blur(24px) saturate(1.8); -webkit-backdrop-filter: blur(24px) saturate(1.8);
+    }
+    .sv-nav-logo { height: 34px; flex-shrink: 0; }
+
+    /* ── Desktop centre nav links (hidden on mobile) ── */
+    .sv-nav-links {
+      display: none; gap: 2px; align-items: center; flex: 1; justify-content: center;
+    }
+    .sv-nav-links a {
+      color: rgba(255,255,255,0.55); text-decoration: none; font-size: 13px; font-weight: 600;
+      padding: 7px 13px; border-radius: 10px; transition: all .18s; white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .sv-nav-links a:hover { color: white; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.09); }
+    .sv-nav-links a.sv-nav-active {
+      color: #71ff00; background: rgba(113,255,0,0.08); border-color: rgba(113,255,0,0.22);
+    }
+    @media (min-width: 769px) { .sv-nav-links { display: flex; } }
+
+    .sv-nav-right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+    .sv-nav-link {
+      color: rgba(255,255,255,0.6); text-decoration: none; font-size: 12px; font-weight: 700;
+      padding: 7px 13px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      transition: all .18s; white-space: nowrap;
+    }
+    .sv-nav-link:hover { color: white; border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.04); }
+    .sv-nav-sell {
+      background: linear-gradient(135deg,rgba(113,255,0,0.12),rgba(79,200,0,0.08));
+      border-color: rgba(113,255,0,0.3); color: #71ff00; font-weight: 800;
+    }
+    .sv-nav-sell:hover { background: linear-gradient(135deg,rgba(113,255,0,0.2),rgba(79,200,0,0.14)); filter: brightness(1.08); }
+
+    /* HERO */
+    .sv-hero {
+      background: linear-gradient(135deg, rgba(113,255,0,0.08), rgba(0,170,255,0.06));
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 48px 24px 40px; text-align: center;
+    }
+    .sv-hero h1 { font-size: clamp(26px,5vw,40px); font-weight: 900; margin-bottom: 10px; }
+    .sv-hero p  { color: rgba(255,255,255,0.5); font-size: 15px; margin-bottom: 24px; }
+    .sv-search-bar {
+      display: flex; max-width: 520px; margin: 0 auto; gap: 8px;
+    }
+    .sv-search-bar input {
+      flex: 1; padding: 14px 18px; background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      color: white; font-size: 14px; outline: none; font-family: inherit;
+    }
+    .sv-search-bar input::placeholder { color: rgba(255,255,255,0.35); }
+    .sv-search-btn {
+      padding: 14px 22px; background: linear-gradient(135deg,#71ff00,#4fc800);
+      border: none; border-radius: 12px; color: black; font-weight: 800;
+      font-size: 14px; cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+
+    /* CONTENT */
+    .sv-body { max-width: 1200px; margin: 0 auto; padding: 28px 24px 60px; }
+
+    /* ── STICKY CATEGORY BAR ── */
+    .sv-cats-bar {
+      position: sticky; top: 60px; z-index: 90;
+      background: rgba(6,6,6,0.99); backdrop-filter: blur(24px) saturate(2);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .sv-cats-label {
+      padding: 8px 24px 0;
+      font-size: 9px; font-weight: 900; color: rgba(113,255,0,0.5);
+      text-transform: uppercase; letter-spacing: .15em;
+    }
+    /* Scroll wrapper gives right-edge fade */
+    .sv-cats-wrap {
+      position: relative;
+    }
+    .sv-cats-wrap::after {
+      content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 48px; pointer-events: none;
+      background: linear-gradient(to left, rgba(6,6,6,0.98) 0%, transparent 100%);
+    }
+    .sv-cats {
+      display: flex; gap: 6px; flex-wrap: nowrap;
+      overflow-x: auto; -ms-overflow-style: none; scrollbar-width: none;
+      padding: 9px 24px 11px;
+      width: 100%; min-width: 0; box-sizing: border-box;
+      -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity;
+    }
+    .sv-cats::-webkit-scrollbar { display: none; }
+
+    .sv-cat-pill {
+      flex-shrink: 0; scroll-snap-align: start;
+      padding: 8px 14px; min-height: 38px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.55);
+      font-size: 12px; font-weight: 700; cursor: pointer; transition: all .18s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
+      white-space: nowrap; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    .sv-cat-pill:hover { background: rgba(255,255,255,0.07); color: white; border-color: rgba(255,255,255,0.18); }
+    .sv-cat-pill.active {
+      background: rgba(113,255,0,0.11); border-color: rgba(113,255,0,0.35); color: #71ff00;
+      box-shadow: 0 0 0 1px rgba(113,255,0,0.12) inset;
+    }
+    .sv-cat-featured {
+      background: rgba(113,255,0,0.07); border-color: rgba(113,255,0,0.25); color: #71ff00;
+    }
+    .sv-cat-featured:hover, .sv-cat-featured.active {
+      background: rgba(113,255,0,0.15); border-color: rgba(113,255,0,0.42);
+    }
+
+    /* SECTION HEADING */
+    .sv-section-h {
+      font-size: 15px; font-weight: 800; color: white; margin: 28px 0 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sv-section-h::after {
+      content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.07);
+    }
+
+    /* SERVICE CARDS GRID */
+    .sv-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .sv-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; overflow: hidden; cursor: pointer;
+      transition: transform .2s, border-color .2s; text-decoration: none; display: block;
+    }
+    .sv-card:hover { transform: translateY(-3px); border-color: rgba(113,255,0,0.25); }
+    .sv-card-img {
+      width: 100%; height: 140px; object-fit: cover; display: block;
+      background: linear-gradient(135deg, rgba(113,255,0,0.08), rgba(0,170,255,0.08));
+    }
+    .sv-card-emoji {
+      width: 100%; height: 140px; display: flex; align-items: center; justify-content: center;
+      font-size: 60px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    }
+    .sv-card-body { padding: 14px 15px; }
+    .sv-card-title { font-size: 14px; font-weight: 800; color: white; margin-bottom: 5px; }
+    .sv-card-seller { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+    .sv-card-price { font-size: 15px; font-weight: 900; color: #71ff00; margin-bottom: 10px; }
+    .sv-card-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+    .sv-tag {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 5px;
+      background: rgba(0,170,255,0.1); border: 1px solid rgba(0,170,255,0.2); color: #00aaff;
+    }
+    .sv-book-btn {
+      width: 100%; padding: 13px 10px; min-height: 44px; border: none; border-radius: 10px;
+      background: linear-gradient(135deg,#71ff00,#4fc800); color: black;
+      font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit;
+      transition: filter .2s; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    .sv-book-btn:hover { filter: brightness(1.08); }
+
+    /* EMPTY STATE */
+    .sv-empty { text-align: center; padding: 60px 0; color: rgba(255,255,255,0.25); font-size: 14px; }
+    .sv-empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* POST A SERVICE CTA */
+    .sv-cta {
+      background: linear-gradient(135deg, rgba(113,255,0,0.07), rgba(0,170,255,0.05));
+      border: 1px solid rgba(113,255,0,0.15); border-radius: 20px;
+      padding: 28px 32px; margin: 32px 0;
+      display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    }
+    .sv-cta-icon { font-size: 40px; flex-shrink: 0; }
+    .sv-cta-info { flex: 1; }
+    .sv-cta-info h3 { font-size: 18px; font-weight: 900; color: white; margin-bottom: 5px; }
+    .sv-cta-info p  { font-size: 13px; color: rgba(255,255,255,0.5); }
+    .sv-cta-btn {
+      padding: 13px 26px; background: linear-gradient(135deg,#71ff00,#4fc800);
+      color: black; font-weight: 800; font-size: 14px; border: none;
+      border-radius: 12px; cursor: pointer; font-family: inherit; text-decoration: none; display: inline-block;
+    }
+
+    /* HUB BANNERS */
+    .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin: 24px 0; }
+    .hub-card {
+      border-radius: 20px; padding: 22px; display: flex; align-items: center; gap: 16px;
+      text-decoration: none; transition: transform .2s, filter .2s; cursor: pointer;
+    }
+    .hub-card:hover { transform: translateY(-3px); filter: brightness(1.08); }
+    .hub-healthcare { background: linear-gradient(135deg, rgba(0,200,120,0.12), rgba(0,100,200,0.08)); border: 1px solid rgba(0,200,120,0.25); }
+    .hub-entertainment { background: linear-gradient(135deg, rgba(168,85,247,0.12), rgba(236,72,153,0.08)); border: 1px solid rgba(168,85,247,0.25); }
+    .hub-delivery { background: linear-gradient(135deg, rgba(113,255,0,0.08), rgba(0,170,255,0.06)); border: 1px solid rgba(113,255,0,0.2); }
+    .hub-sports { background: linear-gradient(135deg, rgba(57,255,20,0.1), rgba(0,180,0,0.07)); border: 1px solid rgba(57,255,20,0.25); }
+    .hub-card .hub-icon { font-size: 34px; flex-shrink: 0; }
+    .hub-card h3 { font-size: 14px; font-weight: 900; color: white; margin-bottom: 4px; }
+    .hub-card p { font-size: 11px; color: rgba(255,255,255,0.45); line-height: 1.5; }
+    .hub-arrow { margin-left: auto; font-size: 18px; color: rgba(255,255,255,0.25); flex-shrink: 0; }
+
+    @media(max-width:600px){
+      .sv-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
+      .sv-cta { flex-direction: column; text-align: center; }
+    }
+
+    /* ── TABS ── */
+    .sv-tabs-row {
+      display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto;
+      -ms-overflow-style: none; scrollbar-width: none;
+      margin: 24px 0 20px; padding-bottom: 1px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .sv-tabs-row::-webkit-scrollbar { display: none; }
+    .sv-tab {
+      flex-shrink: 0; white-space: nowrap;
+      padding: 10px 18px; border-radius: 10px 10px 0 0;
+      font-size: 13px; font-weight: 700;
+      background: transparent; border: 1px solid transparent; border-bottom: none;
+      color: rgba(255,255,255,0.45); cursor: pointer; font-family: inherit;
+      transition: all .18s; position: relative;
+    }
+    .sv-tab::after {
+      content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px;
+      background: transparent; border-radius: 2px 2px 0 0; transition: background .18s;
+    }
+    .sv-tab:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.04); }
+    .sv-tab.active-tab {
+      color: #71ff00; background: rgba(113,255,0,0.06);
+      border-color: rgba(255,255,255,0.08);
+    }
+    .sv-tab.active-tab::after { background: #71ff00; }
+
+    /* Bottom nav active glow on mobile */
+    @media (max-width: 768px) {
+      .bottom-nav .bnav-item.active-bnav {
+        position: relative;
+      }
+      .bottom-nav .bnav-item.active-bnav::before {
+        content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+        width: 28px; height: 2px; background: #71ff00;
+        border-radius: 0 0 3px 3px; box-shadow: 0 0 8px rgba(113,255,0,0.7);
+      }
+      .bottom-nav .bnav-item.active-bnav .bnav-emoji {
+        filter: drop-shadow(0 0 6px rgba(113,255,0,0.5));
+      }
+    }
+
+    /* ── PROVIDER CARD — PREMIUM ── */
+    #providersGrid {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+    .pv-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px; overflow: hidden; cursor: pointer;
+      transition: transform .25s, border-color .25s, box-shadow .25s;
+      display: flex; flex-direction: column;
+    }
+    .pv-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(113,255,0,0.3);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(113,255,0,0.08);
+    }
+    /* Coloured cover band */
+    .pv-cover {
+      height: 76px; position: relative;
+      background: linear-gradient(135deg, rgba(113,255,0,0.13), rgba(0,170,255,0.09));
+    }
+    /* Category-tinted covers */
+    .pv-cover.cv-blue   { background: linear-gradient(135deg,rgba(0,170,255,0.18),rgba(0,80,200,0.1)); }
+    .pv-cover.cv-yellow { background: linear-gradient(135deg,rgba(255,200,0,0.18),rgba(255,130,0,0.1)); }
+    .pv-cover.cv-teal   { background: linear-gradient(135deg,rgba(0,220,180,0.18),rgba(0,170,255,0.1)); }
+    .pv-cover.cv-purple { background: linear-gradient(135deg,rgba(168,85,247,0.18),rgba(120,50,200,0.1)); }
+    .pv-cover.cv-pink   { background: linear-gradient(135deg,rgba(236,72,153,0.18),rgba(168,85,247,0.1)); }
+    .pv-cover.cv-orange { background: linear-gradient(135deg,rgba(249,115,22,0.18),rgba(234,88,12,0.1)); }
+    .pv-cover.cv-red    { background: linear-gradient(135deg,rgba(239,68,68,0.18),rgba(185,28,28,0.1)); }
+    .pv-cover.cv-green  { background: linear-gradient(135deg,rgba(113,255,0,0.18),rgba(0,200,80,0.1)); }
+    /* Avatar centred on the cover-body border */
+    .pv-avatar-wrap {
+      position: absolute; bottom: -26px; left: 50%; transform: translateX(-50%); z-index: 2;
+    }
+    .pv-avatar {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 3px solid #0a0a0a;
+      background: linear-gradient(135deg, #1a2a1a, #0d1a2a);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 900; color: #71ff00;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    }
+    /* Card body */
+    .pv-body {
+      padding: 34px 14px 15px; display: flex; flex-direction: column; flex: 1; text-align: center;
+    }
+    .pv-name {
+      font-size: 14px; font-weight: 800; color: white; margin-bottom: 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pv-verified {
+      display: inline-block; font-size: 9px; background: rgba(113,255,0,0.1); color: #71ff00;
+      padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(113,255,0,0.22);
+      margin-left: 5px; vertical-align: middle; font-weight: 800;
+    }
+    .pv-cat  { font-size: 11px; color: rgba(255,255,255,0.38); margin-bottom: 5px; line-height: 1.4; }
+    .pv-stars {
+      color: #ffc107; font-size: 11px; margin-bottom: 9px;
+    }
+    .pv-stars span { color: rgba(255,255,255,0.35); font-size: 10px; font-weight: 400; }
+    .pv-skills { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px; }
+    .pv-skill {
+      font-size: 10px; padding: 2px 8px; border-radius: 5px;
+      background: rgba(0,170,255,0.08); border: 1px solid rgba(0,170,255,0.15); color: #00aaff;
+    }
+    .pv-bio {
+      font-size: 11px; color: rgba(255,255,255,0.33); margin-bottom: 10px;
+      line-height: 1.55; font-style: italic; flex: 1;
+    }
+    .pv-rate {
+      font-size: 17px; font-weight: 900; color: #71ff00; margin-bottom: 12px;
+    }
+    .pv-rate span { font-size: 11px; color: rgba(255,255,255,0.35); font-weight: 400; }
+    .pv-book-btn {
+      width: 100%; padding: 11px; border: none; border-radius: 12px;
+      background: linear-gradient(135deg,#71ff00,#4fc800); color: black;
+      font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit;
+      transition: filter .2s;
+    }
+    .pv-book-btn:hover { filter: brightness(1.1); }
+    .pv-unavail { opacity: .4; pointer-events: none; }
+    @media(max-width:600px){
+      #providersGrid { grid-template-columns: repeat(2,1fr); gap: 10px; }
+      .pv-body { padding: 32px 10px 12px; }
+      .pv-name { font-size: 13px; }
+      .pv-rate { font-size: 15px; }
+    }
+    @media(max-width:360px){
+      #providersGrid { grid-template-columns: 1fr; }
+    }
+
+    /* ── JOB CARD ── */
+    .job-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 16px 18px; margin-bottom: 10px;
+    }
+    .job-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 20px;
+    }
+    .job-pending   { background: rgba(255,152,0,0.12); color: #ff9800; border: 1px solid rgba(255,152,0,0.25); }
+    .job-confirmed { background: rgba(0,170,255,0.1);  color: #00aaff; border: 1px solid rgba(0,170,255,0.25); }
+    .job-inprogress{ background: rgba(113,255,0,0.1);  color: #71ff00; border: 1px solid rgba(113,255,0,0.25); }
+    .job-completed { background: rgba(76,175,80,0.1);  color: #4caf50; border: 1px solid rgba(76,175,80,0.25); }
+    .job-cancelled { background: rgba(255,77,77,0.08); color: #ff6b6b; border: 1px solid rgba(255,77,77,0.2); }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="compact-grid.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="market-actions.js" defer></script>
+<script src="sokoni-pay.js" defer></script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Service","name":"SOKONI Services — Book Local Professionals in Kenya","description":"Find and hire verified plumbers, electricians, cleaners, mechanics, barbers, tutors and 30+ service providers in Nairobi, Mombasa, Kisumu. Pay via M-Pesa.","url":"https://mysokoni.co.ke/services.html","provider":{"@type":"Organization","name":"Sokoni Technologies Ltd"},"areaServed":{"@type":"Country","name":"Kenya"},"serviceType":["Plumbing","Electrical","Cleaning","Photography","Graphic Design","Tutoring","Catering","Event Planning","Hair & Beauty","IT Repair","Fitness Training","Accounting","Legal Services","Healthcare"]}</script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="sv-nav">
+  <a href="index.html"><img loading="eager" fetchpriority="high" src="assets/Sokonilogo2.png" class="sv-nav-logo" alt="Sokoni"></a>
+
+  <!-- Desktop centre navigation (hidden on mobile — bottom nav covers it) -->
+  <div class="sv-nav-links">
+    <a href="index.html">🏠 Home</a>
+    <a href="category.html?cat=all">🛍️ Shop</a>
+    <a href="services.html" class="sv-nav-active">🛠️ Services</a>
+    <a href="requests.html">🔍 Requests</a>
+    <a href="profile.html">👤 Profile</a>
+  </div>
+
+  <div class="sv-nav-right">
+    <button type="button" class="sv-nav-link" onclick="sharePage()">🔗 Share</button>
+    <a href="javascript:void(0)" onclick="openProviderDash()" class="sv-nav-link sv-nav-sell">➕ List My Service</a>
+  </div>
+</nav>
+
+<div class="sv-hero">
+  <h1>🛠️ Services on Sokoni</h1>
+  <p>Find skilled professionals across Kenya — repair, design, clean, deliver and more</p>
+  <div class="sv-search-bar">
+    <input type="text" id="svSearchInput" placeholder="Search services, e.g. 'phone repair Nairobi'..." oninput="filterServices()">
+    <button type="button" class="sv-search-btn" onclick="filterServices()">🔍 Search</button>
+  </div>
+</div>
+
+<!-- ── STICKY CATEGORY BAR (outside sv-body so it sticks cleanly) ── -->
+<div class="sv-cats-bar">
+  <div class="sv-cats-label">Browse by Category</div>
+  <div class="sv-cats-wrap">
+  <div class="sv-cats" id="svCatPills">
+    <a class="sv-cat-pill active" onclick="setCat('',this);return false;" href="javascript:void(0)">🌍 All Services</a>
+    <a class="sv-cat-pill sv-cat-featured" href="cleaning.html">🧹 Cleaning & Laundry</a>
+    <a class="sv-cat-pill" onclick="setCat('phone-repair',this);return false;" href="javascript:void(0)">📱 Phone Repair</a>
+    <a class="sv-cat-pill" onclick="setCat('plumbing',this);return false;" href="javascript:void(0)">🔧 Plumbing</a>
+    <a class="sv-cat-pill" onclick="setCat('electrical',this);return false;" href="javascript:void(0)">⚡ Electrical</a>
+    <a class="sv-cat-pill" onclick="setCat('home-repairs',this);return false;" href="javascript:void(0)">🏠 Home Repairs</a>
+    <a class="sv-cat-pill" onclick="setCat('computer-repair',this);return false;" href="javascript:void(0)">💻 IT Repair</a>
+    <a class="sv-cat-pill" onclick="setCat('graphic-design',this);return false;" href="javascript:void(0)">🎨 Graphic Design</a>
+    <a class="sv-cat-pill" onclick="setCat('photography',this);return false;" href="javascript:void(0)">📸 Photography</a>
+    <a class="sv-cat-pill" onclick="setCat('videography',this);return false;" href="javascript:void(0)">🎬 Videography</a>
+    <a class="sv-cat-pill" onclick="setCat('delivery-service',this);return false;" href="javascript:void(0)">🚚 Delivery</a>
+    <a class="sv-cat-pill" onclick="setCat('marketing',this);return false;" href="javascript:void(0)">📢 Marketing</a>
+    <a class="sv-cat-pill" onclick="setCat('tutoring',this);return false;" href="javascript:void(0)">📚 Tutoring</a>
+    <a class="sv-cat-pill" onclick="setCat('hair-beauty',this);return false;" href="javascript:void(0)">💇 Hair & Beauty</a>
+    <a class="sv-cat-pill" onclick="setCat('catering',this);return false;" href="javascript:void(0)">🍽️ Catering</a>
+    <a class="sv-cat-pill" onclick="setCat('events',this);return false;" href="javascript:void(0)">🎉 Events</a>
+    <a class="sv-cat-pill" onclick="setCat('accounting',this);return false;" href="javascript:void(0)">📋 Accounting</a>
+    <a class="sv-cat-pill" onclick="setCat('fitness',this);return false;" href="javascript:void(0)">🏋️ Fitness</a>
+    <a class="sv-cat-pill" href="sports-hub.html">🏆 Sports Hub</a>
+    <a class="sv-cat-pill" href="sports-hub.html#sVenues">🏟️ Book Venue</a>
+    <a class="sv-cat-pill" href="sports-hub.html#sTournaments">🏆 Tournaments</a>
+    <a class="sv-cat-pill" href="sports-hub.html#sCoaches">🎯 Coaches</a>
+    <a class="sv-cat-pill" href="healthcare.html">🏥 Healthcare</a>
+    <a class="sv-cat-pill" href="entertainment.html">🎧 Entertainment</a>
+    <a class="sv-cat-pill" href="entertainment.html?cat=dj">🎵 DJ Booking</a>
+    <a class="sv-cat-pill" href="banking.html">🏦 Banking Hub</a>
+    <a class="sv-cat-pill" href="banking.html?tab=loans">💰 Business Loans</a>
+    <a class="sv-cat-pill" href="banking.html?tab=saccos">🤝 SACCOs</a>
+    <a class="sv-cat-pill" href="banking.html?tab=mpesa">📲 M-Pesa Business</a>
+    <a class="sv-cat-pill" href="banking.html?tab=chamas">👥 Chamas</a>
+    <a class="sv-cat-pill" href="banking.html?tab=digital">📱 Digital Loans</a>
+    <a class="sv-cat-pill" href="legal-hub.html">⚖️ Legal Hub</a>
+    <a class="sv-cat-pill" href="legal-hub.html">👨‍⚖️ Find Advocate</a>
+    <a class="sv-cat-pill" href="education.html">📚 Education</a>
+    <a class="sv-cat-pill" href="jobs.html">💼 Jobs</a>
+    <a class="sv-cat-pill" href="food.html">🍽️ Food Hub</a>
+    <a class="sv-cat-pill" href="food.html?cat=restaurant">🍴 Restaurants</a>
+    <a class="sv-cat-pill" href="food.html?cat=fastfood">🍔 Fast Food</a>
+    <a class="sv-cat-pill" href="food.html?cat=grocery">🛒 Grocery Delivery</a>
+    <a class="sv-cat-pill" href="food.html?cat=homechef">👩‍🍳 Home Chefs</a>
+    <a class="sv-cat-pill" href="food.html?cat=catering">🍱 Catering</a>
+    <a class="sv-cat-pill" href="food.html?cat=bakery">🥖 Bakeries</a>
+    <a class="sv-cat-pill" href="food.html?cat=butchery">🥩 Butcheries</a>
+    <a class="sv-cat-pill" href="food-dashboard.html">🏪 Restaurant Portal</a>
+    <a class="sv-cat-pill" href="food-rider.html">🛵 Rider Portal</a>
+    <a class="sv-cat-pill" href="b2b.html">🤝 B2B Wholesale</a>
+    <a class="sv-cat-pill" href="tech-hub.html">💻 Digital Goods</a>
+    <a class="sv-cat-pill" href="car-hub.html">🚗 Car Hub</a>
+    <a class="sv-cat-pill" href="car-hub.html?tab=mechanics">🔧 Mechanics</a>
+    <a class="sv-cat-pill" href="car-hub.html?tab=parts">🔩 Spare Parts</a>
+    <a class="sv-cat-pill" href="car-hub.html?tab=roadside">🆘 Roadside Assist</a>
+    <a class="sv-cat-pill" href="car-hub.html#finance">💰 Car Finance</a>
+    <a class="sv-cat-pill" href="car-hub.html#inspect">🔍 Inspection</a>
+    <a class="sv-cat-pill" href="car-hub.html#transport">🚛 Car Transport</a>
+    <a class="sv-cat-pill" href="car-hub.html?tab=ntsa">🏛️ NTSA Services</a>
+    <a class="sv-cat-pill" href="car-hub.html?tab=dl">🪪 Driving Licence</a>
+    <a class="sv-cat-pill" href="car-hub.html?tab=tracking">📡 Track Vehicle</a>
+    <a class="sv-cat-pill" href="car-hub.html?tab=insurance">🛡️ Car Insurance</a>
+    <a class="sv-cat-pill" href="home-services.html">🏠 Home Services</a>
+    <a class="sv-cat-pill" href="home-services.html#repairs">🔌 Electricians</a>
+    <a class="sv-cat-pill" href="home-services.html#repairs">🔧 Plumbers</a>
+    <a class="sv-cat-pill" href="home-services.html#cleaning">🧹 Cleaners</a>
+    <a class="sv-cat-pill" href="home-services.html#moving">📦 Movers</a>
+    <a class="sv-cat-pill" href="fitness-hub.html">💪 Fitness Hub</a>
+    <a class="sv-cat-pill" href="fitness-hub.html">🏋️ Find a Gym</a>
+    <a class="sv-cat-pill" href="fitness-hub.html">🏃 Fitness Coaches</a>
+    <a class="sv-cat-pill" href="tech-hub.html">📱 Tech Hub</a>
+    <a class="sv-cat-pill" href="tech-hub.html#thpanel-repairs">🔧 Phone Repairs</a>
+  </div>
+  </div><!-- /sv-cats-wrap -->
+</div><!-- /sv-cats-bar -->
+
+<div class="sv-body">
+
+  <!-- Hub Banners -->
+  <div style="font-size:15px;font-weight:800;color:white;margin:28px 0 14px;display:flex;align-items:center;gap:8px;">
+    🚀 Explore Our Hubs
+    <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:8px;"></span>
+  </div>
+  <div class="hub-grid">
+    <a href="healthcare.html" class="hub-card hub-healthcare">
+      <div class="hub-icon">🏥</div>
+      <div><h3>🏥 Healthcare Hub</h3><p>Hospitals, clinics, dispensaries, pharmacies, lab tests &amp; medicine delivery</p></div>
+      <div class="hub-arrow">→</div>
+    </a>
+    <a href="entertainment.html" class="hub-card hub-entertainment">
+      <div class="hub-icon">🎧</div>
+      <div><h3>🎭 Entertainment Hub</h3><p>Book DJs, MCs, live bands, comedians, photographers &amp; dancers</p></div>
+      <div class="hub-arrow">→</div>
+    </a>
+    <a href="driver.html" class="hub-card hub-delivery">
+      <div class="hub-icon">🛵</div>
+      <div><h3>🚚 Delivery Hub</h3><p>E-bike friendly, 88% commission — join Kenya's fairest driver network</p></div>
+      <div class="hub-arrow">→</div>
+    </a>
+    <a href="marketing-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(249,115,22,0.1),rgba(234,179,8,0.07));border:1px solid rgba(249,115,22,0.22);">
+      <div class="hub-icon">🎯</div>
+      <div><h3>🎯 Marketing Hub</h3><p>Advertising, social media, creative services, SEO, growth tools & professionals</p></div>
+      <div class="hub-arrow" style="color:rgba(249,115,22,0.4);">→</div>
+    </a>
+    <a href="banking.html" class="hub-card" style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(16,185,129,0.06));border:1px solid rgba(245,158,11,0.25);">
+      <div class="hub-icon">🏦</div>
+      <div><h3>Banking Hub <span style="font-size:9px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;padding:1px 6px;border-radius:3px;font-weight:800;">NEW</span></h3><p>Loans, SACCOs, Insurance, Investments, M-Pesa Paybill & Microfinance</p></div>
+      <div class="hub-arrow" style="color:rgba(245,158,11,0.4);">→</div>
+    </a>
+    <a href="food.html" class="hub-card" style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(249,115,22,0.07));border:1px solid rgba(34,197,94,0.25);">
+      <div class="hub-icon">🍽️</div>
+      <div><h3>Food Hub <span style="font-size:9px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:1px 6px;border-radius:3px;font-weight:800;">NEW</span></h3><p>Restaurants · Fast Food · Grocery · Home Chefs · Catering · Bakeries · Butcheries</p></div>
+      <div class="hub-arrow" style="color:rgba(34,197,94,0.4);">→</div>
+    </a>
+    <a href="legal-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(124,58,237,0.1),rgba(79,70,229,0.07));border:1px solid rgba(124,58,237,0.25);">
+      <div class="hub-icon">⚖️</div>
+      <div><h3>⚖️ Legal Hub</h3><p>Verified advocates, legal documents, court help & know your rights</p></div>
+      <div class="hub-arrow" style="color:rgba(124,58,237,0.4);">→</div>
+    </a>
+    <a href="education.html" class="hub-card" style="background:linear-gradient(135deg,rgba(14,165,233,0.09),rgba(56,189,248,0.05));border:1px solid rgba(14,165,233,0.22);">
+      <div class="hub-icon">📚</div>
+      <div><h3>📚 Education Hub</h3><p>Schools, tutors, online courses, KCSE prep &amp; professional certifications</p></div>
+      <div class="hub-arrow" style="color:rgba(14,165,233,0.4);">→</div>
+    </a>
+    <a href="jobs.html" class="hub-card" style="background:linear-gradient(135deg,rgba(124,58,237,0.09),rgba(99,102,241,0.05));border:1px solid rgba(124,58,237,0.22);">
+      <div class="hub-icon">💼</div>
+      <div><h3>💼 Jobs Board</h3><p>Find jobs, post vacancies &amp; connect employers with talent across Kenya</p></div>
+      <div class="hub-arrow" style="color:rgba(124,58,237,0.4);">→</div>
+    </a>
+    <a href="b2b.html" class="hub-card" style="background:linear-gradient(135deg,rgba(0,170,255,0.09),rgba(113,255,0,0.05));border:1px solid rgba(0,170,255,0.2);">
+      <div class="hub-icon">🤝</div>
+      <div><h3>🤝 B2B Wholesale</h3><p>Bulk orders, supplier deals, RFQ & business-to-business trading</p></div>
+      <div class="hub-arrow" style="color:rgba(0,170,255,0.4);">→</div>
+    </a>
+    <a href="tech-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(168,85,247,0.09),rgba(59,130,246,0.06));border:1px solid rgba(168,85,247,0.2);">
+      <div class="hub-icon">💻</div>
+      <div><h3>💻 Digital & eSoko</h3><p>eBooks, courses, software, templates & instant digital downloads</p></div>
+      <div class="hub-arrow" style="color:rgba(168,85,247,0.4);">→</div>
+    </a>
+    <a href="car-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(249,115,22,0.1),rgba(234,88,12,0.06));border:1px solid rgba(249,115,22,0.22);">
+      <div class="hub-icon">🚗</div>
+      <div><h3>Car Hub <span style="font-size:9px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.3);color:#71ff00;padding:1px 6px;border-radius:3px;font-weight:800;">UPGRADED</span></h3><p>Rent · Buy &amp; Sell · Mechanics · Parts · Finance · Inspect · Transport · Roadside</p></div>
+      <div class="hub-arrow" style="color:rgba(249,115,22,0.4);">→</div>
+    </a>
+    <a href="construction.html" class="hub-card" style="background:linear-gradient(135deg,rgba(234,179,8,0.1),rgba(180,120,0,0.06));border:1px solid rgba(234,179,8,0.22);">
+      <div class="hub-icon">🧱</div>
+      <div><h3>Construction Hub <span style="font-size:9px;background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.3);color:#fbbf24;padding:1px 6px;border-radius:3px;font-weight:800;">NEW</span></h3><p>Cement, steel, timber, tiles, paint & all building materials</p></div>
+      <div class="hub-arrow" style="color:rgba(234,179,8,0.4);">→</div>
+    </a>
+    <a href="property-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(0,170,255,0.09),rgba(16,185,129,0.05));border:1px solid rgba(0,170,255,0.2);">
+      <div class="hub-icon">🏠</div>
+      <div><h3>🏠 Property Hub</h3><p>Houses, apartments, land for rent & sale across Kenya</p></div>
+      <div class="hub-arrow" style="color:rgba(0,170,255,0.4);">→</div>
+    </a>
+    <a href="bnb-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(255,107,53,0.09),rgba(249,115,22,0.05));border:1px solid rgba(255,107,53,0.2);">
+      <div class="hub-icon">🏡</div>
+      <div><h3>🏨 BnB & Short Stay</h3><p>Airbnb-style stays, guesthouses, lodges & furnished apartments</p></div>
+      <div class="hub-arrow" style="color:rgba(255,107,53,0.4);">→</div>
+    </a>
+    <a href="community.html" class="hub-card" style="background:linear-gradient(135deg,rgba(168,85,247,0.09),rgba(139,92,246,0.05));border:1px solid rgba(168,85,247,0.2);">
+      <div class="hub-icon">👥</div>
+      <div><h3>👥 Community Hub</h3><p>Connect, share, get tips & grow with Sokoni's seller community</p></div>
+      <div class="hub-arrow" style="color:rgba(168,85,247,0.4);">→</div>
+    </a>
+    <a href="sports-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(245,158,11,0.09),rgba(251,191,36,0.05));border:1px solid rgba(245,158,11,0.22);">
+      <div class="hub-icon">🏆</div>
+      <div><h3>Sports Hub <span style="font-size:9px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;padding:1px 6px;border-radius:3px;font-weight:800;">NEW</span></h3><p>Teams, players, venue booking, tournaments, coaches & sports gear</p></div>
+      <div class="hub-arrow" style="color:rgba(245,158,11,0.4);">→</div>
+    </a>
+    <a href="home-services.html" class="hub-card" style="background:linear-gradient(135deg,rgba(245,158,11,0.09),rgba(251,191,36,0.05));border:1px solid rgba(245,158,11,0.22);">
+      <div class="hub-icon">🏠</div>
+      <div><h3>Home Services <span style="font-size:9px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;padding:1px 6px;border-radius:3px;font-weight:800;">NEW</span></h3><p>Plumbers, electricians, cleaners, painters & movers near you</p></div>
+      <div class="hub-arrow" style="color:rgba(245,158,11,0.4);">→</div>
+    </a>
+    <a href="fitness-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(57,255,20,0.09),rgba(16,163,74,0.05));border:1px solid rgba(57,255,20,0.2);">
+      <div class="hub-icon">💪</div>
+      <div><h3>Fitness Hub <span style="font-size:9px;background:rgba(57,255,20,0.12);border:1px solid rgba(57,255,20,0.3);color:#39ff14;padding:1px 6px;border-radius:3px;font-weight:800;">NEW</span></h3><p>Gyms, personal coaches, workout tracking & fitness equipment</p></div>
+      <div class="hub-arrow" style="color:rgba(57,255,20,0.4);">→</div>
+    </a>
+    <a href="tech-hub.html" class="hub-card" style="background:linear-gradient(135deg,rgba(0,212,255,0.09),rgba(0,150,200,0.05));border:1px solid rgba(0,212,255,0.2);">
+      <div class="hub-icon">📱</div>
+      <div><h3>Tech Hub <span style="font-size:9px;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.3);color:#00d4ff;padding:1px 6px;border-radius:3px;font-weight:800;">NEW</span></h3><p>Devices, repairs, technicians & phone comparisons</p></div>
+      <div class="hub-arrow" style="color:rgba(0,212,255,0.4);">→</div>
+    </a>
+  </div>
+
+  <!-- STATS STRIP -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:24px 0;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px 20px;">
+    <div style="text-align:center;"><div style="font-size:22px;font-weight:900;color:#71ff00;">650+</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Verified Providers</div></div>
+    <div style="text-align:center;"><div style="font-size:22px;font-weight:900;color:#00aaff;">5,200+</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Jobs Completed</div></div>
+    <div style="text-align:center;"><div style="font-size:22px;font-weight:900;color:#ffc107;">4.8 ★</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Avg. Provider Rating</div></div>
+    <div style="text-align:center;"><div style="font-size:22px;font-weight:900;color:#a78bfa;">30+</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Service Categories</div></div>
+    <div style="text-align:center;"><div style="font-size:22px;font-weight:900;color:#00c878;">5</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Cities Covered</div></div>
+    <div style="text-align:center;"><div style="font-size:22px;font-weight:900;color:#ff9800;">88%</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Same-Day Response</div></div>
+  </div>
+
+  <!-- ══ FOOD HUB SHOWCASE ══ -->
+  <div style="margin:32px 0 0;">
+    <div style="font-size:15px;font-weight:800;color:white;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+      🍽️ Sokoni Food Hub
+      <span style="font-size:9px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:2px 8px;border-radius:4px;font-weight:800;">NEW</span>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:8px;"></span>
+    </div>
+
+    <!-- CATEGORY GRID -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px;">
+      <a href="food.html?cat=restaurant" style="text-decoration:none;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.18);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">🍴</div>
+        <div style="font-size:12px;font-weight:800;color:white;">Restaurants</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Dine-quality delivery</div>
+      </a>
+      <a href="food.html?cat=fastfood" style="text-decoration:none;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.18);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">🍔</div>
+        <div style="font-size:12px;font-weight:800;color:white;">Fast Food</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Quick & affordable</div>
+      </a>
+      <a href="food.html?cat=grocery" style="text-decoration:none;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.18);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">🛒</div>
+        <div style="font-size:12px;font-weight:800;color:white;">Grocery</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Fresh delivered fast</div>
+      </a>
+      <a href="food.html?cat=homechef" style="text-decoration:none;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.18);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">👩‍🍳</div>
+        <div style="font-size:12px;font-weight:800;color:white;">Home Chefs</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Homemade meals</div>
+      </a>
+      <a href="food.html?cat=catering" style="text-decoration:none;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">🍱</div>
+        <div style="font-size:12px;font-weight:800;color:white;">Catering</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Events & corporate</div>
+      </a>
+      <a href="food.html?cat=bakery" style="text-decoration:none;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">🥖</div>
+        <div style="font-size:12px;font-weight:800;color:white;">Bakeries</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Fresh-baked daily</div>
+      </a>
+      <a href="food.html?cat=butchery" style="text-decoration:none;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">🥩</div>
+        <div style="font-size:12px;font-weight:800;color:white;">Butcheries</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Fresh & halal cuts</div>
+      </a>
+      <a href="food-cart.html" style="text-decoration:none;background:rgba(34,197,94,0.04);border:1px dashed rgba(34,197,94,0.2);border-radius:14px;padding:16px;text-align:center;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <div style="font-size:28px;margin-bottom:6px;">🛒</div>
+        <div style="font-size:12px;font-weight:800;color:#22c55e;">My Cart</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Checkout</div>
+      </a>
+    </div>
+
+    <!-- VENDOR + RIDER PORTALS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <a href="food-dashboard.html" style="text-decoration:none;display:flex;align-items:center;gap:12px;padding:16px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:16px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:28px;flex-shrink:0;">🏪</span>
+        <div>
+          <div style="font-size:13px;font-weight:800;color:white;">Restaurant Portal</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">Manage orders, menu & analytics</div>
+        </div>
+      </a>
+      <a href="food-rider.html" style="text-decoration:none;display:flex;align-items:center;gap:12px;padding:16px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:16px;transition:transform .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+        <span style="font-size:28px;flex-shrink:0;">🛵</span>
+        <div>
+          <div style="font-size:13px;font-weight:800;color:white;">Rider Portal</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">Accept deliveries & earn</div>
+        </div>
+      </a>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px;margin-bottom:6px;">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">How Sokoni Food Works</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <span style="font-size:22px;flex-shrink:0;">🔍</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Browse</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Find restaurants & menus near you</div></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <span style="font-size:22px;flex-shrink:0;">🛒</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Add to Cart</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Multi-vendor cart, one checkout</div></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <span style="font-size:22px;flex-shrink:0;">📱</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Pay via M-Pesa</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">STK Push — instant confirmation</div></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <span style="font-size:22px;flex-shrink:0;">🛵</span>
+          <div><div style="font-size:12px;font-weight:800;color:white;">Track Rider</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Live map — door-to-door delivery</div></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /food hub showcase -->
+
+  <!-- TAB NAV -->
+  <div class="sv-tabs-row">
+    <button type="button" onclick="showTab('providers',this)" class="sv-tab active-tab" id="tab-providers">👷 Verified Providers</button>
+    <button type="button" onclick="showTab('listings',this)" class="sv-tab" id="tab-listings">📋 Service Listings</button>
+    <button type="button" onclick="showTab('mybookings',this)" class="sv-tab" id="tab-mybookings">📅 My Bookings</button>
+    <button type="button" onclick="showTab('dashboard',this)" class="sv-tab" id="tab-dashboard">🏪 Provider Dashboard</button>
+  </div>
+
+  <!-- ══ TAB: VERIFIED PROVIDERS ══ -->
+  <div id="pane-providers">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+      <div style="font-size:15px;font-weight:800;color:white;">👷 Verified Service Providers <span id="providerCount" style="font-size:12px;color:rgba(255,255,255,0.35);font-weight:400;"></span></div>
+      <a href="javascript:void(0)" onclick="openProviderDash()" style="padding:9px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;">+ Register as Provider</a>
+    </div>
+    <div class="sv-grid" id="providersGrid"></div>
+
+    <!-- SPOTLIGHT CTA for providers -->
+    <div class="hub-spotlight-cta">
+      <div class="hsc-icon">👑</div>
+      <div class="hsc-body">
+        <h3>Get Your Service in the Spotlight</h3>
+        <p>Thousands of Kenyans search for services daily. A spotlight listing puts your name at the top — before they even scroll.</p>
+        <div class="hsc-perks">
+          <span class="hsc-perk">🌟 Top placement</span>
+          <span class="hsc-perk">🔵 Verified badge</span>
+          <span class="hsc-perk">📈 10× more enquiries</span>
+          <span class="hsc-perk">🛡️ Fraud protection</span>
+        </div>
+        <a href="provider.html" class="hsc-btn">⚡ Get Spotlighted</a>
+        <div class="hsc-price">From KES 500 / week · Cancel anytime</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: PRODUCT SERVICE LISTINGS ══ -->
+  <div id="pane-listings" style="display:none;">
+    <div class="sv-cta" style="margin-bottom:20px;">
+      <div class="sv-cta-icon">🚀</div>
+      <div class="sv-cta-info">
+        <h3>🛠️ Offer Your Service on Sokoni</h3>
+        <p>Join 500+ professionals earning on Kenya's fastest-growing marketplace. List your service for free.</p>
+      </div>
+      <a href="javascript:void(0)" onclick="openProviderDash()" class="sv-cta-btn">Start Selling Services →</a>
+    </div>
+    <div class="sv-section-h" id="svResultLabel">Loading services...</div>
+    <div class="sv-grid" id="svGrid"></div>
+    <div class="sv-empty" id="svEmpty" style="display:none;">
+      <div class="sv-empty-icon">🔍</div>
+      <p>No services found in this category yet.<br>Be the first to offer this service!</p>
+    </div>
+  </div>
+
+  <!-- ══ TAB: MY BOOKINGS (Client View) ══ -->
+  <div id="pane-mybookings" style="display:none;">
+    <div style="font-size:15px;font-weight:800;color:white;margin-bottom:16px;">📅 My Service Bookings</div>
+    <div id="clientBookingsList"></div>
+  </div>
+
+  <!-- ══ TAB: PROVIDER DASHBOARD ══ -->
+  <div id="pane-dashboard" style="display:none;">
+    <!-- Register as Provider Form -->
+    <div id="providerRegSection" style="background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.15);border-radius:18px;padding:22px;margin-bottom:24px;">
+      <div style="font-size:15px;font-weight:800;color:white;margin-bottom:4px;">🏪 Register as a Service Provider</div>
+      <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">List your skills on Sokoni and get booked by thousands of clients across Kenya</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <input type="text" id="pvName" placeholder="Full Name *" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        <input type="tel"  id="pvPhone" placeholder="Phone Number *" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <select id="pvCategory" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;" onchange="loadServiceSpecificFields(this.value)">
+          <option value="">Select Service Category *</option>
+          <option value="plumbing">🔧 Plumbing</option>
+          <option value="electrical">⚡ Electrical</option>
+          <option value="cleaning">🧹 Cleaning & Deep Clean</option>
+          <option value="laundry">🧺 Mamafua / Laundry</option>
+          <option value="phone-repair">📱 Phone Repair</option>
+          <option value="computer-repair">💻 IT / Computer Repair</option>
+          <option value="graphic-design">🎨 Graphic Design</option>
+          <option value="photography">📸 Photography</option>
+          <option value="videography">🎬 Videography</option>
+          <option value="tutoring">📚 Tutoring</option>
+          <option value="catering">🍽️ Catering & Chefs</option>
+          <option value="events">🎉 Event Planning</option>
+          <option value="hair-beauty">💇 Hair & Beauty</option>
+          <option value="fitness">🏋️ Fitness Training</option>
+          <option value="dj">🎧 DJ / Disc Jockey</option>
+          <option value="mc">🎤 MC / Emcee</option>
+          <option value="marketing">📢 Digital Marketing</option>
+          <option value="accounting">📋 Accounting & Finance</option>
+          <option value="legal">⚖️ Legal / Advocate</option>
+          <option value="interior-design">🏠 Interior Design</option>
+          <option value="driving">🚗 Driver / Chauffeur</option>
+          <option value="security">🛡️ Security Guard</option>
+          <option value="delivery-service">🏍️ Delivery / Courier</option>
+          <option value="tailoring">✂️ Tailoring & Alterations</option>
+          <option value="mechanic">🔩 Auto Mechanic</option>
+        </select>
+        <select id="pvLocation" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+          <option value="nairobi">📍 Nairobi</option>
+          <option value="mombasa">📍 Mombasa</option>
+          <option value="kisumu">📍 Kisumu</option>
+          <option value="nakuru">📍 Nakuru</option>
+          <option value="eldoret">📍 Eldoret</option>
+          <option value="thika">📍 Thika</option>
+          <option value="nyeri">📍 Nyeri</option>
+          <option value="meru">📍 Meru</option>
+          <option value="embu">📍 Embu</option>
+          <option value="machakos">📍 Machakos</option>
+          <option value="naivasha">📍 Naivasha</option>
+          <option value="nanyuki">📍 Nanyuki</option>
+          <option value="kisii">📍 Kisii</option>
+          <option value="kericho">📍 Kericho</option>
+          <option value="kakamega">📍 Kakamega</option>
+          <option value="kitale">📍 Kitale</option>
+          <option value="bungoma">📍 Bungoma</option>
+          <option value="malindi">📍 Malindi</option>
+          <option value="isiolo">📍 Isiolo</option>
+          <option value="garissa">📍 Garissa</option>
+          <option value="remote">💻 Remote / Online</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <input type="number" id="pvRate"    placeholder="Rate (KES) *" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        <select id="pvRateType" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+          <option value="hourly">Per Hour</option>
+          <option value="per job">Per Job</option>
+          <option value="daily">Per Day</option>
+          <option value="monthly">Per Month</option>
+        </select>
+      </div>
+      <input type="text" id="pvSkills" placeholder="Skills (comma-separated): e.g. Pipe fitting, Leak repair, CCTV installation" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:12px;">
+      <textarea id="pvBio" placeholder="Brief bio / experience description *" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;min-height:70px;resize:vertical;margin-bottom:14px;"></textarea>
+
+      <!-- ═══ SERVICE-SPECIFIC FIELDS — injected dynamically ═══ -->
+      <div id="pvSpecificFields" style="display:none;margin-bottom:14px;background:rgba(113,255,0,0.03);border:1px solid rgba(113,255,0,0.12);border-radius:14px;padding:16px 18px;">
+        <div style="font-size:11px;font-weight:800;color:#71ff00;text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;" id="pvSpecLabel">⚙️ Service Details</div>
+        <div id="pvSpecContent"></div>
+      </div>
+
+      <!-- SOCIAL HANDLES -->
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:800;color:white;margin-bottom:12px;">🔗 Social Media &amp; Links <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">(optional — shown on your profile card so clients can verify you)</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">💬 WhatsApp Business</label>
+            <input type="tel" id="pvWhatsApp" placeholder="07XXXXXXXX" class="pv-input" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">📸 Instagram</label>
+            <input type="text" id="pvInstagram" placeholder="@yourhandle" class="pv-input" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">🎵 TikTok</label>
+            <input type="text" id="pvTikTok" placeholder="@yourhandle" class="pv-input" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">👥 Facebook</label>
+            <input type="text" id="pvFacebook" placeholder="Page name or URL" class="pv-input" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">🎬 YouTube</label>
+            <input type="text" id="pvYouTube" placeholder="@channel" class="pv-input" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">🌐 Website / Portfolio</label>
+            <input type="url" id="pvWebsite" placeholder="https://yoursite.com" class="pv-input" style="width:100%;"></div>
+        </div>
+      </div>
+
+      <button type="button" onclick="registerProvider()" style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:11px;cursor:pointer;font-size:14px;font-family:inherit;">🚀 List Me on Sokoni Services</button>
+      <div id="pvRegMsg" style="margin-top:10px;font-size:12px;min-height:16px;"></div>
+    </div>
+
+    <!-- Provider's incoming bookings -->
+    <div style="font-size:15px;font-weight:800;color:white;margin-bottom:12px;">📋 Incoming Job Requests</div>
+    <div id="providerJobsList"></div>
+  </div>
+
+</div>
+
+<!-- ══ BOOKING MODAL ══ -->
+<div id="bookingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(14px);z-index:99999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:22px;padding:28px;max-width:480px;width:100%;max-height:92vh;overflow-y:auto;position:relative;">
+    <button type="button" onclick="document.getElementById('bookingModal').style.display='none'" style="position:absolute;top:14px;right:16px;background:none;border:none;color:rgba(255,255,255,0.35);font-size:20px;cursor:pointer;">✕</button>
+    <h2 style="font-size:17px;font-weight:900;color:white;margin-bottom:4px;">📩 Book This Service</h2>
+    <div id="bookModalProviderInfo" style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <input type="text" id="bkClientName"  placeholder="Your Name *" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <input type="tel"  id="bkClientPhone" placeholder="Your Phone *" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+    </div>
+    <textarea id="bkJobDesc" placeholder="Describe the job in detail * e.g. 'Kitchen sink leaking under the cabinet'" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;min-height:70px;resize:vertical;margin-bottom:10px;"></textarea>
+    <input type="text" id="bkLocation" placeholder="Job Location (e.g. Westlands, Nairobi) *" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div>
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Preferred Date *</label>
+        <input type="date" id="bkDate" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      </div>
+      <div>
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;">Preferred Time</label>
+        <input type="time" id="bkTime" value="09:00" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      </div>
+    </div>
+    <button type="button" onclick="submitBooking()" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;">📩 Submit Booking Request</button>
+    <div id="bkMsg" style="margin-top:10px;font-size:12px;min-height:16px;text-align:center;"></div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════
+   TAB SWITCHER
+══════════════════════════════════════════════ */
+function showTab(name, btn){
+  ["providers","listings","mybookings","dashboard"].forEach(t=>{
+    const p = document.getElementById("pane-"+t);
+    if(p) p.style.display = t===name ? "block" : "none";
+    const b = document.getElementById("tab-"+t);
+    if(b) b.classList.toggle("active-tab", t===name);
+  });
+  if(name==="mybookings")  renderClientBookings();
+  if(name==="providers")   renderProviders();
+  if(name==="dashboard")   renderProviderJobs();
+  if(name==="listings")    renderServices();
+  if(btn) document.querySelectorAll(".sv-tab").forEach(x=>x.classList.remove("active-tab")), btn.classList.add("active-tab");
+}
+
+function openProviderDash(){
+  const btn = document.getElementById("tab-dashboard");
+  showTab("dashboard", btn);
+  const tabsRow = document.querySelector(".sv-tabs-row");
+  if(tabsRow) tabsRow.scrollIntoView({behavior:"smooth",block:"start"});
+  setTimeout(()=>{
+    const firstInput = document.getElementById("pvName") || document.querySelector("#pane-dashboard input");
+    if(firstInput){ firstInput.scrollIntoView({behavior:"smooth",block:"center"}); firstInput.focus(); }
+  }, 350);
+}
+
+function scrollToRegister(){
+  setTimeout(()=>{
+    const el = document.getElementById("pvName");
+    if(el){ el.scrollIntoView({behavior:"smooth",block:"center"}); el.focus(); }
+  }, 100);
+}
+
+/* ══════════════════════════════════════════════
+   PROVIDER DATA
+══════════════════════════════════════════════ */
+/* ══ DEMO PROVIDERS — shown when no real providers are registered yet ══ */
+const DEMO_PROVIDERS = [
+  /* ── HAIR & BEAUTY ── */
+  { id:"DP01", name:"Joyce Wanjiru Beauty", phone:"0712345601", category:"hair-beauty", skills:["Natural Hair","Braids & Twists","Bridal Makeup","Wigs"], bio:"Master stylist, 8 yrs top Nairobi salons. Bridal specialist. Mobile service available.", location:"nairobi", rate:800, rateType:"per job", rating:4.9, jobsCompleted:412, available:true, verified:true },
+  { id:"DP02", name:"Barber Kevin Njoroge", phone:"0723456702", category:"hair-beauty", skills:["Fades","Line-ups","Beard Shaping","Kids Cuts"], bio:"Precision fades & low cuts — 6 yrs Westlands. Home visits weekends.", location:"nairobi", rate:400, rateType:"per job", rating:4.8, jobsCompleted:930, available:true, verified:true },
+  { id:"DP03", name:"Naomi Atieno Styles", phone:"0734567803", category:"hair-beauty", skills:["Locs","Weaves","Nails","Cornrows"], bio:"Certified cosmetologist — 5 yrs Kisumu. Expert locs & natural Afro styles.", location:"kisumu", rate:600, rateType:"per job", rating:4.7, jobsCompleted:280, available:true, verified:true },
+  { id:"DP04", name:"Barber Tony Otieno", phone:"0745678904", category:"hair-beauty", skills:["Classic Cuts","Skin Fades","Colouring","Shaves"], bio:"10 yrs seasoned barber — Westgate Nairobi. Clean fades, group discounts.", location:"nairobi", rate:350, rateType:"per job", rating:5.0, jobsCompleted:1240, available:true, verified:true },
+  { id:"DP05", name:"Grace Muthoni Beauty", phone:"0756789005", category:"hair-beauty", skills:["Facials","Waxing","Manicure/Pedicure","Event Makeup"], bio:"CIDESCO-certified beauty therapist — 7 yrs Karen. Bridal & event specialist.", location:"nairobi", rate:1200, rateType:"per job", rating:4.9, jobsCompleted:520, available:true, verified:true },
+  { id:"DP06", name:"Fatuma Hassan Salon", phone:"0767890106", category:"hair-beauty", skills:["Henna Art","Relaxer","Hair Treatments","Bridal Styles"], bio:"Mombasa premier stylist — 9 yrs Old Town. Expert coastal bridal henna.", location:"mombasa", rate:700, rateType:"per job", rating:4.8, jobsCompleted:380, available:true, verified:true },
+  /* ── PLUMBING ── */
+  { id:"DP07", name:"Peter Kamau Plumbing", phone:"0778901207", category:"plumbing", skills:["Pipe Fitting","Leak Repair","Borehole","Water Tank"], bio:"NCA-licensed plumber — 12 yrs. Emergency callouts 24/7. All Nairobi zones.", location:"nairobi", rate:1500, rateType:"per job", rating:4.8, jobsCompleted:340, available:true, verified:true },
+  { id:"DP08", name:"Amos Odhiambo Plumbers", phone:"0789012308", category:"plumbing", skills:["Drainage","Sewer Lines","Pumps","Bathroom Fitting"], bio:"10 yrs Kisumu. Drainage & bathroom renovation specialist. No callout fee.", location:"kisumu", rate:1200, rateType:"per job", rating:4.7, jobsCompleted:215, available:true, verified:true },
+  { id:"DP09", name:"Dennis Mutua Plumbers", phone:"0790123409", category:"plumbing", skills:["Gas Plumbing","Solar Water Heater","Tile Work","Borehole"], bio:"Gas & plumbing expert — 8 yrs. KEBS-approved gas installer. Mombasa region.", location:"mombasa", rate:1800, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
+  { id:"DP10", name:"Charles Waweru Fundi", phone:"0701234510", category:"plumbing", skills:["Leak Repair","Pipe Install","Water Tanks","Emergency"], bio:"Fast-response plumber — 6 yrs Nakuru. Same-day fixes. All brands.", location:"nakuru", rate:1000, rateType:"per job", rating:4.6, jobsCompleted:167, available:true, verified:false },
+  { id:"DP11", name:"Mark Omondi Drainage", phone:"0712345611", category:"plumbing", skills:["Septic Tank","CCTV Drain","Pressure Testing","Pump Repair"], bio:"Drainage & septic systems — 14 yrs. ELC certified. Commercial & residential.", location:"nairobi", rate:2500, rateType:"per job", rating:4.9, jobsCompleted:455, available:true, verified:true },
+  /* ── ELECTRICAL ── */
+  { id:"DP12", name:"James Gitau Electricals", phone:"0723456712", category:"electrical", skills:["Wiring","Solar PV","DB Board","Security Lights"], bio:"ERC-licensed electrician — 10 yrs. Solar installation specialist. Nairobi.", location:"nairobi", rate:2000, rateType:"per job", rating:4.9, jobsCompleted:310, available:true, verified:true },
+  { id:"DP13", name:"Boniface Ouma Power", phone:"0734567813", category:"electrical", skills:["Generator Install","Inverter/UPS","CCTV","3-Phase"], bio:"Industrial & domestic electrician — 9 yrs Mombasa. ERC certified. Emergency same-day.", location:"mombasa", rate:1800, rateType:"per job", rating:4.7, jobsCompleted:195, available:true, verified:true },
+  { id:"DP14", name:"Edwin Kiptoo Electrics", phone:"0745678914", category:"electrical", skills:["Rewiring","Security Cameras","Solar","Power Faults"], bio:"Licensed — 7 yrs Eldoret. Rapid response. All brands of distribution boards.", location:"eldoret", rate:1500, rateType:"per job", rating:4.6, jobsCompleted:142, available:true, verified:false },
+  { id:"DP15", name:"Robert Mwangi Smart Home", phone:"0756789015", category:"electrical", skills:["Smart Home","Automation","Data Cabling","Solar Grid-Tie"], bio:"Smart home & solar specialist — 11 yrs. Master Electrician. Nairobi CBD & suburbs.", location:"nairobi", rate:3000, rateType:"per job", rating:5.0, jobsCompleted:278, available:true, verified:true },
+  { id:"DP16", name:"Lucy Wanjiku Electrics", phone:"0767890116", category:"electrical", skills:["Wiring","Repairs","Sockets","Light Install"], bio:"ERC-licensed — 6 yrs Nakuru. Kenya's top female electrician. Punctual & professional.", location:"nakuru", rate:1200, rateType:"per job", rating:4.8, jobsCompleted:120, available:true, verified:true },
+  /* ── CLEANING ── */
+  { id:"DP17", name:"ShineClean Services", phone:"0778901217", category:"cleaning", skills:["Deep Clean","Post-Construction","Office Cleaning","Steam Clean"], bio:"Professional 5-person team — 7 yrs Nairobi. Own industrial equipment. Monthly contracts.", location:"nairobi", rate:3500, rateType:"per job", rating:4.9, jobsCompleted:600, available:true, verified:true },
+  { id:"DP18", name:"Angela Nyambura Clean", phone:"0789012318", category:"cleaning", skills:["House Cleaning","Carpet Steam","Move-in/out","Fumigation"], bio:"Solo cleaning pro — 5 yrs Nairobi West. Thorough, honest and affordable.", location:"nairobi", rate:1500, rateType:"per job", rating:4.8, jobsCompleted:340, available:true, verified:true },
+  { id:"DP19", name:"CleanMasters Kenya", phone:"0790123419", category:"cleaning", skills:["Office Cleaning","School Cleaning","ISO Standards","Daily Contract"], bio:"Corporate cleaning company — 10-person team. Daily & weekly contracts. Nairobi.", location:"nairobi", rate:8000, rateType:"daily", rating:4.7, jobsCompleted:180, available:true, verified:true },
+  { id:"DP20", name:"Mombasa Clean Team", phone:"0701234520", category:"cleaning", skills:["Beach House","Post-Event","Hotel Standard","Fumigation"], bio:"Coastal property specialists — 6 yrs Mombasa. Airbnb turnover experts.", location:"mombasa", rate:2500, rateType:"per job", rating:4.8, jobsCompleted:220, available:true, verified:true },
+  { id:"DP21", name:"Purity Kamau Cleaning", phone:"0712345621", category:"cleaning", skills:["Residential","Carpet","Sofa Steam","Move-out"], bio:"Reliable house cleaner — 4 yrs Westlands. Eco-friendly products. Same-day bookings.", location:"nairobi", rate:1200, rateType:"per job", rating:4.9, jobsCompleted:290, available:true, verified:true },
+  /* ── MAMAFUA / LAUNDRY ── */
+  { id:"DP_L01", name:"Mama Jane Laundry", phone:"0711223344", category:"laundry", skills:["Hand Wash","Machine Wash","Ironing","Dry Cleaning"], bio:"Expert mamafua — 8 yrs Nairobi. Clothes collected & delivered same day. Gentle on fabrics.", location:"nairobi", rate:300, rateType:"per job", rating:4.9, jobsCompleted:1120, available:true, verified:true },
+  { id:"DP_L02", name:"FreshWash Services", phone:"0722334455", category:"laundry", skills:["Bulk Laundry","Uniforms","Linen","Hotels"], bio:"Commercial laundry specialists — 5 yrs. Hotels, schools, hospitals. Bulk discounts.", location:"nairobi", rate:1500, rateType:"per job", rating:4.8, jobsCompleted:640, available:true, verified:true },
+  { id:"DP_L03", name:"CleanThreads Mombasa", phone:"0733445566", category:"laundry", skills:["Delicate Fabrics","Stain Removal","Pressing","Pickup/Delivery"], bio:"Premium laundry Mombasa — 4 yrs. WhatsApp booking. 24hr turnaround.", location:"mombasa", rate:400, rateType:"per job", rating:4.7, jobsCompleted:380, available:true, verified:true },
+  { id:"DP_L04", name:"Mary Njeri Mamafua", phone:"0744556677", category:"laundry", skills:["Home Laundry","Bedsheets","Baby Clothes","Woollen Items"], bio:"Trusted mama fua Westlands — 6 yrs. Careful handling. Available Mon–Sat 7am–6pm.", location:"nairobi", rate:250, rateType:"per job", rating:5.0, jobsCompleted:890, available:true, verified:true },
+  { id:"DP_L05", name:"SpinCycle Kisumu", phone:"0755667788", category:"laundry", skills:["Machine Wash","Quick Dry","Ironing","Pickup Service"], bio:"Modern laundry Kisumu — 3 yrs. Industrial machines, fast turnaround. Free pickup within 5km.", location:"kisumu", rate:350, rateType:"per job", rating:4.8, jobsCompleted:290, available:true, verified:false },
+  /* ── PHOTOGRAPHY ── */
+  { id:"DP22", name:"Victor Osei Photography", phone:"0723456722", category:"photography", skills:["Weddings","Events","Corporate","Product"], bio:"Award-winning — 9 yrs. Canon 5D Mark IV. 200+ weddings. @victorpix Instagram.", location:"nairobi", rate:15000, rateType:"per job", rating:5.0, jobsCompleted:230, available:true, verified:true },
+  { id:"DP23", name:"Brenda Achieng Visuals", phone:"0734567823", category:"photography", skills:["Fashion","Portraits","Real Estate","Graduation"], bio:"Fashion & portrait photographer — 6 yrs. Studio in Westlands. Headshots & editorial.", location:"nairobi", rate:8000, rateType:"per job", rating:4.8, jobsCompleted:165, available:true, verified:true },
+  { id:"DP24", name:"Coast Photography KE", phone:"0745678924", category:"photography", skills:["Weddings","Beach","Events","Products"], bio:"Mombasa's top wedding photographer — 11 yrs. Outdoor coastal ceremony specialist.", location:"mombasa", rate:12000, rateType:"per job", rating:4.9, jobsCompleted:190, available:true, verified:true },
+  { id:"DP25", name:"Mike Wangari Snaps", phone:"0756789025", category:"photography", skills:["Sports","Concerts","News","Action Shots"], bio:"Sports & events photographer — 7 yrs. 24hr delivery. Nairobi + Kisumu.", location:"nairobi", rate:6000, rateType:"per job", rating:4.7, jobsCompleted:300, available:true, verified:false },
+  { id:"DP26", name:"Sandra Njoki Studio", phone:"0767890126", category:"photography", skills:["Baby Photoshoots","Maternity","Family","Newborn"], bio:"Baby & family photographer — 5 yrs Karen. Patient approach. Studio + home visits.", location:"nairobi", rate:7000, rateType:"per job", rating:4.9, jobsCompleted:145, available:true, verified:true },
+  /* ── VIDEOGRAPHY ── */
+  { id:"DP_V01", name:"Kevin Mwangi Films", phone:"0711223301", category:"videography", skills:["Wedding Films","4K Video","Drone","Same-Week Edit"], bio:"Cinematic wedding filmmaker — 8 yrs Nairobi. Sony FX6 + DJI drone. Same-week highlight reel.", location:"nairobi", rate:35000, rateType:"per job", rating:5.0, jobsCompleted:140, available:true, verified:true },
+  { id:"DP_V02", name:"Savanna Cinema KE", phone:"0722334402", category:"videography", skills:["Music Videos","Corporate","Events","Animation"], bio:"Full-service production house — 10 yrs. Music videos, brand films, corporate docs. Nairobi & Mombasa.", location:"nairobi", rate:50000, rateType:"per job", rating:4.9, jobsCompleted:95, available:true, verified:true },
+  { id:"DP_V03", name:"Mombasa Visuals Studio", phone:"0733445503", category:"videography", skills:["Weddings","Coastal Events","Drone","4K Aerial"], bio:"Coastal wedding & events videographer — 6 yrs. Drone certified. 24-hr teaser delivery.", location:"mombasa", rate:25000, rateType:"per job", rating:4.8, jobsCompleted:112, available:true, verified:true },
+  { id:"DP_V04", name:"Rift Lens Productions", phone:"0744556604", category:"videography", skills:["Short Films","Brand Ads","TikTok Content","Reels"], bio:"Content & brand videographer — 5 yrs Nakuru. Specialises in social media video for businesses.", location:"nakuru", rate:15000, rateType:"per job", rating:4.7, jobsCompleted:78, available:true, verified:false },
+  /* ── PHONE REPAIR ── */
+  { id:"DP27", name:"TechFix Nairobi", phone:"0778901227", category:"phone-repair", skills:["Samsung","iPhone","Tecno","Screen Replacement"], bio:"Phone repair experts — 7 yrs CBD Nairobi. Same-day screens. 90-day warranty.", location:"nairobi", rate:1500, rateType:"per job", rating:4.9, jobsCompleted:1200, available:true, verified:true },
+  { id:"DP28", name:"Ibrahim Hassan iRepair", phone:"0789012328", category:"phone-repair", skills:["iPhone","iPad","Mac","Data Recovery"], bio:"Apple specialist — 8 yrs. Genuine parts iPhone 12-15 series. Mombasa.", location:"mombasa", rate:2000, rateType:"per job", rating:4.8, jobsCompleted:450, available:true, verified:true },
+  { id:"DP29", name:"Kariuki Cell Repairs", phone:"0790123429", category:"phone-repair", skills:["All Brands","Water Damage","Battery","Software Flash"], bio:"General phone technician — 6 yrs Nakuru. Water damage specialist. No fix, no fee.", location:"nakuru", rate:800, rateType:"per job", rating:4.7, jobsCompleted:680, available:true, verified:false },
+  { id:"DP30", name:"Kelvin Ochieng Mobile", phone:"0701234530", category:"phone-repair", skills:["Infinix","Tecno","Samsung","Xiaomi"], bio:"Affordable smartphone repairs — 5 yrs Kisumu. Online WhatsApp quote.", location:"kisumu", rate:700, rateType:"per job", rating:4.6, jobsCompleted:390, available:true, verified:false },
+  { id:"DP31", name:"DigiMend Solutions", phone:"0712345631", category:"phone-repair", skills:["Motherboard Repair","IC Chip Level","Data Recovery","Unlocking"], bio:"Advanced board-level repair — 10 yrs. Other shops send us their hard cases. Nairobi.", location:"nairobi", rate:3500, rateType:"per job", rating:5.0, jobsCompleted:290, available:true, verified:true },
+  /* ── TUTORING ── */
+  { id:"DP32", name:"Teacher Collins Mwangi", phone:"0723456732", category:"tutoring", skills:["Maths","Physics","Chemistry","KCSE"], bio:"BSc Maths UoN — 8 yrs tutoring KCSE. Average 3-grade improvement. Nairobi.", location:"nairobi", rate:700, rateType:"hourly", rating:4.9, jobsCompleted:340, available:true, verified:true },
+  { id:"DP33", name:"Esther Auma Language", phone:"0734567833", category:"tutoring", skills:["English","Kiswahili","Literature","CBC"], bio:"Language arts teacher — 10 yrs primary & secondary. CBC specialist. Nairobi & online.", location:"nairobi", rate:500, rateType:"hourly", rating:4.8, jobsCompleted:210, available:true, verified:true },
+  { id:"DP34", name:"Dr. Paul Ndirangu PhD", phone:"0745678934", category:"tutoring", skills:["University Maths","Statistics","MATLAB","Research"], bio:"Lecturer offering private stats tutoring. PhD Mathematics (UoN). Online & in-person.", location:"remote", rate:1500, rateType:"hourly", rating:5.0, jobsCompleted:120, available:true, verified:true },
+  { id:"DP35", name:"Mercy Wambua CBC", phone:"0756789035", category:"tutoring", skills:["Grade 1-9 CBC","English","Maths","Arts"], bio:"Junior secondary CBC specialist — 6 yrs. Home visits Kisumu. Child-friendly approach.", location:"kisumu", rate:450, rateType:"hourly", rating:4.7, jobsCompleted:180, available:true, verified:false },
+  { id:"DP36", name:"Kevin Rotich Science", phone:"0767890136", category:"tutoring", skills:["Chemistry","Biology","IGCSE","A Level"], bio:"IGCSE & A-Level tutor — 7 yrs. International schools background. Online sessions.", location:"nairobi", rate:1000, rateType:"hourly", rating:4.9, jobsCompleted:265, available:true, verified:true },
+  /* ── FITNESS ── */
+  { id:"DP37", name:"Coach Brian Maina PT", phone:"0778901237", category:"fitness", skills:["Weight Loss","Muscle Building","HIIT","Nutrition Plans"], bio:"ACE-certified personal trainer — 6 yrs Nairobi CBD. Transformation packages.", location:"nairobi", rate:2000, rateType:"hourly", rating:5.0, jobsCompleted:310, available:true, verified:true },
+  { id:"DP38", name:"Stella Kimani Yoga", phone:"0789012338", category:"fitness", skills:["Yoga","Pilates","Prenatal Fitness","Mindfulness"], bio:"RYT 500-certified — 8 yrs. Studio in Lavington. Prenatal & postnatal specialist.", location:"nairobi", rate:1500, rateType:"hourly", rating:4.9, jobsCompleted:420, available:true, verified:true },
+  { id:"DP39", name:"Coach Felix Njoroge", phone:"0790123439", category:"fitness", skills:["Boxing","CrossFit","Cardio","Endurance"], bio:"Pro boxer turned fitness coach — 9 yrs. Online training programs. Nairobi South.", location:"nairobi", rate:1800, rateType:"hourly", rating:4.8, jobsCompleted:190, available:true, verified:true },
+  { id:"DP40", name:"Sandra Achieng Fit", phone:"0701234540", category:"fitness", skills:["Ladies Fitness","Aerobics","Zumba","Weight Loss"], bio:"Ladies fitness specialist — 5 yrs Kisumu. Group & one-on-one. 100+ transformations.", location:"kisumu", rate:1000, rateType:"hourly", rating:4.7, jobsCompleted:145, available:true, verified:false },
+  { id:"DP41", name:"Mike Otieno Bodybuilding", phone:"0712345641", category:"fitness", skills:["Bodybuilding","Powerlifting","Meal Plans","Contest Prep"], bio:"Competitive bodybuilder & coach — 12 yrs Mombasa. Competition prep specialist.", location:"mombasa", rate:2500, rateType:"hourly", rating:4.9, jobsCompleted:230, available:true, verified:true },
+  /* ── CATERING ── */
+  { id:"DP42", name:"Mama Rose Catering", phone:"0723456742", category:"catering", skills:["Kenyan Cuisine","Nyama Choma","Buffet","Weddings"], bio:"Pro caterer — 15 yrs. Health-certified. Up to 500 guests. Own full kitchen trailer.", location:"nairobi", rate:15000, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
+  { id:"DP43", name:"Chef Daniel Kiplagat", phone:"0734567843", category:"catering", skills:["Continental","Indian","Fusion","Finger Food"], bio:"Trained chef — 10 yrs 5-star hotels. Now freelance. Upscale corporate events.", location:"nairobi", rate:25000, rateType:"per job", rating:5.0, jobsCompleted:95, available:true, verified:true },
+  { id:"DP44", name:"Coast Flavors Catering", phone:"0745678944", category:"catering", skills:["Coastal Cuisine","Seafood","Pilau","Wedding Cakes"], bio:"Mombasa coastal specialists — 9 yrs. Biryani, seafood, pilau. Up to 300 guests.", location:"mombasa", rate:12000, rateType:"per job", rating:4.8, jobsCompleted:140, available:true, verified:true },
+  { id:"DP45", name:"Kisumu Fish BBQ", phone:"0756789045", category:"catering", skills:["Lake Fish","BBQ","Local Cuisines","Budget Events"], bio:"Lakeside catering Kisumu — 7 yrs. Tilapia, omena, ugali. Community events.", location:"kisumu", rate:8000, rateType:"per job", rating:4.7, jobsCompleted:120, available:true, verified:false },
+  { id:"DP46", name:"Sweet Delights Bakery", phone:"0767890146", category:"catering", skills:["Wedding Cakes","Birthday Cakes","Pastries","Desserts"], bio:"Professional baker & cake artist — 8 yrs Nairobi. Custom tiered cakes. Delivery.", location:"nairobi", rate:5000, rateType:"per job", rating:4.9, jobsCompleted:310, available:true, verified:true },
+  /* ── EVENT PLANNERS ── */
+  { id:"DP_E01", name:"Vivian Waweru Events", phone:"0711234501", category:"events", skills:["Weddings","Corporate","Décor","Venue Sourcing"], bio:"Professional event planner — 9 yrs Nairobi. 300+ events. Own full décor stock. Full-service packages.", location:"nairobi", rate:25000, rateType:"per job", rating:5.0, jobsCompleted:180, available:true, verified:true },
+  { id:"DP_E02", name:"Grand Occasions Kenya", phone:"0722345602", category:"events", skills:["Marquee Tents","Birthdays","Corporate","Outdoor Setups"], bio:"Event planning company — 6 yrs Nairobi. Tents, lighting, décor, catering coordination. Fully managed.", location:"nairobi", rate:35000, rateType:"per job", rating:4.9, jobsCompleted:142, available:true, verified:true },
+  { id:"DP_E03", name:"Coastal Celebrations KE", phone:"0733456703", category:"events", skills:["Beach Weddings","Cultural Events","Sound & Lighting","Birthdays"], bio:"Mombasa event specialist — 7 yrs. Beach weddings, cultural ceremonies, corporate events. Full setup.", location:"mombasa", rate:20000, rateType:"per job", rating:4.8, jobsCompleted:95, available:true, verified:true },
+  { id:"DP_E04", name:"Rift Eventions Ltd", phone:"0744567804", category:"events", skills:["Graduations","Religious Events","NGO Events","School Functions"], bio:"Budget-friendly event planner — 5 yrs Nakuru & Kisumu. Schools, churches, community events.", location:"nakuru", rate:15000, rateType:"per job", rating:4.7, jobsCompleted:78, available:true, verified:false },
+  /* ── GRAPHIC DESIGN ── */
+  { id:"DP47", name:"Ken Njagi Designs", phone:"0778901247", category:"graphic-design", skills:["Logo Design","Branding","Flyers","Social Media"], bio:"Brand identity specialist — 7 yrs. 200+ logos for Kenyan SMEs. Behance: kenjagi.", location:"nairobi", rate:3000, rateType:"per job", rating:4.9, jobsCompleted:280, available:true, verified:true },
+  { id:"DP48", name:"Aisha Omar Creative", phone:"0789012348", category:"graphic-design", skills:["UI/UX","App Mockups","Web Design","Figma"], bio:"UX designer — 5 yrs. Adobe XD & Figma expert. Startups & established brands.", location:"nairobi", rate:5000, rateType:"per job", rating:4.8, jobsCompleted:145, available:true, verified:true },
+  { id:"DP49", name:"FredzGraphix Studio", phone:"0790123449", category:"graphic-design", skills:["3D Visuals","Packaging","Vehicle Branding","Banners"], bio:"Print & 3D design studio — 9 yrs Mombasa. Large format printing partnerships.", location:"mombasa", rate:4000, rateType:"per job", rating:4.7, jobsCompleted:200, available:true, verified:false },
+  { id:"DP50", name:"Lilian Wahu Designs", phone:"0701234550", category:"graphic-design", skills:["Canva Pro","Instagram Graphics","Cards","Templates"], bio:"Social media content creator — 3 yrs. Affordable. Same-day delivery for simple jobs.", location:"remote", rate:800, rateType:"per job", rating:4.6, jobsCompleted:350, available:true, verified:false },
+  { id:"DP51", name:"Big Print Kenya", phone:"0712345651", category:"graphic-design", skills:["Corporate Identity","Annual Reports","Presentations","Publishing"], bio:"Corporate design agency — 12 yrs Nairobi. Fortune-500 quality at SME prices.", location:"nairobi", rate:15000, rateType:"per job", rating:4.9, jobsCompleted:110, available:true, verified:true },
+  /* ── ACCOUNTING ── */
+  { id:"DP52", name:"CPA Jane Njoroge", phone:"0723456752", category:"accounting", skills:["Tax Returns (KRA)","Bookkeeping","Payroll","QuickBooks"], bio:"CPA-K licensed — 9 yrs. KRA iTax, payroll, VAT returns & audit prep.", location:"nairobi", rate:5000, rateType:"per job", rating:4.9, jobsCompleted:320, available:true, verified:true },
+  { id:"DP53", name:"Francis Ochieng ACCA", phone:"0734567853", category:"accounting", skills:["IFRS Statements","Audit","Sage","Xero"], bio:"ACCA qualified — 12 yrs. SME & NGO financial statements & audit prep.", location:"nairobi", rate:8000, rateType:"per job", rating:4.8, jobsCompleted:190, available:true, verified:true },
+  { id:"DP54", name:"Mombasa Tax Consultants", phone:"0745678954", category:"accounting", skills:["KRA Compliance","Business Reg","VAT","Corporate Tax"], bio:"Tax compliance specialists — 8 yrs Mombasa. Sole traders, companies & NGOs.", location:"mombasa", rate:4000, rateType:"per job", rating:4.7, jobsCompleted:155, available:true, verified:true },
+  { id:"DP55", name:"Rachel Wambua Books", phone:"0756789055", category:"accounting", skills:["Bookkeeping","Petty Cash","Excel","NSSF/NHIF"], bio:"Small biz bookkeeper — 5 yrs. Affordable rates. Online service nationwide.", location:"remote", rate:2000, rateType:"monthly", rating:4.8, jobsCompleted:210, available:true, verified:false },
+  /* ── COMPUTER REPAIR ── */
+  { id:"DP56", name:"Techvault IT Services", phone:"0767890156", category:"computer-repair", skills:["Virus Removal","Data Recovery","Networking","Server Setup"], bio:"IT support firm — 8 yrs Nairobi. Onsite & remote. SLA contracts for businesses.", location:"nairobi", rate:2500, rateType:"per job", rating:4.9, jobsCompleted:520, available:true, verified:true },
+  { id:"DP57", name:"PC Doctor Kisumu", phone:"0778901257", category:"computer-repair", skills:["Laptop Repair","OS Install","Printer Setup","Networking"], bio:"Computer technician — 7 yrs Kisumu. All brands. Home & office visits.", location:"kisumu", rate:1500, rateType:"per job", rating:4.7, jobsCompleted:310, available:true, verified:false },
+  { id:"DP58", name:"Allan Mwenda CompuFix", phone:"0789012358", category:"computer-repair", skills:["Mac Repair","Windows","Data Recovery","SSD Upgrades"], bio:"Mac & PC specialist — 9 yrs Nairobi. Apple trained. Same-day RAM & SSD upgrades.", location:"nairobi", rate:3000, rateType:"per job", rating:4.8, jobsCompleted:280, available:true, verified:true },
+  { id:"DP59", name:"NetworkPro Kenya", phone:"0790123459", category:"computer-repair", skills:["CCTV Setup","WiFi","Structured Cabling","Mikrotik"], bio:"Network & CCTV installer — 10 yrs. Cisco certified. Commercial & residential.", location:"nairobi", rate:5000, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
+  { id:"DP60", name:"Mercy Njeri IT Support", phone:"0701234560", category:"computer-repair", skills:["Remote Support","Email Setup","MS Office","Cloud Storage"], bio:"Remote IT specialist — 4 yrs. Same-day Zoom/TeamViewer assistance. Nationwide.", location:"remote", rate:1000, rateType:"per job", rating:4.6, jobsCompleted:420, available:true, verified:false },
+  /* ── MARKETING ── */
+  { id:"DP_M01", name:"Brian Omondi Digital", phone:"0711223345", category:"marketing", skills:["Social Media Ads","Google Ads","SEO","Content"], bio:"Digital marketing specialist — 7 yrs Nairobi. Meta & Google certified. 3x average ROAS for SMEs.", location:"nairobi", rate:8000, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
+  { id:"DP_M02", name:"Wanjiku Media KE", phone:"0722334456", category:"marketing", skills:["TikTok Marketing","Instagram","Influencer","Brand Strategy"], bio:"Social media agency — 5 yrs Nairobi. TikTok & Instagram growth specialists. 50+ brands managed.", location:"nairobi", rate:15000, rateType:"monthly", rating:4.8, jobsCompleted:95, available:true, verified:true },
+  { id:"DP_M03", name:"Seun Ade Copywriter", phone:"0733445567", category:"marketing", skills:["Copywriting","Email Marketing","Blogs","Sales Pages"], bio:"Professional copywriter — 6 yrs remote. Conversion-focused copy for Kenyan & East African brands.", location:"remote", rate:3000, rateType:"per job", rating:4.7, jobsCompleted:240, available:true, verified:false },
+  { id:"DP_M04", name:"Nairobi Growth Agency", phone:"0744556678", category:"marketing", skills:["WhatsApp Marketing","SMS Blasts","Bulk Email","Lead Gen"], bio:"Performance marketing firm — 8 yrs. 1M+ messages delivered. SME & corporate packages.", location:"nairobi", rate:5000, rateType:"per job", rating:4.8, jobsCompleted:320, available:true, verified:true },
+  /* ── HOME REPAIRS ── */
+  { id:"DP_H01", name:"Fundi Kamau Repairs", phone:"0755667789", category:"home-repairs", skills:["Painting","Tiling","Plastering","Gypsum"], bio:"General fundi — 10 yrs Nairobi. Interior & exterior painting, tiling, plastering. Own equipment.", location:"nairobi", rate:2000, rateType:"per job", rating:4.8, jobsCompleted:420, available:true, verified:true },
+  { id:"DP_H02", name:"Otieno Handyman Hub", phone:"0766778890", category:"home-repairs", skills:["Door Fitting","Fencing","Burglar Proofing","Welding"], bio:"Metalwork & carpentry fundi — 8 yrs Kisumu. Gate fabrication, burglar bars, door repairs.", location:"kisumu", rate:1500, rateType:"per job", rating:4.7, jobsCompleted:280, available:true, verified:false },
+  { id:"DP_H03", name:"HomeFix Nairobi Pro", phone:"0777889901", category:"home-repairs", skills:["Waterproofing","Roof Repair","Crack Sealing","Renovation"], bio:"Building maintenance specialists — 12 yrs. Roof leaks, waterproofing, crack repair. Commercial & residential.", location:"nairobi", rate:3500, rateType:"per job", rating:4.9, jobsCompleted:195, available:true, verified:true },
+  /* ── DELIVERY ── */
+  { id:"DP61", name:"Speedy Riders Nairobi", phone:"0712345661", category:"delivery-service", skills:["Food Delivery","Parcel","Documents","Same-Day"], bio:"Boda boda delivery network — 3 yrs. 15 riders across Nairobi. GPS tracked.", location:"nairobi", rate:200, rateType:"per job", rating:4.8, jobsCompleted:2400, available:true, verified:true },
+  { id:"DP62", name:"Kelvin Njomo Courier", phone:"0723456762", category:"delivery-service", skills:["Documents","Fragile Goods","CBD Delivery","Next-Day"], bio:"Professional courier — 5 yrs Nairobi. Reliable, insured. Corporate rates.", location:"nairobi", rate:300, rateType:"per job", rating:4.7, jobsCompleted:1100, available:true, verified:false },
+  { id:"DP63", name:"Mombasa Express Courier", phone:"0734567863", category:"delivery-service", skills:["Airport Pickup","Mombasa Island","Medical Samples","E-commerce"], bio:"Coastal delivery — 7 yrs. Mombasa Island & mainland. Medical sample specialists.", location:"mombasa", rate:250, rateType:"per job", rating:4.8, jobsCompleted:1600, available:true, verified:true },
+  { id:"DP64", name:"Kisumu Delivery Hub", phone:"0745678964", category:"delivery-service", skills:["Lakeside Delivery","Homabay","Siaya","Same-Day"], bio:"Western Kenya delivery — 4 yrs. Kisumu, Homabay, Siaya, Migori. Fast & reliable.", location:"kisumu", rate:150, rateType:"per job", rating:4.6, jobsCompleted:890, available:true, verified:false },
+  { id:"DP65", name:"QuickMove Kenya", phone:"0756789065", category:"delivery-service", skills:["Furniture","Appliances","House Moving","Large Items"], bio:"Moving & logistics — 6 yrs. Lorry, pickup & van available. Nairobi-wide.", location:"nairobi", rate:3500, rateType:"per job", rating:4.9, jobsCompleted:340, available:true, verified:true },
+];
+
+function getProviders(){
+  let stored = [];
+  try{ stored = JSON.parse(localStorage.getItem("sokoniServiceProviders"))||[]; } catch(e){}
+  /* Always show demo providers merged with any real ones */
+  const storedIds = new Set(stored.map(p=>p.id));
+  return [...stored, ...DEMO_PROVIDERS.filter(d=>!storedIds.has(d.id))];
+}
+function saveProviders(d){ localStorage.setItem("sokoniServiceProviders",JSON.stringify(d)); }
+function getBookings(){   try{return JSON.parse(localStorage.getItem("sokoniServiceBookings"))||[];}catch(e){return[];} }
+function saveBookings(d){ localStorage.setItem("sokoniServiceBookings",JSON.stringify(d)); }
+
+const RATE_LABEL = { hourly:"per hr", "per job":"per job", daily:"per day", monthly:"per month" };
+const STATUS_LABEL = { pending:"⏳ Pending", confirmed:"✅ Confirmed", in_progress:"🔄 In Progress", completed:"🎉 Completed", cancelled:"❌ Cancelled" };
+const STATUS_CLASS = { pending:"job-pending", confirmed:"job-confirmed", in_progress:"job-inprogress", completed:"job-completed", cancelled:"job-cancelled" };
+
+/* ── Render provider cards ── */
+function renderProviders(){
+  const grid = document.getElementById("providersGrid");
+  const countEl = document.getElementById("providerCount");
+  if(!grid) return;
+  let providers = getProviders();
+
+  /* Filter by active category */
+  const CAT_ALIASES = {
+    "cleaning": ["cleaning","laundry"],   /* cleaning & laundry are the same hub */
+  };
+  if(activeCat){
+    const matchCats = CAT_ALIASES[activeCat] || [activeCat];
+    providers = providers.filter(p => matchCats.includes(p.category));
+  }
+
+  /* Filter by search */
+  const q = (document.getElementById("svSearchInput")?.value||"").toLowerCase();
+  if(q) providers = providers.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    p.skills.join(" ").toLowerCase().includes(q) ||
+    (p.bio||"").toLowerCase().includes(q) ||
+    (CAT_LABEL[p.category]||"").toLowerCase().includes(q)
+  );
+
+  if(countEl) countEl.textContent = `(${providers.length} found)`;
+
+  if(!providers.length){
+    grid.innerHTML = `<div class="sv-empty" style="grid-column:1/-1;"><div class="sv-empty-icon">👷</div><p>No verified providers in this category yet.<br>Be the first to register!</p><a href="javascript:void(0)" onclick="openProviderDash()" style="margin-top:16px;display:inline-block;padding:11px 22px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;font-weight:700;font-family:inherit;font-size:13px;text-decoration:none;">+ Register as Provider</a></div>`;
+    return;
+  }
+
+  const CAT_COVER = {
+    'electrical':'cv-yellow','computer-repair':'cv-yellow',
+    'plumbing':'cv-blue','water':'cv-blue',
+    'cleaning':'cv-teal','laundry':'cv-teal',
+    'beauty':'cv-pink','healthcare':'cv-pink',
+    'accounting':'cv-purple','legal':'cv-purple','tutoring':'cv-purple',
+    'delivery-service':'cv-orange','home-repairs':'cv-orange',
+    'marketing':'cv-pink','design':'cv-purple',
+    'security':'cv-red',
+  };
+
+  /* Patch follow buttons after rendering */
+  setTimeout(function(){ if(window.SokoniSocial) SokoniSocial.patchServicesFollowBtns(); },150);
+
+  grid.innerHTML = providers.map(p => {
+    const initials   = p.name.split(" ").map(w=>w[0]).join("").substring(0,2).toUpperCase();
+    const stars      = "★".repeat(Math.round(p.rating||5)) + "☆".repeat(5-Math.round(p.rating||5));
+    const coverCls   = CAT_COVER[p.category] || "cv-green";
+    const firstName  = p.name.split(" ")[0];
+    const locLabel   = p.location.charAt(0).toUpperCase()+p.location.slice(1);
+    const bioText    = p.bio ? p.bio.substring(0,72)+(p.bio.length>72?"...":"") : "";
+    const rateLabel  = RATE_LABEL[p.rateType]||p.rateType||"";
+    return `
+    <div class="pv-card ${p.available===false?'pv-unavail':''}">
+      <div class="pv-cover ${coverCls}">
+        <div class="pv-avatar-wrap">
+          <div class="pv-avatar">${initials}</div>
+        </div>
+      </div>
+      <div class="pv-body">
+        <div class="pv-name">${p.name}${p.verified?`<span class="pv-verified">✅ Verified</span>`:""}</div>
+        <div class="pv-cat">${CAT_EMOJI[p.category]||"🛠️"} ${CAT_LABEL[p.category]||p.category} · 📍 ${locLabel}</div>
+        <div class="pv-stars">${stars} <span>${p.rating||"5.0"} · ${p.jobsCompleted||0} jobs</span></div>
+        <div class="pv-skills">${(p.skills||[]).slice(0,3).map(s=>`<span class="pv-skill">${s}</span>`).join("")}</div>
+        ${bioText?`<div class="pv-bio">"${bioText}"</div>`:""}
+        <div class="pv-rate">KES ${Number(p.rate||0).toLocaleString()} <span>${rateLabel}</span></div>
+        <div style="display:flex;gap:6px;">
+          <button type="button" class="pv-book-btn" style="flex:1;" onclick="openBookingModal('${p.id}')">📩 Book ${firstName}</button>
+          <button type="button" class="pv-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;flex-shrink:0;padding:9px 14px;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'${p.uid||p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'${(CAT_LABEL[p.category]||p.category).replace(/'/g,"\\'")} · SOKONI Services'}):location.href='messages.html'" title="Message ${firstName}">💬</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ── Open booking modal ── */
+let _currentBookingProviderId = null;
+let _currentBookingRef = null;
+
+function openBookingModal(providerId){
+  const p = getProviders().find(x=>x.id===providerId);
+  if(!p) return;
+  if(typeof SokoniPay !== "undefined"){
+    SokoniPay.bookNow({
+      providerName:  p.name,
+      category:      p.category || "default",
+      serviceDesc:   (p.skills||[]).slice(0,2).join(", ") || "Professional Service",
+      providerPhone: p.phone || ""
+    }, function(ref){
+      _currentBookingRef = ref;
+      _openBookingDetails(providerId);
+      try { if(typeof window.onSokoniPurchase==='function') window.onSokoniPurchase(p.price||0); } catch(e){}
+    });
+  } else {
+    _openBookingDetails(providerId);
+  }
+}
+
+function _openBookingDetails(providerId){
+  _currentBookingProviderId = providerId;
+  const p = getProviders().find(x=>x.id===providerId);
+  if(!p) return;
+
+  const infoEl = document.getElementById("bookModalProviderInfo");
+  if(infoEl) infoEl.innerHTML = `Booking: <strong style="color:white;">${p.name}</strong> · ${CAT_EMOJI[p.category]||"🛠️"} ${CAT_LABEL[p.category]||p.category} · <span style="color:#71ff00;">KES ${Number(p.rate).toLocaleString()} ${RATE_LABEL[p.rateType]||""}</span>${_currentBookingRef?` · <span style="color:#00aaff;font-size:10px;">Ref: ${_currentBookingRef}</span>`:""}`;
+
+  /* Pre-fill from logged-in user */
+  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const nameEl  = document.getElementById("bkClientName");
+  if(user?.name  && nameEl  && !nameEl.value)  nameEl.value  = user.name;
+  if(nameEl) nameEl.focus();
+
+  /* Default date = tomorrow */
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const dateEl = document.getElementById("bkDate");
+  if(dateEl) dateEl.value = tomorrow.toISOString().slice(0,10);
+
+  document.getElementById("bkMsg").textContent = "";
+  document.getElementById("bookingModal").style.display = "flex";
+}
+
+/* ── Submit booking ── */
+function submitBooking(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('svc_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  const name    = document.getElementById("bkClientName")?.value.trim();
+  const phone   = document.getElementById("bkClientPhone")?.value.trim();
+  const jobDesc = document.getElementById("bkJobDesc")?.value.trim();
+  const loc     = document.getElementById("bkLocation")?.value.trim();
+  const date    = document.getElementById("bkDate")?.value;
+  const time    = document.getElementById("bkTime")?.value || "09:00";
+  const msgEl   = document.getElementById("bkMsg");
+
+  if(!name||!phone||!jobDesc||!loc||!date){
+    if(msgEl){ msgEl.textContent="⚠️ Please fill all required fields"; msgEl.style.color="#ff9800"; }
+    return;
+  }
+
+  const p = getProviders().find(x=>x.id===_currentBookingProviderId);
+  if(!p) return;
+
+  const booking = {
+    id:           "BK"+Date.now(),
+    providerId:   p.id,
+    providerName: p.name,
+    providerPhone:p.phone,
+    category:     p.category,
+    clientName:   name,
+    clientPhone:  phone,
+    jobDesc,
+    location:     loc,
+    scheduledDate:date,
+    scheduledTime:time,
+    status:       "pending",
+    quote:        0,
+    sokoniRef:    _currentBookingRef || "",
+    createdAt:    Date.now(),
+    updatedAt:    Date.now()
+  };
+
+  const all = getBookings();
+  all.unshift(booking);
+  saveBookings(all);
+
+  /* Persist to Firestore so provider sees it on any device */
+  if(window.SokoniDB){
+    window.SokoniDB.saveBooking(booking)
+      .catch(e=>console.warn('[SOKONI] Booking save failed:',e.message));
+  }
+
+  /* Notify provider (if same device) */
+  if(window.sokoniNotify) {
+    window.sokoniNotify(
+      `📩 New Booking — ${p.name}`,
+      `${name} wants to book ${CAT_LABEL[p.category]||p.category} on ${date}`,
+      "/assets/logosokoni.png",
+      "/services.html"
+    );
+  }
+
+  /* Add to messages */
+  let msgs = [];
+  try { msgs = JSON.parse(localStorage.getItem("sokoniMessages"))||[]; } catch(e){}
+  msgs.unshift({
+    id: "conv_bk_"+booking.id,
+    productName: `Booking: ${CAT_LABEL[p.category]||p.category}`,
+    sellerName:  p.name,
+    messages:[{
+      sender:"seller",
+      text:`Hi ${name}! 👋 Your booking request for ${CAT_LABEL[p.category]||p.category} on ${date} at ${time} has been received!\n\n📍 Location: ${loc}\n📝 Job: ${jobDesc}\n\nWe'll confirm within 2 hours. Booking ID: ${booking.id}`,
+      time: new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})
+    }],
+    unread:1, spam:false, createdAt:Date.now()
+  });
+  localStorage.setItem("sokoniMessages", JSON.stringify(msgs));
+
+  if(msgEl){ msgEl.innerHTML = '✅ Booking submitted! <a href="messages.html" style="color:#71ff00;">Check Messages →</a>'; msgEl.style.color="#71ff00"; }
+  if(window.SokoniInvoice) setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:(CAT_LABEL[p.category]||p.category)+' Service',category:CAT_LABEL[p.category]||'Service',qty:1,price:p.rate||0}],subtotal:p.rate||0,total:p.rate||0,paymentMethod:'Pending — Provider Confirms',paymentRef:booking.id,sellerName:p.name,date:new Date().toISOString(),notes:loc+' · '+date+' '+time});},700);
+  setTimeout(()=>{ document.getElementById("bookingModal").style.display="none"; }, 2500);
+}
+
+/* ── Client: view their bookings ── */
+function renderClientBookings(){
+  const listEl = document.getElementById("clientBookingsList");
+  if(!listEl) return;
+  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const all  = getBookings();
+  const mine = user ? all.filter(b=>b.clientName===user.name||b.clientPhone===user.phone) : all;
+
+  if(!mine.length){
+    listEl.innerHTML = `<div class="sv-empty"><div class="sv-empty-icon">📅</div><p>No bookings yet.<br>Book a service provider from the Verified Providers tab.</p></div>`;
+    return;
+  }
+
+  listEl.innerHTML = mine.map(b => `
+    <div class="job-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">${CAT_EMOJI[b.category]||"🛠️"} ${CAT_LABEL[b.category]||b.category}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5);">Provider: <strong>${b.providerName}</strong> · ${b.scheduledDate} at ${b.scheduledTime}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">📍 ${b.location} · ID: ${b.id}</div>
+        </div>
+        <span class="job-status ${STATUS_CLASS[b.status]||'job-pending'}">${STATUS_LABEL[b.status]||b.status}</span>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.55);margin-bottom:10px;">"${b.jobDesc}"</div>
+      ${b.quote > 0 ? `<div style="font-size:13px;font-weight:800;color:#71ff00;margin-bottom:8px;">💰 Quoted: KES ${Number(b.quote).toLocaleString()}</div>` : ""}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${b.providerPhone ? `<a href="tel:+254${b.providerPhone.replace(/^0/,'')}" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">📞 Call Provider</a>` : ""}
+        ${b.providerPhone ? `<a href="https://wa.me/254${b.providerPhone.replace(/^0/,'')}?text=${encodeURIComponent(`Hi ${b.providerName}! Regarding my booking ${b.id} for ${CAT_LABEL[b.category]||b.category} on ${b.scheduledDate}...`)}" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 WhatsApp</a>` : ""}
+        ${b.status==="pending" ? `<button type="button" onclick="cancelBooking('${b.id}')" style="padding:7px 12px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;">Cancel</button>` : ""}
+      </div>
+    </div>
+  `).join("");
+}
+
+function cancelBooking(id){
+  const all = getBookings();
+  const bk  = all.find(b=>b.id===id);
+  if(bk){ bk.status="cancelled"; bk.updatedAt=Date.now(); saveBookings(all); renderClientBookings(); }
+}
+
+/* ── Provider: view & manage incoming jobs ── */
+function renderProviderJobs(){
+  const listEl = document.getElementById("providerJobsList");
+  if(!listEl) return;
+  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const all  = getBookings();
+  const mine = user ? all.filter(b=>b.providerName===user.name) : all.filter(b=>b.status!=="cancelled");
+
+  if(!mine.length){
+    listEl.innerHTML = `<div class="sv-empty"><div class="sv-empty-icon">📋</div><p>No job requests yet.<br>Register as a provider and wait for clients to find you!</p></div>`;
+    return;
+  }
+
+  listEl.innerHTML = mine.map(b => `
+    <div class="job-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">${b.clientName} — ${CAT_EMOJI[b.category]||"🛠️"} ${CAT_LABEL[b.category]||b.category}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.5);">📅 ${b.scheduledDate} at ${b.scheduledTime} · 📍 ${b.location}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">Client: ${b.clientPhone} · ID: ${b.id}</div>
+        </div>
+        <span class="job-status ${STATUS_CLASS[b.status]||'job-pending'}">${STATUS_LABEL[b.status]||b.status}</span>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:12px;">"${b.jobDesc}"</div>
+
+      <!-- Quote input -->
+      ${b.status==="pending" ? `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="number" id="quote_${b.id}" placeholder="Set your quote (KES)" value="${b.quote||""}" style="padding:9px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:white;font-size:16px;outline:none;font-family:inherit;width:180px;">
+        <button type="button" onclick="confirmJob('${b.id}')" style="padding:9px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">✅ Confirm &amp; Quote</button>
+        <button type="button" onclick="declineJob('${b.id}')" style="padding:9px 12px;background:rgba(255,77,77,0.08);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;">Decline</button>
+      </div>` : ""}
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${b.clientPhone ? `<a href="tel:${b.clientPhone}" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">📞 Call Client</a>` : ""}
+        ${b.clientPhone ? `<a href="https://wa.me/254${b.clientPhone.replace(/^0/,'')}?text=${encodeURIComponent(`Hi ${b.clientName}! Regarding your service request ${b.id}...`)}" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);color:#25d366;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">💬 WhatsApp</a>` : ""}
+        ${b.status==="confirmed" ? `<button type="button" onclick="updateJobStatus('${b.id}','in_progress')" style="padding:7px 14px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">▶ Mark In Progress</button>` : ""}
+        ${b.status==="in_progress" ? `<button type="button" onclick="updateJobStatus('${b.id}','completed')" style="padding:7px 14px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.25);color:#4caf50;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">✅ Mark Completed</button>` : ""}
+      </div>
+    </div>
+  `).join("");
+}
+
+function confirmJob(id){
+  const all   = getBookings();
+  const bk    = all.find(b=>b.id===id);
+  if(!bk) return;
+  const quote = Number(document.getElementById("quote_"+id)?.value || 0);
+  bk.status   = "confirmed";
+  bk.quote    = quote;
+  bk.updatedAt= Date.now();
+  saveBookings(all);
+  renderProviderJobs();
+  /* Notify client */
+  if(window.sokoniNotify) window.sokoniNotify("✅ Booking Confirmed!", `${bk.providerName} confirmed your booking for ${bk.scheduledDate}${quote > 0 ? ` — KES ${quote.toLocaleString()}` : ""}`, "/assets/logosokoni.png", "/services.html");
+}
+
+function declineJob(id){
+  const all = getBookings();
+  const bk  = all.find(b=>b.id===id);
+  if(bk){ bk.status="cancelled"; bk.updatedAt=Date.now(); saveBookings(all); renderProviderJobs(); }
+}
+
+function updateJobStatus(id, status){
+  const all = getBookings();
+  const bk  = all.find(b=>b.id===id);
+  if(!bk) return;
+
+  if(status === "completed"){
+    /* Ask provider to declare the total service value → generates commission invoice */
+    const raw = prompt(
+      "SOKONI Commission — Enter total service value received (KES):\n" +
+      "Platform will invoice " +
+      ((typeof SokoniPay!=="undefined"?(SokoniPay.COMMISSION_RATES.completion[bk.category]||10):10))+
+      "% of this.\n\nNon-payment will suspend your listing."
+    );
+    const total = raw ? Number(raw.replace(/[^0-9.]/g,"")) : 0;
+    if(total > 0){
+      const pct  = typeof SokoniPay!=="undefined" ? (SokoniPay.COMMISSION_RATES.completion[bk.category]||10) : 10;
+      const owed = Math.round(total * pct / 100);
+      const ref  = bk.sokoniRef || ("BK"+id.slice(-6));
+      if(typeof SokoniPay !== "undefined") SokoniPay.sendCommissionInvoice(ref, total);
+      bk.serviceTotal = total;
+      setTimeout(()=> (window._skToast||alert)(
+        "✅ Job marked complete!\n\n" +
+        "SOKONI Commission ("+pct+"%):\n" +
+        "KES "+owed.toLocaleString()+"\n\n" +
+        "Pay to M-PESA:\n" +
+        "Paybill: 522522\n" +
+        "Account: SOK-"+ref+"\n\n" +
+        "Non-payment suspends your listing."
+      ), 100);
+    }
+    /* Bump provider job count */
+    const providers = getProviders();
+    const pv = providers.find(p=>p.id===bk.providerId);
+    if(pv){ pv.jobsCompleted = (pv.jobsCompleted||0)+1; saveProviders(providers); }
+  }
+
+  bk.status    = status;
+  bk.updatedAt = Date.now();
+  saveBookings(all);
+  renderProviderJobs();
+  if(window.sokoniNotify && status==="completed")
+    window.sokoniNotify("🎉 Job Completed!", `${bk.jobDesc.substring(0,40)} — marked complete.`, "/assets/logosokoni.png", "/services.html");
+}
+
+/* ════════════════════════════════════════════════════════════
+   SERVICE-SPECIFIC FORM FIELDS
+   Each category has its own requirements — doctor ≠ plumber.
+════════════════════════════════════════════════════════════ */
+const SERVICE_SPECS = {
+
+  plumbing: {
+    label: "🔧 Plumbing Details",
+    fields: [
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 5" },
+      { id:"pvLicence",     label:"NCA/Water Board Certificate No.", type:"text",   ph:"e.g. WB-12345 (optional)" },
+      { id:"pvEmergency",   label:"Available for Emergency Callouts?", type:"select", options:["Yes — 24/7","Yes — daytime only","No"] },
+      { id:"pvWorkArea",    label:"Specific work areas", type:"text",   ph:"e.g. Kitchens, bathrooms, drainage, borehole" },
+      { id:"pvOwnTools",    label:"Do you own your tools?", type:"select", options:["Yes — full toolkit","Partial","No — client provides"] },
+      { id:"pvInsurance",   label:"Do you carry liability insurance?", type:"select", options:["Yes","No","In progress"] }
+    ],
+    checkboxes: { label:"Specialisations", options:["Leak repair","Pipe installation","Borehole drilling","Water tank","Septic tank","CCTV installation","Gas plumbing"] }
+  },
+
+  electrical: {
+    label: "⚡ Electrical Details",
+    fields: [
+      { id:"pvErcLicence",  label:"ERC Licence Number *", type:"text",   ph:"e.g. ERC-E-12345" },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 7" },
+      { id:"pvVoltage",     label:"Voltage ratings handled", type:"text",   ph:"e.g. 240V single-phase, 415V three-phase" },
+      { id:"pvEmergency",   label:"Emergency availability", type:"select", options:["Yes — 24/7","Yes — daytime only","No"] },
+      { id:"pvWorkType",    label:"Work type", type:"select", options:["Residential","Commercial","Industrial","All"] }
+    ],
+    checkboxes: { label:"Specialisations", options:["Wiring & rewiring","Solar installation","DB board","Security lights","CCTV","Inverter/UPS","Generator"] }
+  },
+
+  cleaning: {
+    label: "🧹 Cleaning Service Details",
+    fields: [
+      { id:"pvTeamSize",    label:"Team size", type:"select", options:["Solo (just me)","2–3 people","4–6 people","7+ (company)"] },
+      { id:"pvYearsExp",    label:"Years of Experience", type:"number", ph:"e.g. 3" },
+      { id:"pvOwnEquip",    label:"Own cleaning equipment & chemicals?", type:"select", options:["Yes — full kit","Partial","No — client provides"] },
+      { id:"pvWorkArea",    label:"Coverage area (km radius)", type:"number", ph:"e.g. 20" }
+    ],
+    checkboxes: { label:"Service Types", options:["House cleaning","Office cleaning","Deep cleaning","Move-in/out","Post-construction","Carpet/sofa steam","Window cleaning","Fumigation","Laundry — hand wash","Laundry — machine wash","Ironing & pressing","Dry cleaning","Pickup & delivery laundry"] }
+  },
+
+  "phone-repair": {
+    label: "📱 Phone Repair Details",
+    fields: [
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 4" },
+      { id:"pvWarranty",    label:"Warranty offered on repairs?", type:"select", options:["Yes — 90 days","Yes — 30 days","No warranty","Case by case"] },
+      { id:"pvTurnaround",  label:"Typical turnaround time", type:"select", options:["Same day (< 3hrs)","Next day","2–3 days","Depends on part"] }
+    ],
+    checkboxes: { label:"Brands Serviced", options:["Samsung","iPhone/Apple","Tecno","Infinix","Xiaomi/Redmi","Huawei","Nokia","All brands"] }
+  },
+
+  "computer-repair": {
+    label: "💻 IT / Computer Repair Details",
+    fields: [
+      { id:"pvCertification",label:"IT Certifications", type:"text", ph:"e.g. CompTIA A+, Cisco CCNA, Microsoft MCP" },
+      { id:"pvYearsExp",     label:"Years of Experience *", type:"number", ph:"e.g. 5" },
+      { id:"pvRemoteSupport",label:"Remote support available?", type:"select", options:["Yes — remote & onsite","Onsite only","Remote only"] }
+    ],
+    checkboxes: { label:"Specialisations", options:["Hardware repair","Software/OS","Virus removal","Networking","CCTV setup","Server setup","Data recovery","Web design"] }
+  },
+
+  "graphic-design": {
+    label: "🎨 Graphic Design Details",
+    fields: [
+      { id:"pvPortfolio",   label:"Portfolio URL or Behance *", type:"url",  ph:"e.g. behance.net/yourname or instagram link" },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 3" },
+      { id:"pvTurnaround",  label:"Standard turnaround time", type:"select", options:["Same day","1–2 days","3–5 days","1 week+"] },
+      { id:"pvSoftware",    label:"Design tools used", type:"text", ph:"e.g. Adobe Illustrator, Canva, Photoshop, CorelDraw" }
+    ],
+    checkboxes: { label:"Service Types", options:["Logos","Flyers/posters","Social media","Business cards","Packaging","UI/UX","3D visuals","Branding"] }
+  },
+
+  photography: {
+    label: "📸 Photography Details",
+    fields: [
+      { id:"pvPortfolio",   label:"Portfolio / Instagram Link *", type:"url",  ph:"e.g. instagram.com/yourname" },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 6" },
+      { id:"pvCameraGear",  label:"Camera & main equipment", type:"text", ph:"e.g. Sony A7III, Canon 5D, 24-70mm lens, 2× flashes" },
+      { id:"pvEditingTurnaround", label:"Photo delivery time", type:"select", options:["24–48 hours","3–5 days","1 week","Negotiate per project"] }
+    ],
+    checkboxes: { label:"Specialisations", options:["Weddings","Events","Corporate","Product","Fashion","Real estate","Passport/ID","Videography too"] }
+  },
+
+  videography: {
+    label: "🎬 Videography Details",
+    fields: [
+      { id:"pvPortfolio",   label:"YouTube / Portfolio Link *", type:"url",  ph:"e.g. youtube.com/yourchannel" },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 4" },
+      { id:"pvGear",        label:"Camera & equipment", type:"text", ph:"e.g. Sony FX6, DJI Ronin, drone" },
+      { id:"pvDelivery",    label:"Delivery format", type:"text", ph:"e.g. 4K MP4, colour-graded, subtitles available" }
+    ],
+    checkboxes: { label:"Specialisations", options:["Weddings","Events","Music videos","Corporate","Adverts","Social media reels","Live streaming","Drone footage"] }
+  },
+
+  tutoring: {
+    label: "📚 Tutoring Details",
+    fields: [
+      { id:"pvQualification",label:"Highest Qualification *", type:"select", options:["KCSE (Form 4)","Diploma","Bachelor's Degree","Master's Degree","PhD","Doctorate"] },
+      { id:"pvSubjects",     label:"Subjects taught *", type:"text", ph:"e.g. Maths, Physics, Chemistry, English" },
+      { id:"pvCurriculum",   label:"Curriculum", type:"select", options:["CBC (PP1–Grade 9)","IGCSE","8-4-4 / KCSE","A-Level","University — state subjects","Adult literacy"] },
+      { id:"pvMode",         label:"Teaching mode", type:"select", options:["Home visits (at student's home)","Online / Zoom","Both"] },
+      { id:"pvYearsExp",     label:"Years of tutoring", type:"number", ph:"e.g. 5" }
+    ],
+    checkboxes: { label:"Student levels", options:["Pre-school","Lower primary","Upper primary","Junior secondary","Senior secondary","University","Adult/professional"] }
+  },
+
+  catering: {
+    label: "🍽️ Catering Details",
+    fields: [
+      { id:"pvHealthCert",  label:"Public Health Certificate No.", type:"text", ph:"e.g. PHC-2024-12345 (required by law)" },
+      { id:"pvCapacity",    label:"Maximum guests you can cater for", type:"number", ph:"e.g. 200" },
+      { id:"pvTeamSize",    label:"Team size", type:"select", options:["Solo chef","2–5 people","6–10 people","10+ staff"] },
+      { id:"pvEquipment",   label:"Own cooking equipment?", type:"select", options:["Yes — full kitchen trailer","Yes — basic equipment","No — need kitchen access"] }
+    ],
+    checkboxes: { label:"Cuisine & Service Types", options:["Kenyan/African","Continental","Indian","BBQ/nyama choma","Buffet","Cocktail/finger food","Wedding cakes","Diet/vegan"] }
+  },
+
+  events: {
+    label: "🎉 Event Planning Details",
+    fields: [
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 5" },
+      { id:"pvMaxGuests",   label:"Largest event you've organised (guests)", type:"number", ph:"e.g. 500" },
+      { id:"pvVenueAccess", label:"Venue sourcing?", type:"select", options:["Yes — I source venues","No — client provides venue","Both"] },
+      { id:"pvDecorOwned",  label:"Own décor/equipment?", type:"select", options:["Full décor stock","Partial stock","No — hire vendors"] }
+    ],
+    checkboxes: { label:"Event Types", options:["Weddings","Birthdays","Corporate","Graduations","Baby shower","Religious","Funerals","Concerts"] }
+  },
+
+  "hair-beauty": {
+    label: "💇 Hair & Beauty Details",
+    fields: [
+      { id:"pvSalonReg",    label:"Salon/Business Registration No.", type:"text", ph:"e.g. BRS-2023-1234 (if applicable)" },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 6" },
+      { id:"pvMobile",      label:"Mobile (home visits) or salon?", type:"select", options:["Mobile — I come to you","Salon only","Both"] },
+      { id:"pvProductBrand",label:"Products/brands used", type:"text", ph:"e.g. Revlon, OPI, Kerastase, natural/organic" }
+    ],
+    checkboxes: { label:"Specialisations", options:["Natural hair","Braids & twists","Relaxer","Weaves & wigs","Locs","Nails/manicure","Makeup","Facials","Waxing"] }
+  },
+
+  fitness: {
+    label: "🏋️ Fitness Training Details",
+    fields: [
+      { id:"pvCertification",label:"Fitness Certifications *", type:"text", ph:"e.g. KFFS CPT, ACE, NASM, CrossFit L1" },
+      { id:"pvYearsExp",     label:"Years of Experience *", type:"number", ph:"e.g. 4" },
+      { id:"pvMode",         label:"Training mode", type:"select", options:["Home visits","Gym","Online","All of the above"] },
+      { id:"pvEquipment",    label:"Own equipment?", type:"select", options:["Yes — full kit","Basic bands/mats","No — gym required"] }
+    ],
+    checkboxes: { label:"Specialisations", options:["Weight loss","Muscle building","Cardio/endurance","Yoga","Pilates","CrossFit","Boxing","Prenatal fitness","Elderly/rehab"] }
+  },
+
+  accounting: {
+    label: "📋 Accounting & Finance Details",
+    fields: [
+      { id:"pvCpaNumber",   label:"CPA-K / ACCA Number *", type:"text", ph:"e.g. CPA-K/12345 or ACCA No." },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 8" },
+      { id:"pvRemote",      label:"Can work remotely?", type:"select", options:["Yes — fully remote","Yes — part remote","Onsite only"] },
+      { id:"pvSoftware",    label:"Accounting software", type:"text", ph:"e.g. QuickBooks, Sage, Xero, Excel" }
+    ],
+    checkboxes: { label:"Specialisations", options:["Bookkeeping","Tax returns (KRA)","Payroll","Audit","Financial statements","Business registration","VAT","NHIF/NSSF compliance"] }
+  },
+
+  legal: {
+    label: "⚖️ Advocate / Legal Details",
+    fields: [
+      { id:"pvRollNo",      label:"LSK Roll Number *", type:"text", ph:"e.g. 12345 (Law Society of Kenya)" },
+      { id:"pvCourtAdmit",  label:"Year admitted to the Roll", type:"number", ph:"e.g. 2015" },
+      { id:"pvFirm",        label:"Law firm / chambers", type:"text", ph:"e.g. Wanjiku & Associates Advocates" },
+      { id:"pvYearsExp",    label:"Years in practice *", type:"number", ph:"e.g. 9" }
+    ],
+    checkboxes: { label:"Specialisations", options:["Property & conveyancing","Family & divorce","Criminal defence","Commercial & corporate","Employment","IP & copyright","Immigration","Human rights","Environment & land"] }
+  },
+
+  doctor: {
+    label: "👨‍⚕️ Doctor / Home Visit Details",
+    fields: [
+      { id:"pvMohLicence",  label:"MOH Medical Licence No. *", type:"text", ph:"e.g. MOH/GEN/12345/2024" },
+      { id:"pvSpecialty",   label:"Medical specialisation", type:"text", ph:"e.g. General Practice, Paediatrics, OB/GYN" },
+      { id:"pvNhifReg",     label:"NHIF Provider No.", type:"text", ph:"e.g. NHIF-P-12345 (if accredited)" },
+      { id:"pvYearsExp",    label:"Years of experience *", type:"number", ph:"e.g. 10" },
+      { id:"pvRadius",      label:"Home visit radius (km)", type:"number", ph:"e.g. 15" }
+    ],
+    checkboxes: { label:"Services Offered", options:["General consultation","Blood pressure/diabetes check","Malaria testing","Wound dressing","Prescription writing","Child immunisation","Antenatal care","Sick notes/letters"] }
+  },
+
+  nurse: {
+    label: "🩺 Nurse / Clinical Officer Details",
+    fields: [
+      { id:"pvNCKReg",      label:"NCK Registration No. *", type:"text", ph:"e.g. NCK-12345 (Nursing Council of Kenya)" },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 6" },
+      { id:"pvMode",        label:"Available for home visits?", type:"select", options:["Yes","No","On request"] }
+    ],
+    checkboxes: { label:"Services", options:["Wound care","Medication administration","IV drip","Blood draws","Catheter care","Post-surgery care","Elderly care","Diabetic management"] }
+  },
+
+  marketing: {
+    label: "📢 Digital Marketing Details",
+    fields: [
+      { id:"pvPortfolio",   label:"Portfolio / Case studies link", type:"url", ph:"e.g. yourwebsite.com or LinkedIn" },
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 4" },
+      { id:"pvReporting",   label:"Monthly reporting?", type:"select", options:["Yes — detailed analytics","Basic report","No"] }
+    ],
+    checkboxes: { label:"Services", options:["Social media management","SEO","Google Ads","Facebook/Instagram Ads","Content creation","Email marketing","WhatsApp marketing","Influencer marketing","Brand strategy"] }
+  },
+
+  laundry: {
+    label: "🧺 Laundry (Mamafua) Details",
+    fields: [
+      { id:"pvPickupDrop",  label:"Pickup & delivery?", type:"select", options:["Yes — pickup & delivery","Dropoff only","Both"] },
+      { id:"pvCapacity",    label:"Daily capacity (kg)", type:"number", ph:"e.g. 20" },
+      { id:"pvTurnaround",  label:"Turnaround time", type:"select", options:["Same day","Next day","2 days","Depends on load"] },
+      { id:"pvIroning",     label:"Ironing included?", type:"select", options:["Yes","No — wash only","Optional extra charge"] }
+    ],
+    checkboxes: { label:"Service Types", options:["Clothes washing","Dry cleaning","Bedding & duvets","Curtains","Ironing","Stain removal","Uniforms","Delicates/hand wash"] }
+  },
+
+  dj: {
+    label: "🎧 DJ Details",
+    fields: [
+      { id:"pvYearsExp",    label:"Years DJing *", type:"number", ph:"e.g. 5" },
+      { id:"pvEquipment",   label:"Own equipment?", type:"select", options:["Yes — full setup (decks, mixer, speakers, lights)","Partial setup","No — event provides equipment"] },
+      { id:"pvPortfolio",   label:"Mix / portfolio link", type:"url", ph:"e.g. SoundCloud, YouTube or Instagram" }
+    ],
+    checkboxes: { label:"Genres & Events", options:["Afrobeats","Reggae/Dancehall","Hip-hop","RnB","House/EDM","Gospel","Oldies","Weddings","Corporate","Club nights","Private parties"] }
+  },
+
+  "delivery-service": {
+    label: "🏍️ Delivery / Courier Details",
+    fields: [
+      { id:"pvVehicle",     label:"Vehicle type *", type:"select", options:["Motorcycle/boda","Tuk-tuk","Car","Pickup/van","Bicycle","On foot (walking courier)"] },
+      { id:"pvCoverage",    label:"Coverage area", type:"text", ph:"e.g. Nairobi CBD + 20km radius" },
+      { id:"pvWorkingHours",label:"Working hours", type:"select", options:["Daytime only (8am–6pm)","Extended (7am–10pm)","24/7","Flexible"] },
+      { id:"pvNtsa",        label:"NTSA licence?", type:"select", options:["Yes — valid","Expired — renewing","No"] }
+    ],
+    checkboxes: { label:"Delivery Types", options:["Food delivery","Documents/parcels","Groceries","E-commerce fulfillment","Pharmaceutical","Fragile goods","Same-day","Scheduled"] }
+  },
+
+  mechanic: {
+    label: "🔩 Auto Mechanic Details",
+    fields: [
+      { id:"pvYearsExp",    label:"Years of Experience *", type:"number", ph:"e.g. 8" },
+      { id:"pvGarage",      label:"Have a garage/workshop?", type:"select", options:["Yes — own garage","Work from client location","Both"] },
+      { id:"pvDiagTool",    label:"Own diagnostic tools?", type:"select", options:["Yes — OBD scanner + tools","Basic tools only","No"] }
+    ],
+    checkboxes: { label:"Vehicle Types & Services", options:["Toyota","Nissan","Honda","Subaru","Mercedes/BMW","General service","Engine repair","Electrical","Bodywork","Tyres/brakes","AC repair"] }
+  }
+};
+
+/* ── Input style helper ── */
+const PV_INPUT_STYLE = "width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .2s;";
+const PV_LABEL_STYLE = "display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,0.45);margin-bottom:4px;";
+
+function loadServiceSpecificFields(cat){
+  const container = document.getElementById("pvSpecificFields");
+  const content   = document.getElementById("pvSpecContent");
+  const labelEl   = document.getElementById("pvSpecLabel");
+  if(!container || !content) return;
+
+  const spec = SERVICE_SPECS[cat];
+  if(!spec){ container.style.display = "none"; content.innerHTML = ""; return; }
+
+  if(labelEl) labelEl.textContent = "⚙️ " + spec.label;
+  container.style.display = "block";
+
+  /* Build fields HTML */
+  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">';
+  spec.fields.forEach(f => {
+    html += `<div>
+      <label style="${PV_LABEL_STYLE}">${f.label}</label>`;
+
+    if(f.type === "select"){
+      html += `<select id="${f.id}" style="${PV_INPUT_STYLE}">`;
+      (f.options||[]).forEach(o => { html += `<option value="${escapeHTML(o)}">${escapeHTML(o)}</option>`; });
+      html += `</select>`;
+    } else if(f.type === "textarea"){
+      html += `<textarea id="${f.id}" placeholder="${escapeHTML(f.ph||"")}" style="${PV_INPUT_STYLE}min-height:60px;resize:vertical;"></textarea>`;
+    } else {
+      html += `<input type="${f.type||'text'}" id="${f.id}" placeholder="${escapeHTML(f.ph||"")}" style="${PV_INPUT_STYLE}">`;
+    }
+    html += `</div>`;
+  });
+  html += "</div>";
+
+  /* Checkboxes */
+  if(spec.checkboxes){
+    html += `<div style="margin-bottom:4px;">
+      <div style="${PV_LABEL_STYLE}">${escapeHTML(spec.checkboxes.label)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;" id="pvCheckGroup">`;
+    spec.checkboxes.options.forEach(opt => {
+      html += `<label style="font-size:12px;color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;">
+        <input type="checkbox" value="${escapeHTML(opt)}" class="pv-spec-check" style="accent-color:#71ff00;"> ${escapeHTML(opt)}
+      </label>`;
+    });
+    html += `</div></div>`;
+  }
+
+  content.innerHTML = html;
+
+  /* Scroll spec section into view */
+  setTimeout(() => container.scrollIntoView({ behavior:"smooth", block:"nearest" }), 100);
+}
+window.loadServiceSpecificFields = loadServiceSpecificFields;
+
+/* Helper: collect spec field values */
+function collectSpecFields(cat){
+  const spec = SERVICE_SPECS[cat];
+  if(!spec) return {};
+  const result = {};
+  spec.fields.forEach(f => {
+    const el = document.getElementById(f.id);
+    if(el) result[f.id] = el.value || "";
+  });
+  /* Collect checkboxes */
+  const checks = document.querySelectorAll(".pv-spec-check:checked");
+  if(checks.length) result.specialisations = Array.from(checks).map(c => c.value);
+  return result;
+}
+
+/* ── Register new provider ── */
+function registerProvider(){
+  const name    = document.getElementById("pvName")?.value.trim();
+  const phone   = document.getElementById("pvPhone")?.value.trim();
+  const cat     = document.getElementById("pvCategory")?.value;
+  const loc     = document.getElementById("pvLocation")?.value;
+  const rate    = Number(document.getElementById("pvRate")?.value || 0);
+  const rateType= document.getElementById("pvRateType")?.value;
+  const skills  = (document.getElementById("pvSkills")?.value||"").split(",").map(s=>s.trim()).filter(Boolean);
+  const bio     = document.getElementById("pvBio")?.value.trim();
+  const msgEl   = document.getElementById("pvRegMsg");
+
+  if(!name||!phone||!cat||!rate||!bio){
+    if(msgEl){ msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; }
+    return;
+  }
+
+  /* Validate phone */
+  if(typeof SokoniSecurity !== "undefined" && !SokoniSecurity.validateKenyanPhone(phone)){
+    if(msgEl){ msgEl.textContent="⚠️ Enter a valid Kenyan phone number (07XX or 01XX)"; msgEl.style.color="#ff9800"; } return;
+  }
+
+  /* Collect service-specific fields */
+  const specData = collectSpecFields(cat);
+
+  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const provider = {
+    id: "SP"+Date.now(), name, phone, category: cat, location: loc,
+    rate, rateType, skills, bio, rating: 5.0,
+    jobsCompleted: 0, available: true, verified: false,
+    email: user?.email||"",
+    serviceSpec: specData,
+    socials: {
+      whatsapp: document.getElementById("pvWhatsApp")?.value.trim()||"",
+      instagram: document.getElementById("pvInstagram")?.value.trim()||"",
+      tiktok:    document.getElementById("pvTikTok")?.value.trim()||"",
+      facebook:  document.getElementById("pvFacebook")?.value.trim()||"",
+      youtube:   document.getElementById("pvYouTube")?.value.trim()||"",
+      website:   document.getElementById("pvWebsite")?.value.trim()||""
+    },
+    createdAt: Date.now()
+  };
+
+  const all = getProviders();
+  all.unshift(provider);
+  saveProviders(all);
+
+  /* Map services.html category to provider.html CATS key */
+  const catMap = {
+    'plumbing':'plumbing','electrical':'electrical','cleaning':'cleaning','phone-repair':'mechanic',
+    'computer-repair':'mechanic','graphic-design':'marketing','photography':'photography',
+    'videography':'photography','tutoring':'tutoring','catering':'catering','events':'events',
+    'hair-beauty':'hair-beauty','fitness':'fitness','dj':'entertainment','mc':'entertainment',
+    'marketing':'marketing','accounting':'accounting','legal':'legal','driving':'delivery',
+    'security':'delivery','delivery-service':'delivery','tailoring':'hair-beauty','mechanic':'mechanic',
+    'laundry':'cleaning','interior-design':'construction'
+  };
+  const pvCat = catMap[cat] || cat;
+
+  if(msgEl){ msgEl.innerHTML='✅ Listed! Opening your Provider Dashboard…'; msgEl.style.color="#71ff00"; }
+  /* Pre-seed provider.html with data from this form */
+  const pvId = 'PRV'+Date.now().toString(36).toUpperCase();
+  const pvProfile = { cat:pvCat, name, phone, location:loc, bio, status:'available',
+    extras:{ rate:String(rate) }, hours:{}, blockedDates:[], createdAt:Date.now(), id:pvId };
+  localStorage.setItem('sokoniProviderProfile', JSON.stringify(pvProfile));
+
+  /* Submit admin application to Firestore immediately */
+  const adminApp = {
+    id: pvId, name, phone, email: provider.email,
+    category: cat, location: loc, bio,
+    rate, rateType, skills,
+    type: 'provider', hub: 'service',
+    status: 'pending',
+    date: new Date().toLocaleDateString('en-KE'),
+    submittedAt: new Date().toISOString()
+  };
+  /* Save to sokoniPendingApplications for same-device access */
+  try {
+    const _pApps = JSON.parse(localStorage.getItem('sokoniPendingApplications')||'[]');
+    _pApps.unshift(adminApp);
+    localStorage.setItem('sokoniPendingApplications', JSON.stringify(_pApps));
+  } catch(e) {}
+  /* Save to Firestore so admin sees it on any device */
+  if(window.SokoniDB){
+    window.SokoniDB.saveApplication(adminApp)
+      .catch(e => console.warn('[SOKONI] Application save failed:', e.message));
+    /* Also save to providers collection so they appear in listings immediately */
+    window.SokoniDB.saveProvider(provider)
+      .catch(e => console.warn('[SOKONI] Provider save failed:', e.message));
+  }
+
+  setTimeout(()=>{ window.location.href='provider.html?cat='+pvCat; }, 1200);
+}
+
+window.showTab              = showTab;
+window.scrollToRegister     = scrollToRegister;
+window.openBookingModal     = openBookingModal;
+window.submitBooking        = submitBooking;
+window.cancelBooking        = cancelBooking;
+window.confirmJob           = confirmJob;
+window.declineJob           = declineJob;
+window.updateJobStatus      = updateJobStatus;
+window.registerProvider     = registerProvider;
+window.renderProviders      = renderProviders;
+window.renderClientBookings = renderClientBookings;
+window.renderProviderJobs   = renderProviderJobs;
+
+const SERVICE_CATS = new Set([
+  "phone-repair","computer-repair","electronics-repair",
+  "graphic-design","photography","videography","music-audio",
+  "cleaning","laundry","gardening","plumbing","electrical","interior-design",
+  "delivery-service","courier","boda-delivery",
+  "marketing","accounting","legal","printing","virtual-assistant",
+  "tutoring","coaching","events","catering","hair-beauty","fitness",
+  "dj","mc","live-band","comedian","dancer",
+  "pharmacy","clinic","hospital","lab-test","home-doctor"
+]);
+
+const CAT_EMOJI = {
+  "phone-repair":"📱","computer-repair":"💻","electronics-repair":"🔌",
+  "graphic-design":"🎨","photography":"📸","videography":"🎬","music-audio":"🎵",
+  "cleaning":"🧹","laundry":"🧺","gardening":"🌱","plumbing":"🔧","electrical":"⚡","interior-design":"🏠",
+  "delivery-service":"🚚","courier":"📦","boda-delivery":"🏍️",
+  "marketing":"📢","accounting":"📋","legal":"⚖️","printing":"🖨️","virtual-assistant":"💼",
+  "tutoring":"📚","coaching":"🎯","events":"🎉","catering":"🍽️","hair-beauty":"💇","fitness":"🏋️",
+  "dj":"🎧","mc":"🎤","live-band":"🎸","comedian":"😂","dancer":"💃",
+  "pharmacy":"💉","clinic":"🩺","hospital":"🏥","lab-test":"🔬","home-doctor":"👨‍⚕️"
+};
+
+const CAT_LABEL = {
+  "phone-repair":"Phone Repair","computer-repair":"IT Repair","electronics-repair":"Electronics Repair",
+  "graphic-design":"Graphic Design","photography":"Photography","videography":"Videography","music-audio":"Music & Audio",
+  "cleaning":"Cleaning","laundry":"Mamafua (Laundry)","gardening":"Gardening","plumbing":"Plumbing",
+  "electrical":"Electrical Work","interior-design":"Interior Design",
+  "delivery-service":"Delivery","courier":"Courier","boda-delivery":"Boda Delivery",
+  "marketing":"Marketing","accounting":"Accounting","legal":"Legal","printing":"Printing","virtual-assistant":"VA Services",
+  "tutoring":"Tutoring","coaching":"Coaching","events":"Event Planning","catering":"Catering",
+  "hair-beauty":"Hair & Beauty","fitness":"Fitness Training",
+  "dj":"DJ / Disc Jockey","mc":"MC / Emcee","live-band":"Live Band","comedian":"Comedian","dancer":"Dancer",
+  "pharmacy":"Pharmacy","clinic":"Clinic","hospital":"Hospital","lab-test":"Lab Test","home-doctor":"Home Doctor Visit"
+};
+
+let allProducts = [];
+try { allProducts = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e) {}
+const serviceProducts = allProducts.filter(p => SERVICE_CATS.has(p.category));
+
+let activeCat = "";
+const params = new URLSearchParams(window.location.search);
+const urlCat = params.get("cat") || "";
+if(urlCat){ activeCat = urlCat; }
+
+function setCat(cat, btn){
+  activeCat = cat;
+  document.querySelectorAll(".sv-cat-pill").forEach(p => p.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  /* Always show the Providers tab so results are visible */
+  showTab('providers', document.getElementById('tab-providers'));
+  renderProviders();
+  renderServices();
+  /* Scroll to the grid so user sees the filtered results */
+  setTimeout(function(){
+    var grid = document.getElementById('providersGrid');
+    if(grid) grid.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 80);
+  return false;
+}
+
+function filterServices(){
+  renderProviders();
+  renderServices();
+}
+
+function renderServices(){
+  const q = (document.getElementById("svSearchInput")?.value||"").toLowerCase();
+  let filtered = serviceProducts;
+  if(activeCat){
+    const matchCats = activeCat === "cleaning" ? ["cleaning","laundry"] : [activeCat];
+    filtered = filtered.filter(p => matchCats.includes(p.category));
+  }
+  if(q) filtered = filtered.filter(p =>
+    p.name.toLowerCase().includes(q) ||
+    (p.description||"").toLowerCase().includes(q) ||
+    (p.sellerName||"").toLowerCase().includes(q) ||
+    (CAT_LABEL[p.category]||"").toLowerCase().includes(q)
+  );
+
+  const label = document.getElementById("svResultLabel");
+  const grid  = document.getElementById("svGrid");
+  const empty = document.getElementById("svEmpty");
+
+  const catName = activeCat ? CAT_LABEL[activeCat] || activeCat : "All Services";
+  if(label) label.textContent = `${catName} (${filtered.length})`;
+
+  if(!filtered.length){
+    grid.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+
+  grid.innerHTML = filtered.map(p => {
+    const emoji = CAT_EMOJI[p.category] || "🛠️";
+    const imgHtml = p.image && p.image.startsWith("data:")
+      ? `<img class="sv-card-img" src="${p.image}" alt="${p.name}" loading="lazy">`
+      : `<div class="sv-card-emoji">${emoji}</div>`;
+    return `<div class="sv-card" onclick="bookService('${p.id}')">
+      ${imgHtml}
+      <div class="sv-card-body">
+        <div class="sv-card-title">${p.name}</div>
+        <div class="sv-card-seller">by ${p.sellerName||"Provider"} · 📍 ${p.location||"Kenya"}</div>
+        <div class="sv-card-price">KES ${Number(p.price).toLocaleString()}</div>
+        <div class="sv-card-tags">
+          <span class="sv-tag">${CAT_LABEL[p.category]||p.category}</span>
+          ${p.description ? `<span class="sv-tag">${p.description.substring(0,25)}${p.description.length>25?"...":""}</span>` : ""}
+        </div>
+        ${p.socials&&Object.values(p.socials).some(v=>v)?`<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;">${[
+          p.socials.whatsapp?`<a href="https://wa.me/${p.socials.whatsapp.replace(/^0/,"254")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="WhatsApp" onclick="event.stopPropagation()">💬</a>`:"",
+          p.socials.instagram?`<a href="https://instagram.com/${p.socials.instagram.replace(/^@/,"")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="Instagram" onclick="event.stopPropagation()">📸</a>`:"",
+          p.socials.tiktok?`<a href="https://tiktok.com/${p.socials.tiktok.replace(/^@/,"")}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="TikTok" onclick="event.stopPropagation()">🎵</a>`:"",
+          p.socials.facebook?`<a href="https://facebook.com/${p.socials.facebook}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="Facebook" onclick="event.stopPropagation()">👥</a>`:"",
+          p.socials.youtube?`<a href="https://youtube.com/${p.socials.youtube}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="YouTube" onclick="event.stopPropagation()">🎬</a>`:"",
+          p.socials.website?`<a href="${p.socials.website}" target="_blank" style="font-size:18px;text-decoration:none;line-height:1;" title="Website" onclick="event.stopPropagation()">🌐</a>`:""
+        ].filter(Boolean).join("")}</div>`:""}
+        <button type="button" class="sv-book-btn" onclick="event.stopPropagation();bookServiceListing('${p.id}')">📩 Book This Service</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function bookService(id){
+  let products = [];
+  try { products = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
+  const p = products.find(x=>x.id===id);
+  if(!p) return;
+  localStorage.setItem("selectedProduct", JSON.stringify(p));
+  window.location.href = "product.html";
+}
+
+/* ── Book a service listing (seller-listed product) through SokoniPay ── */
+function bookServiceListing(productId){
+  const p = allProducts.find(function(x){ return x.id === productId; });
+  if(!p) return;
+  const waNum = (p.socials && p.socials.whatsapp) ? p.socials.whatsapp : (p.sellerPhone || '');
+  if(typeof SokoniPay !== 'undefined'){
+    if(waNum){
+      SokoniPay.waConnect(
+        waNum,
+        'Hi ' + (p.sellerName || 'Provider') + '! I found your service "' + p.name + '" on SOKONI and would like to book it. Price: KES ' + Number(p.price || 0).toLocaleString('en-KE') + '.',
+        { providerName: p.sellerName || 'Provider', category: p.category || 'default', serviceDesc: p.name }
+      );
+    } else {
+      SokoniPay.bookNow({
+        providerName:  p.sellerName  || 'Provider',
+        category:      p.category    || 'default',
+        serviceDesc:   p.name,
+        providerPhone: ''
+      }, function(){
+        localStorage.setItem('selectedProduct', JSON.stringify(p));
+        window.location.href = 'product.html';
+      });
+    }
+  } else {
+    localStorage.setItem('selectedProduct', JSON.stringify(p));
+    window.location.href = 'product.html';
+  }
+}
+window.bookServiceListing = bookServiceListing;
+
+/* Handle URL cat on load */
+if(urlCat){
+  const pill = document.querySelector(`.sv-cat-pill[onclick*="'${urlCat}'"]`);
+  if(pill){ pill.classList.remove("active"); document.querySelector(".sv-cat-pill").classList.remove("active"); pill.classList.add("active"); }
+}
+
+window.setCat = setCat;
+window.filterServices = filterServices;
+
+/* Initial render — providers tab shown by default */
+renderProviders();
+renderServices(); /* render listings too, hidden initially */
+
+/* Set bk date default */
+const _tomorrow = new Date(); _tomorrow.setDate(_tomorrow.getDate()+1);
+const _bkDateEl = document.getElementById("bkDate");
+if(_bkDateEl && !_bkDateEl.value) _bkDateEl.value = _tomorrow.toISOString().slice(0,10);
+
+function sharePage(){
+  const data={title:"SOKONI Services — Book Professionals in Kenya",text:"Find skilled professionals on SOKONI: plumbers, doctors, lawyers, designers & more across Kenya. Book instantly, pay with M-Pesa.",url:location.href};
+  if(navigator.share) navigator.share(data).catch(()=>{});
+  else { navigator.clipboard.writeText(location.href).then(()=>{ const t=document.createElement('div'); t.textContent='Link copied!'; Object.assign(t.style,{position:'fixed',bottom:'90px',left:'50%',transform:'translateX(-50%)',background:'#71ff00',color:'black',padding:'10px 20px',borderRadius:'10px',fontWeight:'800',fontSize:'13px',zIndex:'99999'}); document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }); }
+}
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-memory.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script type="module">
+import SokoniDB from './sokoni-db.js';
+window.SokoniDB = SokoniDB;
+
+/* Real-time Firestore providers — merge with demo + localStorage on arrival */
+SokoniDB.listenProviders(function(fsProviders){
+  if(!fsProviders.length) return;
+  let stored = [];
+  try{ stored = JSON.parse(localStorage.getItem('sokoniServiceProviders')||'[]'); }catch(e){}
+  const storedIds = new Set(stored.map(p=>p.id));
+  const newOnes = fsProviders.filter(fp=>{
+    const lid = fp._localId || fp.id || fp._fsId;
+    return lid && !storedIds.has(lid);
+  }).map(fp=>({ ...fp, id: fp._localId||fp._fsId, _fromFirestore:true }));
+  if(newOnes.length){
+    stored.push(...newOnes);
+    localStorage.setItem('sokoniServiceProviders', JSON.stringify(stored));
+    if(window.renderProviders) window.renderProviders();
+  }
+});
+
+/* Real-time bookings for provider dashboard */
+const _pvProfile = JSON.parse(localStorage.getItem('sokoniProviderProfile')||'null');
+if(_pvProfile?.phone){
+  const _pvPhone = _pvProfile.phone.replace(/^0/,'254');
+  SokoniDB.listenProviderBookings(_pvPhone, function(fsBkgs){
+    let local = [];
+    try{ local = JSON.parse(localStorage.getItem('sokoniServiceBookings')||'[]'); }catch(e){}
+    const localIds = new Set(local.map(b=>b.id));
+    fsBkgs.forEach(fb=>{ if(!localIds.has(fb.id)){ local.unshift(fb); } });
+    localStorage.setItem('sokoniServiceBookings', JSON.stringify(local));
+    if(window.renderProviderJobs) window.renderProviderJobs();
+  });
+}
+
+/* Real-time bookings for client "My Bookings" tab */
+const _usr = JSON.parse(localStorage.getItem('sokoniUser')||'null');
+if(_usr?.phone){
+  SokoniDB.listenClientBookings(_usr.phone, function(fsBkgs){
+    let local = [];
+    try{ local = JSON.parse(localStorage.getItem('sokoniServiceBookings')||'[]'); }catch(e){}
+    const localIds = new Set(local.map(b=>b.id));
+    fsBkgs.forEach(fb=>{ if(!localIds.has(fb.id)){ local.unshift(fb); } });
+    localStorage.setItem('sokoniServiceBookings', JSON.stringify(local));
+    if(window.renderClientBookings) window.renderClientBookings();
+  });
+}
+
+/* Escape key closes booking modal */
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){
+    var m = document.getElementById('bookingModal');
+    if(m && m.style.display !== 'none') m.style.display = 'none';
+  }
+});
+</script>
+<script src="demo-seed.js"></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script><script src="sokoni-share.js" defer></script>
+  <script src="sokoni-ui-extras.js" defer></script>
+  <script src="sokoni-inbox.js" defer></script>
+  <script src="sokoni-verifications.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-featured.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    if (typeof SokoniFeatured !== 'undefined') {
+      SokoniFeatured.injectBefore('services', 'providersGrid');
+    }
+  }, 900);
+});
+</script>
+<script defer src="kass-widget.js"></script>
+<script defer src="sokoni-loyalty.js"></script>
+  <!-- REGISTER CTA — universal fallback for other business types -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
+    <button onclick="HubRegister.open({hub:'home-services', category:'cleaning'})" style="padding:10px 24px;background:#39ff14;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,363 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Supplier Profile â€” SOKONI B2B</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00aaff">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.fn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
+
+/* COVER */
+.sp-cover{height:160px;background:linear-gradient(135deg,rgba(0,170,255,0.15),rgba(113,255,0,0.06));display:flex;align-items:flex-end;padding:20px;border-bottom:1px solid rgba(255,255,255,0.07);}
+.sp-avatar-wrap{position:relative;}
+.sp-avatar{width:72px;height:72px;border-radius:18px;background:rgba(0,170,255,0.12);border:3px solid rgba(0,170,255,0.3);display:flex;align-items:center;justify-content:center;font-size:36px;}
+.sp-verified-badge{position:absolute;bottom:-4px;right:-4px;background:#22c55e;color:black;font-size:9px;font-weight:900;padding:2px 5px;border-radius:4px;}
+
+.sp-body{max-width:800px;margin:0 auto;padding:16px;}
+
+/* HEADER CARD */
+.sp-header{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:20px;margin-bottom:14px;}
+.sp-name{font-size:20px;font-weight:900;color:white;margin-bottom:6px;}
+.sp-type-chip{display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;margin-right:6px;}
+.sp-export-chip{display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#22c55e;}
+.sp-meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:14px 0;}
+.sp-meta-item{background:rgba(255,255,255,0.03);border-radius:10px;padding:10px;text-align:center;}
+.sp-meta-val{font-size:16px;font-weight:900;color:#00aaff;}
+.sp-meta-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+.sp-desc{font-size:13px;color:rgba(255,255,255,0.55);line-height:1.7;margin-bottom:14px;}
+.sp-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.sp-tag{font-size:10px;padding:3px 10px;border-radius:5px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.4);}
+.sp-certs{display:flex;gap:6px;flex-wrap:wrap;}
+.sp-cert{font-size:10px;padding:3px 10px;border-radius:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;}
+.sp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+.sp-btn{padding:11px 20px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid;text-decoration:none;display:inline-block;}
+.sp-btn.blue{background:rgba(0,170,255,0.1);border-color:rgba(0,170,255,0.3);color:#00aaff;}
+.sp-btn.green{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;}
+.sp-btn.wa{background:rgba(37,211,102,0.08);border-color:rgba(37,211,102,0.2);color:#25d366;}
+
+/* TABS */
+.sp-tabs{display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:16px;overflow-x:auto;scrollbar-width:none;}
+.sp-tabs::-webkit-scrollbar{display:none;}
+.sp-tab{padding:9px 18px;font-size:12px;font-weight:800;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,0.4);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;white-space:nowrap;}
+.sp-tab.active{color:#00aaff;border-bottom-color:#00aaff;}
+.sp-pane{display:none;}
+.sp-pane.active{display:block;}
+
+/* PRODUCT CARD */
+.sp-prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+.sp-prod-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden;transition:all .2s;}
+.sp-prod-card:hover{border-color:rgba(0,170,255,0.3);}
+.sp-prod-img{height:120px;background:linear-gradient(135deg,rgba(0,170,255,0.08),rgba(0,70,160,0.04));display:flex;align-items:center;justify-content:center;font-size:44px;}
+.sp-prod-body{padding:12px;}
+.sp-prod-name{font-size:13px;font-weight:800;color:white;margin-bottom:4px;}
+.sp-prod-price{font-size:16px;font-weight:900;color:#00aaff;}
+.sp-prod-moq{font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;}
+
+/* REVIEW */
+.sp-review{padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.sp-review:last-child{border-bottom:none;}
+.sp-rev-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.sp-rev-rating{color:#f59e0b;font-size:13px;}
+.sp-rev-time{font-size:10px;color:rgba(255,255,255,0.3);}
+.sp-rev-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5;}
+
+/* SECTION */
+.sp-sh{font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);margin:16px 0 10px;text-transform:uppercase;letter-spacing:.5px;}
+
+/* FORM */
+.sp-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:10px;}
+.sp-input:focus{border-color:rgba(0,170,255,0.35);}
+.sp-textarea{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:14px;outline:none;font-family:inherit;min-height:80px;resize:vertical;margin-bottom:10px;}
+.sp-textarea:focus{border-color:rgba(0,170,255,0.35);}
+.sp-submit{padding:12px 24px;background:linear-gradient(135deg,#00aaff,#0066cc);color:white;font-weight:900;border:none;border-radius:11px;cursor:pointer;font-family:inherit;}
+
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#00aaff;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-b2b.js"></script>
+
+<nav class="fn">
+  <a href="b2b.html" class="fn-back">â†</a>
+  <span style="font-size:14px;font-weight:800;flex:1;" id="navTitle">Supplier Profile</span>
+  <button onclick="sharePage()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:white;padding:7px 14px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">Share</button>
+</nav>
+
+<div class="sp-cover" id="spCover">
+  <div class="sp-avatar-wrap">
+    <div class="sp-avatar" id="spAvatar">ðŸ­</div>
+    <div class="sp-verified-badge" id="spVerifiedBadge" style="display:none;">âœ… Verified</div>
+  </div>
+</div>
+
+<div class="sp-body">
+
+  <div class="sp-header" id="spHeader">
+    <div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">Loading supplier...</div>
+  </div>
+
+  <div class="sp-tabs">
+    <button class="sp-tab active" onclick="switchTab('catalog',this)">ðŸ“¦ Catalog</button>
+    <button class="sp-tab" onclick="switchTab('about',this)">â„¹ï¸ About</button>
+    <button class="sp-tab" onclick="switchTab('reviews',this)">â­ Reviews</button>
+    <button class="sp-tab" onclick="switchTab('rfq',this)">ðŸ“‹ Send RFQ</button>
+  </div>
+
+  <div class="sp-pane active" id="pane-catalog">
+    <div id="catalogGrid" class="sp-prod-grid"></div>
+  </div>
+
+  <div class="sp-pane" id="pane-about">
+    <div id="aboutContent"></div>
+  </div>
+
+  <div class="sp-pane" id="pane-reviews">
+    <div id="reviewsContent"></div>
+  </div>
+
+  <div class="sp-pane" id="pane-rfq">
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;">
+      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">ðŸ“‹ Send RFQ to <span id="rfqSupName"></span></div>
+      <input id="rfqTitle" class="sp-input" placeholder="What do you need? (e.g. 500 branded polo shirts)">
+      <textarea id="rfqDesc" class="sp-textarea" placeholder="Specifications, quality requirements, timeline, delivery location..."></textarea>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <input id="rfqQty" class="sp-input" type="number" placeholder="Quantity" style="margin-bottom:0;">
+        <input id="rfqBudget" class="sp-input" type="number" placeholder="Budget (KES)" style="margin-bottom:0;">
+      </div>
+      <input id="rfqName" class="sp-input" placeholder="Your Business Name">
+      <input id="rfqContact" class="sp-input" placeholder="Phone / Email">
+      <button class="sp-submit" onclick="sendRFQ()">ðŸ“‹ Send RFQ to Supplier</button>
+      <div id="rfqMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="b2b.html" class="bnav-item active"><i class="fas fa-handshake"></i><span>B2B</span></a>
+  <a href="b2b-dashboard.html" class="bnav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script>
+const B = window.SokoniB2B;
+const _sid = new URLSearchParams(window.location.search).get('id');
+let _sup = null;
+
+function load() {
+  _sup = B.getSupplierById(_sid);
+  if (!_sup) { document.getElementById('spHeader').innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">Supplier not found. <a href="b2b.html" style="color:#00aaff;">Browse suppliers â†’</a></div>'; return; }
+
+  document.title = _sup.name + ' â€” SOKONI B2B';
+  document.getElementById('navTitle').textContent = _sup.name;
+  const ind = B.INDUSTRIES.find(i=>i.id===_sup.industry)||{icon:'ðŸ¢'};
+  document.getElementById('spAvatar').textContent = ind.icon;
+  if (_sup.verified) document.getElementById('spVerifiedBadge').style.display='block';
+
+  /* Cover gradient */
+  const colors = {agriculture:'34,197,94', electronics:'59,130,246', fashion:'168,85,247', food:'249,115,22', construction:'245,158,11', chemicals:'20,184,166', machinery:'239,68,68'};
+  const c = colors[_sup.industry]||'0,170,255';
+  document.getElementById('spCover').style.background = `linear-gradient(135deg,rgba(${c},0.15),rgba(0,0,0,0.3))`;
+
+  const type = B.SUPPLIER_TYPES.find(t=>t.id===_sup.type)||{label:_sup.type};
+  const {avg,count} = B.getSupplierRating(_sid);
+
+  document.getElementById('spHeader').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+      <div>
+        <div class="sp-name">${_sup.name}</div>
+        <span class="sp-type-chip">${type.label}</span>
+        ${_sup.exportReady?'<span class="sp-export-chip">âœˆï¸ Export Ready</span>':''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:18px;color:#f59e0b;">${B.starsHTML(avg)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);">${avg} Â· ${count} reviews</div>
+      </div>
+    </div>
+    <div class="sp-meta-grid">
+      <div class="sp-meta-item"><div class="sp-meta-val">${_sup.minOrder}</div><div class="sp-meta-lbl">Min Order</div></div>
+      <div class="sp-meta-item"><div class="sp-meta-val">${_sup.established}</div><div class="sp-meta-lbl">Est. Year</div></div>
+      <div class="sp-meta-item"><div class="sp-meta-val">${_sup.employees}</div><div class="sp-meta-lbl">Employees</div></div>
+      <div class="sp-meta-item"><div class="sp-meta-val">ðŸ“ ${_sup.city}</div><div class="sp-meta-lbl">Location</div></div>
+    </div>
+    <div class="sp-desc">${_sup.desc}</div>
+    <div class="sp-tags">${(_sup.tags||[]).map(t=>`<span class="sp-tag">#${t}</span>`).join('')}</div>
+    ${(_sup.certifications||[]).length?`<div class="sp-certs">${_sup.certifications.map(c=>`<span class="sp-cert">ðŸ… ${c}</span>`).join('')}</div>`:''}
+    <div class="sp-actions">
+      <button class="sp-btn blue" onclick="contactSupplier()">ðŸ’¬ Message</button>
+      <button class="sp-btn green" onclick="switchTab('rfq',document.querySelector('.sp-tab:nth-child(4)'))">ðŸ“‹ Send RFQ</button>
+      <a href="tel:${_sup.phone}" class="sp-btn blue">ðŸ“ž Call</a>
+      <a href="https://wa.me/254${(_sup.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi '+_sup.name+', I found your profile on SOKONI B2B. I am interested in your products.')}" target="_blank" class="sp-btn wa">ðŸ’¬ WhatsApp</a>
+    </div>`;
+
+  document.getElementById('rfqSupName').textContent = _sup.name;
+  renderCatalog();
+  renderAbout();
+  renderReviews();
+}
+
+function renderCatalog() {
+  const products = B.getProducts({supplierId: _sid});
+  const grid = document.getElementById('catalogGrid');
+  if (!products.length) { grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.3);"><div style="font-size:40px;margin-bottom:10px;">ðŸ“¦</div><p>No products listed yet.</p></div>'; return; }
+  grid.innerHTML = products.map(p=>{
+    const icon = B.CAT_ICONS[p.category]||'ðŸ“¦';
+    return `
+    <div class="sp-prod-card">
+      <div class="sp-prod-img">${icon}</div>
+      <div class="sp-prod-body">
+        <div class="sp-prod-name">${p.name}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);text-decoration:line-through;">Retail: KES ${B.fmt(p.price)}</div>
+        <div class="sp-prod-price">KES ${B.fmt(p.wholesalePrice)} / ${p.unit||'unit'}</div>
+        <div class="sp-prod-moq">Min: ${p.moq} ${p.unit||'units'}</div>
+        ${p.desc?`<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:6px;line-height:1.5;">${p.desc.slice(0,70)}...</div>`:''}
+        <button onclick="enquire('${p.id}')" style="width:100%;margin-top:10px;padding:8px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);border-radius:9px;color:#00aaff;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">ðŸ’¬ Enquire</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAbout() {
+  if (!_sup) return;
+  document.getElementById('aboutContent').innerHTML = `
+    <div class="sp-sh">Company Information</div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Company Type</span><span style="color:white;font-weight:700;">${B.SUPPLIER_TYPES.find(t=>t.id===_sup.type)?.label||_sup.type}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Industry</span><span style="color:white;font-weight:700;">${_sup.industry}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Location</span><span style="color:white;font-weight:700;">ðŸ“ ${_sup.location}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Established</span><span style="color:white;font-weight:700;">${_sup.established}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Employees</span><span style="color:white;font-weight:700;">${_sup.employees}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Min Order</span><span style="color:#00aaff;font-weight:700;">${_sup.minOrder}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Export Ready</span><span style="color:${_sup.exportReady?'#22c55e':'rgba(255,255,255,0.35)'};font-weight:700;">${_sup.exportReady?'âœ… Yes':'No'}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Phone</span><a href="tel:${_sup.phone}" style="color:#00aaff;font-weight:700;">${_sup.phone}</a></div>
+      </div>
+    </div>
+    ${(_sup.certifications||[]).length?`
+    <div class="sp-sh">Certifications</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${_sup.certifications.map(c=>`<span class="sp-cert">ðŸ… ${c}</span>`).join('')}
+    </div>`:''}
+    <div class="sp-sh" style="margin-top:16px;">Specializations</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">${(_sup.tags||[]).map(t=>`<span class="sp-tag">#${t}</span>`).join('')}</div>`;
+}
+
+function renderReviews() {
+  const ratings = JSON.parse(localStorage.getItem('b2b_ratings_'+_sid)||'[]');
+  const {avg,count} = B.getSupplierRating(_sid);
+  const cont = document.getElementById('reviewsContent');
+  cont.innerHTML = `
+    <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;margin-bottom:14px;">
+      <div style="font-size:44px;font-weight:900;color:#f59e0b;">${avg}</div>
+      <div style="font-size:18px;color:#f59e0b;margin:4px 0;">${B.starsHTML(avg)}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.35);">${count} review${count!==1?'s':''}</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">Leave a Review</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;" id="starPicker">
+        ${[1,2,3,4,5].map(i=>`<span style="font-size:28px;cursor:pointer;opacity:.3;transition:opacity .15s;" onclick="setRev(${i})" id="revStar${i}">â­</span>`).join('')}
+      </div>
+      <textarea id="revComment" class="sp-textarea" placeholder="Describe your experience with this supplier..." style="margin-bottom:10px;"></textarea>
+      <button class="sp-submit" onclick="submitReview()">Submit Review</button>
+      <div id="revMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+    </div>
+    <div id="reviewList">
+      ${ratings.length ? ratings.slice(0,10).map(r=>`
+      <div class="sp-review">
+        <div class="sp-rev-header">
+          <div class="sp-rev-rating">${'â­'.repeat(r.rating)}</div>
+          <div class="sp-rev-time">${r.ts?new Date(r.ts).toLocaleDateString():''}</div>
+        </div>
+        ${r.comment?`<div class="sp-rev-text">"${r.comment}"</div>`:''}
+      </div>`).join('') : '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">No reviews yet. Be the first!</div>'}
+    </div>`;
+}
+
+let _selRev = 0;
+function setRev(n) {
+  _selRev = n;
+  [1,2,3,4,5].forEach(i=>{ const el=document.getElementById('revStar'+i); if(el) el.style.opacity=i<=n?'1':'.3'; });
+}
+window.setRev = setRev;
+
+function submitReview() {
+  const comment = document.getElementById('revComment')?.value.trim();
+  const msg = document.getElementById('revMsg');
+  if (!_selRev) { msg.innerHTML='<span style="color:#ef4444;">Please select a star rating</span>'; return; }
+  B.saveRating(_sid, _selRev, comment);
+  msg.innerHTML='<span style="color:#22c55e;">âœ… Review submitted! Thank you.</span>';
+  setTimeout(renderReviews, 1000);
+}
+window.submitReview = submitReview;
+
+function sendRFQ() {
+  const title=document.getElementById('rfqTitle')?.value.trim();
+  const desc=document.getElementById('rfqDesc')?.value.trim();
+  const qty=document.getElementById('rfqQty')?.value;
+  const budget=document.getElementById('rfqBudget')?.value;
+  const name=document.getElementById('rfqName')?.value.trim();
+  const contact=document.getElementById('rfqContact')?.value.trim();
+  const msg=document.getElementById('rfqMsg');
+  if(!title||!name||!contact){msg.innerHTML='<span style="color:#ef4444;">âš ï¸ Fill all required fields</span>';return;}
+  const rfq=B.createRFQ({title,desc,qty:Number(qty)||0,budget:Number(budget)||0,name,contact,notes:'Directed to: '+(_sup?.name||'Supplier'),targetSupplierId:_sid});
+  B.sendMessage({threadId:_sid+'_rfq',from:'me',to:_sid,text:`ðŸ“‹ New RFQ: ${title} | Qty: ${qty||'â€”'} | Budget: KES ${budget||'Negotiable'} | Contact: ${contact}`});
+  msg.innerHTML=`<span style="color:#22c55e;">âœ… RFQ sent! Ref: ${rfq.id}. Supplier will respond via messaging.</span>`;
+  ['rfqTitle','rfqDesc','rfqQty','rfqBudget','rfqName','rfqContact'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+}
+window.sendRFQ = sendRFQ;
+
+function contactSupplier() {
+  window.location.href = 'b2b-chat.html?thread='+(_sid)+'&name='+encodeURIComponent(_sup?.name||'Supplier');
+}
+window.contactSupplier = contactSupplier;
+
+function enquire(productId) {
+  window.location.href = 'b2b.html?enq='+productId;
+}
+window.enquire = enquire;
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.sp-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sp-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('pane-'+name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+window.switchTab = switchTab;
+
+function sharePage() {
+  if (navigator.share) navigator.share({title:_sup?.name+' on SOKONI B2B',url:window.location.href});
+  else { navigator.clipboard.writeText(window.location.href); (window._skToast||alert)('Link copied!'); }
+}
+window.sharePage = sharePage;
+
+load();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+

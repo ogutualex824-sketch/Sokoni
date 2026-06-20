@@ -1,0 +1,309 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+<meta charset="UTF-8">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>SOKONI â€” Book a Ride</title>
+<meta name="description" content="Book a boda boda, tuk-tuk or car ride anywhere in Kenya with SOKONI. Fast, affordable, tracked.">
+<meta property="og:title" content="SOKONI â€” Book a Ride">
+<meta property="og:description" content="Book affordable rides across Kenya â€” boda boda, tuk-tuk, car. Tracked in real-time.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mysokoni.co.ke/ride-book.html">
+<link rel="canonical" href="https://mysokoni.co.ke/ride-book.html">
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<script src="shared-header.js" defer></script>
+<style>
+body{background:#050505;color:#fff;font-family:inherit;}
+.rb-wrap{max-width:480px;margin:0 auto;padding:72px 16px 100px;}
+.rb-title{font-size:22px;font-weight:900;margin-bottom:4px;}
+.rb-sub{font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:24px;}
+.rb-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:18px;padding:20px;margin-bottom:16px;}
+.rb-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.rb-input{width:100%;padding:13px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:16px;font-family:inherit;box-sizing:border-box;outline:none;transition:border-color .15s;}
+.rb-input:focus{border-color:rgba(113,255,0,0.4);}
+.rb-vehicles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.rb-veh{padding:14px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;text-align:center;cursor:pointer;transition:all .15s;user-select:none;}
+.rb-veh.sel{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.4);}
+.rb-veh-ico{font-size:26px;margin-bottom:4px;}
+.rb-veh-name{font-size:12px;font-weight:800;color:#fff;}
+.rb-veh-fare{font-size:11px;color:rgba(255,255,255,0.45);margin-top:2px;}
+.rb-estimate{background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:16px;margin-bottom:16px;display:none;}
+.rb-est-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.rb-est-label{font-size:12px;color:rgba(255,255,255,0.5);}
+.rb-est-val{font-size:14px;font-weight:800;color:#fff;}
+.rb-fare-big{font-size:28px;font-weight:900;color:#71ff00;}
+.rb-btn{width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:15px;border:none;border-radius:14px;cursor:pointer;font-family:inherit;transition:opacity .15s;}
+.rb-btn:disabled{opacity:.5;cursor:not-allowed;}
+.rb-status{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:18px;padding:20px;margin-bottom:16px;display:none;}
+.rb-status-dot{width:10px;height:10px;border-radius:50%;background:#71ff00;display:inline-block;animation:rbPulse 1.2s infinite;}
+@keyframes rbPulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.rb-step{font-size:13px;color:rgba(255,255,255,0.5);padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.rb-step.done{color:#71ff00;}
+.rb-step.active{color:#fff;font-weight:700;}
+.rb-cancel{width:100%;padding:13px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;font-weight:700;font-size:14px;border-radius:14px;cursor:pointer;font-family:inherit;margin-top:10px;}
+.rb-phone-row{display:flex;gap:8px;}
+.rb-phone-row .rb-input{flex:1;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<div class="rb-wrap">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+    <a href="index.html" style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);text-decoration:none;font-size:14px;">â†</a>
+    <div>
+      <div class="rb-title">Book a Ride</div>
+      <div class="rb-sub">Boda Â· Tuk-Tuk Â· Car â€” live tracking, fair price</div>
+    </div>
+  </div>
+
+  <!-- BOOKING FORM -->
+  <div id="rbForm">
+    <div class="rb-card">
+      <div class="rb-label">Pickup Location</div>
+      <input class="rb-input" id="rbPickup" type="text" placeholder="Enter pickup address or area" style="margin-bottom:10px;">
+      <div class="rb-label">Drop-off Location</div>
+      <input class="rb-input" id="rbDropoff" type="text" placeholder="Where are you going?">
+      <button type="button" onclick="_rbEstimate()" style="margin-top:12px;width:100%;padding:11px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">ðŸ—º Get Fare Estimate</button>
+    </div>
+
+    <div class="rb-label" style="margin-bottom:10px;">Vehicle Type</div>
+    <div class="rb-vehicles">
+      <div class="rb-veh sel" data-veh="moto" onclick="_rbSelectVeh(this,'moto')">
+        <div class="rb-veh-ico">ðŸ›µ</div>
+        <div class="rb-veh-name">Boda Boda</div>
+        <div class="rb-veh-fare">KES 80 base + 15/km</div>
+      </div>
+      <div class="rb-veh" data-veh="tuktuk" onclick="_rbSelectVeh(this,'tuktuk')">
+        <div class="rb-veh-ico">ðŸ›º</div>
+        <div class="rb-veh-name">Tuk-Tuk</div>
+        <div class="rb-veh-fare">KES 120 base + 20/km</div>
+      </div>
+      <div class="rb-veh" data-veh="car" onclick="_rbSelectVeh(this,'car')">
+        <div class="rb-veh-ico">ðŸš—</div>
+        <div class="rb-veh-name">Car</div>
+        <div class="rb-veh-fare">KES 200 base + 35/km</div>
+      </div>
+      <div class="rb-veh" data-veh="ebike" onclick="_rbSelectVeh(this,'ebike')">
+        <div class="rb-veh-ico">âš¡</div>
+        <div class="rb-veh-name">E-Bike</div>
+        <div class="rb-veh-fare">KES 60 base + 10/km</div>
+      </div>
+    </div>
+
+    <div class="rb-estimate" id="rbEstimate">
+      <div class="rb-est-row"><span class="rb-est-label">Distance</span><span class="rb-est-val" id="rbEstDist">â€”</span></div>
+      <div class="rb-est-row"><span class="rb-est-label">Est. Duration</span><span class="rb-est-val" id="rbEstDur">â€”</span></div>
+      <div class="rb-est-row" style="border-top:1px solid rgba(113,255,0,0.15);padding-top:10px;margin-top:4px;">
+        <span class="rb-est-label" style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.7);">Fare Estimate</span>
+        <span class="rb-fare-big" id="rbEstFare">â€”</span>
+      </div>
+    </div>
+
+    <div class="rb-card">
+      <div class="rb-label">Your Phone</div>
+      <input class="rb-input" id="rbPhone" type="tel" placeholder="07XX XXX XXX" style="font-size:16px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;">Driver will call this number</div>
+    </div>
+
+    <button class="rb-btn" id="rbBookBtn" onclick="_rbBook()">ðŸ›µ Book Ride Now</button>
+    <div id="rbMsg" style="margin-top:10px;font-size:13px;text-align:center;min-height:18px;color:rgba(255,255,255,0.5);"></div>
+  </div>
+
+  <!-- RIDE STATUS -->
+  <div class="rb-status" id="rbStatus">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span class="rb-status-dot" id="rbStatusDot"></span>
+      <span style="font-weight:800;font-size:15px;" id="rbStatusLabel">Searching for driver...</span>
+    </div>
+    <div id="rbSteps">
+      <div class="rb-step active" id="step_searching">ðŸ” Searching for nearby driver</div>
+      <div class="rb-step" id="step_assigned">âœ… Driver assigned</div>
+      <div class="rb-step" id="step_en_route">ðŸ›µ Driver on the way</div>
+      <div class="rb-step" id="step_arrived">ðŸ“ Driver arrived</div>
+      <div class="rb-step" id="step_inprogress">ðŸš€ Ride in progress</div>
+      <div class="rb-step" id="step_done">ðŸŽ‰ Ride completed</div>
+    </div>
+    <div id="rbDriverInfo" style="display:none;margin-top:14px;padding:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Your Driver</div>
+      <div style="font-weight:800;font-size:15px;" id="rbDriverName">â€”</div>
+      <div style="font-size:13px;color:#71ff00;margin-top:2px;" id="rbDriverVeh">â€”</div>
+      <a id="rbCallDriver" href="tel:" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:9px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;text-decoration:none;">ðŸ“ž Call Driver</a>
+    </div>
+    <button class="rb-cancel" id="rbCancelBtn" onclick="_rbCancel()">Cancel Ride</button>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>
+  <a href="delivery.html" class="bnav-item"><span class="bnav-emoji">ðŸ“¦</span><span>Delivery</span></a>
+  <a href="ride-book.html" class="bnav-item active-bnav"><span class="bnav-emoji">ðŸ›µ</span><span>Ride</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">ðŸ’¬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">ðŸ‘¤</span><span>Profile</span></a>
+</nav>
+
+<script src="sokoni-routing.js"></script>
+<script type="module" src="sokoni-db.js"></script>
+<script>
+var _rbVeh = 'moto';
+var _rbRouteData = null;
+var _rbRef = null;
+var _rbUnsub = null;
+
+function _rbSelectVeh(el, veh){
+  document.querySelectorAll('.rb-veh').forEach(function(v){ v.classList.remove('sel'); });
+  el.classList.add('sel');
+  _rbVeh = veh;
+  /* Re-estimate fare if route data already computed */
+  if(_rbRouteData && _rbRouteData.distanceKm){
+    var fare = SokoniRouting.calcFare(veh, _rbRouteData.distanceKm);
+    document.getElementById('rbEstFare').textContent = 'KES ' + fare.toLocaleString();
+    _rbRouteData.fare = fare;
+  }
+}
+
+async function _rbEstimate(){
+  var pickup  = document.getElementById('rbPickup').value.trim();
+  var dropoff = document.getElementById('rbDropoff').value.trim();
+  if(!pickup || !dropoff){ _rbMsg('Enter both pickup and drop-off'); return; }
+  _rbMsg('Calculating route...');
+  try{
+    var route = await SokoniRouting.calcRoute(pickup, dropoff, _rbVeh);
+    if(route.error){ _rbMsg('Could not calculate route: ' + route.error); return; }
+    _rbRouteData = route;
+    document.getElementById('rbEstDist').textContent  = route.distanceKm.toFixed(1) + ' km';
+    document.getElementById('rbEstDur').textContent   = route.durationMin + ' min';
+    document.getElementById('rbEstFare').textContent  = 'KES ' + route.fare.toLocaleString();
+    document.getElementById('rbEstimate').style.display = 'block';
+    _rbMsg('');
+  }catch(e){ _rbMsg('Error: ' + e.message); }
+}
+
+async function _rbBook(){
+  var pickup  = document.getElementById('rbPickup').value.trim();
+  var dropoff = document.getElementById('rbDropoff').value.trim();
+  var phone   = document.getElementById('rbPhone').value.trim();
+  if(!pickup || !dropoff){ _rbMsg('Please enter pickup and drop-off locations.'); return; }
+  if(!phone){ _rbMsg('Please enter your phone number.'); return; }
+  var normPhone = phone.replace(/\D/g,'');
+  if(normPhone.startsWith('0')) normPhone = '254' + normPhone.slice(1);
+  if(!normPhone.startsWith('254') || normPhone.length < 12){ _rbMsg('Enter a valid Kenyan phone (07XX...)'); return; }
+
+  var btn = document.getElementById('rbBookBtn');
+  btn.disabled = true; btn.textContent = 'â³ Booking...';
+
+  try{
+    /* Compute route if not already done */
+    if(!_rbRouteData){
+      var route = await SokoniRouting.calcRoute(pickup, dropoff, _rbVeh);
+      if(route.error){ _rbMsg('Route error: '+route.error); btn.disabled=false; btn.textContent='ðŸ›µ Book Ride Now'; return; }
+      _rbRouteData = route;
+    }
+    _rbRef = 'RIDE' + Date.now().toString(36).toUpperCase();
+    var u = null; try{ u = JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){}
+    await SokoniDB.saveRideRequest({
+      ref:           _rbRef,
+      status:        'searching',
+      vehicleType:   _rbVeh,
+      passengerName: u?.name || 'Passenger',
+      passengerPhone:normPhone,
+      pickup:        pickup,
+      dropoff:       dropoff,
+      pickupCoords:  _rbRouteData.from   ? { lat: _rbRouteData.from.lat, lng: _rbRouteData.from.lng } : null,
+      dropoffCoords: _rbRouteData.to     ? { lat: _rbRouteData.to.lat,   lng: _rbRouteData.to.lng   } : null,
+      distanceKm:    _rbRouteData.distanceKm,
+      durationMin:   _rbRouteData.durationMin,
+      fare:          _rbRouteData.fare,
+    });
+    document.getElementById('rbForm').style.display   = 'none';
+    document.getElementById('rbStatus').style.display = 'block';
+    _rbListenStatus(_rbRef);
+  }catch(e){
+    _rbMsg('Booking failed: ' + e.message);
+    btn.disabled=false; btn.textContent='ðŸ›µ Book Ride Now';
+  }
+}
+
+var _STATUS_STEPS = {
+  searching:       { label:'Searching for driver...', step:'step_searching', dot:true },
+  driver_assigned: { label:'Driver assigned!',        step:'step_assigned',  dot:true },
+  driver_accepted: { label:'Driver accepted!',        step:'step_assigned',  dot:true },
+  driver_arrived:  { label:'Driver has arrived!',     step:'step_arrived',   dot:true },
+  in_progress:     { label:'Ride in progress',        step:'step_inprogress',dot:true },
+  completed:       { label:'Ride completed!',         step:'step_done',      dot:false },
+  cancelled:       { label:'Ride cancelled',          step:null,             dot:false },
+};
+
+function _rbListenStatus(ref){
+  if(_rbUnsub) _rbUnsub();
+  _rbUnsub = SokoniDB.listenRideRequest(ref, function(ride){
+    var cfg = _STATUS_STEPS[ride.status] || { label: ride.status, step: null, dot: true };
+    document.getElementById('rbStatusLabel').textContent = cfg.label;
+    document.getElementById('rbStatusDot').style.display = cfg.dot ? 'inline-block' : 'none';
+
+    /* Highlight steps */
+    var order = ['searching','driver_assigned','driver_accepted','driver_arrived','in_progress','completed'];
+    var cur = order.indexOf(ride.status);
+    ['step_searching','step_assigned','step_en_route','step_arrived','step_inprogress','step_done'].forEach(function(id,i){
+      var el = document.getElementById(id);
+      if(!el) return;
+      if(i < cur){ el.className='rb-step done'; }
+      else if(i === cur){ el.className='rb-step active'; }
+      else{ el.className='rb-step'; }
+    });
+
+    /* Show driver info when assigned */
+    if(ride.driverName && (ride.status === 'driver_assigned' || ride.status === 'driver_accepted' || ride.status === 'driver_arrived' || ride.status === 'in_progress')){
+      document.getElementById('rbDriverInfo').style.display  = 'block';
+      document.getElementById('rbDriverName').textContent    = ride.driverName;
+      document.getElementById('rbDriverVeh').textContent     = ride.vehicleType || _rbVeh;
+      var callEl = document.getElementById('rbCallDriver');
+      if(ride.driverPhone) callEl.href = 'tel:' + ride.driverPhone;
+    }
+
+    /* Completed/cancelled */
+    if(ride.status === 'completed' || ride.status === 'cancelled'){
+      document.getElementById('rbCancelBtn').style.display = 'none';
+      if(_rbUnsub){ _rbUnsub(); _rbUnsub=null; }
+      if(ride.status === 'completed'){
+        setTimeout(function(){ window.location.href = 'profile.html'; }, 3000);
+      }
+    }
+  });
+}
+
+async function _rbCancel(_c){
+  if(!_rbRef) return;
+  if(!_c){ _skConfirm('Cancel this ride?', ()=>_rbCancel(true)); return; }
+  try{
+    await SokoniDB.updateRideRequest(_rbRef, { status:'cancelled' });
+  }catch(e){ /* ignore */ }
+  if(_rbUnsub){ _rbUnsub(); _rbUnsub=null; }
+  document.getElementById('rbStatus').style.display = 'none';
+  document.getElementById('rbForm').style.display   = 'block';
+  document.getElementById('rbBookBtn').disabled     = false;
+  document.getElementById('rbBookBtn').textContent  = 'ðŸ›µ Book Ride Now';
+  _rbRef = null;
+}
+
+function _rbMsg(msg){ document.getElementById('rbMsg').textContent = msg; }
+</script>
+<script src="sw-register.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+

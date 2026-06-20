@@ -1,0 +1,662 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Revenue & Billing — SOKONI</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="sokoni-desktop.css"/>
+  <style>
+    :root { --g:#71ff00; --b:#00d4ff; --o:#ff9500; --r:#ff4444; }
+    body { background:#0a0a0a; color:#fff; font-family:'Segoe UI',sans-serif; margin:0; min-height:100vh; padding-bottom:80px; }
+    .sr-hero { background:linear-gradient(135deg,#0d1a0d 0%,#0a0a0a 60%); border-bottom:1px solid #71ff0022; padding:24px 20px 16px; }
+    .sr-hero-title { font-size:22px; font-weight:900; color:var(--g); }
+    .sr-hero-sub   { color:#777; font-size:13px; margin-top:4px; }
+    .sr-hero-badge { display:inline-block; background:var(--g)22; color:var(--g); border:1px solid var(--g)44; border-radius:20px; padding:4px 14px; font-size:12px; font-weight:700; margin-top:10px; }
+    .sr-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; padding:16px 20px; }
+    .sr-stat  { background:#111; border:1px solid #1e1e1e; border-radius:12px; padding:16px; }
+    .sr-stat-val { font-size:20px; font-weight:900; color:var(--g); }
+    .sr-stat-lbl { font-size:11px; color:#777; margin-top:5px; text-transform:uppercase; letter-spacing:.5px; }
+    .sr-stat.blue .sr-stat-val  { color:var(--b); }
+    .sr-stat.orange .sr-stat-val{ color:var(--o); }
+    .sr-stat.red .sr-stat-val   { color:var(--r); }
+    .sr-tabs { display:flex; gap:4px; padding:0 20px; border-bottom:1px solid #1a1a1a; overflow-x:auto; }
+    .sr-tab  { padding:12px 16px; font-size:13px; font-weight:600; color:#666; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+    .sr-tab.active { color:var(--g); border-bottom-color:var(--g); }
+    .sr-pane { display:none; padding:20px; }
+    .sr-pane.active { display:block; }
+    .sr-card { background:#111; border:1px solid #1e1e1e; border-radius:14px; padding:18px; margin-bottom:14px; }
+    .sr-card-title { font-size:13px; font-weight:700; color:#ccc; margin-bottom:14px; }
+    .sr-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .sr-table th { color:#555; font-size:11px; text-transform:uppercase; letter-spacing:.4px; padding:8px 10px; text-align:left; border-bottom:1px solid #1a1a1a; }
+    .sr-table td { padding:10px; border-bottom:1px solid #111; color:#ccc; }
+    .sr-table tr:hover td { background:#0d0d0d; }
+    .badge { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+    .sr-plan-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
+    .sr-plan-card { background:#0d0d0d; border:2px solid #1e1e1e; border-radius:14px; padding:18px; cursor:pointer; transition:.2s; }
+    .sr-plan-card:hover { border-color:#333; }
+    .sr-plan-card.current { border-color:var(--g); }
+    .sr-plan-name  { font-size:15px; font-weight:900; }
+    .sr-plan-price { font-size:26px; font-weight:900; margin:6px 0; }
+    .sr-plan-price small { font-size:12px; font-weight:400; color:#666; }
+    .sr-plan-feat  { font-size:12px; color:#888; margin-top:10px; line-height:1.8; }
+    .sr-plan-feat li { list-style:none; }
+    .sr-plan-feat li::before { content:"✓ "; color:var(--g); }
+    .sr-btn { background:var(--g); color:#000; border:none; padding:10px 22px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; }
+    .sr-btn.sec { background:#1a1a1a; color:#fff; border:1px solid #333; }
+    .sr-btn:hover { opacity:.85; }
+    .sr-feat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .sr-feat-card { background:#0d0d0d; border:1px solid #1e1e1e; border-radius:12px; padding:16px; }
+    .sr-feat-price { font-size:22px; font-weight:900; color:var(--g); }
+    .sr-feat-label { font-size:12px; color:#888; margin-top:4px; }
+    .sr-input { background:#0d0d0d; border:1px solid #2a2a2a; color:#fff; padding:10px 14px; border-radius:10px; font-size:13px; width:100%; box-sizing:border-box; }
+    .sr-form-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    .sr-form-label { font-size:11px; color:#666; margin-bottom:4px; }
+    .sr-form-group { flex:1; min-width:160px; }
+    .commission-bar { background:#1a1a1a; border-radius:8px; height:8px; margin-top:8px; overflow:hidden; }
+    .commission-fill { height:100%; background:var(--g); border-radius:8px; transition:width .6s; }
+    .rev-alert { background:#ff950011; border:1px solid #ff950033; border-radius:10px; padding:12px 16px; margin-bottom:14px; font-size:13px; color:#ff9500; }
+    .rev-alert.info { background:#00d4ff11; border-color:#00d4ff33; color:#00d4ff; }
+    .rev-alert.success { background:#71ff0011; border-color:#71ff0033; color:#71ff00; }
+    .no-data { text-align:center; padding:30px; color:#555; font-size:13px; }
+    @media(max-width:600px){
+      .sr-stats { grid-template-columns:1fr 1fr; }
+      .sr-plan-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<script>
+(function(){
+  const u = JSON.parse(localStorage.getItem('sokoniUser')||'{}');
+  if (!u.uid) window.location.href='login.html?next=seller-revenue.html';
+})();
+</script>
+
+<!-- Hero -->
+<div class="sr-hero">
+  <div class="sr-hero-title">Revenue & Billing</div>
+  <div class="sr-hero-sub">Your commissions, subscriptions, and promotions — all in one place</div>
+  <div class="sr-hero-badge" id="planBadge">Free Plan</div>
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="sr-btn" onclick="location.href='seller.html'">← Dashboard</button>
+    <button class="sr-btn sec" onclick="location.href='payments.html'">Payment Settings</button>
+  </div>
+</div>
+
+<!-- Stat cards -->
+<div class="sr-stats">
+  <div class="sr-stat">
+    <div class="sr-stat-val" id="statGross">—</div>
+    <div class="sr-stat-lbl">Gross Sales MTD</div>
+  </div>
+  <div class="sr-stat orange">
+    <div class="sr-stat-val" id="statOwed">—</div>
+    <div class="sr-stat-lbl">Commission Owed</div>
+  </div>
+  <div class="sr-stat blue">
+    <div class="sr-stat-val" id="statNet">—</div>
+    <div class="sr-stat-lbl">Est. Net Revenue</div>
+  </div>
+  <div class="sr-stat">
+    <div class="sr-stat-val" id="statTxns">—</div>
+    <div class="sr-stat-lbl">Transactions MTD</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="sr-tabs">
+  <div class="sr-tab active" onclick="srTab('overview',this)">Overview</div>
+  <div class="sr-tab" onclick="srTab('commission',this)">Commission</div>
+  <div class="sr-tab" onclick="srTab('subscription',this)">Subscription</div>
+  <div class="sr-tab" onclick="srTab('featured',this)">Featured</div>
+  <div class="sr-tab" onclick="srTab('ads',this)">Ads</div>
+  <div class="sr-tab" onclick="srTab('billing',this)">Billing</div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="sr-pane active" id="pane-overview">
+  <div class="rev-alert info" id="overviewTip">
+    💡 <strong>How revenue works:</strong> Customers pay directly into your M-Pesa account. SOKONI tracks a commission on each payment. You receive the full amount instantly — commission is invoiced monthly.
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">Commission Rate by Hub</div>
+    <div id="ratesGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+      <div class="no-data">Loading...</div>
+    </div>
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">Recent Transactions</div>
+    <div style="overflow-x:auto">
+      <table class="sr-table">
+        <thead><tr><th>Date</th><th>Hub</th><th>Gross</th><th>Commission</th><th>Status</th></tr></thead>
+        <tbody id="recentTxns"><tr><td colspan="5" class="no-data">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- COMMISSION -->
+<div class="sr-pane" id="pane-commission">
+  <div class="sr-card" style="overflow-x:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="sr-card-title" style="margin-bottom:0">Commission Ledger</div>
+      <select class="sr-input" id="commPeriodSel" onchange="loadMyCommissions()" style="width:auto;padding:7px 12px;font-size:12px"></select>
+    </div>
+    <table class="sr-table">
+      <thead><tr><th>Date</th><th>Hub</th><th>Gross</th><th>Rate</th><th>Commission</th><th>Status</th></tr></thead>
+      <tbody id="myCommBody"><tr><td colspan="6" class="no-data">Loading...</td></tr></tbody>
+    </table>
+    <div id="myCommTotal" style="font-size:13px;color:#ff9500;text-align:right;margin-top:12px;font-weight:700"></div>
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">How Commission Is Calculated</div>
+    <div id="commCalcDemo" style="font-size:13px;color:#888;line-height:1.8">
+      <p>Example: You receive a payment of <span style="color:#71ff00">KES 5,000</span> on the Marketplace hub (3%):</p>
+      <p>Commission = 5,000 × 3% = <span style="color:#ff9500">KES 150</span></p>
+      <p>You keep = <span style="color:#71ff00">KES 4,850</span></p>
+      <p style="color:#555;font-size:11px">Commission is invoiced monthly and paid via bank transfer or M-Pesa. You never have to send money in advance.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SUBSCRIPTION -->
+<div class="sr-pane" id="pane-subscription">
+  <div class="sr-card">
+    <div class="sr-card-title">Your Current Plan</div>
+    <div id="currentPlanBlock" style="font-size:13px;color:#888">Loading...</div>
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">Upgrade Your Plan</div>
+    <div class="sr-plan-grid">
+      <div class="sr-plan-card" id="planFree">
+        <div class="sr-plan-name" style="color:#aaa">Free</div>
+        <div class="sr-plan-price">KES 0 <small>/mo</small></div>
+        <ul class="sr-plan-feat"><li>10 product listings</li><li>Basic analytics</li><li>WhatsApp support</li></ul>
+        <button class="sr-btn sec" onclick="selectPlan('free')" style="width:100%;margin-top:14px;padding:8px">Current / Downgrade</button>
+      </div>
+      <div class="sr-plan-card highlighted" id="planPro">
+        <div class="sr-plan-name" style="color:var(--g)">Pro</div>
+        <div class="sr-plan-price">KES 999 <small>/mo</small></div>
+        <ul class="sr-plan-feat"><li>Unlimited listings</li><li>Advanced analytics</li><li>Featured placement</li><li>Priority search</li></ul>
+        <button class="sr-btn" onclick="selectPlan('pro')" style="width:100%;margin-top:14px;padding:8px">Upgrade to Pro</button>
+      </div>
+      <div class="sr-plan-card" style="border-color:#00d4ff44" id="planBusiness">
+        <div class="sr-plan-name" style="color:var(--b)">Business</div>
+        <div class="sr-plan-price">KES 2,999 <small>/mo</small></div>
+        <ul class="sr-plan-feat"><li>Everything in Pro</li><li>Team management</li><li>Marketing tools</li><li>Bulk upload</li><li>Priority support</li></ul>
+        <button class="sr-btn" onclick="selectPlan('business')" style="width:100%;margin-top:14px;padding:8px;background:var(--b);color:#000">Get Business</button>
+      </div>
+      <div class="sr-plan-card" style="border-color:#ff950044" id="planEnterprise">
+        <div class="sr-plan-name" style="color:var(--o)">Enterprise</div>
+        <div class="sr-plan-price">Custom <small>pricing</small></div>
+        <ul class="sr-plan-feat"><li>Unlimited everything</li><li>Dedicated manager</li><li>Full API access</li><li>Custom integrations</li></ul>
+        <button class="sr-btn sec" onclick="contactEnterprise()" style="width:100%;margin-top:14px;padding:8px">Contact Sales</button>
+      </div>
+    </div>
+    <div id="planUpgradeMsg" style="font-size:13px;margin-top:14px;padding:10px;border-radius:8px;display:none"></div>
+  </div>
+</div>
+
+<!-- FEATURED LISTINGS -->
+<div class="sr-pane" id="pane-featured">
+  <div class="sr-card">
+    <div class="sr-card-title">Feature Your Listings</div>
+    <div class="rev-alert info">Your listings appear at the top of search and category pages for the chosen duration.</div>
+    <div class="sr-feat-grid">
+      <div class="sr-feat-card">
+        <div style="font-size:22px">⚡</div>
+        <div class="sr-feat-price">KES 200</div>
+        <div class="sr-feat-label">1 Day spotlight</div>
+        <button class="sr-btn" onclick="buyFeature('daily')" style="margin-top:12px;width:100%;padding:8px">Feature for 1 Day</button>
+      </div>
+      <div class="sr-feat-card" style="border-color:#71ff0044">
+        <div style="font-size:22px">🔥</div>
+        <div class="sr-feat-price">KES 800</div>
+        <div class="sr-feat-label">7 Day spotlight — best value</div>
+        <button class="sr-btn" onclick="buyFeature('weekly')" style="margin-top:12px;width:100%;padding:8px">Feature for 7 Days</button>
+      </div>
+      <div class="sr-feat-card">
+        <div style="font-size:22px">🏆</div>
+        <div class="sr-feat-price">KES 2,500</div>
+        <div class="sr-feat-label">30 Day maximum exposure</div>
+        <button class="sr-btn" onclick="buyFeature('monthly')" style="margin-top:12px;width:100%;padding:8px">Feature for 30 Days</button>
+      </div>
+    </div>
+    <div id="featBuyMsg" style="font-size:13px;margin-top:12px"></div>
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">Your Active Features</div>
+    <div style="overflow-x:auto">
+      <table class="sr-table">
+        <thead><tr><th>Item</th><th>Placement</th><th>Duration</th><th>Price</th><th>Expires</th><th>Status</th></tr></thead>
+        <tbody id="myFeaturedBody"><tr><td colspan="6" class="no-data">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ADS -->
+<div class="sr-pane" id="pane-ads">
+  <div class="sr-card">
+    <div class="sr-card-title">Create Ad Campaign</div>
+    <div class="rev-alert info">Ads appear across SOKONI pages and search results. You set the budget — we charge per 1,000 impressions at KES 150 CPM.</div>
+    <div class="sr-form-row">
+      <div class="sr-form-group">
+        <div class="sr-form-label">Ad Type</div>
+        <select class="sr-input" id="newAdType">
+          <option value="product">Product Ad</option>
+          <option value="store">Store Ad</option>
+          <option value="service">Service Ad</option>
+          <option value="video">Video Ad</option>
+        </select>
+      </div>
+      <div class="sr-form-group">
+        <div class="sr-form-label">Target Hub</div>
+        <select class="sr-input" id="newAdHub">
+          <option value="all">All Pages</option>
+          <option value="marketplace">Marketplace</option>
+          <option value="food">Food</option>
+          <option value="healthcare">Healthcare</option>
+          <option value="property">Property</option>
+          <option value="vehicles">Vehicles</option>
+          <option value="entertainment">Entertainment</option>
+        </select>
+      </div>
+    </div>
+    <div class="sr-form-row">
+      <div class="sr-form-group">
+        <div class="sr-form-label">Ad Title</div>
+        <input class="sr-input" id="newAdTitle" placeholder="e.g. Fresh Fruits — Same Day Delivery"/>
+      </div>
+    </div>
+    <div class="sr-form-row">
+      <div class="sr-form-group">
+        <div class="sr-form-label">Description</div>
+        <input class="sr-input" id="newAdDesc" placeholder="Brief description (120 chars)"/>
+      </div>
+    </div>
+    <div class="sr-form-row">
+      <div class="sr-form-group">
+        <div class="sr-form-label">Budget (KES)</div>
+        <input class="sr-input" id="newAdBudget" type="number" min="500" placeholder="Min KES 500"/>
+      </div>
+      <div class="sr-form-group">
+        <div class="sr-form-label">Landing URL</div>
+        <input class="sr-input" id="newAdUrl" placeholder="https://mysokoni.co.ke/..."/>
+      </div>
+    </div>
+    <button class="sr-btn" onclick="submitAd()" style="margin-top:4px">Submit Campaign for Review</button>
+    <div id="adSubmitMsg" style="font-size:13px;margin-top:12px"></div>
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">My Ad Campaigns</div>
+    <div style="overflow-x:auto">
+      <table class="sr-table">
+        <thead><tr><th>Title</th><th>Type</th><th>Budget</th><th>Spent</th><th>Impressions</th><th>Status</th></tr></thead>
+        <tbody id="myAdsBody"><tr><td colspan="6" class="no-data">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- BILLING -->
+<div class="sr-pane" id="pane-billing">
+  <div class="sr-card">
+    <div class="sr-card-title">Monthly Billing Summary</div>
+    <div id="billingTable">
+      <div class="no-data">Loading...</div>
+    </div>
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">Invoices</div>
+    <div id="invoicesBlock">
+      <div class="no-data">Loading...</div>
+    </div>
+  </div>
+
+  <div class="sr-card">
+    <div class="sr-card-title">How Billing Works</div>
+    <div style="font-size:13px;color:#888;line-height:1.9">
+      <p><strong style="color:#ccc">1. You receive payments directly</strong> — customers pay into your own M-Pesa account. SOKONI never holds your money.</p>
+      <p><strong style="color:#ccc">2. Commission is tracked automatically</strong> — every confirmed payment generates a commission record in your ledger.</p>
+      <p><strong style="color:#ccc">3. Monthly invoice</strong> — on the 1st of each month, SOKONI issues an invoice for commissions from the previous month.</p>
+      <p><strong style="color:#ccc">4. Payment terms</strong> — invoices are due by the 7th. Pay via M-Pesa Paybill 123456 (Account: your seller ID) or bank transfer.</p>
+      <p><strong style="color:#ccc">5. Future</strong> — automatic commission collection directly from payments will be available once integrated with payment partners.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function srTab(name, el) {
+  document.querySelectorAll('.sr-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sr-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pane-' + name).classList.add('active');
+  if (name === 'commission')   loadMyCommissions();
+  if (name === 'billing')      loadBilling();
+  if (name === 'featured')     loadMyFeatured();
+  if (name === 'ads')          loadMyAds();
+}
+</script>
+
+<script type="module">
+import { initializeApp }               from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, query, where, orderBy, limit, getDocs, doc, getDoc }
+                                        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFunctions, httpsCallable }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
+
+const _cfg = {
+  apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+  authDomain:"sokoni-aeb26.firebaseapp.com",
+  projectId:"sokoni-aeb26",
+  storageBucket:"sokoni-aeb26.firebasestorage.app",
+  messagingSenderId:"24799054989",
+  appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"
+};
+const _app = initializeApp(_cfg);
+const _auth = getAuth(_app);
+const _db   = getFirestore(_app);
+const _fns  = getFunctions(_app, "us-central1");
+
+const fmtKES  = n => "KES " + Number(n||0).toLocaleString("en-KE",{minimumFractionDigits:0,maximumFractionDigits:2});
+const fmtDate = ts => { if (!ts) return "—"; const d = ts.toDate?.() || new Date(ts); return d.toLocaleDateString("en-KE",{day:"2-digit",month:"short",year:"2-digit"}); };
+const fmtPeriod = p => { if (!p) return "—"; const [y,m] = p.split("-"); const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return (months[Number(m)-1]||m)+" "+y; };
+const statusMap = { pending:{l:"Pending",c:"#ff9500"},invoiced:{l:"Invoiced",c:"#00d4ff"},paid:{l:"Paid",c:"#71ff00"},waived:{l:"Waived",c:"#888"},active:{l:"Active",c:"#71ff00"},pending_review:{l:"In Review",c:"#ff9500"},expired:{l:"Expired",c:"#ff4444"},pending_payment:{l:"Unpaid",c:"#ff9500"} };
+const badge = (s) => { const b=statusMap[s]||{l:s,c:"#888"}; return `<span class="badge" style="background:${b.c}22;color:${b.c}">${b.l}</span>`; };
+const PLAN_COLORS = {free:"#aaa",pro:"#71ff00",business:"#00d4ff",enterprise:"#ff9500"};
+const HUB_RATES = {marketplace:{pct:3},restaurant:{pct:5},food:{pct:5},freelance:{pct:8},property:{pct:2},vehicles:{pct:0,fixed:2000},healthcare:{pct:5},legal:{pct:5},bnb:{pct:5},digital:{pct:10},b2b:{pct:3},delivery:{pct:8},entertainment:{pct:5},default:{pct:5}};
+const HUB_LABELS = {marketplace:"Marketplace",restaurant:"Restaurant",food:"Food",freelance:"Freelance",property:"Property",vehicles:"Vehicles",healthcare:"Healthcare",legal:"Legal",bnb:"BnB",digital:"Digital",b2b:"B2B",delivery:"Delivery",entertainment:"Entertainment"};
+
+let _uid = null;
+let _period = new Date().toISOString().slice(0, 7);
+let _reportData = null;
+
+/* ── Build period selector ── */
+function buildPeriodSel() {
+  const sel = document.getElementById("commPeriodSel");
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.toISOString().slice(0, 7);
+    sel.add(new Option(fmtPeriod(val) + (i===0?" (current)":""), val));
+  }
+}
+buildPeriodSel();
+
+onAuthStateChanged(_auth, async u => {
+  if (!u) { window.location.href = "login.html?next=seller-revenue.html"; return; }
+  _uid = u.uid;
+  loadReport();
+});
+
+async function loadReport() {
+  try {
+    const fn  = httpsCallable(_fns, "getSellerBillingReport");
+    const res = await fn({ period: _period, months: 6 });
+    _reportData = res.data;
+    renderOverview();
+  } catch(e) {
+    console.error("[seller-revenue] loadReport:", e);
+  }
+}
+
+function renderOverview() {
+  if (!_reportData) return;
+
+  /* Subscription badge */
+  const sub = _reportData.subscription;
+  const plan = sub?.plan || "free";
+  const planCol = PLAN_COLORS[plan] || "#aaa";
+  document.getElementById("planBadge").textContent = (plan.charAt(0).toUpperCase()+plan.slice(1)) + " Plan";
+  document.getElementById("planBadge").style.background = planCol + "22";
+  document.getElementById("planBadge").style.color = planCol;
+  document.getElementById("planBadge").style.borderColor = planCol + "44";
+
+  /* Stat cards from this month's billing */
+  const bill = _reportData.billing.find(b => b.period === _period) || {};
+  const comms = _reportData.commissions || [];
+  const gross = bill.grossSalesKES || comms.reduce((s,c) => s + Number(c.grossAmount||0), 0);
+  const owed  = bill.totalCommissionKES || comms.filter(c=>c.status==="pending").reduce((s,c) => s + Number(c.totalOwed||0), 0);
+  const txns  = bill.transactionCount || comms.length;
+
+  document.getElementById("statGross").textContent = fmtKES(gross);
+  document.getElementById("statOwed").textContent  = fmtKES(owed);
+  document.getElementById("statNet").textContent   = fmtKES(Math.max(gross - owed, 0));
+  document.getElementById("statTxns").textContent  = txns;
+
+  /* Hub rates grid */
+  const HUBS = ["marketplace","food","freelance","healthcare","legal","property","bnb","digital","delivery"];
+  document.getElementById("ratesGrid").innerHTML = HUBS.map(h => {
+    const r = HUB_RATES[h]||HUB_RATES.default;
+    return `<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;padding:12px">
+      <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px">${HUB_LABELS[h]||h}</div>
+      <div style="font-size:20px;font-weight:900;color:var(--g);margin-top:4px">${r.pct}%${r.fixed?"+KES"+r.fixed:""}</div>
+    </div>`;
+  }).join("");
+
+  /* Recent transactions */
+  const recent = comms.slice(0,10);
+  document.getElementById("recentTxns").innerHTML = recent.length
+    ? recent.map(c => `<tr>
+        <td>${fmtDate(c.createdAt)}</td>
+        <td>${HUB_LABELS[c.hub]||c.hub||"—"}</td>
+        <td style="color:#71ff00">${fmtKES(c.grossAmount)}</td>
+        <td style="color:#ff9500">${fmtKES(c.totalOwed)}</td>
+        <td>${badge(c.status)}</td>
+      </tr>`).join("")
+    : "<tr><td colspan='5' class='no-data'>No transactions yet this period</td></tr>";
+
+  /* Current plan block */
+  document.getElementById("currentPlanBlock").innerHTML = sub
+    ? `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:18px;font-weight:900;color:${planCol}">${plan.charAt(0).toUpperCase()+plan.slice(1)} Plan</div>
+          <div style="font-size:12px;color:#666;margin-top:4px">Renews: ${fmtDate(sub.endDate)}</div>
+        </div>
+        <div style="font-size:13px;color:#888">KES ${(sub.priceKES||0).toLocaleString("en-KE")}/month</div>
+        ${badge(sub.status||"active")}
+      </div>`
+    : "<div style='color:#888'>No active plan found. You are on the Free plan.</div>";
+
+  /* Highlight current plan card */
+  document.querySelectorAll(".sr-plan-card").forEach(c => c.classList.remove("current"));
+  const cur = document.getElementById("plan"+plan.charAt(0).toUpperCase()+plan.slice(1));
+  if (cur) cur.classList.add("current");
+}
+
+window.loadMyCommissions = async function() {
+  const period = document.getElementById("commPeriodSel").value;
+  const body   = document.getElementById("myCommBody");
+  const total  = document.getElementById("myCommTotal");
+  body.innerHTML = "<tr><td colspan='6' class='no-data'>Loading...</td></tr>";
+  try {
+    const q = query(
+      collection(_db,"commissionLedger"),
+      where("sellerUid","==",_uid),
+      where("period","==",period),
+      orderBy("createdAt","desc"),
+      limit(100)
+    );
+    const snap = await getDocs(q);
+    let sum = 0;
+    if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='no-data'>No commission records this period</td></tr>"; total.textContent=""; return; }
+    body.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      sum += Number(r.totalOwed||0);
+      return `<tr>
+        <td>${fmtDate(r.createdAt)}</td>
+        <td>${HUB_LABELS[r.hub]||r.hub||"—"}</td>
+        <td style="color:#71ff00">${fmtKES(r.grossAmount)}</td>
+        <td style="color:#888">${r.commissionPct}%${r.fixedFee?" + "+fmtKES(r.fixedFee):""}</td>
+        <td style="color:#ff9500;font-weight:700">${fmtKES(r.totalOwed)}</td>
+        <td>${badge(r.status)}</td>
+      </tr>`;
+    }).join("");
+    total.textContent = "Total owed: " + fmtKES(sum);
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+  }
+};
+
+window.loadBilling = async function() {
+  if (!_reportData) await loadReport();
+  const d = _reportData;
+
+  /* Billing table */
+  const billing = d?.billing || [];
+  document.getElementById("billingTable").innerHTML = billing.length
+    ? `<div style="overflow-x:auto"><table class="sr-table">
+        <thead><tr><th>Period</th><th>Gross Sales</th><th>Commission</th><th>Subscription</th><th>Featured</th><th>Total Owed</th><th>Status</th></tr></thead>
+        <tbody>${billing.map(b => `<tr>
+          <td style="font-weight:700">${fmtPeriod(b.period)}</td>
+          <td style="color:#71ff00">${fmtKES(b.grossSalesKES)}</td>
+          <td style="color:#ff9500">${fmtKES(b.totalCommissionKES)}</td>
+          <td>${fmtKES(b.subscriptionKES)}</td>
+          <td>${fmtKES(b.featuredKES)}</td>
+          <td style="color:#ff9500;font-weight:700">${fmtKES((b.totalCommissionKES||0)+(b.subscriptionKES||0)+(b.featuredKES||0))}</td>
+          <td>${badge(b.status||"open")}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>`
+    : "<div class='no-data'>No billing history yet</div>";
+
+  /* Invoices */
+  const invoices = d?.invoices || [];
+  document.getElementById("invoicesBlock").innerHTML = invoices.length
+    ? invoices.map(inv => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #151515;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:14px;font-weight:700">${fmtKES(inv.totalKES)}</div>
+            <div style="font-size:11px;color:#555;margin-top:3px">Period: ${fmtPeriod(inv.period)} · Due: ${fmtDate(inv.dueDate)}</div>
+            <div style="font-size:10px;color:#444;margin-top:2px;font-family:monospace">${inv.id.slice(0,16)}…</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${badge(inv.status||"pending")}
+            ${inv.status==="pending"||inv.status==="overdue"
+              ? `<button class="sr-btn" onclick="payInvoice('${inv.id}')" style="padding:6px 14px;font-size:12px">Pay Now</button>`
+              : ""}
+          </div>
+        </div>`).join("")
+    : "<div class='no-data'>No invoices yet — great job staying current!</div>";
+};
+
+window.payInvoice = function(invoiceId) {
+  (window._skToast||alert)("To pay invoice " + invoiceId.slice(0,12) + "…\n\nM-Pesa: Lipa Na M-Pesa → Paybill → Business No. 123456 → Account: YOUR_SELLER_ID → Amount: as invoiced\n\nBank: Equity Bank → Account: 0123456789 → Ref: SOKONI-INV-" + invoiceId.slice(0,8) + "\n\nContact support@mysokoni.co.ke once paid.");
+};
+
+window.selectPlan = function(plan) {
+  const msg = document.getElementById("planUpgradeMsg");
+  const PRICES = {free:0, pro:999, business:2999};
+  msg.style.display = "block";
+  msg.style.background = "#ff950011"; msg.style.color="#ff9500"; msg.style.border="1px solid #ff950033";
+  msg.textContent = `To ${plan==="free"?"downgrade to":"upgrade to"} the ${plan.charAt(0).toUpperCase()+plan.slice(1)} plan (${plan==="free"?"free":`KES ${PRICES[plan]}/month`}), contact support@mysokoni.co.ke or WhatsApp +254 705 726 803. Mention your seller ID: ${(_uid||"").slice(0,12)}`;
+};
+
+window.contactEnterprise = function() {
+  window.open("https://wa.me/254705726803?text=Hi+SOKONI%2C+I%27m+interested+in+the+Enterprise+plan+for+my+seller+account+"+(_uid||"").slice(0,8), "_blank");
+};
+
+window.loadMyFeatured = async function() {
+  const body = document.getElementById("myFeaturedBody");
+  body.innerHTML = "<tr><td colspan='6' class='no-data'>Loading...</td></tr>";
+  try {
+    const q = query(collection(_db,"featuredListings"), where("sellerUid","==",_uid), orderBy("createdAt","desc"), limit(50));
+    const snap = await getDocs(q);
+    if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='no-data'>No featured listings yet</td></tr>"; return; }
+    body.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      return `<tr>
+        <td>${r.itemTitle||r.itemType||"—"}</td>
+        <td>${r.placement||"category"}</td>
+        <td>${r.duration||"—"}</td>
+        <td style="color:#71ff00">${fmtKES(r.priceKES)}</td>
+        <td>${fmtDate(r.endDate)}</td>
+        <td>${badge(r.status||"pending_payment")}</td>
+      </tr>`;
+    }).join("");
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+  }
+};
+
+window.buyFeature = function(duration) {
+  const PRICES = {daily:"KES 200",weekly:"KES 800",monthly:"KES 2,500"};
+  const msg = document.getElementById("featBuyMsg");
+  const item = prompt("Enter your product/listing title to feature:");
+  if (!item) return;
+  msg.textContent = `To feature "${item}" for ${duration} (${PRICES[duration]}), pay via M-Pesa Paybill 123456, Account: FEATURE-${(_uid||"").slice(0,8)}, then WhatsApp +254 705 726 803 with your payment code.`;
+  msg.style.color = "#00d4ff";
+};
+
+window.loadMyAds = async function() {
+  const body = document.getElementById("myAdsBody");
+  body.innerHTML = "<tr><td colspan='6' class='no-data'>Loading...</td></tr>";
+  try {
+    const q = query(collection(_db,"sokoAds"), where("sellerUid","==",_uid), orderBy("createdAt","desc"), limit(50));
+    const snap = await getDocs(q);
+    if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='no-data'>No ad campaigns yet</td></tr>"; return; }
+    body.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      return `<tr>
+        <td style="font-weight:600">${r.title||"—"}</td>
+        <td>${r.adType||"—"}</td>
+        <td style="color:#ff9500">${fmtKES(r.budgetKES)}</td>
+        <td>${fmtKES(r.spentKES)}</td>
+        <td>${(r.impressions||0).toLocaleString()}</td>
+        <td>${badge(r.status||"pending_review")}</td>
+      </tr>`;
+    }).join("");
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+  }
+};
+
+window.submitAd = async function() {
+  const msg    = document.getElementById("adSubmitMsg");
+  const title  = document.getElementById("newAdTitle").value.trim();
+  const adType = document.getElementById("newAdType").value;
+  const hub    = document.getElementById("newAdHub").value;
+  const desc   = document.getElementById("newAdDesc").value.trim();
+  const budget = parseFloat(document.getElementById("newAdBudget").value);
+  const url    = document.getElementById("newAdUrl").value.trim();
+
+  if (!title || isNaN(budget) || budget < 500) {
+    msg.textContent = "Title and budget (min KES 500) required."; msg.style.color="#ff4444"; return;
+  }
+
+  msg.textContent = "Submitting..."; msg.style.color="#888";
+  try {
+    const fn  = httpsCallable(_fns, "createAdCampaign");
+    const res = await fn({ adType, title, description: desc, ctaUrl: url, targetHub: hub, budgetKES: budget, cpm: 150 });
+    msg.textContent = "Campaign submitted for review! ID: " + res.data.adId?.slice(0,12);
+    msg.style.color = "#71ff00";
+    document.getElementById("newAdTitle").value = "";
+    document.getElementById("newAdBudget").value = "";
+    loadMyAds();
+  } catch(e) {
+    msg.textContent = "Error: " + (e.message||e); msg.style.color="#ff4444";
+  }
+};
+</script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+

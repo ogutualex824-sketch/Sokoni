@@ -1,0 +1,370 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI BnB — Book Hotels, BnBs & Rooms in Kenya</title>
+  <meta name="description" content="Find and book BnBs, hotels, apartments and rooms across Kenya. Best rates, verified hosts.">
+  <meta property="og:title" content="SOKONI BnB — Book Hotels, BnBs & Rooms in Kenya">
+  <meta property="og:description" content="Find verified BnBs, hotels and apartments across Kenya. Best rates on SOKONI.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="landlord.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="compact-grid.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LodgingBusiness","name":"SOKONI BnB & Short Stay Kenya","description":"Book affordable BnBs, self-contained apartments, hotel rooms and villas in Nairobi, Mombasa, Kisumu across Kenya. Pay with M-Pesa. Instant confirmation.","url":"https://mysokoni.co.ke/bnb.html","logo":"https://mysokoni.co.ke/assets/Sokonilogo2.png","telephone":"+254705726803","currenciesAccepted":"KES","paymentAccepted":"M-Pesa, Visa, Mastercard","areaServed":{"@type":"Country","name":"Kenya"}}</script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="navbar">
+  <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
+  <div class="bnb-nav-links" style="display:flex;gap:8px;align-items:center;">
+    <a href="bnb-manage.html" class="wishlist-nav-btn">🏨 Host</a>
+    <a href="index.html" style="padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;font-weight:600;">🏠 Home</a>
+  </div>
+</nav>
+
+<!-- BNB HERO -->
+<section class="bnb-hero">
+  <div class="bnb-hero-bg"></div>
+  <div class="bnb-hero-content">
+    <h1>🏨 Book Your Perfect Stay</h1>
+    <p>Verified BnBs, apartments & rooms across Kenya</p>
+    <div class="bnb-search-bar">
+      <div class="bnb-search-field">
+        📍
+        <input type="text" id="bnbLocationSearch" placeholder="Where are you going?">
+      </div>
+      <div class="bnb-search-field">
+        📅
+        <input type="date" id="bnbCheckIn">
+      </div>
+      <div class="bnb-search-field">
+        📅
+        <input type="date" id="bnbCheckOut">
+      </div>
+      <div class="bnb-search-field">
+        👤
+        <input type="number" id="bnbGuests" placeholder="Guests" min="1" max="20" value="1">
+      </div>
+      <button type="button" class="bnb-search-btn" onclick="searchBnBs()">
+        🔍 Search
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- FILTER PILLS -->
+<div class="bnb-filter-bar">
+  <button type="button" class="bnb-pill active-pill" onclick="filterBnB('all',this)">🏠 All</button>
+  <button type="button" class="bnb-pill" onclick="filterBnB('bnb',this)">🏡 BnB</button>
+  <button type="button" class="bnb-pill" onclick="filterBnB('hotel',this)">🏨 Hotel</button>
+  <button type="button" class="bnb-pill" onclick="filterBnB('apartment',this)">🏢 Apartment</button>
+  <button type="button" class="bnb-pill" onclick="filterBnB('villa',this)">🏰 Villa</button>
+  <button type="button" class="bnb-pill" onclick="filterBnB('studio',this)">🛋️ Studio</button>
+  <div class="bnb-sort">
+    <select id="bnbSort" onchange="sortBnBs()" class="location-filter-select">
+      <option value="default">Sort: Default</option>
+      <option value="low">Price: Low → High</option>
+      <option value="high">Price: High → Low</option>
+      <option value="rating">Top Rated</option>
+    </select>
+  </div>
+</div>
+
+<!-- LISTINGS GRID -->
+<section style="padding:20px 28px 80px;max-width:1280px;margin:0 auto;">
+  <div id="bnbGrid" class="bnb-grid"></div>
+</section>
+
+<!-- BOOK MODAL -->
+<div id="bnbBookModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:500px;">
+    <h2 id="bookModalTitle">🏨 Book this Stay</h2>
+    <div id="bookModalContent"></div>
+  </div>
+</div>
+
+<div id="notificationContainer"></div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="bnb-manage.html" class="bnav-item"><i class="fas fa-concierge-bell"></i><span>Host</span></a>
+  <a href="bnb.html" class="bnav-item active-bnav"><span class="bnav-emoji">🏨</span><span>Stay</span></a>
+  <a href="property.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Rentals</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+  let allBnBs = [];
+  let filtered = [];
+
+  function loadBnBs(){
+    try { allBnBs = JSON.parse(localStorage.getItem("sokoniBnBs")) || []; } catch(e) { allBnBs = []; }
+    filtered = [...allBnBs];
+    renderBnBs(filtered);
+  }
+
+  function renderBnBs(list){
+    const grid = document.getElementById("bnbGrid");
+    if(!grid) return;
+    if(list.length === 0){
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:80px 20px;">
+          <div style="font-size:64px;margin-bottom:16px;">🏨</div>
+          <h2 style="color:white;margin-bottom:10px;">🏨 No listings yet</h2>
+          <p style="color:rgba(255,255,255,0.4);margin-bottom:24px;">Be the first to list your BnB on Sokoni</p>
+          <a href="bnb-manage.html" style="padding:14px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">🏨 List Your Property</a>
+        </div>`;
+      return;
+    }
+    grid.innerHTML = list.map(b => `
+      <div class="bnb-card" onclick="openBookModal('${b.id}')">
+        <div class="bnb-card-img-wrap">
+          <img loading="lazy" src="${b.image || 'assets/backG1.jpeg'}" alt="${b.name}">
+          <div class="bnb-type-badge">${b.type || 'BnB'}</div>
+          ${b.featured ? '<div class="bnb-featured-badge">⭐ Featured</div>' : ''}
+        </div>
+        <div class="bnb-card-body">
+          <h3 class="bnb-card-title">${b.name}</h3>
+          <p class="bnb-card-location">📍 ${b.location}</p>
+          <div class="bnb-card-meta">
+            <span><i class="fas fa-bed"></i> ${b.bedrooms || 1} bed</span>
+            <span><i class="fas fa-bath"></i> ${b.bathrooms || 1} bath</span>
+            <span>👥 ${b.maxGuests || 2} guests</span>
+          </div>
+          <div class="bnb-amenity-row">
+            ${(b.amenities || []).slice(0,3).map(a => `<span class="bnb-amenity-tag">${a}</span>`).join("")}
+          </div>
+          <div class="bnb-card-footer">
+            <div class="bnb-price">
+              <span class="bnb-price-num">KES ${Number(b.pricePerNight||0).toLocaleString()}</span>
+              <span class="bnb-price-label">/night</span>
+            </div>
+            <div class="bnb-rating">
+              <i class="fas fa-star" style="color:#ffc107"></i>
+              ${b.rating || "New"}
+            </div>
+          </div>
+          <button type="button" class="bnb-book-btn" onclick="event.stopPropagation();openBookModal('${b.id}')">
+            Book Now →
+          </button>
+<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('bnb_'+(b.id||b.name),b.name||b.title||'BnB',this,'bnb')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'bnb'+('bnb_'+(b.id||b.name)),name:b.name||b.title||'BnB',category:'bnb',type:'bnb:'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function openBookModal(id){
+    const b = allBnBs.find(b => b.id === id);
+    if(!b) return;
+    document.getElementById("bookModalTitle").textContent = b.name;
+    document.getElementById("bookModalContent").innerHTML = `
+      <img loading="lazy" src="${b.image||'assets/backG1.jpeg'}" style="width:100%;height:200px;object-fit:cover;border-radius:14px;margin-bottom:16px;">
+      <p style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:16px;"><i class="fas fa-map-marker-alt" style="color:#71ff00;margin-right:6px;"></i>${b.location}</p>
+      <p style="color:rgba(255,255,255,0.7);font-size:14px;line-height:1.6;margin-bottom:16px;">${b.description || 'A wonderful place to stay in Kenya.'}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div><label style="color:rgba(255,255,255,0.45);font-size:11px;text-transform:uppercase;display:block;margin-bottom:6px;">Check In</label>
+          <input type="date" id="bookIn" class="modal-input" style="margin:0;"></div>
+        <div><label style="color:rgba(255,255,255,0.45);font-size:11px;text-transform:uppercase;display:block;margin-bottom:6px;">Check Out</label>
+          <input type="date" id="bookOut" class="modal-input" style="margin:0;"></div>
+      </div>
+      <input type="text" id="bookName" placeholder="Your full name" class="modal-input">
+      <input type="tel" id="bookPhone" placeholder="Phone number" class="modal-input">
+      <div class="bnb-price-summary" id="priceSummary">
+        <span>KES ${Number(b.pricePerNight||0).toLocaleString()} × nights</span>
+        <span id="totalNightsCost">—</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:4px;">
+        <button type="button" class="modal-confirm-btn" onclick="confirmBooking('${b.id}')">Confirm Booking</button>
+        <button type="button" class="modal-cancel-btn" onclick="document.getElementById('bnbBookModal').style.display='none'">Cancel</button>
+      </div>
+    `;
+    // Auto-calculate cost
+    ["bookIn","bookOut"].forEach(id => {
+      document.getElementById(id)?.addEventListener("change", () => {
+        const i = new Date(document.getElementById("bookIn").value);
+        const o = new Date(document.getElementById("bookOut").value);
+        if(i && o && o > i){
+          const nights = Math.round((o - i) / 86400000);
+          const total = nights * Number(b.pricePerNight || 0);
+          document.getElementById("totalNightsCost").textContent = `KES ${total.toLocaleString()} (${nights} nights)`;
+        }
+      });
+    });
+    document.getElementById("bnbBookModal").style.display = "flex";
+  }
+
+  function confirmBooking(bnbId){
+    const name     = document.getElementById("bookName").value.trim();
+    const phone    = document.getElementById("bookPhone").value.trim();
+    const checkIn  = document.getElementById("bookIn").value;
+    const checkOut = document.getElementById("bookOut").value;
+    if(!name || !phone || !checkIn || !checkOut){ showNotif("⚠️ Fill all booking details","error"); return; }
+    if(new Date(checkOut) <= new Date(checkIn)){ showNotif("⚠️ Check-out must be after check-in","error"); return; }
+
+    const b      = allBnBs.find(b => b.id === bnbId);
+    const nights = Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
+    const total  = nights * Number(b?.pricePerNight || 0);
+    const ref    = "BNB" + Date.now().toString().slice(-6);
+
+    function _finalise(mpesaCode){
+      /* Save booking */
+      let bookings = [];
+      try { bookings = JSON.parse(localStorage.getItem("sokoniBnBBookings")) || []; } catch(e) {}
+      bookings.unshift({ id:ref, bnbId, bnbName:b?.name, name, phone, checkIn, checkOut, nights, total, status:"confirmed", mpesaCode, bookedAt: Date.now() });
+      localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
+
+      /* Notify host via WhatsApp */
+      const hostPhone = b?.phone || b?.hostPhone || b?.contact || "";
+      if(hostPhone){
+        const waNum = hostPhone.replace(/^0/,"254").replace(/\D/g,"");
+        const msg = encodeURIComponent(
+          `🏨 *New SOKONI BnB Booking*\n\nRef: ${ref}\nProperty: ${b?.name}\nGuest: ${name} (${phone})\nCheck-in: ${checkIn}\nCheck-out: ${checkOut}\nNights: ${nights}\nTotal: KES ${total.toLocaleString()}${mpesaCode?'\n💚 M-Pesa: '+mpesaCode:''}\n\nPlease confirm the booking with your guest. 🙏`
+        );
+        setTimeout(()=> window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank"), 1000);
+      }
+
+      /* Auto-invoice */
+      if(window.SokoniInvoice){
+        SokoniInvoice.generate({
+          type:"bnb", buyerName:name, buyerPhone:phone,
+          items:[{name:b?.name||"BnB Stay", category:"Accommodation", qty:nights, price:b?.pricePerNight||0}],
+          subtotal:total, total:total,
+          paymentMethod: mpesaCode ? "M-Pesa · "+mpesaCode : "M-Pesa",
+          paymentRef:ref, sellerName:b?.hostName||b?.name||"SOKONI BnB",
+          location:b?.location||"", notes:"Check-in: "+checkIn+" → Check-out: "+checkOut
+        });
+      }
+
+      /* Commission */
+      if(window.SokoniPay && SokoniPay.saveCommission && total > 0){
+        var _cPct = (SokoniPay.COMMISSION_RATES&&SokoniPay.COMMISSION_RATES.completion&&SokoniPay.COMMISSION_RATES.completion['bnb']) || 10;
+        var _cCut = Math.round(total * _cPct / 100);
+        SokoniPay.saveCommission({ref,providerName:b?.hostName||b?.name||'BnB Host',category:'bnb',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'BnB booking · '+nights+' night(s)',createdAt:Date.now()});
+      }
+
+      document.getElementById("bnbBookModal").style.display = "none";
+      showNotif(`✅ Booking confirmed! ${b?.name} · ${nights} night${nights>1?"s":""} · KES ${total.toLocaleString()}`, "success");
+    }
+
+    /* Real Daraja payment if host has configured it */
+    if((b?.sellerUid || b?.hostSellerUid) && total > 0 && window.SokoniMpesa){
+      SokoniMpesa.pay({
+        sellerUid: b.sellerUid || b.hostSellerUid,
+        amount: total,
+        phone,
+        orderId: ref,
+        hub: 'bnb',
+        sellerName: b?.hostName || b?.name || 'BnB Host',
+        description: (b?.name||'BnB Stay') + ' · '+nights+' night'+(nights>1?'s':''),
+        onSuccess: r => _finalise(r.mpesaCode),
+        onFailure: reason => { if(reason !== 'cancelled') _finalise(null); }
+      });
+      return;
+    }
+
+    /* Fallback: show simulated STK state and confirm after 4 s */
+    const content = document.getElementById("bookModalContent");
+    if(content){
+      content.innerHTML = `<div style="text-align:center;padding:28px 16px;">
+        <div style="font-size:48px;margin-bottom:12px;">📲</div>
+        <div style="font-size:15px;font-weight:800;color:white;margin-bottom:8px;">M-Pesa Request Sent!</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:18px;line-height:1.6;">Enter your M-Pesa PIN to pay <strong style="color:#71ff00;">KES ${total.toLocaleString()}</strong>.</div>
+        <div id="bnbPayStatus" style="font-size:12px;color:rgba(255,255,255,0.4);">⏳ Waiting for payment confirmation…</div>
+      </div>`;
+    }
+    setTimeout(()=>{
+      const st = document.getElementById("bnbPayStatus");
+      if(st){ st.innerHTML = `✅ <strong style="color:#71ff00;">Payment confirmed!</strong>`; }
+      setTimeout(()=>_finalise(null), 2000);
+    }, 4000);
+  }
+
+  function filterBnB(type, btn){
+    document.querySelectorAll(".bnb-pill").forEach(b => b.classList.remove("active-pill"));
+    if(btn) btn.classList.add("active-pill");
+    filtered = type === "all" ? [...allBnBs] : allBnBs.filter(b => (b.type||"bnb").toLowerCase() === type);
+    renderBnBs(filtered);
+  }
+
+  function sortBnBs(){
+    const val = document.getElementById("bnbSort").value;
+    let sorted = [...filtered];
+    if(val === "low")    sorted.sort((a,b) => a.pricePerNight - b.pricePerNight);
+    if(val === "high")   sorted.sort((a,b) => b.pricePerNight - a.pricePerNight);
+    if(val === "rating") sorted.sort((a,b) => (b.rating||0) - (a.rating||0));
+    renderBnBs(sorted);
+  }
+
+  function searchBnBs(){
+    const q = (document.getElementById("bnbSearch")?.value || document.getElementById("bnbLocationSearch")?.value || "").toLowerCase();
+    filtered = allBnBs.filter(b => b.name.toLowerCase().includes(q) || (b.location||"").toLowerCase().includes(q));
+    renderBnBs(filtered);
+  }
+
+  function showNotif(msg, type){
+    const c = document.getElementById("notificationContainer");
+    if(!c) return;
+    const n = document.createElement("div");
+    n.className = `notification ${type}`;
+    n.textContent = msg;
+    c.appendChild(n);
+    setTimeout(()=>n.remove(), 4000);
+  }
+
+  loadBnBs();
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-mpesa.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

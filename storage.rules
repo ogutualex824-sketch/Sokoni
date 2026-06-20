@@ -1,0 +1,127 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    /* ── Helper: reject executable and dangerous MIME types ── */
+    function notExecutable() {
+      return !(request.resource.contentType.matches('application/x-.*')
+            || request.resource.contentType.matches('text/x-.*')
+            || request.resource.contentType.matches('application/octet-stream')
+            || request.resource.contentType.matches('application/java-.*')
+            || request.resource.contentType.matches('application/vnd.microsoft.portable-executable')
+            || request.resource.contentType.matches('application/x-msdownload')
+            || request.resource.contentType.matches('application/x-dosexec')
+            || request.resource.contentType == 'text/html'
+            || request.resource.contentType == 'text/javascript'
+            || request.resource.contentType == 'application/javascript');
+    }
+
+    /* ── Provider & entertainment stories — 150 MB video or 15 MB image ── */
+    match /provider-stories/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && (
+                        (request.resource.contentType.matches('video/.*')
+                          && request.resource.size < 150 * 1024 * 1024)
+                     || (request.resource.contentType.matches('image/.*')
+                          && request.resource.size < 15 * 1024 * 1024)
+                   );
+    }
+
+    match /entertainment-stories/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && (
+                        (request.resource.contentType.matches('video/.*')
+                          && request.resource.size < 150 * 1024 * 1024)
+                     || (request.resource.contentType.matches('image/.*')
+                          && request.resource.size < 15 * 1024 * 1024)
+                   );
+    }
+
+    /* ── Property and BnB videos — 150 MB max ── */
+    match /bnb-videos/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && request.resource.contentType.matches('video/.*')
+                   && request.resource.size < 150 * 1024 * 1024;
+    }
+
+    match /property-videos/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && request.resource.contentType.matches('video/.*')
+                   && request.resource.size < 150 * 1024 * 1024;
+    }
+
+    /* ── Product images — 15 MB max, images only ── */
+    match /product-images/{uid}/{allPaths=**} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    /* ── Profile avatars — 5 MB max, images only ── */
+    match /profile-avatars/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    /* ── Seller store banners / logos — 10 MB max ── */
+    match /seller-assets/{uid}/{allPaths=**} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    /* ── Driver / provider identity documents — 20 MB max (image or PDF only) ── */
+    match /documents/{uid}/{filename} {
+      allow read:  if request.auth != null
+                   && (request.auth.uid == uid || request.auth.token.admin == true);
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && request.resource.size < 20 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*')
+                    || request.resource.contentType == 'application/pdf');
+    }
+
+    /* ── Community / post media — 15 MB image or 80 MB video ── */
+    match /community-media/{uid}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && (
+                        (request.resource.contentType.matches('video/.*')
+                          && request.resource.size < 80 * 1024 * 1024)
+                     || (request.resource.contentType.matches('image/.*')
+                          && request.resource.size < 15 * 1024 * 1024)
+                   );
+    }
+
+    /* ── Default: deny everything else ── */
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+  }
+}

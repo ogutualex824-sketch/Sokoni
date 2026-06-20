@@ -1,0 +1,234 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head><script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Welcome to SOKONI Drivers!</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="auth-guard.js"></script>
+<meta name="theme-color" content="#080808">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;padding-bottom:40px;}
+.ss-hero{background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(0,0,0,0));border-bottom:1px solid rgba(113,255,0,0.12);padding:40px 20px 32px;text-align:center;}
+.ss-hero h1{font-size:clamp(22px,5vw,34px);font-weight:900;margin-bottom:8px;line-height:1.2;}
+.ss-hero h1 span{color:#71ff00;}
+.ss-hero p{font-size:14px;color:rgba(255,255,255,0.45);max-width:440px;margin:0 auto;}
+.ss-name{color:#71ff00;}
+.ss-body{max-width:640px;margin:0 auto;padding:20px 16px;}
+.ss-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:14px;}
+.ss-card h2{font-size:13px;font-weight:900;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.ss-progress{height:8px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;margin-bottom:4px;}
+.ss-progress-bar{height:100%;background:linear-gradient(90deg,#71ff00,#5ccc00);border-radius:99px;transition:width .6s;}
+.ss-progress-lbl{font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:14px;}
+.ss-checklist{list-style:none;}
+.ss-check-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.ss-check-item:last-child{border-bottom:none;}
+.ss-check-box{width:24px;height:24px;border-radius:7px;border:2px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;}
+.ss-check-box.done{background:rgba(113,255,0,0.12);border-color:#71ff00;color:#71ff00;font-size:14px;}
+.ss-check-box.pending{background:rgba(255,180,0,0.1);border-color:rgba(255,180,0,0.4);color:rgba(255,180,0,0.8);font-size:14px;}
+.ss-check-text{flex:1;}
+.ss-check-title{font-size:13px;font-weight:800;color:#fff;margin-bottom:2px;}
+.ss-check-title.done{color:rgba(255,255,255,0.4);text-decoration:line-through;}
+.ss-check-sub{font-size:11px;color:rgba(255,255,255,0.3);}
+.ss-check-link{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;color:#71ff00;text-decoration:none;}
+.ss-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.ss-action{padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-decoration:none;text-align:center;transition:all .2s;}
+.ss-action:hover{border-color:rgba(113,255,0,0.3);}
+.ss-action-icon{font-size:26px;margin-bottom:6px;}
+.ss-action-lbl{font-size:12px;font-weight:800;color:rgba(255,255,255,0.7);}
+.ss-action-sub{font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;}
+.ss-tip{padding:14px;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.15);border-radius:12px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;}
+.ss-tip-icon{font-size:20px;flex-shrink:0;margin-top:1px;}
+.ss-tip-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;}
+.ss-tip-text strong{color:#71ff00;}
+.ss-cta{width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#5ccc00);border:none;border-radius:13px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center;}
+.ss-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:20px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:16px;}
+.ss-pending-banner{background:rgba(255,180,0,0.05);border:1px solid rgba(255,180,0,0.2);border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:flex-start;gap:12px;}
+.ss-pending-icon{font-size:22px;flex-shrink:0;}
+.ss-pending-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;}
+.ss-pending-text strong{color:rgba(255,180,0,0.9);}
+</style>
+</head>
+<body>
+
+<div class="ss-hero">
+  <div class="ss-badge">✅ Application Submitted</div>
+  <h1>Welcome to<br><span>SOKONI Drivers</span><span id="ssName"></span>!</h1>
+  <p>Your application is under review. Complete the steps below while you wait — it usually takes 24–48 hours.</p>
+</div>
+
+<div class="ss-body">
+
+  <!-- APPROVAL STATUS BANNER -->
+  <div class="ss-pending-banner">
+    <div class="ss-pending-icon">⏳</div>
+    <div class="ss-pending-text"><strong>Awaiting admin approval.</strong> Our team reviews all driver applications within 24 hours. You'll receive an SMS once approved. Keep your phone on.</div>
+  </div>
+
+  <!-- SETUP CHECKLIST -->
+  <div class="ss-card">
+    <h2>📋 Onboarding Checklist</h2>
+    <div class="ss-progress"><div class="ss-progress-bar" id="ssProgressBar" style="width:50%"></div></div>
+    <div class="ss-progress-lbl" id="ssProgressLbl">2 of 4 steps complete</div>
+    <ul class="ss-checklist">
+      <li class="ss-check-item">
+        <div class="ss-check-box done">✓</div>
+        <div class="ss-check-text">
+          <div class="ss-check-title done">Create your driver account</div>
+          <div class="ss-check-sub">Account and profile set up ✅</div>
+        </div>
+      </li>
+      <li class="ss-check-item">
+        <div class="ss-check-box done">✓</div>
+        <div class="ss-check-text">
+          <div class="ss-check-title done">Submit vehicle &amp; licence details</div>
+          <div class="ss-check-sub">Documents received and under review ✅</div>
+        </div>
+      </li>
+      <li class="ss-check-item" id="chk-approval">
+        <div class="ss-check-box pending" id="box-approval">⏳</div>
+        <div class="ss-check-text">
+          <div class="ss-check-title" id="title-approval">Get admin approval</div>
+          <div class="ss-check-sub">Usually 24–48 hours. You'll get an SMS.</div>
+        </div>
+      </li>
+      <li class="ss-check-item" id="chk-ride">
+        <div class="ss-check-box" id="box-ride"></div>
+        <div class="ss-check-text">
+          <div class="ss-check-title" id="title-ride">Complete your first ride</div>
+          <div class="ss-check-sub">Go online, accept a trip, and earn your first fare</div>
+          <a class="ss-check-link" href="driver.html">→ Open Driver App</a>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- QUICK ACTIONS -->
+  <div class="ss-actions">
+    <a href="driver.html" class="ss-action">
+      <div class="ss-action-icon">🚗</div>
+      <div class="ss-action-lbl">Driver App</div>
+      <div class="ss-action-sub">Go online &amp; accept rides</div>
+    </a>
+    <a href="profile.html" class="ss-action">
+      <div class="ss-action-icon">👤</div>
+      <div class="ss-action-lbl">My Profile</div>
+      <div class="ss-action-sub">Update your details</div>
+    </a>
+    <a href="ride-book.html" class="ss-action">
+      <div class="ss-action-icon">📍</div>
+      <div class="ss-action-lbl">Book a Ride</div>
+      <div class="ss-action-sub">See how riders request trips</div>
+    </a>
+    <a href="support.html" class="ss-action">
+      <div class="ss-action-icon">🎧</div>
+      <div class="ss-action-lbl">Support</div>
+      <div class="ss-action-sub">Help &amp; driver resources</div>
+    </a>
+  </div>
+
+  <!-- TIPS -->
+  <div class="ss-card">
+    <h2>💡 Tips for New Drivers</h2>
+    <div class="ss-tip">
+      <div class="ss-tip-icon">🛡️</div>
+      <div class="ss-tip-text"><strong>Safety first.</strong> Always verify the rider's name and destination before starting a trip. Keep your doors locked until the trip begins. Use the SOS button if needed.</div>
+    </div>
+    <div class="ss-tip">
+      <div class="ss-tip-icon">⚡</div>
+      <div class="ss-tip-text"><strong>Accept quickly.</strong> Drivers who accept within 10 seconds get 30% more trip requests. A fast accept rate boosts your ranking on the platform.</div>
+    </div>
+    <div class="ss-tip">
+      <div class="ss-tip-icon">⭐</div>
+      <div class="ss-tip-text"><strong>Rating matters.</strong> Maintain 4.5+ stars to stay on the platform. Be friendly, keep the car clean, and offer phone chargers — small things earn 5-star reviews.</div>
+    </div>
+    <div class="ss-tip">
+      <div class="ss-tip-icon">📄</div>
+      <div class="ss-tip-text"><strong>Keep documents current.</strong> Expired insurance or driving licence = immediate suspension. Set calendar reminders 30 days before each document expires.</div>
+    </div>
+    <div class="ss-tip">
+      <div class="ss-tip-icon">💰</div>
+      <div class="ss-tip-text"><strong>Peak hours pay more.</strong> Morning (6–9am) and evening (5–8pm) have the highest surge. Work these windows consistently to double your daily earnings.</div>
+    </div>
+  </div>
+
+  <!-- EARNINGS INFO -->
+  <div class="ss-card" style="background:rgba(113,255,0,0.03);border-color:rgba(113,255,0,0.15);">
+    <h2 style="color:#71ff00;">💸 How Earnings Work</h2>
+    <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">You keep <strong style="color:#71ff00;">85%</strong> of every fare. SOKONI's 15% covers dispatch, insurance, and platform costs.</p>
+    <p style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:14px;line-height:1.6;">Payouts are sent to your M-Pesa every Friday (or daily if you selected daily payout during signup). No hidden deductions — what you see is what you get.</p>
+    <a href="driver.html" class="ss-cta">Open Driver App →</a>
+  </div>
+
+  <!-- SUPPORT LINK -->
+  <div style="text-align:center;padding:8px 0;">
+    <a href="support.html" style="font-size:12px;color:rgba(255,255,255,0.3);text-decoration:none;">Need help? → Contact Support</a>
+    <span style="color:rgba(255,255,255,0.1);margin:0 8px;">·</span>
+    <a href="help.html" style="font-size:12px;color:rgba(255,255,255,0.3);text-decoration:none;">Help Center</a>
+  </div>
+
+</div>
+
+<script src="sokoni-launch.js"></script>
+<script>
+window.addEventListener('DOMContentLoaded', function() {
+  /* Show driver name if available */
+  try {
+    var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+    var name = u.displayName || '';
+    if (name) {
+      var el = document.getElementById('ssName');
+      if (el) el.textContent = ', ' + name.split(' ')[0];
+    }
+  } catch (e) {}
+
+  /* Check if approval has come through (admin sets status in Firestore) */
+  checkApprovalStatus();
+});
+
+async function checkApprovalStatus() {
+  try {
+    var auth = window.firebaseAuth;
+    var db   = window.firebaseDB;
+    if (!auth || !db || !auth.currentUser) return;
+    var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var snap = await fs.getDocs(
+      fs.query(
+        fs.collection(db, 'applications'),
+        fs.where('uid', '==', auth.currentUser.uid),
+        fs.where('type', '==', 'driver'),
+        fs.limit(1)
+      )
+    );
+    if (snap.empty) return;
+    var data = snap.docs[0].data();
+    if (data.status === 'approved') {
+      var box   = document.getElementById('box-approval');
+      var title = document.getElementById('title-approval');
+      if (box)   { box.className = 'ss-check-box done'; box.textContent = '✓'; }
+      if (title) { title.className = 'ss-check-title done'; title.textContent = 'Approved by admin'; }
+      var banner = document.querySelector('.ss-pending-banner');
+      if (banner) {
+        banner.style.background = 'rgba(113,255,0,0.04)';
+        banner.style.borderColor = 'rgba(113,255,0,0.2)';
+        banner.querySelector('.ss-pending-icon').textContent = '✅';
+        banner.querySelector('.ss-pending-text').innerHTML = '<strong style="color:#71ff00;">You\'re approved!</strong> Your driver account is active. Open the Driver App to go online and start earning.';
+      }
+      var bar = document.getElementById('ssProgressBar');
+      var lbl = document.getElementById('ssProgressLbl');
+      if (bar) bar.style.width = '75%';
+      if (lbl) lbl.textContent = '3 of 4 steps complete';
+    }
+  } catch (e) {}
+}
+</script>
+<script type="module" src="firebase.js"></script>
+<script src="sw-register.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

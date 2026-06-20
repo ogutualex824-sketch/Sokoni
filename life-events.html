@@ -1,0 +1,447 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI Life Events — Get Help for Life's Biggest Moments</title>
+<meta name="description" content="Tell SOKONI what you're trying to achieve — Starting a Business, Buying a Car, Moving House, Getting Married — and we connect all the right hubs for you.">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mysokoni.co.ke/life-events.html">
+<meta property="og:title" content="SOKONI Life Events — Get Help for Life's Biggest Moments">
+<meta property="og:description" content="Tell SOKONI what you're trying to achieve — Starting a Business, Buying a Car, Moving House, Getting Married — and we connect all the right hubs for you.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:site_name" content="SOKONI">
+<meta property="og:locale" content="en_KE">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080a0f;color:white;min-height:100vh;padding-bottom:100px;}
+
+/* ── NAV ── */
+.le-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(8,10,15,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.le-nav-logo{height:30px;}
+.le-nav-right{display:flex;gap:8px;}
+.le-nav-btn{padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.55);font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;background:none;font-family:inherit;}
+
+/* ── HERO ── */
+.le-hero{padding:52px 24px 40px;text-align:center;position:relative;overflow:hidden;}
+.le-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(113,255,0,0.06),transparent 70%);}
+.le-hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 16px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:999px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:18px;text-transform:uppercase;letter-spacing:1px;}
+.le-hero h1{font-size:clamp(28px,6vw,52px);font-weight:900;line-height:1.15;margin-bottom:14px;}
+.le-hero h1 em{font-style:normal;background:linear-gradient(135deg,#71ff00,#00d4ff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.le-hero p{font-size:15px;color:rgba(255,255,255,0.45);max-width:480px;margin:0 auto 28px;line-height:1.7;}
+
+/* ── SEARCH ── */
+.le-search-wrap{max-width:520px;margin:0 auto 0;position:relative;}
+.le-search{width:100%;padding:16px 52px 16px 20px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:16px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .2s;}
+.le-search:focus{border-color:rgba(113,255,0,0.4);}
+.le-search::placeholder{color:rgba(255,255,255,0.3);}
+.le-search-icon{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;}
+
+/* ── EVENTS GRID ── */
+.le-body{max-width:1100px;margin:0 auto;padding:36px 18px 60px;}
+.le-section-label{font-size:12px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px;}
+.le-events-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+.le-event-card{border-radius:22px;padding:22px;cursor:pointer;transition:all .25s;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.025);position:relative;overflow:hidden;}
+.le-event-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .25s;}
+.le-event-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,0.4);}
+.le-event-card:hover::before{opacity:1;}
+.le-event-emoji{font-size:48px;margin-bottom:14px;display:block;line-height:1;}
+.le-event-title{font-size:17px;font-weight:900;color:white;margin-bottom:5px;}
+.le-event-sub{font-size:12px;color:rgba(255,255,255,0.4);line-height:1.55;margin-bottom:14px;}
+.le-event-hubs{display:flex;gap:5px;flex-wrap:wrap;}
+.le-event-hub-tag{font-size:10px;padding:3px 9px;border-radius:999px;font-weight:700;}
+.le-event-arrow{position:absolute;bottom:20px;right:20px;font-size:18px;color:rgba(255,255,255,0.2);transition:all .2s;}
+.le-event-card:hover .le-event-arrow{color:white;transform:translateX(3px);}
+
+/* ── DETAIL PANEL ── */
+.le-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(6px);}
+.le-detail-overlay.open{opacity:1;pointer-events:all;}
+.le-detail-sheet{background:#0d1117;border-radius:24px 24px 0 0;border:1px solid rgba(255,255,255,0.09);border-bottom:none;width:100%;max-width:680px;max-height:88vh;overflow-y:auto;padding:28px 24px 100px;transform:translateY(100%);transition:transform .3s cubic-bezier(0.4,0,0.2,1);}
+.le-detail-overlay.open .le-detail-sheet{transform:translateY(0);}
+.le-detail-header{display:flex;align-items:flex-start;gap:14px;margin-bottom:24px;}
+.le-detail-emoji{font-size:52px;line-height:1;flex-shrink:0;}
+.le-detail-close{position:absolute;top:20px;right:20px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.5);font-size:16px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;}
+.le-detail-title{font-size:22px;font-weight:900;color:white;margin-bottom:5px;}
+.le-detail-tagline{font-size:13px;color:rgba(255,255,255,0.4);line-height:1.6;}
+.le-steps-label{font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;}
+.le-steps{display:flex;flex-direction:column;gap:10px;}
+.le-step{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:16px;text-decoration:none;transition:all .2s;cursor:pointer;}
+.le-step:hover{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.12);transform:translateX(4px);}
+.le-step-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;flex-shrink:0;margin-top:1px;}
+.le-step-icon{font-size:22px;flex-shrink:0;}
+.le-step-info{flex:1;min-width:0;}
+.le-step-name{font-size:13px;font-weight:800;color:white;margin-bottom:2px;}
+.le-step-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;}
+.le-step-hub{font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;margin-top:4px;display:inline-block;}
+.le-step-go{font-size:14px;color:rgba(255,255,255,0.2);flex-shrink:0;align-self:center;}
+.le-step:hover .le-step-go{color:rgba(255,255,255,0.6);}
+.le-progress-wrap{background:rgba(255,255,255,0.06);border-radius:999px;height:6px;margin:16px 0 24px;overflow:hidden;}
+.le-progress-bar{height:100%;border-radius:999px;transition:width .4s;}
+
+@media(max-width:600px){
+  .le-events-grid{grid-template-columns:1fr 1fr;}
+  .le-event-card{padding:16px;}
+  .le-event-emoji{font-size:36px;margin-bottom:10px;}
+  .le-event-title{font-size:14px;}
+  .le-event-sub{display:none;}
+}
+</style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="le-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="le-nav-logo" alt="SOKONI"></a>
+  <div class="le-nav-right">
+    <a href="index.html" class="le-nav-btn">🏠 Home</a>
+  </div>
+</nav>
+
+<div class="le-hero">
+  <div class="le-hero-badge">✨ SOKONI Life Events</div>
+  <h1>What are you<br>trying to <em>achieve?</em></h1>
+  <p>Tell us your goal — Sokoni brings together every hub, service, and provider you need across the whole city.</p>
+  <div class="le-search-wrap">
+    <input type="text" class="le-search" id="leSearch" placeholder="e.g. Starting a business, Buying a car…" oninput="filterEvents()">
+    <span class="le-search-icon">🔍</span>
+  </div>
+</div>
+
+<div class="le-body">
+  <div class="le-section-label" style="margin-bottom:16px;" id="leLabel">Choose your life goal</div>
+  <div class="le-events-grid" id="leEventsGrid"></div>
+</div>
+
+<!-- DETAIL SHEET -->
+<div class="le-detail-overlay" id="leOverlay" onclick="closeDetail(event)">
+  <div class="le-detail-sheet" id="leSheet">
+    <button type="button" class="le-detail-close" onclick="closeDetailBtn()">✕</button>
+    <div id="leDetailContent"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="life-events.html" class="bnav-item active-bnav"><span class="bnav-emoji">✨</span><span>Life Goals</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+const EVENTS = [
+  {
+    id:'biz', emoji:'🚀', title:'Starting a Business',
+    color:'#71ff00', bg:'rgba(113,255,0,0.06)', border:'rgba(113,255,0,0.18)',
+    tagline:'From idea to open — we wire together legal, finance, workspace and marketing.',
+    tags:['Legal','Banking','Digital','Services'],
+    steps:[
+      { icon:'⚖️', name:'Register Your Business', desc:'KRA PIN, Business Name, Company Registration, Compliance docs', hub:'Legal Hub', hubColor:'#818cf8', hubBg:'rgba(129,140,248,0.1)', link:'legal-hub.html' },
+      { icon:'🏦', name:'Open a Business Account', desc:'KCB, Equity, Co-op — business accounts with M-Pesa paybill setup', hub:'Banking Hub', hubColor:'#f59e0b', hubBg:'rgba(245,158,11,0.1)', link:'banking.html' },
+      { icon:'💻', name:'Get a Logo & Website', desc:'Hire a designer, developer, or get a ready MiniStore on Sokoni', hub:'Digital Services', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'tech-hub.html' },
+      { icon:'🏢', name:'Find Office Space', desc:'Commercial rentals, co-working spaces, virtual offices in Nairobi', hub:'Property Hub', hubColor:'#38bdf8', hubBg:'rgba(56,189,248,0.1)', link:'property.html' },
+      { icon:'📣', name:'Market Your Business', desc:'Boost your listing, run flash deals, reach thousands of buyers', hub:'Marketing Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'marketing.html' },
+      { icon:'💰', name:'Get Business Financing', desc:'KCB, Equity, M-Pesa loans, SACCOs and microfinance options', hub:'Banking Hub', hubColor:'#f59e0b', hubBg:'rgba(245,158,11,0.1)', link:'banking.html?tab=loans' },
+      { icon:'🛒', name:'Open Your Sokoni Store', desc:'List products, set prices, accept M-Pesa — go live in 5 minutes', hub:'Marketplace', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'seller.html' },
+    ]
+  },
+  {
+    id:'car', emoji:'🚗', title:'Buying a Car',
+    color:'#f97316', bg:'rgba(249,115,22,0.06)', border:'rgba(249,115,22,0.18)',
+    tagline:'Find, inspect, finance and insure your next vehicle — all in one place.',
+    tags:['Car Hub','Finance','Legal','Insurance'],
+    steps:[
+      { icon:'🚗', name:'Browse & Compare Cars', desc:'New, used & imported vehicles — sedans, SUVs, pickups, vans', hub:'Car Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+      { icon:'🔧', name:'Book a Pre-Purchase Inspection', desc:'Have a certified mechanic check the car before you commit', hub:'Car Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+      { icon:'💰', name:'Get Vehicle Financing', desc:'Car loans from Stanbic, DTB, banks & SACCOs — fast approval', hub:'Banking Hub', hubColor:'#f59e0b', hubBg:'rgba(245,158,11,0.1)', link:'banking.html' },
+      { icon:'🛡️', name:'Get Car Insurance', desc:'Third party, comprehensive — compare quotes from top insurers', hub:'Car Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+      { icon:'⚖️', name:'Transfer of Ownership / Logbook', desc:'NTSA transfer services, logbook verification, KRA compliance', hub:'Car Hub (NTSA)', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+      { icon:'📍', name:'Set Up GPS Tracking', desc:'Real-time vehicle tracking, geo-fencing, driver monitoring', hub:'Car Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+    ]
+  },
+  {
+    id:'move', emoji:'🏡', title:'Moving House',
+    color:'#38bdf8', bg:'rgba(56,189,248,0.06)', border:'rgba(56,189,248,0.18)',
+    tagline:'Find a new place, pack up and settle in — Sokoni handles every step.',
+    tags:['Property','Services','Marketplace','Tech'],
+    steps:[
+      { icon:'🏘️', name:'Search for Your New Place', desc:'Rentals, apartments, studios — filter by area, size & price', hub:'Property Hub', hubColor:'#38bdf8', hubBg:'rgba(56,189,248,0.1)', link:'property.html' },
+      { icon:'📦', name:'Hire Movers & Packers', desc:'Vetted moving companies in Nairobi, Mombasa, Kisumu & more', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=movers' },
+      { icon:'🌐', name:'Set Up Internet', desc:'Safaricom, Zuku, Faiba — compare packages, book installation', hub:'Tech Hub', hubColor:'#00d4ff', hubBg:'rgba(0,212,255,0.1)', link:'tech-hub.html' },
+      { icon:'🧹', name:'Deep Clean Your New Home', desc:'End-of-tenancy clean, move-in spruce-up by professional cleaners', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'cleaning.html' },
+      { icon:'🛋️', name:'Buy Furniture & Appliances', desc:'Sofas, beds, fridges, cookers — new and used on the Marketplace', hub:'Marketplace', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'category.html?cat=furniture' },
+      { icon:'📹', name:'Install CCTV & Security', desc:'Home security cameras, alarm systems, electric fence wiring', hub:'Tech Hub', hubColor:'#00d4ff', hubBg:'rgba(0,212,255,0.1)', link:'tech-hub.html' },
+      { icon:'⚡', name:'Electrical & Plumbing Checks', desc:'Certified electricians and plumbers to make your home safe', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=electrical' },
+    ]
+  },
+  {
+    id:'wed', emoji:'💍', title:'Getting Married',
+    color:'#ec4899', bg:'rgba(236,72,153,0.06)', border:'rgba(236,72,153,0.18)',
+    tagline:'Plan your perfect day without the stress — venues, photography, catering and more.',
+    tags:['Entertainment','Property','Transport','Marketplace'],
+    steps:[
+      { icon:'🏟️', name:'Book Your Venue', desc:'Wedding halls, garden venues, hotels — capacity from 50 to 2,000', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+      { icon:'📸', name:'Hire a Photographer & Videographer', desc:'Capture every moment with Kenya\'s top wedding photographers', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+      { icon:'🎵', name:'Book a DJ or Live Band', desc:'From afrobeats to gospel — find the right sound for your vibe', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+      { icon:'🍽️', name:'Find a Caterer', desc:'Full catering packages — Kenyan, continental, buffet & plated', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=catering' },
+      { icon:'🏨', name:'Guest Accommodation', desc:'Block-book BnB rooms and hotel suites for your guests', hub:'BnB & Stays', hubColor:'#10b981', hubBg:'rgba(16,185,129,0.1)', link:'bnb.html' },
+      { icon:'🚌', name:'Transport & Transfers', desc:'Wedding car hire, guest shuttle services, chauffeur-driven SUVs', hub:'Car Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+      { icon:'⚖️', name:'Marriage Certificate & Legal Docs', desc:'Prepare legal documents, get a marriage certificate guidance', hub:'Legal Hub', hubColor:'#818cf8', hubBg:'rgba(129,140,248,0.1)', link:'legal-hub.html' },
+    ]
+  },
+  {
+    id:'property', emoji:'🏠', title:'Buying Property / Land',
+    color:'#10b981', bg:'rgba(16,185,129,0.06)', border:'rgba(16,185,129,0.18)',
+    tagline:'From site visit to title deed — navigate Kenya\'s property market safely.',
+    tags:['Property','Legal','Banking','Car Hub'],
+    steps:[
+      { icon:'🏘️', name:'Search Property & Land Listings', desc:'Plots, apartments, maisonettes — filter by county, size & budget', hub:'Property Hub', hubColor:'#38bdf8', hubBg:'rgba(56,189,248,0.1)', link:'property.html' },
+      { icon:'⚖️', name:'Hire a Property Lawyer', desc:'Title deed verification, due diligence, sale agreement drafting', hub:'Legal Hub', hubColor:'#818cf8', hubBg:'rgba(129,140,248,0.1)', link:'legal-hub.html' },
+      { icon:'💰', name:'Mortgage & Financing', desc:'KCB, HF Group, Co-op Bank — compare mortgage rates & terms', hub:'Banking Hub', hubColor:'#f59e0b', hubBg:'rgba(245,158,11,0.1)', link:'banking.html' },
+      { icon:'🔍', name:'Get a Land Survey', desc:'Licensed surveyors for boundary beacons, survey plans & valuations', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html' },
+      { icon:'🚗', name:'Site Visit Transport', desc:'Self-drive or chauffeur to view properties — any county in Kenya', hub:'Car Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+      { icon:'🏗️', name:'Find a Contractor or Architect', desc:'Build your dream home — vetted contractors, architects, quantity surveyors', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=construction' },
+    ]
+  },
+  {
+    id:'health', emoji:'⚕️', title:'Taking Care of My Health',
+    color:'#34d399', bg:'rgba(52,211,153,0.06)', border:'rgba(52,211,153,0.18)',
+    tagline:'Book a doctor, fill a prescription, find a gym coach — all from one place.',
+    tags:['Healthcare','Sports','Marketplace','Services'],
+    steps:[
+      { icon:'🏥', name:'Book a Doctor / Specialist', desc:'GPs, dermatologists, ENT, paediatricians — book online', hub:'Healthcare Hub', hubColor:'#10b981', hubBg:'rgba(16,185,129,0.1)', link:'healthcare.html' },
+      { icon:'📺', name:'Telemedicine Consultation', desc:'See a doctor via video call without leaving home', hub:'Healthcare Hub', hubColor:'#10b981', hubBg:'rgba(16,185,129,0.1)', link:'healthcare.html' },
+      { icon:'💊', name:'Pharmacy & Medicine Delivery', desc:'Order medicine and have it delivered same-day', hub:'Healthcare Hub', hubColor:'#10b981', hubBg:'rgba(16,185,129,0.1)', link:'healthcare.html' },
+      { icon:'🧪', name:'Book Lab Tests', desc:'Blood work, urine tests, STI panels — collect from home or walk-in', hub:'Healthcare Hub', hubColor:'#10b981', hubBg:'rgba(16,185,129,0.1)', link:'healthcare.html' },
+      { icon:'🏋️', name:'Find a Fitness Coach', desc:'Personal trainers, nutritionists, group fitness coaches', hub:'Sports Hub', hubColor:'#39ff14', hubBg:'rgba(57,255,20,0.1)', link:'sports-hub.html' },
+      { icon:'🛒', name:'Buy Health & Wellness Products', desc:'Supplements, equipment, healthy food — all on the Marketplace', hub:'Marketplace', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'category.html?cat=health' },
+    ]
+  },
+  {
+    id:'baby', emoji:'👶', title:'Having a Baby',
+    color:'#fb923c', bg:'rgba(251,146,60,0.06)', border:'rgba(251,146,60,0.18)',
+    tagline:'Every milestone covered — from prenatal care to childproofing your home.',
+    tags:['Healthcare','Marketplace','Services','Property'],
+    steps:[
+      { icon:'🤰', name:'Antenatal Care & Maternity Hospital', desc:'Book a gynaecologist, antenatal classes, hospital maternity ward', hub:'Healthcare Hub', hubColor:'#10b981', hubBg:'rgba(16,185,129,0.1)', link:'healthcare.html' },
+      { icon:'🛒', name:'Shop Baby Essentials', desc:'Prams, cots, clothes, diapers, feeding equipment & more', hub:'Marketplace', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'category.html?cat=baby' },
+      { icon:'🎨', name:'Baby Room Décor & Painting', desc:'Hire painters, interior decorators to set up the nursery', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=painting' },
+      { icon:'🧹', name:'Deep Clean Before Baby Arrives', desc:'Professional home sanitisation and cleaning service', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'cleaning.html' },
+      { icon:'🏥', name:'Paediatric Care', desc:'Find a paediatrician for newborn check-ups and immunisations', hub:'Healthcare Hub', hubColor:'#10b981', hubBg:'rgba(16,185,129,0.1)', link:'healthcare.html' },
+      { icon:'📸', name:'Newborn Photography', desc:'Beautiful newborn photo sessions — in-home or studio', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+    ]
+  },
+  {
+    id:'repair', emoji:'🛠️', title:'My House Needs Repairs',
+    color:'#fbbf24', bg:'rgba(251,191,36,0.06)', border:'rgba(251,191,36,0.18)',
+    tagline:'One stop — plumbers, electricians, painters, carpenters and more.',
+    tags:['Services','Tech Hub','Marketplace'],
+    steps:[
+      { icon:'🔧', name:'Plumbing Repairs', desc:'Burst pipes, blocked drains, water heater install, bathroom fitting', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=plumbing' },
+      { icon:'⚡', name:'Electrical Repairs', desc:'Wiring, sockets, circuit breakers, security lights', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=electrical' },
+      { icon:'🎨', name:'Painting & Decoration', desc:'Interior & exterior painting, wallpaper, ceiling boards', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=painting' },
+      { icon:'🚪', name:'Carpentry & Metalwork', desc:'Doors, windows, wardrobes, grills, staircases', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=carpentry' },
+      { icon:'📹', name:'CCTV & Security Systems', desc:'Install cameras, alarms, electric fence, access control', hub:'Tech Hub', hubColor:'#00d4ff', hubBg:'rgba(0,212,255,0.1)', link:'tech-hub.html' },
+      { icon:'🛒', name:'Buy Building Materials', desc:'Tiles, cement, paint, hardware — compare prices from suppliers', hub:'Marketplace', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'category.html?cat=hardware' },
+    ]
+  },
+  {
+    id:'event', emoji:'🎉', title:'Planning an Event',
+    color:'#a855f7', bg:'rgba(168,85,247,0.06)', border:'rgba(168,85,247,0.18)',
+    tagline:'Corporate, birthday, fundraiser or concert — every supplier in one place.',
+    tags:['Entertainment','Property','Transport','Marketplace'],
+    steps:[
+      { icon:'🏟️', name:'Book a Venue', desc:'Conference rooms, event halls, outdoor spaces, rooftop venues', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+      { icon:'🎵', name:'Book Entertainment', desc:'DJs, live bands, MCs, comedians, praise & worship bands', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+      { icon:'📸', name:'Hire a Photographer & Videographer', desc:'Event coverage, live streaming, photo booths', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+      { icon:'🍽️', name:'Catering & Bar Services', desc:'Full catering, drinks packages, waitstaff, equipment hire', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=catering' },
+      { icon:'🚌', name:'Guest Transport', desc:'Shuttles, matatu charters, VIP car hire for your guests', hub:'Car Hub', hubColor:'#f97316', hubBg:'rgba(249,115,22,0.1)', link:'car-hub.html' },
+      { icon:'🎟️', name:'Sell Tickets', desc:'List your event, sell tickets via M-Pesa on Sokoni', hub:'Entertainment Hub', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'entertainment.html' },
+    ]
+  },
+  {
+    id:'study', emoji:'🎓', title:'Furthering My Education',
+    color:'#60a5fa', bg:'rgba(96,165,250,0.06)', border:'rgba(96,165,250,0.18)',
+    tagline:'Devices, tutors, financing — everything to power your learning journey.',
+    tags:['Tech Hub','Banking','Services','Marketplace'],
+    steps:[
+      { icon:'💻', name:'Buy a Laptop or Tablet', desc:'Student deals on laptops, tablets — new and refurbished', hub:'Tech Hub', hubColor:'#00d4ff', hubBg:'rgba(0,212,255,0.1)', link:'tech-hub.html' },
+      { icon:'💰', name:'Student Loan & HELB', desc:'HELB applications, student loans, bursary tracking resources', hub:'Banking Hub', hubColor:'#f59e0b', hubBg:'rgba(245,158,11,0.1)', link:'banking.html' },
+      { icon:'👨‍🏫', name:'Find a Tutor', desc:'Maths, sciences, languages — private tutors for all levels', hub:'Services', hubColor:'#71ff00', hubBg:'rgba(113,255,0,0.1)', link:'services.html?cat=tutoring' },
+      { icon:'📱', name:'Phone & Device Repairs', desc:'Keep your devices working — fast, affordable campus repairs', hub:'Tech Hub', hubColor:'#00d4ff', hubBg:'rgba(0,212,255,0.1)', link:'tech-hub.html' },
+      { icon:'💻', name:'Hire a Developer for Your Project', desc:'Final year project help, web apps, mobile apps', hub:'Digital Services', hubColor:'#a855f7', hubBg:'rgba(168,85,247,0.1)', link:'tech-hub.html' },
+      { icon:'🏨', name:'Find Student Accommodation', desc:'Bedsitters, hostel rooms near your campus', hub:'Property Hub', hubColor:'#38bdf8', hubBg:'rgba(56,189,248,0.1)', link:'property.html' },
+    ]
+  },
+];
+
+let _filtered = EVENTS;
+
+function filterEvents() {
+  const q = (document.getElementById('leSearch')?.value||'').toLowerCase().trim();
+  _filtered = q ? EVENTS.filter(e =>
+    (e.title+e.tagline+e.tags.join(' ')+e.steps.map(s=>s.name+s.desc).join(' ')).toLowerCase().includes(q)
+  ) : EVENTS;
+  const lbl = document.getElementById('leLabel');
+  if (lbl) lbl.textContent = q ? `${_filtered.length} result${_filtered.length===1?'':'s'} for "${q}"` : 'Choose your life goal';
+  renderGrid();
+}
+
+function renderGrid() {
+  const grid = document.getElementById('leEventsGrid'); if (!grid) return;
+  if (!_filtered.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3);font-size:14px;">No life events match that search</div>';
+    return;
+  }
+  grid.innerHTML = _filtered.map(e => `
+    <div class="le-event-card" onclick="openDetail('${e.id}')"
+      style="background:${e.bg};border-color:${e.border};">
+      <span class="le-event-emoji">${e.emoji}</span>
+      <div class="le-event-title">${e.title}</div>
+      <div class="le-event-sub">${e.tagline}</div>
+      <div class="le-event-hubs">${e.tags.map(t=>`<span class="le-event-hub-tag" style="background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.5);">${t}</span>`).join('')}</div>
+      <div class="le-event-arrow">›</div>
+    </div>`).join('');
+}
+
+function openDetail(id) {
+  const e = EVENTS.find(x => x.id === id); if (!e) return;
+  const content = document.getElementById('leDetailContent'); if (!content) return;
+
+  /* track progress from localStorage */
+  let done = []; try { done = JSON.parse(localStorage.getItem('leProgress_'+id)||'[]'); } catch(ex){}
+  const pct = e.steps.length ? Math.round(done.length / e.steps.length * 100) : 0;
+
+  content.innerHTML = `
+    <div class="le-detail-header">
+      <div class="le-detail-emoji">${e.emoji}</div>
+      <div>
+        <div class="le-detail-title">${e.title}</div>
+        <div class="le-detail-tagline">${e.tagline}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <div class="le-steps-label" style="margin:0;">Your Progress</div>
+      <span style="font-size:12px;font-weight:800;color:${e.color};">${done.length}/${e.steps.length} done</span>
+    </div>
+    <div class="le-progress-wrap"><div class="le-progress-bar" style="width:${pct}%;background:${e.color};"></div></div>
+    <div class="le-steps-label">Steps to complete</div>
+    <div class="le-steps" id="leStepsList">
+      ${e.steps.map((s,i) => {
+        const checked = done.includes(i);
+        return `<a href="${s.link}" class="le-step" style="${checked?'opacity:.55;':''}">
+          <div class="le-step-num" style="background:${checked?e.color:'rgba(255,255,255,0.08)'};color:${checked?'#000':'rgba(255,255,255,0.4)'};">
+            ${checked?'✓':(i+1)}
+          </div>
+          <div class="le-step-icon">${s.icon}</div>
+          <div class="le-step-info">
+            <div class="le-step-name" style="${checked?'text-decoration:line-through;color:rgba(255,255,255,0.4);':''}">${s.name}</div>
+            <div class="le-step-desc">${s.desc}</div>
+            <span class="le-step-hub" style="background:${s.hubBg};color:${s.hubColor};">${s.hub}</span>
+          </div>
+          <div class="le-step-go">›</div>
+        </a>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:20px;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:12px;color:rgba(255,255,255,0.4);">Tap a step to mark it done, then visit the hub</span>
+      <button type="button" onclick="resetProgress('${id}')" style="padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.35);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Reset</button>
+    </div>`;
+
+  /* Step tap = toggle done */
+  document.querySelectorAll('.le-steps .le-step').forEach((el, i) => {
+    el.addEventListener('click', function(ev) {
+      ev.preventDefault();
+      let d = []; try { d = JSON.parse(localStorage.getItem('leProgress_'+id)||'[]'); } catch(ex){}
+      if (d.includes(i)) d = d.filter(x => x !== i); else d.push(i);
+      localStorage.setItem('leProgress_'+id, JSON.stringify(d));
+      /* Sync to Firestore in the background */
+      _leSync(id, d);
+      const href = e.steps[i].link;
+      setTimeout(() => { window.location.href = href; }, 220);
+    });
+  });
+
+  document.getElementById('leOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+window.openDetail = openDetail;
+
+function closeDetail(ev) {
+  if (ev.target === document.getElementById('leOverlay')) closeDetailBtn();
+}
+function closeDetailBtn() {
+  document.getElementById('leOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+window.closeDetailBtn = closeDetailBtn;
+
+function resetProgress(id) {
+  localStorage.removeItem('leProgress_'+id);
+  openDetail(id);
+}
+window.resetProgress = resetProgress;
+
+renderGrid();
+
+/* ── Firestore progress sync ── */
+var _leFS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+function _leGetUid(){ var u=window.sokoniUser||(function(){try{return JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){return null;}}()); return u&&(u.uid||u.email)||null; }
+function _leSync(eventId, done){
+  var uid=_leGetUid(); if(!uid) return;
+  import(_leFS).then(function(m){
+    var db=window.firebaseDB; if(!db) return;
+    m.setDoc(m.doc(db,'userProgress',uid,'leEvents',eventId),{done:done,updatedAt:m.serverTimestamp()},{merge:true});
+  }).catch(function(){});
+}
+function _leLoadCloud(){
+  var uid=_leGetUid(); if(!uid) return;
+  import(_leFS).then(function(m){
+    var db=window.firebaseDB; if(!db) return;
+    m.getDocs(m.collection(db,'userProgress',uid,'leEvents')).then(function(snap){
+      snap.forEach(function(d){
+        var data=d.data(); if(Array.isArray(data.done)) localStorage.setItem('leProgress_'+d.id,JSON.stringify(data.done));
+      });
+      renderGrid();
+    }).catch(function(){});
+  }).catch(function(){});
+}
+document.addEventListener('sokoniAuthReady',function(){ _leLoadCloud(); });
+if(window.firebaseDB) _leLoadCloud(); else setTimeout(_leLoadCloud,2500);
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'entertainment', category:'event-planner'})" style="padding:12px 28px;background:#fb923c;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

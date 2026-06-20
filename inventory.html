@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#050a10">
+<meta name="description" content="SOKONI Inventory — Enterprise-grade inventory management">
+<title>Inventory | SOKONI</title>
+<link rel="icon" href="logo.png">
+<style>
+:root{
+  --bg:#050a10;--bg2:#0a1520;--bg3:#0f1f30;
+  --accent:#71ff00;--accent2:#52cc00;
+  --warn:#ffb800;--danger:#ff3b3b;--success:#00e87a;--info:#00c8ff;
+  --text:#e8f4ff;--muted:rgba(232,244,255,.45);--border:rgba(255,255,255,.07);
+  --card:rgba(255,255,255,.03);--card-hover:rgba(255,255,255,.055);
+  --radius:14px;--radius-sm:8px;--radius-lg:20px;
+  --shadow:0 4px 24px rgba(0,0,0,.5);
+  --nav-h:56px;--header-h:56px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;border:none;background:none;font-family:inherit;color:inherit}
+input,select,textarea{font-family:inherit;color:var(--text)}
+img{max-width:100%;display:block}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100%;overflow:hidden}
+#main{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:calc(var(--nav-h) + 16px)}
+.page{display:none;padding:12px 14px 8px}
+.page.active{display:block}
+
+/* ── HEADER ── */
+.header{height:var(--header-h);display:flex;align-items:center;padding:0 14px;
+  background:rgba(5,10,16,.92);border-bottom:1px solid var(--border);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  position:sticky;top:0;z-index:100;gap:10px}
+.header-logo{font-weight:800;font-size:17px;letter-spacing:-.3px;color:var(--accent)}
+.header-title{font-size:15px;font-weight:700;flex:1;color:var(--text);opacity:.9}
+.header-actions{display:flex;gap:6px;align-items:center}
+.icon-btn{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  background:var(--card);border:1px solid var(--border);font-size:15px;
+  transition:background .15s,border-color .15s}
+.icon-btn:hover{background:var(--card-hover);border-color:rgba(255,255,255,.15)}
+.icon-btn.accent{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.25);color:var(--accent)}
+
+/* ── SEARCH BAR ── */
+.search-wrap{padding:10px 14px;background:var(--bg);position:sticky;top:var(--header-h);z-index:90}
+.search-inner{position:relative;display:flex;gap:8px}
+.search-input{flex:1;height:40px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:0 12px 0 36px;font-size:14px;color:var(--text);outline:none;transition:border-color .15s}
+.search-input::placeholder{color:var(--muted)}
+.search-input:focus{border-color:rgba(113,255,0,.4)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
+.scan-btn{height:40px;width:44px;border-radius:var(--radius-sm);background:rgba(113,255,0,.12);
+  border:1px solid rgba(113,255,0,.25);color:var(--accent);font-size:16px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* ── KPI STRIP ── */
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px 14px 4px;flex-shrink:0}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 10px;text-align:center;transition:border-color .2s}
+.kpi.warn  {border-color:rgba(255,184,0,.3);background:rgba(255,184,0,.05)}
+.kpi.danger{border-color:rgba(255,59,59,.3);background:rgba(255,59,59,.05)}
+.kpi.ok    {border-color:rgba(0,232,122,.2);background:rgba(0,232,122,.04)}
+.kpi-val{font-size:20px;font-weight:800;letter-spacing:-.5px;line-height:1}
+.kpi-lbl{font-size:10px;color:var(--muted);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:0;overflow-x:auto;padding:10px 14px 0;scrollbar-width:none;border-bottom:1px solid var(--border)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:8px 14px;font-size:13px;font-weight:600;color:var(--muted);
+  border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── SECTION HEADER ── */
+.section-hd{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px}
+.section-title{font-size:14px;font-weight:700;color:var(--text)}
+.section-action{font-size:12px;color:var(--accent);font-weight:600;padding:4px 10px;
+  background:rgba(113,255,0,.1);border-radius:6px;border:1px solid rgba(113,255,0,.2)}
+.section-action:hover{background:rgba(113,255,0,.18)}
+
+/* ── ALERT BANNER ── */
+.alert-bar{display:none;padding:10px 14px;gap:8px;align-items:center;font-size:13px;font-weight:600}
+.alert-bar.visible{display:flex}
+.alert-bar.warn{background:rgba(255,184,0,.1);border-bottom:1px solid rgba(255,184,0,.2);color:var(--warn)}
+.alert-bar.danger{background:rgba(255,59,59,.1);border-bottom:1px solid rgba(255,59,59,.2);color:var(--danger)}
+.alert-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── CARDS ── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.card:last-child{margin-bottom:0}
+.card-row{display:flex;align-items:center;gap:10px}
+.card-icon{width:38px;height:38px;border-radius:10px;background:var(--bg3);
+  display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.card-body{flex:1;min-width:0}
+.card-title{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.card-right{text-align:right;flex-shrink:0}
+.card-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+.badge-ok    {background:rgba(0,232,122,.1);color:var(--success);border:1px solid rgba(0,232,122,.2)}
+.badge-warn  {background:rgba(255,184,0,.1);color:var(--warn);border:1px solid rgba(255,184,0,.2)}
+.badge-danger{background:rgba(255,59,59,.1);color:var(--danger);border:1px solid rgba(255,59,59,.2)}
+.badge-info  {background:rgba(0,200,255,.1);color:var(--info);border:1px solid rgba(0,200,255,.2)}
+
+/* ── QUICK ACTIONS ── */
+.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.quick-btn{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;transition:background .15s}
+.quick-btn:hover{background:var(--card-hover)}
+.quick-icon{font-size:22px}
+.quick-label{font-size:10px;font-weight:600;color:var(--muted);text-align:center;line-height:1.2}
+
+/* ── PRODUCT LIST ── */
+.product-item{display:flex;align-items:center;gap:11px;padding:11px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  margin-bottom:8px;transition:background .15s;cursor:pointer}
+.product-item:hover{background:var(--card-hover)}
+.product-thumb{width:44px;height:44px;border-radius:8px;background:var(--bg3);
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden}
+.product-thumb img{width:100%;height:100%;object-fit:cover}
+.product-info{flex:1;min-width:0}
+.product-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.product-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.product-stock{text-align:right;flex-shrink:0}
+.stock-qty{font-size:16px;font-weight:800;line-height:1}
+.stock-unit{font-size:10px;color:var(--muted)}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;
+   letter-spacing:.5px;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border)}
+td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+
+/* ── MOVEMENT TIMELINE ── */
+.mv-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.mv-item:last-child{border-bottom:none}
+.mv-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;flex-shrink:0;margin-top:2px}
+.mv-in  {background:rgba(0,232,122,.1);color:var(--success)}
+.mv-out {background:rgba(255,59,59,.1);color:var(--danger)}
+.mv-adj {background:rgba(0,200,255,.1);color:var(--info)}
+.mv-body{flex:1}
+.mv-title{font-size:13px;font-weight:600}
+.mv-sub  {font-size:11px;color:var(--muted);margin-top:1px}
+.mv-qty  {font-size:15px;font-weight:800;flex-shrink:0;text-align:right}
+.mv-qty.pos{color:var(--success)}
+.mv-qty.neg{color:var(--danger)}
+
+/* ── STOCK BAR ── */
+.stock-bar-wrap{display:flex;align-items:center;gap:8px;margin-top:6px}
+.stock-bar{flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.stock-bar-fill{height:100%;border-radius:3px;transition:width .4s}
+.stock-bar-fill.ok    {background:var(--success)}
+.stock-bar-fill.warn  {background:var(--warn)}
+.stock-bar-fill.danger{background:var(--danger)}
+.stock-pct{font-size:11px;color:var(--muted);flex-shrink:0;width:32px;text-align:right}
+
+/* ── AI PANEL ── */
+.ai-panel{background:linear-gradient(135deg,rgba(113,255,0,.06) 0%,rgba(0,200,255,.04) 100%);
+  border:1px solid rgba(113,255,0,.15);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.ai-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ai-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+.ai-title{font-size:13px;font-weight:700;color:var(--accent)}
+.ai-msg-list{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;margin-bottom:10px}
+.ai-bubble{padding:9px 12px;border-radius:10px;font-size:13px;line-height:1.5;max-width:92%}
+.ai-bubble.user{background:rgba(113,255,0,.12);color:var(--text);align-self:flex-end;border-bottom-right-radius:3px}
+.ai-bubble.bot {background:var(--bg3);color:var(--text);align-self:flex-start;border-bottom-left-radius:3px}
+.ai-input-row{display:flex;gap:8px}
+.ai-input{flex:1;height:38px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:0 12px;font-size:13px;color:var(--text);outline:none}
+.ai-input:focus{border-color:rgba(113,255,0,.4)}
+.ai-send{width:38px;height:38px;border-radius:8px;background:rgba(113,255,0,.15);
+  border:1px solid rgba(113,255,0,.25);color:var(--accent);font-size:15px;
+  display:flex;align-items:center;justify-content:center}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.4px;display:block;margin-bottom:5px}
+.form-input,.form-select,.form-textarea{width:100%;height:42px;background:var(--bg2);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 12px;
+  font-size:14px;color:var(--text);outline:none;transition:border-color .15s;appearance:none}
+.form-input:focus,.form-select:focus{border-color:rgba(113,255,0,.4)}
+.form-textarea{height:80px;padding:10px 12px;resize:vertical}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-hint{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* ── BUTTONS ── */
+.btn{height:44px;border-radius:var(--radius-sm);font-size:14px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:0 18px;transition:all .15s;border:none;cursor:pointer}
+.btn-primary{background:var(--accent);color:#050a10}
+.btn-primary:hover{background:var(--accent2)}
+.btn-ghost  {background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(255,255,255,.09)}
+.btn-danger {background:rgba(255,59,59,.15);color:var(--danger);border:1px solid rgba(255,59,59,.25)}
+.btn-danger:hover{background:rgba(255,59,59,.22)}
+.btn-sm{height:32px;font-size:12px;padding:0 12px;border-radius:6px}
+.btn-full{width:100%}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;
+  display:none;align-items:flex-end;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  width:100%;max-width:540px;max-height:92vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom)}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 0}
+.modal-header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border)}
+.modal-title{font-size:16px;font-weight:800}
+.modal-close{width:30px;height:30px;border-radius:8px;background:var(--bg3);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted)}
+.modal-body{padding:14px 16px}
+.modal-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+
+/* ── EMPTY STATE ── */
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-icon{font-size:40px;margin-bottom:10px;opacity:.4}
+.empty-text{font-size:14px;font-weight:600}
+.empty-sub {font-size:12px;margin-top:4px;opacity:.7}
+
+/* ── CHIP FILTER ── */
+.chips{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;margin-bottom:10px}
+.chips::-webkit-scrollbar{display:none}
+.chip{height:30px;padding:0 12px;border-radius:20px;font-size:12px;font-weight:600;
+  background:var(--bg2);border:1px solid var(--border);color:var(--muted);
+  white-space:nowrap;flex-shrink:0;transition:all .15s}
+.chip.active{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.3);color:var(--accent)}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:calc(var(--nav-h) + 12px);left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:10px 18px;font-size:13px;font-weight:600;
+  opacity:0;transition:opacity .25s,transform .25s;z-index:999;white-space:nowrap;
+  box-shadow:var(--shadow);pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── OFFLINE BANNER ── */
+#offline-bar{display:none;padding:7px 14px;background:rgba(255,184,0,.08);
+  border-bottom:1px solid rgba(255,184,0,.2);font-size:12px;font-weight:600;color:var(--warn);
+  text-align:center}
+#offline-bar.visible{display:block}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{height:var(--nav-h);display:flex;align-items:center;
+  background:rgba(5,10,16,.95);border-top:1px solid var(--border);
+  position:fixed;bottom:0;left:0;right:0;z-index:200;
+  padding:0 4px;padding-bottom:env(safe-area-inset-bottom)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;padding:4px;border-radius:8px;transition:background .15s}
+.nav-item.active .nav-icon{color:var(--accent)}
+.nav-item.active .nav-lbl{color:var(--accent)}
+.nav-icon{font-size:19px;color:var(--muted)}
+.nav-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+
+/* ── ANALYTICS ── */
+.chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px;margin-bottom:10px}
+.chart-title{font-size:13px;font-weight:700;margin-bottom:12px}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:90px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.bar-fill{width:100%;background:rgba(113,255,0,.3);border-radius:4px 4px 0 0;transition:height .4s;min-height:4px}
+.bar-fill.accent{background:var(--accent)}
+.bar-lbl{font-size:9px;color:var(--muted);text-align:center}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-box{background:var(--bg3);border-radius:var(--radius-sm);padding:12px}
+.stat-val{font-size:18px;font-weight:800}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── PURCHASE ORDER ── */
+.po-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;margin-bottom:8px;cursor:pointer;transition:background .15s}
+.po-item:hover{background:var(--card-hover)}
+.po-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.po-number{font-size:13px;font-weight:700;color:var(--accent)}
+.po-supplier{font-size:12px;color:var(--muted)}
+.po-total{font-size:15px;font-weight:800}
+.po-date{font-size:11px;color:var(--muted)}
+
+/* ── LOADING SKELETON ── */
+.skeleton{background:linear-gradient(90deg,var(--bg2) 25%,var(--bg3) 50%,var(--bg2) 75%);
+  background-size:200%;animation:skeleton 1.4s infinite;border-radius:6px}
+@keyframes skeleton{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skel-line{height:14px;margin-bottom:8px}
+.skel-line.sm{height:10px;width:60%}
+
+/* ── SCANNER MODAL ── */
+#scanner-video{width:100%;max-height:260px;object-fit:cover;border-radius:var(--radius-sm);background:#000}
+.scanner-overlay{position:relative;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.scanner-crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:160px;height:100px;border:2px solid var(--accent);border-radius:8px;pointer-events:none}
+
+@media(min-width:768px){
+  .kpi-strip{grid-template-columns:repeat(4,1fr)}
+  .quick-grid{grid-template-columns:repeat(8,1fr)}
+  #main{padding-bottom:0}
+  .bottom-nav{display:none}
+  .page{padding:16px 24px 12px;max-width:900px;margin:0 auto}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ── OFFLINE BAR ── -->
+<div id="offline-bar">⚠ You are offline — showing cached data</div>
+
+<!-- ── HEADER ── -->
+<header class="header">
+  <span class="header-logo">SOKONI</span>
+  <span class="header-title">Inventory</span>
+  <div class="header-actions">
+    <button class="icon-btn" onclick="openScannerModal()" title="Scan barcode">&#128247;</button>
+    <button class="icon-btn accent" onclick="openAIModal()" title="AI Assistant">&#129302;</button>
+    <button class="icon-btn" onclick="openNotifModal()" title="Alerts" id="notif-btn">&#128276;</button>
+  </div>
+</header>
+
+<!-- ── ALERT BANNER ── -->
+<div id="alert-bar" class="alert-bar"></div>
+
+<!-- ── SEARCH ── -->
+<div class="search-wrap">
+  <div class="search-inner">
+    <span class="search-icon">&#128269;</span>
+    <input type="search" class="search-input" id="global-search" placeholder="Search products, SKU, barcode…" oninput="onSearch(this.value)" autocomplete="off">
+    <button class="scan-btn" onclick="openScannerModal()">&#128250;</button>
+  </div>
+</div>
+
+<!-- ── KPI STRIP ── -->
+<div class="kpi-strip">
+  <div class="kpi ok"   id="kpi-skus">   <div class="kpi-val">—</div><div class="kpi-lbl">SKUs</div></div>
+  <div class="kpi"      id="kpi-val">    <div class="kpi-val">—</div><div class="kpi-lbl">Value</div></div>
+  <div class="kpi warn" id="kpi-low">    <div class="kpi-val">—</div><div class="kpi-lbl">Low Stock</div></div>
+  <div class="kpi danger" id="kpi-oos">  <div class="kpi-val">—</div><div class="kpi-lbl">Out of Stock</div></div>
+</div>
+
+<!-- ── TABS ── -->
+<nav class="tabs" id="tabs">
+  <button class="tab active" onclick="showPage('overview')">Overview</button>
+  <button class="tab" onclick="showPage('products')">Products</button>
+  <button class="tab" onclick="showPage('stock')">Stock</button>
+  <button class="tab" onclick="showPage('purchases')">Purchases</button>
+  <button class="tab" onclick="showPage('analytics')">Analytics</button>
+</nav>
+
+<!-- ── MAIN SCROLL AREA ── -->
+<div id="main">
+
+<!-- ════════════════════ PAGE: OVERVIEW ════════════════════ -->
+<section class="page active" id="page-overview">
+  <div class="section-hd">
+    <span class="section-title">Quick Actions</span>
+  </div>
+  <div class="quick-grid">
+    <button class="quick-btn" onclick="openProductModal()">
+      <span class="quick-icon">&#10133;</span><span class="quick-label">Add Product</span>
+    </button>
+    <button class="quick-btn" onclick="openAdjustModal()">
+      <span class="quick-icon">&#9881;</span><span class="quick-label">Adjust Stock</span>
+    </button>
+    <button class="quick-btn" onclick="openStockCountModal()">
+      <span class="quick-icon">&#128203;</span><span class="quick-label">Stock Count</span>
+    </button>
+    <button class="quick-btn" onclick="openPOModal()">
+      <span class="quick-icon">&#128666;</span><span class="quick-label">New PO</span>
+    </button>
+    <button class="quick-btn" onclick="openTransferModal()">
+      <span class="quick-icon">&#8645;</span><span class="quick-label">Transfer</span>
+    </button>
+    <button class="quick-btn" onclick="openSupplierModal()">
+      <span class="quick-icon">&#127970;</span><span class="quick-label">Add Supplier</span>
+    </button>
+    <button class="quick-btn" onclick="openImportModal()">
+      <span class="quick-icon">&#128196;</span><span class="quick-label">Import CSV</span>
+    </button>
+    <button class="quick-btn" onclick="openReorderPanel()">
+      <span class="quick-icon">&#129302;</span><span class="quick-label">AI Reorder</span>
+    </button>
+  </div>
+
+  <!-- Low stock alerts -->
+  <div class="section-hd">
+    <span class="section-title">&#128680; Alerts</span>
+    <button class="section-action" onclick="showPage('stock')">View All</button>
+  </div>
+  <div id="alerts-list">
+    <div class="skeleton skel-line"></div>
+    <div class="skeleton skel-line sm"></div>
+    <div class="skeleton skel-line"></div>
+  </div>
+
+  <!-- Recent movements -->
+  <div class="section-hd" style="margin-top:18px">
+    <span class="section-title">Recent Movements</span>
+    <button class="section-action" onclick="showPage('stock')">See All</button>
+  </div>
+  <div id="recent-movements">
+    <div class="skeleton skel-line"></div>
+    <div class="skeleton skel-line"></div>
+    <div class="skeleton skel-line sm"></div>
+  </div>
+
+  <!-- AI Reorder suggestions -->
+  <div class="section-hd" style="margin-top:18px">
+    <span class="section-title">&#129302; AI Suggestions</span>
+    <button class="section-action" onclick="loadReorderSuggestions()">Refresh</button>
+  </div>
+  <div id="reorder-suggestions">
+    <div class="ai-panel">
+      <div class="ai-header"><div class="ai-dot"></div><span class="ai-title">Inventory Assistant</span></div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Ask me anything about your inventory</p>
+      <div class="ai-input-row">
+        <input class="ai-input" id="quick-ai-input" placeholder="What should I reorder this week?" onkeydown="if(event.key==='Enter')quickAiQuery()">
+        <button class="ai-send" onclick="quickAiQuery()">&#10148;</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ PAGE: PRODUCTS ════════════════════ -->
+<section class="page" id="page-products">
+  <div class="chips" id="cat-chips">
+    <button class="chip active" onclick="filterCategory(null,this)">All</button>
+  </div>
+  <div id="products-list">
+    <div class="skeleton skel-line" style="height:60px"></div>
+    <div class="skeleton skel-line" style="height:60px;margin-top:8px"></div>
+    <div class="skeleton skel-line" style="height:60px;margin-top:8px"></div>
+  </div>
+  <button class="btn btn-ghost btn-full" style="margin-top:10px" id="load-more-btn" onclick="loadMoreProducts()">Load More</button>
+</section>
+
+<!-- ════════════════════ PAGE: STOCK ════════════════════ -->
+<section class="page" id="page-stock">
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <select class="form-select" id="warehouse-filter" onchange="loadStockLevels()" style="flex:1;height:36px">
+      <option value="">All Warehouses</option>
+    </select>
+    <select class="form-select" id="stock-filter" onchange="loadStockLevels()" style="width:130px;height:36px">
+      <option value="">All Stock</option>
+      <option value="low">Low Stock</option>
+      <option value="out">Out of Stock</option>
+      <option value="ok">In Stock</option>
+    </select>
+  </div>
+
+  <div id="stock-list">
+    <div class="skeleton skel-line" style="height:70px"></div>
+    <div class="skeleton skel-line" style="height:70px;margin-top:8px"></div>
+    <div class="skeleton skel-line" style="height:70px;margin-top:8px"></div>
+  </div>
+
+  <div class="section-hd" style="margin-top:16px">
+    <span class="section-title">Movement History</span>
+  </div>
+  <div id="movement-history"></div>
+</section>
+
+<!-- ════════════════════ PAGE: PURCHASES ════════════════════ -->
+<section class="page" id="page-purchases">
+  <div class="chips">
+    <button class="chip active" onclick="filterPOs(null,this)">All</button>
+    <button class="chip" onclick="filterPOs('draft',this)">Drafts</button>
+    <button class="chip" onclick="filterPOs('sent',this)">Sent</button>
+    <button class="chip" onclick="filterPOs('partial',this)">Partial</button>
+    <button class="chip" onclick="filterPOs('received',this)">Received</button>
+  </div>
+  <div id="po-list">
+    <div class="skeleton skel-line" style="height:80px"></div>
+    <div class="skeleton skel-line" style="height:80px;margin-top:8px"></div>
+  </div>
+  <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="openPOModal()">+ New Purchase Order</button>
+</section>
+
+<!-- ════════════════════ PAGE: ANALYTICS ════════════════════ -->
+<section class="page" id="page-analytics">
+  <div class="stat-grid" style="margin-bottom:12px">
+    <div class="stat-box">
+      <div class="stat-val" id="an-value">KES —</div>
+      <div class="stat-lbl">Inventory Value</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val" id="an-turnover">—</div>
+      <div class="stat-lbl">Turnover Rate</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val" id="an-shrinkage">—</div>
+      <div class="stat-lbl">Shrinkage</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val" id="an-fill-rate">—</div>
+      <div class="stat-lbl">Fill Rate</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-title">Stock Movements — Last 7 Days</div>
+    <div class="bar-chart" id="movement-chart"></div>
+  </div>
+
+  <div class="section-hd">
+    <span class="section-title">&#127942; Top Movers</span>
+  </div>
+  <div id="top-movers"></div>
+
+  <div class="section-hd" style="margin-top:14px">
+    <span class="section-title">&#128032; Slow Movers</span>
+  </div>
+  <div id="slow-movers"></div>
+
+  <div class="section-hd" style="margin-top:14px">
+    <span class="section-title">Expiry Watch</span>
+  </div>
+  <div id="expiry-list"></div>
+</section>
+
+</div><!-- /main -->
+
+<!-- ════════════════════ BOTTOM NAV ════════════════════ -->
+<nav class="bottom-nav">
+  <a class="nav-item" href="index.html"><span class="nav-icon">&#127968;</span><span class="nav-lbl">Home</span></a>
+  <button class="nav-item active" onclick="showPage('overview')"><span class="nav-icon">&#128200;</span><span class="nav-lbl">Inventory</span></button>
+  <a class="nav-item" href="pos.html"><span class="nav-icon">&#128179;</span><span class="nav-lbl">POS</span></a>
+  <a class="nav-item" href="seller.html"><span class="nav-icon">&#128722;</span><span class="nav-lbl">Seller</span></a>
+  <a class="nav-item" href="profile.html"><span class="nav-icon">&#128100;</span><span class="nav-lbl">Profile</span></a>
+</nav>
+
+</div><!-- /app -->
+
+<!-- ════════════════════ MODALS ════════════════════ -->
+
+<!-- ADD / EDIT PRODUCT -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="product-modal-title">Add Product</span>
+      <button class="modal-close" onclick="closeModal('product-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="pm-id">
+      <div class="form-group">
+        <label class="form-label">Product Name *</label>
+        <input class="form-input" id="pm-name" placeholder="e.g. Brookside Milk 500ml">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">SKU</label>
+          <input class="form-input" id="pm-sku" placeholder="Auto-generated">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Barcode / EAN</label>
+          <input class="form-input" id="pm-barcode" placeholder="Scan or enter">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <input class="form-input" id="pm-category" list="cat-list" placeholder="e.g. Dairy">
+          <datalist id="cat-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Brand</label>
+          <input class="form-input" id="pm-brand" placeholder="e.g. Brookside">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cost Price (KES)</label>
+          <input class="form-input" id="pm-cost" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Selling Price (KES)</label>
+          <input class="form-input" id="pm-price" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Opening Stock</label>
+          <input class="form-input" id="pm-qty" type="number" min="0" step="1" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <select class="form-select" id="pm-unit">
+            <option>each</option><option>kg</option><option>g</option><option>litre</option>
+            <option>ml</option><option>pack</option><option>box</option><option>carton</option>
+            <option>pair</option><option>set</option><option>metre</option><option>piece</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Reorder Point</label>
+          <input class="form-input" id="pm-reorder" type="number" min="0" placeholder="5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Stock</label>
+          <input class="form-input" id="pm-maxstock" type="number" min="0" placeholder="100">
+        </div>
+      </div>
+      <div class="form-group" style="display:flex;gap:14px;align-items:center">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+          <input type="checkbox" id="pm-serial"> Track Serial Numbers
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+          <input type="checkbox" id="pm-batch"> Track Batches / Expiry
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('product-modal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK ADJUSTMENT -->
+<div class="modal-overlay" id="adjust-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Stock Adjustment</span>
+      <button class="modal-close" onclick="closeModal('adjust-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Product</label>
+        <input class="form-input" id="adj-product" placeholder="Search by name or SKU" oninput="searchForAdjust(this.value)">
+        <div id="adj-product-results"></div>
+        <input type="hidden" id="adj-product-id">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Warehouse</label>
+        <select class="form-select" id="adj-warehouse"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="adj-type">
+            <option value="adjustment">Adjustment</option>
+            <option value="damage">Damage</option>
+            <option value="loss">Loss / Theft</option>
+            <option value="expiry">Expiry</option>
+            <option value="donation">Donation</option>
+            <option value="sample">Sample</option>
+            <option value="write_off">Write-Off</option>
+            <option value="opening_stock">Opening Stock</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input class="form-input" id="adj-qty" type="number" step="0.001" placeholder="+10 or -5">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason / Notes</label>
+        <input class="form-input" id="adj-reason" placeholder="e.g. Damaged during delivery">
+      </div>
+      <div id="adj-current-stock" style="font-size:13px;color:var(--muted);padding:8px;background:var(--bg3);border-radius:8px;display:none">
+        Current stock: <strong id="adj-stock-val">—</strong>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('adjust-modal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="submitAdjustment()">Apply Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRANSFER STOCK -->
+<div class="modal-overlay" id="transfer-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Transfer Stock</span>
+      <button class="modal-close" onclick="closeModal('transfer-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Product</label>
+        <input class="form-input" id="tr-product" placeholder="Search product">
+        <input type="hidden" id="tr-product-id">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">From Warehouse</label>
+          <select class="form-select" id="tr-from"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">To Warehouse</label>
+          <select class="form-select" id="tr-to"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantity</label>
+        <input class="form-input" id="tr-qty" type="number" min="1" step="0.001" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input class="form-input" id="tr-notes" placeholder="Optional">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('transfer-modal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="submitTransfer()">Transfer</button>
+    </div>
+  </div>
+</div>
+
+<!-- PURCHASE ORDER -->
+<div class="modal-overlay" id="po-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">New Purchase Order</span>
+      <button class="modal-close" onclick="closeModal('po-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Supplier *</label>
+        <select class="form-select" id="po-supplier"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Expected Delivery</label>
+          <input class="form-input" id="po-delivery" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Deliver To</label>
+          <select class="form-select" id="po-warehouse"></select>
+        </div>
+      </div>
+      <div class="section-hd"><span class="section-title">Line Items</span><button class="section-action" onclick="addPOLine()">+ Add Item</button></div>
+      <div id="po-lines"></div>
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">Notes</label>
+        <input class="form-input" id="po-notes" placeholder="Optional">
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);margin-top:8px">
+        <span style="font-size:13px;color:var(--muted)">Total</span>
+        <strong id="po-total">KES 0.00</strong>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('po-modal')">Cancel</button>
+      <button class="btn btn-ghost" onclick="savePODraft()">Save Draft</button>
+      <button class="btn btn-primary" onclick="submitPO()">Send PO</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK COUNT / AUDIT -->
+<div class="modal-overlay" id="count-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Stock Count</span>
+      <button class="modal-close" onclick="closeModal('count-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div id="count-setup">
+        <div class="form-group">
+          <label class="form-label">Count Name</label>
+          <input class="form-input" id="count-name" placeholder="e.g. Monthly Count June 2026">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Warehouse</label>
+          <select class="form-select" id="count-warehouse"></select>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="beginStockCount()">Begin Count</button>
+      </div>
+      <div id="count-session" style="display:none">
+        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px" id="count-session-name"></div>
+        <div class="form-group">
+          <label class="form-label">Scan or Enter Product</label>
+          <input class="form-input" id="count-scan" placeholder="Barcode / SKU" oninput="onCountScan(this.value)">
+        </div>
+        <div id="count-items-list" style="max-height:220px;overflow-y:auto"></div>
+        <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="finaliseStockCount()">Finalise Count</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCANNER -->
+<div class="modal-overlay" id="scanner-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Scan Barcode</span>
+      <button class="modal-close" onclick="closeScannerModal()">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="scanner-overlay">
+        <video id="scanner-video" autoplay muted playsinline></video>
+        <div class="scanner-crosshair"></div>
+      </div>
+      <div style="margin-top:10px">
+        <label class="form-label">Or type barcode manually</label>
+        <input class="form-input" id="manual-barcode" placeholder="Enter barcode…" onkeydown="if(event.key==='Enter')lookupBarcode(this.value)">
+      </div>
+      <div id="scan-result" style="margin-top:10px;display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER -->
+<div class="modal-overlay" id="supplier-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Add Supplier</span>
+      <button class="modal-close" onclick="closeModal('supplier-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Supplier Name *</label><input class="form-input" id="sup-name" placeholder="e.g. Unilever Kenya"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Contact Name</label><input class="form-input" id="sup-contact" placeholder="Full name"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="sup-phone" type="tel" placeholder="+254…"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="sup-email" type="email" placeholder="orders@supplier.co.ke"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Payment Terms (days)</label><input class="form-input" id="sup-terms" type="number" placeholder="30"></div>
+        <div class="form-group"><label class="form-label">Lead Time (days)</label><input class="form-input" id="sup-lead" type="number" placeholder="7"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="sup-notes" placeholder="Optional"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('supplier-modal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveSupplier()">Save Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Import Products</span>
+      <button class="modal-close" onclick="closeModal('import-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Upload a CSV file with columns: name, sku, barcode, category, brand, costPrice, sellingPrice, quantity, unit</p>
+      <div class="form-group"><label class="form-label">CSV File</label><input type="file" class="form-input" id="import-file" accept=".csv,text/csv" style="height:auto;padding:10px"></div>
+      <button class="btn btn-ghost btn-full" onclick="downloadTemplate()">&#11015; Download Template CSV</button>
+      <div id="import-result" style="margin-top:12px;display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('import-modal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="processImport()">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- ALERTS / NOTIFICATIONS -->
+<div class="modal-overlay" id="notif-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Alerts</span>
+      <button class="modal-close" onclick="closeModal('notif-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body" id="notif-body">
+      <div class="empty"><div class="empty-icon">&#128276;</div><div class="empty-text">No active alerts</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- AI ASSISTANT -->
+<div class="modal-overlay" id="ai-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">&#129302; Inventory AI</span>
+      <button class="modal-close" onclick="closeModal('ai-modal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="ai-msg-list" id="ai-msg-list">
+        <div class="ai-bubble bot">Hello! I can help you with stock levels, reorder recommendations, demand forecasting, and inventory insights. Ask me anything.</div>
+      </div>
+      <div class="ai-input-row" style="margin-top:10px">
+        <input class="ai-input" id="ai-input" placeholder="e.g. Which products are running low?" onkeydown="if(event.key==='Enter')sendAiMessage()">
+        <button class="ai-send" onclick="sendAiMessage()">&#10148;</button>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+        <button class="chip" onclick="aiPreset(this)">What should I reorder?</button>
+        <button class="chip" onclick="aiPreset(this)">Top selling products</button>
+        <button class="chip" onclick="aiPreset(this)">Near expiry items</button>
+        <button class="chip" onclick="aiPreset(this)">Slow movers</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- ════════════════════ SCRIPTS ════════════════════ -->
+<script src="firebase.js"></script>
+<script src="auth.js"></script>
+<script src="sokoni-db.js"></script>
+<script src="sokoni-scale.js" defer></script>
+<script src="sokoni-cache.js" defer></script>
+<script src="sokoni-monitor.js" defer></script>
+<script src="sokoni-inventory.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   INVENTORY DASHBOARD — PAGE CONTROLLER
+═══════════════════════════════════════════════════════════ */
+
+let _products     = [];
+let _stockLevels  = [];
+let _movements    = [];
+let _pos          = [];
+let _suppliers    = [];
+let _warehouses   = [];
+let _alerts       = [];
+let _currentPage  = 'overview';
+let _catFilter    = null;
+let _poFilter     = null;
+let _productPage  = 0;
+let _stockSession = null;
+let _scanStream   = null;
+let _scanDebounce = null;
+
+// ── INIT ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  initOfflineBanner();
+  await waitForFirebase();
+  await SokoniInventory.init({ firestore: window.db, auth: window.auth });
+  SokoniInventory.on('alerts_updated', onAlertsUpdated);
+  SokoniInventory.on('sync_complete',  () => showToast('Synced'));
+  await Promise.all([loadKPIs(), loadProducts(), loadWarehouses(), loadSuppliers()]);
+  await loadOverviewData();
+});
+
+function waitForFirebase(retries = 20) {
+  return new Promise(res => {
+    const check = () => { if (window.db || retries-- <= 0) return res(); setTimeout(check, 150); };
+    check();
+  });
+}
+
+// ── OFFLINE ───────────────────────────────────────────────
+function initOfflineBanner() {
+  const bar = document.getElementById('offline-bar');
+  const update = () => { bar.classList.toggle('visible', !navigator.onLine); };
+  window.addEventListener('online',  update);
+  window.addEventListener('offline', update);
+  update();
+}
+
+// ── TABS ──────────────────────────────────────────────────
+function showPage(id) {
+  _currentPage = id;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const page = document.getElementById(`page-${id}`);
+  const tabs  = document.querySelectorAll('.tab');
+  const order = ['overview','products','stock','purchases','analytics'];
+  if (page) page.classList.add('active');
+  const idx = order.indexOf(id);
+  if (tabs[idx]) tabs[idx].classList.add('active');
+  if (id === 'stock')     loadStockLevels();
+  if (id === 'purchases') loadPOs();
+  if (id === 'analytics') loadAnalytics();
+}
+
+// ── KPIs ──────────────────────────────────────────────────
+async function loadKPIs() {
+  try {
+    const [products, analytics] = await Promise.all([
+      SokoniInventory.getProducts({ active: true }),
+      SokoniInventory.getAnalytics(),
+    ]);
+    document.querySelector('#kpi-skus .kpi-val').textContent  = products.length;
+    document.querySelector('#kpi-val .kpi-val').textContent   = fmt(analytics.inventoryValue || 0);
+    document.querySelector('#kpi-low .kpi-val').textContent   = analytics.lowStockCount  || 0;
+    document.querySelector('#kpi-oos .kpi-val').textContent   = analytics.outOfStockCount|| 0;
+  } catch (_) {}
+}
+
+function fmt(n) {
+  if (n >= 1_000_000) return 'KES ' + (n/1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return 'KES ' + (n/1_000).toFixed(1) + 'K';
+  return 'KES ' + n.toFixed(0);
+}
+
+// ── OVERVIEW ──────────────────────────────────────────────
+async function loadOverviewData() {
+  await Promise.all([loadAlerts(), loadRecentMovements()]);
+}
+
+async function loadAlerts() {
+  _alerts = await SokoniInventory.getAlerts();
+  renderAlertBar(_alerts);
+  renderAlertsList(_alerts);
+}
+
+function onAlertsUpdated({ alerts }) {
+  _alerts = alerts;
+  renderAlertBar(alerts);
+  renderAlertsList(alerts);
+  const btn = document.getElementById('notif-btn');
+  if (btn) btn.style.color = alerts.length ? 'var(--warn)' : '';
+}
+
+function renderAlertBar(alerts) {
+  const bar = document.getElementById('alert-bar');
+  const crit = alerts.filter(a => a.severity === 'critical').length;
+  const warn = alerts.filter(a => a.severity === 'warning').length;
+  if (!crit && !warn) { bar.className = 'alert-bar'; return; }
+  bar.className = `alert-bar visible ${crit ? 'danger' : 'warn'}`;
+  bar.innerHTML = `<div class="alert-dot"></div>${crit ? crit + ' out of stock' : ''}${crit && warn ? ' · ' : ''}${warn ? warn + ' low stock' : ''}`;
+}
+
+function renderAlertsList(alerts) {
+  const el = document.getElementById('alerts-list');
+  if (!alerts.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-text">All stock levels healthy</div></div>';
+    return;
+  }
+  el.innerHTML = alerts.slice(0, 8).map(a => `
+    <div class="card" style="cursor:pointer" onclick="showPage('stock')">
+      <div class="card-row">
+        <div class="card-icon">${a.type === 'out_of_stock' ? '&#128680;' : '&#9888;'}</div>
+        <div class="card-body">
+          <div class="card-title">${escHtml(a.productId)}</div>
+          <div class="card-sub">${escHtml(a.message)} · ${escHtml(a.warehouseId || 'main')}</div>
+        </div>
+        <span class="card-badge ${a.severity === 'critical' ? 'badge-danger' : 'badge-warn'}">
+          ${a.severity === 'critical' ? 'OUT' : 'LOW'}
+        </span>
+      </div>
+    </div>`).join('');
+}
+
+async function loadRecentMovements() {
+  const mvs = await SokoniInventory.getMovements({ limit: 8 });
+  const el  = document.getElementById('recent-movements');
+  if (!mvs.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">No movements yet</div></div>';
+    return;
+  }
+  el.innerHTML = mvs.map(m => renderMovementItem(m)).join('');
+}
+
+function renderMovementItem(m) {
+  const isIn  = m.quantity > 0;
+  const cls   = isIn ? 'mv-in' : m.type === 'adjustment' ? 'mv-adj' : 'mv-out';
+  const icon  = isIn ? '&#8679;' : m.type === 'adjustment' ? '&#9881;' : '&#8681;';
+  const sign  = isIn ? '+' : '';
+  const dt    = m.timestamp ? new Date(m.timestamp).toLocaleString('en-KE',{hour:'2-digit',minute:'2-digit',month:'short',day:'numeric'}) : '';
+  return `
+  <div class="mv-item">
+    <div class="mv-icon ${cls}">${icon}</div>
+    <div class="mv-body">
+      <div class="mv-title">${escHtml(m.type.replace(/_/g,' '))}</div>
+      <div class="mv-sub">${escHtml(m.productId)} · ${dt}</div>
+    </div>
+    <div class="mv-qty ${isIn?'pos':'neg'}">${sign}${m.quantity}</div>
+  </div>`;
+}
+
+// ── PRODUCTS ──────────────────────────────────────────────
+async function loadProducts(reset = true) {
+  if (reset) { _productPage = 0; _products = []; }
+  try {
+    const batch = await SokoniInventory.getProducts({ category: _catFilter, page: _productPage, active: true });
+    _products = reset ? batch : [..._products, ...batch];
+    renderProducts(_products);
+    renderCategories();
+    document.getElementById('load-more-btn').style.display = batch.length < 50 ? 'none' : '';
+  } catch (e) { showToast('Error loading products'); }
+}
+
+function renderProducts(products) {
+  const el = document.getElementById('products-list');
+  if (!products.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">&#128230;</div><div class="empty-text">No products found</div><div class="empty-sub">Add your first product to get started</div></div>`;
+    return;
+  }
+  el.innerHTML = products.map(p => `
+    <div class="product-item" onclick="openProductModal('${p.id}')">
+      <div class="product-thumb">${p.images?.[0] ? `<img src="${escHtml(p.images[0])}" alt="">` : '&#128230;'}</div>
+      <div class="product-info">
+        <div class="product-name">${escHtml(p.name)}</div>
+        <div class="product-meta">${escHtml(p.sku||'')} ${p.barcode ? '· '+escHtml(p.barcode) : ''} ${p.brand ? '· '+escHtml(p.brand) : ''}</div>
+        <div class="product-meta" style="margin-top:1px">KES ${(p.sellingPrice||0).toFixed(2)} sell · KES ${(p.costPrice||0).toFixed(2)} cost</div>
+      </div>
+      <div class="product-stock">
+        <div class="stock-qty" id="qty-${p.id}">—</div>
+        <div class="stock-unit">${escHtml(p.unit||'each')}</div>
+      </div>
+    </div>`).join('');
+
+  // Load stock levels asynchronously
+  products.forEach(async p => {
+    try {
+      const sl  = await SokoniInventory.getStockLevel(p.id);
+      const el2 = document.getElementById(`qty-${p.id}`);
+      if (!el2) return;
+      el2.textContent = sl.available;
+      el2.style.color = sl.available <= 0 ? 'var(--danger)' : sl.available <= (p.reorderPoint||5) ? 'var(--warn)' : 'var(--success)';
+    } catch (_) {}
+  });
+}
+
+function renderCategories() {
+  const cats = [...new Set(_products.map(p => p.category).filter(Boolean))].sort();
+  const dl   = document.getElementById('cat-list');
+  if (dl) dl.innerHTML = cats.map(c => `<option value="${escHtml(c)}">`).join('');
+  const chips = document.getElementById('cat-chips');
+  if (!chips) return;
+  chips.innerHTML = `<button class="chip ${!_catFilter?'active':''}" onclick="filterCategory(null,this)">All</button>` +
+    cats.map(c => `<button class="chip ${_catFilter===c?'active':''}" onclick="filterCategory('${escHtml(c)}',this)">${escHtml(c)}</button>`).join('');
+}
+
+function filterCategory(cat, btn) {
+  _catFilter = cat;
+  document.querySelectorAll('#cat-chips .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  loadProducts();
+}
+
+function loadMoreProducts() {
+  _productPage++;
+  loadProducts(false);
+}
+
+// ── SEARCH ────────────────────────────────────────────────
+let _searchTimer;
+function onSearch(q) {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(async () => {
+    if (!q) { loadProducts(); return; }
+    const results = await SokoniInventory.searchProducts(q);
+    renderProducts(results);
+    if (_currentPage !== 'products') showPage('products');
+  }, 280);
+}
+
+// ── STOCK LEVELS ──────────────────────────────────────────
+async function loadStockLevels() {
+  const wh  = document.getElementById('warehouse-filter')?.value;
+  const flt = document.getElementById('stock-filter')?.value;
+  try {
+    const levels = await SokoniInventory.getAllStockLevels({ warehouseId: wh || undefined });
+    _stockLevels = levels;
+    const filtered = flt === 'low' ? levels.filter(l => l.available > 0 && l.available <= 10)
+                   : flt === 'out' ? levels.filter(l => l.available <= 0)
+                   : flt === 'ok'  ? levels.filter(l => l.available > 10)
+                   : levels;
+    renderStockList(filtered);
+    loadMovementHistory();
+  } catch (_) {}
+}
+
+function renderStockList(levels) {
+  const el = document.getElementById('stock-list');
+  if (!levels.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-text">No stock records</div></div>';
+    return;
+  }
+  el.innerHTML = levels.map(sl => {
+    const pct = sl.maxStock ? Math.min((sl.available / sl.maxStock) * 100, 100) : 50;
+    const cls = sl.available <= 0 ? 'danger' : sl.available <= (sl.reorderPoint||5) ? 'warn' : 'ok';
+    return `
+    <div class="card" onclick="openAdjustModal('${sl.productId}')">
+      <div class="card-row">
+        <div class="card-icon">&#128230;</div>
+        <div class="card-body">
+          <div class="card-title">${escHtml(sl.productId)}</div>
+          <div class="card-sub">${escHtml(sl.warehouseId)} · Reserved: ${sl.reserved} · Incoming: ${sl.incoming}</div>
+          <div class="stock-bar-wrap">
+            <div class="stock-bar"><div class="stock-bar-fill ${cls}" style="width:${pct}%"></div></div>
+            <span class="stock-pct">${Math.round(pct)}%</span>
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:20px;font-weight:800;color:var(--${cls === 'danger' ? 'danger' : cls === 'warn' ? 'warn' : 'success'})">${sl.available}</div>
+          <div style="font-size:10px;color:var(--muted)">on hand</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadMovementHistory() {
+  const mvs = await SokoniInventory.getMovements({ limit: 20 });
+  const el  = document.getElementById('movement-history');
+  el.innerHTML = mvs.length ? mvs.map(m => renderMovementItem(m)).join('') :
+    '<div class="empty"><div class="empty-text">No movements recorded</div></div>';
+}
+
+// ── WAREHOUSES ────────────────────────────────────────────
+async function loadWarehouses() {
+  _warehouses = await SokoniInventory.getWarehouses();
+  ['warehouse-filter','adj-warehouse','tr-from','tr-to','count-warehouse','po-warehouse'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const opts = _warehouses.map(w => `<option value="${escHtml(w.id)}">${escHtml(w.name)}</option>`).join('');
+    if (id === 'warehouse-filter') el.innerHTML = '<option value="">All Warehouses</option>' + opts;
+    else el.innerHTML = opts;
+  });
+}
+
+// ── SUPPLIERS ─────────────────────────────────────────────
+async function loadSuppliers() {
+  _suppliers = await SokoniInventory.getSuppliers();
+  const sel  = document.getElementById('po-supplier');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">Select supplier…</option>` +
+    _suppliers.map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`).join('');
+}
+
+// ── PURCHASE ORDERS ───────────────────────────────────────
+async function loadPOs() {
+  _pos = await SokoniInventory.getPurchaseOrders({ status: _poFilter || undefined });
+  renderPOs(_pos);
+}
+
+function renderPOs(pos) {
+  const el = document.getElementById('po-list');
+  if (!pos.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">&#128666;</div><div class="empty-text">No purchase orders</div></div>';
+    return;
+  }
+  el.innerHTML = pos.map(po => `
+    <div class="po-item">
+      <div class="po-row">
+        <span class="po-number">${escHtml(po.number||po.id)}</span>
+        <span class="card-badge badge-${po.status==='received'?'ok':po.status==='cancelled'?'danger':'info'}">${escHtml(po.status)}</span>
+      </div>
+      <div class="po-row">
+        <span class="po-supplier">${escHtml(po.supplierName||po.supplierId||'—')}</span>
+        <span class="po-total">KES ${(po.totalCost||0).toFixed(2)}</span>
+      </div>
+      <div class="po-date">${po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-KE') : ''} · ${(po.items||[]).length} item(s)</div>
+    </div>`).join('');
+}
+
+function filterPOs(status, btn) {
+  _poFilter = status;
+  document.querySelectorAll('#page-purchases .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  loadPOs();
+}
+
+// ── ANALYTICS ─────────────────────────────────────────────
+async function loadAnalytics() {
+  const an = await SokoniInventory.getAnalytics();
+  document.getElementById('an-value').textContent     = fmt(an.inventoryValue || 0);
+  document.getElementById('an-turnover').textContent  = an.turnoverRate ? an.turnoverRate.toFixed(1)+'x' : '—';
+  document.getElementById('an-shrinkage').textContent = an.shrinkage    ? fmt(an.shrinkage)               : '—';
+  document.getElementById('an-fill-rate').textContent = an.fillRate     ? an.fillRate.toFixed(0)+'%'      : '—';
+  renderMovementChart(an.dailyMovements || []);
+  renderTopMovers(an.topMovers   || []);
+  renderSlowMovers(an.slowMovers || []);
+  loadExpiryWatch();
+}
+
+function renderMovementChart(days) {
+  const el = document.getElementById('movement-chart');
+  if (!days.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px">No data available</div>'; return; }
+  const max = Math.max(...days.map(d => d.count), 1);
+  el.innerHTML = days.slice(-7).map(d => {
+    const h = Math.max((d.count / max) * 80, 4);
+    const accent = d === days[days.length-1];
+    return `<div class="bar-col"><div class="bar-fill ${accent?'accent':''}" style="height:${h}px"></div><div class="bar-lbl">${d.label||''}</div></div>`;
+  }).join('');
+}
+
+function renderTopMovers(items) {
+  const el = document.getElementById('top-movers');
+  el.innerHTML = items.length ? items.slice(0, 5).map((i, idx) => `
+    <div class="card-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--muted);width:20px">#${idx+1}</span>
+      <div class="card-body"><div class="card-title">${escHtml(i.name||i.productId)}</div></div>
+      <strong>${i.count||0}</strong>
+    </div>`).join('') : '<div class="empty"><div class="empty-text">No data</div></div>';
+}
+
+function renderSlowMovers(items) {
+  const el = document.getElementById('slow-movers');
+  el.innerHTML = items.length ? items.slice(0, 5).map(i => `
+    <div class="card-row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div class="card-body"><div class="card-title">${escHtml(i.name||i.productId)}</div><div class="card-sub">${i.daysSinceLastSale||0} days since last sale</div></div>
+      <span class="card-badge badge-warn">${i.available||0} units</span>
+    </div>`).join('') : '<div class="empty"><div class="empty-text">No slow movers</div></div>';
+}
+
+async function loadExpiryWatch() {
+  const batches = await SokoniInventory.getNearExpiryBatches(30);
+  const el = document.getElementById('expiry-list');
+  el.innerHTML = batches.length ? batches.map(b => `
+    <div class="card">
+      <div class="card-row">
+        <div class="card-icon">&#8987;</div>
+        <div class="card-body">
+          <div class="card-title">${escHtml(b.productId)}</div>
+          <div class="card-sub">Batch ${escHtml(b.batchNumber||'—')} · Expires ${escHtml(b.expiryDate||'—')}</div>
+        </div>
+        <span class="card-badge badge-warn">${b.available||0} units</span>
+      </div>
+    </div>`).join('') : '<div class="empty"><div class="empty-text">No items nearing expiry</div></div>';
+}
+
+// ── PRODUCT MODAL ─────────────────────────────────────────
+async function openProductModal(id) {
+  if (id) {
+    const p = await SokoniInventory.getProduct(id);
+    if (!p) return;
+    document.getElementById('product-modal-title').textContent = 'Edit Product';
+    document.getElementById('pm-id').value         = p.id;
+    document.getElementById('pm-name').value       = p.name       || '';
+    document.getElementById('pm-sku').value        = p.sku        || '';
+    document.getElementById('pm-barcode').value    = p.barcode    || '';
+    document.getElementById('pm-category').value   = p.category   || '';
+    document.getElementById('pm-brand').value      = p.brand      || '';
+    document.getElementById('pm-cost').value       = p.costPrice  || '';
+    document.getElementById('pm-price').value      = p.sellingPrice|| '';
+    document.getElementById('pm-unit').value       = p.unit       || 'each';
+    document.getElementById('pm-reorder').value    = p.reorderPoint|| '';
+    document.getElementById('pm-maxstock').value   = p.maxStock   || '';
+    document.getElementById('pm-serial').checked   = !!p.trackSerial;
+    document.getElementById('pm-batch').checked    = !!p.trackBatch;
+    document.getElementById('pm-qty').value        = '';
+  } else {
+    document.getElementById('product-modal-title').textContent = 'Add Product';
+    ['pm-id','pm-name','pm-sku','pm-barcode','pm-category','pm-brand','pm-cost','pm-price','pm-qty','pm-reorder','pm-maxstock'].forEach(id2 => {
+      const el = document.getElementById(id2); if (el) el.value = '';
+    });
+  }
+  openModal('product-modal');
+}
+
+async function saveProduct() {
+  const name = document.getElementById('pm-name').value.trim();
+  if (!name) { showToast('Product name is required'); return; }
+  const product = {
+    id:           document.getElementById('pm-id').value || undefined,
+    name,
+    sku:          document.getElementById('pm-sku').value.trim(),
+    barcode:      document.getElementById('pm-barcode').value.trim(),
+    category:     document.getElementById('pm-category').value.trim(),
+    brand:        document.getElementById('pm-brand').value.trim(),
+    costPrice:    parseFloat(document.getElementById('pm-cost').value)  || 0,
+    sellingPrice: parseFloat(document.getElementById('pm-price').value) || 0,
+    unit:         document.getElementById('pm-unit').value,
+    reorderPoint: parseInt(document.getElementById('pm-reorder').value) || 0,
+    maxStock:     parseInt(document.getElementById('pm-maxstock').value) || 0,
+    trackSerial:  document.getElementById('pm-serial').checked,
+    trackBatch:   document.getElementById('pm-batch').checked,
+  };
+  const qty = parseFloat(document.getElementById('pm-qty').value) || 0;
+  try {
+    const saved = await SokoniInventory.saveProduct(product);
+    if (qty > 0) {
+      await SokoniInventory.adjustStock({ productId: saved.id, quantity: qty, type: 'opening_stock', reason: 'Opening stock' });
+    }
+    showToast(`${product.id ? 'Updated' : 'Added'}: ${name}`);
+    closeModal('product-modal');
+    loadProducts();
+    loadKPIs();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+// ── ADJUST MODAL ──────────────────────────────────────────
+async function openAdjustModal(productId) {
+  if (productId) {
+    document.getElementById('adj-product').value    = productId;
+    document.getElementById('adj-product-id').value = productId;
+    const sl = await SokoniInventory.getStockLevel(productId);
+    document.getElementById('adj-current-stock').style.display = '';
+    document.getElementById('adj-stock-val').textContent = sl.available;
+  }
+  openModal('adjust-modal');
+}
+
+let _adjSearchTimer;
+function searchForAdjust(q) {
+  clearTimeout(_adjSearchTimer);
+  _adjSearchTimer = setTimeout(async () => {
+    const results  = await SokoniInventory.searchProducts(q, { limit: 5 });
+    const resultsEl= document.getElementById('adj-product-results');
+    resultsEl.innerHTML = results.map(p => `
+      <div style="padding:8px;cursor:pointer;border-bottom:1px solid var(--border)"
+           onclick="selectAdjProduct('${escHtml(p.id)}','${escHtml(p.name)}')">
+        ${escHtml(p.name)} <span style="color:var(--muted);font-size:11px">${escHtml(p.sku||'')}</span>
+      </div>`).join('');
+  }, 250);
+}
+
+async function selectAdjProduct(id, name) {
+  document.getElementById('adj-product').value = name;
+  document.getElementById('adj-product-id').value = id;
+  document.getElementById('adj-product-results').innerHTML = '';
+  const sl = await SokoniInventory.getStockLevel(id);
+  document.getElementById('adj-current-stock').style.display = '';
+  document.getElementById('adj-stock-val').textContent = sl.available;
+}
+
+async function submitAdjustment() {
+  const productId = document.getElementById('adj-product-id').value;
+  const qty       = parseFloat(document.getElementById('adj-qty').value);
+  const type      = document.getElementById('adj-type').value;
+  const reason    = document.getElementById('adj-reason').value;
+  const wh        = document.getElementById('adj-warehouse').value;
+  if (!productId) { showToast('Select a product'); return; }
+  if (isNaN(qty) || qty === 0) { showToast('Enter a quantity'); return; }
+  try {
+    await SokoniInventory.adjustStock({ productId, quantity: qty, type, reason, warehouseId: wh });
+    showToast('Stock adjusted');
+    closeModal('adjust-modal');
+    loadKPIs();
+    if (_currentPage === 'stock') loadStockLevels();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+// ── TRANSFER MODAL ────────────────────────────────────────
+function openTransferModal() { openModal('transfer-modal'); }
+
+async function submitTransfer() {
+  const productId = document.getElementById('tr-product-id').value;
+  const from      = document.getElementById('tr-from').value;
+  const to        = document.getElementById('tr-to').value;
+  const qty       = parseFloat(document.getElementById('tr-qty').value);
+  if (!productId || !from || !to || !qty) { showToast('Fill in all fields'); return; }
+  if (from === to) { showToast('From and To warehouses must differ'); return; }
+  try {
+    await SokoniInventory.transferStock({ productId, fromWarehouse: from, toWarehouse: to, quantity: qty });
+    showToast('Transfer submitted');
+    closeModal('transfer-modal');
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+// ── PURCHASE ORDER MODAL ──────────────────────────────────
+let _poLines = [];
+function openPOModal() {
+  _poLines = [];
+  document.getElementById('po-lines').innerHTML = '';
+  document.getElementById('po-total').textContent = 'KES 0.00';
+  openModal('po-modal');
+}
+
+function addPOLine() {
+  const idx = _poLines.length;
+  _poLines.push({ productId: '', qty: 1, unitCost: 0 });
+  const container = document.getElementById('po-lines');
+  const div       = document.createElement('div');
+  div.id          = `po-line-${idx}`;
+  div.style.cssText= 'display:grid;grid-template-columns:1fr 70px 90px 28px;gap:6px;margin-bottom:8px;align-items:center';
+  div.innerHTML   = `
+    <input class="form-input" placeholder="Product name" style="font-size:13px" oninput="_poLines[${idx}].productId=this.value;calcPOTotal()">
+    <input class="form-input" type="number" placeholder="Qty" style="font-size:13px" value="1" oninput="_poLines[${idx}].qty=+this.value;calcPOTotal()">
+    <input class="form-input" type="number" placeholder="Cost" style="font-size:13px" oninput="_poLines[${idx}].unitCost=+this.value;calcPOTotal()">
+    <button onclick="removePOLine(${idx})" style="color:var(--danger);font-size:16px">&#10005;</button>`;
+  container.appendChild(div);
+}
+
+function removePOLine(idx) {
+  _poLines.splice(idx, 1);
+  const el = document.getElementById(`po-line-${idx}`);
+  if (el) el.remove();
+  calcPOTotal();
+}
+
+function calcPOTotal() {
+  const total = _poLines.reduce((s, l) => s + (l.qty * l.unitCost), 0);
+  document.getElementById('po-total').textContent = `KES ${total.toFixed(2)}`;
+}
+
+async function submitPO(status = 'sent') {
+  const supplierId = document.getElementById('po-supplier').value;
+  if (!supplierId) { showToast('Select a supplier'); return; }
+  if (!_poLines.length) { showToast('Add at least one item'); return; }
+  const po = {
+    supplierId,
+    warehouseId:    document.getElementById('po-warehouse').value,
+    expectedDelivery:document.getElementById('po-delivery').value,
+    notes:          document.getElementById('po-notes').value,
+    items:          _poLines,
+    status,
+  };
+  try {
+    const saved = await SokoniInventory.createPO(po);
+    if (status === 'sent') await SokoniInventory.updatePO(saved.id, { status: 'sent' });
+    showToast(`PO ${saved.number} ${status === 'draft' ? 'saved' : 'sent'}`);
+    closeModal('po-modal');
+    loadPOs();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+function savePODraft() { submitPO('draft'); }
+
+// ── STOCK COUNT ───────────────────────────────────────────
+function openStockCountModal() {
+  document.getElementById('count-setup').style.display   = '';
+  document.getElementById('count-session').style.display = 'none';
+  openModal('count-modal');
+}
+
+async function beginStockCount() {
+  const name = document.getElementById('count-name').value;
+  const wh   = document.getElementById('count-warehouse').value;
+  _stockSession = await SokoniInventory.startStockCount({ warehouseId: wh, name });
+  document.getElementById('count-setup').style.display   = 'none';
+  document.getElementById('count-session').style.display = '';
+  document.getElementById('count-session-name').textContent = _stockSession.name;
+  showToast('Stock count started');
+}
+
+async function onCountScan(value) {
+  if (value.length < 2) return;
+  const p = await SokoniInventory.getProductByBarcode(value) ||
+            (await SokoniInventory.searchProducts(value, { limit: 1 }))[0];
+  if (!p) { showToast('Product not found'); return; }
+  document.getElementById('count-scan').value = '';
+  const qty = parseInt(prompt(`Counted quantity for "${p.name}":`, '0'));
+  if (isNaN(qty)) return;
+  await SokoniInventory.addAuditItem(_stockSession.id, { productId: p.id, name: p.name, countedQty: qty });
+  _stockSession.items.push({ productId: p.id, name: p.name, countedQty: qty });
+  renderCountItems(_stockSession.items);
+  showToast(`Recorded: ${p.name} × ${qty}`);
+}
+
+function renderCountItems(items) {
+  document.getElementById('count-items-list').innerHTML = items.map(i => `
+    <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span>${escHtml(i.name)}</span><strong>${i.countedQty}</strong>
+    </div>`).join('');
+}
+
+async function finaliseStockCount() {
+  if (!_stockSession?.items?.length) { showToast('Add items before finalising'); return; }
+  try {
+    await SokoniInventory.submitStockCount({ auditId: _stockSession.id });
+    showToast('Stock count submitted');
+    closeModal('count-modal');
+    _stockSession = null;
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+// ── SUPPLIER MODAL ────────────────────────────────────────
+function openSupplierModal() { openModal('supplier-modal'); }
+
+async function saveSupplier() {
+  const name = document.getElementById('sup-name').value.trim();
+  if (!name) { showToast('Supplier name required'); return; }
+  try {
+    await SokoniInventory.saveSupplier({
+      name,
+      contactName:   document.getElementById('sup-contact').value,
+      phone:         document.getElementById('sup-phone').value,
+      email:         document.getElementById('sup-email').value,
+      paymentTerms:  parseInt(document.getElementById('sup-terms').value) || 30,
+      leadTimeDays:  parseInt(document.getElementById('sup-lead').value)  || 7,
+      notes:         document.getElementById('sup-notes').value,
+    });
+    showToast(`Supplier "${name}" saved`);
+    closeModal('supplier-modal');
+    loadSuppliers();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+// ── IMPORT ────────────────────────────────────────────────
+function openImportModal() { openModal('import-modal'); }
+
+async function processImport() {
+  const file = document.getElementById('import-file').files[0];
+  if (!file) { showToast('Select a file'); return; }
+  const text = await file.text();
+  const rows  = parseCSV(text);
+  const res   = await SokoniInventory.importProducts(rows);
+  const el    = document.getElementById('import-result');
+  el.style.display = '';
+  el.innerHTML = `<div style="font-size:13px;color:var(--success)">&#10003; ${res.created} products imported</div>` +
+    (res.errors.length ? `<div style="font-size:12px;color:var(--danger);margin-top:4px">${res.errors.length} errors</div>` : '');
+  if (res.created) { loadProducts(); loadKPIs(); }
+}
+
+function parseCSV(text) {
+  const lines  = text.split(/\r?\n/).filter(l => l.trim());
+  const headers= lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line => {
+    const vals = line.split(',');
+    return Object.fromEntries(headers.map((h, i) => [h, (vals[i]||'').trim().replace(/^"|"$/g,'')]));
+  }).filter(r => r[headers[0]]);
+}
+
+function downloadTemplate() {
+  const csv = 'name,sku,barcode,category,brand,costPrice,sellingPrice,quantity,unit\n' +
+    'Example Product,SKU-001,5901234123457,Dairy,Brookside,45.00,65.00,100,each\n';
+  const a   = Object.assign(document.createElement('a'),{ href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})), download: 'sokoni-inventory-template.csv' });
+  a.click();
+}
+
+// ── SCANNER ───────────────────────────────────────────────
+async function openScannerModal() {
+  openModal('scanner-modal');
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('manual-barcode').value = '';
+  try {
+    _scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    document.getElementById('scanner-video').srcObject = _scanStream;
+    startBarcodeDetection();
+  } catch (_) { showToast('Camera not available — use manual entry'); }
+}
+
+function startBarcodeDetection() {
+  if (!('BarcodeDetector' in window)) return;
+  const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code','upc_a','upc_e'] });
+  const video    = document.getElementById('scanner-video');
+  const scan     = async () => {
+    if (!_scanStream) return;
+    try {
+      const barcodes = await detector.detect(video);
+      if (barcodes.length) { await lookupBarcode(barcodes[0].rawValue); return; }
+    } catch (_) {}
+    requestAnimationFrame(scan);
+  };
+  video.addEventListener('loadeddata', scan, { once: true });
+}
+
+function closeScannerModal() {
+  if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
+  closeModal('scanner-modal');
+}
+
+async function lookupBarcode(barcode) {
+  if (!barcode) return;
+  if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
+  const p  = await SokoniInventory.getProductByBarcode(barcode.trim());
+  const el = document.getElementById('scan-result');
+  el.style.display = '';
+  if (p) {
+    const sl = await SokoniInventory.getStockLevel(p.id);
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-title">${escHtml(p.name)}</div>
+        <div class="card-sub">${escHtml(p.sku||'')} · ${escHtml(barcode)}</div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <span class="card-badge badge-${sl.available<=0?'danger':sl.available<=5?'warn':'ok'}">${sl.available} in stock</span>
+          <button class="btn btn-primary btn-sm" onclick="closeModal('scanner-modal');openProductModal('${escHtml(p.id)}')">Edit</button>
+          <button class="btn btn-ghost btn-sm" onclick="closeModal('scanner-modal');openAdjustModal('${escHtml(p.id)}')">Adjust</button>
+        </div>
+      </div>`;
+  } else {
+    el.innerHTML = `<div class="card"><div class="card-sub">Barcode: ${escHtml(barcode)}</div>
+      <div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="openProductModal();document.getElementById('pm-barcode').value='${escHtml(barcode)}'">Add New Product</button></div></div>`;
+  }
+}
+
+// ── AI ASSISTANT ──────────────────────────────────────────
+function openAIModal() { openModal('ai-modal'); }
+
+async function sendAiMessage() {
+  const input   = document.getElementById('ai-input');
+  const question= input.value.trim();
+  if (!question) return;
+  input.value   = '';
+  appendAIMessage(question, 'user');
+  appendAIMessage('Thinking…', 'bot', 'bot-thinking');
+  try {
+    const ans = await SokoniInventory.aiQuery(question);
+    const el  = document.getElementById('bot-thinking');
+    if (el) el.remove();
+    appendAIMessage(ans.answer || ans.text || JSON.stringify(ans), 'bot');
+  } catch (e) {
+    const el = document.getElementById('bot-thinking');
+    if (el) el.remove();
+    appendAIMessage('Sorry, I could not process that request right now.', 'bot');
+  }
+}
+
+function appendAIMessage(text, role, id) {
+  const list = document.getElementById('ai-msg-list');
+  const el   = document.createElement('div');
+  el.className= `ai-bubble ${role}`;
+  if (id) el.id = id;
+  el.textContent = text;
+  list.appendChild(el);
+  list.scrollTop = list.scrollHeight;
+}
+
+function aiPreset(btn) {
+  document.getElementById('ai-input').value = btn.textContent;
+  sendAiMessage();
+}
+
+async function quickAiQuery() {
+  const input = document.getElementById('quick-ai-input');
+  const q     = input.value.trim();
+  if (!q) return;
+  input.disabled = true;
+  try {
+    const ans = await SokoniInventory.aiQuery(q);
+    const text= ans.answer || ans.text || JSON.stringify(ans);
+    const el  = document.getElementById('reorder-suggestions');
+    el.innerHTML += `<div class="ai-panel"><div class="ai-msg-list"><div class="ai-bubble user">${escHtml(q)}</div><div class="ai-bubble bot">${escHtml(text)}</div></div></div>`;
+  } catch (_) { showToast('AI unavailable'); }
+  input.disabled = false;
+  input.value    = '';
+}
+
+async function loadReorderSuggestions() {
+  showToast('Fetching AI suggestions…');
+  try {
+    const suggestions = await SokoniInventory.aiReorderSuggestions();
+    const el = document.getElementById('reorder-suggestions');
+    if (suggestions?.items?.length) {
+      el.innerHTML = suggestions.items.map(s => `
+        <div class="card">
+          <div class="card-row">
+            <div class="card-icon">&#129302;</div>
+            <div class="card-body">
+              <div class="card-title">${escHtml(s.productName||s.productId)}</div>
+              <div class="card-sub">${escHtml(s.reason)}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:700">Reorder ${s.suggestedQty}</div>
+              <div style="font-size:11px;color:var(--muted)">from ${escHtml(s.supplierName||'—')}</div>
+            </div>
+          </div>
+        </div>`).join('');
+    }
+  } catch (_) { showToast('AI suggestions unavailable'); }
+}
+
+function openReorderPanel() { openAIModal(); }
+
+// ── NOTIFICATIONS MODAL ───────────────────────────────────
+function openNotifModal() {
+  const el = document.getElementById('notif-body');
+  if (!_alerts.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">&#10003;</div><div class="empty-text">All good! No alerts.</div></div>';
+  } else {
+    el.innerHTML = _alerts.map(a => `
+      <div class="card">
+        <div class="card-row">
+          <div class="card-icon ${a.severity==='critical'?'':''}">&#${a.severity==='critical'?'128680;':'9888;'}</div>
+          <div class="card-body">
+            <div class="card-title">${escHtml(a.productId)}</div>
+            <div class="card-sub">${escHtml(a.message)}</div>
+          </div>
+          <span class="card-badge ${a.severity==='critical'?'badge-danger':'badge-warn'}">${a.severity}</span>
+        </div>
+      </div>`).join('');
+  }
+  openModal('notif-modal');
+}
+
+// ── MODAL HELPERS ─────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); });
+});
+
+// ── TOAST ─────────────────────────────────────────────────
+let _toastTimer;
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ── SECURITY ──────────────────────────────────────────────
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+<script src="sw-register.js" defer></script>
+</body>
+</html>

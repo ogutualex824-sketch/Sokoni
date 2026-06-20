@@ -1,0 +1,813 @@
+/* ================================================================
+   SOKONI — Desktop & Wide-Screen Layout System  (sokoni-desktop.css)
+   Complements style.css + premium.css + sokoni-premium-v2.css
+   Targets: ≥769px tablet/laptop/desktop
+   Design: Dark glass · SOKONI green · wide grids · sidebar layouts
+================================================================ */
+
+/* ── BOTTOM NAV — edge-to-edge on desktop, enlarged ── */
+@media (min-width: 769px) {
+  body {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+    /* padding-top intentionally NOT reset — shared-header.js injects 64px for its fixed bar */
+  }
+  .bottom-nav {
+    height: 72px !important;
+    padding: 0 60px !important;
+    gap: 0 !important;
+    border-top: 1px solid rgba(255,255,255,0.08) !important;
+    backdrop-filter: blur(24px) saturate(1.6) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
+  }
+  .bnav-item {
+    font-size: 12px !important;
+    min-height: 72px !important;
+    gap: 6px !important;
+    flex: 1 !important;
+    letter-spacing: 0.3px !important;
+  }
+  .bnav-emoji {
+    font-size: 24px !important;
+  }
+}
+
+/* ── DESKTOP PAGE CONTAINER ── */
+@media (min-width: 769px) {
+  .page-wrap, .dt-wrap, .bk-body, .fd-body, .sv-body, .hc-body,
+  .law-body, .driver-page, .seller-page, .profile-page,
+  .banking-page, .community-page, .digital-body, .b2b-body,
+  .bnb-body, .property-body, .entertainment-page, .sports-hub-page,
+  .car-hub-page, .landlord-body, .track-page, .legal-page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  /* All generic main-like wrappers */
+  main, .main-content, .content-wrap, [class$="-body"]:not(.modal-body) {
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* ── DESKTOP HERO — wider, more visual ── */
+@media (min-width: 769px) {
+  .glass-hero, .bk-hero, .fd-hero, .sv-hero, .hc-hero,
+  .law-hero, .ent-hero, .sp-hero, .car-hero, .prop-hero,
+  .bnb-hero, .ride-hero, .del-hero {
+    padding: 56px 60px 44px !important;
+  }
+
+  .glass-hero h1, .bk-hero h1, .fd-hero h1, .sv-hero h1,
+  .hc-hero h1, .law-hero h1 {
+    font-size: clamp(32px, 4vw, 52px) !important;
+    letter-spacing: -0.03em !important;
+  }
+
+  .glass-hero-card {
+    max-width: 760px;
+    padding: 36px 40px !important;
+  }
+
+  .fn-hero { min-height: 80vh; }
+}
+
+/* ── DESKTOP GRID SYSTEMS ── */
+@media (min-width: 769px) {
+  /* 3-col product grid */
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+    gap: 16px !important;
+    padding: 24px 0 !important;
+  }
+
+  /* 3-4 col service grid */
+  .sv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+    gap: 14px !important;
+  }
+
+  /* Restaurant grid */
+  .rest-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 14px !important;
+  }
+
+  /* Hub card grid */
+  .hub-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+    gap: 14px !important;
+  }
+
+  /* Categories grid */
+  .categories {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+    gap: 10px !important;
+  }
+  .categories-premium {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+    gap: 14px !important;
+    padding: 12px 32px 28px !important;
+  }
+
+  /* 3+ col flash grid */
+  .flash-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  /* Provider / card grids */
+  .pv-grid, .lawyers-grid, .doc-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  /* Bank / sacco / insurance grids */
+  .bank-grid, .sacco-grid, .ins-grid, .inv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 12px !important;
+  }
+}
+
+/* ── DESKTOP SIDEBAR LAYOUTS ── */
+@media (min-width: 1024px) {
+
+  /* Profile / Seller 2-col: sidebar + main */
+  .profile-layout, .seller-layout, .dashboard-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+
+  /* Provider / Driver dashboard 2-col */
+  .driver-layout, .provider-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* Track order 2-col: map + steps */
+  .track-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+  }
+
+  /* Checkout 2-col: form + summary */
+  .checkout-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 28px;
+    align-items: start;
+  }
+
+  /* Messages: thread list + chat */
+  .messages-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 0;
+    height: calc(100vh - 70px);
+    overflow: hidden;
+  }
+}
+
+/* ── DESKTOP CARDS — bigger, hover polish ── */
+@media (min-width: 769px) {
+  .product-card {
+    border-radius: 18px !important;
+  }
+  .product-card:hover {
+    transform: translateY(-6px) !important;
+    box-shadow: 0 20px 48px rgba(0,0,0,0.45), 0 0 0 1px rgba(113,255,0,0.12) !important;
+    border-color: rgba(113,255,0,0.15) !important;
+  }
+
+  .sv-card:hover, .rest-card:hover, .pv-card:hover,
+  .hub-card:hover, .bank-card:hover, .lawyer-card:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.4) !important;
+    border-color: rgba(113,255,0,0.12) !important;
+  }
+
+  .cat-card-premium:hover {
+    transform: translateY(-4px) scale(1.03) !important;
+    border-color: rgba(113,255,0,0.2) !important;
+    background: rgba(113,255,0,0.05) !important;
+  }
+}
+
+/* ── DESKTOP SECTION HEADERS ── */
+@media (min-width: 769px) {
+  .section-title h2, .bk-section-h, .fd-section-h,
+  .sv-section-h, .hc-section-h {
+    font-size: 22px !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.02em !important;
+  }
+
+  .section-title {
+    padding: 20px 0 12px !important;
+  }
+}
+
+/* ── DESKTOP BUTTONS ── */
+@media (min-width: 769px) {
+  .auth-btn, .sv-book-btn, .pv-book-btn, .hc-book-btn,
+  .lc-book-btn, .dc-accept-btn {
+    padding: 13px 28px !important;
+    font-size: 14px !important;
+  }
+
+  button:not([class]):not(.icon-btn):not(.qty-btn):not(.star-btn):not(.theme-toggle) {
+    cursor: pointer;
+  }
+}
+
+/* ── DESKTOP TABS — horizontal scroll (same as mobile, saves vertical space) ── */
+@media (min-width: 769px) {
+  .bk-tabs, .sv-cats, .fd-cuisine-row, .cat-nav-pills {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 8px !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    scroll-behavior: smooth !important;
+  }
+  /* padding kept per-component so arrow buttons in category.html stay clear */
+  .bk-tabs, .sv-cats, .fd-cuisine-row {
+    padding: 10px 24px 12px !important;
+  }
+  .bk-tabs::-webkit-scrollbar,
+  .sv-cats::-webkit-scrollbar,
+  .fd-cuisine-row::-webkit-scrollbar,
+  .cat-nav-pills::-webkit-scrollbar { display: none !important; }
+
+  .bk-tab, .sv-cat-pill, .fd-cuisine-pill, .cat-pill {
+    flex-shrink: 0 !important;
+    padding: 9px 20px !important;
+    font-size: 12px !important;
+    border-radius: 999px !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ── DESKTOP NAVBAR ── */
+@media (min-width: 769px) {
+  .navbar {
+    padding: 0 32px !important;
+    height: 64px !important;
+  }
+
+  .navbar .search-bar {
+    width: 400px !important;
+    max-width: 40vw !important;
+  }
+
+  .navbar .search-bar input {
+    font-size: 14px !important;
+    padding: 10px 16px 10px 42px !important;
+  }
+
+  /* Show desktop-only nav items */
+  .navbar .wishlist-nav-btn,
+  .navbar .nav-points-btn {
+    display: flex !important;
+  }
+}
+
+/* ── DESKTOP MODALS — centered, not bottom sheet ── */
+@media (min-width: 769px) {
+  .modal-overlay, .rest-modal-overlay, .quick-view-overlay {
+    align-items: center !important;
+    padding: 20px !important;
+  }
+
+  .modal-box, .quick-view-box {
+    border-radius: 24px !important;
+    max-width: 560px !important;
+    width: 100% !important;
+    max-height: 85vh !important;
+    padding: 32px !important;
+  }
+
+  .modal-box::before, .quick-view-box::before {
+    display: none !important;
+  }
+
+  .rest-modal {
+    border-radius: 24px !important;
+    max-width: 640px !important;
+    max-height: 85vh !important;
+    margin: auto !important;
+  }
+}
+
+/* ── DESKTOP FORMS ── */
+@media (min-width: 769px) {
+  /* Broad form baseline — excludes search type so the premium search block takes over */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="search"]),
+  select, textarea {
+    font-size: 14px !important;
+    padding: 12px 16px !important;
+    border-radius: 12px !important;
+  }
+
+  /* ── Search inputs: premium icon padding (specificity 0,4,1 matches + ties then wins by source order) ── */
+  .bk-search-bar input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+  .sv-search-bar input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+  .hc-search-bar input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+  .fd-search-row input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+  input.b2-search-input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+  input.adm-search:not([type="radio"]):not([type="checkbox"]):not([type="file"]) {
+    padding: 12px 16px 12px 44px !important;
+    border-radius: 14px !important;
+  }
+}
+
+/* ── DESKTOP STATS BARS ── */
+@media (min-width: 769px) {
+  .stats-row, .driver-stats, .seller-stats, .kpi-row {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+    gap: 16px !important;
+  }
+
+  .driver-stat, .seller-stat, .kpi-card {
+    padding: 20px !important;
+    border-radius: 18px !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+  }
+}
+
+/* ── DESKTOP PROFILE AVATAR ── */
+@media (min-width: 769px) {
+  .profile-avatar, .seller-avatar-large {
+    width: 96px !important;
+    height: 96px !important;
+    font-size: 40px !important;
+    border-radius: 50% !important;
+    border: 3px solid rgba(113,255,0,0.35) !important;
+    box-shadow: 0 0 0 6px rgba(113,255,0,0.08) !important;
+  }
+}
+
+/* ── DESKTOP FOOTER ── */
+@media (min-width: 769px) {
+  .footer {
+    padding: 48px 7% 90px !important;
+  }
+  .footer-container {
+    grid-template-columns: 1.5fr repeat(4, 1fr) !important;
+    gap: 32px !important;
+  }
+}
+
+/* ── DESKTOP EMPTY STATES ── */
+@media (min-width: 769px) {
+  .empty-state, [class*="-empty"] {
+    padding: 80px 40px !important;
+  }
+}
+
+/* ── DESKTOP FEATURE SECTIONS ── */
+@media (min-width: 769px) {
+  /* Side-by-side feature rows */
+  .feature-row, .fn-feature-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+  }
+
+  /* Alternating image/text */
+  .feature-row:nth-child(even) { direction: rtl; }
+  .feature-row:nth-child(even) > * { direction: ltr; }
+
+  /* Foundation stats grid */
+  .fn-stats-grid, .impact-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 20px !important;
+  }
+
+  .fn-program-grid, .program-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+  }
+
+  .fn-team-grid, .team-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 20px !important;
+  }
+}
+
+/* ── DESKTOP QA TILES ── */
+@media (min-width: 769px) {
+  .qa-grid {
+    grid-template-columns: repeat(10, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .qa-tile {
+    padding: 12px 8px !important;
+  }
+
+  .qa-tile .qa-icon { font-size: 22px !important; }
+  .qa-tile .qa-label { font-size: 9px !important; }
+}
+
+/* ── DESKTOP PROMO BANNERS ── */
+@media (min-width: 769px) {
+  .promo-row {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .promo-card {
+    padding: 16px 18px !important;
+    border-radius: 16px !important;
+  }
+
+  .promo-card p { display: block !important; }
+}
+
+/* ── DESKTOP TOAST / NOTIFICATION ── */
+@media (min-width: 769px) {
+  #networkToast {
+    top: 80px !important;
+    bottom: auto !important;
+    right: 24px !important;
+    left: auto !important;
+    transform: none !important;
+    width: 320px !important;
+  }
+}
+
+/* ── DESKTOP SCROLL ANIMATIONS ── */
+@media (min-width: 769px) {
+  .hub-card, .product-card, .sv-card, .rest-card,
+  .pv-card, .lawyer-card, .bank-card {
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease !important;
+  }
+}
+
+/* ── DESKTOP TYPOGRAPHY ── */
+@media (min-width: 769px) {
+  /* Only apply to hero headings — avoid overriding card/badge/label text */
+  .glass-hero h1, .bk-hero h1, .fd-hero h1, .sv-hero h1,
+  .hc-hero h1, .cl-hero h1, .sh-hero h1, .op-hero h1,
+  .sub-hero h1, .ch-hero h1, .ent-hero h1, .fn-hero h1,
+  .b2-hero h1, .ly-hero h1 {
+    font-size: clamp(28px, 4vw, 52px) !important;
+    letter-spacing: -0.03em !important;
+  }
+  /* Body text in main content areas only — not labels/badges/icons */
+  .page-wrap p:not([class]), .fd-body p:not([class]), .hc-body p:not([class]),
+  .bk-body p:not([class]), .sv-body p:not([class]) {
+    font-size: 14px;
+    line-height: 1.65;
+  }
+}
+
+/* ── DESKTOP DELIVERY TRACKING ── */
+@media (min-width: 769px) {
+  .dt-wrap {
+    max-width: 900px !important;
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 28px;
+    align-items: start;
+    padding: 32px 20px !important;
+  }
+
+  .dt-map-wrap { margin-bottom: 0 !important; }
+  #dtMap { height: 360px !important; }
+}
+
+/* ── DESKTOP INVOICE ── */
+@media (min-width: 769px) {
+  .invoice-wrap, #invoiceBox {
+    max-width: 800px !important;
+    margin: 40px auto !important;
+    padding: 48px !important;
+    border-radius: 24px !important;
+  }
+}
+
+/* ── DESKTOP B2B PAGE ── */
+@media (min-width: 769px) {
+  .b2b-hero { padding: 60px !important; }
+
+  .b2b-grid, .b2b-features {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+  }
+}
+
+/* ── DESKTOP TRUST PASSPORT ── */
+@media (min-width: 769px) {
+  .trust-card, .tp-card {
+    max-width: 560px;
+    margin: 40px auto !important;
+    border-radius: 28px !important;
+    padding: 40px !important;
+  }
+}
+
+/* ── DESKTOP DISPUTE ── */
+@media (min-width: 769px) {
+  .dispute-wrap, .dr-wrap {
+    max-width: 720px !important;
+    margin: 32px auto !important;
+  }
+  .dispute-body-wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+/* ── DESKTOP REFERRAL ── */
+@media (min-width: 769px) {
+  .referral-wrap {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 28px;
+    align-items: start;
+    padding: 32px 20px !important;
+  }
+}
+
+/* ── DESKTOP SUCCESS PAGE ── */
+@media (min-width: 769px) {
+  .success-page {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: calc(100vh - 64px);
+    padding: 40px 20px !important;
+  }
+
+  .success-box {
+    max-width: 640px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+  }
+}
+
+/* ── DESKTOP COMMUNITY PAGE ── */
+@media (min-width: 1024px) {
+  .community-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+/* ── DESKTOP WALLET ── */
+@media (min-width: 769px) {
+  .wallet-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 16px !important;
+  }
+}
+
+/* ── DESKTOP MINISTORE ── */
+@media (min-width: 769px) {
+  .ministore-layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+/* ── DESKTOP FITNESS / SPORTS ── */
+@media (min-width: 769px) {
+  .fitness-grid, .sports-grid, .gym-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 16px !important;
+  }
+}
+
+/* ── DESKTOP MECHANICS / CONSTRUCTION ── */
+@media (min-width: 769px) {
+  .mechanics-grid, .construction-grid, .mc-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+    gap: 16px !important;
+  }
+}
+
+/* ── SCROLLBAR — desktop subtle ── */
+@media (min-width: 769px) {
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(113,255,0,0.25); }
+}
+
+/* ── DESKTOP INSPIQ FEED ── */
+@media (min-width: 769px) {
+  .inspiq-feed, .iq-feed {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+}
+
+/* ── DESKTOP OPPORTUNITY PAGE ── */
+@media (min-width: 769px) {
+  .opportunity-grid, .op-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+  }
+}
+
+/* ── DESKTOP LIFE EVENTS ── */
+@media (min-width: 769px) {
+  .le-grid, .life-events-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 20px !important;
+  }
+}
+
+/* ── DESKTOP BNB ── */
+@media (min-width: 769px) {
+  .bnb-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+    gap: 20px !important;
+  }
+}
+
+/* ── DESKTOP PROPERTY ── */
+@media (min-width: 769px) {
+  .property-grid, .prop-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+    gap: 20px !important;
+  }
+}
+
+/* ── DESKTOP HEALTHCARE ── */
+@media (min-width: 769px) {
+  .hc-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+    gap: 14px !important;
+  }
+}
+
+/* ── DESKTOP ENTERTAINMENT ── */
+@media (min-width: 769px) {
+  .ent-grid, .entertainment-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 14px !important;
+  }
+}
+
+/* ── DESKTOP CAR HUB ── */
+@media (min-width: 769px) {
+  .car-grid, .rental-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+    gap: 16px !important;
+  }
+}
+
+/* ── DESKTOP FOOD (EATS) ── */
+@media (min-width: 769px) {
+  .rest-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 16px !important;
+  }
+
+  .rest-cover, .rest-cover-emoji {
+    height: 160px !important;
+  }
+
+  .rest-cover-emoji { font-size: 60px !important; }
+}
+
+/* ── DESKTOP REQUESTS PAGE ── */
+@media (min-width: 769px) {
+  .rq-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+    gap: 16px !important;
+  }
+}
+
+/* ── DESKTOP PROVIDERS PAGE ── */
+@media (min-width: 769px) {
+  .providers-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 16px !important;
+  }
+}
+
+/* ── HOVER STATES FOR ALL INTERACTIVE ELEMENTS ── */
+@media (min-width: 769px) {
+  a[href]:not([href="#"]):not([href="javascript:void(0)"]) {
+    transition: opacity 0.15s !important;
+  }
+
+  /* Button hover lift */
+  button[type="button"]:not(.theme-toggle):not(.icon-btn):hover,
+  .btn:hover, [class*="-btn"]:not(.n-bell-btn):not(.theme-toggle):hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  button[type="button"]:not(.theme-toggle):not(.icon-btn):active,
+  .btn:active {
+    transform: translateY(0) scale(0.97) !important;
+  }
+}
+
+/* ── MARKETING HUB DESKTOP ── */
+@media (min-width: 769px) {
+  .marketing-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 16px !important;
+  }
+}
+
+/* ── DIGITAL PRODUCTS DESKTOP ── */
+@media (min-width: 769px) {
+  .dig-grid, .digital-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+    gap: 14px !important;
+  }
+}
+
+/* ── CLEAN URL (no href="#") BUTTON CURSOR ── */
+button, [role="button"] {
+  cursor: pointer;
+}
+
+/* ── SKELETON SHIMMER (global) ── */
+.sk-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0px,
+    rgba(255,255,255,0.08) 80px,
+    rgba(255,255,255,0.04) 160px
+  );
+  background-size: 400px 100%;
+  animation: skShimmer 1.4s linear infinite;
+  border-radius: 8px;
+  min-height: 20px;
+}
+@keyframes skShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* ── LIGHT MODE DESKTOP ── */
+@media (min-width: 769px) {
+  body.light-mode .product-card,
+  body.light-mode .sv-card,
+  body.light-mode .hub-card {
+    background: #ffffff !important;
+    border-color: rgba(0,0,0,0.07) !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+  }
+  body.light-mode .product-card:hover {
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12) !important;
+  }
+}
+
+/* ── DESKTOP NOTIFICATIONS ── */
+@media (min-width: 769px) {
+  .notif-tabs, #notifContainer {
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* ── DESKTOP WISHLIST ── */
+@media (min-width: 769px) {
+  .wish-grid {
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0 32px;
+  }
+}
+
+/* ── DESKTOP PRODUCT PAGE ── */
+@media (min-width: 769px) {
+  .product-page {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+}

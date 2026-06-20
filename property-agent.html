@@ -1,0 +1,259 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agent Profile — SOKONI Property Hub</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#10b981">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.ag-body{max-width:800px;margin:0 auto;padding:16px;}
+/* PROFILE CARD */
+.ag-profile{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;margin-bottom:16px;text-align:center;}
+.ag-icon{font-size:60px;margin-bottom:12px;}
+.ag-name{font-size:22px;font-weight:900;color:white;margin-bottom:4px;}
+.ag-location{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:10px;}
+.ag-stats{display:flex;justify-content:center;gap:24px;margin:14px 0;}
+.ag-stat{text-align:center;}
+.ag-stat-num{font-size:18px;font-weight:900;color:#10b981;}
+.ag-stat-lbl{font-size:10px;color:rgba(255,255,255,0.3);}
+.ag-bio{font-size:13px;color:rgba(255,255,255,0.5);line-height:1.7;max-width:520px;margin:0 auto 14px;}
+.ag-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+.ag-btn{padding:10px 18px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;text-decoration:none;border:none;font-family:inherit;}
+.ag-btn.green{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#10b981;}
+.ag-btn.wa{background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;}
+/* TABS */
+.ag-tabs{display:flex;gap:0;margin-bottom:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;}
+.ag-tab{flex:1;padding:12px;font-size:12px;font-weight:800;cursor:pointer;text-align:center;border:none;background:none;color:rgba(255,255,255,0.4);font-family:inherit;transition:all .2s;border-right:1px solid rgba(255,255,255,0.07);}
+.ag-tab:last-child{border-right:none;}
+.ag-tab.active{background:rgba(16,185,129,0.1);color:#10b981;}
+/* PROP GRID */
+.ag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+.ag-prop-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden;cursor:pointer;transition:all .2s;}
+.ag-prop-card:hover{border-color:rgba(16,185,129,0.3);}
+.ag-prop-img{height:140px;display:flex;align-items:center;justify-content:center;font-size:56px;background:rgba(16,185,129,0.06);}
+.ag-prop-body{padding:12px;}
+.ag-prop-price{font-size:16px;font-weight:900;color:#10b981;margin-bottom:3px;}
+.ag-prop-title{font-size:12px;font-weight:800;color:white;margin-bottom:3px;}
+/* REVIEWS */
+.ag-review{padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.ag-review:last-child{border-bottom:none;}
+/* MODAL */
+#agModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:flex-end;justify-content:center;}
+#agModal.open{display:flex;}
+#agModalBox{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+.ag-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;margin-bottom:10px;outline:none;}
+.ag-input:focus{border-color:rgba(16,185,129,0.4);}
+.ag-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block;}
+.ag-submit{width:100%;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:11px;color:white;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-property.js"></script>
+
+<nav class="fn">
+  <a href="property-hub.html" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;">←</a>
+  <span style="font-size:14px;font-weight:800;flex:1;" id="fnTitle">Agent Profile</span>
+</nav>
+
+<div class="ag-body" id="agBody">
+  <div style="text-align:center;padding:60px;color:rgba(255,255,255,0.3);">Loading agent...</div>
+</div>
+
+<div id="agModal"><div id="agModalBox"><div id="agModalContent"></div></div></div>
+
+<script>
+const P = window.SokoniProperty;
+let _agent = null;
+let _activeTab = 'listings';
+
+function init() {
+  const id = new URLSearchParams(window.location.search).get('id');
+  _agent = id ? P.getAgentById(id) : null;
+  if (!_agent) {
+    document.getElementById('agBody').innerHTML = '<div style="text-align:center;padding:60px;color:rgba(255,255,255,0.3);"><div style="font-size:48px;margin-bottom:14px;">😕</div><p>Agent not found.</p><a href="property-hub.html" style="color:#10b981;font-weight:700;">← Back to Hub</a></div>';
+    return;
+  }
+  document.getElementById('fnTitle').textContent = _agent.name;
+  renderPage();
+}
+
+function renderPage() {
+  const a = _agent;
+  const avgRating = P.getAvgRating(a.id, a.rating);
+  const listings = P.getListings({}).filter(p=>p.agentId===a.id);
+  const reviews = P.getReviews(a.id);
+
+  document.getElementById('agBody').innerHTML = `
+    <!-- PROFILE -->
+    <div class="ag-profile">
+      <div class="ag-icon">${a.icon||'🏢'}</div>
+      <div class="ag-name">${a.name}</div>
+      ${a.verified?'<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:6px;">✅ Verified Agent</div>':''}
+      <div class="ag-location">📍 ${a.location}</div>
+      <div style="font-size:13px;margin-bottom:10px;">${P.starsHTML(avgRating)} <strong style="color:#f59e0b;">${avgRating}</strong> <span style="color:rgba(255,255,255,0.3);">(${reviews.length + a.reviews} reviews)</span></div>
+      <div class="ag-stats">
+        <div class="ag-stat"><div class="ag-stat-num">${listings.length || a.listings}</div><div class="ag-stat-lbl">Listings</div></div>
+        <div class="ag-stat"><div class="ag-stat-num">${a.yearsExp}</div><div class="ag-stat-lbl">Yrs Exp</div></div>
+        <div class="ag-stat"><div class="ag-stat-num">${reviews.length + a.reviews}</div><div class="ag-stat-lbl">Reviews</div></div>
+      </div>
+      <div class="ag-bio">${a.bio||''}</div>
+      ${a.specialties?.length?`<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;">${a.specialties.map(s=>`<span style="font-size:11px;padding:4px 10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:6px;color:#10b981;">${s}</span>`).join('')}</div>`:''}
+      <div class="ag-btns">
+        <a href="tel:${a.phone}" class="ag-btn green">📞 Call</a>
+        <a href="https://wa.me/254${(a.phone||'').replace(/[^0-9]/g,'').replace(/^0/,'')}" target="_blank" class="ag-btn wa">💬 WhatsApp</a>
+        <a href="mailto:${a.email||''}" class="ag-btn green">✉️ Email</a>
+        <button class="ag-btn" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;" onclick="openContactModal()">📩 Send Message</button>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="ag-tabs">
+      <button class="ag-tab ${_activeTab==='listings'?'active':''}" onclick="switchTab('listings')">🏠 Listings (${listings.length||a.listings})</button>
+      <button class="ag-tab ${_activeTab==='reviews'?'active':''}" onclick="switchTab('reviews')">⭐ Reviews (${reviews.length})</button>
+      <button class="ag-tab ${_activeTab==='about'?'active':''}" onclick="switchTab('about')">ℹ️ About</button>
+    </div>
+
+    <!-- TAB CONTENT -->
+    <div id="agTabContent">${renderTab(_activeTab, listings, reviews)}</div>
+  `;
+}
+
+function renderTab(tab, listings, reviews) {
+  const a = _agent;
+  if (tab==='listings') {
+    if (!listings.length) return '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);"><div style="font-size:36px;margin-bottom:10px;">🔍</div><p>No listings available at the moment.</p></div>';
+    return `<div class="ag-grid">${listings.map(p=>{
+      const st=P.PROPERTY_STATUS[p.status]||{label:p.status,color:'white',icon:'🏠'};
+      return `<div class="ag-prop-card" onclick="window.location.href='property-listing.html?id=${p.id}'">
+        <div class="ag-prop-img">${p.icon||'🏠'}</div>
+        <div class="ag-prop-body">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <span style="padding:3px 8px;border-radius:5px;font-size:9px;font-weight:900;background:${st.color}18;border:1px solid ${st.color}50;color:${st.color};">${st.icon} ${st.label}</span>
+            ${p.featured?'<span style="padding:3px 7px;border-radius:5px;font-size:9px;font-weight:900;background:rgba(245,158,11,0.12);color:#f59e0b;">⭐ Featured</span>':''}
+          </div>
+          <div class="ag-prop-price">${P.fmtPrice(p.price,p.priceUnit)}</div>
+          <div class="ag-prop-title">${p.title}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;">📍 ${p.location}</div>
+          <div style="display:flex;gap:8px;margin-top:6px;font-size:10px;color:rgba(255,255,255,0.4);">
+            ${p.bedrooms>0?`<span>🛏️ ${p.bedrooms}</span>`:''}
+            ${p.bathrooms>0?`<span>🚿 ${p.bathrooms}</span>`:''}
+            ${p.size?`<span>📐 ${p.size}${p.sizeUnit||'sqm'}</span>`:''}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+  if (tab==='reviews') {
+    return `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <button onclick="openReviewModal()" style="padding:8px 16px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:10px;color:#f59e0b;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">+ Write a Review</button>
+      </div>
+      ${reviews.length?reviews.map(r=>`
+      <div class="ag-review">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <div style="font-size:13px;font-weight:800;color:white;">${r.name||'Client'}</div>
+          <div>${P.starsHTML(r.rating)} <span style="font-size:11px;color:rgba(255,255,255,0.4);">${P.timeSince(r.ts)}</span></div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;">${r.comment||''}</div>
+      </div>`).join(''):'<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);"><div style="font-size:36px;margin-bottom:10px;">⭐</div><p>No reviews yet. Be the first!</p></div>'}
+    `;
+  }
+  if (tab==='about') {
+    return `
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:12px;">
+        <div style="font-size:14px;font-weight:800;margin-bottom:10px;">📋 About ${a.name}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.7;">${a.bio||'No bio available.'}</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:12px;">
+        <div style="font-size:14px;font-weight:800;margin-bottom:12px;">📞 Contact Details</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="font-size:13px;"><span style="color:rgba(255,255,255,0.4);">Contact:</span> <span style="font-weight:700;">${a.contact||'—'}</span></div>
+          <div style="font-size:13px;"><span style="color:rgba(255,255,255,0.4);">Phone:</span> <a href="tel:${a.phone}" style="font-weight:700;color:#10b981;">${a.phone||'—'}</a></div>
+          <div style="font-size:13px;"><span style="color:rgba(255,255,255,0.4);">Email:</span> <a href="mailto:${a.email}" style="font-weight:700;color:#10b981;">${a.email||'—'}</a></div>
+          <div style="font-size:13px;"><span style="color:rgba(255,255,255,0.4);">Location:</span> <span style="font-weight:700;">${a.location||'—'}</span></div>
+          <div style="font-size:13px;"><span style="color:rgba(255,255,255,0.4);">Type:</span> <span style="font-weight:700;">${a.type==='agency'?'Licensed Agency':'Individual Agent'}</span></div>
+          <div style="font-size:13px;"><span style="color:rgba(255,255,255,0.4);">Experience:</span> <span style="font-weight:700;">${a.yearsExp||0} years</span></div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;">
+        <div style="font-size:14px;font-weight:800;margin-bottom:10px;">🎯 Specialties</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">${(a.specialties||[]).map(s=>`<span style="font-size:12px;padding:6px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:8px;color:#10b981;font-weight:700;">${s}</span>`).join('')}</div>
+      </div>
+    `;
+  }
+  return '';
+}
+
+function switchTab(tab) {
+  _activeTab = tab;
+  const listings = P.getListings({}).filter(p=>p.agentId===_agent.id);
+  const reviews = P.getReviews(_agent.id);
+  document.querySelectorAll('.ag-tab').forEach(t=>{t.classList.toggle('active',t.textContent.toLowerCase().includes(tab));});
+  document.getElementById('agTabContent').innerHTML = renderTab(tab, listings, reviews);
+}
+window.switchTab = switchTab;
+
+function openContactModal() {
+  document.getElementById('agModalContent').innerHTML = `
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">📩 Contact Agent<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
+    <label class="ag-label">Your Name *</label><input class="ag-input" id="ctName" placeholder="John Kamau">
+    <label class="ag-label">Phone *</label><input class="ag-input" id="ctPhone" placeholder="0712 345 678">
+    <label class="ag-label">Message *</label><textarea class="ag-input" id="ctMsg" rows="4" placeholder="Hello, I would like to enquire about..."></textarea>
+    <button class="ag-submit" onclick="sendContact()">📤 Send Message</button>`;
+  document.getElementById('agModal').classList.add('open');
+}
+window.openContactModal=openContactModal;
+
+function sendContact() {
+  const name=document.getElementById('ctName').value.trim();const phone=document.getElementById('ctPhone').value.trim();const msg=document.getElementById('ctMsg').value.trim();
+  if(!name||!phone||!msg){(window._skToast||alert)('Please fill all fields.');return;}
+  P.sendInquiry({propertyId:'agent_contact',propertyTitle:'Agent Contact',agentId:_agent.id,agentName:_agent.name,name,phone,message:msg});
+  closeModal();(window._skToast||alert)('✅ Message sent! The agent will respond within 24 hours.');
+}
+window.sendContact=sendContact;
+
+function openReviewModal() {
+  document.getElementById('agModalContent').innerHTML = `
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">⭐ Review Agent<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
+    <label class="ag-label">Your Name</label><input class="ag-input" id="rvName" placeholder="Your name">
+    <label class="ag-label">Rating</label>
+    <div style="display:flex;gap:8px;margin-bottom:12px;font-size:28px;">${[1,2,3,4,5].map(i=>`<span style="cursor:pointer;color:rgba(255,255,255,0.2);" onclick="setRvRating(${i})" id="rvStar${i}">★</span>`).join('')}</div>
+    <label class="ag-label">Review</label><textarea class="ag-input" id="rvComment" rows="4" placeholder="Share your experience working with this agent..."></textarea>
+    <button class="ag-submit" onclick="submitReview()">⭐ Submit Review</button>`;
+  document.getElementById('agModal').classList.add('open');
+  _rvRating=0;
+}
+window.openReviewModal=openReviewModal;
+let _rvRating=0;
+function setRvRating(n){_rvRating=n;for(let i=1;i<=5;i++){const s=document.getElementById('rvStar'+i);if(s)s.style.color=i<=n?'#f59e0b':'rgba(255,255,255,0.2)';}}
+window.setRvRating=setRvRating;
+function submitReview(){const name=document.getElementById('rvName').value.trim()||'Anonymous';const comment=document.getElementById('rvComment').value.trim();if(!_rvRating||!comment){(window._skToast||alert)('Please select a rating and write a review.');return;}P.addReview(_agent.id,'agent',{name,rating:_rvRating,comment});closeModal();(window._skToast||alert)('✅ Review submitted!');renderPage();}
+window.submitReview=submitReview;
+
+function closeModal(){document.getElementById('agModal').classList.remove('open');}
+window.closeModal=closeModal;
+document.getElementById('agModal').addEventListener('click',e=>{if(e.target===document.getElementById('agModal'))closeModal();});
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

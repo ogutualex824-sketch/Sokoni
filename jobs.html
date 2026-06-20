@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Jobs — Find Jobs & Hire Talent in Kenya</title>
+  <meta name="description" content="Browse thousands of jobs across Kenya. Find full-time, part-time, remote and contract roles. Post a job and hire top talent on SOKONI.">
+  <meta property="og:title" content="SOKONI Jobs — Find Jobs & Hire Talent in Kenya">
+  <meta property="og:description" content="Kenya's fastest-growing jobs marketplace. Find your next role or hire the best talent.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:url" content="https://mysokoni.co.ke/jobs.html">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#7c3aed">
+  <script src="security.js"></script>
+  <script src="sokoni-permissions.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="seo.js" defer></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a12;color:white;min-height:100vh;padding-bottom:90px;}
+
+    /* ── Nav ── */
+    .jb-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(10,10,18,0.97);border-bottom:1px solid rgba(124,58,237,0.18);position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);}
+    .jb-nav-logo{height:32px;}
+    .jb-nav-right{display:flex;gap:8px;align-items:center;}
+    .jb-nav-btn{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border:none;transition:all .2s;text-decoration:none;display:inline-block;}
+    .jb-btn-outline{background:transparent;border:1px solid rgba(124,58,237,0.35);color:rgba(255,255,255,0.7);}
+    .jb-btn-outline:hover{border-color:#7c3aed;color:white;}
+    .jb-btn-primary{background:linear-gradient(135deg,#7c3aed,#9333ea);color:white;}
+    .jb-btn-primary:hover{opacity:.88;}
+
+    /* ── Hero ── */
+    .jb-hero{background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(147,51,234,0.06));border-bottom:1px solid rgba(124,58,237,0.12);padding:52px 24px 44px;text-align:center;}
+    .jb-hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.3);border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:18px;letter-spacing:.04em;}
+    .jb-hero h1{font-size:clamp(26px,5.5vw,44px);font-weight:900;line-height:1.15;margin-bottom:12px;}
+    .jb-hero h1 span{background:linear-gradient(135deg,#7c3aed,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .jb-hero p{color:rgba(255,255,255,0.5);font-size:15px;margin-bottom:28px;max-width:480px;margin-left:auto;margin-right:auto;}
+    .jb-search-wrap{max-width:640px;margin:0 auto;display:flex;gap:10px;flex-wrap:wrap;}
+    .jb-search-field{flex:1;min-width:200px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:0 16px;}
+    .jb-search-field i{color:rgba(255,255,255,0.35);font-size:14px;}
+    .jb-search-field input{flex:1;background:none;border:none;outline:none;color:white;font-size:16px;font-family:inherit;padding:14px 0;}
+    .jb-search-field input::placeholder{color:rgba(255,255,255,0.3);}
+    .jb-search-go{padding:14px 26px;background:linear-gradient(135deg,#7c3aed,#9333ea);border:none;border-radius:14px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+    .jb-hero-stats{display:flex;gap:32px;justify-content:center;margin-top:28px;flex-wrap:wrap;}
+    .jb-hero-stat{text-align:center;}
+    .jb-hero-stat strong{display:block;font-size:22px;font-weight:900;color:#a78bfa;}
+    .jb-hero-stat span{font-size:12px;color:rgba(255,255,255,0.4);font-weight:600;}
+
+    /* ── Layout ── */
+    .jb-body{max-width:1200px;margin:0 auto;padding:28px 20px 60px;display:grid;grid-template-columns:260px 1fr;gap:24px;}
+    @media(max-width:800px){.jb-body{grid-template-columns:1fr;}}
+
+    /* ── Sidebar filters ── */
+    .jb-sidebar{display:flex;flex-direction:column;gap:16px;}
+    .jb-filter-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px;}
+    .jb-filter-title{font-size:12px;font-weight:800;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;}
+    .jb-filter-option{display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;border-radius:8px;transition:all .15s;}
+    .jb-filter-option:hover .jb-fo-label{color:white;}
+    .jb-fo-check{width:18px;height:18px;border-radius:5px;border:1.5px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+    .jb-filter-option.active .jb-fo-check{background:#7c3aed;border-color:#7c3aed;}
+    .jb-filter-option.active .jb-fo-check::after{content:'✓';color:white;font-size:11px;font-weight:900;}
+    .jb-fo-label{font-size:13px;color:rgba(255,255,255,0.6);font-weight:600;flex:1;}
+    .jb-fo-count{font-size:11px;color:rgba(255,255,255,0.25);font-weight:700;}
+    .jb-salary-inputs{display:flex;gap:8px;}
+    .jb-salary-input{flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:10px 12px;color:white;font-size:13px;font-family:inherit;outline:none;width:100%;}
+
+    /* ── Main content ── */
+    .jb-main{}
+    .jb-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap;}
+    .jb-result-count{font-size:13px;color:rgba(255,255,255,0.45);font-weight:600;}
+    .jb-result-count strong{color:white;}
+    .jb-sort{display:flex;align-items:center;gap:8px;}
+    .jb-sort-label{font-size:12px;color:rgba(255,255,255,0.4);}
+    .jb-sort-select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 12px;color:white;font-size:13px;font-family:inherit;outline:none;cursor:pointer;}
+
+    /* Category pills */
+    .jb-cats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+    .jb-cat{padding:7px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.55);background:transparent;transition:all .2s;font-family:inherit;}
+    .jb-cat:hover,.jb-cat.active{background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.4);color:#a78bfa;}
+
+    /* ── Job cards ── */
+    .jb-list{display:flex;flex-direction:column;gap:14px;}
+    .jb-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;transition:all .2s;cursor:pointer;position:relative;}
+    .jb-card:hover{border-color:rgba(124,58,237,0.3);background:rgba(124,58,237,0.04);transform:translateY(-2px);}
+    .jb-card.featured{border-color:rgba(124,58,237,0.3);background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(147,51,234,0.03));}
+    .jb-featured-badge{position:absolute;top:14px;right:14px;background:linear-gradient(135deg,#7c3aed,#9333ea);color:white;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.04em;}
+    .jb-card-top{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px;}
+    .jb-company-logo{width:50px;height:50px;border-radius:12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;font-weight:900;color:white;}
+    .jb-card-info{flex:1;}
+    .jb-job-title{font-size:16px;font-weight:800;color:white;margin-bottom:4px;line-height:1.3;}
+    .jb-company-name{font-size:13px;color:rgba(255,255,255,0.5);font-weight:600;margin-bottom:8px;}
+    .jb-card-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+    .jb-meta-tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;}
+    .jb-tag-location{background:rgba(0,200,120,0.08);color:#4ade80;border:1px solid rgba(0,200,120,0.18);}
+    .jb-tag-type{background:rgba(59,130,246,0.08);color:#60a5fa;border:1px solid rgba(59,130,246,0.18);}
+    .jb-tag-salary{background:rgba(251,191,36,0.08);color:#fbbf24;border:1px solid rgba(251,191,36,0.18);}
+    .jb-tag-remote{background:rgba(124,58,237,0.1);color:#a78bfa;border:1px solid rgba(124,58,237,0.2);}
+    .jb-card-desc{font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .jb-card-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+    .jb-posted-date{font-size:11px;color:rgba(255,255,255,0.3);font-weight:600;}
+    .jb-card-actions{display:flex;gap:8px;}
+    .jb-apply-btn{padding:9px 20px;background:linear-gradient(135deg,#7c3aed,#9333ea);border:none;border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}
+    .jb-save-btn{padding:9px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.5);font-size:13px;cursor:pointer;font-family:inherit;transition:all .2s;}
+    .jb-save-btn:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .jb-save-btn.saved{color:#fbbf24;border-color:rgba(251,191,36,0.35);}
+
+    /* ── Load more ── */
+    .jb-load-more{text-align:center;margin-top:28px;}
+    .jb-load-btn{padding:13px 36px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);border-radius:14px;color:#a78bfa;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;}
+    .jb-load-btn:hover{background:rgba(124,58,237,0.2);}
+
+    /* ── Empty state ── */
+    .jb-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3);}
+    .jb-empty-icon{font-size:48px;margin-bottom:14px;}
+    .jb-empty h3{font-size:18px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:8px;}
+
+    /* ── Spinner ── */
+    .jb-spinner{display:flex;justify-content:center;padding:40px;}
+    .jb-spinner div{width:36px;height:36px;border-radius:50%;border:3px solid rgba(124,58,237,0.2);border-top-color:#7c3aed;animation:jbspin .7s linear infinite;}
+    @keyframes jbspin{to{transform:rotate(360deg);}}
+
+    /* ── Post job banner ── */
+    .jb-post-banner{background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(147,51,234,0.08));border:1px solid rgba(124,58,237,0.25);border-radius:20px;padding:28px 24px;margin-bottom:24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+    .jb-post-banner-text{flex:1;}
+    .jb-post-banner-text h3{font-size:18px;font-weight:900;margin-bottom:6px;}
+    .jb-post-banner-text p{font-size:13px;color:rgba(255,255,255,0.5);line-height:1.5;}
+
+    /* ── Modals ── */
+    .jb-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .jb-modal-overlay.open{opacity:1;pointer-events:all;}
+    @media(min-width:600px){.jb-modal-overlay{align-items:center;}}
+    .jb-modal{background:#13131f;border:1px solid rgba(255,255,255,0.1);border-radius:24px 24px 0 0;width:100%;max-width:580px;max-height:92vh;overflow-y:auto;transform:translateY(40px);transition:transform .28s cubic-bezier(.25,.8,.25,1);}
+    @media(min-width:600px){.jb-modal{border-radius:24px;transform:scale(.95);}}
+    .jb-modal-overlay.open .jb-modal{transform:none;}
+    .jb-modal-head{padding:22px 24px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#13131f;z-index:2;}
+    .jb-modal-title{font-size:17px;font-weight:900;}
+    .jb-modal-close{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.07);border:none;color:rgba(255,255,255,0.6);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;}
+    .jb-modal-body{padding:22px 24px 28px;}
+    .jb-form-group{margin-bottom:16px;}
+    .jb-form-label{display:block;font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;}
+    .jb-form-input,.jb-form-select,.jb-form-textarea{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:13px 14px;color:white;font-size:15px;font-family:inherit;outline:none;transition:border-color .2s;}
+    .jb-form-input:focus,.jb-form-select:focus,.jb-form-textarea:focus{border-color:rgba(124,58,237,0.5);}
+    .jb-form-textarea{resize:vertical;min-height:100px;}
+    .jb-form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    @media(max-width:480px){.jb-form-row{grid-template-columns:1fr;}}
+    .jb-form-submit{width:100%;padding:15px;background:linear-gradient(135deg,#7c3aed,#9333ea);border:none;border-radius:14px;color:white;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;margin-top:8px;transition:opacity .2s;}
+    .jb-form-submit:disabled{opacity:.5;cursor:not-allowed;}
+
+    /* Post job plan selection */
+    .jb-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+    @media(max-width:480px){.jb-plans{grid-template-columns:1fr;}}
+    .jb-plan{border:1.5px solid rgba(255,255,255,0.1);border-radius:14px;padding:14px 12px;cursor:pointer;transition:all .2s;text-align:center;}
+    .jb-plan:hover,.jb-plan.selected{border-color:rgba(124,58,237,0.5);background:rgba(124,58,237,0.08);}
+    .jb-plan-name{font-size:13px;font-weight:800;margin-bottom:4px;}
+    .jb-plan-price{font-size:18px;font-weight:900;color:#a78bfa;margin-bottom:4px;}
+    .jb-plan-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.4;}
+
+    /* Job detail modal */
+    .jb-detail-section{margin-bottom:22px;}
+    .jb-detail-section h4{font-size:13px;font-weight:800;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+    .jb-detail-section p,.jb-detail-section li{font-size:14px;color:rgba(255,255,255,0.65);line-height:1.7;}
+    .jb-detail-section ul{padding-left:20px;}
+
+    /* Toast */
+    .jb-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid rgba(124,58,237,0.35);border-radius:14px;padding:13px 22px;font-size:14px;font-weight:700;color:white;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+    .jb-toast.show{opacity:1;}
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="jb-nav">
+  <a href="index.html"><img src="assets/logosokoni.png" alt="SOKONI" class="jb-nav-logo"></a>
+  <div class="jb-nav-right">
+    <button class="jb-nav-btn jb-btn-outline" onclick="JBApp.openPostJob()">Post a Job</button>
+    <a href="profile.html" class="jb-nav-btn jb-btn-primary">My Account</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="jb-hero">
+  <div class="jb-hero-badge">💼 Kenya's Jobs Marketplace</div>
+  <h1>Find Your Next <span>Opportunity</span></h1>
+  <p>Thousands of jobs across Kenya — full-time, remote, contract and more.</p>
+  <div class="jb-search-wrap">
+    <div class="jb-search-field" style="flex:2">
+      <i class="fas fa-search"></i>
+      <input id="jbSearchTitle" type="text" placeholder="Job title, company, keyword..." autocomplete="off">
+    </div>
+    <div class="jb-search-field">
+      <i class="fas fa-map-marker-alt"></i>
+      <input id="jbSearchLocation" type="text" placeholder="Location (e.g. Nairobi)" autocomplete="off">
+    </div>
+    <button class="jb-search-go" onclick="JBApp.search()">Search</button>
+  </div>
+  <div class="jb-hero-stats">
+    <div class="jb-hero-stat"><strong id="jbStatJobs">—</strong><span>Active Jobs</span></div>
+    <div class="jb-hero-stat"><strong id="jbStatEmployers">—</strong><span>Employers</span></div>
+    <div class="jb-hero-stat"><strong id="jbStatCategories">12</strong><span>Industries</span></div>
+  </div>
+</section>
+
+<!-- Body -->
+<div class="jb-body">
+
+  <!-- Sidebar -->
+  <aside class="jb-sidebar">
+    <!-- Job Type -->
+    <div class="jb-filter-card">
+      <div class="jb-filter-title">Job Type</div>
+      <div class="jb-filter-option" data-filter="type" data-value="Full-time" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Full-time</span>
+      </div>
+      <div class="jb-filter-option" data-filter="type" data-value="Part-time" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Part-time</span>
+      </div>
+      <div class="jb-filter-option" data-filter="type" data-value="Contract" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Contract</span>
+      </div>
+      <div class="jb-filter-option" data-filter="type" data-value="Remote" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Remote</span>
+      </div>
+      <div class="jb-filter-option" data-filter="type" data-value="Internship" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Internship</span>
+      </div>
+    </div>
+
+    <!-- Experience -->
+    <div class="jb-filter-card">
+      <div class="jb-filter-title">Experience Level</div>
+      <div class="jb-filter-option" data-filter="experience" data-value="Entry" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Entry Level</span>
+      </div>
+      <div class="jb-filter-option" data-filter="experience" data-value="Mid" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Mid Level</span>
+      </div>
+      <div class="jb-filter-option" data-filter="experience" data-value="Senior" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Senior Level</span>
+      </div>
+      <div class="jb-filter-option" data-filter="experience" data-value="Lead" onclick="JBApp.toggleFilter(this)">
+        <div class="jb-fo-check"></div><span class="jb-fo-label">Lead / Manager</span>
+      </div>
+    </div>
+
+    <!-- Salary -->
+    <div class="jb-filter-card">
+      <div class="jb-filter-title">Salary Range (KES)</div>
+      <div class="jb-salary-inputs">
+        <input id="jbSalaryMin" class="jb-salary-input" type="number" placeholder="Min" min="0" onchange="JBApp.search()">
+        <input id="jbSalaryMax" class="jb-salary-input" type="number" placeholder="Max" min="0" onchange="JBApp.search()">
+      </div>
+    </div>
+
+    <!-- Clear -->
+    <button onclick="JBApp.clearFilters()" style="padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:rgba(255,255,255,0.45);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;">Clear Filters</button>
+  </aside>
+
+  <!-- Main -->
+  <main class="jb-main">
+
+    <!-- Post job CTA -->
+    <div class="jb-post-banner">
+      <div style="font-size:42px;flex-shrink:0;">🏢</div>
+      <div class="jb-post-banner-text">
+        <h3>Hiring? Post a Job Today</h3>
+        <p>Reach thousands of qualified candidates across Kenya. Free listing or featured placement available.</p>
+      </div>
+      <button class="jb-nav-btn jb-btn-primary" onclick="JBApp.openPostJob()">Post a Job</button>
+    </div>
+
+    <!-- Category pills -->
+    <div class="jb-cats" id="jbCats">
+      <button class="jb-cat active" data-cat="All" onclick="JBApp.setCategory(this)">All Jobs</button>
+      <button class="jb-cat" data-cat="Technology" onclick="JBApp.setCategory(this)">💻 Technology</button>
+      <button class="jb-cat" data-cat="Finance" onclick="JBApp.setCategory(this)">💰 Finance</button>
+      <button class="jb-cat" data-cat="Healthcare" onclick="JBApp.setCategory(this)">🏥 Healthcare</button>
+      <button class="jb-cat" data-cat="Education" onclick="JBApp.setCategory(this)">📚 Education</button>
+      <button class="jb-cat" data-cat="Sales" onclick="JBApp.setCategory(this)">📈 Sales</button>
+      <button class="jb-cat" data-cat="Marketing" onclick="JBApp.setCategory(this)">📣 Marketing</button>
+      <button class="jb-cat" data-cat="Logistics" onclick="JBApp.setCategory(this)">🚚 Logistics</button>
+      <button class="jb-cat" data-cat="Hospitality" onclick="JBApp.setCategory(this)">🏨 Hospitality</button>
+      <button class="jb-cat" data-cat="Legal" onclick="JBApp.setCategory(this)">⚖️ Legal</button>
+      <button class="jb-cat" data-cat="Construction" onclick="JBApp.setCategory(this)">🏗️ Construction</button>
+      <button class="jb-cat" data-cat="Other" onclick="JBApp.setCategory(this)">💼 Other</button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="jb-toolbar">
+      <div class="jb-result-count"><strong id="jbCount">0</strong> jobs found</div>
+      <div class="jb-sort">
+        <span class="jb-sort-label">Sort by:</span>
+        <select class="jb-sort-select" id="jbSort" onchange="JBApp.search()">
+          <option value="newest">Newest First</option>
+          <option value="salary">Highest Salary</option>
+          <option value="featured">Featured</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Job list -->
+    <div id="jbList" class="jb-list">
+      <div class="jb-spinner"><div></div></div>
+    </div>
+
+    <!-- Load more -->
+    <div class="jb-load-more" id="jbLoadMoreWrap" style="display:none;">
+      <button class="jb-load-btn" id="jbLoadBtn" onclick="JBApp.loadMore()">Load More Jobs</button>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Apply Modal ── -->
+<div class="jb-modal-overlay" id="jbApplyModal">
+  <div class="jb-modal">
+    <div class="jb-modal-head">
+      <span class="jb-modal-title" id="jbApplyTitle">Apply for Job</span>
+      <button class="jb-modal-close" onclick="JBApp.closeModal('jbApplyModal')">×</button>
+    </div>
+    <div class="jb-modal-body">
+      <div id="jbApplyJobSummary" style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:14px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:rgba(255,255,255,0.6);"></div>
+      <div class="jb-form-row">
+        <div class="jb-form-group">
+          <label class="jb-form-label">Full Name *</label>
+          <input id="applyName" class="jb-form-input" type="text" placeholder="Jane Muthoni">
+        </div>
+        <div class="jb-form-group">
+          <label class="jb-form-label">Phone *</label>
+          <input id="applyPhone" class="jb-form-input" type="tel" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <div class="jb-form-group">
+        <label class="jb-form-label">Email Address *</label>
+        <input id="applyEmail" class="jb-form-input" type="email" placeholder="jane@email.com">
+      </div>
+      <div class="jb-form-group">
+        <label class="jb-form-label">CV / Portfolio Link</label>
+        <input id="applyCv" class="jb-form-input" type="url" placeholder="https://drive.google.com/your-cv or LinkedIn">
+      </div>
+      <div class="jb-form-group">
+        <label class="jb-form-label">Cover Letter *</label>
+        <textarea id="applyCover" class="jb-form-textarea" placeholder="Why are you a great fit for this role? Highlight relevant experience..."></textarea>
+      </div>
+      <button class="jb-form-submit" id="jbApplySubmitBtn" onclick="JBApp.submitApplication()">Submit Application</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Job Detail Modal ── -->
+<div class="jb-modal-overlay" id="jbDetailModal">
+  <div class="jb-modal">
+    <div class="jb-modal-head">
+      <span class="jb-modal-title" id="jbDetailTitle">Job Details</span>
+      <button class="jb-modal-close" onclick="JBApp.closeModal('jbDetailModal')">×</button>
+    </div>
+    <div class="jb-modal-body" id="jbDetailBody"></div>
+  </div>
+</div>
+
+<!-- ── Post Job Modal ── -->
+<div class="jb-modal-overlay" id="jbPostModal">
+  <div class="jb-modal">
+    <div class="jb-modal-head">
+      <span class="jb-modal-title">Post a Job</span>
+      <button class="jb-modal-close" onclick="JBApp.closeModal('jbPostModal')">×</button>
+    </div>
+    <div class="jb-modal-body">
+      <!-- Step 1: details -->
+      <div id="jbPostStep1">
+        <div class="jb-form-row">
+          <div class="jb-form-group">
+            <label class="jb-form-label">Job Title *</label>
+            <input id="postTitle" class="jb-form-input" type="text" placeholder="e.g. Senior Software Engineer">
+          </div>
+          <div class="jb-form-group">
+            <label class="jb-form-label">Company Name *</label>
+            <input id="postCompany" class="jb-form-input" type="text" placeholder="Your company name">
+          </div>
+        </div>
+        <div class="jb-form-row">
+          <div class="jb-form-group">
+            <label class="jb-form-label">Industry *</label>
+            <select id="postCategory" class="jb-form-select">
+              <option value="">Select industry</option>
+              <option>Technology</option><option>Finance</option><option>Healthcare</option>
+              <option>Education</option><option>Sales</option><option>Marketing</option>
+              <option>Logistics</option><option>Hospitality</option><option>Legal</option>
+              <option>Construction</option><option>Other</option>
+            </select>
+          </div>
+          <div class="jb-form-group">
+            <label class="jb-form-label">Job Type *</label>
+            <select id="postType" class="jb-form-select">
+              <option value="">Select type</option>
+              <option>Full-time</option><option>Part-time</option><option>Contract</option>
+              <option>Remote</option><option>Internship</option>
+            </select>
+          </div>
+        </div>
+        <div class="jb-form-row">
+          <div class="jb-form-group">
+            <label class="jb-form-label">Location *</label>
+            <input id="postLocation" class="jb-form-input" type="text" placeholder="e.g. Nairobi CBD">
+          </div>
+          <div class="jb-form-group">
+            <label class="jb-form-label">Experience Level</label>
+            <select id="postExperience" class="jb-form-select">
+              <option value="">Any</option>
+              <option>Entry</option><option>Mid</option><option>Senior</option><option>Lead</option>
+            </select>
+          </div>
+        </div>
+        <div class="jb-form-row">
+          <div class="jb-form-group">
+            <label class="jb-form-label">Min Salary (KES)</label>
+            <input id="postSalaryMin" class="jb-form-input" type="number" placeholder="e.g. 50000">
+          </div>
+          <div class="jb-form-group">
+            <label class="jb-form-label">Max Salary (KES)</label>
+            <input id="postSalaryMax" class="jb-form-input" type="number" placeholder="e.g. 120000">
+          </div>
+        </div>
+        <div class="jb-form-group">
+          <label class="jb-form-label">Job Description *</label>
+          <textarea id="postDescription" class="jb-form-textarea" style="min-height:120px;" placeholder="Describe the role, day-to-day responsibilities..."></textarea>
+        </div>
+        <div class="jb-form-group">
+          <label class="jb-form-label">Requirements (one per line)</label>
+          <textarea id="postRequirements" class="jb-form-textarea" placeholder="Bachelor's degree in relevant field&#10;3+ years experience&#10;Proficiency in English"></textarea>
+        </div>
+        <div class="jb-form-group">
+          <label class="jb-form-label">Contact Email *</label>
+          <input id="postContactEmail" class="jb-form-input" type="email" placeholder="hr@yourcompany.co.ke">
+        </div>
+
+        <!-- Plan selection -->
+        <div style="margin:20px 0 8px;font-size:12px;font-weight:800;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:.06em;">Choose Listing Plan</div>
+        <div class="jb-plans">
+          <div class="jb-plan selected" data-plan="free" data-price="0" onclick="JBApp.selectPlan(this)">
+            <div class="jb-plan-name">Basic</div>
+            <div class="jb-plan-price">Free</div>
+            <div class="jb-plan-desc">Standard listing · 30 days · Organic reach</div>
+          </div>
+          <div class="jb-plan" data-plan="featured" data-price="500" onclick="JBApp.selectPlan(this)">
+            <div class="jb-plan-name">Featured</div>
+            <div class="jb-plan-price">KES 500</div>
+            <div class="jb-plan-desc">Top of results · 60 days · Featured badge</div>
+          </div>
+          <div class="jb-plan" data-plan="premium" data-price="1500" onclick="JBApp.selectPlan(this)">
+            <div class="jb-plan-name">Premium</div>
+            <div class="jb-plan-price">KES 1,500</div>
+            <div class="jb-plan-desc">Pinned + email blast · 90 days · Priority support</div>
+          </div>
+        </div>
+
+        <button class="jb-form-submit" id="jbPostSubmitBtn" onclick="JBApp.submitJob()">Post Job</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="jb-toast" id="jbToast"></div>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav" id="bottomNav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="search.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Search</span></a>
+  <a href="cart.html" class="bnav-item"><span class="bnav-emoji">🛒</span><span>Cart</span></a>
+  <a href="jobs.html" class="bnav-item active"><span class="bnav-emoji">💼</span><span>Jobs</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script type="module">
+import { db, auth } from './firebase.js';
+import {
+  collection, query, where, orderBy, limit, startAfter,
+  getDocs, addDoc, serverTimestamp, getCountFromServer, doc, updateDoc, increment
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const PAGE_SIZE = 12;
+
+const _state = {
+  filters: { type: new Set(), experience: new Set() },
+  category: 'All',
+  titleQuery: '',
+  locationQuery: '',
+  salaryMin: 0,
+  salaryMax: 0,
+  sort: 'newest',
+  lastDoc: null,
+  hasMore: false,
+  currentJobId: null,
+  currentJob: null,
+  selectedPlan: { plan: 'free', price: 0 },
+  currentUser: null,
+};
+
+function _esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _toast(msg, ok = true) {
+  const t = document.getElementById('jbToast');
+  t.textContent = msg;
+  t.style.background = ok ? '#1a1a2e' : 'rgba(220,38,38,0.9)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+function _fmt(n) { return Number(n).toLocaleString('en-KE'); }
+function _ago(ts) {
+  if (!ts) return 'Recently';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const diff = Math.floor((Date.now() - d) / 1000);
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+function _buildQuery(limitN, afterDoc) {
+  let q = query(collection(db, 'jobs'), where('active', '==', true));
+  if (_state.category !== 'All') q = query(q, where('category', '==', _state.category));
+  if (_state.filters.type.size === 1) q = query(q, where('type', '==', [..._state.filters.type][0]));
+  if (_state.filters.experience.size === 1) q = query(q, where('experience', '==', [..._state.filters.experience][0]));
+  const sortField = _state.sort === 'salary' ? 'salaryMax' : _state.sort === 'featured' ? 'featured' : 'postedAt';
+  q = query(q, orderBy(sortField, 'desc'), limit(limitN));
+  if (afterDoc) q = query(q, startAfter(afterDoc));
+  return q;
+}
+
+function _renderCard(job) {
+  const salary = job.salaryMin || job.salaryMax
+    ? `KES ${_fmt(job.salaryMin||0)} – ${_fmt(job.salaryMax||0)}`
+    : 'Negotiable';
+  const logo = (job.company || '?').charAt(0).toUpperCase();
+  return `
+  <div class="jb-card${job.featured ? ' featured' : ''}" onclick="JBApp.openDetail('${_esc(job._id)}')">
+    ${job.featured ? '<div class="jb-featured-badge">FEATURED</div>' : ''}
+    <div class="jb-card-top">
+      <div class="jb-company-logo">${_esc(logo)}</div>
+      <div class="jb-card-info">
+        <div class="jb-job-title">${_esc(job.title)}</div>
+        <div class="jb-company-name">${_esc(job.company)}</div>
+        <div class="jb-card-meta">
+          <span class="jb-meta-tag jb-tag-location"><i class="fas fa-map-marker-alt"></i> ${_esc(job.location)}</span>
+          <span class="jb-meta-tag jb-tag-type">${_esc(job.type)}</span>
+          <span class="jb-meta-tag jb-tag-salary"><i class="fas fa-money-bill-alt"></i> ${_esc(salary)}</span>
+          ${job.type === 'Remote' ? '<span class="jb-meta-tag jb-tag-remote">🌍 Remote</span>' : ''}
+        </div>
+      </div>
+    </div>
+    <div class="jb-card-desc">${_esc(job.description)}</div>
+    <div class="jb-card-footer">
+      <span class="jb-posted-date">Posted ${_ago(job.postedAt)} · ${_esc(job.category)}</span>
+      <div class="jb-card-actions">
+        <button class="jb-save-btn" onclick="event.stopPropagation();JBApp.toggleSave('${_esc(job._id)}',this)">
+          <i class="far fa-bookmark"></i> Save
+        </button>
+        <button class="jb-apply-btn" onclick="event.stopPropagation();JBApp.openApply('${_esc(job._id)}')">Apply Now</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function _loadJobs(append = false) {
+  if (!append) {
+    _state.lastDoc = null;
+    document.getElementById('jbList').innerHTML = '<div class="jb-spinner"><div></div></div>';
+  }
+
+  try {
+    const q = _buildQuery(PAGE_SIZE + 1, _state.lastDoc);
+    const snap = await getDocs(q);
+    const docs = snap.docs.slice(0, PAGE_SIZE);
+    _state.hasMore = snap.docs.length > PAGE_SIZE;
+    _state.lastDoc = docs[docs.length - 1] || null;
+
+    // client-side filters that Firestore can't do without extra indexes
+    let jobs = docs.map(d => ({ _id: d.id, ...d.data() }));
+
+    if (_state.titleQuery) {
+      const kw = _state.titleQuery.toLowerCase();
+      jobs = jobs.filter(j =>
+        (j.title||'').toLowerCase().includes(kw) ||
+        (j.company||'').toLowerCase().includes(kw) ||
+        (j.description||'').toLowerCase().includes(kw)
+      );
+    }
+    if (_state.locationQuery) {
+      const lq = _state.locationQuery.toLowerCase();
+      jobs = jobs.filter(j => (j.location||'').toLowerCase().includes(lq));
+    }
+    if (_state.salaryMin > 0) jobs = jobs.filter(j => (j.salaryMax || 0) >= _state.salaryMin);
+    if (_state.salaryMax > 0) jobs = jobs.filter(j => (j.salaryMin || 0) <= _state.salaryMax);
+
+    const list = document.getElementById('jbList');
+    if (!append) list.innerHTML = '';
+
+    if (jobs.length === 0 && !append) {
+      list.innerHTML = `<div class="jb-empty"><div class="jb-empty-icon">🔍</div><h3>No jobs found</h3><p>Try adjusting your filters or search terms.</p></div>`;
+    } else {
+      jobs.forEach(j => { list.insertAdjacentHTML('beforeend', _renderCard(j)); });
+    }
+
+    document.getElementById('jbLoadMoreWrap').style.display = _state.hasMore ? 'block' : 'none';
+
+    // update count
+    try {
+      const countSnap = await getCountFromServer(query(collection(db, 'jobs'), where('active','==',true)));
+      document.getElementById('jbCount').textContent = countSnap.data().count;
+      document.getElementById('jbStatJobs').textContent = countSnap.data().count + '+';
+    } catch (_) {
+      document.getElementById('jbCount').textContent = jobs.length;
+    }
+  } catch (err) {
+    console.error('[JBApp] load error', err);
+    document.getElementById('jbList').innerHTML = '<div class="jb-empty"><div class="jb-empty-icon">⚠️</div><h3>Failed to load jobs</h3><p>Please check your connection and try again.</p></div>';
+  }
+}
+
+// cache jobs by id for detail view
+const _jobCache = {};
+
+async function _fetchJob(id) {
+  if (_jobCache[id]) return _jobCache[id];
+  const { getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  const snap = await getDoc(doc(db, 'jobs', id));
+  if (!snap.exists()) return null;
+  const job = { _id: snap.id, ...snap.data() };
+  _jobCache[id] = job;
+  return job;
+}
+
+window.JBApp = {
+  toggleFilter(el) {
+    const { filter, value } = el.dataset;
+    if (_state.filters[filter].has(value)) {
+      _state.filters[filter].delete(value);
+      el.classList.remove('active');
+    } else {
+      // single-select per filter group
+      document.querySelectorAll(`[data-filter="${filter}"]`).forEach(e => {
+        e.classList.remove('active');
+        _state.filters[filter].delete(e.dataset.value);
+      });
+      _state.filters[filter].add(value);
+      el.classList.add('active');
+    }
+    _loadJobs();
+  },
+
+  setCategory(el) {
+    document.querySelectorAll('.jb-cat').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    _state.category = el.dataset.cat;
+    _loadJobs();
+  },
+
+  search() {
+    _state.titleQuery = document.getElementById('jbSearchTitle').value.trim();
+    _state.locationQuery = document.getElementById('jbSearchLocation').value.trim();
+    _state.salaryMin = Number(document.getElementById('jbSalaryMin').value) || 0;
+    _state.salaryMax = Number(document.getElementById('jbSalaryMax').value) || 0;
+    _state.sort = document.getElementById('jbSort').value;
+    _loadJobs();
+  },
+
+  clearFilters() {
+    _state.filters.type.clear();
+    _state.filters.experience.clear();
+    _state.titleQuery = '';
+    _state.locationQuery = '';
+    _state.salaryMin = 0;
+    _state.salaryMax = 0;
+    document.querySelectorAll('.jb-filter-option').forEach(e => e.classList.remove('active'));
+    document.getElementById('jbSearchTitle').value = '';
+    document.getElementById('jbSearchLocation').value = '';
+    document.getElementById('jbSalaryMin').value = '';
+    document.getElementById('jbSalaryMax').value = '';
+    _loadJobs();
+  },
+
+  loadMore() {
+    _loadJobs(true);
+  },
+
+  openModal(id) { document.getElementById(id).classList.add('open'); },
+  closeModal(id) { document.getElementById(id).classList.remove('open'); },
+
+  openApply(jobId) {
+    _state.currentJobId = jobId;
+    const job = _jobCache[jobId];
+    document.getElementById('jbApplyTitle').textContent = `Apply — ${job ? _esc(job.title) : 'Job'}`;
+    document.getElementById('jbApplyJobSummary').innerHTML = job
+      ? `<strong>${_esc(job.title)}</strong> at <strong>${_esc(job.company)}</strong> · ${_esc(job.location)} · ${_esc(job.type)}`
+      : '';
+    // pre-fill from auth user
+    if (_state.currentUser) {
+      document.getElementById('applyEmail').value = _state.currentUser.email || '';
+      document.getElementById('applyName').value = _state.currentUser.displayName || '';
+    }
+    this.openModal('jbApplyModal');
+  },
+
+  async openDetail(jobId) {
+    this.openModal('jbDetailModal');
+    document.getElementById('jbDetailBody').innerHTML = '<div class="jb-spinner"><div></div></div>';
+    const job = await _fetchJob(jobId);
+    if (!job) { document.getElementById('jbDetailBody').innerHTML = '<p>Job not found.</p>'; return; }
+    _state.currentJob = job;
+    const salary = job.salaryMin || job.salaryMax
+      ? `KES ${_fmt(job.salaryMin||0)} – ${_fmt(job.salaryMax||0)} per month`
+      : 'Negotiable';
+    const reqs = (job.requirements || '').split('\n').filter(Boolean).map(r => `<li>${_esc(r)}</li>`).join('');
+    document.getElementById('jbDetailTitle').textContent = job.title;
+    document.getElementById('jbDetailBody').innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+        <span class="jb-meta-tag jb-tag-location"><i class="fas fa-map-marker-alt"></i> ${_esc(job.location)}</span>
+        <span class="jb-meta-tag jb-tag-type">${_esc(job.type)}</span>
+        <span class="jb-meta-tag jb-tag-salary"><i class="fas fa-money-bill-alt"></i> ${_esc(salary)}</span>
+      </div>
+      <div class="jb-detail-section"><h4>Company</h4><p>${_esc(job.company)}</p></div>
+      <div class="jb-detail-section"><h4>About the Role</h4><p>${_esc(job.description)}</p></div>
+      ${reqs ? `<div class="jb-detail-section"><h4>Requirements</h4><ul>${reqs}</ul></div>` : ''}
+      ${job.benefits ? `<div class="jb-detail-section"><h4>Benefits</h4><p>${_esc(job.benefits)}</p></div>` : ''}
+      <div class="jb-detail-section"><h4>Posted</h4><p>${_ago(job.postedAt)}</p></div>
+      <button class="jb-form-submit" onclick="JBApp.closeModal('jbDetailModal');JBApp.openApply('${_esc(job._id)}')">Apply for This Job</button>
+    `;
+  },
+
+  openPostJob() {
+    this.openModal('jbPostModal');
+  },
+
+  selectPlan(el) {
+    document.querySelectorAll('.jb-plan').forEach(p => p.classList.remove('selected'));
+    el.classList.add('selected');
+    _state.selectedPlan = { plan: el.dataset.plan, price: Number(el.dataset.price) };
+  },
+
+  async submitApplication() {
+    const btn = document.getElementById('jbApplySubmitBtn');
+    const name  = document.getElementById('applyName').value.trim();
+    const email = document.getElementById('applyEmail').value.trim();
+    const phone = document.getElementById('applyPhone').value.trim();
+    const cover = document.getElementById('applyCover').value.trim();
+    const cv    = document.getElementById('applyCv').value.trim();
+
+    if (!name || !email || !phone || !cover) { _toast('Please fill all required fields', false); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { _toast('Invalid email address', false); return; }
+    if (!/^(07|01|\+2547|\+2541)\d{8}$/.test(phone.replace(/\s/g,''))) { _toast('Enter a valid Kenyan phone number', false); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    try {
+      await addDoc(collection(db, 'jobApplications'), {
+        jobId: _state.currentJobId,
+        name, email, phone, coverLetter: cover, cvUrl: cv || null,
+        appliedAt: serverTimestamp(),
+        uid: _state.currentUser?.uid || null,
+        status: 'pending',
+      });
+      // increment applicant count
+      await updateDoc(doc(db, 'jobs', _state.currentJobId), { applicants: increment(1) });
+      _toast('Application submitted! Good luck!');
+      this.closeModal('jbApplyModal');
+      ['applyName','applyEmail','applyPhone','applyPhone','applyCover','applyCv'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+    } catch (err) {
+      console.error('[JBApp] apply error', err);
+      _toast('Failed to submit. Please try again.', false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Submit Application';
+    }
+  },
+
+  async submitJob() {
+    const btn = document.getElementById('jbPostSubmitBtn');
+    const title   = document.getElementById('postTitle').value.trim();
+    const company = document.getElementById('postCompany').value.trim();
+    const category= document.getElementById('postCategory').value;
+    const type    = document.getElementById('postType').value;
+    const location= document.getElementById('postLocation').value.trim();
+    const desc    = document.getElementById('postDescription').value.trim();
+    const reqs    = document.getElementById('postRequirements').value.trim();
+    const email   = document.getElementById('postContactEmail').value.trim();
+    const salMin  = Number(document.getElementById('postSalaryMin').value) || 0;
+    const salMax  = Number(document.getElementById('postSalaryMax').value) || 0;
+    const exp     = document.getElementById('postExperience').value;
+    const plan    = _state.selectedPlan;
+
+    if (!title||!company||!category||!type||!location||!desc||!email) {
+      _toast('Please fill all required fields', false); return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { _toast('Invalid contact email', false); return; }
+
+    btn.disabled = true;
+    btn.textContent = plan.price > 0 ? 'Processing Payment…' : 'Posting Job…';
+
+    try {
+      const jobData = {
+        title, company, category, type, location,
+        description: desc, requirements: reqs,
+        contactEmail: email, experience: exp || null,
+        salaryMin: salMin, salaryMax: salMax,
+        featured: plan.plan !== 'free',
+        plan: plan.plan,
+        active: plan.price === 0, // free jobs go live immediately; paid pending payment
+        applicants: 0,
+        uid: _state.currentUser?.uid || null,
+        postedAt: serverTimestamp(),
+        expiresAt: null,
+      };
+
+      if (plan.price > 0) {
+        // M-Pesa STK push for paid listings
+        if (!_state.currentUser) { _toast('Sign in to post a paid listing', false); btn.disabled=false; btn.textContent='Post Job'; return; }
+        const phone = prompt('Enter your M-Pesa phone number (e.g. 07XXXXXXXX):');
+        if (!phone) { btn.disabled=false; btn.textContent='Post Job'; return; }
+        if (window.SokoniMpesa) {
+          await window.SokoniMpesa.stkPush({
+            phone: phone.replace(/^0/,'254'),
+            amount: plan.price,
+            description: `SOKONI Jobs — ${plan.plan} listing: ${title}`,
+            onSuccess: async () => {
+              jobData.active = true;
+              await addDoc(collection(db, 'jobs'), jobData);
+              _toast('Job posted and payment confirmed!');
+              this.closeModal('jbPostModal');
+              _loadJobs();
+            },
+            onError: () => { _toast('Payment failed. Job not posted.', false); },
+          });
+        } else {
+          _toast('Payment system unavailable. Try a free listing.', false);
+        }
+      } else {
+        await addDoc(collection(db, 'jobs'), jobData);
+        _toast('Job posted successfully!');
+        this.closeModal('jbPostModal');
+        _loadJobs();
+      }
+    } catch (err) {
+      console.error('[JBApp] post job error', err);
+      _toast('Failed to post job. Please try again.', false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Post Job';
+    }
+  },
+
+  toggleSave(jobId, btn) {
+    const saved = JSON.parse(localStorage.getItem('jbSaved') || '[]');
+    const idx = saved.indexOf(jobId);
+    if (idx === -1) {
+      saved.push(jobId);
+      btn.classList.add('saved');
+      btn.innerHTML = '<i class="fas fa-bookmark"></i> Saved';
+      _toast('Job saved');
+    } else {
+      saved.splice(idx, 1);
+      btn.classList.remove('saved');
+      btn.innerHTML = '<i class="far fa-bookmark"></i> Save';
+      _toast('Job removed from saved');
+    }
+    localStorage.setItem('jbSaved', JSON.stringify(saved));
+  },
+};
+
+// Keyboard: Enter in search inputs triggers search
+document.getElementById('jbSearchTitle').addEventListener('keydown', e => { if(e.key==='Enter') JBApp.search(); });
+document.getElementById('jbSearchLocation').addEventListener('keydown', e => { if(e.key==='Enter') JBApp.search(); });
+
+// Close modals on overlay click
+document.querySelectorAll('.jb-modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// Auth
+onAuthStateChanged(auth, user => {
+  _state.currentUser = user || null;
+});
+
+// Employer/applicant stats (rough counts)
+(async () => {
+  try {
+    const employerSnap = await getCountFromServer(query(collection(db, 'jobs'), where('active','==',true)));
+    document.getElementById('jbStatJobs').textContent = employerSnap.data().count + '+';
+    // unique employer count via distinct companies isn't supported in Firestore — use placeholder
+    document.getElementById('jbStatEmployers').textContent = '100+';
+  } catch (_) {}
+})();
+
+// Initial load
+_loadJobs();
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script defer src="hub-register.js"></script>
+<script defer src="kass-widget.js"></script>
+  <!-- Scale + Resilience stack -->
+  <script defer src="sokoni-scale.js"></script>
+  <script defer src="sokoni-cache.js"></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>

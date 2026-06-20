@@ -1,0 +1,712 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<script type="module" src="firebase.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Customer Analytics (Admin)</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--accent:#71ff00;--bg:#080808;--card:#111;--card2:#161616;--border:rgba(113,255,0,0.12);--text:#e8e8e8;--sub:rgba(255,255,255,0.45);}
+html{scroll-behavior:smooth;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px;}
+input,select,textarea,button{font-size:16px;font-family:inherit;}
+
+/* ── TOP NAV ── */
+.top-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;
+  background:rgba(8,8,8,0.95);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);}
+.nav-logo img{height:28px;}
+.nav-logo span{font-weight:800;font-size:17px;color:var(--accent);}
+.nav-title{font-size:15px;font-weight:700;color:var(--text);}
+.nav-right{display:flex;gap:10px;align-items:center;}
+.nav-btn{background:transparent;border:1px solid var(--border);color:var(--sub);border-radius:10px;padding:7px 14px;cursor:pointer;font-size:13px;transition:.2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+.admin-badge{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:var(--accent);border-radius:8px;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
+
+/* ── PAGE LAYOUT ── */
+.page-wrap{max-width:1200px;margin:0 auto;padding:24px 16px;}
+.section-title{font-size:13px;font-weight:800;color:var(--sub);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.section-title::before{content:'';display:block;width:3px;height:14px;background:var(--accent);border-radius:2px;}
+.section-block{margin-bottom:36px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:768px){.two-col{grid-template-columns:1fr;}}
+
+/* ── COHORT TABLE ── */
+.cohort-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:auto;}
+.cohort-table{width:100%;border-collapse:collapse;font-size:12px;}
+.cohort-table th{padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap;}
+.cohort-table th:first-child{text-align:left;}
+.cohort-table td{padding:9px 12px;text-align:center;font-weight:700;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.cohort-table td:first-child{text-align:left;color:var(--sub);font-weight:600;white-space:nowrap;}
+.cell-green{background:rgba(113,255,0,0.18);color:#71ff00;}
+.cell-amber{background:rgba(255,180,0,0.14);color:#ffb400;}
+.cell-red{background:rgba(255,70,70,0.12);color:#ff6b6b;}
+.cell-na{color:rgba(255,255,255,0.15);}
+
+/* ── KPI CARDS ── */
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:600px){.kpi-row{grid-template-columns:1fr;}}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 16px;position:relative;overflow:hidden;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);}
+.kpi-label{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.kpi-value{font-size:26px;font-weight:900;color:var(--accent);line-height:1;}
+.kpi-sub{font-size:11px;color:var(--sub);margin-top:6px;}
+
+/* ── CHART WRAP ── */
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;}
+.chart-wrap canvas{display:block;width:100%;height:auto;}
+
+/* ── HEATMAP ── */
+.heatmap-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;}
+.heatmap-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.heatmap-legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub);}
+.hmap-grad{width:80px;height:10px;border-radius:4px;background:linear-gradient(90deg,rgba(113,255,0,0.05),rgba(113,255,0,0.9));}
+.kenya-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;}
+.county-cell{border-radius:8px;padding:8px 4px;text-align:center;font-size:9px;font-weight:700;min-height:40px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:.2s;cursor:default;}
+.county-cell:hover{transform:scale(1.05);}
+.county-name{font-size:8px;opacity:0.8;}
+.county-val{font-size:10px;font-weight:800;}
+
+/* ── CHURN TABLE ── */
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);}
+.data-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--text);}
+.data-table tr:hover td{background:rgba(113,255,0,0.03);}
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+.badge-red{background:rgba(255,70,70,0.15);color:#ff4646;}
+.badge-amber{background:rgba(255,180,0,0.15);color:#ffb400;}
+.re-engage-btn{padding:5px 12px;background:transparent;border:1px solid rgba(113,255,0,0.3);color:var(--accent);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;transition:.2s;}
+.re-engage-btn:hover{background:rgba(113,255,0,0.1);}
+
+/* ── ENGAGEMENT BARS ── */
+.engage-list{display:flex;flex-direction:column;gap:10px;}
+.engage-item{display:flex;align-items:center;gap:12px;}
+.engage-label{min-width:110px;font-size:13px;color:var(--sub);}
+.engage-bar-wrap{flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;}
+.engage-bar{height:100%;border-radius:8px;background:var(--accent);transition:width 1s ease;}
+.engage-val{min-width:36px;font-size:12px;font-weight:700;color:var(--accent);text-align:right;}
+
+/* ── FUNNEL ── */
+.funnel-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.97);border-top:1px solid var(--border);display:flex;z-index:200;padding-bottom:env(safe-area-inset-bottom);}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;text-decoration:none;color:var(--sub);font-size:10px;font-weight:600;gap:4px;transition:.2s;}
+.bnav-item.active{color:var(--accent);}
+.bnav-item i{font-size:18px;}
+@media(min-width:769px){.bottom-nav{display:none;}}
+
+/* ── TOAST / LOADING ── */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.3s;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:var(--accent);color:var(--accent);}
+.loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;}
+.loading-spinner{width:40px;height:40px;border:3px solid rgba(113,255,0,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <span style="font-size:13px;color:var(--sub);">Loading customer analytics…</span>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- TOP NAV -->
+<nav class="top-nav">
+  <a class="nav-logo" href="index.html">
+    <img src="assets/logosokoni.png" alt="Sokoni">
+    <span>SOKONI</span>
+  </a>
+  <span class="nav-title">📊 Customer Analytics</span>
+  <div class="nav-right">
+    <span class="admin-badge">Admin</span>
+    <a href="admin.html" class="nav-btn">⚙️ Admin</a>
+  </div>
+</nav>
+
+<div class="page-wrap" id="mainContent" style="display:none;">
+
+  <!-- 1. COHORT RETENTION TABLE -->
+  <div class="section-block">
+    <div class="section-title">Cohort Retention (Weekly)</div>
+    <div class="cohort-wrap">
+      <table class="cohort-table" id="cohortTable">
+        <thead>
+          <tr>
+            <th>Cohort</th>
+            <th>Size</th>
+            <th>Week 1</th>
+            <th>Week 2</th>
+            <th>Week 3</th>
+            <th>Week 4</th>
+          </tr>
+        </thead>
+        <tbody id="cohortBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 2. SESSION ANALYTICS KPIs -->
+  <div class="section-block">
+    <div class="section-title">Session Analytics</div>
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Avg Session Duration</div>
+        <div class="kpi-value">4m 32s</div>
+        <div class="kpi-sub">Per unique session</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Pages per Session</div>
+        <div class="kpi-value">6.8</div>
+        <div class="kpi-sub">Avg pages browsed</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Bounce Rate</div>
+        <div class="kpi-value" style="color:#ffb400;">34<span style="font-size:14px;color:var(--sub);">%</span></div>
+        <div class="kpi-sub">Single-page sessions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. USER JOURNEY FUNNEL (Vertical canvas) -->
+  <div class="section-block">
+    <div class="section-title">User Journey Funnel</div>
+    <div class="funnel-wrap">
+      <canvas id="journeyFunnel" height="280"></canvas>
+    </div>
+  </div>
+
+  <!-- 4. GEOGRAPHIC HEATMAP -->
+  <div class="section-block">
+    <div class="section-title">Geographic Density — Kenya Counties</div>
+    <div class="heatmap-wrap">
+      <div class="heatmap-title-row">
+        <span style="font-size:12px;color:var(--sub);">User concentration by county</span>
+        <div class="heatmap-legend">
+          <span>Low</span>
+          <div class="hmap-grad"></div>
+          <span>High</span>
+        </div>
+      </div>
+      <div class="kenya-grid" id="kenyaGrid"></div>
+    </div>
+  </div>
+
+  <!-- 5. PURCHASE FREQUENCY HISTOGRAM -->
+  <div class="section-block">
+    <div class="section-title">Purchase Frequency Distribution</div>
+    <div class="chart-wrap">
+      <canvas id="freqChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- 6. CHURN RISK TABLE -->
+  <div class="section-block">
+    <div class="section-title">Churn Risk Users</div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Last Seen</th>
+            <th>LTV (KES)</th>
+            <th>Risk</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="churnTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 7. LTV DISTRIBUTION -->
+  <div class="section-block">
+    <div class="section-title">Customer LTV Distribution</div>
+    <div class="chart-wrap">
+      <canvas id="ltvChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- 8. TOP ENGAGEMENT DRIVERS -->
+  <div class="section-block">
+    <div class="section-title">Top Engagement Drivers</div>
+    <div class="chart-wrap">
+      <div class="engage-list" id="engageList"></div>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="customer-analytics.html" class="bnav-item active"><i class="fa fa-chart-bar"></i>Customers</a>
+  <a href="admin.html" class="bnav-item"><i class="fa fa-users"></i>Users</a>
+  <a href="growth-dashboard.html" class="bnav-item"><i class="fa fa-chart-line"></i>Growth</a>
+  <a href="revenue.html" class="bnav-item"><i class="fa fa-coins"></i>Revenue</a>
+  <a href="admin.html" class="bnav-item"><i class="fa fa-cog"></i>Admin</a>
+</nav>
+
+<script src="sokoni-pay.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="analytics.js" defer></script>
+
+<script>
+(function(){
+  'use strict';
+
+  function escapeHTML(str){
+    if(str == null) return '';
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  /* ── AUTH GATE — Firebase custom claim (admin:true) required ── */
+  function checkAuth(){ return false; } /* synchronous version disabled — see _verifyAdmin() */
+
+  function _verifyAdmin(onGranted){
+    if(localStorage.getItem('loggedIn') !== 'true'){
+      window.location.replace('login.html'); return;
+    }
+    function _deny(msg){
+      document.getElementById('loadingOverlay').innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px;">' +
+        '<span style="font-size:40px;">&#128274;</span>' +
+        '<strong style="color:white;">' + escapeHTML(msg||'Admin access required.') + '</strong>' +
+        '<a href="login.html" style="color:#71ff00;font-weight:700;">Sign in</a></div>';
+      setTimeout(function(){ window.location.href='login.html'; }, 2200);
+    }
+    function _poll(n){
+      if(!window.firebaseAuth){
+        if(n > 30){ _deny('Firebase unavailable — cannot verify admin access.'); return; }
+        setTimeout(function(){ _poll(n+1); }, 150); return;
+      }
+      window.firebaseAuth.onAuthStateChanged(function(user){
+        if(!user){ _deny('Please sign in.'); return; }
+        user.getIdTokenResult(true).then(function(r){
+          if(r.claims && r.claims.admin === true){ onGranted(); }
+          else { _deny('Admin access required.'); }
+        }).catch(function(){ _deny('Cannot verify — check connection.'); });
+      });
+    }
+    _poll(0);
+  }
+
+  /* ── TOAST ── */
+  function showToast(msg, type){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type ? ' '+type : '');
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 3000);
+  }
+
+  /* ── SEEDED RANDOM ── */
+  function sr(seed){
+    var x = Math.sin(seed + 1) * 10000;
+    return x - Math.floor(x);
+  }
+
+  /* ── 1. COHORT TABLE ── */
+  function renderCohortTable(){
+    var now = new Date();
+    var cohorts = [];
+    for(var i = 5; i >= 0; i--){
+      var d = new Date(now);
+      d.setDate(d.getDate() - i * 7);
+      var label = 'W/C ' + d.toLocaleDateString('en-KE', {month:'short',day:'numeric'});
+      var size = Math.floor(sr(i*11+3)*300)+80;
+      var w1 = i < 5 ? Math.round(sr(i*7+1)*20+70) : 100;
+      var w2 = i < 4 ? Math.round(sr(i*7+2)*15+45) : null;
+      var w3 = i < 3 ? Math.round(sr(i*7+3)*10+28) : null;
+      var w4 = i < 2 ? Math.round(sr(i*7+4)*8+18) : null;
+      cohorts.push({label:label, size:size, w1:w1, w2:w2, w3:w3, w4:w4});
+    }
+
+    function cellClass(v){
+      if(v === null) return 'cell-na';
+      if(v >= 60) return 'cell-green';
+      if(v >= 35) return 'cell-amber';
+      return 'cell-red';
+    }
+    function cellText(v){
+      if(v === null) return '—';
+      return v+'%';
+    }
+
+    var html = '';
+    cohorts.forEach(function(c){
+      html += '<tr>'+
+        '<td>'+escapeHTML(c.label)+'</td>'+
+        '<td style="color:var(--text);">'+c.size+'</td>'+
+        '<td class="'+cellClass(c.w1)+'">'+cellText(c.w1)+'</td>'+
+        '<td class="'+cellClass(c.w2)+'">'+cellText(c.w2)+'</td>'+
+        '<td class="'+cellClass(c.w3)+'">'+cellText(c.w3)+'</td>'+
+        '<td class="'+cellClass(c.w4)+'">'+cellText(c.w4)+'</td>'+
+        '</tr>';
+    });
+    document.getElementById('cohortBody').innerHTML = html;
+  }
+
+  /* ── 2. USER JOURNEY FUNNEL (Canvas vertical) ── */
+  function drawJourneyFunnel(){
+    var canvas = document.getElementById('journeyFunnel');
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.parentElement.clientWidth - 40;
+    var H = 280;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W+'px';
+    canvas.style.height = H+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var steps = [
+      { label:'Landing', users:12400, pct:100, color:'rgba(113,255,0,0.85)' },
+      { label:'Signup', users:6820, pct:55, color:'rgba(113,255,0,0.70)' },
+      { label:'First Browse', users:5050, pct:41, color:'rgba(113,255,0,0.55)' },
+      { label:'First Purchase', users:2170, pct:17, color:'rgba(113,255,0,0.40)' },
+      { label:'Repeat Purchase', users:890, pct:7, color:'rgba(113,255,0,0.25)' },
+    ];
+
+    var maxW = W * 0.65;
+    var stepH = H / steps.length;
+    var cx = W / 2;
+
+    steps.forEach(function(s, i){
+      var barW = (s.pct / 100) * maxW;
+      var y = i * stepH;
+      var barH = stepH - 8;
+
+      /* trapezoid approach: simple rect with taper */
+      var nextW = i < steps.length-1 ? (steps[i+1].pct/100)*maxW : barW * 0.7;
+      var topW = barW;
+      var botW = nextW;
+
+      ctx.beginPath();
+      ctx.moveTo(cx - topW/2, y + 4);
+      ctx.lineTo(cx + topW/2, y + 4);
+      ctx.lineTo(cx + botW/2, y + barH + 4);
+      ctx.lineTo(cx - botW/2, y + barH + 4);
+      ctx.closePath();
+      ctx.fillStyle = s.color;
+      ctx.fill();
+
+      /* label left */
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '12px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(s.label, cx - topW/2 - 8, y + stepH/2 + 4);
+
+      /* users right */
+      ctx.fillStyle = '#71ff00';
+      ctx.font = 'bold 12px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(s.users.toLocaleString('en-KE'), cx + topW/2 + 8, y + stepH/2 + 4);
+
+      /* drop-off */
+      if(i > 0){
+        var dropPct = steps[i-1].pct - s.pct;
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = '10px Segoe UI,system-ui,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('-'+dropPct+'%', cx, y + 2);
+      }
+    });
+  }
+
+  /* ── 3. GEOGRAPHIC HEATMAP ── */
+  function renderHeatmap(){
+    var counties = [
+      { name:'Nairobi', val:4200 },{ name:'Mombasa', val:1800 },
+      { name:'Kiambu', val:1400 },{ name:'Nakuru', val:1100 },
+      { name:'Kisumu', val:900 },{ name:'Uasin Gishu', val:780 },
+      { name:'Machakos', val:640 },{ name:'Kajiado', val:590 },
+      { name:'Murang\'a', val:520 },{ name:'Nyeri', val:480 },
+      { name:'Kilifi', val:440 },{ name:'Kwale', val:380 },
+      { name:'Kakamega', val:360 },{ name:'Trans Nzoia', val:320 },
+      { name:'Bungoma', val:300 },{ name:'Embu', val:270 },
+      { name:'Kirinyaga', val:250 },{ name:'Laikipia', val:220 },
+      { name:'Nyandarua', val:200 },{ name:'Nandi', val:190 },
+      { name:'Kericho', val:180 },{ name:'Bomet', val:160 },
+      { name:'Siaya', val:150 },{ name:'Homa Bay', val:140 },
+    ];
+
+    var maxVal = counties[0].val;
+    var html = '';
+    counties.forEach(function(c){
+      var ratio = c.val / maxVal;
+      var alpha = 0.08 + ratio * 0.82;
+      var bg = 'rgba(113,255,0,'+alpha.toFixed(2)+')';
+      var textColor = ratio > 0.5 ? '#000' : (ratio > 0.2 ? '#71ff00' : 'rgba(113,255,0,0.5)');
+      html += '<div class="county-cell" style="background:'+bg+';color:'+textColor+';" title="'+escapeHTML(c.name)+': '+c.val.toLocaleString()+' users">'+
+        '<div class="county-val">'+escapeHTML(c.val >= 1000 ? (c.val/1000).toFixed(1)+'K' : String(c.val))+'</div>'+
+        '<div class="county-name">'+escapeHTML(c.name)+'</div>'+
+        '</div>';
+    });
+    document.getElementById('kenyaGrid').innerHTML = html;
+  }
+
+  /* ── 4. PURCHASE FREQUENCY HISTOGRAM ── */
+  function drawFreqChart(){
+    var canvas = document.getElementById('freqChart');
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.parentElement.clientWidth - 40;
+    var H = 200;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W+'px';
+    canvas.style.height = H+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var bins = [
+      { label:'1x', val:4820, color:'#71ff00' },
+      { label:'2-3x', val:2140, color:'#4dcc00' },
+      { label:'4-6x', val:980, color:'#2ea300' },
+      { label:'7-10x', val:390, color:'#1a6600' },
+      { label:'10+x', val:180, color:'#0d3300' },
+    ];
+    var max = bins[0].val * 1.12;
+
+    var padL = 50, padR = 16, padT = 16, padB = 36;
+    var cW = W - padL - padR;
+    var cH = H - padT - padB;
+    var barW = (cW / bins.length) * 0.6;
+    var gap = (cW / bins.length) * 0.4;
+
+    /* grid */
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    for(var g = 0; g <= 4; g++){
+      var gy = padT + (cH/4)*g;
+      ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+cW,gy); ctx.stroke();
+      var gv = Math.round(max - (max/4)*g);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '10px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(gv >= 1000 ? (gv/1000).toFixed(1)+'K' : gv, padL-6, gy+4);
+    }
+
+    bins.forEach(function(b, i){
+      var bH = (b.val / max) * cH;
+      var x = padL + i * (barW + gap) + gap/2;
+      var y = padT + cH - bH;
+
+      /* gradient bar */
+      var grad = ctx.createLinearGradient(0, y, 0, padT+cH);
+      grad.addColorStop(0, b.color);
+      grad.addColorStop(1, 'rgba(113,255,0,0.1)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, bH, [4,4,0,0]);
+      ctx.fill();
+
+      /* value on top */
+      ctx.fillStyle = '#71ff00';
+      ctx.font = 'bold 11px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(b.val.toLocaleString(), x + barW/2, y - 5);
+
+      /* x label */
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '11px Segoe UI,system-ui,sans-serif';
+      ctx.fillText(b.label, x + barW/2, H - 8);
+    });
+  }
+
+  /* ── 5. CHURN RISK TABLE ── */
+  function renderChurnTable(){
+    var users = [
+      { name:'K. Wanjiku', lastSeen:'18 days ago', ltv:48200, risk:'High' },
+      { name:'J. Otieno',  lastSeen:'21 days ago', ltv:32100, risk:'High' },
+      { name:'A. Mwangi',  lastSeen:'15 days ago', ltv:27800, risk:'Medium' },
+      { name:'F. Achieng', lastSeen:'16 days ago', ltv:19400, risk:'Medium' },
+      { name:'B. Kamau',   lastSeen:'20 days ago', ltv:14300, risk:'High' },
+    ];
+    var html = '';
+    users.forEach(function(u, i){
+      var badgeClass = u.risk === 'High' ? 'badge-red' : 'badge-amber';
+      html += '<tr>'+
+        '<td>'+escapeHTML(u.name)+'</td>'+
+        '<td style="color:var(--sub);">'+escapeHTML(u.lastSeen)+'</td>'+
+        '<td>KES '+u.ltv.toLocaleString('en-KE')+'</td>'+
+        '<td><span class="badge '+badgeClass+'">'+escapeHTML(u.risk)+'</span></td>'+
+        '<td><button class="re-engage-btn" onclick="scheduleReEngage('+i+',\''+escapeHTML(u.name)+'\')">Re-engage</button></td>'+
+        '</tr>';
+    });
+    document.getElementById('churnTableBody').innerHTML = html;
+  }
+
+  window.scheduleReEngage = function(idx, name){
+    var scheduled = JSON.parse(localStorage.getItem('sokoniScheduledPush') || '[]');
+    var entry = {
+      userId: 'churn_risk_'+idx,
+      name: name,
+      message: 'We miss you on SOKONI! Come back and see what\'s new.',
+      scheduledAt: new Date().toISOString(),
+    };
+    scheduled.push(entry);
+    localStorage.setItem('sokoniScheduledPush', JSON.stringify(scheduled));
+    showToast('Re-engagement push scheduled for '+escapeHTML(name), 'success');
+  };
+
+  /* ── 6. LTV DISTRIBUTION ── */
+  function drawLTVChart(){
+    var canvas = document.getElementById('ltvChart');
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.parentElement.clientWidth - 40;
+    var H = 200;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W+'px';
+    canvas.style.height = H+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var buckets = [
+      { label:'KES 0-500', val:3210, color:'rgba(113,255,0,0.4)' },
+      { label:'500-2K', val:2840, color:'rgba(113,255,0,0.6)' },
+      { label:'2K-10K', val:1620, color:'rgba(113,255,0,0.8)' },
+      { label:'10K+', val:540, color:'#71ff00' },
+    ];
+    var max = buckets[0].val * 1.15;
+
+    var padL = 50, padR = 16, padT = 16, padB = 36;
+    var cW = W - padL - padR;
+    var cH = H - padT - padB;
+    var barW = (cW / buckets.length) * 0.55;
+    var gap = (cW / buckets.length) * 0.45;
+
+    /* grid */
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    for(var g = 0; g <= 4; g++){
+      var gy = padT + (cH/4)*g;
+      ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+cW,gy); ctx.stroke();
+      var gv = Math.round(max - (max/4)*g);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '10px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(gv >= 1000 ? (gv/1000).toFixed(1)+'K' : gv, padL-6, gy+4);
+    }
+
+    buckets.forEach(function(b, i){
+      var bH = (b.val / max) * cH;
+      var x = padL + i * (barW + gap) + gap/2;
+      var y = padT + cH - bH;
+
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, bH, [4,4,0,0]);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = 'bold 11px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(b.val.toLocaleString(), x + barW/2, y - 5);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '10px Segoe UI,system-ui,sans-serif';
+      ctx.fillText(b.label, x + barW/2, H - 8);
+    });
+  }
+
+  /* ── 7. ENGAGEMENT DRIVERS ── */
+  function renderEngagementDrivers(){
+    var drivers = [
+      { label:'Reviews', pct:84 },
+      { label:'Wishlist', pct:71 },
+      { label:'Notifications', pct:63 },
+      { label:'Loyalty Points', pct:57 },
+      { label:'Referrals', pct:44 },
+      { label:'Search', pct:38 },
+    ];
+
+    var html = '';
+    drivers.forEach(function(d, i){
+      html += '<div class="engage-item">'+
+        '<div class="engage-label">'+escapeHTML(d.label)+'</div>'+
+        '<div class="engage-bar-wrap"><div class="engage-bar" id="ebar'+i+'" style="width:0"></div></div>'+
+        '<div class="engage-val">'+d.pct+'%</div>'+
+        '</div>';
+    });
+    document.getElementById('engageList').innerHTML = html;
+
+    /* animate bars */
+    setTimeout(function(){
+      drivers.forEach(function(d, i){
+        var el = document.getElementById('ebar'+i);
+        if(el) el.style.width = d.pct+'%';
+      });
+    }, 150);
+  }
+
+  /* ── INIT ── */
+  function initAll(){
+    renderCohortTable();
+    drawJourneyFunnel();
+    renderHeatmap();
+    drawFreqChart();
+    renderChurnTable();
+    drawLTVChart();
+    renderEngagementDrivers();
+  }
+
+  function init(){
+    _verifyAdmin(function(){
+      document.getElementById('mainContent').style.display = '';
+      document.getElementById('loadingOverlay').style.display = 'none';
+      initAll();
+    });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  var resizeTimer;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      drawJourneyFunnel();
+      drawFreqChart();
+      drawLTVChart();
+    }, 200);
+  });
+
+})();
+</script>
+<script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

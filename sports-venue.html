@@ -1,0 +1,447 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Venue — SOKONI Sports Hub</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f59e0b">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:140px;}
+.vn-nav{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.vn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
+.vn-nav-title{font-size:14px;font-weight:800;flex:1;}
+/* HERO */
+.vn-hero-img{height:180px;background:linear-gradient(135deg,rgba(245,158,11,0.18),rgba(8,8,8,0.9));display:flex;align-items:center;justify-content:center;font-size:80px;position:relative;}
+.vn-hero-overlay{position:absolute;bottom:0;left:0;right:0;padding:16px;background:linear-gradient(to top,rgba(8,8,8,0.95),transparent);}
+.vn-hero-name{font-size:20px;font-weight:900;line-height:1.2;}
+.vn-hero-meta{font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px;}
+/* PILLS */
+.vn-pills{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.vn-pill{padding:4px 10px;border-radius:7px;font-size:10px;font-weight:900;}
+/* SPECS */
+.vn-specs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.vn-spec{text-align:center;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 8px;}
+.vn-spec-val{font-size:16px;font-weight:900;color:#f59e0b;}
+.vn-spec-lbl{font-size:9px;color:rgba(255,255,255,0.35);margin-top:2px;}
+/* TABS */
+.vn-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.vn-tabs::-webkit-scrollbar{display:none;}
+.vn-tab{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;flex-shrink:0;transition:all .2s;}
+.vn-tab.active{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.35);color:#f59e0b;}
+.vn-body{padding:16px;}
+/* TIME SLOTS */
+.vn-date-row{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-bottom:14px;padding-bottom:4px;}
+.vn-date-row::-webkit-scrollbar{display:none;}
+.vn-date-chip{padding:8px 14px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;flex-shrink:0;text-align:center;transition:all .2s;}
+.vn-date-chip.active{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.35);color:#f59e0b;}
+.vn-slot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.vn-slot{padding:10px 6px;border-radius:10px;font-size:11px;font-weight:800;text-align:center;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.6);font-family:inherit;transition:all .2s;}
+.vn-slot.selected{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.4);color:#f59e0b;}
+.vn-slot.booked{background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.05);color:rgba(255,255,255,0.2);cursor:not-allowed;text-decoration:line-through;}
+/* AMENITY */
+.vn-amenity-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;}
+.vn-amenity{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 12px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);}
+.vn-amenity-icon{font-size:16px;flex-shrink:0;}
+/* REVIEW */
+.vn-review-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;margin-bottom:8px;}
+.vn-review-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.vn-reviewer{font-size:12px;font-weight:800;}
+.vn-review-time{font-size:10px;color:rgba(255,255,255,0.3);margin-left:auto;}
+.vn-review-body{font-size:11px;color:rgba(255,255,255,0.55);line-height:1.6;}
+/* BOOKING BAR */
+.vn-book-bar{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);z-index:50;backdrop-filter:blur(16px);}
+.vn-book-price{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:6px;}
+.vn-book-price span{font-size:20px;font-weight:900;color:#f59e0b;}
+.vn-book-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;}
+/* MODAL */
+.vn-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:none;align-items:flex-end;justify-content:center;}
+.vn-modal-overlay.open{display:flex;}
+.vn-modal{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px 16px;width:100%;max-width:540px;max-height:85vh;overflow-y:auto;}
+.vn-modal-title{font-size:16px;font-weight:900;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+.vn-modal-close{background:rgba(255,255,255,0.07);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:16px;cursor:pointer;}
+.vn-field{margin-bottom:14px;}
+.vn-field label{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:5px;}
+.vn-field input,.vn-field select,.vn-field textarea{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;}
+.vn-field input:focus,.vn-field select:focus,.vn-field textarea:focus{outline:none;border-color:rgba(245,158,11,0.4);}
+.vn-field select option{background:#111;}
+.vn-field textarea{resize:vertical;min-height:70px;}
+.vn-submit-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+.vn-cost-box{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;text-align:center;margin-bottom:14px;}
+.vn-cost-total{font-size:22px;font-weight:900;color:#f59e0b;}
+.vn-cost-breakdown{font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;}
+.empty{text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-sports.js"></script>
+
+<nav class="vn-nav">
+  <a href="sports-hub.html" class="vn-back">←</a>
+  <span class="vn-nav-title" id="pageTitle">Venue</span>
+  <button onclick="shareVenue()" style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:white;">📤</button>
+</nav>
+
+<div id="mainContent"></div>
+
+<!-- BOOKING BAR -->
+<div class="vn-book-bar" id="bookBar" style="display:none;">
+  <div class="vn-book-price">From <span id="priceDisplay">—</span>/hour</div>
+  <button class="vn-book-btn" id="bookBtn" onclick="openBookingModal()">🏟️ Book This Venue</button>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav style="position:fixed;bottom:72px;left:0;right:0;background:transparent;display:flex;justify-content:space-around;padding:0;z-index:40;pointer-events:none;"></nav>
+
+<!-- BOOKING MODAL -->
+<div class="vn-modal-overlay" id="bookingModal">
+  <div class="vn-modal">
+    <div class="vn-modal-title">🏟️ Book Venue<button class="vn-modal-close" onclick="closeModal('bookingModal')">✕</button></div>
+    <div id="bookingModalBody"></div>
+  </div>
+</div>
+
+<!-- REVIEW MODAL -->
+<div class="vn-modal-overlay" id="reviewModal">
+  <div class="vn-modal">
+    <div class="vn-modal-title">⭐ Write a Review<button class="vn-modal-close" onclick="closeModal('reviewModal')">✕</button></div>
+    <div class="vn-field"><label>Your Name</label><input type="text" id="rvName" placeholder="Full name" style="font-size:16px;"></div>
+    <div class="vn-field"><label>Rating</label>
+      <select id="rvRating" style="font-size:16px;">
+        <option value="5">⭐⭐⭐⭐⭐ Excellent</option>
+        <option value="4">⭐⭐⭐⭐ Good</option>
+        <option value="3">⭐⭐⭐ Average</option>
+        <option value="2">⭐⭐ Below Average</option>
+        <option value="1">⭐ Poor</option>
+      </select>
+    </div>
+    <div class="vn-field"><label>Review</label><textarea id="rvBody" placeholder="Share your experience at this venue…"></textarea></div>
+    <button class="vn-submit-btn" onclick="submitReview()">📤 Post Review</button>
+  </div>
+</div>
+
+<script>
+const S = window.SokoniSports;
+const params = new URLSearchParams(location.search);
+const VN_ID = params.get('id') || 'vn001';
+let venue = null;
+let activeTab = 'book';
+let selectedDate = '';
+let selectedSlots = [];
+
+const HOURS = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
+
+function init() {
+  venue = S.getVenueById(VN_ID);
+  if (!venue) {
+    document.getElementById('mainContent').innerHTML = '<div class="empty"><div style="font-size:48px;margin-bottom:12px;">🏟️</div><p>Venue not found.</p><a href="sports-hub.html" style="color:#f59e0b;">← Back to Sports Hub</a></div>';
+    return;
+  }
+  document.title = venue.name + ' — SOKONI Sports';
+  document.getElementById('pageTitle').textContent = venue.name;
+  document.getElementById('priceDisplay').textContent = 'KES ' + S.fmt(venue.pricePerHour);
+  document.getElementById('bookBar').style.display = 'block';
+  renderPage();
+}
+
+function renderPage() {
+  const sc = '#f59e0b';
+  const el = document.getElementById('mainContent');
+  el.innerHTML = `
+    <!-- HERO -->
+    <div class="vn-hero-img">
+      ${venue.icon||'🏟️'}
+      <div class="vn-hero-overlay">
+        <div class="vn-hero-name">${venue.name}</div>
+        <div class="vn-hero-meta">📍 ${venue.location} · ⭐ ${venue.rating||4.5} (${S.getReviews(VN_ID).length} reviews)</div>
+      </div>
+    </div>
+    <!-- SPORT PILLS -->
+    <div class="vn-pills">
+      ${(venue.sports||[]).map(sp=>`<span class="vn-pill" style="background:${S.sportColor(sp)}12;border:1px solid ${S.sportColor(sp)}25;color:${S.sportColor(sp)};">${S.sportIcon(sp)} ${sp}</span>`).join('')}
+      ${venue.featured?`<span class="vn-pill" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;">⭐ Featured</span>`:''}
+      ${venue.indoor?'<span class="vn-pill" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);color:#3b82f6;">🏠 Indoor</span>':'<span class="vn-pill" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#22c55e;">🌿 Outdoor</span>'}
+    </div>
+    <!-- SPECS -->
+    <div class="vn-specs">
+      <div class="vn-spec"><div class="vn-spec-val">KES ${S.fmt(venue.pricePerHour)}</div><div class="vn-spec-lbl">Per Hour</div></div>
+      <div class="vn-spec"><div class="vn-spec-val">${venue.capacity||'—'}</div><div class="vn-spec-lbl">Capacity</div></div>
+      <div class="vn-spec"><div class="vn-spec-val">${venue.size||'Standard'}</div><div class="vn-spec-lbl">Size</div></div>
+    </div>
+    <!-- TABS -->
+    <div class="vn-tabs" id="vnTabs"></div>
+    <!-- BODY -->
+    <div class="vn-body" id="vnBody"></div>`;
+
+  renderTabs();
+  renderContent(activeTab);
+}
+
+const TABS = [
+  {id:'book',    label:'📅 Book'},
+  {id:'about',   label:'ℹ️ About'},
+  {id:'amenities',label:'🛎 Amenities'},
+  {id:'reviews', label:'⭐ Reviews'},
+];
+
+function renderTabs() {
+  document.getElementById('vnTabs').innerHTML = TABS.map(t=>
+    `<button class="vn-tab${t.id===activeTab?' active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`
+  ).join('');
+}
+
+function switchTab(tab) { activeTab = tab; renderTabs(); renderContent(tab); }
+
+function renderContent(tab) {
+  const el = document.getElementById('vnBody');
+  if (tab === 'book') renderBook(el);
+  else if (tab === 'about') renderAbout(el);
+  else if (tab === 'amenities') renderAmenities(el);
+  else if (tab === 'reviews') renderReviews(el);
+}
+
+/* ── BOOKING TAB ── */
+function renderBook(el) {
+  const today = new Date();
+  const dates = Array.from({length:7},(_,i)=>{
+    const d = new Date(today); d.setDate(today.getDate()+i);
+    return {
+      iso: d.toISOString().split('T')[0],
+      label: i===0?'Today':i===1?'Tomorrow':d.toLocaleDateString('en-KE',{weekday:'short',month:'short',day:'numeric'}),
+    };
+  });
+  if (!selectedDate) selectedDate = dates[0].iso;
+
+  const bookedSlots = S.checkVenueAvailability ? S.checkVenueAvailability(VN_ID, selectedDate) : [];
+
+  el.innerHTML = `
+    <div style="font-size:12px;font-weight:800;margin-bottom:10px;color:rgba(255,255,255,0.6);">Select Date</div>
+    <div class="vn-date-row">
+      ${dates.map(d=>`<button class="vn-date-chip${d.iso===selectedDate?' active':''}" onclick="selectDate('${d.iso}')">${d.label}</button>`).join('')}
+    </div>
+    <div style="font-size:12px;font-weight:800;margin-bottom:10px;color:rgba(255,255,255,0.6);">Select Time Slots <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">(tap to select)</span></div>
+    <div class="vn-slot-grid">
+      ${HOURS.map(h=>{
+        const taken = bookedSlots.includes(h);
+        const sel = selectedSlots.includes(h) && !taken;
+        return `<button class="vn-slot${taken?' booked':sel?' selected':''}" onclick="${taken?'':'toggleSlot(\\''+h+'\\')'}">${h}${taken?'<br><span style="font-size:8px;">Booked</span>':''}</button>`;
+      }).join('')}
+    </div>
+    ${selectedSlots.length ? `
+    <div class="vn-cost-box">
+      <div class="vn-cost-total">KES ${S.fmt(selectedSlots.length * venue.pricePerHour)}</div>
+      <div class="vn-cost-breakdown">${selectedSlots.length} hour${selectedSlots.length!==1?'s':''} × KES ${S.fmt(venue.pricePerHour)}/hr</div>
+    </div>` : '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;text-align:center;font-size:11px;color:rgba(255,255,255,0.25);margin-bottom:14px;">Select time slots above to see the cost</div>'}
+    <div style="font-size:11px;color:rgba(255,255,255,0.3);line-height:1.6;margin-bottom:10px;">
+      ⏰ Opening Hours: ${venue.openTime||'06:00'} – ${venue.closeTime||'22:00'}<br>
+      📋 Minimum booking: 1 hour · Payment on confirmation
+    </div>
+    <button onclick="openBookingModal()" style="width:100%;padding:13px;background:${selectedSlots.length?'#f59e0b':'rgba(255,255,255,0.05)'};border:none;border-radius:11px;color:${selectedSlots.length?'#080808':'rgba(255,255,255,0.3)'};font-size:14px;font-weight:900;cursor:${selectedSlots.length?'pointer':'not-allowed'};font-family:inherit;">${selectedSlots.length?'🏟️ Confirm Booking — KES '+S.fmt(selectedSlots.length*venue.pricePerHour):'Select slots to continue'}</button>`;
+}
+
+function selectDate(d) { selectedDate = d; selectedSlots = []; renderContent('book'); }
+
+function toggleSlot(h) {
+  if (selectedSlots.includes(h)) selectedSlots = selectedSlots.filter(s=>s!==h);
+  else selectedSlots.push(h);
+  selectedSlots.sort();
+  renderContent('book');
+}
+
+/* ── ABOUT TAB ── */
+function renderAbout(el) {
+  el.innerHTML = `
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:8px;">About this Venue</div>
+      <p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.7;">${venue.description||'A premium sports facility available for booking.'}</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+      ${infoBox('📍 Location', venue.location)}
+      ${infoBox('🏙️ County', venue.county||'Nairobi')}
+      ${infoBox('💰 Per Hour', 'KES '+S.fmt(venue.pricePerHour))}
+      ${infoBox('👥 Capacity', venue.capacity||'Standard')}
+      ${infoBox('📐 Size', venue.size||'Full size')}
+      ${infoBox('⏰ Open', (venue.openTime||'06:00')+' – '+(venue.closeTime||'22:00'))}
+    </div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:10px;">Available Sports</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${(venue.sports||[]).map(sp=>`<div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:${S.sportColor(sp)}08;border:1px solid ${S.sportColor(sp)}20;border-radius:8px;font-size:11px;font-weight:700;color:${S.sportColor(sp)};">${S.sportIcon(sp)} ${sp}</div>`).join('')}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <a href="https://maps.google.com?q=${encodeURIComponent(venue.name+' '+venue.location)}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:10px;color:#3b82f6;font-size:12px;font-weight:800;text-decoration:none;">🗺️ Google Maps</a>
+      <a href="tel:${venue.phone||''}" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;color:#22c55e;font-size:12px;font-weight:800;text-decoration:none;">📞 Call Venue</a>
+    </div>
+    ${venue.phone?`<a href="https://wa.me/254${(venue.phone||'700000000').replace(/^0/,'')}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:10px;color:#25d366;font-size:12px;font-weight:800;text-decoration:none;margin-top:8px;">📲 WhatsApp Venue</a>`:''}`;
+}
+
+function infoBox(label, val) {
+  return `<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px;">
+    <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:3px;">${label}</div>
+    <div style="font-size:12px;font-weight:800;">${val}</div>
+  </div>`;
+}
+
+/* ── AMENITIES TAB ── */
+const AMENITY_ICONS = {
+  parking:'🚗',lighting:'💡',changing_rooms:'👗',showers:'🚿',
+  toilets:'🚽',water:'💧',first_aid:'🩹',security:'🔒',
+  wifi:'📶',cafe:'☕',equipment_hire:'⚙️',scoreboard:'📋',
+  cctv:'📹',locker:'🔐',spectator_stands:'👥',grass:'🌿',
+  synthetic:'🟩',rubber:'⭕',water_resistant:'💦',indoor:'🏠',
+  floodlights:'🔦',sound_system:'🔊',pa_system:'📢',generator:'⚡',
+};
+
+function renderAmenities(el) {
+  const amenities = venue.amenities || [];
+  if (!amenities.length) { el.innerHTML = '<div class="empty"><p>No amenities listed yet.</p></div>'; return; }
+  el.innerHTML = `
+    <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:12px;">This venue offers the following facilities:</div>
+    <div class="vn-amenity-grid">
+      ${amenities.map(a=>{
+        const icon = AMENITY_ICONS[a] || '✓';
+        const label = a.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+        return `<div class="vn-amenity"><span class="vn-amenity-icon">${icon}</span>${label}</div>`;
+      }).join('')}
+    </div>
+    <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.12);border-radius:12px;padding:14px;font-size:11px;color:rgba(255,255,255,0.4);line-height:1.7;">
+      <div style="font-size:12px;font-weight:800;color:#f59e0b;margin-bottom:6px;">📋 Booking Policies</div>
+      ✓ Advance booking required — walk-ins subject to availability<br>
+      ✓ Full payment required to confirm booking<br>
+      ✓ Cancellations accepted up to 24 hours before the slot<br>
+      ✓ Bring your own equipment unless hired from the venue<br>
+      ✓ Maintain cleanliness and respect venue rules
+    </div>`;
+}
+
+/* ── REVIEWS TAB ── */
+function renderReviews(el) {
+  const reviews = S.getReviews(VN_ID);
+  const avg = S.getAvgRating(VN_ID, venue.rating);
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div>
+        <div style="font-size:28px;font-weight:900;color:#f59e0b;">${avg}</div>
+        <div style="margin-top:4px;">${S.starsHTML(avg)}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:3px;">${reviews.length} review${reviews.length!==1?'s':''}</div>
+      </div>
+      <button onclick="openReviewModal()" style="padding:10px 18px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;color:#f59e0b;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">+ Write Review</button>
+    </div>
+    <div id="reviewList">
+    ${reviews.length?reviews.map(r=>`
+      <div class="vn-review-card">
+        <div class="vn-review-head">
+          <div style="width:32px;height:32px;border-radius:50%;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">⭐</div>
+          <div class="vn-reviewer">${r.author||r.name||'Anonymous'}</div>
+          <div class="vn-review-time">${S.timeSince(r.ts)}</div>
+        </div>
+        <div style="margin-bottom:6px;">${S.starsHTML(r.rating)}</div>
+        <div class="vn-review-body">${r.body||r.comment||''}</div>
+      </div>`).join(''):'<div class="empty"><p style="font-weight:700;">No reviews yet</p><p style="font-size:11px;margin-top:6px;">Be the first to review this venue!</p></div>'}
+    </div>`;
+}
+
+function openReviewModal() { document.getElementById('reviewModal').classList.add('open'); }
+
+function submitReview() {
+  const name = document.getElementById('rvName').value.trim();
+  const body = document.getElementById('rvBody').value.trim();
+  if (!name || !body) { (window._skToast||alert)('Please enter your name and review.'); return; }
+  S.addReview(VN_ID, 'venue', {author: name, rating: parseInt(document.getElementById('rvRating').value), body});
+  closeModal('reviewModal');
+  document.getElementById('rvName').value = '';
+  document.getElementById('rvBody').value = '';
+  renderContent('reviews');
+}
+
+/* ── BOOKING MODAL ── */
+function openBookingModal() {
+  if (!venue) return;
+  const hrs = selectedSlots.length;
+  const total = hrs * venue.pricePerHour;
+  document.getElementById('bookingModalBody').innerHTML = `
+    <div class="vn-cost-box">
+      <div style="font-size:12px;font-weight:800;margin-bottom:6px;color:rgba(255,255,255,0.7);">${venue.name}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">📅 ${selectedDate} · ${selectedSlots.length?selectedSlots[0]+' – '+padTime(selectedSlots[selectedSlots.length-1]):'No slots selected'}</div>
+      <div class="vn-cost-total">KES ${S.fmt(total)}</div>
+      <div class="vn-cost-breakdown">${hrs} hour${hrs!==1?'s':''} × KES ${S.fmt(venue.pricePerHour)}/hr</div>
+    </div>
+    <div class="vn-field"><label>Your Name</label><input type="text" id="bk_name" placeholder="Full name" style="font-size:16px;"></div>
+    <div class="vn-field"><label>Phone Number</label><input type="tel" id="bk_phone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <div class="vn-field"><label>Sport / Activity</label>
+      <select id="bk_sport" style="font-size:16px;">
+        ${(venue.sports||['football']).map(sp=>`<option value="${sp}">${S.sportIcon(sp)} ${sp}</option>`).join('')}
+      </select>
+    </div>
+    <div class="vn-field"><label>Number of Players</label><input type="number" id="bk_players" placeholder="e.g. 22" min="1" max="${venue.capacity||100}" style="font-size:16px;"></div>
+    <div class="vn-field"><label>Notes (optional)</label><textarea id="bk_notes" placeholder="Equipment needs, special requirements…"></textarea></div>
+    <button class="vn-submit-btn" onclick="submitBooking()">✅ Confirm Booking — KES ${S.fmt(total)}</button>
+    <div style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:10px;">Payment via M-Pesa on confirmation. Booking ref will be sent via SMS.</div>`;
+  document.getElementById('bookingModal').classList.add('open');
+}
+
+function padTime(t) {
+  /* given "14:00" returns "15:00" */
+  const [h] = t.split(':');
+  return String(parseInt(h)+1).padStart(2,'0')+':00';
+}
+
+function submitBooking() {
+  const name = document.getElementById('bk_name').value.trim();
+  const phone = document.getElementById('bk_phone').value.trim();
+  if (!name || !phone) { (window._skToast||alert)('Please enter your name and phone number.'); return; }
+  if (!selectedSlots.length) { (window._skToast||alert)('Please select at least one time slot.'); return; }
+  const bk = S.bookVenue({
+    venueId: VN_ID,
+    date: selectedDate,
+    slots: selectedSlots,
+    name,
+    phone,
+    sport: document.getElementById('bk_sport').value,
+    players: document.getElementById('bk_players').value,
+    notes: document.getElementById('bk_notes').value,
+    total: selectedSlots.length * venue.pricePerHour,
+  });
+  S.addNotification({type:'venue', title:'Venue Booked!', body:`${venue.name} booked for ${selectedDate}. Ref: ${bk.id}`});
+  closeModal('bookingModal');
+  selectedSlots = [];
+  renderContent('book');
+  (window._skToast||alert)('✅ Venue booked!\nRef: ' + bk.id + '\nConfirmation will be sent to ' + phone + '\nPayment details will follow.');
+}
+
+function shareVenue() {
+  const url = location.href;
+  if (navigator.share) navigator.share({title: venue?.name||'SOKONI Sports Venue', url}).catch(()=>{});
+  else navigator.clipboard.writeText(url).then(()=>(window._skToast||alert)('Venue link copied!')).catch(()=>{});
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.addEventListener('click', e => {
+  ['bookingModal','reviewModal'].forEach(id => {
+    const modal = document.getElementById(id);
+    if (e.target === modal) modal.classList.remove('open');
+  });
+});
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

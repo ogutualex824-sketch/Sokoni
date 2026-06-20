@@ -1,0 +1,376 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RFQ Management â€” SOKONI B2B</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00aaff">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.fn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
+.rfq-body{max-width:900px;margin:0 auto;padding:16px;}
+
+/* RFQ HEADER */
+.rfq-hdr-card{background:linear-gradient(135deg,rgba(0,170,255,0.08),rgba(0,100,200,0.04));border:1px solid rgba(0,170,255,0.2);border-radius:18px;padding:20px;margin-bottom:16px;}
+.rfq-hdr-title{font-size:20px;font-weight:900;color:white;margin-bottom:8px;}
+.rfq-hdr-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:12px;}
+.rfq-hdr-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:7px;font-size:11px;font-weight:800;}
+.rfq-stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:14px;}
+.rfq-stat{background:rgba(0,0,0,0.3);border-radius:10px;padding:10px;text-align:center;}
+.rfq-stat-val{font-size:18px;font-weight:900;color:#00aaff;}
+.rfq-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+
+/* QUOTE COMPARISON */
+.qc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px;}
+.qc-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;position:relative;transition:all .2s;}
+.qc-card.best{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.03);}
+.qc-best-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#71ff00;color:black;font-size:10px;font-weight:900;padding:2px 12px;border-radius:8px;white-space:nowrap;}
+.qc-sup{font-size:14px;font-weight:900;color:white;margin-bottom:4px;}
+.qc-price{font-size:26px;font-weight:900;color:#71ff00;margin:8px 0;}
+.qc-total{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:8px;}
+.qc-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.qc-row:last-of-type{border-bottom:none;}
+.qc-row .lbl{color:rgba(255,255,255,0.4);}
+.qc-row .val{font-weight:700;color:white;}
+.qc-actions{display:flex;gap:8px;margin-top:14px;}
+.qc-btn{flex:1;padding:10px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid;text-align:center;}
+.qc-accept{background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:#22c55e;}
+.qc-reject{background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.2);color:#ef4444;}
+.qc-msg{background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.25);color:#00aaff;}
+.qc-status{font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;position:absolute;top:14px;right:14px;}
+
+/* COMPARISON TABLE */
+.cmp-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px;}
+.cmp-table th{padding:10px 14px;text-align:left;font-size:11px;font-weight:800;color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.07);}
+.cmp-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.cmp-table tr:hover td{background:rgba(255,255,255,0.02);}
+.cmp-table .best-val{color:#71ff00;font-weight:900;}
+
+/* NEGOTIATION */
+.neg-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:12px;}
+.neg-msg-bubble{padding:10px 14px;border-radius:12px;font-size:13px;margin-bottom:8px;}
+.neg-msg-bubble.sent{background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.2);}
+.neg-msg-bubble.recv{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);}
+
+.rfq-tab-bar{display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:16px;}
+.rfq-tab{padding:9px 18px;font-size:12px;font-weight:800;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,0.4);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;}
+.rfq-tab.active{color:#00aaff;border-bottom-color:#00aaff;}
+.rfq-pane{display:none;}
+.rfq-pane.active{display:block;}
+
+.rfq-empty{text-align:center;padding:40px 16px;color:rgba(255,255,255,0.3);}
+.rfq-empty .big{font-size:44px;margin-bottom:12px;}
+
+.b2-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:10px;}
+.b2-input:focus{border-color:rgba(0,170,255,0.35);}
+.b2-textarea{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:14px;outline:none;font-family:inherit;min-height:70px;resize:vertical;margin-bottom:10px;}
+.b2-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);display:block;margin-bottom:4px;}
+.b2-submit{padding:11px 24px;background:linear-gradient(135deg,#00aaff,#0066cc);color:white;font-weight:900;border:none;border-radius:11px;cursor:pointer;font-family:inherit;}
+
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#00aaff;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-b2b.js"></script>
+
+<nav class="fn">
+  <a href="b2b.html" class="fn-back">â†</a>
+  <span style="font-size:14px;font-weight:800;flex:1;">ðŸ“‹ RFQ Management</span>
+  <button onclick="deleteThisRFQ()" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#ef4444;padding:7px 14px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">Delete RFQ</button>
+</nav>
+
+<div class="rfq-body">
+
+  <div id="rfqHdr">
+    <div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">Loading RFQ...</div>
+  </div>
+
+  <div class="rfq-tab-bar">
+    <button class="rfq-tab active" onclick="switchTab('quotes',this)">ðŸ“Š Compare Quotes</button>
+    <button class="rfq-tab" onclick="switchTab('table',this)">ðŸ“‹ Comparison Table</button>
+    <button class="rfq-tab" onclick="switchTab('submit',this)">ðŸ“¤ Submit Quote</button>
+    <button class="rfq-tab" onclick="switchTab('negotiate',this)">ðŸ¤ Negotiate</button>
+  </div>
+
+  <div class="rfq-pane active" id="pane-quotes">
+    <div id="quotesGrid" class="qc-grid"></div>
+    <div id="noQuotes" style="display:none;" class="rfq-empty"><div class="big">ðŸ’¬</div><p>No quotes received yet.<br>Share your RFQ with suppliers to get offers.</p>
+      <button onclick="switchTab('submit',document.querySelectorAll('.rfq-tab')[2])" style="margin-top:14px;padding:10px 20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.3);color:#00aaff;border-radius:10px;cursor:pointer;font-weight:800;font-family:inherit;">Be the first to submit a quote â†’</button>
+    </div>
+  </div>
+
+  <div class="rfq-pane" id="pane-table">
+    <div style="overflow-x:auto;">
+      <table class="cmp-table" id="compTable">
+        <thead><tr><th>Supplier</th><th>Unit Price</th><th>Total</th><th>Lead Time</th><th>Valid Until</th><th>Status</th></tr></thead>
+        <tbody id="compTableBody"></tbody>
+      </table>
+    </div>
+    <div id="noTableData" class="rfq-empty" style="display:none;"><div class="big">ðŸ“‹</div><p>No quotes to compare yet.</p></div>
+  </div>
+
+  <div class="rfq-pane" id="pane-submit">
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;">
+      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">ðŸ“¤ Submit Your Quote</div>
+      <label class="b2-label">Your Company Name *</label>
+      <input id="qtSup" class="b2-input" placeholder="XYZ Suppliers Ltd.">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="b2-label">Unit Price (KES) *</label><input id="qtPrice" class="b2-input" type="number" placeholder="450"></div>
+        <div><label class="b2-label">Quantity You Can Supply</label><input id="qtQty" class="b2-input" type="number" placeholder="500"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label class="b2-label">Lead Time</label><input id="qtLead" class="b2-input" placeholder="e.g. 5 working days"></div>
+        <div><label class="b2-label">Quote Valid Until</label><input id="qtValid" class="b2-input" type="date"></div>
+      </div>
+      <label class="b2-label">Quote Details / Notes</label>
+      <textarea id="qtNotes" class="b2-textarea" placeholder="What's included, delivery terms, payment terms, warranties..."></textarea>
+      <label class="b2-label">Your Contact *</label>
+      <input id="qtContact" class="b2-input" placeholder="07XXXXXXXX or email@company.com">
+      <button class="b2-submit" onclick="submitQuote()">ðŸ“¤ Submit Quote to Buyer</button>
+      <div id="qtMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+
+  <div class="rfq-pane" id="pane-negotiate">
+    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">ðŸ¤ Negotiation Thread</div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;height:300px;display:flex;flex-direction:column;margin-bottom:12px;">
+      <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;" id="negMsgList"></div>
+      <div style="display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,0.07);">
+        <input id="negInput" class="b2-input" placeholder="Type a message..." style="margin-bottom:0;" onkeydown="if(event.key==='Enter')sendNegMsg()">
+        <button onclick="sendNegMsg()" style="padding:10px 18px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.3);border-radius:10px;color:#00aaff;font-weight:900;cursor:pointer;font-family:inherit;">Send</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="b2b.html" class="bnav-item"><i class="fas fa-handshake"></i><span>B2B</span></a>
+  <a href="b2b-dashboard.html" class="bnav-item active"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script>
+const B = window.SokoniB2B;
+const _rfqId = new URLSearchParams(window.location.search).get('id');
+let _rfq = null;
+
+function load() {
+  if (!_rfqId) { showAllRFQs(); return; }
+  _rfq = B.getRFQById(_rfqId);
+  if (!_rfq) { document.getElementById('rfqHdr').innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">RFQ not found. <a href="b2b.html" style="color:#00aaff;">Go to B2B Hub â†’</a></div>'; return; }
+
+  renderHeader();
+  renderQuotes();
+  renderTable();
+  loadNegMessages();
+}
+
+function showAllRFQs() {
+  const rfqs = B.getRFQs();
+  document.getElementById('rfqHdr').innerHTML = rfqs.length ?
+    `<div style="font-size:15px;font-weight:800;color:white;margin-bottom:14px;">ðŸ“‹ All My RFQs</div>` +
+    rfqs.map(r=>`
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;" onclick="window.location.href='b2b-rfq.html?id=${r.id}'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:800;color:white;">${r.title}</span>
+        <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);color:#00aaff;">${r.status}</span>
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);">#${r.id} Â· ${B.timeSince(r.createdAt)} Â· ${B.getQuotes(r.id).length} quote(s)</div>
+    </div>`).join('') :
+    '<div class="rfq-empty"><div class="big">ðŸ“‹</div><p>No RFQs posted yet.<br><a href="b2b.html?tab=rfq-create" style="color:#00aaff;font-weight:800;">Post your first RFQ â†’</a></p></div>';
+  document.querySelector('.rfq-tab-bar').style.display='none';
+  document.querySelectorAll('.rfq-pane').forEach(p=>p.style.display='none');
+}
+
+function renderHeader() {
+  const quotes = B.getQuotes(_rfqId);
+  const st = B.RFQ_STATUS[_rfq.status]||{label:_rfq.status,color:'#00aaff'};
+  document.getElementById('rfqHdr').innerHTML = `
+    <div class="rfq-hdr-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+        <div class="rfq-hdr-title">${_rfq.title}</div>
+        <span class="rfq-hdr-badge" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
+      </div>
+      <div class="rfq-hdr-meta">
+        <span>#${_rfq.id}</span>
+        <span>ðŸ“… Posted ${B.timeSince(_rfq.createdAt)}</span>
+        ${_rfq.deadline?`<span>ðŸ“… Need by: ${_rfq.deadline}</span>`:''}
+        <span>ðŸ“¦ ${_rfq.qty||'â€”'} ${_rfq.unit||'units'}</span>
+        ${_rfq.deliveryLocation?`<span>ðŸ“ ${_rfq.deliveryLocation}</span>`:''}
+      </div>
+      ${_rfq.desc?`<div style="font-size:13px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:10px;">${_rfq.desc}</div>`:''}
+      <div class="rfq-stat-row">
+        <div class="rfq-stat"><div class="rfq-stat-val">${quotes.length}</div><div class="rfq-stat-lbl">Quotes Received</div></div>
+        <div class="rfq-stat"><div class="rfq-stat-val">${_rfq.budget?'KES '+B.fmt(_rfq.budget):'Open'}</div><div class="rfq-stat-lbl">Budget</div></div>
+        <div class="rfq-stat"><div class="rfq-stat-val">${quotes.length?'KES '+B.fmt(Math.min(...quotes.map(q=>q.unitPrice||Infinity))):'â€”'}</div><div class="rfq-stat-lbl">Best Price / Unit</div></div>
+        <div class="rfq-stat"><div class="rfq-stat-val">${quotes.filter(q=>q.status==='pending').length}</div><div class="rfq-stat-lbl">Pending Review</div></div>
+      </div>
+    </div>`;
+}
+
+function renderQuotes() {
+  const quotes = B.getQuotes(_rfqId);
+  const grid = document.getElementById('quotesGrid');
+  const noQ = document.getElementById('noQuotes');
+  if (!quotes.length) { grid.innerHTML=''; noQ.style.display='block'; return; }
+  noQ.style.display='none';
+
+  const sorted = [...quotes].sort((a,b)=>(a.unitPrice||Infinity)-(b.unitPrice||Infinity));
+  grid.innerHTML = sorted.map((q,i)=>{
+    const st = B.QUOTE_STATUS[q.status]||{label:q.status,color:'white'};
+    const isBest = i===0 && q.status!=='rejected';
+    return `
+    <div class="qc-card ${isBest?'best':''}">
+      ${isBest?'<div class="qc-best-badge">ðŸ† Best Price</div>':''}
+      <span class="qc-status" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
+      <div class="qc-sup">ðŸ­ ${q.supplierName}</div>
+      <div class="qc-price">KES ${B.fmt(q.unitPrice)} <span style="font-size:13px;color:rgba(255,255,255,0.4);">/ unit</span></div>
+      <div class="qc-total">Total: KES ${B.fmt(q.totalPrice)}</div>
+      <div class="qc-row"><span class="lbl">Lead Time</span><span class="val">${q.leadTime||'â€”'}</span></div>
+      <div class="qc-row"><span class="lbl">Valid Until</span><span class="val">${q.validUntil||'â€”'}</span></div>
+      <div class="qc-row"><span class="lbl">Contact</span><span class="val">${q.contact}</span></div>
+      ${q.notes?`<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:8px;line-height:1.5;">${q.notes}</div>`:''}
+      ${q.status==='pending'?`
+      <div class="qc-actions">
+        <button class="qc-btn qc-accept" onclick="acceptQ('${q.id}')">âœ… Accept</button>
+        <button class="qc-btn qc-msg" onclick="openNegotiate('${q.id}','${q.supplierName.replace(/'/g,"\\'")}')">ðŸ¤ Negotiate</button>
+        <button class="qc-btn qc-reject" onclick="rejectQ('${q.id}')">âœ—</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderTable() {
+  const quotes = B.getQuotes(_rfqId);
+  const tbody = document.getElementById('compTableBody');
+  const noData = document.getElementById('noTableData');
+  if (!quotes.length) { tbody.innerHTML=''; noData.style.display='block'; return; }
+  noData.style.display='none';
+  const minPrice = Math.min(...quotes.map(q=>q.unitPrice||Infinity));
+  tbody.innerHTML = quotes.sort((a,b)=>(a.unitPrice||0)-(b.unitPrice||0)).map(q=>{
+    const isBest = q.unitPrice===minPrice && q.status!=='rejected';
+    const st = B.QUOTE_STATUS[q.status]||{label:q.status};
+    return `<tr>
+      <td style="font-weight:800;color:white;">${q.supplierName} ${isBest?'ðŸ†':''}</td>
+      <td class="${isBest?'best-val':''}">KES ${B.fmt(q.unitPrice)}</td>
+      <td>KES ${B.fmt(q.totalPrice)}</td>
+      <td>${q.leadTime||'â€”'}</td>
+      <td>${q.validUntil||'â€”'}</td>
+      <td><span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.5);">${st.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function acceptQ(quoteId) {
+  if(!_c){_skConfirm('Accept this quote and create a Purchase Order?',()=>_doAcceptQuote(_rfqId,true));return;}
+  B.acceptQuote(quoteId, _rfqId);
+  const q = B.getQuoteById(quoteId);
+  const order = B.createOrder({
+    rfqId:_rfqId, quoteId, supplierId:q.supplierId||quoteId, supplierName:q.supplierName,
+    items:[{name:_rfq?.title||'B2B Order',qty:q.qty||_rfq?.qty||1,unitPrice:q.unitPrice}],
+    total:q.totalPrice, deliveryAddress:_rfq?.deliveryLocation,
+  });
+  B.showToast('âœ… Quote accepted! PO '+order.id+' created.');
+  renderHeader(); renderQuotes(); renderTable();
+}
+window.acceptQ = acceptQ;
+
+function rejectQ(quoteId) {
+  B.updateQuoteStatus(quoteId,'rejected');
+  B.showToast('Quote rejected.','warn');
+  renderHeader(); renderQuotes(); renderTable();
+}
+window.rejectQ = rejectQ;
+
+function openNegotiate(quoteId, supName) {
+  switchTab('negotiate', document.querySelectorAll('.rfq-tab')[3]);
+  document.getElementById('negInput').placeholder = 'Message to ' + supName + '...';
+}
+window.openNegotiate = openNegotiate;
+
+function loadNegMessages() {
+  const threadId = 'rfq_' + _rfqId;
+  const msgs = B.getMessages(threadId);
+  const list = document.getElementById('negMsgList');
+  list.innerHTML = msgs.length ? msgs.map(m=>`
+    <div class="neg-msg-bubble ${m.from==='me'?'sent':'recv'}">
+      <div style="font-size:13px;color:rgba(255,255,255,0.85);">${m.text}</div>
+      <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:4px;">${B.timeSince(m.ts)}</div>
+    </div>`).join('') : '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">No messages yet. Start the negotiation!</div>';
+  list.scrollTop = list.scrollHeight;
+}
+
+function sendNegMsg() {
+  const input = document.getElementById('negInput');
+  const text = input?.value.trim();
+  if (!text) return;
+  B.sendMessage({threadId:'rfq_'+_rfqId, from:'me', to:'supplier', text});
+  input.value='';
+  loadNegMessages();
+}
+window.sendNegMsg = sendNegMsg;
+
+function submitQuote() {
+  const supplierName = document.getElementById('qtSup')?.value.trim();
+  const unitPrice = parseFloat(document.getElementById('qtPrice')?.value);
+  const qty = parseInt(document.getElementById('qtQty')?.value)||0;
+  const leadTime = document.getElementById('qtLead')?.value.trim();
+  const validUntil = document.getElementById('qtValid')?.value;
+  const notes = document.getElementById('qtNotes')?.value.trim();
+  const contact = document.getElementById('qtContact')?.value.trim();
+  const msg = document.getElementById('qtMsg');
+  if (!supplierName||!contact) {msg.innerHTML='<span style="color:#ef4444;">âš ï¸ Company name and contact required</span>';return;}
+  if (!unitPrice||unitPrice<1) {msg.innerHTML='<span style="color:#ef4444;">âš ï¸ Enter a valid unit price</span>';return;}
+  const totalPrice = unitPrice*(qty||_rfq?.qty||1);
+  B.submitQuote({rfqId:_rfqId, supplierName, unitPrice, totalPrice, qty, leadTime, validUntil, notes, contact});
+  msg.innerHTML='<span style="color:#22c55e;">âœ… Quote submitted! Buyer will be notified.</span>';
+  ['qtSup','qtPrice','qtQty','qtLead','qtValid','qtNotes','qtContact'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  setTimeout(()=>{switchTab('quotes',document.querySelectorAll('.rfq-tab')[0]);renderHeader();renderQuotes();renderTable();},1500);
+}
+window.submitQuote = submitQuote;
+
+function deleteThisRFQ() {
+  if(!_rfq)return;if(!_c){_skConfirm('Delete this RFQ? This cannot be undone.',()=>_doDeleteRFQ(true));return;}
+  B.deleteRFQ(_rfqId);
+  B.showToast('RFQ deleted.');
+  setTimeout(()=>window.location.href='b2b.html?tab=my-rfqs',800);
+}
+window.deleteThisRFQ = deleteThisRFQ;
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.rfq-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.rfq-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('pane-'+name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+window.switchTab = switchTab;
+
+load();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+

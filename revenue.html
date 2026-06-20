@@ -1,0 +1,790 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Revenue Engine — SOKONI Admin</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="sokoni-desktop.css"/>
+  <style>
+    :root { --g:#71ff00; --b:#00d4ff; --o:#ff9500; --r:#ff4444; }
+    body { background:#0a0a0a; color:#fff; font-family:'Segoe UI',sans-serif; margin:0; }
+    .rev-hero { background:linear-gradient(135deg,#0d1a0d 0%,#0a0a0a 60%); border-bottom:1px solid #71ff0022; padding:28px 24px 20px; }
+    .rev-hero-title { font-size:26px; font-weight:900; color:var(--g); letter-spacing:-0.5px; }
+    .rev-hero-sub   { color:#888; font-size:13px; margin-top:4px; }
+    .rev-hero-row   { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; }
+    .rev-period-sel { background:#111; border:1px solid #333; color:#fff; padding:8px 14px; border-radius:10px; font-size:13px; }
+    .rev-btn        { background:var(--g); color:#000; border:none; padding:9px 20px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; }
+    .rev-btn.sec    { background:#1a1a1a; color:#fff; border:1px solid #333; }
+    .rev-btn:hover  { opacity:.85; }
+    .rev-stats      { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; padding:20px 24px; }
+    .rev-stat       { background:#111; border:1px solid #1e1e1e; border-radius:14px; padding:18px; }
+    .rev-stat-val   { font-size:22px; font-weight:900; color:var(--g); line-height:1; }
+    .rev-stat-lbl   { font-size:11px; color:#777; margin-top:6px; text-transform:uppercase; letter-spacing:.5px; }
+    .rev-stat-sub   { font-size:11px; color:#555; margin-top:3px; }
+    .rev-stat.blue .rev-stat-val  { color:var(--b); }
+    .rev-stat.orange .rev-stat-val{ color:var(--o); }
+    .rev-stat.red .rev-stat-val   { color:var(--r); }
+    .rev-tabs { display:flex; gap:4px; padding:0 24px; border-bottom:1px solid #1a1a1a; overflow-x:auto; }
+    .rev-tab  { padding:12px 18px; font-size:13px; font-weight:600; color:#666; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+    .rev-tab.active { color:var(--g); border-bottom-color:var(--g); }
+    .rev-pane { display:none; padding:24px; }
+    .rev-pane.active { display:block; }
+    .rev-card { background:#111; border:1px solid #1e1e1e; border-radius:14px; padding:20px; margin-bottom:16px; }
+    .rev-card-title { font-size:14px; font-weight:700; margin-bottom:16px; color:#ccc; }
+    .rev-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .rev-table th { color:#555; font-size:11px; text-transform:uppercase; letter-spacing:.5px; padding:8px 12px; text-align:left; border-bottom:1px solid #1a1a1a; }
+    .rev-table td { padding:10px 12px; border-bottom:1px solid #111; color:#ccc; }
+    .rev-table tr:hover td { background:#111; }
+    .rev-table .mono { font-family:monospace; font-size:12px; }
+    .rev-filter-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+    .rev-filter { background:#111; border:1px solid #2a2a2a; color:#fff; padding:7px 12px; border-radius:8px; font-size:13px; }
+    .rev-empty { text-align:center; padding:40px; color:#555; }
+    .hub-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+    .hub-card { background:#0d0d0d; border:1px solid #1e1e1e; border-radius:12px; padding:16px; }
+    .hub-card-name { font-size:13px; font-weight:700; color:#ccc; }
+    .hub-card-val  { font-size:20px; font-weight:900; color:var(--g); margin-top:6px; }
+    .hub-card-sub  { font-size:11px; color:#555; margin-top:3px; }
+    .config-row    { display:flex; align-items:center; gap:12px; padding:14px 0; border-bottom:1px solid #151515; }
+    .config-label  { flex:1; font-size:13px; color:#ccc; }
+    .config-sub    { font-size:11px; color:#555; }
+    .config-input  { background:#0d0d0d; border:1px solid #2a2a2a; color:#fff; padding:8px 12px; border-radius:8px; font-size:13px; width:90px; }
+    .config-save   { background:var(--g); color:#000; border:none; padding:8px 16px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; }
+    .plan-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+    .plan-card { background:#0d0d0d; border:2px solid #1e1e1e; border-radius:16px; padding:20px; }
+    .plan-card.highlighted { border-color:var(--g); }
+    .plan-name  { font-size:16px; font-weight:900; }
+    .plan-price { font-size:28px; font-weight:900; margin:8px 0; }
+    .plan-price span { font-size:13px; font-weight:400; color:#666; }
+    .plan-feat  { font-size:12px; color:#888; margin-top:12px; line-height:1.8; }
+    .plan-feat li { list-style:none; }
+    .plan-feat li::before { content:"✓ "; color:var(--g); }
+    .inv-row { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid #151515; gap:12px; flex-wrap:wrap; }
+    .inv-meta { font-size:11px; color:#555; margin-top:3px; }
+    .badge-pending  { background:#ff950022; color:#ff9500; }
+    .badge-invoiced { background:#00d4ff22; color:#00d4ff; }
+    .badge-paid     { background:#71ff0022; color:#71ff00; }
+    .badge-overdue  { background:#ff444422; color:#ff4444; }
+    .badge { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+    .top-seller-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #111; }
+    .ts-uid  { font-size:12px; color:#888; font-family:monospace; }
+    .ts-amt  { font-size:14px; font-weight:700; color:var(--o); }
+    .rev-alert { background:#ff950011; border:1px solid #ff950033; border-radius:10px; padding:12px 16px; margin-bottom:16px; font-size:13px; color:#ff9500; }
+    .rev-alert.green { background:#71ff0011; border-color:#71ff0033; color:#71ff00; }
+    @media(max-width:600px){
+      .rev-stats { grid-template-columns:1fr 1fr; }
+      .hub-grid { grid-template-columns:1fr 1fr; }
+      .plan-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- Guard: admin only -->
+<script>
+  (function(){
+    const u = JSON.parse(localStorage.getItem('sokoniUser')||'{}');
+    if (!u.uid) { window.location.href='login.html?next=revenue.html'; }
+  })();
+</script>
+
+<!-- Hero -->
+<div class="rev-hero">
+  <div class="rev-hero-title">Revenue Engine</div>
+  <div class="rev-hero-sub">Commission · Subscriptions · Featured Listings · Ads · Invoices</div>
+  <div class="rev-hero-row">
+    <select class="rev-period-sel" id="revPeriod" onchange="loadRevenue()"></select>
+    <button class="rev-btn" onclick="loadRevenue()">Refresh</button>
+    <button class="rev-btn sec" onclick="window.location.href='admin.html'">← Admin</button>
+  </div>
+</div>
+
+<!-- Stat cards -->
+<div class="rev-stats">
+  <div class="rev-stat">
+    <div class="rev-stat-val" id="statPending">—</div>
+    <div class="rev-stat-lbl">Commission Pending</div>
+    <div class="rev-stat-sub" id="statPendingTxns">—</div>
+  </div>
+  <div class="rev-stat blue">
+    <div class="rev-stat-val" id="statCollected">—</div>
+    <div class="rev-stat-lbl">Collected MTD</div>
+    <div class="rev-stat-sub" id="statSellers">—</div>
+  </div>
+  <div class="rev-stat orange">
+    <div class="rev-stat-val" id="statGross">—</div>
+    <div class="rev-stat-lbl">Gross GMV MTD</div>
+    <div class="rev-stat-sub" id="statToday">—</div>
+  </div>
+  <div class="rev-stat">
+    <div class="rev-stat-val" id="statSubs">—</div>
+    <div class="rev-stat-lbl">Active Subscriptions</div>
+    <div class="rev-stat-sub" id="statSubRev">—</div>
+  </div>
+  <div class="rev-stat blue">
+    <div class="rev-stat-val" id="statFeatured">—</div>
+    <div class="rev-stat-lbl">Active Featured</div>
+    <div class="rev-stat-sub" id="statFeatRev">—</div>
+  </div>
+  <div class="rev-stat orange">
+    <div class="rev-stat-val" id="statAds">—</div>
+    <div class="rev-stat-lbl">Active Ad Campaigns</div>
+    <div class="rev-stat-sub" id="statAdBudget">—</div>
+  </div>
+</div>
+
+<!-- Tab bar -->
+<div class="rev-tabs">
+  <div class="rev-tab active" onclick="revTab('overview',this)">Overview</div>
+  <div class="rev-tab" onclick="revTab('commissions',this)">Commissions</div>
+  <div class="rev-tab" onclick="revTab('invoices',this)">Invoices</div>
+  <div class="rev-tab" onclick="revTab('config',this)">Rate Config</div>
+  <div class="rev-tab" onclick="revTab('subscriptions',this)">Subscriptions</div>
+  <div class="rev-tab" onclick="revTab('ads',this)">Ads & Featured</div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="rev-pane active" id="pane-overview">
+  <div class="rev-alert" id="overviewAlert" style="display:none"></div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Commission by Hub</div>
+    <div class="hub-grid" id="hubGrid"><div class="rev-empty">Loading...</div></div>
+  </div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Top Sellers by Commission Owed</div>
+    <div id="topSellersList"><div class="rev-empty">Loading...</div></div>
+  </div>
+</div>
+
+<!-- COMMISSIONS -->
+<div class="rev-pane" id="pane-commissions">
+  <div class="rev-filter-row">
+    <select class="rev-filter" id="cfSellerFilter" onchange="loadLedger()">
+      <option value="">All Sellers</option>
+    </select>
+    <select class="rev-filter" id="cfHubFilter" onchange="loadLedger()">
+      <option value="">All Hubs</option>
+      <option value="marketplace">Marketplace</option>
+      <option value="restaurant">Restaurant</option>
+      <option value="food">Food</option>
+      <option value="freelance">Freelance</option>
+      <option value="property">Property</option>
+      <option value="vehicles">Vehicles</option>
+      <option value="healthcare">Healthcare</option>
+      <option value="legal">Legal</option>
+      <option value="bnb">BnB</option>
+      <option value="digital">Digital</option>
+      <option value="delivery">Delivery</option>
+      <option value="b2b">B2B</option>
+    </select>
+    <select class="rev-filter" id="cfStatusFilter" onchange="loadLedger()">
+      <option value="pending">Pending</option>
+      <option value="invoiced">Invoiced</option>
+      <option value="paid">Paid</option>
+      <option value="">All</option>
+    </select>
+    <button class="rev-btn sec" onclick="loadLedger()">Filter</button>
+  </div>
+
+  <div class="rev-card" style="overflow-x:auto">
+    <table class="rev-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Seller</th>
+          <th>Hub</th>
+          <th>Gross</th>
+          <th>Rate</th>
+          <th>Commission</th>
+          <th>Status</th>
+          <th>M-Pesa</th>
+        </tr>
+      </thead>
+      <tbody id="commLedgerBody">
+        <tr><td colspan="8" class="rev-empty">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="commCount" style="font-size:12px;color:#555;text-align:right"></div>
+</div>
+
+<!-- INVOICES -->
+<div class="rev-pane" id="pane-invoices">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+    <select class="rev-filter" id="invStatusFilter" onchange="loadInvoices()">
+      <option value="pending">Pending</option>
+      <option value="paid">Paid</option>
+      <option value="overdue">Overdue</option>
+      <option value="">All</option>
+    </select>
+    <button class="rev-btn" onclick="generateInvoicesNow()">Generate Now</button>
+    <button class="rev-btn sec" onclick="loadInvoices()">Refresh</button>
+  </div>
+
+  <div class="rev-card">
+    <div id="invoicesList"><div class="rev-empty">Loading...</div></div>
+  </div>
+</div>
+
+<!-- RATE CONFIG -->
+<div class="rev-pane" id="pane-config">
+  <div class="rev-card">
+    <div class="rev-card-title">Global Default Rate</div>
+    <div class="config-row">
+      <div class="config-label">
+        Platform default commission<br>
+        <span class="config-sub">Applied when no hub or seller override exists</span>
+      </div>
+      <input class="config-input" id="cfgGlobalPct" type="number" min="0" max="50" step="0.5" placeholder="%"/>
+      <button class="config-save" onclick="saveConfig('global',{defaultCommissionPct:+document.getElementById('cfgGlobalPct').value})">Save</button>
+    </div>
+  </div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Hub Commission Rates</div>
+    <div id="hubConfigRows">Loading...</div>
+  </div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Seller-Specific Overrides</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      <input class="rev-filter" id="cfgSellerUid" placeholder="Seller UID" style="flex:1;min-width:200px"/>
+      <input class="rev-filter" id="cfgSellerPct" type="number" min="0" max="50" step="0.5" placeholder="Rate %"/>
+      <input class="rev-filter" id="cfgSellerFixed" type="number" min="0" placeholder="Fixed KES"/>
+      <button class="config-save" onclick="saveSellerOverride()">Set Override</button>
+    </div>
+    <div id="sellerOverridesList" style="font-size:13px;color:#666">Enter a seller UID above to set a custom commission rate.</div>
+  </div>
+</div>
+
+<!-- SUBSCRIPTIONS -->
+<div class="rev-pane" id="pane-subscriptions">
+  <div class="rev-card">
+    <div class="rev-card-title">Subscription Plans</div>
+    <div class="plan-grid" id="planGrid">
+      <div class="plan-card">
+        <div class="plan-name" style="color:#aaa">Free</div>
+        <div class="plan-price">KES 0 <span>/mo</span></div>
+        <ul class="plan-feat"><li>10 product listings</li><li>Basic analytics</li><li>WhatsApp support</li></ul>
+      </div>
+      <div class="plan-card highlighted">
+        <div class="plan-name" style="color:var(--g)">Pro</div>
+        <div class="plan-price">KES 999 <span>/mo</span></div>
+        <ul class="plan-feat"><li>Unlimited listings</li><li>Advanced analytics</li><li>Featured placement</li><li>Priority search</li><li>Remove SOKONI branding</li></ul>
+      </div>
+      <div class="plan-card" style="border-color:#00d4ff44">
+        <div class="plan-name" style="color:var(--b)">Business</div>
+        <div class="plan-price">KES 2,999 <span>/mo</span></div>
+        <ul class="plan-feat"><li>Everything in Pro</li><li>Team management (5 users)</li><li>Marketing automation</li><li>Bulk upload tools</li><li>Priority support</li></ul>
+      </div>
+      <div class="plan-card" style="border-color:#ff950044">
+        <div class="plan-name" style="color:var(--o)">Enterprise</div>
+        <div class="plan-price">Custom <span>pricing</span></div>
+        <ul class="plan-feat"><li>Everything in Business</li><li>Unlimited team users</li><li>Custom integrations</li><li>Dedicated account manager</li><li>Full API access</li><li>SLA guarantee</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Active Subscriptions</div>
+    <div class="rev-filter-row">
+      <select class="rev-filter" id="subPlanFilter" onchange="loadSubscriptions()">
+        <option value="">All Plans</option>
+        <option value="free">Free</option>
+        <option value="pro">Pro</option>
+        <option value="business">Business</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+      <button class="rev-btn sec" onclick="loadSubscriptions()">Refresh</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="rev-table">
+        <thead><tr><th>Seller UID</th><th>Plan</th><th>Price</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="subsBody"><tr><td colspan="6" class="rev-empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Assign Subscription</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <div style="font-size:11px;color:#666;margin-bottom:4px">Seller UID</div>
+        <input class="rev-filter" id="assignSubUid" placeholder="uid..." style="min-width:200px"/>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#666;margin-bottom:4px">Plan</div>
+        <select class="rev-filter" id="assignSubPlan">
+          <option value="free">Free</option>
+          <option value="pro" selected>Pro (KES 999)</option>
+          <option value="business">Business (KES 2,999)</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#666;margin-bottom:4px">Months</div>
+        <input class="rev-filter" id="assignSubMonths" type="number" value="1" min="1" max="12" style="width:60px"/>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#666;margin-bottom:4px">Payment Ref</div>
+        <input class="rev-filter" id="assignSubRef" placeholder="M-Pesa / bank ref" style="min-width:140px"/>
+      </div>
+      <button class="config-save" onclick="assignSubscription()">Assign Plan</button>
+    </div>
+    <div id="assignSubMsg" style="font-size:13px;margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ADS & FEATURED -->
+<div class="rev-pane" id="pane-ads">
+  <div class="rev-card">
+    <div class="rev-card-title">Featured Listings</div>
+    <div class="rev-filter-row">
+      <select class="rev-filter" id="featStatusFilter" onchange="loadFeatured()">
+        <option value="active">Active</option>
+        <option value="pending_payment">Pending Payment</option>
+        <option value="expired">Expired</option>
+        <option value="">All</option>
+      </select>
+      <button class="rev-btn sec" onclick="loadFeatured()">Refresh</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="rev-table">
+        <thead><tr><th>Seller</th><th>Item</th><th>Hub</th><th>Placement</th><th>Duration</th><th>Price</th><th>Expires</th><th>Status</th></tr></thead>
+        <tbody id="featuredBody"><tr><td colspan="8" class="rev-empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Ad Campaigns</div>
+    <div class="rev-filter-row">
+      <select class="rev-filter" id="adStatusFilter" onchange="loadAds()">
+        <option value="pending_review">Pending Review</option>
+        <option value="active">Active</option>
+        <option value="paused">Paused</option>
+        <option value="">All</option>
+      </select>
+      <button class="rev-btn sec" onclick="loadAds()">Refresh</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="rev-table">
+        <thead><tr><th>Seller</th><th>Type</th><th>Title</th><th>Hub</th><th>Budget</th><th>Spent</th><th>Impressions</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="adsBody"><tr><td colspan="9" class="rev-empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="rev-card">
+    <div class="rev-card-title">Ad Pricing</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+      <div class="hub-card"><div class="hub-card-name">CPM Rate</div><div class="hub-card-val">KES 150</div><div class="hub-card-sub">Per 1,000 impressions</div></div>
+      <div class="hub-card"><div class="hub-card-name">Daily Feature</div><div class="hub-card-val">KES 200</div><div class="hub-card-sub">1 day spotlight</div></div>
+      <div class="hub-card"><div class="hub-card-name">Weekly Feature</div><div class="hub-card-val">KES 800</div><div class="hub-card-sub">7 day spotlight</div></div>
+      <div class="hub-card"><div class="hub-card-name">Monthly Feature</div><div class="hub-card-val">KES 2,500</div><div class="hub-card-sub">30 day spotlight</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function revTab(name, el) {
+  document.querySelectorAll('.rev-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.rev-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pane-' + name).classList.add('active');
+  if (name === 'commissions')   loadLedger();
+  if (name === 'invoices')      loadInvoices();
+  if (name === 'config')        loadConfig();
+  if (name === 'subscriptions') loadSubscriptions();
+  if (name === 'ads') { loadFeatured(); loadAds(); }
+}
+</script>
+
+<script type="module">
+import { initializeApp }               from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, query, where, orderBy, limit, getDocs, doc, getDoc, onSnapshot, Timestamp }
+                                        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFunctions, httpsCallable }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
+
+const _cfg = {
+  apiKey:"AIzaSyBmPL3mFJXFN3LXY_gPuH2HSJY8oWmyOJ4",
+  authDomain:"sokoni-aeb26.firebaseapp.com",
+  projectId:"sokoni-aeb26",
+  storageBucket:"sokoni-aeb26.appspot.com",
+  messagingSenderId:"448791489749",
+  appId:"1:448791489749:web:your-app-id"
+};
+const _app = initializeApp(_cfg);
+const _auth = getAuth(_app);
+const _db   = getFirestore(_app);
+const _fns  = getFunctions(_app, "us-central1");
+
+const fmtKES = n => "KES " + Number(n||0).toLocaleString("en-KE",{minimumFractionDigits:0,maximumFractionDigits:2});
+const fmtDate = ts => { if (!ts) return "—"; const d = ts.toDate?.() || new Date(ts); return d.toLocaleDateString("en-KE",{day:"2-digit",month:"short",year:"2-digit"}); };
+const badge = (s,map) => { const b=map[s]||{l:s,c:"#888"}; return `<span class="badge" style="background:${b.c}22;color:${b.c}">${b.l}</span>`; };
+const statusMap = { pending:{l:"Pending",c:"#ff9500"}, invoiced:{l:"Invoiced",c:"#00d4ff"}, paid:{l:"Paid",c:"#71ff00"}, waived:{l:"Waived",c:"#888"}, overdue:{l:"Overdue",c:"#ff4444"}, active:{l:"Active",c:"#71ff00"}, pending_review:{l:"Review",c:"#ff9500"}, expired:{l:"Expired",c:"#ff4444"}, pending_payment:{l:"Unpaid",c:"#ff9500"}, paused:{l:"Paused",c:"#888"} };
+
+let _uid = null, _period = null;
+
+/* ── Build period selector ── */
+function buildPeriods() {
+  const sel = document.getElementById("revPeriod");
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.toISOString().slice(0, 7);
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    sel.add(new Option(months[d.getMonth()] + " " + d.getFullYear(), val));
+  }
+}
+buildPeriods();
+_period = document.getElementById("revPeriod").value;
+
+onAuthStateChanged(_auth, async u => {
+  if (!u) { window.location.href = "login.html?next=revenue.html"; return; }
+  const tok = await u.getIdTokenResult();
+  if (!tok.claims.admin) { (window._skToast||alert)("Admin access required."); window.location.href = "admin.html"; return; }
+  _uid = u.uid;
+  loadRevenue();
+});
+
+window.loadRevenue = async function() {
+  _period = document.getElementById("revPeriod").value;
+  try {
+    const fn = httpsCallable(_fns, "getAdminRevenueReport");
+    const res = await fn({ period: _period });
+    const d = res.data;
+    document.getElementById("statPending").textContent    = fmtKES(d.pendingCommissionKES);
+    document.getElementById("statPendingTxns").textContent= d.pendingTransactions + " transactions";
+    document.getElementById("statCollected").textContent  = fmtKES(d.collectedCommissionKES);
+    document.getElementById("statSellers").textContent    = d.uniqueSellersOwing + " sellers owing";
+    document.getElementById("statGross").textContent      = fmtKES(d.grossSalesMTDKES);
+    document.getElementById("statToday").textContent      = "Today: " + fmtKES(d.todayCommissionKES);
+    document.getElementById("statSubs").textContent       = d.activeSubCount;
+    document.getElementById("statSubRev").textContent     = fmtKES(d.subscriptionRevenueKES) + "/mo";
+    document.getElementById("statFeatured").textContent   = d.activeFeaturedCount;
+    document.getElementById("statFeatRev").textContent    = fmtKES(d.featuredRevenueKES);
+    document.getElementById("statAds").textContent        = d.activeAdCount;
+    document.getElementById("statAdBudget").textContent   = fmtKES(d.adBudgetKES) + " budget";
+
+    /* Hub breakdown grid */
+    const hubs = d.hubBreakdown || {};
+    const hubKeys = Object.keys(hubs).sort((a,b) => hubs[b].commission - hubs[a].commission);
+    const HUB_LABELS = {marketplace:"Marketplace",restaurant:"Restaurant",food:"Food",freelance:"Freelance",property:"Property",vehicles:"Vehicles",healthcare:"Healthcare",legal:"Legal",bnb:"BnB",digital:"Digital",b2b:"B2B",delivery:"Delivery",entertainment:"Entertainment"};
+    document.getElementById("hubGrid").innerHTML = hubKeys.length
+      ? hubKeys.map(h => `
+          <div class="hub-card">
+            <div class="hub-card-name">${HUB_LABELS[h]||h}</div>
+            <div class="hub-card-val">${fmtKES(hubs[h].commission)}</div>
+            <div class="hub-card-sub">${hubs[h].count} txns · GMV ${fmtKES(hubs[h].gross)}</div>
+          </div>`).join("")
+      : "<div class='rev-empty'>No hub data for this period</div>";
+
+    /* Top sellers */
+    const ts = d.topSellers || [];
+    document.getElementById("topSellersList").innerHTML = ts.length
+      ? ts.map((s,i) => `
+          <div class="top-seller-row">
+            <div><span style="color:#555;margin-right:8px">#${i+1}</span><span class="ts-uid">${s.sellerUid}</span></div>
+            <div class="ts-amt">${fmtKES(s.owedKES)}</div>
+          </div>`).join("")
+      : "<div class='rev-empty'>No commission data</div>";
+
+  } catch(e) {
+    document.getElementById("overviewAlert").style.display="block";
+    document.getElementById("overviewAlert").textContent = "Error: " + (e.message||e);
+  }
+};
+
+window.loadLedger = async function() {
+  const body = document.getElementById("commLedgerBody");
+  body.innerHTML = "<tr><td colspan='8' class='rev-empty'>Loading...</td></tr>";
+  try {
+    const fn = httpsCallable(_fns, "getCommissionLedger");
+    const res = await fn({
+      sellerUid: document.getElementById("cfSellerFilter").value || undefined,
+      hub:       document.getElementById("cfHubFilter").value    || undefined,
+      status:    document.getElementById("cfStatusFilter").value || undefined,
+      period:    _period,
+      limit: 100,
+    });
+    const rows = res.data.rows || [];
+    document.getElementById("commCount").textContent = rows.length + " records";
+    body.innerHTML = rows.length
+      ? rows.map(r => `<tr>
+          <td>${fmtDate(r.createdAt)}</td>
+          <td class="mono" title="${r.sellerUid}">${(r.sellerUid||"").slice(0,10)}…</td>
+          <td>${r.hub||"—"}</td>
+          <td style="color:#71ff00">${fmtKES(r.grossAmount)}</td>
+          <td style="color:#888">${r.commissionPct}%${r.fixedFee?"+"+fmtKES(r.fixedFee):""}</td>
+          <td style="color:#ff9500">${fmtKES(r.totalOwed)}</td>
+          <td>${badge(r.status,statusMap)}</td>
+          <td class="mono" style="color:#555">${r.mpesaCode||r.orderId||"—"}</td>
+        </tr>`).join("")
+      : "<tr><td colspan='8' class='rev-empty'>No records</td></tr>";
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan='8' class='rev-empty' style='color:#ff4444'>Error: ${e.message}</td></tr>`;
+  }
+};
+
+window.loadInvoices = async function() {
+  const list = document.getElementById("invoicesList");
+  list.innerHTML = "<div class='rev-empty'>Loading...</div>";
+  try {
+    let q = query(collection(_db,"invoices"), orderBy("createdAt","desc"), limit(50));
+    const statusVal = document.getElementById("invStatusFilter").value;
+    if (statusVal) q = query(collection(_db,"invoices"), where("status","==",statusVal), orderBy("createdAt","desc"), limit(50));
+    const snap = await getDocs(q);
+    if (snap.empty) { list.innerHTML="<div class='rev-empty'>No invoices</div>"; return; }
+    const rows = [];
+    snap.forEach(d => rows.push({id:d.id,...d.data()}));
+    list.innerHTML = rows.map(r => `
+      <div class="inv-row">
+        <div>
+          <div style="font-size:14px;font-weight:700">${fmtKES(r.totalKES)}</div>
+          <div class="inv-meta">Seller: <span style="font-family:monospace">${(r.sellerUid||"").slice(0,16)}…</span></div>
+          <div class="inv-meta">Period: ${r.period} · Due: ${fmtDate(r.dueDate)} · ID: <span style="font-family:monospace;font-size:10px">${r.id.slice(0,12)}</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${badge(r.status,statusMap)}
+          ${r.status==="pending"||r.status==="overdue"
+            ? `<button class="rev-btn" onclick="markPaid('${r.id}')" style="padding:6px 14px;font-size:12px">Mark Paid</button>`
+            : r.paymentRef
+              ? `<span style="font-size:11px;color:#555">${r.paymentRef}</span>`
+              : ""}
+        </div>
+      </div>`).join("");
+  } catch(e) {
+    list.innerHTML = `<div class='rev-empty' style='color:#ff4444'>Error: ${e.message}</div>`;
+  }
+};
+
+window.markPaid = async function(invoiceId) {
+  const ref = prompt("Enter payment reference (M-Pesa code or bank ref):");
+  if (!ref) return;
+  try {
+    const fn = httpsCallable(_fns, "markCommissionPaid");
+    await fn({ invoiceId, paymentRef: ref });
+    (window._skToast||alert)("Invoice marked as paid.");
+    loadInvoices();
+  } catch(e) { (window._skToast||alert)("Error: " + (e.message||e)); }
+};
+
+window.generateInvoicesNow = function() {
+  (window._skToast||alert)("Monthly invoice generation is scheduled automatically on the 1st of each month at 06:00 EAT.\n\nTo manually trigger, run:\nfirebase functions:shell\n> generateMonthlyInvoices()");
+};
+
+window.loadConfig = async function() {
+  try {
+    const fn  = httpsCallable(_fns, "getRevenueConfig");
+    const res = await fn({});
+    const cfg = res.data.configs || {};
+    const def = res.data.hubDefaults || {};
+
+    if (cfg.global?.defaultCommissionPct != null) {
+      document.getElementById("cfgGlobalPct").value = cfg.global.defaultCommissionPct;
+    }
+
+    const HUB_KEYS = ["marketplace","restaurant","food","freelance","property","vehicles","healthcare","legal","bnb","digital","b2b","delivery","entertainment"];
+    const HUB_LABELS2 = {marketplace:"Marketplace (3%)",restaurant:"Restaurant (5%)",food:"Food (5%)",freelance:"Freelance (8%)",property:"Property (2%)",vehicles:"Vehicles (Fixed KES 2,000)",healthcare:"Healthcare (5%)",legal:"Legal (5%)",bnb:"BnB (5%)",digital:"Digital (10%)",b2b:"B2B (3%)",delivery:"Delivery (8%)",entertainment:"Entertainment (5%)"};
+    document.getElementById("hubConfigRows").innerHTML = HUB_KEYS.map(h => {
+      const saved = cfg[`hub_${h}`] || {};
+      const pct   = saved.commissionPct != null ? saved.commissionPct : (def[h]?.pct ?? 5);
+      const fixed = saved.fixedFee != null ? saved.fixedFee : (def[h]?.fixedKES ?? 0);
+      return `<div class="config-row" id="hubrow_${h}">
+        <div class="config-label">${HUB_LABELS2[h]||h}<br><span class="config-sub">hub_${h}</span></div>
+        <input class="config-input" id="cfgHub_${h}_pct" type="number" min="0" max="50" step="0.5" value="${pct}" title="Commission %"/>
+        <input class="config-input" id="cfgHub_${h}_fix" type="number" min="0" value="${fixed}" title="Fixed KES"/>
+        <button class="config-save" onclick="saveHubConfig('${h}')">Save</button>
+      </div>`;
+    }).join("");
+    /* Auto-seed hub defaults if Firestore has no config yet */
+    const hasAnyConfig = Object.keys(cfg).length > 0 || HUB_KEYS.some(h => cfg[`hub_${h}`]);
+    if (!hasAnyConfig) {
+      try {
+        const seedFn = httpsCallable(_fns, "updateRevenueConfig");
+        const seeds = [
+          { configId: "global",            data: { defaultCommissionPct: 5 } },
+          { configId: "hub_marketplace",   data: { commissionPct: 3,  fixedFee: 0    } },
+          { configId: "hub_restaurant",    data: { commissionPct: 5,  fixedFee: 0    } },
+          { configId: "hub_food",          data: { commissionPct: 5,  fixedFee: 0    } },
+          { configId: "hub_freelance",     data: { commissionPct: 8,  fixedFee: 0    } },
+          { configId: "hub_property",      data: { commissionPct: 2,  fixedFee: 0    } },
+          { configId: "hub_vehicles",      data: { commissionPct: 0,  fixedFee: 2000 } },
+          { configId: "hub_healthcare",    data: { commissionPct: 5,  fixedFee: 0    } },
+          { configId: "hub_legal",         data: { commissionPct: 5,  fixedFee: 0    } },
+          { configId: "hub_bnb",           data: { commissionPct: 5,  fixedFee: 0    } },
+          { configId: "hub_digital",       data: { commissionPct: 10, fixedFee: 0    } },
+          { configId: "hub_b2b",           data: { commissionPct: 3,  fixedFee: 0    } },
+          { configId: "hub_delivery",      data: { commissionPct: 8,  fixedFee: 0    } },
+          { configId: "hub_entertainment", data: { commissionPct: 5,  fixedFee: 0    } },
+        ];
+        await Promise.allSettled(seeds.map(s => seedFn(s)));
+        document.getElementById("hubConfigRows").innerHTML += `<div style='color:#71ff00;padding:8px 0;font-size:12px'>✅ Default rates seeded. Reload this tab to see them.</div>`;
+      } catch(e2) { console.warn("[Revenue] Auto-seed failed:", e2); }
+    }
+  } catch(e) {
+    document.getElementById("hubConfigRows").innerHTML = "<div style='color:#ff4444'>Error: " + e.message + "</div>";
+  }
+};
+
+window.saveConfig = async function(configId, data) {
+  try {
+    const fn = httpsCallable(_fns, "updateRevenueConfig");
+    await fn({ configId, data });
+    (window._skToast||alert)("Saved: " + configId);
+  } catch(e) { (window._skToast||alert)("Error: " + (e.message||e)); }
+};
+
+window.saveHubConfig = async function(hub) {
+  const pct   = parseFloat(document.getElementById(`cfgHub_${hub}_pct`).value);
+  const fixed = parseFloat(document.getElementById(`cfgHub_${hub}_fix`).value);
+  await saveConfig("hub_" + hub, { commissionPct: pct, fixedFee: fixed });
+};
+
+window.saveSellerOverride = async function() {
+  const uid   = document.getElementById("cfgSellerUid").value.trim();
+  const pct   = parseFloat(document.getElementById("cfgSellerPct").value);
+  const fixed = parseFloat(document.getElementById("cfgSellerFixed").value || "0");
+  if (!uid || isNaN(pct)) { (window._skToast||alert)("Seller UID and commission % required."); return; }
+  await saveConfig("seller_" + uid, { commissionPct: pct, fixedFee: fixed, sellerUid: uid });
+};
+
+window.loadSubscriptions = async function() {
+  const body  = document.getElementById("subsBody");
+  body.innerHTML = "<tr><td colspan='6' class='rev-empty'>Loading...</td></tr>";
+  try {
+    let q = query(collection(_db,"sellerSubscriptions"), orderBy("updatedAt","desc"), limit(100));
+    const planF = document.getElementById("subPlanFilter").value;
+    if (planF) q = query(collection(_db,"sellerSubscriptions"), where("plan","==",planF), limit(100));
+    const snap = await getDocs(q);
+    if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='rev-empty'>No subscriptions</td></tr>"; return; }
+    const PLAN_COLORS = {free:"#aaa",pro:"#71ff00",business:"#00d4ff",enterprise:"#ff9500"};
+    body.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      const col = PLAN_COLORS[r.plan]||"#ccc";
+      return `<tr>
+        <td class="mono" title="${r.sellerUid}">${(r.sellerUid||"").slice(0,14)}…</td>
+        <td style="color:${col};font-weight:700">${r.plan||"—"}</td>
+        <td>${fmtKES(r.priceKES)}</td>
+        <td>${fmtDate(r.endDate)}</td>
+        <td>${badge(r.status||"active",statusMap)}</td>
+        <td><button class="rev-btn sec" onclick="changePlan('${r.sellerUid}')" style="padding:4px 10px;font-size:11px">Change</button></td>
+      </tr>`;
+    }).join("");
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+  }
+};
+
+window.changePlan = function(uid) {
+  document.getElementById("assignSubUid").value = uid;
+  document.querySelector('.rev-tab[onclick*="subscriptions"]').click();
+};
+
+window.assignSubscription = async function() {
+  const uid    = document.getElementById("assignSubUid").value.trim();
+  const plan   = document.getElementById("assignSubPlan").value;
+  const months = parseInt(document.getElementById("assignSubMonths").value) || 1;
+  const payRef = document.getElementById("assignSubRef").value.trim();
+  const msg    = document.getElementById("assignSubMsg");
+  if (!uid) { msg.textContent="Seller UID required."; msg.style.color="#ff4444"; return; }
+  msg.textContent="Saving..."; msg.style.color="#888";
+  try {
+    const fn = httpsCallable(_fns, "updateSellerSubscription");
+    await fn({ sellerUid: uid, plan, months, paymentRef: payRef || null });
+    msg.textContent = `Assigned ${plan} to ${uid.slice(0,12)}… (${months} month${months>1?"s":""})`;
+    msg.style.color = "#71ff00";
+    loadSubscriptions();
+  } catch(e) {
+    msg.textContent = "Error: " + (e.message||e);
+    msg.style.color = "#ff4444";
+  }
+};
+
+window.loadFeatured = async function() {
+  const body = document.getElementById("featuredBody");
+  body.innerHTML = "<tr><td colspan='8' class='rev-empty'>Loading...</td></tr>";
+  try {
+    let q = query(collection(_db,"featuredListings"), orderBy("createdAt","desc"), limit(100));
+    const s = document.getElementById("featStatusFilter").value;
+    if (s) q = query(collection(_db,"featuredListings"), where("status","==",s), limit(100));
+    const snap = await getDocs(q);
+    if (snap.empty) { body.innerHTML="<tr><td colspan='8' class='rev-empty'>No featured listings</td></tr>"; return; }
+    body.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      return `<tr>
+        <td class="mono" title="${r.sellerUid}">${(r.sellerUid||"").slice(0,12)}…</td>
+        <td>${r.itemTitle||r.itemType||"—"}</td>
+        <td>${r.hub||"—"}</td>
+        <td>${r.placement||"—"}</td>
+        <td>${r.duration||"—"}</td>
+        <td style="color:#71ff00">${fmtKES(r.priceKES)}</td>
+        <td>${fmtDate(r.endDate)}</td>
+        <td>${badge(r.status||"active",statusMap)}</td>
+      </tr>`;
+    }).join("");
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan='8' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+  }
+};
+
+window.loadAds = async function() {
+  const body = document.getElementById("adsBody");
+  body.innerHTML = "<tr><td colspan='9' class='rev-empty'>Loading...</td></tr>";
+  try {
+    let q = query(collection(_db,"sokoAds"), orderBy("createdAt","desc"), limit(100));
+    const s = document.getElementById("adStatusFilter").value;
+    if (s) q = query(collection(_db,"sokoAds"), where("status","==",s), limit(100));
+    const snap = await getDocs(q);
+    if (snap.empty) { body.innerHTML="<tr><td colspan='9' class='rev-empty'>No ad campaigns</td></tr>"; return; }
+    body.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      return `<tr>
+        <td class="mono" title="${r.sellerUid}">${(r.sellerUid||"").slice(0,12)}…</td>
+        <td>${r.adType||"—"}</td>
+        <td>${r.title||"—"}</td>
+        <td>${r.targetHub||"all"}</td>
+        <td style="color:#ff9500">${fmtKES(r.budgetKES)}</td>
+        <td>${fmtKES(r.spentKES)}</td>
+        <td>${(r.impressions||0).toLocaleString()}</td>
+        <td>${badge(r.status||"pending_review",statusMap)}</td>
+        <td>${r.status==="pending_review"
+          ? `<button class="rev-btn" onclick="approveAd('${d.id}')" style="padding:4px 10px;font-size:11px">Approve</button>`
+          : `<button class="rev-btn sec" onclick="pauseAd('${d.id}','${r.status}')" style="padding:4px 10px;font-size:11px">${r.status==="active"?"Pause":"Resume"}</button>`}
+        </td>
+      </tr>`;
+    }).join("");
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan='9' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+  }
+};
+
+window.approveAd = async function(adId) {
+  const { updateDoc, doc: firestoreDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+  await updateDoc(firestoreDoc(_db,"sokoAds",adId), { status:"active" });
+  loadAds();
+};
+
+window.pauseAd = async function(adId, current) {
+  const { updateDoc, doc: firestoreDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+  await updateDoc(firestoreDoc(_db,"sokoAds",adId), { status: current==="active"?"paused":"active" });
+  loadAds();
+};
+</script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+

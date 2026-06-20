@@ -1,0 +1,749 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Unboxing Wall 📦</title>
+  <meta name="description" content="See real photos of orders received by SOKONI shoppers. Post your own unboxing photo review and earn loyalty points.">
+  <meta property="og:title" content="SOKONI Unboxing Wall — Real Photos from Real Buyers">
+  <meta property="og:description" content="Photo reviews from verified SOKONI shoppers across Kenya. Drop your unboxing photos and help others shop with confidence.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#080b0f;color:white;min-height:100vh;padding-bottom:80px;}
+
+    /* ── NAV ── */
+    .ub-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(8,11,15,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(20px);}
+    .ub-logo{height:32px;}
+    .ub-nav-right{display:flex;gap:8px;align-items:center;}
+    .ub-nav-link{padding:7px 13px;border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.55);text-decoration:none;font-size:12px;font-weight:600;transition:all .15s;background:none;cursor:pointer;font-family:inherit;}
+    .ub-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .ub-nav-post{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.25);color:#71ff00;}
+
+    /* ── HERO ── */
+    .ub-hero{padding:36px 20px 0;text-align:center;position:relative;overflow:hidden;}
+    .ub-hero::before{content:'📦📸🛍️⭐📦📸🛍️';position:absolute;top:0;left:50%;transform:translateX(-50%);font-size:120px;opacity:0.025;white-space:nowrap;pointer-events:none;letter-spacing:10px;}
+    .ub-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:999px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;}
+    .ub-hero h1{font-size:clamp(26px,5vw,44px);font-weight:900;line-height:1.08;margin-bottom:10px;}
+    .ub-hero h1 span{color:#71ff00;}
+    .ub-hero p{font-size:14px;color:rgba(255,255,255,0.45);max-width:520px;margin:0 auto 24px;line-height:1.6;}
+
+    /* ── STATS STRIP ── */
+    .ub-stats{display:flex;gap:0;justify-content:center;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px 24px;margin:0 20px 24px;max-width:700px;margin-left:auto;margin-right:auto;flex-wrap:wrap;}
+    .ub-stat{flex:1;min-width:100px;text-align:center;padding:6px 12px;}
+    .ub-stat:not(:last-child){border-right:1px solid rgba(255,255,255,0.07);}
+    .ub-stat-num{font-size:22px;font-weight:900;color:#71ff00;line-height:1;}
+    .ub-stat-label{font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;}
+
+    /* ── UPLOAD CTA ── */
+    .ub-post-cta{margin:0 20px 24px;background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,170,255,0.04));border:1px dashed rgba(113,255,0,0.25);border-radius:18px;padding:20px 24px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:all .2s;flex-wrap:wrap;}
+    .ub-post-cta:hover{border-color:rgba(113,255,0,0.45);background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(0,170,255,0.06));}
+    .ub-post-icon{font-size:40px;flex-shrink:0;}
+    .ub-post-text h3{font-size:16px;font-weight:900;margin-bottom:3px;}
+    .ub-post-text p{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;}
+    .ub-post-btn{margin-left:auto;padding:11px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:13px;border:none;border-radius:11px;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;}
+
+    /* ── FILTER BAR ── */
+    .ub-filters{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 20px 16px;flex-wrap:nowrap;}
+    .ub-filters::-webkit-scrollbar{display:none;}
+    .ub-filter-pill{flex-shrink:0;padding:6px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+    .ub-filter-pill:hover,.ub-filter-pill.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+
+    /* ── SORT ROW ── */
+    .ub-sort-row{display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px;flex-wrap:wrap;gap:8px;}
+    .ub-count{font-size:12px;color:rgba(255,255,255,0.35);font-weight:600;}
+    .ub-sort-select{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:16px;font-weight:600;padding:6px 12px;font-family:inherit;cursor:pointer;outline:none;}
+
+    /* ── MASONRY GALLERY ── */
+    .ub-gallery{padding:0 16px;columns:2;column-gap:10px;transition:opacity .3s;}
+    @media(min-width:480px){.ub-gallery{columns:3;}}
+    @media(min-width:768px){.ub-gallery{columns:4;}}
+    @media(min-width:1100px){.ub-gallery{columns:5;}}
+    @media(min-width:1400px){.ub-gallery{columns:6;}}
+
+    /* ── REVIEW CARD ── */
+    .ub-card{break-inside:avoid;margin-bottom:10px;border-radius:16px;overflow:hidden;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:all .22s;position:relative;display:block;}
+    .ub-card:hover{border-color:rgba(113,255,0,0.3);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.5);}
+    .ub-card-img{width:100%;display:block;object-fit:cover;border-radius:0;}
+    .ub-card-img-placeholder{width:100%;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;font-size:48px;background:linear-gradient(135deg,rgba(113,255,0,0.05),rgba(0,170,255,0.04));}
+    .ub-card-body{padding:12px 12px 10px;}
+    .ub-card-stars{font-size:11px;color:#ffc107;margin-bottom:4px;letter-spacing:.5px;}
+    .ub-card-product{font-size:12px;font-weight:800;color:white;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ub-card-comment{font-size:11px;color:rgba(255,255,255,0.5);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:8px;}
+    .ub-card-footer{display:flex;align-items:center;justify-content:space-between;gap:4px;}
+    .ub-card-author{display:flex;align-items:center;gap:5px;}
+    .ub-card-avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:black;flex-shrink:0;}
+    .ub-card-name{font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;}
+    .ub-card-actions{display:flex;align-items:center;gap:6px;}
+    .ub-card-like{background:none;border:none;color:rgba(255,255,255,0.3);font-size:11px;cursor:pointer;font-family:inherit;padding:0;transition:color .15s;display:flex;align-items:center;gap:3px;}
+    .ub-card-like:hover,.ub-card-like.liked{color:#ff6b6b;}
+    .ub-card-share{background:none;border:none;color:rgba(255,255,255,0.3);font-size:11px;cursor:pointer;font-family:inherit;padding:0;transition:color .15s;}
+    .ub-card-share:hover{color:#25d366;}
+    .ub-verified-badge{position:absolute;top:8px;right:8px;background:rgba(113,255,0,0.9);color:black;font-size:8px;font-weight:900;padding:2px 7px;border-radius:999px;display:flex;align-items:center;gap:3px;}
+    .ub-multi-badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.65);color:white;font-size:9px;font-weight:800;padding:3px 8px;border-radius:999px;backdrop-filter:blur(6px);}
+    .ub-rating-badge{position:absolute;bottom:60px;left:10px;background:rgba(0,0,0,0.7);color:#ffc107;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;backdrop-filter:blur(6px);}
+
+    /* ── EMPTY STATE ── */
+    .ub-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,0.25);}
+    .ub-empty-icon{font-size:56px;margin-bottom:14px;}
+    .ub-empty h3{font-size:16px;font-weight:800;margin-bottom:6px;color:rgba(255,255,255,0.4);}
+
+    /* ── LIGHTBOX ── */
+    .ub-lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;backdrop-filter:blur(16px);overflow-y:auto;}
+    .ub-lightbox.open{display:flex;align-items:flex-start;justify-content:center;padding:20px;}
+    .ub-lb-inner{background:#0e1218;border:1px solid rgba(255,255,255,0.1);border-radius:22px;max-width:700px;width:100%;position:relative;overflow:hidden;}
+    .ub-lb-close{position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;z-index:10;transition:all .15s;}
+    .ub-lb-close:hover{background:rgba(255,255,255,0.15);color:white;}
+    .ub-lb-photos{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;border-radius:22px 22px 0 0;overflow:hidden;}
+    .ub-lb-photos::-webkit-scrollbar{display:none;}
+    .ub-lb-photo{min-width:100%;max-height:420px;object-fit:contain;background:#0a0c10;}
+    .ub-lb-photo-placeholder{min-width:100%;height:320px;display:flex;align-items:center;justify-content:center;font-size:80px;background:linear-gradient(135deg,rgba(113,255,0,0.05),rgba(0,170,255,0.04));}
+    .ub-lb-dots{display:flex;justify-content:center;gap:5px;padding:8px 0 2px;}
+    .ub-lb-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.2);cursor:pointer;transition:background .15s;}
+    .ub-lb-dot.active{background:#71ff00;width:18px;border-radius:3px;}
+    .ub-lb-body{padding:18px 20px 24px;}
+    .ub-lb-top{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+    .ub-lb-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:black;flex-shrink:0;}
+    .ub-lb-name{font-size:14px;font-weight:800;color:white;}
+    .ub-lb-meta{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
+    .ub-lb-stars{margin-left:auto;font-size:16px;color:#ffc107;}
+    .ub-lb-product{font-size:13px;font-weight:800;color:#71ff00;margin-bottom:6px;}
+    .ub-lb-comment{font-size:13px;color:rgba(255,255,255,0.65);line-height:1.6;margin-bottom:16px;}
+    .ub-lb-order{font-size:11px;color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:6px 12px;display:inline-block;margin-bottom:16px;}
+    .ub-lb-actions{display:flex;gap:10px;flex-wrap:wrap;}
+    .ub-lb-action{padding:9px 18px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:none;transition:all .15s;display:flex;align-items:center;gap:6px;}
+    .ub-lb-like-btn{background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.2);color:#ff6b6b;}
+    .ub-lb-like-btn:hover,.ub-lb-like-btn.liked{background:rgba(255,107,107,0.2);border-color:rgba(255,107,107,0.4);}
+    .ub-lb-share-btn{background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);color:#25d366;}
+    .ub-lb-share-btn:hover{background:rgba(37,211,102,0.2);}
+    .ub-lb-report-btn{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.3);}
+    .ub-lb-report-btn:hover{color:rgba(255,255,255,0.6);}
+
+    /* ── UPLOAD MODAL ── */
+    .ub-upload-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9998;backdrop-filter:blur(12px);align-items:flex-end;justify-content:center;}
+    .ub-upload-overlay.open{display:flex;}
+    .ub-upload-sheet{background:#0e1218;border:1px solid rgba(113,255,0,0.18);border-radius:28px 28px 0 0;padding:24px 20px 36px;width:100%;max-width:580px;max-height:94vh;overflow-y:auto;}
+    .ub-upload-handle{width:40px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin:0 auto 20px;}
+    .ub-upload-sheet h2{font-size:18px;font-weight:900;margin-bottom:4px;}
+    .ub-upload-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;}
+
+    /* Drop Zone */
+    .ub-drop-zone{border:2px dashed rgba(113,255,0,0.25);border-radius:16px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(113,255,0,0.02);position:relative;margin-bottom:16px;}
+    .ub-drop-zone.dragging{border-color:rgba(113,255,0,0.6);background:rgba(113,255,0,0.06);}
+    .ub-drop-icon{font-size:40px;margin-bottom:10px;}
+    .ub-drop-text{font-size:14px;font-weight:800;color:rgba(255,255,255,0.7);margin-bottom:4px;}
+    .ub-drop-sub{font-size:11px;color:rgba(255,255,255,0.3);}
+    .ub-file-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+
+    /* Preview thumbnails */
+    .ub-previews{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+    .ub-preview-thumb{width:80px;height:80px;border-radius:10px;object-fit:cover;border:2px solid rgba(113,255,0,0.25);position:relative;}
+    .ub-preview-wrap{position:relative;display:inline-block;}
+    .ub-preview-remove{position:absolute;top:-6px;right:-6px;background:#ff4444;color:white;border:none;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;font-weight:900;line-height:1;}
+
+    /* Stars */
+    .ub-stars-row{display:flex;gap:6px;margin-bottom:16px;}
+    .ub-star-btn{font-size:30px;background:none;border:none;color:rgba(255,255,255,0.15);cursor:pointer;transition:all .15s;padding:0;line-height:1;}
+    .ub-star-btn:hover,.ub-star-btn.lit{color:#ffc107;transform:scale(1.15);}
+
+    /* Inputs */
+    .ub-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px;}
+    .ub-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:14px;transition:border-color .15s;}
+    .ub-input:focus{border-color:rgba(113,255,0,0.4);}
+    .ub-input::placeholder{color:rgba(255,255,255,0.2);}
+    .ub-textarea{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:14px;resize:vertical;min-height:80px;transition:border-color .15s;}
+    .ub-textarea:focus{border-color:rgba(113,255,0,0.4);}
+    .ub-textarea::placeholder{color:rgba(255,255,255,0.2);}
+    .ub-cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px;}
+    .ub-cat-btn{padding:9px 6px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;}
+    .ub-cat-btn:hover,.ub-cat-btn.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+    .ub-submit-btn{width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:14px;border:none;border-radius:13px;cursor:pointer;font-family:inherit;transition:filter .2s;}
+    .ub-submit-btn:hover{filter:brightness(1.08);}
+    .ub-submit-btn:disabled{opacity:.5;cursor:not-allowed;}
+    .ub-form-msg{font-size:12px;min-height:16px;margin-top:10px;text-align:center;}
+
+    /* ── CONFETTI ── */
+    .confetti-piece{position:fixed;top:-10px;border-radius:3px;animation:confettiFall linear forwards;pointer-events:none;z-index:99999;}
+    @keyframes confettiFall{to{transform:translateY(110vh) rotate(720deg);opacity:0;}}
+
+    /* ── TOAST ── */
+    .ub-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2000;border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-size:13px;font-weight:700;padding:10px 20px;border-radius:12px;z-index:99999;opacity:0;transition:all .3s;white-space:nowrap;pointer-events:none;}
+    .ub-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+    @media(max-width:480px){.ub-cat-grid{grid-template-columns:repeat(2,1fr);}.ub-stats{flex-wrap:wrap;}.ub-stat:not(:last-child){border-right:none;border-bottom:1px solid rgba(255,255,255,0.07);}}
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="ub-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="ub-logo" alt="SOKONI"></a>
+  <div class="ub-nav-right">
+    <a href="index.html" class="ub-nav-link">🏠</a>
+    <a href="reviews.html" class="ub-nav-link">⭐ All Reviews</a>
+    <button type="button" class="ub-nav-link ub-nav-post" onclick="openUpload()">📸 Post Your Unboxing</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="ub-hero">
+  <div class="ub-badge">📦 Live Unboxing Wall</div>
+  <h1>Real Orders.<br><span>Real Photos. Real Trust.</span></h1>
+  <p>Kenya's first shopper photo wall — see exactly what other buyers received, then share your own unboxing and help the community shop smarter.</p>
+</div>
+
+<!-- STATS -->
+<div class="ub-stats" id="ubStats">
+  <div class="ub-stat"><div class="ub-stat-num" id="statTotal">0</div><div class="ub-stat-label">Photo Reviews</div></div>
+  <div class="ub-stat"><div class="ub-stat-num" id="statPhotos">0</div><div class="ub-stat-label">Package Photos</div></div>
+  <div class="ub-stat"><div class="ub-stat-num" id="statAvg">—</div><div class="ub-stat-label">Avg. Rating</div></div>
+  <div class="ub-stat"><div class="ub-stat-num" id="statVerified">0</div><div class="ub-stat-label">Verified Buys</div></div>
+</div>
+
+<!-- POST CTA -->
+<div class="ub-post-cta" onclick="openUpload()">
+  <div class="ub-post-icon">📸</div>
+  <div class="ub-post-text">
+    <h3>📦 Just received your order? Show it off!</h3>
+    <p>Post your unboxing photo, rate your experience & earn <strong style="color:#71ff00;">+50 loyalty points</strong>. Your photo helps thousands of Kenyan shoppers.</p>
+  </div>
+  <button type="button" class="ub-post-btn" onclick="event.stopPropagation();openUpload()">📸 Post Now</button>
+</div>
+
+<!-- FILTER PILLS -->
+<div class="ub-filters" id="ubFilters">
+  <button type="button" class="ub-filter-pill active" onclick="setFilter('all',this)">🌍 All</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('electronics',this)">📱 Electronics</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('fashion',this)">👗 Fashion</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('food',this)">🍽️ Food & Grocery</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('furniture',this)">🛋️ Furniture</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('beauty',this)">💄 Beauty</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('sports',this)">⚽ Sports</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('services',this)">🛠️ Services</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('books',this)">📚 Books</button>
+  <button type="button" class="ub-filter-pill" onclick="setFilter('other',this)">📦 Other</button>
+</div>
+
+<!-- SORT ROW -->
+<div class="ub-sort-row">
+  <div class="ub-count" id="ubCount">Loading reviews...</div>
+  <select class="ub-sort-select" onchange="setSort(this.value)">
+    <option value="newest">Newest First</option>
+    <option value="top">Most Liked</option>
+    <option value="highest">5 Stars First</option>
+    <option value="photos">Most Photos</option>
+  </select>
+</div>
+
+<!-- GALLERY -->
+<div class="ub-gallery" id="ubGallery"></div>
+
+<!-- EMPTY -->
+<div class="ub-empty" id="ubEmpty" style="display:none;">
+  <div class="ub-empty-icon">📦</div>
+  <h3>📷 No photo reviews yet in this category</h3>
+  <p style="font-size:13px;margin-top:4px;">Be the first to post your unboxing!</p>
+  <button type="button" onclick="openUpload()" style="margin-top:16px;padding:11px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:11px;cursor:pointer;font-family:inherit;font-size:13px;">📸 Post First Review</button>
+</div>
+
+<!-- TOAST -->
+<div class="ub-toast" id="ubToast"></div>
+
+<!-- ═══════════════ UPLOAD MODAL ═══════════════ -->
+<div class="ub-upload-overlay" id="uploadOverlay" onclick="if(event.target===this)closeUpload()">
+  <div class="ub-upload-sheet">
+    <div class="ub-upload-handle"></div>
+    <h2>📦 Share Your Unboxing</h2>
+    <p class="ub-upload-sub">Post a photo of your received package & earn <strong style="color:#71ff00;">+50 loyalty points</strong></p>
+
+    <!-- PHOTO DROP ZONE -->
+    <div class="ub-drop-zone" id="dropZone">
+      <input type="file" class="ub-file-input" id="photoInput" accept="image/*" multiple onchange="handleFiles(this.files)">
+      <div class="ub-drop-icon">📷</div>
+      <div class="ub-drop-text">Tap to upload package photos</div>
+      <div class="ub-drop-sub">Up to 3 photos · JPG, PNG, WEBP (auto-compressed)</div>
+    </div>
+    <div class="ub-previews" id="photoPreviews"></div>
+
+    <!-- STAR RATING -->
+    <label class="ub-label">Your Rating *</label>
+    <div class="ub-stars-row" id="starRow">
+      <button type="button" class="ub-star-btn" data-val="1" onclick="setStar(1)">★</button>
+      <button type="button" class="ub-star-btn" data-val="2" onclick="setStar(2)">★</button>
+      <button type="button" class="ub-star-btn" data-val="3" onclick="setStar(3)">★</button>
+      <button type="button" class="ub-star-btn" data-val="4" onclick="setStar(4)">★</button>
+      <button type="button" class="ub-star-btn" data-val="5" onclick="setStar(5)">★</button>
+    </div>
+
+    <!-- CATEGORY -->
+    <label class="ub-label">Category *</label>
+    <div class="ub-cat-grid" id="catGrid">
+      <button type="button" class="ub-cat-btn" onclick="setCat('electronics',this)">📱 Electronics</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('fashion',this)">👗 Fashion</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('food',this)">🍽️ Food</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('furniture',this)">🛋️ Furniture</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('beauty',this)">💄 Beauty</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('sports',this)">⚽ Sports</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('books',this)">📚 Books</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('services',this)">🛠️ Services</button>
+      <button type="button" class="ub-cat-btn" onclick="setCat('other',this)">📦 Other</button>
+    </div>
+
+    <!-- PRODUCT NAME -->
+    <label class="ub-label">Product / Service Name *</label>
+    <input type="text" class="ub-input" id="ubProduct" placeholder="e.g. Samsung Galaxy A55, Nike Air Max, Plumbing Fix">
+
+    <!-- REVIEW TEXT -->
+    <label class="ub-label">Your Review *</label>
+    <textarea class="ub-textarea" id="ubComment" placeholder="Describe what you received — quality, packaging, delivery speed, how it matches the listing..."></textarea>
+
+    <!-- REVIEWER NAME -->
+    <label class="ub-label">Your Name (optional)</label>
+    <input type="text" class="ub-input" id="ubReviewer" placeholder="e.g. Grace M. (shown publicly)">
+
+    <!-- ORDER ID -->
+    <label class="ub-label">Order ID (optional — adds ✅ Verified badge)</label>
+    <input type="text" class="ub-input" id="ubOrderId" placeholder="e.g. ORD1234567 — find this in your order confirmation">
+
+    <button type="button" class="ub-submit-btn" id="ubSubmitBtn" onclick="submitReview()">📦 Post My Unboxing Review →</button>
+    <div class="ub-form-msg" id="ubFormMsg"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ LIGHTBOX ═══════════════ -->
+<div class="ub-lightbox" id="ubLightbox" onclick="if(event.target===this)closeLightbox()">
+  <div class="ub-lb-inner">
+    <button type="button" class="ub-lb-close" onclick="closeLightbox()">✕</button>
+    <div class="ub-lb-photos" id="lbPhotos"></div>
+    <div class="ub-lb-dots" id="lbDots"></div>
+    <div class="ub-lb-body">
+      <div class="ub-lb-top">
+        <div class="ub-lb-avatar" id="lbAvatar"></div>
+        <div>
+          <div class="ub-lb-name" id="lbName"></div>
+          <div class="ub-lb-meta" id="lbMeta"></div>
+        </div>
+        <div class="ub-lb-stars" id="lbStars"></div>
+      </div>
+      <div class="ub-lb-product" id="lbProduct"></div>
+      <div class="ub-lb-comment" id="lbComment"></div>
+      <div class="ub-lb-order" id="lbOrder" style="display:none;"></div>
+      <div class="ub-lb-actions">
+        <button type="button" class="ub-lb-action ub-lb-like-btn" id="lbLikeBtn" onclick="lightboxLike()">❤️ <span id="lbLikeCount">0</span> Helpful</button>
+        <button type="button" class="ub-lb-action ub-lb-share-btn" onclick="lightboxShare()"><i class="fab fa-whatsapp"></i> Share</button>
+        <button type="button" class="ub-lb-action ub-lb-report-btn" onclick="showToast('Thank you for the report. We will review it.',3000)">⚑ Report</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="unboxing.html" class="bnav-item active-bnav"><span class="bnav-emoji">📦</span><span>Unboxing</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* ═══════ CONSTANTS ═══════ */
+const AV_COLORS=['#71ff00','#00c878','#00aaff','#f472b6','#f59e0b','#a78bfa','#ef4444','#22d3ee','#fb923c','#4ade80','#e879f9','#38bdf8','#facc15','#34d399','#f87171'];
+const CAT_EMOJIS={electronics:'📱',fashion:'👗',food:'🍽️',furniture:'🛋️',beauty:'💄',sports:'⚽',books:'📚',services:'🛠️',other:'📦'};
+
+/* ═══════ DEMO REVIEWS (with placeholder photo patterns) ═══════ */
+const DEMO = [
+  {id:'dm01',rating:5,product:'Samsung Galaxy A55',category:'electronics',comment:'Sealed box, original charger, legit Samsung. Arrived in 2 days. Packaging perfect — bubble wrap inside and outside. Highly recommend this seller!',reviewer:'Brian K.',orderId:'ORD1820045',date:'2 Jun 2026',likes:34,liked:false,verified:true,photos:['📱'],photoCount:2},
+  {id:'dm02',rating:5,product:'Nike Air Force 1',category:'fashion',comment:'100% authentic! Even came with the Nike receipt. Box was in perfect condition. Sizes run true. Will order again for sure.',reviewer:'Grace M.',orderId:'ORD1820043',date:'1 Jun 2026',likes:28,liked:false,verified:true,photos:['👟'],photoCount:3},
+  {id:'dm03',rating:5,product:'Java Breakfast Combo',category:'food',comment:'Arrived HOT in 28 minutes. Eggs cooked perfectly, toast still crispy. They even included extra ketchup sachets. Best food delivery in Nairobi.',reviewer:'Alice W.',orderId:'',date:'31 May 2026',likes:22,liked:false,verified:false,photos:['🍳'],photoCount:1},
+  {id:'dm04',rating:4,product:'L-Shaped Sofa (Grey)',category:'furniture',comment:'Quality is great, colour exactly as shown. Delivery team was careful and even helped with setup. Slight delay of 1 day but totally worth the wait.',reviewer:'David O.',orderId:'ORD1820040',date:'30 May 2026',likes:19,liked:false,verified:true,photos:['🛋️'],photoCount:2},
+  {id:'dm05',rating:5,product:'MAC Foundation Pro',category:'beauty',comment:'Original product, sealed with authentication code. Matches my skin perfectly. Delivery came with cute packaging and a free sample. 10/10!',reviewer:'Purity N.',orderId:'',date:'29 May 2026',likes:41,liked:false,verified:false,photos:['💄'],photoCount:3},
+  {id:'dm06',rating:5,product:'Adidas Football Boots',category:'sports',comment:'Perfect size, original Adidas. Came with both extra laces and the original box. My son was so happy. These are genuine — I checked the stitch quality.',reviewer:'James K.',orderId:'ORD1820037',date:'28 May 2026',likes:15,liked:false,verified:true,photos:['⚽'],photoCount:1},
+  {id:'dm07',rating:5,product:'Plumbing Repair — PipePro',category:'services',comment:'Called at 9am, technician arrived by 11am. Fixed burst pipe, replaced joint, cleaned everything up. Left no mess at all. Absolutely professional!',reviewer:'Margaret A.',orderId:'PLM9201745',date:'27 May 2026',likes:33,liked:false,verified:true,photos:['🔧'],photoCount:1},
+  {id:'dm08',rating:3,product:'OLED TV 55"',category:'electronics',comment:'TV works great but outer box was a bit dented on delivery. Inside was fine — wrapped in thick foam. Remote has all functions. Just be careful with packaging next time.',reviewer:'Samuel T.',orderId:'ORD1820034',date:'26 May 2026',likes:8,liked:false,verified:true,photos:['📺'],photoCount:2},
+  {id:'dm09',rating:5,product:'Kenyan Honey (Pure)',category:'food',comment:'Pure, thick, no additives. You can tell immediately it is natural by the colour and taste. Came sealed and labelled properly. Ordered 3 jars already.',reviewer:'Esther R.',orderId:'',date:'25 May 2026',likes:27,liked:false,verified:false,photos:['🍯'],photoCount:1},
+  {id:'dm10',rating:5,product:'Custom Logo Design',category:'services',comment:'Sent brief at 8pm, received 3 concepts by 7am next morning. Final files delivered in all formats. Designer was responsive and talented. Money well spent.',reviewer:'StartUp CEO',orderId:'SVC0028810',date:'24 May 2026',likes:48,liked:false,verified:true,photos:['🎨'],photoCount:2},
+  {id:'dm11',rating:5,product:'iPhone 15 Pro',category:'electronics',comment:'Factory sealed, full apple warranty. IMEI checked — 100% legit. Arrived in Nairobi from Mombasa in 18 hours. Best electronics deal I have ever gotten on any platform.',reviewer:'Kevin N.',orderId:'ORD1820029',date:'23 May 2026',likes:62,liked:false,verified:true,photos:['🍎'],photoCount:3},
+  {id:'dm12',rating:4,product:'Leather Handbag',category:'fashion',comment:'Quality is amazing — real leather, stitching is perfect. Size is a bit bigger than I expected but that is actually better! Colour is exactly as shown.',reviewer:'Zipporah M.',orderId:'',date:'22 May 2026',likes:11,liked:false,verified:false,photos:['👜'],photoCount:2},
+];
+
+/* ═══════ STATE ═══════ */
+let currentFilter='all', currentSort='newest', openReview=null;
+let uploadedPhotos=[], selectedStar=0, selectedCat='', currentLbIndex=0;
+window._fsUnboxReviews=[];
+
+/* ═══════ STORAGE ═══════ */
+function getReviews(){try{return JSON.parse(localStorage.getItem('sokoniUnboxingReviews'))||[];}catch{return [];}}
+function saveReviews(r){try{localStorage.setItem('sokoniUnboxingReviews',JSON.stringify(r));}catch{showToast('⚠️ Storage full — older reviews may be removed.',3000);}}
+
+function allReviews(){
+  const local=getReviews();
+  const localIds=new Set(local.map(r=>r.id));
+  const fsOnly=(window._fsUnboxReviews||[]).filter(r=>!localIds.has(r.id));
+  return [...local,...fsOnly,...DEMO];
+}
+
+/* ═══════ STATS ═══════ */
+function updateStats(){
+  const all=allReviews();
+  document.getElementById('statTotal').textContent=all.length;
+  document.getElementById('statPhotos').textContent=all.reduce((s,r)=>s+(r.photoCount||r.photos?.length||1),0);
+  const avg=all.reduce((s,r)=>s+r.rating,0)/all.length;
+  document.getElementById('statAvg').textContent=isNaN(avg)?'—':(avg.toFixed(1)+'★');
+  document.getElementById('statVerified').textContent=all.filter(r=>r.verified).length;
+}
+
+/* ═══════ RENDER GALLERY ═══════ */
+function renderGallery(){
+  let list=allReviews();
+  if(currentFilter!=='all') list=list.filter(r=>r.category===currentFilter);
+  if(currentSort==='top') list=list.sort((a,b)=>(b.likes||0)-(a.likes||0));
+  else if(currentSort==='highest') list=list.sort((a,b)=>b.rating-a.rating);
+  else if(currentSort==='photos') list=list.sort((a,b)=>(b.photoCount||1)-(a.photoCount||1));
+  else list=list.sort((a,b)=>b.id.localeCompare?b.id.localeCompare(a.id):0);
+
+  const gallery=document.getElementById('ubGallery');
+  const empty=document.getElementById('ubEmpty');
+  const countEl=document.getElementById('ubCount');
+
+  if(!list.length){gallery.innerHTML='';gallery.style.display='none';empty.style.display='block';countEl.textContent='0 reviews';return;}
+  gallery.style.display='';empty.style.display='none';
+  countEl.textContent=list.length+' photo review'+(list.length!==1?'s':'');
+
+  gallery.innerHTML=list.map((r,i)=>{
+    const bg=AV_COLORS[i%AV_COLORS.length];
+    const initials=(r.reviewer||'A').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const stars='★'.repeat(r.rating)+'☆'.repeat(5-r.rating);
+    const catEmoji=CAT_EMOJIS[r.category]||'📦';
+    const photoCount=r.photoCount||r.photos?.length||1;
+    const isRealPhoto=r.photos&&r.photos[0]&&r.photos[0].startsWith('data:');
+
+    return `<div class="ub-card" onclick="openLightbox('${r.id}')">
+      ${isRealPhoto
+        ?`<img class="ub-card-img" src="${r.photos[0]}" alt="Unboxing photo" loading="lazy">`
+        :`<div class="ub-card-img-placeholder">${r.photos?r.photos[0]:catEmoji}</div>`}
+      ${r.verified?'<div class="ub-verified-badge">✅ Verified Buy</div>':''}
+      ${photoCount>1?`<div class="ub-multi-badge">📷 ${photoCount}</div>`:''}
+      <div class="ub-card-body">
+        <div class="ub-card-stars">${stars}</div>
+        <div class="ub-card-product">${r.product}</div>
+        <div class="ub-card-comment">${r.comment}</div>
+        <div class="ub-card-footer">
+          <div class="ub-card-author">
+            <div class="ub-card-avatar" style="background:${bg};">${initials}</div>
+            <span class="ub-card-name">${r.reviewer||'Anonymous'}</span>
+          </div>
+          <div class="ub-card-actions">
+            <button type="button" class="ub-card-like ${r.liked?'liked':''}" onclick="event.stopPropagation();toggleLike('${r.id}',this)">❤️ ${r.likes||0}</button>
+            <button type="button" class="ub-card-share" onclick="event.stopPropagation();shareReview('${r.id}')">🔗</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════ FILTERS / SORT ═══════ */
+function setFilter(cat,btn){
+  currentFilter=cat;
+  document.querySelectorAll('.ub-filter-pill').forEach(p=>p.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderGallery();
+}
+function setSort(val){currentSort=val;renderGallery();}
+
+/* ═══════ LIKE ═══════ */
+function toggleLike(id,btn){
+  const user=JSON.parse(localStorage.getItem('sokoniUnboxingReviews')||'[]');
+  const all=getReviews();
+  const idx=all.findIndex(r=>r.id===id);
+  const demo=DEMO.find(r=>r.id===id);
+  const target=idx>=0?all[idx]:demo;
+  if(!target)return;
+  target.liked=!target.liked;
+  target.likes=(target.likes||0)+(target.liked?1:-1);
+  if(idx>=0){all[idx]=target;saveReviews(all);}
+  btn.classList.toggle('liked',target.liked);
+  btn.innerHTML=`❤️ ${target.likes}`;
+  if(openReview?.id===id){document.getElementById('lbLikeCount').textContent=target.likes;document.getElementById('lbLikeBtn').classList.toggle('liked',target.liked);}
+}
+
+/* ═══════ SHARE ═══════ */
+function shareReview(id){
+  const all=allReviews();
+  const r=all.find(x=>x.id===id);
+  if(!r)return;
+  const msg=`📦 Unboxing on SOKONI!\n\n⭐ ${'★'.repeat(r.rating)} — ${r.product}\n"${r.comment.slice(0,120)}..."\n— ${r.reviewer||'Anonymous'}\n\nShop on SOKONI: https://mysokoni.co.ke`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+/* ═══════ LIGHTBOX ═══════ */
+function openLightbox(id){
+  const all=allReviews();
+  const r=all.find(x=>x.id===id);
+  if(!r)return;
+  openReview=r;
+  currentLbIndex=0;
+  const bg=AV_COLORS[Math.abs(id.charCodeAt(0)-48)%AV_COLORS.length];
+  const initials=(r.reviewer||'A').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+
+  const photosEl=document.getElementById('lbPhotos');
+  const dotsEl=document.getElementById('lbDots');
+  const photos=r.photos||[CAT_EMOJIS[r.category]||'📦'];
+  photosEl.innerHTML=photos.map(p=>
+    p.startsWith('data:')||p.startsWith('http')
+      ?`<img loading="lazy" class="ub-lb-photo" src="${p}" alt="Unboxing">`
+      :`<div class="ub-lb-photo-placeholder">${p}</div>`
+  ).join('');
+  dotsEl.innerHTML=photos.length>1?photos.map((_,i)=>`<div class="ub-lb-dot ${i===0?'active':''}" onclick="lbGoto(${i})"></div>`).join(''):'';
+
+  document.getElementById('lbAvatar').textContent=initials;
+  document.getElementById('lbAvatar').style.background=bg;
+  document.getElementById('lbName').textContent=r.reviewer||'Anonymous';
+  document.getElementById('lbMeta').textContent=r.date+(r.verified?' · ✅ Verified Buy':'');
+  document.getElementById('lbStars').textContent='★'.repeat(r.rating)+'☆'.repeat(5-r.rating);
+  document.getElementById('lbProduct').textContent=(CAT_EMOJIS[r.category]||'📦')+' '+r.product;
+  document.getElementById('lbComment').textContent=`"${r.comment}"`;
+  const orderEl=document.getElementById('lbOrder');
+  if(r.orderId){orderEl.style.display='block';orderEl.textContent='📋 Order: '+r.orderId;}else{orderEl.style.display='none';}
+  document.getElementById('lbLikeCount').textContent=r.likes||0;
+  document.getElementById('lbLikeBtn').classList.toggle('liked',!!r.liked);
+  document.getElementById('ubLightbox').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function lbGoto(i){
+  currentLbIndex=i;
+  const photosEl=document.getElementById('lbPhotos');
+  photosEl.children[i]?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'start'});
+  document.querySelectorAll('.ub-lb-dot').forEach((d,idx)=>d.classList.toggle('active',idx===i));
+}
+
+function closeLightbox(){document.getElementById('ubLightbox').classList.remove('open');document.body.style.overflow='';openReview=null;}
+
+function lightboxLike(){if(openReview)toggleLike(openReview.id,document.getElementById('lbLikeBtn'));}
+function lightboxShare(){if(openReview)shareReview(openReview.id);}
+
+/* ═══════ UPLOAD MODAL ═══════ */
+function openUpload(){document.getElementById('uploadOverlay').classList.add('open');document.body.style.overflow='hidden';}
+function closeUpload(){document.getElementById('uploadOverlay').classList.remove('open');document.body.style.overflow='';}
+
+/* Drag-and-drop */
+const dropZone=document.getElementById('dropZone');
+if(dropZone){
+  ['dragenter','dragover'].forEach(e=>dropZone.addEventListener(e,ev=>{ev.preventDefault();dropZone.classList.add('dragging');}));
+  ['dragleave','drop'].forEach(e=>dropZone.addEventListener(e,ev=>{ev.preventDefault();dropZone.classList.remove('dragging');}));
+  dropZone.addEventListener('drop',ev=>{handleFiles(ev.dataTransfer.files);});
+}
+
+function handleFiles(files){
+  if(!files||!files.length)return;
+  const remaining=3-uploadedPhotos.length;
+  const toProcess=[...files].slice(0,remaining);
+  toProcess.forEach(f=>{
+    if(!f.type.startsWith('image/')){showToast('Only image files are supported.');return;}
+    const reader=new FileReader();
+    reader.onload=e=>{
+      compressImage(e.target.result,800,0.72,compressed=>{
+        uploadedPhotos.push(compressed);
+        renderPreviews();
+      });
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+function compressImage(dataUrl,maxW,quality,cb){
+  const img=new Image();
+  img.onload=()=>{
+    const ratio=Math.min(1,maxW/img.width);
+    const canvas=document.createElement('canvas');
+    canvas.width=img.width*ratio;canvas.height=img.height*ratio;
+    canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+    cb(canvas.toDataURL('image/jpeg',quality));
+  };
+  img.src=dataUrl;
+}
+
+function renderPreviews(){
+  const el=document.getElementById('photoPreviews');
+  el.innerHTML=uploadedPhotos.map((src,i)=>`
+    <div class="ub-preview-wrap">
+      <img loading="lazy" class="ub-preview-thumb" src="${src}" alt="Preview">
+      <button type="button" class="ub-preview-remove" onclick="removePhoto(${i})">✕</button>
+    </div>`).join('');
+  const dz=document.getElementById('dropZone');
+  if(dz)dz.style.display=uploadedPhotos.length>=3?'none':'';
+}
+function removePhoto(i){uploadedPhotos.splice(i,1);renderPreviews();}
+
+/* Stars */
+let formStar=0;
+function setStar(n){
+  formStar=n;
+  document.querySelectorAll('.ub-star-btn').forEach((b,i)=>b.classList.toggle('lit',i<n));
+}
+
+/* Category */
+let formCat='';
+function setCat(cat,btn){
+  formCat=cat;
+  document.querySelectorAll('.ub-cat-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+}
+
+/* SUBMIT */
+function submitReview(){
+  const product=document.getElementById('ubProduct')?.value.trim();
+  const comment=document.getElementById('ubComment')?.value.trim();
+  const reviewer=document.getElementById('ubReviewer')?.value.trim()||'Anonymous';
+  const orderId=document.getElementById('ubOrderId')?.value.trim();
+  const msgEl=document.getElementById('ubFormMsg');
+
+  if(!formStar){if(msgEl){msgEl.textContent='⭐ Please select a star rating.';msgEl.style.color='#ff6b6b';}return;}
+  if(!formCat){if(msgEl){msgEl.textContent='📦 Please select a category.';msgEl.style.color='#ff6b6b';}return;}
+  if(!product){if(msgEl){msgEl.textContent='📝 Please enter the product or service name.';msgEl.style.color='#ff6b6b';}return;}
+  if(!comment||comment.length<10){if(msgEl){msgEl.textContent='💬 Please write at least 10 characters.';msgEl.style.color='#ff6b6b';}return;}
+
+  const btn=document.getElementById('ubSubmitBtn');
+  btn.disabled=true;btn.textContent='Posting...';
+
+  const review={
+    id:'ubr_'+Date.now(),
+    rating:formStar,
+    product,
+    category:formCat,
+    comment,
+    reviewer,
+    orderId,
+    date:new Date().toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}),
+    likes:0,
+    liked:false,
+    verified:!!orderId,
+    photos:uploadedPhotos.length?uploadedPhotos:[CAT_EMOJIS[formCat]||'📦'],
+    photoCount:uploadedPhotos.length||1
+  };
+
+  setTimeout(()=>{
+    const reviews=getReviews();
+    reviews.unshift(review);
+    saveReviews(reviews);
+
+    /* Push to Firestore — photos excluded (base64 too large for Firestore) */
+    if(window.SokoniDB){
+      window.SokoniDB.saveUnboxingReview(review)
+        .catch(e=>console.warn('[SOKONI] Unboxing save failed:',e.message));
+    }
+
+    /* Add loyalty points */
+    try{const u=JSON.parse(localStorage.getItem('sokoniUser')||'{}');u.points=(u.points||0)+50;localStorage.setItem('sokoniUser',JSON.stringify(u));}catch{}
+
+    /* Reset form */
+    uploadedPhotos=[];formStar=0;formCat='';
+    document.querySelectorAll('.ub-star-btn').forEach(b=>b.classList.remove('lit'));
+    document.querySelectorAll('.ub-cat-btn').forEach(b=>b.classList.remove('active'));
+    ['ubProduct','ubComment','ubReviewer','ubOrderId'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    renderPreviews();
+    btn.disabled=false;btn.textContent='📦 Post My Unboxing Review →';
+    if(msgEl){msgEl.textContent='';};
+
+    closeUpload();
+    confetti();
+    showToast('🎉 Review posted! +50 loyalty points added.',4000);
+    updateStats();
+    renderGallery();
+  },600);
+}
+
+/* ═══════ CONFETTI ═══════ */
+function confetti(){
+  const colors=['#71ff00','#00aaff','#ffc107','#ff6b6b','#a78bfa','#ffffff'];
+  for(let i=0;i<60;i++){
+    const p=document.createElement('div');
+    p.className='confetti-piece';
+    const size=Math.random()*10+5;
+    p.style.cssText=`width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};left:${Math.random()*100}vw;animation-duration:${Math.random()*2+2}s;animation-delay:${Math.random()*.6}s;transform:rotate(${Math.random()*360}deg);opacity:${Math.random()*.5+.5};`;
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),(Math.random()*2+2.6)*1000);
+  }
+}
+
+/* ═══════ TOAST ═══════ */
+function showToast(msg,dur=2500){
+  const t=document.getElementById('ubToast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
+}
+
+/* ═══════ INIT ═══════ */
+updateStats();
+renderGallery();
+
+window.setFilter=setFilter;window.setSort=setSort;window.openUpload=openUpload;window.closeUpload=closeUpload;
+window.openLightbox=openLightbox;window.closeLightbox=closeLightbox;window.lightboxLike=lightboxLike;window.lightboxShare=lightboxShare;
+window.toggleLike=toggleLike;window.shareReview=shareReview;window.lbGoto=lbGoto;
+window.handleFiles=handleFiles;window.removePhoto=removePhoto;window.setStar=setStar;window.setCat=setCat;window.submitReview=submitReview;
+window.showToast=showToast;
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script type="module">
+import SokoniDB from './sokoni-db.js';
+window.SokoniDB = SokoniDB;
+const _emojiMap={electronics:'📱',fashion:'👗',food:'🍽️',furniture:'🛋️',beauty:'💄',sports:'⚽',books:'📚',services:'🛠️',other:'📦'};
+SokoniDB.listenUnboxingReviews(function(fsRevs){
+  window._fsUnboxReviews = fsRevs.map(r => ({
+    ...r,
+    photos: [r.photoEmoji || _emojiMap[r.category] || '📦'],
+    liked: false,
+  }));
+  if(typeof updateStats==='function') updateStats();
+  if(typeof renderGallery==='function') renderGallery();
+});
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+

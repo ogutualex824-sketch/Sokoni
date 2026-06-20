@@ -1,0 +1,1021 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Delivery Hub</title>
+<meta name="description" content="Send packages anywhere in Kenya — instant, scheduled and multi-stop deliveries. Live GPS tracking, M-Pesa payment.">
+<meta property="og:title" content="SOKONI — Delivery Hub">
+<meta property="og:description" content="Send packages anywhere in Kenya. Live tracking, M-Pesa payment, same-day delivery.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="seller.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="shared-header.js" defer></script>
+<script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js" defer></script>
+<style>
+:root{ --green:#71ff00; --blue:#00aaff; --orange:#f97316; --card:rgba(255,255,255,0.04); --border:rgba(255,255,255,0.08); }
+
+/* ── Tab bar ── */
+.dh-tabs{ display:flex; gap:4px; padding:16px 16px 0; overflow-x:auto; scrollbar-width:none; position:sticky; top:60px; background:#0a0a0a; z-index:90; border-bottom:1px solid var(--border); }
+.dh-tabs::-webkit-scrollbar{ display:none; }
+.dh-tab{ padding:10px 18px; border-radius:10px 10px 0 0; font-size:13px; font-weight:800; cursor:pointer; background:transparent; border:1px solid transparent; color:rgba(255,255,255,0.4); font-family:inherit; white-space:nowrap; transition:all .2s; }
+.dh-tab.active{ color:var(--green); border-color:var(--border); background:var(--card); }
+.dh-tab:hover:not(.active){ color:rgba(255,255,255,0.7); }
+
+/* ── Pane ── */
+.dh-pane{ display:none; padding:16px; max-width:680px; margin:0 auto; padding-bottom:100px; }
+.dh-pane.active{ display:block; }
+
+/* ── Section card ── */
+.dh-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:18px 20px; margin-bottom:14px; }
+.dh-card-title{ font-size:11px; font-weight:800; color:rgba(255,255,255,0.38); letter-spacing:.7px; margin-bottom:14px; text-transform:uppercase; }
+
+/* ── Delivery type selector ── */
+.deltype-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+.deltype-btn{ padding:12px 10px; border-radius:14px; border:1px solid var(--border); background:var(--card); color:rgba(255,255,255,0.55); font-size:12px; font-weight:800; cursor:pointer; font-family:inherit; text-align:center; transition:all .2s; }
+.deltype-btn .dbt-icon{ font-size:22px; display:block; margin-bottom:4px; }
+.deltype-btn.active{ border-color:rgba(113,255,0,0.5); background:rgba(113,255,0,0.07); color:var(--green); }
+
+/* ── Vehicle grid ── */
+.vehicle-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin-bottom:14px; }
+.vehicle-card{ background:var(--card); border:2px solid var(--border); border-radius:14px; padding:12px 8px; text-align:center; cursor:pointer; transition:all .2s; }
+.vehicle-card:hover{ border-color:rgba(113,255,0,0.3); }
+.vehicle-card.selected{ border-color:var(--green); background:rgba(113,255,0,0.07); box-shadow:0 0 12px rgba(113,255,0,0.1); }
+.vc-icon{ font-size:28px; margin-bottom:4px; }
+.vc-name{ font-size:11px; font-weight:800; color:white; }
+.vc-cap{ font-size:9px; color:rgba(255,255,255,0.38); margin-top:2px; }
+.vc-base{ font-size:11px; font-weight:700; color:var(--green); margin-top:4px; }
+
+/* ── Inputs ── */
+.dh-input{ width:100%; padding:13px 14px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:16px; outline:none; font-family:inherit; margin-bottom:10px; transition:border-color .2s; box-sizing:border-box; }
+.dh-input:focus{ border-color:rgba(113,255,0,0.4); }
+.dh-input::placeholder{ color:rgba(255,255,255,0.3); }
+.dh-label{ font-size:11px; font-weight:700; color:rgba(255,255,255,0.42); display:block; margin-bottom:5px; }
+.dh-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.dh-grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+
+/* ── Address row ── */
+.addr-wrap{ position:relative; margin-bottom:10px; }
+.addr-wrap .dh-input{ margin-bottom:0; padding-right:42px; }
+.addr-loc-btn{ position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; font-size:18px; cursor:pointer; color:rgba(255,255,255,0.4); padding:4px; }
+.addr-loc-btn:hover{ color:var(--green); }
+
+/* ── Multi-stop builder ── */
+.stops-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+.stop-row{ display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; }
+.stop-seq{ width:28px; height:28px; border-radius:50%; font-size:12px; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.stop-pickup{ background:rgba(113,255,0,0.15); border:1px solid rgba(113,255,0,0.4); color:var(--green); }
+.stop-dropoff{ background:rgba(0,170,255,0.12); border:1px solid rgba(0,170,255,0.3); color:var(--blue); }
+.stop-remove{ background:rgba(255,61,61,0.08); border:1px solid rgba(255,61,61,0.2); border-radius:8px; color:#ff6b6b; padding:6px 10px; cursor:pointer; font-size:12px; font-family:inherit; }
+.stop-remove:hover{ background:rgba(255,61,61,0.15); }
+
+/* ── Urgency row ── */
+.urgency-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.urg-btn{ padding:8px 14px; border-radius:20px; border:1px solid var(--border); background:var(--card); color:rgba(255,255,255,0.55); font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .2s; }
+.urg-btn.active{ background:rgba(113,255,0,0.1); border-color:rgba(113,255,0,0.35); color:var(--green); }
+.urg-btn.urgent.active{ background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.3); color:#ef4444; }
+
+/* ── Price box ── */
+.dh-price-box{ background:rgba(113,255,0,0.04); border:1px solid rgba(113,255,0,0.18); border-radius:14px; padding:16px 18px; margin-bottom:14px; }
+.dh-price-row{ display:flex; justify-content:space-between; font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:7px; }
+.dh-price-row.total{ font-size:16px; font-weight:900; color:white; border-top:1px solid rgba(255,255,255,0.08); padding-top:9px; margin-top:4px; }
+.dh-price-row.total span:last-child{ color:var(--green); }
+.dh-eta{ font-size:11px; color:rgba(113,255,0,0.65); margin-top:6px; }
+
+/* ── Action buttons ── */
+.dh-btn-primary{ width:100%; padding:15px; background:linear-gradient(135deg,#71ff00,#4fc800); color:black; font-weight:900; font-size:15px; border:none; border-radius:14px; cursor:pointer; font-family:inherit; margin-bottom:8px; transition:transform .15s; }
+.dh-btn-primary:hover{ transform:translateY(-1px); }
+.dh-btn-secondary{ width:100%; padding:13px; background:rgba(37,211,102,0.08); border:1px solid rgba(37,211,102,0.25); color:#25d366; font-weight:800; font-size:14px; border-radius:14px; cursor:pointer; font-family:inherit; margin-bottom:8px; }
+.dh-btn-outline{ width:100%; padding:12px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:rgba(255,255,255,0.6); font-weight:700; font-size:13px; border-radius:12px; cursor:pointer; font-family:inherit; }
+
+/* ── Stats row ── */
+.dh-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px; }
+.dh-stat{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px 8px; text-align:center; }
+.dhs-val{ font-size:20px; font-weight:900; color:var(--green); }
+.dhs-lbl{ font-size:10px; color:rgba(255,255,255,0.35); font-weight:700; margin-top:3px; }
+
+/* ── Delivery card ── */
+.dlv-card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px 18px; margin-bottom:10px; transition:.2s; }
+.dlv-card:hover{ border-color:rgba(113,255,0,0.2); }
+.dlv-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:8px; flex-wrap:wrap; }
+.dlv-ref{ font-size:13px; font-weight:900; color:white; }
+.dlv-date{ font-size:11px; color:rgba(255,255,255,0.35); }
+.dlv-route{ font-size:12px; color:rgba(255,255,255,0.55); margin-bottom:8px; line-height:1.6; }
+.dlv-status{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:800; }
+.dlv-actions{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.dlv-btn{ padding:8px 14px; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; border:1px solid; transition:.15s; }
+.dlv-btn-track{ background:rgba(0,170,255,0.08); border-color:rgba(0,170,255,0.25); color:var(--blue); }
+.dlv-btn-cancel{ background:rgba(255,61,61,0.06); border-color:rgba(255,61,61,0.2); color:#ff6b6b; }
+.dlv-btn-copy{ background:rgba(255,255,255,0.04); border-color:var(--border); color:rgba(255,255,255,0.55); }
+.dlv-btn-confirm{ background:rgba(113,255,0,0.08); border-color:rgba(113,255,0,0.3); color:var(--green); }
+
+/* ── PIN box ── */
+.dh-pin-box{ background:rgba(113,255,0,0.05); border:1px solid rgba(113,255,0,0.25); border-radius:12px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+.dh-pin-label{ font-size:11px; color:rgba(255,255,255,0.4); font-weight:700; }
+.dh-pin-code{ font-size:22px; font-weight:900; letter-spacing:6px; color:var(--green); }
+
+/* ── Empty state ── */
+.dh-empty{ text-align:center; padding:48px 24px; color:rgba(255,255,255,0.25); }
+.dh-empty-icon{ font-size:48px; margin-bottom:12px; }
+.dh-empty-text{ font-size:14px; font-weight:700; margin-bottom:6px; color:rgba(255,255,255,0.4); }
+.dh-empty-sub{ font-size:12px; }
+
+/* ── Success modal ── */
+.dh-modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9000; display:flex; align-items:center; justify-content:center; padding:20px; }
+.dh-modal{ background:#111; border:1px solid rgba(113,255,0,0.25); border-radius:24px; padding:28px 24px; max-width:400px; width:100%; text-align:center; }
+.dh-modal-icon{ font-size:52px; margin-bottom:12px; }
+.dh-modal-title{ font-size:20px; font-weight:900; color:white; margin-bottom:6px; }
+.dh-modal-ref{ font-size:14px; font-weight:800; color:var(--green); margin-bottom:4px; }
+.dh-modal-sub{ font-size:12px; color:rgba(255,255,255,0.45); margin-bottom:18px; line-height:1.6; }
+.dh-modal-pin{ background:rgba(113,255,0,0.07); border:2px solid rgba(113,255,0,0.35); border-radius:14px; padding:14px; margin-bottom:16px; }
+.dh-modal-pin-label{ font-size:10px; font-weight:800; color:rgba(113,255,0,0.6); letter-spacing:.7px; margin-bottom:4px; }
+.dh-modal-pin-code{ font-size:40px; font-weight:900; color:var(--green); letter-spacing:10px; }
+.dh-modal-btn-row{ display:flex; gap:8px; }
+.dh-modal-btn{ flex:1; padding:12px; border-radius:12px; font-size:13px; font-weight:800; cursor:pointer; font-family:inherit; border:1px solid; }
+.dh-modal-btn-primary{ background:linear-gradient(135deg,#71ff00,#4fc800); color:black; border-color:transparent; }
+.dh-modal-btn-sec{ background:rgba(255,255,255,0.05); border-color:var(--border); color:rgba(255,255,255,0.7); }
+
+/* ── Toast ── */
+.dh-toast{ position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px); padding:11px 22px; border-radius:12px; font-size:13px; font-weight:800; z-index:9999; opacity:0; transition:.3s; pointer-events:none; white-space:nowrap; max-width:88vw; text-align:center; background:#71ff00; color:black; }
+.dh-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+@media(max-width:580px){
+  .dh-grid2{ grid-template-columns:1fr; }
+  .dh-grid3{ grid-template-columns:1fr 1fr; }
+  .vehicle-grid{ grid-template-columns:repeat(3,1fr); }
+  .deltype-row{ grid-template-columns:1fr 1fr; }
+  .dh-stats{ grid-template-columns:repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="seller-navbar">
+  <div class="seller-nav-left">
+    <img loading="lazy" src="assets/Sokonilogo2.png" class="seller-nav-logo-img" alt="SOKONI">
+  </div>
+  <div class="seller-nav-center">
+    <span class="seller-nav-title">🚚 Delivery Hub</span>
+  </div>
+  <div class="seller-nav-right">
+    <a href="services.html" class="seller-nav-link">← Services</a>
+    <a href="driver.html" class="seller-nav-link">🏍️ Be a Rider</a>
+  </div>
+</nav>
+
+<!-- TAB BAR -->
+<div class="dh-tabs">
+  <button class="dh-tab active" onclick="showDelTab('create')">+ Create</button>
+  <button class="dh-tab" onclick="showDelTab('active')">📦 My Deliveries</button>
+  <button class="dh-tab" onclick="showDelTab('history')">🕑 History</button>
+  <button class="dh-tab" onclick="showDelTab('calc')">🧮 Pricing</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PANE 1 — CREATE DELIVERY
+══════════════════════════════════════════════════════════ -->
+<div id="pane-create" class="dh-pane active">
+
+  <!-- Delivery Type -->
+  <div class="dh-card">
+    <div class="dh-card-title">Delivery Type</div>
+    <div class="deltype-row">
+      <button class="deltype-btn active" id="dtyp-instant" onclick="setDelType('instant',this)">
+        <span class="dbt-icon">⚡</span>Instant
+      </button>
+      <button class="deltype-btn" id="dtyp-same_day" onclick="setDelType('same_day',this)">
+        <span class="dbt-icon">📅</span>Same Day
+      </button>
+      <button class="deltype-btn" id="dtyp-scheduled" onclick="setDelType('scheduled',this)">
+        <span class="dbt-icon">🗓️</span>Scheduled
+      </button>
+      <button class="deltype-btn" id="dtyp-multi_stop" onclick="setDelType('multi_stop',this)">
+        <span class="dbt-icon">🔀</span>Multi-Stop
+      </button>
+    </div>
+    <div id="schedTimeRow" style="display:none;">
+      <label class="dh-label">Scheduled Date &amp; Time</label>
+      <input type="datetime-local" id="schedTime" class="dh-input">
+    </div>
+  </div>
+
+  <!-- Vehicle -->
+  <div class="dh-card">
+    <div class="dh-card-title">Vehicle Type</div>
+    <div class="vehicle-grid" id="vehicleGrid"></div>
+  </div>
+
+  <!-- Standard Pickup / Dropoff -->
+  <div class="dh-card" id="standardStopsCard">
+    <div class="dh-card-title">Route</div>
+    <label class="dh-label">Pickup Address</label>
+    <div class="addr-wrap">
+      <input id="pickupAddr" class="dh-input" placeholder="e.g. CBD, Westlands, Kikuyu…" oninput="onAddrInput()">
+      <button class="addr-loc-btn" onclick="useMyLocation('pickup')" title="Use my location">📍</button>
+    </div>
+    <label class="dh-label">Dropoff Address</label>
+    <div class="addr-wrap">
+      <input id="dropoffAddr" class="dh-input" placeholder="e.g. Kasarani, Ngong, Thika…" oninput="onAddrInput()">
+      <button class="addr-loc-btn" onclick="useMyLocation('dropoff')" title="Use my location">📍</button>
+    </div>
+    <div class="dh-grid2">
+      <div>
+        <label class="dh-label">Distance (km)</label>
+        <input type="number" id="distKm" class="dh-input" placeholder="e.g. 8" min="0.5" step="0.5" oninput="calcDelivery()">
+      </div>
+      <div>
+        <label class="dh-label">Package Weight</label>
+        <select id="weightSel" class="dh-input" onchange="calcDelivery()">
+          <option value="light">Light (under 5 kg)</option>
+          <option value="medium">Medium (5–20 kg)</option>
+          <option value="heavy">Heavy (20–100 kg)</option>
+          <option value="bulk">Bulk / Full Load</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Stop Builder -->
+  <div class="dh-card" id="multiStopCard" style="display:none;">
+    <div class="dh-card-title">Stops</div>
+    <div class="stops-list" id="stopsList"></div>
+    <button type="button" class="dh-btn-outline" onclick="addStop('pickup')" style="margin-bottom:6px;">+ Add Pickup</button>
+    <button type="button" class="dh-btn-outline" onclick="addStop('dropoff')">+ Add Dropoff</button>
+  </div>
+
+  <!-- Recipient -->
+  <div class="dh-card">
+    <div class="dh-card-title">Recipient</div>
+    <div class="dh-grid2">
+      <div>
+        <label class="dh-label">Recipient Name</label>
+        <input id="recipName" class="dh-input" placeholder="Full name">
+      </div>
+      <div>
+        <label class="dh-label">Recipient Phone</label>
+        <input type="tel" id="recipPhone" class="dh-input" placeholder="07XXXXXXXX">
+      </div>
+    </div>
+    <div class="dh-grid2">
+      <div>
+        <label class="dh-label">Package Type</label>
+        <select id="packageType" class="dh-input">
+          <option value="parcel">📦 General Parcel</option>
+          <option value="documents">📄 Documents</option>
+          <option value="food">🍱 Food / Perishables</option>
+          <option value="medicine">💊 Medicine / Pharmacy</option>
+          <option value="fragile">🫙 Fragile Items</option>
+          <option value="oversized">📐 Oversized / Bulky</option>
+        </select>
+      </div>
+      <div>
+        <label class="dh-label">Your Phone (for M-Pesa)</label>
+        <input type="tel" id="senderPhone" class="dh-input" placeholder="07XXXXXXXX">
+      </div>
+    </div>
+    <div>
+      <label class="dh-label">Notes for Rider (optional)</label>
+      <input id="delivNotes" class="dh-input" placeholder="e.g. Fragile, call before arrival, gate code…">
+    </div>
+  </div>
+
+  <!-- Urgency -->
+  <div class="dh-card">
+    <div class="dh-card-title">Urgency</div>
+    <div class="urgency-row">
+      <button type="button" class="urg-btn active" id="urg-standard" onclick="setUrgency('standard',this)">📦 Standard</button>
+      <button type="button" class="urg-btn" id="urg-express" onclick="setUrgency('express',this)">⚡ Express (+30%)</button>
+      <button type="button" class="urg-btn urgent" id="urg-urgent" onclick="setUrgency('urgent',this)">🚨 Urgent (+60%)</button>
+    </div>
+  </div>
+
+  <!-- Price Breakdown -->
+  <div class="dh-price-box" id="priceBox" style="display:none;">
+    <div class="dh-price-row"><span>Vehicle</span><span id="prVehicle">—</span></div>
+    <div class="dh-price-row"><span>Distance</span><span id="prDist">—</span></div>
+    <div class="dh-price-row"><span>Base fare</span><span id="prBase">—</span></div>
+    <div class="dh-price-row"><span>Per-km</span><span id="prKmCh">—</span></div>
+    <div class="dh-price-row" id="prWRow" style="display:none;"><span>Load surcharge</span><span id="prWeight">—</span></div>
+    <div class="dh-price-row" id="prURow" style="display:none;"><span id="prUrgLabel">Express fee</span><span id="prUrg">—</span></div>
+    <div class="dh-price-row total"><span>Total</span><span id="prTotal">KES —</span></div>
+    <div class="dh-eta" id="prETA"></div>
+  </div>
+  <div id="calcMsg" style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:12px;min-height:14px;"></div>
+
+  <!-- Actions -->
+  <button type="button" class="dh-btn-primary" onclick="bookDeliveryFS()">📲 Book &amp; Pay with M-Pesa</button>
+  <button type="button" class="dh-btn-secondary" onclick="bookDeliveryWA()">💬 Book via WhatsApp</button>
+  <button type="button" class="dh-btn-outline" style="margin-top:4px;" onclick="showDelTab('calc')">🧮 Just Check Pricing</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PANE 2 — MY DELIVERIES (active)
+══════════════════════════════════════════════════════════ -->
+<div id="pane-active" class="dh-pane">
+  <div class="dh-stats" id="delStatsRow">
+    <div class="dh-stat"><div class="dhs-val" id="st-total">0</div><div class="dhs-lbl">Total</div></div>
+    <div class="dh-stat"><div class="dhs-val" id="st-active" style="color:#00aaff;">0</div><div class="dhs-lbl">Active</div></div>
+    <div class="dh-stat"><div class="dhs-val" id="st-done" style="color:#71ff00;">0</div><div class="dhs-lbl">Delivered</div></div>
+    <div class="dh-stat"><div class="dhs-val" id="st-spend">0</div><div class="dhs-lbl">Spent KES</div></div>
+  </div>
+  <div id="activeDeliveriesList">
+    <div class="dh-empty"><div class="dh-empty-icon">📦</div><div class="dh-empty-text">No active deliveries</div><div class="dh-empty-sub">Create a delivery to see it here</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PANE 3 — HISTORY
+══════════════════════════════════════════════════════════ -->
+<div id="pane-history" class="dh-pane">
+  <div id="historyList">
+    <div class="dh-empty"><div class="dh-empty-icon">🕑</div><div class="dh-empty-text">No delivery history yet</div><div class="dh-empty-sub">Your completed deliveries will appear here</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PANE 4 — PRICING CALCULATOR
+══════════════════════════════════════════════════════════ -->
+<div id="pane-calc" class="dh-pane">
+  <div class="dh-card">
+    <div class="dh-card-title">Delivery Cost Calculator</div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Select vehicle · enter distance · get instant pricing</p>
+    <div class="vehicle-grid" id="calcVehicleGrid"></div>
+    <div class="dh-grid2">
+      <div>
+        <label class="dh-label">Distance (km)</label>
+        <input type="number" id="calcKm" class="dh-input" placeholder="e.g. 8" min="0.5" step="0.5" oninput="calcPricing()">
+      </div>
+      <div>
+        <label class="dh-label">Package Weight</label>
+        <select id="calcWeight" class="dh-input" onchange="calcPricing()">
+          <option value="light">Light (&lt;5 kg)</option>
+          <option value="medium">Medium (5–20 kg)</option>
+          <option value="heavy">Heavy (20–100 kg)</option>
+          <option value="bulk">Bulk / Full Load</option>
+        </select>
+      </div>
+    </div>
+    <div class="urgency-row">
+      <button type="button" class="urg-btn active" onclick="setCalcUrg('standard',this)">📦 Standard</button>
+      <button type="button" class="urg-btn" onclick="setCalcUrg('express',this)">⚡ Express</button>
+      <button type="button" class="urg-btn urgent" onclick="setCalcUrg('urgent',this)">🚨 Urgent</button>
+    </div>
+    <div class="dh-price-box" id="calcPriceBox" style="display:none;">
+      <div class="dh-price-row"><span>Vehicle</span><span id="cpVehicle">—</span></div>
+      <div class="dh-price-row"><span>Distance</span><span id="cpDist">—</span></div>
+      <div class="dh-price-row"><span>Base fare</span><span id="cpBase">—</span></div>
+      <div class="dh-price-row"><span>Per-km</span><span id="cpKm">—</span></div>
+      <div class="dh-price-row" id="cpWRow" style="display:none;"><span>Load surcharge</span><span id="cpWeight">—</span></div>
+      <div class="dh-price-row" id="cpURow" style="display:none;"><span id="cpUrgLabel">Express</span><span id="cpUrg">—</span></div>
+      <div class="dh-price-row total"><span>Total</span><span id="cpTotal">KES —</span></div>
+      <div class="dh-eta" id="cpETA"></div>
+    </div>
+    <div id="calcPricingMsg" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;min-height:14px;"></div>
+    <button type="button" class="dh-btn-primary" style="margin-top:12px;" onclick="showDelTab('create')">+ Book a Delivery Now</button>
+  </div>
+
+  <!-- Rate card -->
+  <div class="dh-card">
+    <div class="dh-card-title">Full Rate Card</div>
+    <div id="rateCardGrid" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- SUCCESS MODAL -->
+<div class="dh-modal-overlay" id="successModal" style="display:none;" onclick="closeSuccessModal(event)">
+  <div class="dh-modal" onclick="event.stopPropagation()">
+    <div class="dh-modal-icon">🚀</div>
+    <div class="dh-modal-title">Delivery Booked!</div>
+    <div class="dh-modal-ref" id="successRef"></div>
+    <div class="dh-modal-sub" id="successSub"></div>
+    <div class="dh-modal-pin">
+      <div class="dh-modal-pin-label">DELIVERY PIN — give to rider on arrival</div>
+      <div class="dh-modal-pin-code" id="successPIN">——</div>
+    </div>
+    <div class="dh-modal-btn-row">
+      <button class="dh-modal-btn dh-modal-btn-primary" onclick="trackMyDelivery()">📍 Track Live</button>
+      <button class="dh-modal-btn dh-modal-btn-sec" onclick="shareDeliveryLink()">💬 Share</button>
+    </div>
+    <button class="dh-btn-outline" style="margin-top:8px;" onclick="closeSuccessModal()">✓ Done</button>
+  </div>
+</div>
+
+<div class="dh-toast" id="dhToast"></div>
+<div id="notificationContainer"></div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<!-- ════ SCRIPTS ════ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="sokoni-routing.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   VEHICLE DATA (mirrors delivery-hub.js VEHICLES)
+════════════════════════════════════════════════════════════ */
+const VEHICLES = {
+  boda:    { label:'Boda Boda',       icon:'🏍️', base:150,  perKm:35,  maxKm:25,  capacity:'Up to 5 kg',      eta:'15–40 min'  },
+  bicycle: { label:'Bicycle Courier', icon:'🚲', base:100,  perKm:20,  maxKm:10,  capacity:'Up to 3 kg',      eta:'20–50 min'  },
+  car:     { label:'Car / Saloon',    icon:'🚗', base:400,  perKm:60,  maxKm:80,  capacity:'Up to 50 kg',     eta:'20–60 min'  },
+  pickup:  { label:'Pickup (1T)',     icon:'🛻', base:1500, perKm:90,  maxKm:200, capacity:'Up to 1 tonne',   eta:'30–90 min'  },
+  van:     { label:'Van / Canter',    icon:'🚐', base:2500, perKm:110, maxKm:300, capacity:'Up to 3 tonnes',  eta:'45–120 min' },
+  truck:   { label:'Lorry (5T+)',     icon:'🚛', base:5000, perKm:150, maxKm:500, capacity:'5+ tonnes',       eta:'1–4 hrs'    },
+  ref:     { label:'Refrigerated',    icon:'🧊', base:3000, perKm:130, maxKm:300, capacity:'Perishables',     eta:'30–90 min'  },
+  flatbed: { label:'Flatbed',         icon:'🚚', base:6000, perKm:170, maxKm:500, capacity:'Oversized cargo', eta:'1–5 hrs'    },
+};
+const WEIGHT_SUR = { light:0, medium:0.1, heavy:0.25, bulk:0.4 };
+const URG_MULT   = { standard:1, express:1.3, urgent:1.6 };
+const URG_ETA    = { standard:'', express:' (express)', urgent:' (priority)' };
+const SOKONI_WA  = '254705726803';
+
+let _selVehicle    = null;
+let _calcVehicle   = null; /* for pricing tab */
+let _urgency       = 'standard';
+let _calcUrg       = 'standard';
+let _delivType     = 'instant';
+let _stops         = []; /* multi-stop array */
+let _pickupCoords  = null;
+let _dropoffCoords = null;
+let _successData   = null; /* last booking result */
+
+/* ── XSS escape ── */
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ── Toast ── */
+function dhToast(msg, ok){
+  const t = document.getElementById('dhToast');
+  if(!t) return;
+  t.textContent = msg;
+  t.style.background = ok===false ? '#ef4444' : ok==='blue' ? '#00aaff' : '#71ff00';
+  t.style.color = ok===false ? 'white' : 'black';
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ── Tabs ── */
+function showDelTab(tab){
+  document.querySelectorAll('.dh-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.dh-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + tab)?.classList.add('active');
+  const tabs = { create:0, active:1, history:2, calc:3 };
+  const tabBtns = document.querySelectorAll('.dh-tab');
+  if(tabBtns[tabs[tab]]) tabBtns[tabs[tab]].classList.add('active');
+  if(tab === 'calc') { _initCalcVehicleGrid(); _renderRateCard(); }
+}
+
+/* ── Delivery type ── */
+function setDelType(type, btn){
+  _delivType = type;
+  document.querySelectorAll('.deltype-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  document.getElementById('schedTimeRow').style.display   = type==='scheduled' ? 'block' : 'none';
+  document.getElementById('standardStopsCard').style.display = type==='multi_stop' ? 'none' : 'block';
+  document.getElementById('multiStopCard').style.display     = type==='multi_stop' ? 'block' : 'none';
+  if(type==='multi_stop' && _stops.length===0){ addStop('pickup'); addStop('dropoff'); }
+}
+
+/* ── Urgency ── */
+function setUrgency(u, btn){
+  _urgency = u;
+  document.querySelectorAll('.urg-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  calcDelivery();
+}
+function setCalcUrg(u, btn){
+  _calcUrg = u;
+  document.querySelectorAll('#pane-calc .urg-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  calcPricing();
+}
+
+/* ── Vehicle grids ── */
+function renderVehicleGrid(containerId, fnName, activeKey){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML = Object.entries(VEHICLES).map(([k,v]) => `
+    <div class="vehicle-card${activeKey===k?' selected':''}" id="vc_${containerId}_${k}" onclick="${fnName}('${k}')">
+      <div class="vc-icon">${v.icon}</div>
+      <div class="vc-name">${v.label}</div>
+      <div class="vc-cap">${v.capacity}</div>
+      <div class="vc-base">KES ${v.base.toLocaleString()}</div>
+    </div>`
+  ).join('');
+}
+
+function selectVehicle(k){
+  _selVehicle = k;
+  document.querySelectorAll('[id^="vc_vehicleGrid_"]').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('vc_vehicleGrid_'+k)?.classList.add('selected');
+  calcDelivery();
+}
+function selectCalcVehicle(k){
+  _calcVehicle = k;
+  document.querySelectorAll('[id^="vc_calcVehicleGrid_"]').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('vc_calcVehicleGrid_'+k)?.classList.add('selected');
+  calcPricing();
+}
+
+function _initCalcVehicleGrid(){
+  if(!document.getElementById('vc_calcVehicleGrid_boda')){
+    renderVehicleGrid('calcVehicleGrid', 'selectCalcVehicle', _calcVehicle);
+  }
+}
+
+/* ── Address geolocation ── */
+function useMyLocation(field){
+  if(!navigator.geolocation){ dhToast('GPS not supported on this device', false); return; }
+  dhToast('📍 Getting your location…', 'blue');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude:lat, longitude:lng } = pos.coords;
+    const label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    if(field === 'pickup'){
+      _pickupCoords = { lat, lng };
+      const el = document.getElementById('pickupAddr');
+      if(el) el.value = label;
+    } else {
+      _dropoffCoords = { lat, lng };
+      const el = document.getElementById('dropoffAddr');
+      if(el) el.value = label;
+    }
+    calcDelivery();
+    dhToast('📍 Location captured!');
+  }, err => dhToast('Could not get location: ' + err.message, false),
+  { timeout:8000, enableHighAccuracy:true });
+}
+
+function onAddrInput(){
+  /* Clear captured coords when user types manually */
+  _pickupCoords  = null;
+  _dropoffCoords = null;
+  calcDelivery();
+}
+
+/* ── Multi-stop ── */
+function addStop(type){
+  const idx = _stops.length;
+  _stops.push({ id:'stop_'+idx, type:type||'dropoff', address:'', coords:null, contactName:'', contactPhone:'', notes:'' });
+  renderStops();
+}
+function removeStop(idx){
+  _stops.splice(idx, 1);
+  renderStops();
+}
+function renderStops(){
+  const el = document.getElementById('stopsList');
+  if(!el) return;
+  el.innerHTML = _stops.map((s,i) => `
+    <div class="stop-row">
+      <div class="stop-seq ${s.type==='pickup'?'stop-pickup':'stop-dropoff'}">${s.type==='pickup'?'⬆':'⬇'}</div>
+      <div>
+        <div style="font-size:10px;font-weight:800;color:${s.type==='pickup'?'#71ff00':'#00aaff'};margin-bottom:4px;">${s.type.toUpperCase()} ${i+1}</div>
+        <input class="dh-input" style="margin-bottom:6px;" placeholder="${s.type==='pickup'?'Pickup':'Dropoff'} address"
+          value="${esc(s.address)}" oninput="_stops[${i}].address=this.value">
+        <input class="dh-input" placeholder="Contact name" value="${esc(s.contactName)}"
+          oninput="_stops[${i}].contactName=this.value">
+      </div>
+      <button class="stop-remove" onclick="removeStop(${i})">✕</button>
+    </div>`
+  ).join('');
+}
+
+/* ── Price calculation ── */
+function _doCalc(vehicleKey, km, weight, urgency){
+  const v = VEHICLES[vehicleKey];
+  if(!v || km<=0) return null;
+  const base     = v.base;
+  const kmCharge = Math.round(km * v.perKm);
+  const wSur     = Math.round((base+kmCharge)*(WEIGHT_SUR[weight]||0));
+  const uMult    = URG_MULT[urgency] || 1;
+  const urgFee   = Math.round((base+kmCharge+wSur)*(uMult-1));
+  const total    = Math.round((base+kmCharge+wSur)*uMult);
+  return { base, kmCharge, wSur, urgFee, total, uMult };
+}
+
+function calcDelivery(){
+  const km     = parseFloat(document.getElementById('distKm')?.value) || 0;
+  const weight = document.getElementById('weightSel')?.value || 'light';
+  const msgEl  = document.getElementById('calcMsg');
+  const box    = document.getElementById('priceBox');
+
+  if(!_selVehicle){ box.style.display='none'; if(msgEl)msgEl.textContent='← Select a vehicle type above'; return; }
+  const v = VEHICLES[_selVehicle];
+  if(km<=0){ box.style.display='none'; if(msgEl)msgEl.textContent='Enter the distance in km above'; return; }
+  if(km>v.maxKm){ box.style.display='none'; if(msgEl){ msgEl.textContent=`⚠️ ${v.label} max range is ${v.maxKm} km. Choose a larger vehicle.`; msgEl.style.color='#f97316'; } return; }
+  if(msgEl){ msgEl.textContent=''; msgEl.style.color=''; }
+
+  const r = _doCalc(_selVehicle, km, weight, _urgency);
+  if(!r) return;
+  const _s = (id,val) => { const e=document.getElementById(id); if(e)e.textContent=val; };
+  _s('prVehicle', `${v.icon} ${v.label}`);
+  _s('prDist',    `${km} km`);
+  _s('prBase',    `KES ${r.base.toLocaleString()}`);
+  _s('prKmCh',    `KES ${r.kmCharge.toLocaleString()} (${km}km × KES ${v.perKm})`);
+  _s('prTotal',   `KES ${r.total.toLocaleString()}`);
+  _s('prETA',     `⏱ ${v.eta}${URG_ETA[_urgency]}`);
+  const wRow=document.getElementById('prWRow'); if(r.wSur>0){_s('prWeight',`KES ${r.wSur.toLocaleString()}`);wRow.style.display='flex';}else wRow.style.display='none';
+  const uRow=document.getElementById('prURow'); if(r.urgFee>0){_s('prUrgLabel',_urgency==='urgent'?'🚨 Urgency fee':'⚡ Express fee');_s('prUrg',`KES ${r.urgFee.toLocaleString()}`);uRow.style.display='flex';}else uRow.style.display='none';
+  box.style.display='block';
+}
+
+function calcPricing(){
+  const km     = parseFloat(document.getElementById('calcKm')?.value) || 0;
+  const weight = document.getElementById('calcWeight')?.value || 'light';
+  const msgEl  = document.getElementById('calcPricingMsg');
+  const box    = document.getElementById('calcPriceBox');
+  if(!_calcVehicle){ box.style.display='none'; if(msgEl)msgEl.textContent='← Select a vehicle above'; return; }
+  const v = VEHICLES[_calcVehicle];
+  if(km<=0){ box.style.display='none'; if(msgEl)msgEl.textContent='Enter distance in km'; return; }
+  if(km>v.maxKm){ box.style.display='none'; if(msgEl){msgEl.textContent=`⚠️ ${v.label} max range is ${v.maxKm} km`; msgEl.style.color='#f97316';} return; }
+  if(msgEl){ msgEl.textContent=''; msgEl.style.color=''; }
+  const r = _doCalc(_calcVehicle, km, weight, _calcUrg);
+  if(!r) return;
+  const _s = (id,val) => { const e=document.getElementById(id); if(e)e.textContent=val; };
+  _s('cpVehicle',`${v.icon} ${v.label}`);
+  _s('cpDist',`${km} km`);
+  _s('cpBase',`KES ${r.base.toLocaleString()}`);
+  _s('cpKm',`KES ${r.kmCharge.toLocaleString()} (${km}km × KES ${v.perKm})`);
+  _s('cpTotal',`KES ${r.total.toLocaleString()}`);
+  _s('cpETA',`⏱ ${v.eta}${URG_ETA[_calcUrg]}`);
+  const wRow=document.getElementById('cpWRow'); if(r.wSur>0){_s('cpWeight',`KES ${r.wSur.toLocaleString()}`);wRow.style.display='flex';}else wRow.style.display='none';
+  const uRow=document.getElementById('cpURow'); if(r.urgFee>0){_s('cpUrgLabel',_calcUrg==='urgent'?'🚨 Urgency':'⚡ Express');_s('cpUrg',`KES ${r.urgFee.toLocaleString()}`);uRow.style.display='flex';}else uRow.style.display='none';
+  box.style.display='block';
+}
+
+function _renderRateCard(){
+  const el = document.getElementById('rateCardGrid');
+  if(!el) return;
+  el.innerHTML = Object.entries(VEHICLES).map(([k,v]) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 14px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:22px;">${v.icon}</span>
+        <div>
+          <div style="font-size:13px;font-weight:800;color:white;">${v.label}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.38);">${v.capacity} · ${v.eta}</div>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:13px;font-weight:900;color:#71ff00;">KES ${v.base.toLocaleString()}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);">+ KES ${v.perKm}/km</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+/* ── Booking helpers ── */
+function _getBookingData(){
+  const km      = parseFloat(document.getElementById('distKm')?.value) || 0;
+  const from    = (document.getElementById('pickupAddr')?.value || '').trim();
+  const to      = (document.getElementById('dropoffAddr')?.value || '').trim();
+  const weight  = document.getElementById('weightSel')?.value || 'light';
+  const rName   = (document.getElementById('recipName')?.value || '').trim();
+  const rPhone  = (document.getElementById('recipPhone')?.value || '').trim();
+  const phone   = (document.getElementById('senderPhone')?.value || '').trim();
+  const notes   = (document.getElementById('delivNotes')?.value || '').trim();
+  const pkgType = document.getElementById('packageType')?.value || 'parcel';
+  const msgEl   = document.getElementById('calcMsg');
+
+  if(!_selVehicle){ if(msgEl){msgEl.textContent='⚠️ Select a vehicle type'; msgEl.style.color='#f97316';} return null; }
+  if(!km && _delivType!=='multi_stop'){ if(msgEl){msgEl.textContent='⚠️ Enter the distance'; msgEl.style.color='#f97316';} return null; }
+
+  const v   = VEHICLES[_selVehicle];
+  const r   = _doCalc(_selVehicle, km||5, weight, _urgency) || { total:v.base };
+  return { from, to, km:km||5, weight, urgency:_urgency, vehicle:_selVehicle, vehicleData:v,
+           total:r.total, rName, rPhone, phone, notes, pkgType, deliveryType:_delivType };
+}
+
+/* ── Book via WhatsApp ── */
+function bookDeliveryWA(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('del_wa',10,300000)){
+    (window._skToast||alert)('Too many booking attempts. Wait 5 minutes.'); return;
+  }
+  const d = _getBookingData(); if(!d) return;
+  const v = d.vehicleData;
+  const ref = 'DEL' + Date.now().toString().slice(-6);
+  const msg = encodeURIComponent(
+    `🚚 *SOKONI Delivery Request*\n\nRef: ${ref}\n`+
+    `Type: ${d.deliveryType.replace('_',' ')}\n`+
+    `Vehicle: ${v.icon} ${v.label}\n`+
+    `From: ${d.from||'TBC'}\nTo: ${d.to||'TBC'}\n`+
+    `Distance: ~${d.km} km\nLoad: ${d.weight}\nUrgency: ${d.urgency}\n`+
+    `💰 Total: KES ${d.total.toLocaleString()}\n`+
+    `${d.rName?`\nRecipient: ${d.rName}`:''}${d.rPhone?`\nRecipient Phone: ${d.rPhone}`:''}`+
+    `${d.phone?`\nSender Phone: ${d.phone}`:''}`+
+    `${d.notes?`\nNotes: ${d.notes}`:''}\n\nPlease confirm. 🙏`
+  );
+  if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'delivery',buyerName:d.rName||'Customer',buyerPhone:d.rPhone||d.phone||'',items:[{name:`${v.icon} ${v.label} Delivery`,category:'Delivery',qty:1,price:d.total}],subtotal:d.total,total:d.total,paymentMethod:'WhatsApp Booking',paymentRef:ref,sellerName:'SOKONI Delivery Partners',date:new Date().toISOString(),notes:`${d.from} → ${d.to}`}),800);
+  window.open(`https://wa.me/${SOKONI_WA}?text=${msg}`,'_blank');
+  dhToast(`✅ WhatsApp opened! Ref: ${ref}`);
+}
+
+/* ── Book via Firestore + M-Pesa ── */
+async function bookDeliveryFS(){
+  const d = _getBookingData(); if(!d) return;
+  if(!window.DeliveryHub){ dhToast('Delivery system loading, please wait…','blue'); return; }
+
+  const uid = window.firebaseAuth?.currentUser?.uid ||
+    JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid;
+  if(!uid){ dhToast('Please sign in to book a delivery', false); return; }
+
+  const senderUser = JSON.parse(localStorage.getItem('sokoniUser')||'null') || {};
+  const btn = document.querySelector('.dh-btn-primary');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Creating delivery…'; }
+
+  try {
+    const result = await window.DeliveryHub.createDelivery({
+      uid,
+      senderName:  senderUser.name || '',
+      senderPhone: d.phone || senderUser.phone || '',
+      deliveryType:d.deliveryType,
+      scheduledTime:document.getElementById('schedTime')?.value || null,
+      category:    d.pkgType,
+      pickupAddress: d.from,
+      pickupCoords:  _pickupCoords,
+      deliveryAddress:d.to,
+      deliveryCoords: _dropoffCoords,
+      stops: _stops,
+      recipientName:  d.rName,
+      recipientPhone: d.rPhone,
+      packageType:    d.pkgType,
+      weight:         d.weight,
+      vehicleType:    d.vehicle,
+      notes:          d.notes,
+      urgency:        d.urgency,
+      paymentMethod:  'mpesa',
+    });
+
+    /* M-Pesa STK push — Daraja direct to platform account */
+    const cfg   = window.SOKONI_CONFIG || {};
+    const sPhone = (d.phone||'').replace(/^0/,'254').replace(/^\+/,'');
+    /* If platform sellerUid is configured, use Daraja direct */
+    const _platUid = cfg.platformSellerUid || null;
+    if(_platUid && sPhone && d.total > 0 && window.SokoniMpesa){
+      window.SokoniMpesa.pay({
+        sellerUid:   _platUid,
+        amount:      d.total,
+        phone:       sPhone,
+        orderId:     result.deliveryRef,
+        hub:         'delivery',
+        description: 'Delivery ' + result.deliveryRef,
+        sellerName:  'SOKONI Delivery',
+      }).then(outcome => {
+        if(outcome === 'success') dhToast('💚 Payment confirmed! Delivery booked.');
+      });
+    } else if(cfg.intasendKey && sPhone && d.total > 0){
+      /* Fallback: IntaSend */
+      try{
+        const IS = new window.IntaSend({ publicAPIKey:cfg.intasendKey, live:cfg.intasendLive!==false });
+        IS.mpesa().stkPush({ amount:d.total, phone_number:sPhone, email:senderUser.email||'', narrative:`SOKONI Delivery ${result.deliveryRef}` })
+          .then(r=>{ if(r?.invoice?.invoice_id) dhToast('💚 M-Pesa payment initiated!'); })
+          .catch(e=>console.warn('[delivery] STK:', e.message));
+      }catch(e){ console.warn('[delivery] IntaSend not loaded:', e.message); }
+    }
+
+    /* Invoice */
+    if(window.SokoniInvoice) SokoniInvoice.generate({
+      type:'delivery', buyerName:senderUser.name||'Customer', buyerPhone:d.phone||'',
+      items:[{name:`${VEHICLES[d.vehicle].icon} ${VEHICLES[d.vehicle].label} Delivery`,category:'Delivery',qty:1,price:d.total}],
+      subtotal:d.total, total:d.total, paymentMethod:'M-Pesa', paymentRef:result.deliveryRef,
+      sellerName:'SOKONI Delivery Partners', date:new Date().toISOString(),
+      notes:`${d.from} → ${d.to} (${d.km} km)`,
+    });
+
+    _successData = result;
+    showSuccessModal(result);
+
+  } catch(e){
+    console.error('[delivery] createDelivery:', e);
+    dhToast('Booking failed: ' + e.message, false);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='📲 Book & Pay with M-Pesa'; }
+  }
+}
+
+/* ── Success modal ── */
+function showSuccessModal(result){
+  document.getElementById('successRef').textContent = result.deliveryRef;
+  document.getElementById('successSub').textContent =
+    `KES ${result.deliveryFee?.toLocaleString()} · ${result.distanceKm?.toFixed(1)} km · Rider searching…`;
+  document.getElementById('successPIN').textContent = result.proofPIN || '——';
+  document.getElementById('successModal').style.display = 'flex';
+}
+function closeSuccessModal(e){
+  if(e && e.target!==document.getElementById('successModal')) return;
+  document.getElementById('successModal').style.display = 'none';
+  showDelTab('active');
+}
+function trackMyDelivery(){
+  if(!_successData) return;
+  const url = _successData.trackingUrl || `delivery-tracking.html?ref=${_successData.deliveryRef}`;
+  window.open(url,'_blank');
+}
+function shareDeliveryLink(){
+  if(!_successData) return;
+  const url = _successData.trackingUrl || `https://mysokoni.co.ke/delivery-tracking.html?ref=${_successData.deliveryRef}`;
+  const msg = encodeURIComponent(`📦 Track my SOKONI Delivery\n\nRef: ${_successData.deliveryRef}\n\n👉 ${url}`);
+  window.open(`https://wa.me/?text=${msg}`,'_blank');
+}
+
+/* ── Status badge ── */
+function _statusBadge(status){
+  const MAP = {
+    pending:        { label:'Pending',        color:'#fbbf24' },
+    rider_assigned: { label:'Rider Assigned', color:'#00aaff' },
+    rider_en_route: { label:'En Route',       color:'#00aaff' },
+    picked_up:      { label:'Picked Up',      color:'#a78bfa' },
+    in_transit:     { label:'In Transit',     color:'#00aaff' },
+    delivered:      { label:'Delivered',      color:'#71ff00' },
+    completed:      { label:'Completed',      color:'#71ff00' },
+    cancelled:      { label:'Cancelled',      color:'#ef4444' },
+    order_placed:   { label:'Order Placed',   color:'#fbbf24' },
+    ready_for_pickup:{ label:'Ready',         color:'#71ff00' },
+    driver_accepted:{ label:'En Route',       color:'#00aaff' },
+    driver_at_seller:{ label:'At Seller',     color:'#f97316' },
+    buyer_confirmed:{ label:'Confirmed',      color:'#71ff00' },
+  };
+  const s = MAP[status] || { label:status, color:'white' };
+  return `<span class="dlv-status" style="background:${s.color}18;border:1px solid ${s.color}44;color:${s.color};">${s.label}</span>`;
+}
+
+/* ── Render deliveries list ── */
+function renderDeliveries(all){
+  const active   = all.filter(d => !['delivered','completed','cancelled'].includes(d.status));
+  const hist     = all.filter(d =>  ['delivered','completed','cancelled'].includes(d.status));
+  const spent    = all.filter(d => d.status!=='cancelled').reduce((s,d)=>s+(d.deliveryFee||0),0);
+
+  /* Stats */
+  const _sv = (id,v)=>{ const e=document.getElementById(id); if(e)e.textContent=v; };
+  _sv('st-total', all.length);
+  _sv('st-active', active.length);
+  _sv('st-done', all.filter(d=>['delivered','completed'].includes(d.status)).length);
+  _sv('st-spend', spent>=1000?(spent/1000).toFixed(1)+'k':spent);
+
+  /* Active pane */
+  const aEl = document.getElementById('activeDeliveriesList');
+  if(aEl){
+    aEl.innerHTML = active.length ? active.map(d=>_renderDelivCard(d)).join('') :
+      `<div class="dh-empty"><div class="dh-empty-icon">📦</div><div class="dh-empty-text">No active deliveries</div><div class="dh-empty-sub">Book a delivery to get started</div></div>`;
+  }
+
+  /* History pane */
+  const hEl = document.getElementById('historyList');
+  if(hEl){
+    hEl.innerHTML = hist.length ? hist.map(d=>_renderDelivCard(d,true)).join('') :
+      `<div class="dh-empty"><div class="dh-empty-icon">🕑</div><div class="dh-empty-text">No delivery history yet</div><div class="dh-empty-sub">Your completed deliveries appear here</div></div>`;
+  }
+}
+
+function _renderDelivCard(d, isHistory){
+  const ref    = d.deliveryRef || d.ref || d._fsId;
+  const date   = d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  const from   = esc(d.pickupAddress   || d.from || '—');
+  const to     = esc(d.deliveryAddress || d.to   || '—');
+  const fee    = Number(d.deliveryFee  || d.total || 0).toLocaleString();
+  const rider  = d.riderName ? `<br>🏍️ Rider: ${esc(d.riderName)}` : '';
+  const etaTxt = d.etaMin && ['rider_assigned','rider_en_route'].includes(d.status) ? `<br>⏱ ETA ~${d.etaMin} min` : '';
+  const trackUrl = d.trackingUrl || `delivery-tracking.html?ref=${ref}`;
+  const pinRow = (!isHistory && d.proofPIN && !['delivered','completed','cancelled'].includes(d.status))
+    ? `<div class="dh-pin-box"><span class="dh-pin-label">DELIVERY PIN</span><span class="dh-pin-code">${d.proofPIN}</span></div>` : '';
+
+  let actions = `<button class="dlv-btn dlv-btn-track" onclick="window.open('${esc(trackUrl)}','_blank')">📍 Track</button>`;
+  actions += `<button class="dlv-btn dlv-btn-copy" onclick="navigator.clipboard?.writeText('${esc(trackUrl)}').then(()=>dhToast('🔗 Link copied!'))">🔗 Copy</button>`;
+  if(d.status === 'pending' || d.status === 'rider_assigned'){
+    actions += `<button class="dlv-btn dlv-btn-cancel" onclick="_cancelDelivery('${esc(d._fsId||'')}')" >✕ Cancel</button>`;
+  }
+  if(d.status === 'delivered'){
+    actions += `<button class="dlv-btn dlv-btn-confirm" onclick="_confirmReceipt('${esc(d._fsId||'')}')">✅ Confirm Receipt</button>`;
+  }
+
+  return `<div class="dlv-card">
+    <div class="dlv-top">
+      <div>
+        <div class="dlv-ref">${esc(ref)}</div>
+        <div class="dlv-date">${date}</div>
+      </div>
+      <div style="text-align:right;">
+        ${_statusBadge(d.status)}
+        <div style="font-size:13px;font-weight:900;color:#71ff00;margin-top:4px;">KES ${fee}</div>
+      </div>
+    </div>
+    <div class="dlv-route">📍 ${from}<br>🎯 ${to}${rider}${etaTxt}</div>
+    ${pinRow}
+    <div class="dlv-actions">${actions}</div>
+  </div>`;
+}
+
+async function _cancelDelivery(fsId, _c){
+  if(!fsId || !window.DeliveryHub){ dhToast('Not available', false); return; }
+  if(!_c){ _skConfirm('Cancel this delivery?', ()=>_cancelDelivery(fsId,true)); return; }
+  const uid = window.firebaseAuth?.currentUser?.uid || null;
+  try{
+    await window.DeliveryHub.cancelDelivery(fsId, uid, 'Sender cancelled');
+    dhToast('Delivery cancelled');
+  }catch(e){ dhToast(e.message, false); }
+}
+
+async function _confirmReceipt(fsId){
+  if(!fsId || !window.DeliveryHub){ dhToast('Not available', false); return; }
+  const uid = window.firebaseAuth?.currentUser?.uid || null;
+  try{
+    await window.DeliveryHub.confirmReceipt(fsId, uid);
+    dhToast('✅ Receipt confirmed! Rider payout released.');
+  }catch(e){ dhToast(e.message, false); }
+}
+
+/* ── Init ── */
+renderVehicleGrid('vehicleGrid', 'selectVehicle', null);
+window.addEventListener('load', () => { if(!_calcVehicle && document.getElementById('pane-calc')?.classList.contains('active')) _initCalcVehicleGrid(); });
+
+/* Pre-fill phone from user profile */
+(function(){
+  try{
+    const u = JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    if(u?.phone){ const el=document.getElementById('senderPhone'); if(el) el.value=u.phone; }
+  }catch(e){}
+})();
+</script>
+
+<!-- ════ FIRESTORE MODULE ════ -->
+<script type="module">
+import DeliveryHub from './delivery-hub.js';
+import SokoniDB    from './sokoni-db.js';
+window.DeliveryHub = DeliveryHub;
+window.SokoniDB    = SokoniDB;
+
+/* Listen to current user's deliveries */
+let _unsub = null;
+let _retries = 0;
+
+function _uid(){
+  return window.firebaseAuth?.currentUser?.uid ||
+    JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid || null;
+}
+
+function _startListening(uid){
+  if(_unsub){ _unsub(); _unsub=null; }
+  _unsub = DeliveryHub.listenSenderDeliveries(uid, deliveries => {
+    if(typeof window.renderDeliveries === 'function') window.renderDeliveries(deliveries);
+  });
+}
+
+function _init(){
+  const uid = _uid();
+  if(!uid){
+    if(++_retries < 12) { setTimeout(_init, 1500); return; }
+    return;
+  }
+  _retries = 0;
+  _startListening(uid);
+}
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', ()=>setTimeout(_init, 1500));
+} else {
+  setTimeout(_init, 1500);
+}
+</script>
+
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-mpesa.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+

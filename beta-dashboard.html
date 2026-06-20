@@ -1,0 +1,434 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Beta Dashboard</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;padding-bottom:40px;}
+.bd-nav{display:flex;align-items:center;gap:12px;padding:13px 18px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:10;}
+.bd-body{max-width:1100px;margin:0 auto;padding:16px;}
+.bd-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.bd-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;}
+.bd-stat-val{font-size:28px;font-weight:900;color:#71ff00;line-height:1;}
+.bd-stat-lbl{font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;}
+.bd-stat.red .bd-stat-val{color:#ff4444;}
+.bd-stat.amber .bd-stat-val{color:#f59e0b;}
+.bd-stat.blue .bd-stat-val{color:#00aaff;}
+.bd-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:16px;}
+.bd-tabs::-webkit-scrollbar{display:none;}
+.bd-tab{padding:9px 18px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
+.bd-tab.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.bd-pane{display:none;}.bd-pane.active{display:block;}
+.bd-table-wrap{overflow-x:auto;border-radius:12px;border:1px solid rgba(255,255,255,0.07);}
+table.bd-table{width:100%;border-collapse:collapse;font-size:12px;}
+.bd-table th{padding:10px 12px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.35);text-align:left;font-weight:800;white-space:nowrap;}
+.bd-table td{padding:10px 12px;border-top:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.75);vertical-align:middle;}
+.bd-table tr:hover td{background:rgba(255,255,255,0.02);}
+.bd-badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:800;}
+.bd-badge.open{background:rgba(255,68,68,0.12);color:#ff4444;border:1px solid rgba(255,68,68,0.25);}
+.bd-badge.investigating{background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);}
+.bd-badge.resolved{background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.2);}
+.bd-badge.critical{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);}
+.bd-badge.high{background:rgba(249,115,22,0.12);color:#f97316;border:1px solid rgba(249,115,22,0.25);}
+.bd-badge.medium{background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);}
+.bd-badge.low{background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.08);}
+.bd-funnel{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:18px;margin-bottom:16px;}
+.bd-funnel h3{font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:14px;}
+.bd-fstep{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.bd-fstep-lbl{font-size:12px;color:rgba(255,255,255,0.5);width:160px;flex-shrink:0;}
+.bd-fbar-wrap{flex:1;height:26px;background:rgba(255,255,255,0.04);border-radius:6px;overflow:hidden;position:relative;}
+.bd-fbar{height:100%;background:linear-gradient(90deg,#71ff00,#5ccc00);border-radius:6px;transition:width .6s;}
+.bd-fval{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:rgba(255,255,255,0.5);}
+.bd-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+.bd-filter-sel{padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:12px;font-family:inherit;outline:none;}
+.bd-filter-sel option{background:#111;}
+.bd-action-btn{padding:7px 13px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:8px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;}
+.bd-danger-btn{padding:7px 13px;background:rgba(255,68,68,0.07);border:1px solid rgba(255,68,68,0.2);border-radius:8px;color:#ff4444;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;}
+.bd-refresh-btn{padding:7px 13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;}
+.bd-empty{text-align:center;padding:36px;color:rgba(255,255,255,0.2);font-size:13px;}
+.bd-health{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;}
+.bd-health-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;}
+.bd-health-card h4{font-size:12px;font-weight:800;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+.bd-health-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;}
+.bd-health-row .k{color:rgba(255,255,255,0.4);}
+.bd-health-row .v{font-weight:700;color:#fff;}
+.bd-health-row .v.ok{color:#22c55e;}
+.bd-health-row .v.warn{color:#f59e0b;}
+.bd-health-row .v.err{color:#ff4444;}
+.bd-export-btn{padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;margin-left:auto;}
+.bd-stars{color:#f59e0b;font-size:13px;letter-spacing:1px;}
+.bd-ts{color:rgba(255,255,255,0.25);font-size:11px;}
+</style>
+</head>
+<body>
+
+<nav class="bd-nav">
+  <a href="admin.html" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:15px;flex-shrink:0;">←</a>
+  <span style="font-size:14px;font-weight:900;">🧪 Beta Dashboard</span>
+  <span id="bdLastRefresh" style="font-size:11px;color:rgba(255,255,255,0.2);margin-left:8px;"></span>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <button class="bd-refresh-btn" onclick="loadAll()">↻ Refresh</button>
+    <button class="bd-export-btn" onclick="exportCSV()">⬇ Export</button>
+  </div>
+</nav>
+
+<div class="bd-body">
+
+  <!-- STATS -->
+  <div class="bd-stats" id="bdStats">
+    <div class="bd-stat"><div class="bd-stat-val" id="stTesters">—</div><div class="bd-stat-lbl">Beta Testers</div></div>
+    <div class="bd-stat red"><div class="bd-stat-val" id="stBugs">—</div><div class="bd-stat-lbl">Open Bugs</div></div>
+    <div class="bd-stat amber"><div class="bd-stat-val" id="stCritical">—</div><div class="bd-stat-lbl">Critical Bugs</div></div>
+    <div class="bd-stat blue"><div class="bd-stat-val" id="stEvents">—</div><div class="bd-stat-lbl">Events (7d)</div></div>
+    <div class="bd-stat"><div class="bd-stat-val" id="stRating">—</div><div class="bd-stat-lbl">Avg Rating</div></div>
+    <div class="bd-stat red"><div class="bd-stat-val" id="stErrors">—</div><div class="bd-stat-lbl">JS Errors (7d)</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="bd-tabs">
+    <button class="bd-tab active" onclick="showTab('overview',this)">📊 Overview</button>
+    <button class="bd-tab" onclick="showTab('bugs',this)">🐛 Bugs</button>
+    <button class="bd-tab" onclick="showTab('feedback',this)">⭐ Feedback</button>
+    <button class="bd-tab" onclick="showTab('testers',this)">👥 Testers</button>
+    <button class="bd-tab" onclick="showTab('events',this)">📡 Events</button>
+    <button class="bd-tab" onclick="showTab('errors',this)">⚠️ Errors</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="bd-pane active" id="bdP-overview">
+    <div class="bd-funnel" id="bdFunnel">
+      <h3>User Journey Funnel</h3>
+      <div id="bdFunnelRows"><div class="bd-empty">Loading funnel data...</div></div>
+    </div>
+    <div class="bd-health" id="bdHealth">
+      <div class="bd-health-card"><h4>Platform Health</h4><div id="bdHealthRows"><div style="font-size:12px;color:rgba(255,255,255,0.2);">Loading...</div></div></div>
+      <div class="bd-health-card"><h4>Bug Status Split</h4><div id="bdBugSplit"><div style="font-size:12px;color:rgba(255,255,255,0.2);">Loading...</div></div></div>
+      <div class="bd-health-card"><h4>Top Reported Pages</h4><div id="bdTopPages"><div style="font-size:12px;color:rgba(255,255,255,0.2);">Loading...</div></div></div>
+      <div class="bd-health-card"><h4>Tester Roles</h4><div id="bdRoleSplit"><div style="font-size:12px;color:rgba(255,255,255,0.2);">Loading...</div></div></div>
+    </div>
+  </div>
+
+  <!-- BUGS -->
+  <div class="bd-pane" id="bdP-bugs">
+    <div class="bd-filter-row">
+      <select class="bd-filter-sel" id="bugFilterStatus" onchange="renderBugs()">
+        <option value="">All Status</option>
+        <option value="open">Open</option>
+        <option value="investigating">Investigating</option>
+        <option value="resolved">Resolved</option>
+      </select>
+      <select class="bd-filter-sel" id="bugFilterSev" onchange="renderBugs()">
+        <option value="">All Severity</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <span id="bugCount" style="font-size:12px;color:rgba(255,255,255,0.3);"></span>
+    </div>
+    <div class="bd-table-wrap">
+      <table class="bd-table">
+        <thead><tr><th>ID</th><th>Severity</th><th>Type</th><th>Page</th><th>Description</th><th>Tester</th><th>Time</th><th>Status</th></tr></thead>
+        <tbody id="bugsBody"><tr><td colspan="8" class="bd-empty">Loading bugs...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- FEEDBACK -->
+  <div class="bd-pane" id="bdP-feedback">
+    <div class="bd-filter-row">
+      <select class="bd-filter-sel" id="fbFilterType" onchange="renderFeedback()">
+        <option value="">All Types</option>
+        <option value="full">Satisfaction</option>
+        <option value="quick">Quick Rating</option>
+        <option value="idea">Ideas</option>
+      </select>
+      <span id="fbAvg" style="font-size:13px;font-weight:800;color:#f59e0b;margin-left:8px;"></span>
+    </div>
+    <div class="bd-table-wrap">
+      <table class="bd-table">
+        <thead><tr><th>Type</th><th>Rating</th><th>What Worked</th><th>Needs Improvement</th><th>Recommend</th><th>Page</th><th>Time</th></tr></thead>
+        <tbody id="feedbackBody"><tr><td colspan="7" class="bd-empty">Loading feedback...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TESTERS -->
+  <div class="bd-pane" id="bdP-testers">
+    <div class="bd-table-wrap">
+      <table class="bd-table">
+        <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Role</th><th>Registered</th><th>Events</th><th>Bugs Filed</th></tr></thead>
+        <tbody id="testersBody"><tr><td colspan="7" class="bd-empty">Loading testers...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EVENTS -->
+  <div class="bd-pane" id="bdP-events">
+    <div class="bd-filter-row">
+      <select class="bd-filter-sel" id="evtFilterPage" onchange="renderEvents()">
+        <option value="">All Pages</option>
+      </select>
+      <select class="bd-filter-sel" id="evtFilterEvent" onchange="renderEvents()">
+        <option value="">All Events</option>
+      </select>
+      <span id="evtCount" style="font-size:12px;color:rgba(255,255,255,0.3);"></span>
+    </div>
+    <div class="bd-table-wrap">
+      <table class="bd-table">
+        <thead><tr><th>Event</th><th>Page</th><th>Tester</th><th>Role</th><th>Time</th></tr></thead>
+        <tbody id="eventsBody"><tr><td colspan="5" class="bd-empty">Loading events...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ERRORS -->
+  <div class="bd-pane" id="bdP-errors">
+    <div class="bd-filter-row">
+      <select class="bd-filter-sel" id="errFilterPage" onchange="renderErrors()">
+        <option value="">All Pages</option>
+      </select>
+      <button class="bd-danger-btn" onclick="_skConfirm('Mark all errors as reviewed?',function(){_data.errors=[];renderErrors();})">Clear Errors</button>
+    </div>
+    <div class="bd-table-wrap">
+      <table class="bd-table">
+        <thead><tr><th>Message</th><th>File</th><th>Line</th><th>Page</th><th>Tester</th><th>Time</th></tr></thead>
+        <tbody id="errorsBody"><tr><td colspan="6" class="bd-empty">Loading errors...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, query, orderBy, limit, getDocs, doc, updateDoc, where, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const FB_CFG = {
+  apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+  authDomain:'sokoni-aeb26.firebaseapp.com',
+  projectId:'sokoni-aeb26',
+  storageBucket:'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId:'24799054989',
+  appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4'
+};
+
+const app  = getApps().length ? getApps()[0] : initializeApp(FB_CFG);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+const DAY7 = Date.now() - 7*24*60*60*1000;
+
+window._data = { bugs:[], feedback:[], testers:[], events:[], errors:[] };
+
+async function _load(col, field) {
+  try {
+    const q  = query(collection(db, col), orderBy('ts','desc'), limit(200));
+    const sn = await getDocs(q);
+    return sn.docs.map(d => Object.assign({ _id: d.id }, d.data()));
+  } catch (e) {
+    console.warn('[Beta Dashboard]', col, e.message);
+    return [];
+  }
+}
+
+window.loadAll = async function() {
+  document.getElementById('bdLastRefresh').textContent = 'Refreshing…';
+  const [bugs, feedback, testers, events, errors] = await Promise.all([
+    _load('beta_bugs'),
+    _load('beta_feedback'),
+    _load('beta_testers'),
+    _load('beta_events'),
+    _load('beta_errors'),
+  ]);
+  _data.bugs     = bugs;
+  _data.feedback = feedback;
+  _data.testers  = testers;
+  _data.events   = events;
+  _data.errors   = errors;
+  updateStats();
+  renderOverview();
+  renderBugs();
+  renderFeedback();
+  renderTesters();
+  renderEvents();
+  renderErrors();
+  document.getElementById('bdLastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+};
+
+function updateStats() {
+  const openBugs    = _data.bugs.filter(b => b.status === 'open');
+  const criticalBugs= _data.bugs.filter(b => b.severity === 'critical');
+  const recentEvts  = _data.events.filter(e => e.ts > DAY7);
+  const ratings     = _data.feedback.filter(f => f.rating).map(f => f.rating);
+  const avgRating   = ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : '—';
+  const recentErrs  = _data.errors.filter(e => e.ts > DAY7);
+
+  document.getElementById('stTesters').textContent  = _data.testers.length;
+  document.getElementById('stBugs').textContent     = openBugs.length;
+  document.getElementById('stCritical').textContent = criticalBugs.length;
+  document.getElementById('stEvents').textContent   = recentEvts.length;
+  document.getElementById('stRating').textContent   = avgRating + (avgRating !== '—' ? '★':'');
+  document.getElementById('stErrors').textContent   = recentErrs.length;
+}
+
+function renderOverview() {
+  /* Funnel — infer from page visits */
+  const pages = _data.events.filter(e=>e.event==='page_visit').map(e=>e.page||'');
+  const funnelData = [
+    { label:'Visited Homepage',   count: pages.filter(p=>p==='/'||p==='/index.html').length },
+    { label:'Visited Signup',     count: pages.filter(p=>p.includes('signup')).length },
+    { label:'Browsed Products',   count: pages.filter(p=>p.includes('product')||p.includes('category')).length },
+    { label:'Viewed Cart',        count: pages.filter(p=>p.includes('cart')).length },
+    { label:'Reached Checkout',   count: pages.filter(p=>p.includes('checkout')).length },
+    { label:'Tracked Order',      count: pages.filter(p=>p.includes('track')||p.includes('delivery-tracking')).length },
+  ];
+  const maxC = Math.max(1, funnelData[0].count);
+  document.getElementById('bdFunnelRows').innerHTML = funnelData.map(function(f) {
+    var pct = Math.round(f.count/maxC*100);
+    return '<div class="bd-fstep"><div class="bd-fstep-lbl">'+f.label+'</div><div class="bd-fbar-wrap"><div class="bd-fbar" style="width:'+pct+'%"></div><span class="bd-fval">'+f.count+'</span></div></div>';
+  }).join('');
+
+  /* Health */
+  document.getElementById('bdHealthRows').innerHTML = [
+    ['Testers registered', _data.testers.length, _data.testers.length>0?'ok':'warn'],
+    ['Bugs open', _data.bugs.filter(b=>b.status==='open').length, _data.bugs.filter(b=>b.status==='open').length>5?'err':'ok'],
+    ['Avg rating', (_data.feedback.filter(f=>f.rating).reduce((a,b)=>a+b.rating,0)/Math.max(1,_data.feedback.filter(f=>f.rating).length)).toFixed(1)+'★', 'ok'],
+    ['Errors (7d)', _data.errors.filter(e=>e.ts>DAY7).length, _data.errors.filter(e=>e.ts>DAY7).length>10?'err':'ok'],
+  ].map(function(r){ return '<div class="bd-health-row"><span class="k">'+r[0]+'</span><span class="v '+r[2]+'">'+r[1]+'</span></div>'; }).join('');
+
+  /* Bug split */
+  var bSplit = {};
+  _data.bugs.forEach(function(b){ bSplit[b.status||'open'] = (bSplit[b.status||'open']||0)+1; });
+  document.getElementById('bdBugSplit').innerHTML = Object.keys(bSplit).map(function(k){
+    return '<div class="bd-health-row"><span class="k">'+k+'</span><span class="v">'+bSplit[k]+'</span></div>';
+  }).join('') || '<div style="font-size:12px;color:rgba(255,255,255,0.2);">No bugs yet</div>';
+
+  /* Top bug pages */
+  var bPages = {};
+  _data.bugs.forEach(function(b){ var p=(b.page||'/').split('?')[0]; bPages[p]=(bPages[p]||0)+1; });
+  var sortedP = Object.keys(bPages).sort(function(a,b){return bPages[b]-bPages[a];}).slice(0,5);
+  document.getElementById('bdTopPages').innerHTML = sortedP.map(function(p){
+    return '<div class="bd-health-row"><span class="k" style="font-size:10px;">'+p+'</span><span class="v">'+bPages[p]+'</span></div>';
+  }).join('') || '<div style="font-size:12px;color:rgba(255,255,255,0.2);">No data</div>';
+
+  /* Role split */
+  var rSplit = {};
+  _data.testers.forEach(function(t){ rSplit[t.role||'unknown']=(rSplit[t.role||'unknown']||0)+1; });
+  document.getElementById('bdRoleSplit').innerHTML = Object.keys(rSplit).map(function(k){
+    return '<div class="bd-health-row"><span class="k">'+k+'</span><span class="v">'+rSplit[k]+'</span></div>';
+  }).join('') || '<div style="font-size:12px;color:rgba(255,255,255,0.2);">No testers</div>';
+}
+
+window.renderBugs = function() {
+  var status = document.getElementById('bugFilterStatus').value;
+  var sev    = document.getElementById('bugFilterSev').value;
+  var bugs   = _data.bugs.filter(function(b){
+    return (!status || b.status===status) && (!sev || b.severity===sev);
+  });
+  document.getElementById('bugCount').textContent = bugs.length + ' bugs';
+  document.getElementById('bugsBody').innerHTML = bugs.length ? bugs.map(function(b){
+    return '<tr><td style="font-family:monospace;font-size:10px;color:rgba(255,255,255,0.3);">'+(b.id||'—')+'</td><td><span class="bd-badge '+(b.severity||'medium')+'">'+(b.severity||'medium')+'</span></td><td>'+(b.type||'—')+'</td><td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(b.page||'—')+'</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+(b.happened||'')+'"><span style="color:rgba(255,255,255,0.4);font-size:11px;">'+(b.doing||'')+'</span> '+(b.happened||'—')+'</td><td style="font-size:11px;">'+(b.testerId||b.uid||'anon')+'</td><td class="bd-ts">'+_ts(b.ts)+'</td><td><span class="bd-badge '+(b.status||'open')+'">'+(b.status||'open')+'</span></td></tr>';
+  }).join('') : '<tr><td colspan="8" class="bd-empty">No bugs match filter</td></tr>';
+};
+
+window.renderFeedback = function() {
+  var type = document.getElementById('fbFilterType').value;
+  var items = _data.feedback.filter(function(f){ return !type || f.type===type; });
+  var ratings = items.filter(function(f){return f.rating;});
+  var avg = ratings.length ? (ratings.reduce(function(a,b){return a+b.rating;},0)/ratings.length).toFixed(1) : '';
+  document.getElementById('fbAvg').textContent = avg ? 'Avg: '+avg+'★ ('+ratings.length+' ratings)' : '';
+  document.getElementById('feedbackBody').innerHTML = items.length ? items.map(function(f){
+    var stars = f.rating ? '★'.repeat(f.rating)+'☆'.repeat(5-f.rating) : '—';
+    return '<tr><td><span class="bd-badge medium">'+(f.type||'—')+'</span></td><td><span class="bd-stars">'+stars+'</span></td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(f.good||f.idea||'—')+'</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(f.bad||'—')+'</td><td>'+(f.recommend||'—')+'</td><td style="font-size:11px;">'+(f.page||'—')+'</td><td class="bd-ts">'+_ts(f.ts)+'</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="bd-empty">No feedback yet</td></tr>';
+};
+
+window.renderTesters = function() {
+  var testerEventCounts = {};
+  var testerBugCounts   = {};
+  _data.events.forEach(function(e){ if(e.testerId) testerEventCounts[e.testerId]=(testerEventCounts[e.testerId]||0)+1; });
+  _data.bugs.forEach(function(b){ if(b.testerId) testerBugCounts[b.testerId]=(testerBugCounts[b.testerId]||0)+1; });
+
+  document.getElementById('testersBody').innerHTML = _data.testers.length ? _data.testers.map(function(t){
+    return '<tr><td style="font-family:monospace;font-size:10px;color:rgba(255,255,255,0.3);">'+(t.id||'—')+'</td><td>'+(t.name||'—')+'</td><td>'+(t.phone||'—')+'</td><td><span class="bd-badge medium">'+(t.role||'—')+'</span></td><td class="bd-ts">'+_ts(t.registeredAt)+'</td><td>'+(testerEventCounts[t.id]||0)+'</td><td>'+(testerBugCounts[t.id]||0)+'</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="bd-empty">No testers registered yet</td></tr>';
+};
+
+window.renderEvents = function() {
+  var pgFilter  = document.getElementById('evtFilterPage').value;
+  var evtFilter = document.getElementById('evtFilterEvent').value;
+  var items = _data.events.filter(function(e){ return (!pgFilter||e.page===pgFilter) && (!evtFilter||e.event===evtFilter); });
+  document.getElementById('evtCount').textContent = items.length + ' events';
+
+  /* Populate filter dropdowns */
+  var pages = [...new Set(_data.events.map(e=>e.page||'').filter(Boolean))].slice(0,30);
+  var evtNames = [...new Set(_data.events.map(e=>e.event||'').filter(Boolean))].slice(0,20);
+  var pgSel = document.getElementById('evtFilterPage');
+  if (pgSel.options.length <= 1) {
+    pages.forEach(function(p){ var o=document.createElement('option'); o.value=p; o.textContent=p; pgSel.appendChild(o); });
+  }
+  var evtSel = document.getElementById('evtFilterEvent');
+  if (evtSel.options.length <= 1) {
+    evtNames.forEach(function(n){ var o=document.createElement('option'); o.value=n; o.textContent=n; evtSel.appendChild(o); });
+  }
+
+  document.getElementById('eventsBody').innerHTML = items.length ? items.slice(0,100).map(function(e){
+    return '<tr><td><span class="bd-badge medium">'+(e.event||'—')+'</span></td><td style="font-size:11px;">'+(e.page||'—')+'</td><td style="font-size:11px;">'+(e.testerId||e.uid||'anon')+'</td><td>'+(e.role||'—')+'</td><td class="bd-ts">'+_ts(e.ts)+'</td></tr>';
+  }).join('') : '<tr><td colspan="5" class="bd-empty">No events yet</td></tr>';
+};
+
+window.renderErrors = function() {
+  var pgFilter = document.getElementById('errFilterPage').value;
+  var items = _data.errors.filter(function(e){ return !pgFilter||e.page===pgFilter; });
+  var errPages = [...new Set(_data.errors.map(e=>e.page||'').filter(Boolean))];
+  var errSel = document.getElementById('errFilterPage');
+  if (errSel.options.length <= 1) {
+    errPages.forEach(function(p){ var o=document.createElement('option'); o.value=p; o.textContent=p; errSel.appendChild(o); });
+  }
+  document.getElementById('errorsBody').innerHTML = items.length ? items.slice(0,100).map(function(e){
+    return '<tr><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ff4444;" title="'+(e.stack||'')+'">'+(e.msg||'—')+'</td><td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(e.file||'—')+'</td><td style="font-size:11px;">'+(e.line||'—')+'</td><td style="font-size:11px;">'+(e.page||'—')+'</td><td style="font-size:11px;">'+(e.testerId||e.uid||'anon')+'</td><td class="bd-ts">'+_ts(e.ts)+'</td></tr>';
+  }).join('') : '<tr><td colspan="6" class="bd-empty">No errors logged</td></tr>';
+};
+
+function _ts(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-KE',{dateStyle:'short',timeStyle:'short'});
+}
+
+window.showTab = function(name, btn) {
+  document.querySelectorAll('.bd-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.bd-pane').forEach(function(p){ p.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('bdP-'+name).classList.add('active');
+};
+
+window.exportCSV = function() {
+  var rows = [['type','id','event/severity','page','description','tester','ts']];
+  _data.bugs.forEach(function(b){ rows.push(['bug', b.id||'', b.severity||'', b.page||'', (b.happened||'').replace(/,/g,' '), b.testerId||'', _ts(b.ts)]); });
+  _data.feedback.forEach(function(f){ rows.push(['feedback','', f.type||'', f.page||'', (f.good||f.idea||'').replace(/,/g,' '), f.testerId||'', _ts(f.ts)]); });
+  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
+  var a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'sokoni-beta-' + Date.now() + '.csv';
+  a.click();
+};
+
+/* Admin auth guard */
+onAuthStateChanged(auth, function(user) {
+  if (!user) { window.location.href='login.html?redirect=beta-dashboard.html'; return; }
+  loadAll();
+});
+</script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+

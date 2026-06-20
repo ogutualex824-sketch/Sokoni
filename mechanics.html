@@ -1,0 +1,1054 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head><script src="security.js"></script>
+<script>/* Mechanics Hub merged into Car Hub */window.location.replace('car-hub.html?tab=mechanics');</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Mechanics  Find Garages & Auto Mechanics in Kenya</title>
+  <meta property="og:title" content="SOKONI Mechanics — Lawyers, Court Documents & Legal Advice | SOKONI">
+  <meta property="og:description" content="Find trusted mechanics and garages near you in Kenya. Book via WhatsApp, pay with M-Pesa on SOKONI SOKONI Mechanics Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta name="description" content="Find trusted mechanics, garages and auto repair shops near you in Kenya. Book via WhatsApp, pay with M-Pesa.">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f97316">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:white;min-height:100vh;padding-bottom:90px;}
+    :root{--mec:#f97316;--mec2:#ea580c;}
+
+    /* NAV */
+    .mc-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(249,115,22,0.15);position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);}
+    .mc-nav-logo{height:32px;}
+    .mc-nav-right{display:flex;gap:8px;}
+    .mc-nav-btn{color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;font-weight:700;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;cursor:pointer;background:none;font-family:inherit;}
+    .mc-nav-btn:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .mc-nav-btn.primary{background:rgba(249,115,22,0.12);border-color:rgba(249,115,22,0.3);color:#f97316;}
+
+    /* HERO */
+    .mc-hero{background:linear-gradient(135deg,rgba(249,115,22,0.1),rgba(234,88,12,0.06),rgba(0,0,0,0));border-bottom:1px solid rgba(249,115,22,0.12);padding:44px 24px 36px;position:relative;overflow:hidden;}
+    .mc-hero::before{content:'⚙';position:absolute;right:4%;top:50%;transform:translateY(-50%);font-size:180px;opacity:0.04;pointer-events:none;}
+    .mc-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.3);border-radius:999px;font-size:11px;font-weight:800;color:#f97316;margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;}
+    .mc-hero h1{font-size:clamp(24px,5vw,40px);font-weight:900;margin-bottom:10px;line-height:1.2;}
+    .mc-hero h1 span{background:linear-gradient(135deg,#f97316,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .mc-hero p{color:rgba(255,255,255,0.5);font-size:14px;margin-bottom:22px;max-width:520px;line-height:1.7;}
+    .mc-search-row{display:flex;gap:8px;max-width:600px;flex-wrap:wrap;}
+    .mc-search-row input,.mc-search-row select{flex:1;min-width:140px;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+    .mc-search-row input::placeholder{color:rgba(255,255,255,0.3);}
+    .mc-search-btn{padding:12px 20px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+    .mc-stats{display:flex;gap:22px;margin-top:18px;flex-wrap:wrap;}
+    .mc-stat{font-size:12px;color:rgba(255,255,255,0.4);}
+    .mc-stat strong{color:#f97316;font-size:15px;display:block;}
+
+    /* FILTER BAR */
+    .mc-filter-bar{display:flex;gap:8px;padding:14px 20px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid rgba(255,255,255,0.06);align-items:center;position:relative;}
+    .mc-pill{padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0;font-family:inherit;}
+    .mc-pill:hover,.mc-pill.active{background:rgba(249,115,22,0.12);border-color:rgba(249,115,22,0.3);color:#f97316;}
+
+    /* BODY */
+    .mc-body{max-width:1200px;margin:0 auto;padding:24px 18px 60px;}
+
+    /* MECHANIC CARDS */
+    .mc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px;}
+    .mc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:18px;transition:all .2s;}
+    .mc-card:hover{transform:translateY(-3px);border-color:rgba(249,115,22,0.3);box-shadow:0 8px 28px rgba(249,115,22,0.08);}
+    .mc-card-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
+    .mc-avatar{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,rgba(249,115,22,0.2),rgba(251,191,36,0.1));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+    .mc-name{font-size:15px;font-weight:800;color:white;margin-bottom:2px;line-height:1.2;}
+    .mc-type{font-size:11px;color:#f97316;font-weight:700;margin-bottom:3px;}
+    .mc-loc{font-size:11px;color:rgba(255,255,255,0.4);}
+    .mc-rating{display:flex;align-items:center;gap:4px;font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:10px;}
+    .mc-rating .stars{color:#fbbf24;}
+    .mc-services{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;}
+    .mc-service-tag{font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.18);color:#fb923c;}
+    .mc-service-tag.garage{background:rgba(14,165,233,0.08);border-color:rgba(14,165,233,0.2);color:#38bdf8;}
+    .mc-service-tag.mobile{background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2);color:#10b981;}
+    .mc-service-tag.cert{background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.2);color:#fbbf24;}
+    .mc-bio{font-size:11px;color:rgba(255,255,255,0.35);line-height:1.6;margin-bottom:12px;}
+    .mc-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+    .mc-meta-chip{font-size:10px;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);}
+    .mc-actions{display:flex;gap:8px;}
+    .mc-book-btn{flex:1;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;transition:filter .2s;}
+    .mc-book-btn:hover{filter:brightness(1.1);}
+    .mc-call-btn{padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:10px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:flex;align-items:center;justify-content:center;}
+    .mc-call-btn:hover{background:rgba(255,255,255,0.08);color:white;}
+
+    /* BOOKING MODAL */
+    .mc-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:999;display:flex;align-items:flex-end;justify-content:center;}
+    .mc-modal{width:100%;max-width:520px;background:#111;border:1px solid rgba(249,115,22,0.2);border-radius:24px 24px 0 0;padding:26px 22px 40px;max-height:90vh;overflow-y:auto;}
+    @media(min-width:580px){.mc-overlay{align-items:center;padding:20px;}.mc-modal{border-radius:24px;}}
+    .mc-modal-hd{font-size:15px;font-weight:900;color:white;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;}
+    .mc-close{background:none;border:none;color:rgba(255,255,255,0.4);font-size:22px;cursor:pointer;}
+    .mc-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+    .mc-input:focus{border-color:rgba(249,115,22,0.5);}
+    .mc-input::placeholder{color:rgba(255,255,255,0.3);}
+    .mc-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+
+    /* REGISTER GARAGE */
+    .mc-register{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px;margin-top:32px;}
+    .mc-register-g{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+    /* EMPTY */
+    .mc-empty{grid-column:1/-1;text-align:center;padding:72px 20px;color:rgba(255,255,255,0.25);}
+
+    /* BOTTOM NAV */
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:999;background:rgba(10,10,10,0.96);backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-around;padding:8px 0 max(8px,env(safe-area-inset-bottom));}
+    .bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 12px;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;transition:color .2s;}
+    .bnav-item i{font-size:18px;}
+
+    @media(max-width:600px){
+      .mc-register-g{grid-template-columns:1fr;}
+    }
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<!-- NAV -->
+<nav class="mc-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="mc-nav-logo" alt="Sokoni"></a>
+  <div class="mc-nav-right">
+    <button type="button" class="mc-nav-btn primary" onclick="document.getElementById('registerSection').scrollIntoView({behavior:'smooth'})">🏪 List Your Garage</button>
+    <a href="provider.html?cat=mechanic" class="mc-nav-btn primary"><i class="fas fa-tachometer-alt"></i> Provider Dashboard</a> <a href="index.html" class="mc-nav-btn">  Home</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="mc-hero">
+  <div class="mc-badge">🔧 SOKONI Mechanics</div>
+  <h1>Fix It Fast.<br><span>Find a Mechanic Near You.</span></h1>
+  <p>Verified mechanics, garages, auto electricians &amp; body shops across Kenya. Book via WhatsApp, pay with M-Pesa.</p>
+  <div class="mc-search-row">
+    <input type="text" id="srchMech" placeholder="Search by name, speciality or area⬦" oninput="applyFilters()">
+    <select id="srchLoc" onchange="applyFilters()" style="max-width:180px;">
+      <option value="">📍 All Locations</option>
+      <option value="nairobi">Nairobi</option>
+      <option value="mombasa">Mombasa</option>
+      <option value="kisumu">Kisumu</option>
+      <option value="nakuru">Nakuru</option>
+      <option value="eldoret">Eldoret</option>
+      <option value="thika">Thika</option>
+      <option value="nyeri">Nyeri</option>
+      <option value="meru">Meru</option>
+      <option value="embu">Embu</option>
+      <option value="machakos">Machakos</option>
+      <option value="naivasha">Naivasha</option>
+      <option value="nanyuki">Nanyuki</option>
+      <option value="kisii">Kisii</option>
+      <option value="kericho">Kericho</option>
+      <option value="kakamega">Kakamega</option>
+      <option value="kitale">Kitale</option>
+      <option value="bungoma">Bungoma</option>
+      <option value="malindi">Malindi</option>
+      <option value="mobile">Mobile / Come to Me</option>
+    </select>
+    <button type="button" class="mc-search-btn" onclick="applyFilters()">🔍 Search</button>
+  </div>
+  <div class="mc-stats">
+    <div class="mc-stat"><strong id="statMechs"></strong> Verified Mechanics</div>
+    <div class="mc-stat"><strong id="statGarages"></strong> Garages</div>
+    <div class="mc-stat"><strong>M-Pesa</strong> Accepted</div>
+    <div class="mc-stat"><strong>24/7</strong> Roadside Help</div>
+  </div>
+</section>
+
+<!-- FILTER BAR -->
+<div class="mc-filter-bar">
+  <button type="button" class="mc-pill active" onclick="filterMechs('all',this)">⚙️ All</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('general',this)">🔧 General Repair</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('electrical',this)">⚡ Auto Electrical</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('tyres',this)">🔄 Tyres & Alignment</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('bodywork',this)">🎨 Body & Paint</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('diagnosis',this)">🔍 Diagnostics</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('aircon',this)">❄️ Air Con</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('transmission',this)">⚙️ Gearbox</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('mobile',this)">🔧 Mobile Mechanic</button>
+  <button type="button" class="mc-pill" onclick="filterMechs('4x4',this)">🛻 4x4 / Offroad</button>
+</div>
+
+<!-- BODY -->
+<div class="mc-body">
+  <div style="font-size:14px;font-weight:800;color:rgba(255,255,255,0.6);margin-bottom:14px;display:flex;align-items:center;gap:8px;" id="mechsHeading">
+    🔧 Mechanics &amp; Garages
+    <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;"></span>
+    <span id="mechCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span>
+  </div>
+  <div class="mc-grid" id="mechGrid"></div>
+
+  <!-- REGISTER YOUR GARAGE -->
+  <div class="mc-register" id="registerSection">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">🏪 List Your Garage or Mechanic Service</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Get discovered by thousands of car owners. Free listing  get jobs via WhatsApp instantly.</div>
+
+    <div class="mc-register-g">
+      <div>
+        <label class="mc-label">Garage / Business Name *</label>
+        <input type="text" id="rgName" class="mc-input" placeholder="e.g. Kamau Auto Garage">
+        <label class="mc-label">Your Phone (WhatsApp) *</label>
+        <input type="tel" id="rgPhone" class="mc-input" placeholder="07XXXXXXXX">
+        <label class="mc-label">Location / Area *</label>
+        <select id="rgLoc" class="mc-input">
+          <option value="nairobi">Nairobi</option>
+          <option value="mombasa">Mombasa</option>
+          <option value="kisumu">Kisumu</option>
+          <option value="nakuru">Nakuru</option>
+          <option value="eldoret">Eldoret</option>
+          <option value="thika">Thika</option>
+          <option value="nyeri">Nyeri</option>
+          <option value="meru">Meru</option>
+          <option value="embu">Embu</option>
+          <option value="machakos">Machakos</option>
+          <option value="naivasha">Naivasha</option>
+          <option value="nanyuki">Nanyuki</option>
+          <option value="kisii">Kisii</option>
+          <option value="kericho">Kericho</option>
+          <option value="kakamega">Kakamega</option>
+          <option value="kitale">Kitale</option>
+          <option value="bungoma">Bungoma</option>
+          <option value="malindi">Malindi</option>
+          <option value="mobile">Mobile / Come to Customer</option>
+        </select>
+        <label class="mc-label">Specific Area / Street</label>
+        <input type="text" id="rgArea" class="mc-input" placeholder="e.g. Industrial Area, Kirinyaga Rd">
+      </div>
+      <div>
+        <label class="mc-label">Type *</label>
+        <select id="rgType" class="mc-input">
+          <option value="garage">🔧 Garage / Workshop</option>
+          <option value="mobile">🔧 Mobile Mechanic</option>
+          <option value="bodyshop">🎨 Body Shop</option>
+          <option value="dealer">🔍 Dealer Service Centre</option>
+          <option value="tyre">🔄 Tyre Shop</option>
+          <option value="electrician">⚡ Auto Electrician</option>
+        </select>
+        <label class="mc-label">Primary Specialisation *</label>
+        <select id="rgSpec" class="mc-input">
+          <option value="general">🔧 General Repair</option>
+          <option value="electrical">⚡ Auto Electrical</option>
+          <option value="tyres">🔄 Tyres &amp; Alignment</option>
+          <option value="bodywork">🎨 Body Work &amp; Paint</option>
+          <option value="diagnosis">🔍 Computer Diagnostics</option>
+          <option value="aircon">❄️ Air Conditioning</option>
+          <option value="transmission">⚙️ Gearbox &amp; Transmission</option>
+          <option value="4x4">🛻 4x4 &amp; Offroad</option>
+          <option value="mobile">🔧 Mobile / Roadside</option>
+        </select>
+        <label class="mc-label">Years of Experience *</label>
+        <input type="number" id="rgYears" class="mc-input" placeholder="e.g. 10" min="1">
+        <label class="mc-label">Consultation / Labour Rate (KES/hr)</label>
+        <input type="number" id="rgRate" class="mc-input" placeholder="e.g. 1500">
+      </div>
+    </div>
+
+    <label class="mc-label">Services Offered (comma-separated)</label>
+    <input type="text" id="rgServices" class="mc-input" placeholder="e.g. Engine overhaul, Brake pads, Oil change, Suspension, Wheel alignment⬦">
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftDiag" style="accent-color:#f97316;"> 🔍 OBD Diagnostics</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftMpesa" style="accent-color:#f97316;"> 💳 M-Pesa Accepted</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftWarranty" style="accent-color:#f97316;"> ✅ Parts Warranty</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ft247" style="accent-color:#f97316;"> ⏰ 24/7 Emergency</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);cursor:pointer;"><input type="checkbox" id="ftTow" style="accent-color:#f97316;"> 🚗 Towing Service</label>
+    </div>
+
+    <label class="mc-label">About Your Garage / Bio</label>
+    <textarea id="rgBio" class="mc-input" style="min-height:72px;resize:vertical;" placeholder="Briefly describe your garage, experience, brands you service, what makes you stand out⬦"></textarea>
+
+    <button type="button" onclick="registerGarage()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;">🏪 List My Garage on SOKONI</button>
+    <div id="rgMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>
+  </div>
+</div>
+
+<!-- ASK THE HUB -->
+<section style="max-width:1200px;margin:0 auto;padding:0 18px 28px;">
+  <div style="background:linear-gradient(135deg,rgba(249,115,22,0.07),rgba(234,88,12,0.04));border:1px solid rgba(249,115,22,0.2);border-radius:20px;padding:24px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:26px;">🔧</span>
+      <div>
+        <div style="font-size:15px;font-weight:900;color:white;">Ask the Mechanics Hub</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Post a job request � mechanics near you respond directly</div>
+      </div>
+      <span style="margin-left:auto;font-size:10px;padding:3px 10px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);border-radius:6px;color:#f97316;font-weight:800;">LIVE REQUESTS</span>
+    </div>
+    <textarea id="askHubText" placeholder="e.g. Need a mechanic in Lang'ata, my Subaru Forester won't start. Looking for someone with OBD diagnostics..." style="width:100%;padding:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;min-height:80px;resize:vertical;outline:none;font-family:inherit;transition:border-color .2s;" onfocus="this.style.borderColor='rgba(249,115,22,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <select id="askHubLoc" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+        <option value="">📍 Any Location</option>
+        <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option><option>Nakuru</option><option>Eldoret</option><option>Thika</option>
+      </select>
+      <input type="tel" id="askHubPhone" placeholder="Your phone (07...)" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <button type="button" onclick="postAskHub('mechanics')" style="padding:10px 20px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">📡 Broadcast Request</button>
+    </div>
+    <div id="askHubFeed" style="margin-top:18px;display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</section>
+
+<!-- ROADSIDE SOS -->
+<section style="max-width:1200px;margin:0 auto;padding:0 18px 28px;">
+  <div style="background:linear-gradient(135deg,rgba(239,68,68,0.07),rgba(249,115,22,0.04));border:1px solid rgba(239,68,68,0.22);border-radius:20px;padding:24px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+      <span style="font-size:28px;">🚨</span>
+      <div>
+        <div style="font-size:15px;font-weight:900;color:white;">Roadside SOS</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Broken down? Get help in minutes � 24/7</div>
+      </div>
+      <div style="margin-left:auto;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 12px;border-radius:6px;font-size:10px;font-weight:800;">EMERGENCY</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:18px;" id="sosTypeGrid">
+      <button type="button" onclick="sosTap(this,'Flat Tyre')" class="sos-type-btn" style="padding:14px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">🛞 Flat Tyre</button>
+      <button type="button" onclick="sosTap(this,'Dead Battery')" class="sos-type-btn" style="padding:14px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">🔋 Dead Battery</button>
+      <button type="button" onclick="sosTap(this,'Out of Fuel')" class="sos-type-btn" style="padding:14px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">⛽ Out of Fuel</button>
+      <button type="button" onclick="sosTap(this,'Overheating')" class="sos-type-btn" style="padding:14px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">🌡️ Overheating</button>
+      <button type="button" onclick="sosTap(this,'Accident')" class="sos-type-btn" style="padding:14px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">💥 Accident</button>
+      <button type="button" onclick="sosTap(this,'Need Tow Truck')" class="sos-type-btn" style="padding:14px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">🚛 Need Tow</button>
+    </div>
+    <input type="text" id="sosLocation" placeholder="Your current location (e.g. Near Nakumatt Mega, Mombasa Rd)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;">
+    <input type="tel" id="sosPhone" placeholder="Your phone number" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;">
+    <button type="button" onclick="sendSOS()" style="width:100%;padding:14px;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;border-radius:12px;color:white;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;letter-spacing:.5px;">🆘 Send SOS � Get Help Now</button>
+    <p style="font-size:10px;color:rgba(255,255,255,0.25);text-align:center;margin-top:8px;">Your request is broadcast to the nearest available mechanics & tow trucks on SOKONI</p>
+  </div>
+</section>
+
+<!-- PARTS MARKETPLACE -->
+<section style="max-width:1200px;margin:0 auto;padding:0 18px 28px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+    <div style="font-size:16px;font-weight:900;color:white;">🔩 Parts Marketplace</div>
+    <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);"></span>
+    <span style="font-size:10px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.25);color:#f97316;padding:3px 10px;border-radius:6px;font-weight:800;">NEW</span>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+    <input type="text" id="partsSearch" placeholder="Search parts (e.g. brake pads Toyota, alternator Subaru...)" style="flex:1;min-width:200px;padding:11px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;" oninput="filterParts()">
+    <select id="partsCondition" onchange="filterParts()" style="padding:11px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+      <option value="">All Conditions</option><option value="new">Brand New</option><option value="used">Used / Second Hand</option><option value="refurb">Refurbished</option>
+    </select>
+  </div>
+  <div class="mc-grid" id="partsGrid"></div>
+  <div style="text-align:center;margin-top:16px;">
+    <button type="button" onclick="toggleSellPartsForm()" style="padding:11px 24px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.22);border-radius:12px;color:#f97316;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">+ Sell a Part</button>
+  </div>
+  <div id="sellPartsForm" style="display:none;margin-top:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:20px;">
+    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">List a Part for Sale</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <input type="text" id="partName" class="mc-input" placeholder="Part name (e.g. Brake Pads)">
+      <input type="text" id="partFitment" class="mc-input" placeholder="Fits (e.g. Toyota Prado 2012-2019)">
+      <input type="number" id="partPrice" class="mc-input" placeholder="Price (KES)">
+      <select id="partCond" class="mc-input"><option value="new">Brand New</option><option value="used">Used</option><option value="refurb">Refurbished</option></select>
+      <input type="tel" id="partPhone" class="mc-input" placeholder="Your phone (WhatsApp)">
+      <select id="partLoc" class="mc-input">
+        <option value="nairobi">Nairobi</option><option value="mombasa">Mombasa</option><option value="kisumu">Kisumu</option><option value="nakuru">Nakuru</option><option value="eldoret">Eldoret</option>
+      </select>
+    </div>
+    <button type="button" onclick="listPart()" style="width:100%;padding:12px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:11px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;margin-top:12px;">List Part for Sale</button>
+    <div id="partMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+  </div>
+</section>
+
+<!-- REPAIR TRACKER -->
+<section style="max-width:1200px;margin:0 auto;padding:0 18px 28px;">
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:24px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <span style="font-size:24px;">🔧</span>
+      <div>
+        <div style="font-size:15px;font-weight:900;color:white;">Repair Tracker</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Track the status of your ongoing repair or service</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <input type="text" id="trackJobRef" placeholder="Enter Booking Ref (e.g. MCH123456)" style="flex:1;min-width:200px;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <button type="button" onclick="trackRepair()" style="padding:12px 20px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:11px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🔍 Track</button>
+    </div>
+    <div id="trackResult" style="margin-top:16px;"></div>
+    <div id="activeRepairs" style="margin-top:16px;"></div>
+  </div>
+</section>
+
+<!-- SERVICE REMINDERS -->
+<section style="max-width:1200px;margin:0 auto;padding:0 18px 40px;">
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:24px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <span style="font-size:24px;">🔔</span>
+      <div>
+        <div style="font-size:15px;font-weight:900;color:white;">Service Reminders</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Never miss an oil change, service or NTSA inspection</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="reminderFormGrid">
+      <div>
+        <label class="mc-label">Vehicle (Make & Model)</label>
+        <input type="text" id="remVehicle" class="mc-input" placeholder="e.g. Toyota Prado 2019">
+        <label class="mc-label">Service Type</label>
+        <select id="remType" class="mc-input">
+          <option>Oil & Filter Change</option><option>Full Service</option><option>Tyre Rotation</option>
+          <option>Brake Inspection</option><option>NTSA Inspection</option><option>Insurance Renewal</option><option>Custom Reminder</option>
+        </select>
+      </div>
+      <div>
+        <label class="mc-label">Due Date</label>
+        <input type="date" id="remDate" class="mc-input">
+        <label class="mc-label">Your Phone (for reminder)</label>
+        <input type="tel" id="remPhone" class="mc-input" placeholder="07XXXXXXXX">
+      </div>
+    </div>
+    <button type="button" onclick="addReminder()" style="width:100%;padding:13px;background:linear-gradient(135deg,#f97316,#ea580c);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px;">? Set Service Reminder</button>
+    <div id="remindersList" style="margin-top:18px;display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+</section>
+
+<!-- BOOKING MODAL -->
+<div id="mechOverlay" style="display:none;" class="mc-overlay" onclick="if(event.target===this)closeMechModal()">
+  <div class="mc-modal">
+    <div class="mc-modal-hd">
+      <span id="mechModalTitle">Book Mechanic</span>
+      <button type="button" class="mc-close" onclick="closeMechModal()">S"</button>
+    </div>
+    <div id="mechModalBody"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="mechanics.html" class="bnav-item active-bnav"><span class="bnav-emoji">🔧</span><span>Mechanics</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* """""""""""""""""""""""""""""""
+   DEMO MECHANICS / GARAGES
+""""""""""""""""""""""""""""""" */
+const DEMO_MECHS = [
+  { id:"MCH001", name:"Kamau Auto Garage", type:"garage", spec:"general", emoji:"🔧",
+    location:"nairobi", area:"Industrial Area, Nairobi", phone:"0712001001", years:15,
+    rate:1500, services:["Engine overhaul","Brake pads","Oil change","Suspension","Gearbox"],
+    features:["diag","mpesa","warranty"], rating:4.9, jobs:432, verified:true,
+    bio:"15 years in Industrial Area. Specialists in Toyota, Nissan & Subaru. OBD diagnostics on site." },
+  { id:"MCH002", name:"Patrick Mobile Mechanic", type:"mobile", spec:"mobile", emoji:"🔧",
+    location:"nairobi", area:"Westlands / CBD", phone:"0723002002", years:8,
+    rate:1000, services:["Roadside repair","Battery jump-start","Tyre change","Oil top-up","AC regas"],
+    features:["mpesa","247"], rating:4.8, jobs:287, verified:true,
+    bio:"Come to you anywhere in Nairobi within 30 mins. 24/7 emergency callout. No callout fee within 15 km." },
+  { id:"MCH003", name:"Coast Auto Electricals", type:"electrician", spec:"electrical", emoji:"⚡",
+    location:"mombasa", area:"Changamwe, Mombasa", phone:"0734003003", years:12,
+    rate:1200, services:["ECU repair","Wiring","Alternator","Starter motor","Central locking","Alarm"],
+    features:["diag","mpesa","warranty"], rating:4.8, jobs:198, verified:true,
+    bio:"Mombasa's top auto electrician. All makes. ECU reprogramming, anti-theft systems, full electrical diagnostics." },
+  { id:"MCH004", name:"Precision Wheel & Tyre", type:"tyre", spec:"tyres", emoji:"🔄",
+    location:"nairobi", area:"Mombasa Road, Nairobi", phone:"0745004004", years:10,
+    rate:800, services:["Tyre fitting","Wheel balancing","Alignment","Nitrogen inflation","Puncture repair"],
+    features:["mpesa","warranty"], rating:4.7, jobs:876, verified:true,
+    bio:"All tyre brands. Same-day fitment. Digital wheel alignment. Truck tyres available." },
+  { id:"MCH005", name:"Pro Body & Paint Shop", type:"bodyshop", spec:"bodywork", emoji:"🎨",
+    location:"nairobi", area:"South C, Nairobi", phone:"0756005005", years:14,
+    rate:2000, services:["Panel beating","Spray paint","Denting","Chrome work","Rust treatment"],
+    features:["mpesa","warranty"], rating:4.8, jobs:156, verified:true,
+    bio:"Professional panel beating and spray painting. Insurance approved. All paint types including metallic." },
+  { id:"MCH006", name:"Kisumu Motors Garage", type:"garage", spec:"general", emoji:"🔧",
+    location:"kisumu", area:"Kondele, Kisumu", phone:"0767006006", years:9,
+    rate:1200, services:["General repair","Engine","Clutch","Brakes","Exhaust","AC service"],
+    features:["mpesa","diag"], rating:4.6, jobs:312, verified:true,
+    bio:"Kisumu's trusted garage since 2015. All Japanese and European makes. Quick turnaround guaranteed." },
+  { id:"MCH007", name:"4x4 Safari Mechanics", type:"garage", spec:"4x4", emoji:"🛻",
+    location:"nairobi", area:"Karen, Nairobi", phone:"0778007007", years:18,
+    rate:2500, services:["Land Cruiser","Prado","Defender","Lift kits","Diff locks","Winch install","Snorkels"],
+    features:["diag","mpesa","warranty","tow"], rating:5.0, jobs:203, verified:true,
+    bio:"Kenya's #1 4x4 and offroad specialist. Land Cruiser, Defender, Pajero, Ranger. Safari prep packages." },
+  { id:"MCH008", name:"Nakuru AC & Cooling", type:"garage", spec:"aircon", emoji:"❄️",
+    location:"nakuru", area:"Section 58, Nakuru", phone:"0789008008", years:7,
+    rate:1000, services:["AC gas recharge","Compressor repair","Radiator flush","Coolant","Fan motor"],
+    features:["mpesa","warranty"], rating:4.7, jobs:445, verified:false,
+    bio:"AC specialists for all vehicles. Radiator and cooling system experts. Quick 2-hour service." },
+  { id:"MCH009", name:"Thika Road Auto Centre", type:"dealer", spec:"diagnosis", emoji:"🔍",
+    location:"nairobi", area:"Roasters, Thika Rd", phone:"0700009009", years:11,
+    rate:2000, services:["Full diagnostics","Engine management","ABS","Airbags","Transmission ECU","DPF cleaning"],
+    features:["diag","mpesa","warranty"], rating:4.9, jobs:167, verified:true,
+    bio:"Advanced diagnostics for all makes. BMW, Mercedes, Audi, VW specialists. ADAS calibration." },
+  { id:"MCH010", name:"Eldoret Diesel Specialists", type:"garage", spec:"transmission", emoji:"⚙️",
+    location:"eldoret", area:"Langas, Eldoret", phone:"0711010010", years:16,
+    rate:2000, services:["Gearbox rebuild","Differential","Transfer case","Propshaft","Engine rebuild"],
+    features:["mpesa","warranty","tow"], rating:4.8, jobs:289, verified:true,
+    bio:"Diesel engine and gearbox specialists. Trucks, pickups, matatus. 16 years rebuilding gearboxes." },
+  { id:"MCH011", name:"Machakos Roadside Help", type:"mobile", spec:"mobile", emoji:"🔧",
+    location:"machakos", area:"Machakos Town", phone:"0722011011", years:5,
+    rate:800, services:["Puncture","Battery boost","Fuel delivery","Tow hookup","Emergency repair"],
+    features:["mpesa","247","tow"], rating:4.5, jobs:134, verified:false,
+    bio:"24/7 roadside assistance in Machakos and along Mombasa highway. 30-minute response time." },
+  { id:"MCH012", name:"Nairobi Gearbox Centre", type:"garage", spec:"transmission", emoji:"⚙️",
+    location:"nairobi", area:"Enterprise Road, Industrial Area", phone:"0733012012", years:20,
+    rate:2200, services:["Auto gearbox","Manual gearbox","Clutch kit","Flywheel","CV joints","Driveshaft"],
+    features:["diag","mpesa","warranty"], rating:4.9, jobs:521, verified:true,
+    bio:"20 years rebuilding automatic and manual gearboxes. All makes. 6-month warranty on rebuilt gearboxes." },
+];
+
+const FEAT_LBL = { diag:"🔍 OBD Diag", mpesa:"💳 M-Pesa", warranty:"✅ Warranty", "247":"⏰ 24/7", tow:"🚗 Towing" };
+const TYPE_LBL  = { garage:"Garage", mobile:"Mobile Mechanic", bodyshop:"Body Shop", dealer:"Dealer Service", tyre:"Tyre Shop", electrician:"Auto Electrician" };
+
+/* """""""""""""""""""""""""""""""
+   FIREBASE
+""""""""""""""""""""""""""""""" */
+let _fsDb=null, _fsCache=null;
+async function _getDb(){
+  if(_fsDb) return _fsDb;
+  try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const {getFirestore}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const apps=getApps();
+    const app=apps.length?apps[0]:initializeApp({apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"});
+    _fsDb=getFirestore(app); return _fsDb;
+  }catch(e){return null;}
+}
+async function _loadFs(){
+  try{
+    const db=await _getDb(); if(!db) return null;
+    const {collection,getDocs,query,orderBy}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const snap=await getDocs(query(collection(db,"mechanics"),orderBy("createdAt","desc")));
+    return snap.empty?[]:(snap.docs.map(d=>({id:d.id,...d.data()})));
+  }catch(e){return null;}
+}
+async function _saveFs(doc){
+  try{
+    const db=await _getDb(); if(!db) return false;
+    const {collection,doc:fsDoc,setDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    await setDoc(fsDoc(collection(db,"mechanics"),doc.id),{...doc,createdAt:serverTimestamp()});
+    return true;
+  }catch(e){return false;}
+}
+
+/* """""""""""""""""""""""""""""""
+   STATE
+""""""""""""""""""""""""""""""" */
+let _all=[], _filtered=[], _activeCat="all";
+
+/* """""""""""""""""""""""""""""""
+   LOAD
+""""""""""""""""""""""""""""""" */
+async function loadMechs(){
+  const grid=document.getElementById("mechGrid");
+  if(grid) grid.innerHTML=`<div class="mc-empty"><div style="font-size:48px;margin-bottom:12px;">🔧</div><div>Loading mechanics⬦</div></div>`;
+
+  if(!_fsCache){const fs=await _loadFs(); if(fs!==null) _fsCache=fs;}
+
+  const fsIds=new Set((_fsCache||[]).map(m=>m.id));
+  let local=[]; try{local=JSON.parse(localStorage.getItem("sokoniMechanics"))||[];}catch(e){}
+  _all=[...(_fsCache||[]),...local.filter(m=>!fsIds.has(m.id)),...DEMO_MECHS.filter(d=>!fsIds.has(d.id)&&!local.some(l=>l.id===d.id))];
+
+  const verified=_all.filter(m=>m.verified).length;
+  const garages =_all.filter(m=>m.type==="garage"||m.type==="bodyshop"||m.type==="dealer"||m.type==="tyre"||m.type==="electrician").length;
+  const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  s("statMechs",verified+"+"); s("statGarages",garages+"+");
+
+  applyFilters();
+}
+
+/* """""""""""""""""""""""""""""""
+   FILTERS
+""""""""""""""""""""""""""""""" */
+function applyFilters(){
+  const q=(document.getElementById("srchMech")?.value||"").toLowerCase().trim();
+  const loc=document.getElementById("srchLoc")?.value||"";
+  let list=[..._all];
+  if(_activeCat!=="all") list=list.filter(m=>m.spec===_activeCat||(m.services||[]).some(s=>s.toLowerCase().includes(_activeCat))||(m.type===_activeCat));
+  if(loc) list=list.filter(m=>m.location===loc);
+  if(q) list=list.filter(m=>m.name.toLowerCase().includes(q)||(m.area||"").toLowerCase().includes(q)||(m.bio||"").toLowerCase().includes(q)||(m.services||[]).some(s=>s.toLowerCase().includes(q)));
+  _filtered=list;
+  const cnt=document.getElementById("mechCount"); if(cnt) cnt.textContent=`${list.length} found`;
+  renderGrid();
+}
+
+function filterMechs(cat,btn){
+  _activeCat=cat;
+  document.querySelectorAll(".mc-pill").forEach(b=>b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  applyFilters();
+}
+window.filterMechs=filterMechs;
+
+/* """""""""""""""""""""""""""""""
+   RENDER CARDS
+""""""""""""""""""""""""""""""" */
+function renderGrid(){
+  const grid=document.getElementById("mechGrid");
+  if(!grid) return;
+  if(!_filtered.length){
+    grid.innerHTML=`<div class="mc-empty"><div style="font-size:48px;margin-bottom:14px;">🔧</div><p style="margin-bottom:14px;">No mechanics found for this filter.</p><button type="button" onclick="document.getElementById('srchMech').value='';document.getElementById('srchLoc').value='';filterMechs('all',document.querySelector('.mc-pill'))" style="padding:10px 20px;background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.25);color:#f97316;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">Reset</button></div>`;
+    return;
+  }
+  grid.innerHTML=_filtered.map(m=>{
+    const stars="★".repeat(Math.round(m.rating||5))+"☆".repeat(5-Math.round(m.rating||5));
+    const feats=(m.features||[]).map(f=>`<span class="mc-service-tag ${f==="mpesa"?"cert":f==="warranty"?"cert":""}">${FEAT_LBL[f]||f}</span>`).join("");
+    const svcs=(m.services||[]).slice(0,4).map(s=>`<span class="mc-service-tag">${s}</span>`).join("");
+    return `<div class="mc-card">
+      <div class="mc-card-top">
+        <div class="mc-avatar">${m.emoji||"🔧"}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="mc-name">${m.name} ${m.verified?`<span style="font-size:8px;background:rgba(113,255,0,0.1);color:#71ff00;padding:1px 5px;border-radius:3px;border:1px solid rgba(113,255,0,0.2);">✓ Verified</span>`:""}</div>
+          <div class="mc-type">${TYPE_LBL[m.type]||m.type}</div>
+          <div class="mc-loc">📍 ${m.area||m.location}</div>
+        </div>
+      </div>
+      <div class="mc-rating"><span class="stars">${stars}</span><span>${m.rating||"5.0"}</span><span></span><span>${m.jobs||0} jobs</span><span></span><span>${m.years||1} yrs exp</span></div>
+      <div class="mc-services">${feats}${svcs}</div>
+      ${m.bio?`<div class="mc-bio">"${m.bio.substring(0,90)}${m.bio.length>90?"⬦":""}"</div>`:""}
+      <div class="mc-meta">
+        ${m.rate?`<span class="mc-meta-chip"> KES ${Number(m.rate).toLocaleString()}/hr</span>`:""}
+        <span class="mc-meta-chip">📍 ${(m.location||"Kenya").charAt(0).toUpperCase()+(m.location||"Kenya").slice(1)}</span>
+      </div>
+      <div class="mc-actions">
+        <button type="button" class="mc-book-btn" onclick="openBookMech('${m.id}')">📅 Book Now</button>
+        ${m.phone?`<a href="tel:${m.phone}" class="mc-call-btn">📞</a>`:""}
+      <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('mech_'+(m.id||m.name),m.name||"Mechanic",this,'mechanic')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'mech_'+m.id,name:m.name||"Mechanic",category:'Mechanic',type:'mechanic'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
+    </div>`;
+  }).join("");
+}
+
+/* """""""""""""""""""""""""""""""
+   BOOKING MODAL
+""""""""""""""""""""""""""""""" */
+let _activeMech=null;
+function openBookMech(id){
+  _activeMech=_all.find(m=>m.id===id); if(!_activeMech) return;
+  const m=_activeMech;
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById("mechModalTitle").textContent=`Book  ${m.name}`;
+  document.getElementById("mechModalBody").innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:12px;margin-bottom:16px;">
+      <div style="font-size:36px;">${m.emoji||"x"}</div>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:white;">${m.name}</div>
+        <div style="font-size:11px;color:#f97316;font-weight:700;">${TYPE_LBL[m.type]||m.type}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${m.area||m.location}</div>
+        ${m.rate?`<div style="font-size:13px;font-weight:900;color:#f97316;margin-top:2px;">KES ${Number(m.rate).toLocaleString()}/hr</div>`:""}
+      </div>
+    </div>
+    <label class="mc-label">Your Name *</label>
+    <input type="text" id="bkMName" class="mc-input" placeholder="Full name">
+    <label class="mc-label">Your Phone *</label>
+    <input type="tel" id="bkMPhone" class="mc-input" placeholder="07XXXXXXXX">
+    <label class="mc-label">Job / Problem Description *</label>
+    <select id="bkMService" class="mc-input">
+      <option value="">-- Select service --</option>
+      ${(m.services||[]).map(s=>`<option value="${s}">${s}</option>`).join("")}
+      <option value="Other / Not listed">Other / Not listed</option>
+    </select>
+    <label class="mc-label">Describe the Problem</label>
+    <textarea id="bkMDesc" class="mc-input" style="min-height:64px;resize:vertical;" placeholder="e.g. Car won't start, strange noise from front left, engine warning light on⬦"></textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div><label class="mc-label">Preferred Date</label><input type="date" id="bkMDate" class="mc-input" min="${today}" value="${today}"></div>
+      <div><label class="mc-label">Preferred Time</label>
+        <select id="bkMTime" class="mc-input">
+          <option>Morning (7am12pm)</option>
+          <option>Afternoon (12pm5pm)</option>
+          <option>Evening (5pm8pm)</option>
+          <option>ASAP / Flexible</option>
+        </select>
+      </div>
+    </div>
+    <label class="mc-label">Your Location (for mobile mechanic)</label>
+    <input type="text" id="bkMLoc" class="mc-input" placeholder="e.g. Kilimani, near Junction Mall">
+    <button type="button" onclick="confirmMechBooking('${m.id}')" style="width:100%;padding:14px;background:linear-gradient(135deg,#f97316,#ea580c);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;"> Send Booking via WhatsApp</button>
+    <button type="button" onclick="closeMechModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.4);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
+    <div id="bkMMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>`;
+  document.getElementById("mechOverlay").style.display="flex";
+  document.body.style.overflow="hidden";
+}
+
+function confirmMechBooking(id){
+  const name=document.getElementById("bkMName")?.value.trim();
+  const phone=document.getElementById("bkMPhone")?.value.trim();
+  const svc=document.getElementById("bkMService")?.value;
+  const desc=document.getElementById("bkMDesc")?.value.trim();
+  const date=document.getElementById("bkMDate")?.value;
+  const time=document.getElementById("bkMTime")?.value;
+  const loc=document.getElementById("bkMLoc")?.value.trim();
+  const msgEl=document.getElementById("bkMMsg");
+  if(!name||!phone||!svc){if(msgEl){msgEl.textContent="a️ Fill your name, phone and select a service";msgEl.style.color="#ff9800";}return;}
+  const m=_all.find(x=>x.id===id); if(!m) return;
+  const ref="MCH"+Date.now().toString().slice(-6);
+  const wa=m.phone?m.phone.replace(/^0/,"254").replace(/\D/g,""):"";
+  let bks=[]; try{bks=JSON.parse(localStorage.getItem("sokoniMechBookings"))||[];}catch(e){}
+  bks.unshift({ref,mechId:id,mechName:m.name,name,phone,svc,desc,date,time,loc,status:"sent",createdAt:Date.now()});
+  localStorage.setItem("sokoniMechBookings",JSON.stringify(bks));
+  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:svc,category:'Mechanic',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:ref,sellerName:m.name,date:new Date().toISOString(),notes:loc||''});},700);
+  if(!wa){if(msgEl){msgEl.textContent="a️ Contact not available";msgEl.style.color="#ff9800";}return;}
+  const plainMsg=`🔧 *SOKONI Mechanics  Booking Request*\n\n👤 Client: ${name}\n📞 Phone: ${phone}\n🔧 Service: ${svc}\n📅 Date: ${date||"Flexible"}  ${time}\n${loc?`📍 Location: ${loc}\n`:""}\n${desc?`x Problem:\n${desc}\n\n`:""}`+`Please confirm this booking. Thank you! 🙏`;
+  if(typeof SokoniPay!=='undefined'){
+    try{
+      closeMechModal();
+      SokoniPay.waConnect(m.phone, plainMsg, {
+        providerName: m.name,
+        category: 'plumbing',
+        serviceDesc: svc+'  '+m.name
+      });
+      return;
+    }catch(e){}
+  }
+  const msg=encodeURIComponent(`🔧 *SOKONI Mechanics  Booking Request*\n\nRef: ${ref}\n\n`+plainMsg);
+  if(msgEl){msgEl.innerHTML=`S& Opening WhatsApp⬦ Ref: <strong>${ref}</strong>`;msgEl.style.color="#71ff00";}
+  setTimeout(()=>{window.open(`https://wa.me/${wa}?text=${msg}`,"_blank");setTimeout(closeMechModal,2000);},600);
+}
+
+function closeMechModal(){
+  document.getElementById("mechOverlay").style.display="none";
+  document.body.style.overflow="";
+}
+window.openBookMech=openBookMech; window.confirmMechBooking=confirmMechBooking; window.closeMechModal=closeMechModal;
+
+/* """""""""""""""""""""""""""""""
+   REGISTER GARAGE
+""""""""""""""""""""""""""""""" */
+async function registerGarage(){
+  const name=document.getElementById("rgName")?.value.trim();
+  const phone=document.getElementById("rgPhone")?.value.trim();
+  const years=Number(document.getElementById("rgYears")?.value||0);
+  const msgEl=document.getElementById("rgMsg");
+  if(!name||!phone||!years){if(msgEl){msgEl.textContent="a️ Fill all required fields";msgEl.style.color="#ff9800";}return;}
+
+  const features=[];
+  if(document.getElementById("ftDiag")?.checked)    features.push("diag");
+  if(document.getElementById("ftMpesa")?.checked)   features.push("mpesa");
+  if(document.getElementById("ftWarranty")?.checked) features.push("warranty");
+  if(document.getElementById("ft247")?.checked)     features.push("247");
+  if(document.getElementById("ftTow")?.checked)     features.push("tow");
+
+  const typeEmoji={garage:"🔧",mobile:"🔧",bodyshop:"🎨",dealer:"🔍",tyre:"🔄",electrician:"⚡"};
+  const garage={
+    id:"MCH"+Date.now(),name,phone,
+    type:document.getElementById("rgType")?.value||"garage",
+    spec:document.getElementById("rgSpec")?.value||"general",
+    location:document.getElementById("rgLoc")?.value||"nairobi",
+    area:document.getElementById("rgArea")?.value.trim()||"",
+    years,rate:Number(document.getElementById("rgRate")?.value||0)||null,
+    services:(document.getElementById("rgServices")?.value||"").split(",").map(s=>s.trim()).filter(Boolean),
+    features,bio:document.getElementById("rgBio")?.value.trim()||"",
+    rating:5.0,jobs:0,verified:false,
+    emoji:typeEmoji[document.getElementById("rgType")?.value||"garage"]||"🔧",
+    createdAt:Date.now()
+  };
+
+  let local=[]; try{local=JSON.parse(localStorage.getItem("sokoniMechanics"))||[];}catch(e){}
+  local.unshift(garage); localStorage.setItem("sokoniMechanics",JSON.stringify(local));
+  if(msgEl){msgEl.textContent="Saving listing⬦";msgEl.style.color="#a78bfa";}
+  const saved=await _saveFs(garage); _fsCache=null;
+  if(msgEl){msgEl.innerHTML=saved?`S& <strong>${garage.name}</strong> is now live on SOKONI Mechanics! Customers can find and book you.`:`S& Listing saved locally. Will sync when connection is restored.`;msgEl.style.color="#71ff00";}
+  ["rgName","rgPhone","rgArea","rgYears","rgRate","rgServices","rgBio"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  ["ftDiag","ftMpesa","ftWarranty","ft247","ftTow"].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
+  await loadMechs();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+window.registerGarage=registerGarage;
+
+loadMechs();
+
+/* =============================================================
+   ASK THE HUB
+============================================================= */
+let _sosType = '';
+
+function postAskHub(hub) {
+  const text = (document.getElementById('askHubText')?.value || '').trim();
+  const loc  = document.getElementById('askHubLoc')?.value || '';
+  const phone= (document.getElementById('askHubPhone')?.value || '').trim();
+  if (!text) { showMechToast('Please describe what you need'); return; }
+  const key = 'askHub_' + hub;
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem(key)) || []; } catch(e) {}
+  reqs.unshift({ id:'REQ'+Date.now(), text, loc: loc||'Any Location', phone, ts: Date.now() });
+  localStorage.setItem(key, JSON.stringify(reqs.slice(0,30)));
+  document.getElementById('askHubText').value = '';
+  document.getElementById('askHubPhone').value = '';
+  renderAskHubFeed(hub);
+  showMechToast('Request broadcast to mechanics near you!');
+}
+
+function renderAskHubFeed(hub) {
+  const feed = document.getElementById('askHubFeed'); if (!feed) return;
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_'+hub)) || []; } catch(e) {}
+  if (!reqs.length) { feed.innerHTML = ''; return; }
+  feed.innerHTML = '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Recent Requests</div>' +
+    reqs.slice(0,5).map(r => `
+      <div style="padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <div style="width:26px;height:26px;border-radius:7px;background:rgba(249,115,22,0.12);display:flex;align-items:center;justify-content:center;font-size:12px;">🔧</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${r.loc} � ${mechTimeAgo(r.ts)}</div>
+          <div style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">${safeHtml(r.text)}</div>
+        ${r.phone ? `<div style="margin-top:8px;"><a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your SOKONI mechanics request: '+r.text+'\n\nI can help! — SOKONI Verified Mechanic')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.2);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond on WhatsApp</a></div>` : ''}
+      </div>`).join('');
+}
+
+function mechTimeAgo(ts) {
+  const s = Math.floor((Date.now()-ts)/1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60)+'m ago';
+  if (s < 86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+function safeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showMechToast(msg) {
+  if(typeof window._sokoniToast==='function'){window._sokoniToast(msg,'warning',2800);return;}
+  var t=document.getElementById('mechToast');if(t)t.remove();
+  t=document.createElement('div');t.id='mechToast';
+  t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#f97316;color:white;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:700;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2800);
+}
+
+/* =============================================================
+   ROADSIDE SOS
+============================================================= */
+function sosTap(btn, type) {
+  _sosType = type;
+  document.querySelectorAll('.sos-type-btn').forEach(b => {
+    b.style.background = 'rgba(255,255,255,0.04)';
+    b.style.borderColor = 'rgba(255,255,255,0.1)';
+    b.style.color = 'rgba(255,255,255,0.7)';
+  });
+  btn.style.background = 'rgba(239,68,68,0.12)';
+  btn.style.borderColor = 'rgba(239,68,68,0.35)';
+  btn.style.color = '#ef4444';
+}
+window.sosTap = sosTap;
+
+function sendSOS() {
+  const loc   = (document.getElementById('sosLocation')?.value || '').trim();
+  const phone = (document.getElementById('sosPhone')?.value || '').trim();
+  if (!_sosType) { showMechToast('Please select your emergency type'); return; }
+  if (!loc)      { showMechToast('Please enter your current location'); return; }
+  const mobile247 = _all.filter(m => m.features && (m.features.includes('247') || m.features.includes('tow')));
+  const msg = `🆘 *SOKONI ROADSIDE SOS*\n\nEmergency: ${_sosType}\n📍 Location: ${loc}\n📱 Phone: ${phone||'not provided'}\n\nPlease respond ASAP!`;
+  const wa = (mobile247.length && mobile247[0].phone)
+    ? mobile247[0].phone.replace(/^0/,'254').replace(/\D/g,'')
+    : '254705726803';
+  window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, '_blank');
+  showMechToast('SOS sent! Help is on the way.');
+}
+window.sendSOS = sendSOS;
+
+/* =============================================================
+   PARTS MARKETPLACE
+============================================================= */
+const DEMO_PARTS = [
+  { id:'PT001', name:'Brake Pads (Front)', fits:'Toyota Prado 2010-2020', price:3500, cond:'new', loc:'nairobi', phone:'0712100001', seller:'Kamau Auto Spares' },
+  { id:'PT002', name:'Alternator', fits:'Subaru Forester 2008-2013', price:8500, cond:'used', loc:'nairobi', phone:'0723100002', seller:'Kikuyu Spares' },
+  { id:'PT003', name:'Oil Filter Kit', fits:'All Toyota / Nissan', price:1200, cond:'new', loc:'mombasa', phone:'0734100003', seller:'Coast Auto Parts' },
+  { id:'PT004', name:'Radiator (Complete)', fits:'Nissan X-Trail 2007-2014', price:12000, cond:'refurb', loc:'nairobi', phone:'0745100004', seller:'Industrial Spares' },
+  { id:'PT005', name:'CV Joint (Outer)', fits:'Toyota RAV4 2006-2012', price:4800, cond:'new', loc:'nakuru', phone:'0756100005', seller:'Nakuru Auto Spares' },
+  { id:'PT006', name:'Shock Absorbers (Pair)', fits:'Subaru Legacy / Outback', price:6500, cond:'new', loc:'nairobi', phone:'0767100006', seller:'Westlands Spares' },
+];
+
+function loadParts() {
+  let custom = []; try { custom = JSON.parse(localStorage.getItem('sokoniParts')) || []; } catch(e) {}
+  return [...custom, ...DEMO_PARTS.filter(d => !custom.some(c => c.id === d.id))];
+}
+
+function filterParts() {
+  const q    = (document.getElementById('partsSearch')?.value || '').toLowerCase();
+  const cond = document.getElementById('partsCondition')?.value || '';
+  let parts  = loadParts();
+  if (q)    parts = parts.filter(p => (p.name+p.fits+p.seller).toLowerCase().includes(q));
+  if (cond) parts = parts.filter(p => p.cond === cond);
+  renderPartsGrid(parts);
+}
+
+function renderPartsGrid(parts) {
+  const grid = document.getElementById('partsGrid'); if (!grid) return;
+  if (!parts.length) { grid.innerHTML = '<div class="mc-empty"><div style="font-size:40px;margin-bottom:10px;">🔩</div><div>No parts found</div></div>'; return; }
+  const condLabel = { new:'Brand New', used:'Used', refurb:'Refurbished' };
+  const condColor = { new:'rgba(34,197,94,0.12)', used:'rgba(249,115,22,0.1)', refurb:'rgba(59,130,246,0.1)' };
+  grid.innerHTML = parts.map(p => `
+    <div class="mc-card">
+      <div class="mc-card-top">
+        <div class="mc-avatar" style="background:rgba(249,115,22,0.1);">🔩</div>
+        <div style="flex:1;min-width:0;">
+          <div class="mc-name">${safeHtml(p.name)}</div>
+          <div class="mc-type">Fits: ${safeHtml(p.fits)}</div>
+          <div class="mc-loc">📍 ${p.loc.charAt(0).toUpperCase()+p.loc.slice(1)}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:18px;font-weight:900;color:#f97316;">KES ${Number(p.price).toLocaleString()}</div>
+        <span style="font-size:10px;padding:3px 9px;border-radius:6px;background:${condColor[p.cond]||'rgba(255,255,255,0.06)'};color:rgba(255,255,255,0.7);font-weight:700;">${condLabel[p.cond]||p.cond}</span>
+      </div>
+      <div class="mc-bio">${safeHtml(p.seller||'Seller')}</div>
+      <div class="mc-actions">
+        <a href="https://wa.me/254${(p.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your '+p.name+' listing on SOKONI Parts. Is it still available? Fits: '+p.fits)}" target="_blank" rel="noopener" class="mc-book-btn" style="text-align:center;text-decoration:none;display:block;">💬 WhatsApp Seller</a>
+      </div>
+    </div>`).join('');
+}
+
+function toggleSellPartsForm() {
+  const f = document.getElementById('sellPartsForm');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function listPart() {
+  const name  = (document.getElementById('partName')?.value||'').trim();
+  const fits  = (document.getElementById('partFitment')?.value||'').trim();
+  const price = Number(document.getElementById('partPrice')?.value||0);
+  const phone = (document.getElementById('partPhone')?.value||'').trim();
+  const msgEl = document.getElementById('partMsg');
+  if (!name || !price || !phone) { if(msgEl) { msgEl.textContent='Fill name, price and phone'; msgEl.style.color='#ff9800'; } return; }
+  const part = { id:'PT'+Date.now(), name, fits, price, phone, cond: document.getElementById('partCond')?.value||'new', loc: document.getElementById('partLoc')?.value||'nairobi', seller:'Private Seller' };
+  let local = []; try { local = JSON.parse(localStorage.getItem('sokoniParts'))||[]; } catch(e) {}
+  local.unshift(part); localStorage.setItem('sokoniParts', JSON.stringify(local));
+  filterParts();
+  toggleSellPartsForm();
+  showMechToast('Part listed successfully!');
+}
+window.toggleSellPartsForm = toggleSellPartsForm;
+window.listPart = listPart;
+
+/* =============================================================
+   REPAIR TRACKER
+============================================================= */
+function trackRepair() {
+  const ref = (document.getElementById('trackJobRef')?.value||'').trim().toUpperCase();
+  const res = document.getElementById('trackResult');
+  if (!ref) { if(res) res.innerHTML = '<div style="color:#ff9800;font-size:12px;">Enter a booking reference</div>'; return; }
+  let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniMechBookings'))||[]; } catch(e) {}
+  const b = bks.find(x => (x.ref||'').toUpperCase() === ref);
+  if (!b) { if(res) res.innerHTML = `<div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;font-size:12px;color:rgba(255,255,255,0.5);">No booking found for <strong style="color:white;">${safeHtml(ref)}</strong>. Check the ref sent via WhatsApp.</div>`; return; }
+  const statusMap = { sent:'📤 Sent', confirmed:'✅ Confirmed', in_progress:'🔧 In Progress', done:'✅ Complete', cancelled:'❌ Cancelled' };
+  const statusColor = { sent:'#f97316', confirmed:'#22c55e', in_progress:'#3b82f6', done:'#22c55e', cancelled:'#ef4444' };
+  if(res) res.innerHTML = `
+    <div style="padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:900;color:white;">${safeHtml(b.mechName||'Mechanic')}</div>
+        <div style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.2);color:${statusColor[b.status]||'#f97316'};font-weight:700;">${statusMap[b.status]||'Sent'}</div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Service: <span style="color:rgba(255,255,255,0.8);">${safeHtml(b.svc||'')}</span></div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Date: <span style="color:rgba(255,255,255,0.8);">${b.date||'Flexible'}</span></div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.3);">Ref: ${safeHtml(b.ref)}</div>
+    </div>`;
+}
+window.trackRepair = trackRepair;
+
+function loadActiveRepairs() {
+  const el = document.getElementById('activeRepairs'); if(!el) return;
+  let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniMechBookings'))||[]; } catch(e) {}
+  const active = bks.filter(b => b.status !== 'done' && b.status !== 'cancelled').slice(0,3);
+  if (!active.length) return;
+  el.innerHTML = '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Your Active Bookings</div>' +
+    active.map(b => `<div style="padding:10px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:20px;">🔧</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.8);">${safeHtml(b.mechName||'Mechanic')}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${safeHtml(b.svc||'')} � ${b.date||'Flexible'}</div>
+      </div>
+      <div style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(249,115,22,0.1);color:#f97316;font-weight:700;">${b.ref||''}</div>
+    </div>`).join('');
+}
+
+/* =============================================================
+   SERVICE REMINDERS
+============================================================= */
+function addReminder() {
+  const vehicle = (document.getElementById('remVehicle')?.value||'').trim();
+  const type    = document.getElementById('remType')?.value || '';
+  const date    = document.getElementById('remDate')?.value || '';
+  if (!vehicle || !date) { showMechToast('Enter vehicle and due date'); return; }
+  let reminders = []; try { reminders = JSON.parse(localStorage.getItem('sokoniReminders'))||[]; } catch(e) {}
+  reminders.unshift({ id:'REM'+Date.now(), vehicle, type, date, phone:(document.getElementById('remPhone')?.value||'').trim(), done:false });
+  localStorage.setItem('sokoniReminders', JSON.stringify(reminders.slice(0,20)));
+  document.getElementById('remVehicle').value = '';
+  if(document.getElementById('remDate')) document.getElementById('remDate').value = '';
+  if(document.getElementById('remPhone')) document.getElementById('remPhone').value = '';
+  renderReminders();
+  showMechToast('Reminder set for ' + date);
+}
+
+function renderReminders() {
+  const el = document.getElementById('remindersList'); if(!el) return;
+  let reminders = []; try { reminders = JSON.parse(localStorage.getItem('sokoniReminders'))||[]; } catch(e) {}
+  if (!reminders.length) { el.innerHTML = ''; return; }
+  const today = new Date().toISOString().slice(0,10);
+  el.innerHTML = reminders.map((r,i) => {
+    const overdue = r.date < today;
+    const soon    = !overdue && r.date <= new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+    return `<div style="padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid ${overdue?'rgba(239,68,68,0.25)':soon?'rgba(249,115,22,0.2)':'rgba(255,255,255,0.07)'};border-radius:12px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:20px;">${overdue?'??':soon?'??':'??'}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.85);">${safeHtml(r.vehicle)} � ${safeHtml(r.type)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Due: ${r.date}${overdue?' � OVERDUE':soon?' � DUE SOON':''}</div>
+      </div>
+      <button type="button" onclick="deleteReminder(${i})" style="padding:5px 10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:7px;color:#ef4444;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">?</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteReminder(i) {
+  let reminders = []; try { reminders = JSON.parse(localStorage.getItem('sokoniReminders'))||[]; } catch(e) {}
+  reminders.splice(i,1);
+  localStorage.setItem('sokoniReminders', JSON.stringify(reminders));
+  renderReminders();
+}
+window.addReminder = addReminder;
+window.deleteReminder = deleteReminder;
+window.postAskHub = postAskHub;
+
+renderAskHubFeed('mechanics');
+filterParts();
+loadActiveRepairs();
+renderReminders();
+</script>
+<script src="sokoni-pay.js"></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="scroll-memory.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'car', category:'mechanic'})" style="padding:12px 28px;background:#39ff14;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

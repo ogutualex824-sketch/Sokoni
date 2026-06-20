@@ -1,0 +1,490 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Dispute Resolution</title>
+  <meta name="description" content="Raise and resolve order disputes on SOKONI. Our team helps protect buyers and sellers.">
+  <meta property="og:title" content="SOKONI — Dispute Resolution">
+  <meta property="og:description" content="Raise a dispute and get fair resolution from the SOKONI team.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    .dispute-page{ padding:0 0 100px; min-height:100vh; }
+
+    /* ── Premium hero ── */
+    .dispute-hero{
+      background:linear-gradient(135deg,rgba(255,152,0,0.09),rgba(239,68,68,0.06),transparent);
+      border-bottom:1px solid rgba(255,152,0,0.12);
+      padding:48px 5% 36px;
+      position:relative;overflow:hidden;
+    }
+    .dispute-hero::before{
+      content:'⚖️⚠️📋';position:absolute;right:-10px;top:50%;transform:translateY(-50%);
+      font-size:100px;opacity:0.035;white-space:nowrap;pointer-events:none;letter-spacing:-4px;
+    }
+    .dispute-hero-badge{
+      display:inline-flex;align-items:center;gap:6px;padding:5px 14px;
+      background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.28);
+      border-radius:999px;font-size:11px;font-weight:800;color:#ff9800;
+      margin-bottom:14px;text-transform:uppercase;letter-spacing:.06em;
+    }
+    .dispute-hero h1{ font-size:clamp(22px,5vw,34px); font-weight:900; color:white; margin-bottom:8px; line-height:1.15; }
+    .dispute-hero p{ color:rgba(255,255,255,0.45); font-size:14px; max-width:500px; line-height:1.6; margin-bottom:20px; }
+    .dispute-hero-stats{display:flex;gap:24px;flex-wrap:wrap;}
+    .dispute-hero-stat{font-size:12px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:5px;}
+    .dispute-hero-stat strong{color:#71ff00;font-size:14px;}
+
+    .dispute-body-wrap{ padding:28px 5% 0; }
+
+    .dispute-grid{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    @media(max-width:768px){ .dispute-grid{ grid-template-columns:1fr; } }
+
+    .dispute-card{
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:24px;
+      padding:28px;
+      backdrop-filter:blur(14px);
+    }
+
+    .dispute-card h2{ font-size:17px; font-weight:800; color:white; margin-bottom:6px; }
+    .dispute-card p{ color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:20px; }
+
+    .d-input{
+      width:100%;
+      padding:13px 15px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px;
+      color:white;
+      font-size:16px;
+      outline:none;
+      font-family:inherit;
+      margin-bottom:12px;
+    }
+
+    .d-input:focus{ border-color:rgba(255,152,0,0.45); }
+    .d-input::placeholder{ color:rgba(255,255,255,0.3); }
+
+    .d-select{
+      width:100%;
+      padding:13px 15px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px;
+      color:white;
+      font-size:16px;
+      outline:none;
+      font-family:inherit;
+      margin-bottom:12px;
+    }
+
+    .d-textarea{
+      width:100%;
+      padding:13px 15px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px;
+      color:white;
+      font-size:16px;
+      outline:none;
+      font-family:inherit;
+      resize:vertical;
+      min-height:100px;
+      margin-bottom:12px;
+      line-height:1.5;
+    }
+
+    .d-textarea::placeholder{ color:rgba(255,255,255,0.3); }
+
+    .issue-types{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      margin-bottom:16px;
+    }
+
+    .issue-type-btn{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 14px;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px;
+      color:rgba(255,255,255,0.65);
+      font-size:12px;
+      font-weight:600;
+      cursor:pointer;
+      transition:0.2s;
+      text-align:left;
+      font-family:inherit;
+    }
+
+    .issue-type-btn:hover,
+    .issue-type-btn.selected{
+      background:rgba(255,152,0,0.1);
+      border-color:rgba(255,152,0,0.35);
+      color:#ff9800;
+    }
+
+    .d-submit-btn{
+      width:100%;
+      padding:15px;
+      background:linear-gradient(135deg,#ff9800,#ff6600);
+      color:white;
+      font-weight:900;
+      font-size:14px;
+      border:none;
+      border-radius:14px;
+      cursor:pointer;
+      transition:0.3s;
+      font-family:inherit;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+    }
+
+    .d-submit-btn:hover{ transform:translateY(-2px); box-shadow:0 8px 24px rgba(255,152,0,0.35); }
+
+    /* Dispute history list */
+    .dispute-history-item{
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.07);
+      border-radius:14px;
+      padding:16px;
+      margin-bottom:10px;
+      transition:0.2s;
+    }
+
+    .dispute-history-item:hover{ border-color:rgba(255,152,0,0.2); }
+
+    .dhi-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px; }
+    .dhi-order{ color:white; font-weight:800; font-size:14px; }
+    .dhi-date{ color:rgba(255,255,255,0.35); font-size:11px; }
+    .dhi-issue{ color:rgba(255,255,255,0.6); font-size:13px; margin-bottom:6px; }
+    .dhi-desc{ color:rgba(255,255,255,0.4); font-size:12px; line-height:1.5; }
+
+    .d-status-pill{
+      display:inline-block;
+      padding:3px 10px;
+      border-radius:999px;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:0.3px;
+    }
+
+    .d-open{ background:rgba(255,152,0,0.12); color:#ff9800; border:1px solid rgba(255,152,0,0.3); }
+    .d-resolved{ background:rgba(113,255,0,0.12); color:#71ff00; border:1px solid rgba(113,255,0,0.3); }
+    .d-review{ background:rgba(0,170,255,0.12); color:#00aaff; border:1px solid rgba(0,170,255,0.3); }
+
+    .dhi-response{
+      margin-top:10px;
+      background:rgba(113,255,0,0.05);
+      border:1px solid rgba(113,255,0,0.15);
+      border-radius:10px;
+      padding:10px 14px;
+      font-size:12px;
+    }
+
+    .dhi-response-label{ color:#71ff00; font-weight:800; font-size:10px; text-transform:uppercase; margin-bottom:4px; }
+    .dhi-response-text{ color:rgba(255,255,255,0.7); }
+
+    /* Success message */
+    .dispute-success{
+      display:none;
+      text-align:center;
+      padding:32px;
+    }
+
+    .dispute-success .ds-icon{ font-size:48px; margin-bottom:12px; }
+    .dispute-success h3{ color:white; font-size:18px; font-weight:800; margin-bottom:6px; }
+    .dispute-success p{ color:rgba(255,255,255,0.45); font-size:13px; }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="navbar">
+  <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
+  <div class="nav-actions">
+    <a href="track.html" class="wishlist-nav-btn">📦 My Orders</a>
+    <a href="index.html" class="cart-btn" style="text-decoration:none;">🏠 Home</a>
+  </div>
+</nav>
+
+<div class="dispute-page">
+
+  <div class="dispute-hero">
+    <div class="dispute-hero-badge">⚖️ Protected by SOKONI</div>
+    <h1>Dispute Resolution<br>Center</h1>
+    <p>Report an issue with your order. Our team reviews every case fairly and resolves disputes within 24 hours — buyers and sellers protected.</p>
+    <div class="dispute-hero-stats">
+      <span class="dispute-hero-stat"><strong>24h</strong> Average Resolution</span>
+      <span class="dispute-hero-stat"><strong>98%</strong> Resolved Fairly</span>
+      <span class="dispute-hero-stat"><strong>100%</strong> Buyer Protection</span>
+    </div>
+  </div>
+
+  <div class="dispute-body-wrap">
+  <div class="dispute-grid">
+
+    <!-- LEFT: Report Form -->
+    <div class="dispute-card">
+      <h2>📋 Report an Issue</h2>
+      <p>Describe your problem and we'll help resolve it</p>
+
+      <div id="disputeForm">
+        <select class="d-select" id="disputeOrder">
+          <option value="">Select Order ID...</option>
+        </select>
+
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Issue Type</div>
+        <div class="issue-types" id="issueTypes">
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Item Not Received')">📭 Item Not Received</button>
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Wrong Item Sent')">❌ Wrong Item Sent</button>
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Damaged / Defective')">💔 Damaged / Defective</button>
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Counterfeit / Fake')">🚫 Counterfeit / Fake</button>
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Seller Unresponsive')">💬 Seller Unresponsive</button>
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Refund Not Received')">💸 Refund Not Received</button>
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Quality Issue')">⭐ Quality Issue</button>
+          <button type="button" class="issue-type-btn" onclick="selectIssue(this,'Other')">❓ Other</button>
+        </div>
+
+        <textarea class="d-textarea" id="disputeDesc" placeholder="Describe the issue in detail — what happened, when, what you expected..."></textarea>
+        <input class="d-input" type="text" id="disputeContact" placeholder="Your phone / email for follow-up">
+
+        <button type="button" class="d-submit-btn" onclick="submitDispute()">
+          📨 Submit Dispute
+        </button>
+      </div>
+
+      <div class="dispute-success" id="disputeSuccess">
+        <div class="ds-icon">✅</div>
+        <h3>✅ Dispute Submitted!</h3>
+        <p>Your case has been logged. Reference: <strong id="disputeRef" style="color:#71ff00;"></strong><br>Our team will contact you within 24 hours.</p>
+        <button type="button" onclick="resetForm()" style="margin-top:16px;padding:12px 24px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:white;border-radius:12px;cursor:pointer;font-family:inherit;font-weight:700;">Report Another Issue</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: My Disputes -->
+    <div class="dispute-card">
+      <h2>📜 My Dispute History</h2>
+      <p>Track the status of your reported issues</p>
+      <div id="disputeHistoryList"></div>
+
+      <!-- What happens next — premium timeline -->
+      <div style="margin-top:20px;background:rgba(0,170,255,0.04);border:1px solid rgba(0,170,255,0.14);border-radius:16px;padding:18px 20px;">
+        <div style="font-size:13px;font-weight:800;color:#00aaff;margin-bottom:14px;">ℹ️ What Happens Next?</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(0,170,255,0.15);border:1px solid rgba(0,170,255,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#00aaff;flex-shrink:0;">1</div>
+            <div><div style="font-size:13px;font-weight:800;color:white;">Review</div><div style="font-size:11px;color:rgba(255,255,255,0.45);">Team reviews your case within 24 hours</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#ff9800;flex-shrink:0;">2</div>
+            <div><div style="font-size:13px;font-weight:800;color:white;">Seller Notice</div><div style="font-size:11px;color:rgba(255,255,255,0.45);">Seller is contacted and given 48hrs to respond</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#71ff00;flex-shrink:0;">3</div>
+            <div><div style="font-size:13px;font-weight:800;color:white;">Resolution</div><div style="font-size:11px;color:rgba(255,255,255,0.45);">Refund, replacement, or outcome determined</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:rgba(255,255,255,0.5);flex-shrink:0;">4</div>
+            <div><div style="font-size:13px;font-weight:800;color:white;">Closure</div><div style="font-size:11px;color:rgba(255,255,255,0.45);">Case closed with full outcome report</div></div>
+          </div>
+        </div>
+        <div style="margin-top:14px;padding:10px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.5);">
+          🚨 Urgent issue? Call <strong style="color:#71ff00;">+254 705 726 803</strong>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Categories</span></a>
+  <a href="flashsale.html" class="bnav-item bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item active-bnav"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+let selectedIssue = "";
+
+/* Load orders into select */
+(function(){
+  let orders = [];
+  try { orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
+  const sel = document.getElementById("disputeOrder");
+  orders.forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = o.id;
+    opt.textContent = `${o.id} — ${o.date} — KES ${Number(o.total).toLocaleString()}`;
+    sel.appendChild(opt);
+  });
+
+  /* Pre-select from URL */
+  const urlId = new URLSearchParams(window.location.search).get("order");
+  if(urlId){ sel.value = urlId; }
+})();
+
+function selectIssue(btn, type){
+  document.querySelectorAll(".issue-type-btn").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+  selectedIssue = type;
+}
+
+async function submitDispute(){
+  /* Auth gate — uid must come from Firebase, not localStorage */
+  var auth = window.firebaseAuth;
+  if(!auth || !auth.currentUser){
+    (window._skToast||alert)('Please sign in to open a dispute.');
+    window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
+    return;
+  }
+
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('dispute_submit', 5, 300000)){
+    (window._skToast||alert)('Too many dispute submissions. Please wait 5 minutes.'); return;
+  }
+  const orderId  = document.getElementById("disputeOrder").value;
+  const desc     = document.getElementById("disputeDesc").value.trim();
+  const contact  = document.getElementById("disputeContact").value.trim();
+
+  if(!orderId){ (window._skToast||alert)("Please select an order."); return; }
+  if(!selectedIssue){ (window._skToast||alert)("Please select an issue type."); return; }
+  if(!desc){ (window._skToast||alert)("Please describe the issue."); return; }
+
+  const ref = "DSP" + Date.now().toString().slice(-6);
+
+  /* Persist locally so history renders instantly */
+  const localEntry = {
+    id: ref, orderId, issue: selectedIssue,
+    description: desc.slice(0, 1000), contact: contact.slice(0, 100),
+    status: "open",
+    date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
+    timestamp: Date.now(), response: null
+  };
+  let disputes = [];
+  try { disputes = JSON.parse(localStorage.getItem("sokoniDisputes"))||[]; } catch(e){}
+  disputes.unshift(localEntry);
+  localStorage.setItem("sokoniDisputes", JSON.stringify(disputes));
+
+  /* Write to Firestore via hardened SokoniDispute.open() */
+  if(window.SokoniDispute){
+    await window.SokoniDispute.open({
+      orderId:     orderId,
+      reason:      selectedIssue,
+      details:     desc.slice(0, 1000),
+      contact:     contact.slice(0, 100),
+      referenceId: ref
+    });
+  }
+
+  document.getElementById("disputeForm").style.display = "none";
+  document.getElementById("disputeSuccess").style.display = "block";
+  document.getElementById("disputeRef").textContent = ref;
+  renderDisputeHistory();
+}
+
+function resetForm(){
+  document.getElementById("disputeForm").style.display = "block";
+  document.getElementById("disputeSuccess").style.display = "none";
+  document.getElementById("disputeDesc").value = "";
+  document.getElementById("disputeContact").value = "";
+  selectedIssue = "";
+  document.querySelectorAll(".issue-type-btn").forEach(b => b.classList.remove("selected"));
+}
+
+function renderDisputeHistory(){
+  let disputes = [];
+  try { disputes = JSON.parse(localStorage.getItem("sokoniDisputes"))||[]; } catch(e){}
+
+  const el = document.getElementById("disputeHistoryList");
+  if(!disputes.length){
+    el.innerHTML = `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:16px 0;">No disputes filed yet.</div>`;
+    return;
+  }
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  const statusMap = { open:"d-open", resolved:"d-resolved", "under review":"d-review" };
+  el.innerHTML = disputes.map(d=>`
+    <div class="dispute-history-item">
+      <div class="dhi-top">
+        <div>
+          <div class="dhi-order">${esc(d.id)} · Order ${esc(d.orderId)}</div>
+          <div class="dhi-date">${esc(d.date)}</div>
+        </div>
+        <span class="d-status-pill ${statusMap[d.status]||'d-open'}">${esc(d.status).toUpperCase()}</span>
+      </div>
+      <div class="dhi-issue">⚠️ ${esc(d.issue)}</div>
+      <div class="dhi-desc">${esc(d.description)}</div>
+      ${d.response ? `
+        <div class="dhi-response">
+          <div class="dhi-response-label">Sokoni Response</div>
+          <div class="dhi-response-text">${esc(d.response)}</div>
+        </div>
+      ` : `<div style="font-size:11px;color:rgba(255,152,0,0.6);margin-top:6px;">⏳ Awaiting review…</div>`}
+    </div>
+  `).join("");
+}
+
+renderDisputeHistory();
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="sokoni-trust.js" defer></script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+
+
+
+
+

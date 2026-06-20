@@ -1,0 +1,34 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="security.js" defer></script>
+  <title>SOKONI — You're Offline</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#0a0a0a;color:white;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .box{text-align:center;max-width:340px;}
+    .icon{font-size:64px;margin-bottom:20px;line-height:1;}
+    h1{font-size:22px;font-weight:900;color:white;margin-bottom:8px;}
+    p{font-size:14px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:24px;}
+    .btns{display:flex;flex-direction:column;gap:10px;}
+    .btn-primary{padding:14px 24px;background:#71ff00;color:#0a0a0a;font-weight:900;font-size:14px;border:none;border-radius:14px;cursor:pointer;font-family:inherit;text-decoration:none;display:block;}
+    .btn-secondary{padding:14px 24px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);font-weight:700;font-size:14px;border-radius:14px;cursor:pointer;font-family:inherit;text-decoration:none;display:block;}
+    .status{margin-top:20px;font-size:11px;color:rgba(255,255,255,0.2);}
+  </style>
+<script src="shared-header.js" defer></script>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">📶</div>
+    <h1>No Internet Connection</h1>
+    <p>Check your Wi-Fi or mobile data connection and try again. SOKONI needs internet to load fresh content.</p>
+    <div class="btns">
+      <button class="btn-primary" onclick="location.reload()">🔄 Try Again</button>
+      <a href="/" class="btn-secondary">🏠 Go Home</a>
+    </div>
+    <div class="status">SOKONI — Kenya's Marketplace</div>
+  </div>
+</body>
+</html>

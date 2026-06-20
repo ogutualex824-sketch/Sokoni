@@ -1,0 +1,448 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Help Center — SOKONI</title>
+  <meta name="description" content="Find answers, tutorials and support for SOKONI — Kenya's #1 marketplace. M-Pesa, delivery, disputes and more.">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <meta property="og:title" content="Help Center — SOKONI">
+  <meta property="og:description" content="Find answers to common questions about SOKONI marketplace.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding-bottom:100px;}
+
+    /* ── Nav ── */
+    .hlp-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+    .hlp-nav-left{display:flex;align-items:center;gap:10px;}
+    .hlp-nav-back{background:none;border:none;color:rgba(255,255,255,0.6);font-size:20px;cursor:pointer;padding:4px;line-height:1;font-family:inherit;}
+    .hlp-nav-back:hover{color:#fff;}
+    .hlp-nav-logo{height:28px;}
+    .hlp-nav-title{font-size:15px;font-weight:800;}
+    .hlp-nav-right{display:flex;gap:10px;}
+    .hlp-nav-link{text-decoration:none;color:rgba(255,255,255,0.55);font-size:13px;font-weight:600;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;}
+    .hlp-nav-link:hover{color:#fff;border-color:rgba(255,255,255,0.25);}
+
+    /* ── Hero ── */
+    .hlp-hero{background:linear-gradient(160deg,rgba(113,255,0,0.08) 0%,rgba(0,170,255,0.04) 60%,transparent 100%);border-bottom:1px solid rgba(255,255,255,0.07);padding:52px 24px 44px;text-align:center;}
+    .hlp-hero-icon{font-size:48px;margin-bottom:14px;line-height:1;}
+    .hlp-hero h1{font-size:clamp(26px,6vw,42px);font-weight:900;margin-bottom:8px;line-height:1.15;}
+    .hlp-hero h1 span{color:#71ff00;}
+    .hlp-hero p{color:rgba(255,255,255,0.45);font-size:15px;margin-bottom:28px;}
+
+    /* ── Search bar ── */
+    .hlp-search-wrap{max-width:560px;margin:0 auto;position:relative;}
+    .hlp-search-input{width:100%;padding:16px 56px 16px 20px;background:rgba(255,255,255,0.07);border:1.5px solid rgba(255,255,255,0.12);border-radius:16px;color:#fff;font-size:16px;font-family:inherit;outline:none;transition:border-color .2s,background .2s;}
+    .hlp-search-input:focus{border-color:rgba(113,255,0,0.45);background:rgba(113,255,0,0.04);}
+    .hlp-search-input::placeholder{color:rgba(255,255,255,0.3);}
+    .hlp-search-icon{position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:20px;pointer-events:none;color:rgba(255,255,255,0.35);}
+    .hlp-result-count{text-align:center;font-size:13px;color:rgba(255,255,255,0.35);margin-top:10px;min-height:18px;}
+
+    /* ── Body ── */
+    .hlp-body{max-width:900px;margin:0 auto;padding:0 18px;}
+
+    /* ── Section labels ── */
+    .hlp-section-label{font-size:12px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin:32px 0 14px;}
+
+    /* ── Search results panel ── */
+    .hlp-results{display:none;background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:18px;margin:20px 0;overflow:hidden;}
+    .hlp-result-item{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background .15s;}
+    .hlp-result-item:last-child{border-bottom:none;}
+    .hlp-result-item:hover{background:rgba(255,255,255,0.04);}
+    .hlp-result-cat{display:inline-block;font-size:10px;font-weight:800;color:#71ff00;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:6px;padding:2px 8px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;}
+    .hlp-result-title{font-size:14px;font-weight:700;margin-bottom:4px;}
+    .hlp-result-snippet{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .hlp-no-results{padding:28px;text-align:center;color:rgba(255,255,255,0.35);font-size:14px;}
+
+    /* ── Category cards ── */
+    .hlp-cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px;}
+    @media(max-width:500px){.hlp-cat-grid{grid-template-columns:repeat(2,1fr);}}
+    .hlp-cat-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px 14px;text-align:center;cursor:pointer;transition:all .2s;text-decoration:none;color:inherit;display:block;}
+    .hlp-cat-card:hover{border-color:rgba(113,255,0,0.3);background:rgba(113,255,0,0.06);transform:translateY(-1px);}
+    .hlp-cat-card .cat-icon{font-size:28px;margin-bottom:8px;}
+    .hlp-cat-card .cat-name{font-size:13px;font-weight:800;margin-bottom:3px;}
+    .hlp-cat-card .cat-sub{font-size:11px;color:rgba(255,255,255,0.35);}
+
+    /* ── FAQ Accordion ── */
+    .hlp-faq{background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:18px;overflow:hidden;margin-bottom:8px;}
+    .hlp-faq-item{border-bottom:1px solid rgba(255,255,255,0.06);}
+    .hlp-faq-item:last-child{border-bottom:none;}
+    .hlp-faq-q{width:100%;background:none;border:none;color:#fff;text-align:left;padding:18px 20px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:inherit;line-height:1.4;transition:background .15s;}
+    .hlp-faq-q:hover{background:rgba(255,255,255,0.03);}
+    .hlp-faq-q.open{color:#71ff00;}
+    .hlp-faq-q .faq-chevron{font-size:16px;flex-shrink:0;transition:transform .2s;color:rgba(255,255,255,0.4);}
+    .hlp-faq-q.open .faq-chevron{transform:rotate(180deg);color:#71ff00;}
+    .hlp-faq-a{display:none;padding:0 20px 18px;font-size:13px;color:rgba(255,255,255,0.55);line-height:1.7;}
+    .hlp-faq-a.open{display:block;}
+
+    /* ── Tutorial cards ── */
+    .hlp-tut-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+    .hlp-tut-card{background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px 18px;transition:border-color .2s;}
+    .hlp-tut-card:hover{border-color:rgba(113,255,0,0.25);}
+    .hlp-tut-card .tut-icon{font-size:28px;margin-bottom:10px;}
+    .hlp-tut-card h3{font-size:15px;font-weight:900;margin-bottom:12px;line-height:1.3;}
+    .hlp-tut-steps{list-style:none;display:flex;flex-direction:column;gap:8px;}
+    .hlp-tut-steps li{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:rgba(255,255,255,0.6);line-height:1.45;}
+    .tut-num{width:22px;height:22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#71ff00;flex-shrink:0;margin-top:1px;}
+
+    /* ── Contact section ── */
+    .hlp-contact{background:linear-gradient(135deg,rgba(113,255,0,0.06),rgba(0,170,255,0.04));border:1px solid rgba(255,255,255,0.08);border-radius:22px;padding:32px 24px;text-align:center;margin-top:12px;}
+    .hlp-contact h2{font-size:20px;font-weight:900;margin-bottom:6px;}
+    .hlp-contact p{color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:24px;}
+    .hlp-contact-btns{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;}
+    .hlp-contact-btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:14px;font-size:14px;font-weight:800;text-decoration:none;transition:filter .15s,transform .1s;font-family:inherit;border:none;cursor:pointer;}
+    .hlp-contact-btn:active{transform:scale(0.97);}
+    .hlp-contact-btn.whatsapp{background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;}
+    .hlp-contact-btn.email{background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.12);}
+    .hlp-contact-btn.dispute{background:rgba(255,100,100,0.1);color:#ff8888;border:1px solid rgba(255,100,100,0.2);}
+    .hlp-contact-btn:hover{filter:brightness(1.1);}
+
+    /* ── Scrolled back to top ── */
+    .hlp-back-top{position:fixed;bottom:110px;right:20px;width:44px;height:44px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;transition:all .2s;z-index:50;text-decoration:none;}
+    .hlp-back-top:hover{background:rgba(113,255,0,0.2);}
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="hlp-nav" aria-label="Help Center navigation">
+    <div class="hlp-nav-left">
+      <button class="hlp-nav-back" onclick="window.location.href='index.html'" aria-label="Back to home">&#8592;</button>
+      <img src="assets/logosokoni.png" alt="SOKONI" class="hlp-nav-logo">
+      <span class="hlp-nav-title">Help Center</span>
+    </div>
+    <div class="hlp-nav-right">
+      <a href="dispute.html" class="hlp-nav-link">⚖️ Disputes</a>
+      <a href="index.html" class="hlp-nav-link">🏠 Home</a>
+    </div>
+  </nav>
+
+  <!-- Hero + Search -->
+  <div class="hlp-hero">
+    <div class="hlp-hero-icon">💬</div>
+    <h1><span>Help</span> Center</h1>
+    <p>Find answers, guides and support for everything on SOKONI</p>
+    <div class="hlp-search-wrap">
+      <input
+        class="hlp-search-input"
+        type="search"
+        id="helpSearch"
+        placeholder="Search for help... (e.g. M-Pesa, delivery, refund)"
+        autocomplete="off"
+        oninput="doSearch(this.value)"
+        aria-label="Search help articles"
+      >
+      <span class="hlp-search-icon" aria-hidden="true">🔍</span>
+    </div>
+    <div class="hlp-result-count" id="resultCount" aria-live="polite"></div>
+  </div>
+
+  <!-- Body -->
+  <div class="hlp-body">
+
+    <!-- Search Results (hidden by default) -->
+    <div class="hlp-results" id="searchResults" role="region" aria-label="Search results"></div>
+
+    <!-- Category cards -->
+    <div class="hlp-section-label">Browse by category</div>
+    <div class="hlp-cat-grid">
+      <div class="hlp-cat-card" onclick="filterCategory('Getting Started')" tabindex="0" role="button">
+        <div class="cat-icon">🚀</div>
+        <div class="cat-name">Getting Started</div>
+        <div class="cat-sub">Account setup, first steps</div>
+      </div>
+      <div class="hlp-cat-card" onclick="filterCategory('Selling')" tabindex="0" role="button">
+        <div class="cat-icon">🛍️</div>
+        <div class="cat-name">Selling</div>
+        <div class="cat-sub">List products, manage orders</div>
+      </div>
+      <div class="hlp-cat-card" onclick="filterCategory('Buying')" tabindex="0" role="button">
+        <div class="cat-icon">🛒</div>
+        <div class="cat-name">Buying</div>
+        <div class="cat-sub">Browse, checkout, tracking</div>
+      </div>
+      <div class="hlp-cat-card" onclick="filterCategory('Payments')" tabindex="0" role="button">
+        <div class="cat-icon">💳</div>
+        <div class="cat-name">Payments</div>
+        <div class="cat-sub">M-Pesa, IntaSend, refunds</div>
+      </div>
+      <div class="hlp-cat-card" onclick="filterCategory('Delivery')" tabindex="0" role="button">
+        <div class="cat-icon">🚚</div>
+        <div class="cat-name">Delivery</div>
+        <div class="cat-sub">Shipping, tracking, drivers</div>
+      </div>
+      <div class="hlp-cat-card" onclick="filterCategory('Safety')" tabindex="0" role="button">
+        <div class="cat-icon">🛡️</div>
+        <div class="cat-name">Safety</div>
+        <div class="cat-sub">Reports, disputes, scams</div>
+      </div>
+    </div>
+
+    <!-- Popular FAQs -->
+    <div class="hlp-section-label">Popular questions</div>
+    <div class="hlp-faq" role="list">
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How do I start selling on SOKONI? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">Go to the Seller Dashboard (tap the 🛍️ icon in the bottom nav). Tap "+ Add Product", fill in your product name, price, category, description and photos, then tap Publish. Your listing goes live instantly and buyers across Kenya can find it. Complete your seller profile to get the Verified Seller badge — it increases trust and sales significantly.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How do I pay for an order? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">At checkout, you'll see payment options: M-Pesa STK Push (recommended — a payment prompt comes to your phone, enter your M-Pesa PIN), M-Pesa Paybill, or debit/credit card via IntaSend. STK Push is the fastest — funds are confirmed within seconds. You never need to send money manually.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How do I track my delivery? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">Go to Profile → My Orders → select your order → tap "Track Order". If your order uses a SOKONI rider, you'll see them live on the map with their name, phone number and estimated arrival time. For self-arranged delivery, you'll get status updates when the seller dispatches.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          What happens if my order doesn't arrive? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">First, tap "Contact Rider" or "Contact Seller" from your order screen to follow up. If there's no resolution within 24 hours, tap "Report a Problem" → "Order not delivered". Our dispute team will intervene and — if the order is confirmed as not delivered — you'll receive a full refund within 1–3 business days.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How do I become a verified seller? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">In Seller Dashboard → tap your profile photo → Verification. Submit a clear photo of your National ID (front and back) and optionally your business registration documents. Our team reviews submissions within 24–48 hours. Once approved, a blue ✅ badge appears on all your listings and your profile.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How do I report a scam or fake listing? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">Tap the three-dot menu (⋮) on any listing or user profile → "Report". Choose the reason (e.g. "Fake listing", "Scam", "Counterfeit goods") and add any details. You can also submit evidence such as screenshots. Our moderation team reviews all reports within 24 hours. Confirmed scam accounts are banned immediately.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How long does dispute resolution take? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">Standard disputes (wrong item, non-delivery, damage) are resolved within 48–72 hours. Complex cases involving fraud or large amounts may take up to 7 days. You can submit evidence and send messages to the mediator at any time via the dispute chat. You'll receive SMS and app notifications at every stage.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How do I withdraw my earnings? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">Go to Seller Dashboard → Wallet → Withdraw. Enter the amount (minimum KES 100) and your M-Pesa number. Funds arrive in your M-Pesa within 30 seconds during business hours. Withdrawals from 11 PM to 6 AM are processed the next morning. Make sure your M-Pesa number is verified in your payment settings.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          Can I sell services (not just products)? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">Yes! Go to the Services section and tap "Register as a Provider". Set your services, hourly rate, consultation types and availability. Clients can discover, book and pay you directly through SOKONI. Professionals such as doctors, lawyers, tutors and consultants can also apply for a Verified Professional badge.</div>
+      </div>
+
+      <div class="hlp-faq-item" role="listitem">
+        <button class="hlp-faq-q" onclick="toggleFAQ(this)" aria-expanded="false">
+          How does SOKONI protect buyers? <span class="faq-chevron" aria-hidden="true">▼</span>
+        </button>
+        <div class="hlp-faq-a">SOKONI uses escrow for all transactions — your money is held safely until you confirm delivery. We verify sellers before they can list, moderate all listings for quality, have a 48-hour dispute resolution service, and provide refunds for orders that don't arrive or are not as described. All payments use 256-bit encryption.</div>
+      </div>
+
+    </div>
+
+    <!-- Tutorial cards -->
+    <div class="hlp-section-label">Step-by-step tutorials</div>
+    <div class="hlp-tut-grid">
+
+      <div class="hlp-tut-card">
+        <div class="tut-icon">📦</div>
+        <h3>How to List Your First Product</h3>
+        <ul class="hlp-tut-steps">
+          <li><span class="tut-num">1</span> Open Seller Dashboard and tap "+ Add Product"</li>
+          <li><span class="tut-num">2</span> Enter product name, price and category</li>
+          <li><span class="tut-num">3</span> Write a clear description with key details</li>
+          <li><span class="tut-num">4</span> Add at least 3 clear, bright photos</li>
+          <li><span class="tut-num">5</span> Tap "Publish" — your listing is live!</li>
+        </ul>
+      </div>
+
+      <div class="hlp-tut-card">
+        <div class="tut-icon">🛒</div>
+        <h3>How to Place Your First Order</h3>
+        <ul class="hlp-tut-steps">
+          <li><span class="tut-num">1</span> Browse products and tap the item you want</li>
+          <li><span class="tut-num">2</span> Tap "Buy Now" and enter your delivery address</li>
+          <li><span class="tut-num">3</span> Choose M-Pesa STK Push at checkout</li>
+          <li><span class="tut-num">4</span> Enter your M-Pesa PIN when prompted — done!</li>
+        </ul>
+      </div>
+
+      <div class="hlp-tut-card">
+        <div class="tut-icon">📱</div>
+        <h3>How to Set Up M-Pesa Payments</h3>
+        <ul class="hlp-tut-steps">
+          <li><span class="tut-num">1</span> Go to Seller Dashboard → Payments</li>
+          <li><span class="tut-num">2</span> Tap "Add M-Pesa Number"</li>
+          <li><span class="tut-num">3</span> Enter your Safaricom number and tap "Verify"</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Contact section -->
+    <div class="hlp-section-label">Still need help?</div>
+    <div class="hlp-contact">
+      <h2>We're here to help 🤝</h2>
+      <p>Our support team is available Monday–Saturday, 8 AM – 8 PM EAT</p>
+      <div class="hlp-contact-btns">
+        <a href="https://wa.me/254700000000?text=Hello%20SOKONI%20Support" class="hlp-contact-btn whatsapp" target="_blank" rel="noopener noreferrer">
+          💬 Chat on WhatsApp
+        </a>
+        <a href="mailto:support@sokoni.co.ke" class="hlp-contact-btn email">
+          ✉️ support@sokoni.co.ke
+        </a>
+        <a href="dispute.html" class="hlp-contact-btn dispute">
+          ⚖️ Go to Dispute Center
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Back to top -->
+  <a href="javascript:void(0)" class="hlp-back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top" title="Back to top">↑</a>
+
+  <script type="module" src="firebase.js"></script>
+  <script src="sokoni-trust.js" defer></script>
+  <script src="kass-widget.js" defer></script>
+  <script src="scroll-top.js" defer></script>
+  <script>
+    /* ── HTML escape ── */
+    function esc(s){
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    /* ── FAQ accordion ── */
+    function toggleFAQ(btn){
+      var isOpen = btn.classList.contains('open');
+      /* close all */
+      document.querySelectorAll('.hlp-faq-q.open').forEach(function(b){
+        b.classList.remove('open');
+        b.setAttribute('aria-expanded','false');
+        var a = b.nextElementSibling;
+        if(a) a.classList.remove('open');
+      });
+      if(!isOpen){
+        btn.classList.add('open');
+        btn.setAttribute('aria-expanded','true');
+        var ans = btn.nextElementSibling;
+        if(ans) ans.classList.add('open');
+      }
+    }
+
+    /* ── Search ── */
+    function doSearch(query){
+      var resultBox  = document.getElementById('searchResults');
+      var countEl    = document.getElementById('resultCount');
+      query = (query||'').trim();
+
+      if(!query){
+        resultBox.style.display = 'none';
+        resultBox.innerHTML     = '';
+        countEl.textContent     = '';
+        return;
+      }
+
+      /* Wait for SokoniHelp to be available */
+      if(!window.SokoniHelp){
+        countEl.textContent = 'Loading...';
+        setTimeout(function(){ doSearch(document.getElementById('helpSearch').value); }, 400);
+        return;
+      }
+
+      var results = SokoniHelp.search(query);
+      countEl.textContent = results.length
+        ? results.length + ' result' + (results.length!==1?'s':'') + ' found'
+        : 'No results for "' + esc(query) + '"';
+
+      if(!results.length){
+        resultBox.innerHTML = '<div class="hlp-no-results">No articles found for "' + esc(query) + '". Try different keywords or browse categories below.</div>';
+        resultBox.style.display = 'block';
+        return;
+      }
+
+      var html = results.map(function(a){
+        var snippet = a.content.slice(0,120) + (a.content.length>120?'...':'');
+        return '<div class="hlp-result-item" onclick="expandArticle('+a.id+')">'
+          + '<div class="hlp-result-cat">' + esc(a.category) + '</div>'
+          + '<div class="hlp-result-title">' + esc(a.title) + '</div>'
+          + '<div class="hlp-result-snippet">' + esc(snippet) + '</div>'
+          + '</div>';
+      }).join('');
+      resultBox.innerHTML = html;
+      resultBox.style.display = 'block';
+    }
+
+    /* ── Expand article inline ── */
+    function expandArticle(id){
+      if(!window.SokoniHelp) return;
+      var article = SokoniHelp.articles.find(function(a){ return a.id===id; });
+      if(!article) return;
+      /* Build a simple overlay */
+      var existing = document.getElementById('articleOverlay');
+      if(existing) existing.remove();
+      var overlay = document.createElement('div');
+      overlay.id = 'articleOverlay';
+      overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);';
+      overlay.innerHTML =
+        '<div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:22px;padding:30px 24px;max-width:520px;width:100%;max-height:80vh;overflow-y:auto;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px;">'
+        + '<span style="font-size:10px;font-weight:800;color:#71ff00;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:6px;padding:3px 8px;text-transform:uppercase;">' + esc(article.category) + '</span>'
+        + '<button onclick="document.getElementById(\'articleOverlay\').remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:22px;cursor:pointer;line-height:1;padding:0;" aria-label="Close">&#x2715;</button>'
+        + '</div>'
+        + '<h2 style="font-size:18px;font-weight:900;margin-bottom:14px;line-height:1.3;">' + esc(article.title) + '</h2>'
+        + '<p style="font-size:14px;color:rgba(255,255,255,0.6);line-height:1.7;">' + esc(article.content) + '</p>'
+        + '</div>';
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+    }
+
+    /* ── Category filter ── */
+    function filterCategory(cat){
+      var searchEl = document.getElementById('helpSearch');
+      if(searchEl) searchEl.value = cat;
+      doSearch(cat);
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+
+    /* ── Keyboard on category cards ── */
+    document.querySelectorAll('.hlp-cat-card').forEach(function(c){
+      c.addEventListener('keydown',function(e){
+        if(e.key==='Enter'||e.key===' '){
+          e.preventDefault();
+          c.click();
+        }
+      });
+    });
+  </script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

@@ -1,0 +1,688 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Business Directory — SOKONI</title>
+  <meta name="description" content="Discover verified businesses across Kenya on SOKONI — retail, food, tech, healthcare, property, auto and more.">
+  <meta property="og:title" content="SOKONI Business Directory">
+  <meta property="og:description" content="Find verified Kenyan businesses on SOKONI marketplace.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:site_name" content="SOKONI">
+  <meta property="og:locale" content="en_KE">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
+
+    /* ── HERO ── */
+    .bd-hero {
+      background: linear-gradient(135deg, rgba(113,255,0,0.09) 0%, rgba(0,100,200,0.07) 55%, rgba(80,0,200,0.06) 100%);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 52px 24px 40px; text-align: center;
+    }
+    .bd-hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.3);
+      color: #71ff00; font-size: 12px; font-weight: 800;
+      padding: 5px 14px; border-radius: 20px; margin-bottom: 18px; letter-spacing: .04em;
+    }
+    .bd-hero h1 {
+      font-size: clamp(24px, 5vw, 42px); font-weight: 900; line-height: 1.15;
+      margin-bottom: 10px;
+    }
+    .bd-hero h1 span { color: #71ff00; }
+    .bd-hero-sub {
+      font-size: 15px; color: rgba(255,255,255,0.45); max-width: 500px;
+      margin: 0 auto 28px; line-height: 1.6;
+    }
+
+    /* ── SEARCH ── */
+    .bd-search-wrap {
+      max-width: 640px; margin: 0 auto; position: relative;
+    }
+    .bd-search-icon {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      font-size: 16px; opacity: .5; pointer-events: none;
+    }
+    .bd-search {
+      width: 100%; padding: 14px 18px 14px 46px;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 16px; color: white; font-size: 15px; font-family: inherit;
+      outline: none; transition: border-color .2s, background .2s;
+    }
+    .bd-search:focus {
+      border-color: rgba(113,255,0,0.45); background: rgba(255,255,255,0.09);
+      box-shadow: 0 0 0 3px rgba(113,255,0,0.08);
+    }
+    .bd-search::placeholder { color: rgba(255,255,255,0.3); }
+
+    /* ── CATEGORY TABS ── */
+    .bd-cat-wrap {
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      overflow-x: auto; scrollbar-width: none;
+    }
+    .bd-cat-wrap::-webkit-scrollbar { display: none; }
+    .bd-cat-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; gap: 0; padding: 0 20px;
+    }
+    .bd-cat-btn {
+      padding: 13px 18px; font-size: 13px; font-weight: 700;
+      border: none; background: transparent;
+      color: rgba(255,255,255,0.45); font-family: inherit;
+      border-bottom: 2px solid transparent; white-space: nowrap;
+      cursor: pointer; transition: all .2s;
+    }
+    .bd-cat-btn:hover { color: rgba(255,255,255,0.8); }
+    .bd-cat-btn.active { color: #71ff00; border-bottom-color: #71ff00; }
+
+    /* ── LAYOUT ── */
+    .bd-layout {
+      max-width: 1200px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr;
+      gap: 0; padding: 28px 20px;
+    }
+    @media(min-width: 900px) {
+      .bd-layout { grid-template-columns: 240px 1fr; gap: 28px; }
+    }
+
+    /* ── SIDEBAR ── */
+    .bd-sidebar {
+      display: none;
+    }
+    @media(min-width: 900px) {
+      .bd-sidebar { display: block; }
+    }
+    .bd-sidebar-section {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 18px; margin-bottom: 16px;
+    }
+    .bd-sidebar-title {
+      font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.4);
+      text-transform: uppercase; letter-spacing: .6px; margin-bottom: 14px;
+    }
+    .bd-filter-option {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.6);
+      border-radius: 8px; transition: color .15s;
+    }
+    .bd-filter-option:hover { color: white; }
+    .bd-filter-option input[type="radio"],
+    .bd-filter-option input[type="checkbox"] {
+      accent-color: #71ff00; width: 16px; height: 16px; flex-shrink: 0; cursor: pointer;
+    }
+    .bd-county-select {
+      width: 100%; padding: 10px 12px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; color: white; font-size: 13px; font-family: inherit;
+      outline: none; appearance: none; cursor: pointer;
+    }
+    .bd-county-select:focus { border-color: rgba(113,255,0,0.35); }
+    .bd-sort-select {
+      width: 100%; padding: 10px 12px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; color: white; font-size: 13px; font-family: inherit;
+      outline: none; appearance: none; cursor: pointer; margin-bottom: 8px;
+    }
+    .bd-sort-select:focus { border-color: rgba(113,255,0,0.35); }
+    .bd-filter-btn {
+      width: 100%; padding: 11px; border-radius: 12px;
+      background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.25);
+      color: #71ff00; font-size: 13px; font-weight: 800; cursor: pointer;
+      font-family: inherit; transition: background .2s; margin-top: 6px;
+    }
+    .bd-filter-btn:hover { background: rgba(113,255,0,0.2); }
+
+    /* ── MOBILE FILTER BAR ── */
+    .bd-mobile-filters {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px;
+    }
+    @media(min-width: 900px) { .bd-mobile-filters { display: none; } }
+    .bd-mobile-chip {
+      padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 700;
+      cursor: pointer; border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.55);
+      transition: all .2s; font-family: inherit;
+    }
+    .bd-mobile-chip.active {
+      background: rgba(113,255,0,0.12); border-color: rgba(113,255,0,0.3); color: #71ff00;
+    }
+
+    /* ── RESULTS BAR ── */
+    .bd-results-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px; flex-wrap: wrap; gap: 10px;
+    }
+    .bd-results-count { font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 600; }
+    .bd-results-count strong { color: white; }
+
+    /* ── BUSINESS CARDS GRID ── */
+    .bd-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .bd-biz-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; overflow: hidden;
+      transition: transform .2s, border-color .2s, box-shadow .2s;
+      cursor: pointer; text-decoration: none; display: block;
+    }
+    .bd-biz-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(113,255,0,0.25);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    .bd-biz-logo-area {
+      height: 120px; position: relative;
+      background: linear-gradient(135deg, rgba(113,255,0,0.08), rgba(0,100,200,0.07));
+      display: flex; align-items: center; justify-content: center;
+    }
+    .bd-biz-logo-area img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .bd-biz-avatar {
+      width: 60px; height: 60px; border-radius: 16px;
+      background: rgba(113,255,0,0.12); border: 2px solid rgba(113,255,0,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 900; color: #71ff00;
+    }
+    .bd-biz-badge-wrap {
+      position: absolute; top: 10px; right: 10px; display: flex; gap: 5px;
+    }
+    .bd-biz-verified {
+      background: rgba(113,255,0,0.15); border: 1px solid rgba(113,255,0,0.35);
+      color: #71ff00; font-size: 10px; font-weight: 800;
+      padding: 3px 8px; border-radius: 8px;
+    }
+    .bd-biz-pro {
+      background: rgba(0,212,255,0.12); border: 1px solid rgba(0,212,255,0.3);
+      color: #00d4ff; font-size: 10px; font-weight: 800;
+      padding: 3px 8px; border-radius: 8px;
+    }
+    .bd-biz-body { padding: 14px 16px 16px; }
+    .bd-biz-name {
+      font-size: 15px; font-weight: 900; color: white;
+      margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bd-biz-cat {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      background: rgba(0,170,255,0.1); border: 1px solid rgba(0,170,255,0.2);
+      color: #00aaff; padding: 2px 8px; border-radius: 6px; margin-bottom: 8px;
+    }
+    .bd-biz-location { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+    .bd-biz-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; flex-wrap: wrap;
+    }
+    .bd-biz-stars { color: #ffc107; font-size: 12px; }
+    .bd-biz-rating-text { font-size: 11px; color: rgba(255,255,255,0.35); }
+    .bd-biz-followers {
+      font-size: 11px; color: rgba(255,255,255,0.35);
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ── LOADING / EMPTY ── */
+    .bd-loading {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 60px 24px; color: rgba(255,255,255,0.3); font-size: 14px;
+      grid-column: 1 / -1;
+    }
+    .bd-spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid rgba(113,255,0,0.15);
+      border-top-color: #71ff00;
+      animation: bd-spin .8s linear infinite;
+    }
+    @keyframes bd-spin { to { transform: rotate(360deg); } }
+
+    .bd-empty {
+      grid-column: 1 / -1;
+      text-align: center; padding: 60px 24px;
+      color: rgba(255,255,255,0.25); font-size: 14px;
+    }
+    .bd-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+
+    /* ── REGISTER CTA ── */
+    .bd-cta {
+      background: linear-gradient(135deg, rgba(113,255,0,0.08), rgba(0,100,200,0.06));
+      border: 1px solid rgba(113,255,0,0.18); border-radius: 20px;
+      padding: 36px 28px; text-align: center; margin-top: 40px;
+    }
+    .bd-cta h2 { font-size: 22px; font-weight: 900; margin-bottom: 8px; }
+    .bd-cta p  { font-size: 14px; color: rgba(255,255,255,0.45); margin-bottom: 22px; }
+    .bd-cta-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 28px; border-radius: 14px;
+      background: #71ff00; color: #000; font-size: 14px; font-weight: 900;
+      text-decoration: none; transition: opacity .2s;
+    }
+    .bd-cta-btn:hover { opacity: .88; }
+
+    /* ── RESPONSIVE ── */
+    @media(max-width: 480px) {
+      .bd-grid { grid-template-columns: 1fr; }
+      .bd-hero { padding: 36px 18px 28px; }
+    }
+  </style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- HERO -->
+<div class="bd-hero">
+  <div class="bd-hero-badge"><i class="fas fa-building"></i> Business Directory</div>
+  <h1>SOKONI <span>Business</span> Directory</h1>
+  <p class="bd-hero-sub">Discover verified businesses across Kenya — from retail stores to healthcare, tech, food and more.</p>
+  <div class="bd-search-wrap">
+    <span class="bd-search-icon">🔍</span>
+    <input type="search" class="bd-search" id="bdSearch"
+      placeholder="Search by name, category, or location…"
+      autocomplete="off" aria-label="Search businesses"
+      oninput="bdSearch()">
+  </div>
+</div>
+
+<!-- CATEGORY TABS -->
+<div class="bd-cat-wrap">
+  <div class="bd-cat-inner" id="bdCatTabs">
+    <button type="button" class="bd-cat-btn active" onclick="bdSetCategory('all',this)">All</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Retail',this)">Retail</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Food',this)">Food &amp; Drink</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Tech',this)">Tech</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Healthcare',this)">Healthcare</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Auto',this)">Auto</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Property',this)">Property</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Freelancers',this)">Freelancers</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Education',this)">Education</button>
+    <button type="button" class="bd-cat-btn" onclick="bdSetCategory('Entertainment',this)">Entertainment</button>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="bd-layout">
+
+  <!-- SIDEBAR (desktop) -->
+  <aside class="bd-sidebar">
+
+    <div class="bd-sidebar-section">
+      <div class="bd-sidebar-title">Sort By</div>
+      <select class="bd-sort-select" id="bdSort" onchange="bdApplyFilters()">
+        <option value="newest">Newest</option>
+        <option value="followers">Most Followed</option>
+        <option value="rating">Highest Rated</option>
+      </select>
+    </div>
+
+    <div class="bd-sidebar-section">
+      <div class="bd-sidebar-title">Minimum Rating</div>
+      <label class="bd-filter-option">
+        <input type="radio" name="bdRating" value="0" checked onchange="bdApplyFilters()"> Any Rating
+      </label>
+      <label class="bd-filter-option">
+        <input type="radio" name="bdRating" value="3" onchange="bdApplyFilters()"> 3+ Stars
+      </label>
+      <label class="bd-filter-option">
+        <input type="radio" name="bdRating" value="4" onchange="bdApplyFilters()"> 4+ Stars
+      </label>
+    </div>
+
+    <div class="bd-sidebar-section">
+      <div class="bd-sidebar-title">County / Location</div>
+      <select class="bd-county-select" id="bdCounty" onchange="bdApplyFilters()">
+        <option value="">All Kenya</option>
+        <option>Nairobi</option>
+        <option>Mombasa</option>
+        <option>Kisumu</option>
+        <option>Nakuru</option>
+        <option>Eldoret</option>
+        <option>Thika</option>
+        <option>Machakos</option>
+        <option>Kiambu</option>
+        <option>Nyeri</option>
+        <option>Meru</option>
+        <option>Kakamega</option>
+        <option>Kisii</option>
+        <option>Garissa</option>
+        <option>Kwale</option>
+        <option>Kilifi</option>
+      </select>
+    </div>
+
+    <div class="bd-sidebar-section">
+      <div class="bd-sidebar-title">Filters</div>
+      <label class="bd-filter-option">
+        <input type="checkbox" id="bdVerifiedOnly" onchange="bdApplyFilters()"> Verified Only
+      </label>
+      <button type="button" class="bd-filter-btn" onclick="bdResetFilters()">
+        <i class="fas fa-redo-alt"></i> Reset Filters
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- Mobile filter row -->
+    <div class="bd-mobile-filters">
+      <select class="bd-mobile-chip" style="padding:8px 14px;border-radius:20px;" id="bdSortMobile" onchange="document.getElementById('bdSort').value=this.value;bdApplyFilters()">
+        <option value="newest">Newest</option>
+        <option value="followers">Most Followed</option>
+        <option value="rating">Highest Rated</option>
+      </select>
+      <button type="button" class="bd-mobile-chip" id="bdVerifiedChip" onclick="bdToggleMobileVerified()">Verified Only</button>
+      <select class="bd-mobile-chip" style="padding:8px 14px;border-radius:20px;" id="bdCountyMobile" onchange="document.getElementById('bdCounty').value=this.value;bdApplyFilters()">
+        <option value="">All Kenya</option>
+        <option>Nairobi</option>
+        <option>Mombasa</option>
+        <option>Kisumu</option>
+        <option>Nakuru</option>
+        <option>Eldoret</option>
+        <option>Thika</option>
+        <option>Machakos</option>
+        <option>Kiambu</option>
+        <option>Nyeri</option>
+        <option>Meru</option>
+        <option>Kakamega</option>
+        <option>Kisii</option>
+        <option>Garissa</option>
+      </select>
+    </div>
+
+    <!-- Results bar -->
+    <div class="bd-results-bar">
+      <div class="bd-results-count" id="bdResultsCount">Loading businesses…</div>
+    </div>
+
+    <!-- Cards grid -->
+    <div class="bd-grid" id="bdGrid">
+      <div class="bd-loading">
+        <div class="bd-spinner"></div>
+        Loading businesses…
+      </div>
+    </div>
+
+    <!-- Register CTA -->
+    <div class="bd-cta">
+      <h2>List Your Business on SOKONI</h2>
+      <p>Reach thousands of customers across Kenya. Add your products, services, and get verified today.</p>
+      <a href="business-os.html" class="bd-cta-btn">
+        <i class="fas fa-plus"></i> Register Your Business
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="businesses.html" class="bnav-item active-bnav"><span class="bnav-emoji">🏢</span><span>Businesses</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+
+<script type="module">
+/* ================================================================
+   businesses.html — Business Directory
+   Firestore: businesses collection (top 100), client-side filter/sort
+================================================================ */
+
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+  getFirestore, collection, getDocs, query, orderBy, limit
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* ── Firebase ── */
+const FB_CONFIG = {
+  apiKey: 'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+  authDomain: 'sokoni-aeb26.firebaseapp.com',
+  projectId: 'sokoni-aeb26',
+  storageBucket: 'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId: '24799054989',
+  appId: '1:24799054989:web:e1cf6ca8c281bf1abf26c4'
+};
+const _fbApp = initializeApp(FB_CONFIG, 'bizDir');
+const _db    = getFirestore(_fbApp);
+
+/* ── XSS helper ── */
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ── State ── */
+let _allBiz     = [];   /* raw from Firestore */
+let _category   = 'all';
+let _searchQ    = '';
+let _sortBy     = 'newest';
+let _minRating  = 0;
+let _county     = '';
+let _verifiedOnly = false;
+
+/* ── Stars ── */
+function renderStars(r) {
+  const n = Math.round(r || 0);
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
+
+/* ── Load from Firestore ── */
+async function loadBusinesses() {
+  try {
+    const q = query(
+      collection(_db, 'businesses'),
+      orderBy('createdAt', 'desc'),
+      limit(100)
+    );
+    const snap = await getDocs(q);
+    _allBiz = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn('[bizDir] Firestore error:', e);
+    _allBiz = [];
+  }
+  bdApplyFilters();
+}
+
+/* ── Category filter ── */
+window.bdSetCategory = function (cat, btn) {
+  _category = cat;
+  document.querySelectorAll('.bd-cat-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  bdApplyFilters();
+};
+
+/* ── Search input handler ── */
+window.bdSearch = function () {
+  _searchQ = (document.getElementById('bdSearch').value || '').trim().toLowerCase();
+  bdApplyFilters();
+};
+
+/* ── Toggle mobile verified chip ── */
+window.bdToggleMobileVerified = function () {
+  _verifiedOnly = !_verifiedOnly;
+  document.getElementById('bdVerifiedOnly').checked = _verifiedOnly;
+  document.getElementById('bdVerifiedChip').classList.toggle('active', _verifiedOnly);
+  bdApplyFilters();
+};
+
+/* ── Apply all filters + sort ── */
+window.bdApplyFilters = function () {
+  /* read sidebar controls */
+  const sortEl  = document.getElementById('bdSort');
+  const countyEl = document.getElementById('bdCounty');
+  const ratingEl = document.querySelector('input[name="bdRating"]:checked');
+  const verifiedEl = document.getElementById('bdVerifiedOnly');
+
+  if (sortEl)     _sortBy      = sortEl.value;
+  if (countyEl)   _county      = countyEl.value;
+  if (ratingEl)   _minRating   = Number(ratingEl.value);
+  if (verifiedEl) _verifiedOnly = verifiedEl.checked;
+
+  let list = [..._allBiz];
+
+  /* category */
+  if (_category && _category !== 'all') {
+    list = list.filter(b => {
+      const cat = (b.category || '').toLowerCase();
+      return cat === _category.toLowerCase() || cat.includes(_category.toLowerCase());
+    });
+  }
+
+  /* search */
+  if (_searchQ) {
+    list = list.filter(b =>
+      (b.name     || '').toLowerCase().includes(_searchQ) ||
+      (b.category || '').toLowerCase().includes(_searchQ) ||
+      (b.location || '').toLowerCase().includes(_searchQ) ||
+      (b.tagline  || '').toLowerCase().includes(_searchQ)
+    );
+  }
+
+  /* rating */
+  if (_minRating > 0) {
+    list = list.filter(b => (b.avgRating || 0) >= _minRating);
+  }
+
+  /* county */
+  if (_county) {
+    list = list.filter(b =>
+      (b.location || b.county || '').toLowerCase().includes(_county.toLowerCase())
+    );
+  }
+
+  /* verified */
+  if (_verifiedOnly) {
+    list = list.filter(b => b.verified);
+  }
+
+  /* sort */
+  if (_sortBy === 'followers') {
+    list.sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0));
+  } else if (_sortBy === 'rating') {
+    list.sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0));
+  }
+  /* default: newest — already ordered from Firestore */
+
+  renderGrid(list);
+};
+
+/* ── Reset ── */
+window.bdResetFilters = function () {
+  _searchQ = ''; _category = 'all'; _sortBy = 'newest';
+  _minRating = 0; _county = ''; _verifiedOnly = false;
+
+  document.getElementById('bdSearch').value = '';
+  document.getElementById('bdSort').value = 'newest';
+  document.getElementById('bdCounty').value = '';
+
+  const ratingAny = document.querySelector('input[name="bdRating"][value="0"]');
+  if (ratingAny) ratingAny.checked = true;
+
+  const verEl = document.getElementById('bdVerifiedOnly');
+  if (verEl) verEl.checked = false;
+
+  document.querySelectorAll('.bd-cat-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+
+  bdApplyFilters();
+};
+
+/* ── Render ── */
+function renderGrid(list) {
+  const grid   = document.getElementById('bdGrid');
+  const countEl = document.getElementById('bdResultsCount');
+
+  countEl.innerHTML = `<strong>${list.length}</strong> business${list.length !== 1 ? 'es' : ''} found`;
+
+  if (!list.length) {
+    grid.innerHTML = `
+      <div class="bd-empty">
+        <div class="bd-empty-icon">🏢</div>
+        No businesses match your search.<br>
+        <span style="font-size:12px;margin-top:6px;display:block;">Try clearing filters or a different category.</span>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(b => bizCardHtml(b)).join('');
+}
+
+function bizCardHtml(b) {
+  /* Logo area */
+  const logoHtml = b.coverUrl || b.logoUrl
+    ? `<img src="${escHtml(b.coverUrl || b.logoUrl)}" alt="${escHtml(b.name)}" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">`
+    : `<div class="bd-biz-avatar">${escHtml((b.name || '?').charAt(0).toUpperCase())}</div>`;
+
+  /* Badges */
+  const badges = [];
+  if (b.verified) badges.push(`<span class="bd-biz-verified"><i class="fas fa-check"></i> Verified</span>`);
+  if (b.type === 'pro') badges.push(`<span class="bd-biz-pro">Pro</span>`);
+  const badgeHtml = badges.length ? `<div class="bd-biz-badge-wrap">${badges.join('')}</div>` : '';
+
+  /* Rating */
+  const hasRating = b.avgRating && b.reviewCount;
+  const ratingHtml = hasRating
+    ? `<span class="bd-biz-stars">${renderStars(b.avgRating)}</span>
+       <span class="bd-biz-rating-text">${escHtml(String((b.avgRating || 0).toFixed(1)))} (${escHtml(String(b.reviewCount || 0))})</span>`
+    : `<span class="bd-biz-rating-text">No reviews yet</span>`;
+
+  const followers = (b.followerCount || 0).toLocaleString();
+
+  return `
+    <a href="business.html?id=${escHtml(b.id)}" class="bd-biz-card" aria-label="${escHtml(b.name || 'Business')}">
+      <div class="bd-biz-logo-area">
+        ${logoHtml}
+        ${badgeHtml}
+      </div>
+      <div class="bd-biz-body">
+        <div class="bd-biz-name">${escHtml(b.name || 'Unnamed Business')}</div>
+        ${b.category ? `<span class="bd-biz-cat">${escHtml(b.category)}</span>` : ''}
+        <div class="bd-biz-location">
+          ${b.location ? `📍 ${escHtml(b.location)}` : '<span style="opacity:.4;">Location not listed</span>'}
+        </div>
+        <div class="bd-biz-footer">
+          <div>${ratingHtml}</div>
+          <div class="bd-biz-followers"><i class="fas fa-users" style="font-size:10px;"></i> ${escHtml(followers)}</div>
+        </div>
+      </div>
+    </a>`;
+}
+
+/* ── Boot ── */
+loadBusinesses();
+</script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

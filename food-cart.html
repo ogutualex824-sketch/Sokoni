@@ -1,0 +1,333 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cart & Checkout — SOKONI Food</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:20px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.fn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
+.food-cart-badge{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;background:#22c55e;color:#000;font-size:8px;font-weight:900;display:none;align-items:center;justify-content:center;}
+.fc-body{max-width:700px;margin:0 auto;padding:16px;}
+.fc-sh{font-size:14px;font-weight:800;color:white;margin:20px 0 12px;display:flex;align-items:center;gap:8px;}
+.fc-sh::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+/* ── VENDOR GROUP ── */
+.fc-vendor{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:18px;margin-bottom:14px;overflow:hidden;}
+.fc-vendor-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(34,197,94,0.04);}
+.fc-vendor-emoji{font-size:24px;}
+.fc-vendor-name{font-size:14px;font-weight:800;color:white;flex:1;}
+.fc-vendor-subtotal{font-size:14px;font-weight:900;color:#22c55e;}
+.fc-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.fc-item:last-child{border-bottom:none;}
+.fc-item-info{flex:1;min-width:0;}
+.fc-item-name{font-size:13px;font-weight:700;color:white;}
+.fc-item-price{font-size:11px;color:rgba(255,255,255,0.4);}
+.fc-item-controls{display:flex;align-items:center;gap:0;}
+.qty-btn{width:28px;height:28px;border-radius:7px;border:1px solid rgba(34,197,94,0.3);background:rgba(34,197,94,0.08);color:#22c55e;font-size:16px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;}
+.qty-num{min-width:26px;text-align:center;font-size:13px;font-weight:900;}
+.fc-item-total{font-size:13px;font-weight:900;color:white;min-width:60px;text-align:right;}
+.fc-del-fee{padding:8px 16px;font-size:11px;color:rgba(255,255,255,0.4);display:flex;justify-content:space-between;}
+
+/* ── OPTIONS ── */
+.fc-section{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;margin-bottom:12px;}
+.fc-label{font-size:11px;font-weight:800;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
+.fc-toggle-row{display:flex;gap:8px;}
+.fc-toggle{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;text-align:center;transition:all .2s;font-family:inherit;}
+.fc-toggle.active{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#22c55e;}
+.fc-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-top:6px;}
+.fc-input:focus{border-color:rgba(34,197,94,0.4);}
+.fc-select{width:100%;padding:12px 14px;background:rgba(14,14,14,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-top:6px;}
+.fc-schedule{display:none;margin-top:10px;}
+
+/* ── PROMO ── */
+.promo-row{display:flex;gap:8px;margin-top:6px;}
+.promo-input{flex:1;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;text-transform:uppercase;}
+.promo-input:focus{border-color:rgba(34,197,94,0.4);}
+.promo-btn{padding:11px 16px;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:10px;color:#22c55e;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.promo-msg{font-size:11px;margin-top:6px;min-height:14px;}
+.promo-success{color:#10b981;}
+.promo-error{color:#ef4444;}
+
+/* ── SUMMARY ── */
+.fc-summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;color:rgba(255,255,255,0.55);}
+.fc-summary-row.total{font-size:17px;font-weight:900;color:white;border-top:1px solid rgba(255,255,255,0.08);padding-top:14px;margin-top:6px;}
+.fc-summary-row .green{color:#22c55e;}
+.fc-summary-row .red{color:#ef4444;}
+.fc-commission-note{font-size:10px;color:rgba(255,255,255,0.2);margin-top:8px;}
+
+/* ── MPESA SECTION ── */
+.fc-mpesa-section{background:rgba(0,180,90,0.06);border:1px solid rgba(0,180,90,0.2);border-radius:16px;padding:16px;margin-bottom:12px;}
+.fc-mpesa-logo{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.fc-mpesa-icon{width:44px;height:44px;border-radius:12px;background:rgba(0,180,90,0.15);border:1px solid rgba(0,180,90,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;}
+.fc-mpesa-title{font-size:14px;font-weight:900;color:white;}
+.fc-mpesa-sub{font-size:11px;color:rgba(0,180,90,0.8);}
+.fc-place-btn{width:100%;padding:16px;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-weight:900;border:none;border-radius:14px;cursor:pointer;font-size:16px;font-family:inherit;margin-top:6px;transition:filter .2s;}
+.fc-place-btn:hover{filter:brightness(1.08);}
+.fc-place-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ── EMPTY ── */
+.fc-empty{text-align:center;padding:80px 20px;color:rgba(255,255,255,0.25);}
+
+/* ── STK MODAL ── */
+.stk-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;align-items:center;justify-content:center;padding:20px;}
+.stk-overlay.open{display:flex;}
+.stk-box{background:#111;border:1px solid rgba(0,180,90,0.25);border-radius:22px;padding:28px 24px;max-width:420px;width:100%;text-align:center;}
+.stk-icon{font-size:52px;margin-bottom:14px;}
+.stk-title{font-size:18px;font-weight:900;color:white;margin-bottom:8px;}
+.stk-sub{font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;line-height:1.6;}
+.stk-steps{text-align:left;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.55);line-height:2.2;}
+.stk-confirm-btn{width:100%;padding:14px;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;}
+.stk-cancel-btn{width:100%;padding:12px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.5);font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-food.js"></script>
+<script src="sokoni-pay.js" defer></script>
+
+<nav class="fn">
+  <a href="food.html" class="fn-back">←</a>
+  <span style="font-size:15px;font-weight:800;flex:1;">🛒 Your Cart</span>
+</nav>
+
+<div class="fc-body" id="fcBody"></div>
+
+<!-- STK Push Modal -->
+<div class="stk-overlay" id="stkOverlay">
+  <div class="stk-box">
+    <div class="stk-icon">📲</div>
+    <div class="stk-title">M-Pesa Payment</div>
+    <div class="stk-sub" id="stkSub">Please complete payment on your phone to confirm your order.</div>
+    <div class="stk-steps">
+      <div>1. Open <strong style="color:white;">M-PESA</strong> on your phone</div>
+      <div>2. Go to <strong style="color:white;">Lipa Na M-Pesa → Paybill</strong></div>
+      <div>3. Business No: <strong style="color:#22c55e;">400200</strong></div>
+      <div>4. Account No: <strong style="color:#22c55e;" id="stkOrderRef">FD000000</strong></div>
+      <div>5. Amount: <strong style="color:#f59e0b;" id="stkAmount">KES 0</strong></div>
+      <div>6. Enter your M-Pesa PIN and confirm</div>
+    </div>
+    <button class="stk-confirm-btn" onclick="confirmPayment()">✅ I've Paid — Confirm Order</button>
+    <button class="stk-cancel-btn" onclick="document.getElementById('stkOverlay').classList.remove('open')">Cancel</button>
+  </div>
+</div>
+
+<script>
+let _deliveryMethod = 'delivery';
+let _schedule = 'now';
+let _promoCode = '';
+let _promoDiscount = 0;
+let _promoType = '';
+let _pendingOrder = null;
+let _userLat = null, _userLng = null;
+if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => { _userLat = p.coords.latitude; _userLng = p.coords.longitude; }, () => {}, { maximumAge: 60000, timeout: 8000 });
+
+function render() {
+  const vendors = SokoniFood.getCartByVendor();
+  const body = document.getElementById('fcBody'); if (!body) return;
+
+  if (!vendors.length) {
+    body.innerHTML = `<div class="fc-empty"><div style="font-size:52px;margin-bottom:14px;">🛒</div><h3 style="font-size:16px;margin-bottom:8px;">Your cart is empty</h3><p style="font-size:13px;">Browse restaurants and add items to get started.</p><a href="food.html" style="display:inline-block;margin-top:20px;padding:12px 24px;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-weight:900;border-radius:12px;text-decoration:none;">🍽️ Browse Food</a></div>`;
+    return;
+  }
+
+  let totalDeliveryFee = 0;
+  let subtotal = 0;
+  vendors.forEach(v => {
+    subtotal += v.subtotal;
+    const rest = SokoniFood.RESTAURANTS.find(r => r.id === v.restaurantId);
+    if (_deliveryMethod === 'delivery' && rest) totalDeliveryFee += rest.deliveryFee;
+  });
+
+  const discount = (_promoType === 'delivery') ? Math.min(_promoDiscount, totalDeliveryFee) : _promoDiscount;
+  const netDelivery = Math.max(0, totalDeliveryFee - (_promoType === 'delivery' ? discount : 0));
+  const subtotalDiscount = _promoType !== 'delivery' ? discount : 0;
+  const total = subtotal - subtotalDiscount + (_deliveryMethod === 'delivery' ? netDelivery : 0);
+
+  body.innerHTML = `
+  <!-- CART ITEMS -->
+  <div class="fc-sh">🛒 Cart (${SokoniFood.getCartCount()} items)</div>
+  ${vendors.map(v => {
+    const rest = SokoniFood.RESTAURANTS.find(r => r.id === v.restaurantId);
+    return `<div class="fc-vendor">
+      <div class="fc-vendor-header">
+        <span class="fc-vendor-emoji">${v.restaurantEmoji}</span>
+        <span class="fc-vendor-name">${v.restaurantName}</span>
+        <span class="fc-vendor-subtotal">KES ${SokoniFood.fmt(v.subtotal)}</span>
+      </div>
+      ${v.items.map(item => `
+      <div class="fc-item">
+        <div class="fc-item-info">
+          <div class="fc-item-name">${item.name}</div>
+          <div class="fc-item-price">KES ${SokoniFood.fmt(item.price)} each</div>
+        </div>
+        <div class="fc-item-controls">
+          <button class="qty-btn" onclick="changeQty('${item.cartId}','dec')">−</button>
+          <span class="qty-num">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty('${item.cartId}','inc')">+</button>
+        </div>
+        <div class="fc-item-total">KES ${SokoniFood.fmt(item.price * item.qty)}</div>
+      </div>`).join('')}
+      ${_deliveryMethod === 'delivery' ? `<div class="fc-del-fee"><span>Delivery from ${v.restaurantName}</span><span style="color:#22c55e;">KES ${rest ? rest.deliveryFee : 0}</span></div>` : ''}
+    </div>`;
+  }).join('')}
+
+  <!-- DELIVERY METHOD -->
+  <div class="fc-section">
+    <div class="fc-label">Delivery Method</div>
+    <div class="fc-toggle-row">
+      <button class="fc-toggle ${_deliveryMethod==='delivery'?'active':''}" onclick="setMethod('delivery')">🛵 Delivery</button>
+      <button class="fc-toggle ${_deliveryMethod==='pickup'?'active':''}" onclick="setMethod('pickup')">🏃 Pickup</button>
+    </div>
+    ${_deliveryMethod==='delivery' ? `
+    <input class="fc-input" type="text" id="deliveryAddr" placeholder="Enter delivery address *" value="${localStorage.getItem('sokoniDeliveryAddr')||''}">
+    ` : `<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:10px;">You'll pick up your order directly from each restaurant.</div>`}
+  </div>
+
+  <!-- SCHEDULE -->
+  <div class="fc-section">
+    <div class="fc-label">When do you want it?</div>
+    <div class="fc-toggle-row">
+      <button class="fc-toggle ${_schedule==='now'?'active':''}" onclick="setSchedule('now')">⚡ Now</button>
+      <button class="fc-toggle ${_schedule==='later'?'active':''}" onclick="setSchedule('later')">🕐 Schedule</button>
+    </div>
+    <div class="fc-schedule" id="scheduleInput" style="${_schedule==='later'?'display:block;':''}">
+      <input class="fc-input" type="datetime-local" id="scheduleTime" min="${new Date().toISOString().slice(0,16)}">
+    </div>
+  </div>
+
+  <!-- PROMO CODE -->
+  <div class="fc-section">
+    <div class="fc-label">Promo Code</div>
+    <div class="promo-row">
+      <input class="promo-input" type="text" id="promoInput" placeholder="Enter code (e.g. WELCOME50)" value="${_promoCode}">
+      <button class="promo-btn" onclick="applyPromo()">Apply</button>
+    </div>
+    <div class="promo-msg" id="promoMsg" style="${_promoCode?'color:#10b981;':''}">${_promoCode?`✅ ${_promoCode} applied! -KES ${SokoniFood.fmt(discount)}`:'Try: WELCOME50, FOOD20, FREEDELIVERY'}</div>
+  </div>
+
+  <!-- MPESA -->
+  <div class="fc-mpesa-section">
+    <div class="fc-mpesa-logo">
+      <div class="fc-mpesa-icon">📲</div>
+      <div><div class="fc-mpesa-title">Pay with M-Pesa</div><div class="fc-mpesa-sub">Fast, safe Kenyan mobile payment</div></div>
+    </div>
+    <div class="fc-label" style="margin-bottom:6px;">M-Pesa Phone Number</div>
+    <input class="fc-input" type="tel" id="mpesaPhone" placeholder="07XX XXX XXX *" value="${localStorage.getItem('sokoniMpesaPhone')||''}">
+    <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;">You'll receive M-Pesa payment steps after placing your order.</div>
+  </div>
+
+  <!-- ORDER SUMMARY -->
+  <div class="fc-section">
+    <div class="fc-label">Order Summary</div>
+    <div class="fc-summary-row"><span>Subtotal (${SokoniFood.getCartCount()} items)</span><span>KES ${SokoniFood.fmt(subtotal)}</span></div>
+    ${_deliveryMethod==='delivery'?`<div class="fc-summary-row"><span>Delivery Fee${vendors.length>1?' ('+vendors.length+' vendors)':''}</span><span>KES ${SokoniFood.fmt(totalDeliveryFee)}</span></div>`:''}
+    ${discount>0?`<div class="fc-summary-row"><span class="green">🏷️ Promo (${_promoCode})</span><span class="red">−KES ${SokoniFood.fmt(discount)}</span></div>`:''}
+    <div class="fc-summary-row total"><span>Total</span><span class="green">KES ${SokoniFood.fmt(total)}</span></div>
+    <div class="fc-commission-note">Sokoni service fee (10%) included in vendor pricing</div>
+  </div>
+
+  <!-- PLACE ORDER -->
+  <button class="fc-place-btn" onclick="placeOrder(${total},${subtotal})">
+    📱 Place Order — KES ${SokoniFood.fmt(total)}
+  </button>
+  <div style="font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:10px;">By placing this order you agree to Sokoni's Terms of Service</div>`;
+}
+
+function changeQty(cartId, dir) {
+  const cart = SokoniFood.getCart();
+  const item = cart.find(c => c.cartId === cartId); if (!item) return;
+  SokoniFood.updateQty(cartId, item.qty + (dir==='inc'?1:-1));
+  render();
+}
+
+function setMethod(method) { _deliveryMethod = method; render(); }
+function setSchedule(s) { _schedule = s; render(); }
+
+function applyPromo() {
+  const code = document.getElementById('promoInput')?.value.trim(); if (!code) return;
+  const vendors = SokoniFood.getCartByVendor();
+  const subtotal = vendors.reduce((s,v)=>s+v.subtotal,0);
+  const result = SokoniFood.validatePromo(code, subtotal);
+  const msg = document.getElementById('promoMsg');
+  if (!result.valid) {
+    if (msg) { msg.textContent = '❌ ' + result.error; msg.className = 'promo-msg promo-error'; }
+    _promoCode=''; _promoDiscount=0; _promoType='';
+  } else {
+    _promoCode = code.toUpperCase(); _promoDiscount = result.discount; _promoType = result.promo.type;
+    if (msg) { msg.textContent = `✅ ${code.toUpperCase()} applied! You save KES ${SokoniFood.fmt(result.discount)}`; msg.className = 'promo-msg promo-success'; }
+    render();
+  }
+}
+
+function placeOrder(total, subtotal) {
+  const phone = document.getElementById('mpesaPhone')?.value.trim();
+  const addr = document.getElementById('deliveryAddr')?.value.trim();
+  if (!phone) { (window._skToast||alert)('Please enter your M-Pesa phone number'); return; }
+  if (_deliveryMethod === 'delivery' && !addr) { (window._skToast||alert)('Please enter your delivery address'); return; }
+
+  const vendors = SokoniFood.getCartByVendor();
+  const rest = SokoniFood.RESTAURANTS.find(r => r.id === vendors[0]?.restaurantId);
+
+  localStorage.setItem('sokoniMpesaPhone', phone);
+  if (addr) localStorage.setItem('sokoniDeliveryAddr', addr);
+
+  const scheduleTime = _schedule === 'later' ? document.getElementById('scheduleTime')?.value : null;
+
+  _pendingOrder = {
+    vendors, phone, total, subtotal,
+    deliveryMethod: _deliveryMethod,
+    deliveryAddress: addr || '',
+    deliveryLat: _userLat,
+    deliveryLng: _userLng,
+    deliveryTime: rest?.deliveryTime || '30-45 min',
+    schedule: _schedule,
+    scheduledFor: scheduleTime,
+    promoCode: _promoCode,
+    promoDiscount: _promoDiscount,
+  };
+
+  /* Show STK modal */
+  document.getElementById('stkOrderRef').textContent = 'SOKFOOD' + Date.now().toString(36).toUpperCase().slice(-6);
+  document.getElementById('stkAmount').textContent = 'KES ' + SokoniFood.fmt(total);
+  document.getElementById('stkOverlay').classList.add('open');
+}
+
+function confirmPayment() {
+  if (!_pendingOrder) return;
+  const order = SokoniFood.placeOrder(_pendingOrder);
+
+  /* Clear cart */
+  if (_promoCode) SokoniFood.usePromo(_promoCode);
+  SokoniFood.clearCart();
+
+  /* Redirect to tracking */
+  window.location.href = 'food-order.html?id=' + order.id;
+}
+
+render();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+

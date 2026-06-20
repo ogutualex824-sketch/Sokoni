@@ -1,0 +1,401 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI Trust Passport — Your Universal Verified Identity</title>
+<meta name="description" content="Your SOKONI Trust Passport — one verification that unlocks trust across the marketplace, property, finance, legal, mechanics and every hub.">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mysokoni.co.ke/trust.html">
+<meta property="og:title" content="SOKONI Trust Passport — Your Universal Verified Identity">
+<meta property="og:description" content="Your SOKONI Trust Passport — one verification that unlocks trust across the marketplace, property, finance, legal, mechanics and every hub.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:site_name" content="SOKONI">
+<meta property="og:locale" content="en_KE">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00d4ff">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a10;color:white;min-height:100vh;padding-bottom:100px;}
+
+.tp-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(5,10,16,0.97);border-bottom:1px solid rgba(0,212,255,0.1);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.tp-nav-logo{height:30px;}
+
+.tp-hero{padding:48px 20px 36px;text-align:center;background:linear-gradient(135deg,rgba(0,212,255,0.07),rgba(168,85,247,0.05),transparent);border-bottom:1px solid rgba(0,212,255,0.1);position:relative;overflow:hidden;}
+.tp-hero::before{content:'🛡️✅🔒';position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:100px;opacity:0.03;white-space:nowrap;pointer-events:none;letter-spacing:-4px;}
+.tp-badge-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px;}
+.tp-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 16px;background:rgba(0,212,255,0.09);border:1px solid rgba(0,212,255,0.28);border-radius:999px;font-size:11px;font-weight:800;color:#00d4ff;text-transform:uppercase;letter-spacing:1px;}
+.tp-hero h1{font-size:clamp(24px,5vw,42px);font-weight:900;line-height:1.2;margin-bottom:10px;}
+.tp-hero h1 span{background:linear-gradient(135deg,#00d4ff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.tp-hero p{font-size:14px;color:rgba(255,255,255,0.45);max-width:480px;margin:0 auto;line-height:1.7;}
+
+.tp-body{max-width:900px;margin:0 auto;padding:24px 18px 60px;}
+
+/* ── PASSPORT CARD ── */
+.passport-card{background:linear-gradient(135deg,#0a1628,#0d0d1a,#0a1220);border:1px solid rgba(0,212,255,0.2);border-radius:28px;padding:28px;position:relative;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(0,212,255,0.08);}
+.passport-card::before{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(0,212,255,0.08),transparent 70%);pointer-events:none;}
+.passport-card::after{content:'SOKONI';position:absolute;bottom:16px;right:24px;font-size:72px;font-weight:900;color:rgba(255,255,255,0.02);letter-spacing:-2px;pointer-events:none;user-select:none;}
+.passport-header{display:flex;align-items:flex-start;gap:16px;margin-bottom:22px;}
+.passport-avatar{width:72px;height:72px;border-radius:16px;background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(168,85,247,0.1));border:2px solid rgba(0,212,255,0.25);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;}
+.passport-info{flex:1;}
+.passport-name{font-size:20px;font-weight:900;color:white;margin-bottom:2px;}
+.passport-id{font-size:11px;color:rgba(0,212,255,0.6);font-weight:700;letter-spacing:1px;margin-bottom:6px;}
+.passport-location{font-size:12px;color:rgba(255,255,255,0.4);}
+.passport-verified-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:999px;font-size:10px;font-weight:800;color:#4ade80;margin-top:6px;}
+
+.passport-score-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+.passport-score-box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:12px;text-align:center;}
+.passport-score-num{font-size:22px;font-weight:900;color:#00d4ff;margin-bottom:2px;}
+.passport-score-label{font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
+
+.trust-score-ring-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:22px;}
+.trust-score-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.4);margin-top:8px;}
+.trust-score-value{font-size:44px;font-weight:900;color:#00d4ff;line-height:1;margin-bottom:4px;}
+.trust-score-tier{font-size:12px;font-weight:800;color:#4ade80;}
+
+.verif-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:20px;}
+.verif-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;}
+.verif-icon{font-size:18px;flex-shrink:0;}
+.verif-label{font-size:12px;color:rgba(255,255,255,0.55);font-weight:600;}
+.verif-status{margin-left:auto;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;}
+.verif-done{background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.2);}
+.verif-pending{background:rgba(249,115,22,0.1);color:#fb923c;border:1px solid rgba(249,115,22,0.2);}
+
+.hub-rep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:24px;}
+.hub-rep-item{padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;text-align:center;}
+
+.tp-unlock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:24px;}
+.tp-unlock-card{display:flex;align-items:flex-start;gap:12px;padding:16px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:16px;}
+.tp-unlock-icon{font-size:24px;flex-shrink:0;}
+.tp-unlock-name{font-size:13px;font-weight:800;color:white;margin-bottom:3px;}
+.tp-unlock-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;}
+
+.tp-section-h{font-size:16px;font-weight:900;color:white;margin:28px 0 14px;display:flex;align-items:center;gap:10px;}
+.tp-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+.tp-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+.tp-input:focus{border-color:rgba(0,212,255,0.4);}
+.tp-input::placeholder{color:rgba(255,255,255,0.3);}
+.tp-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+@media(max-width:500px){.passport-score-row{grid-template-columns:1fr 1fr;}}
+</style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="tp-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="tp-nav-logo" alt="SOKONI"></a>
+  <a href="profile.html" style="padding:8px 14px;border:1px solid rgba(0,212,255,0.2);border-radius:10px;color:#00d4ff;font-size:12px;font-weight:700;text-decoration:none;">👤 My Profile</a>
+</nav>
+
+<div class="tp-hero">
+  <div class="tp-badge-row">
+    <div class="tp-badge">🛂 Trust Passport</div>
+  </div>
+  <h1>One Identity.<br><span>Trusted Everywhere.</span></h1>
+  <p>Verify once on SOKONI and your trust score unlocks access to every hub — marketplace, finance, property, legal, mechanics and more.</p>
+</div>
+
+<div class="tp-body">
+
+  <!-- LIVE PASSPORT CARD -->
+  <div class="passport-card" id="passportCard">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div style="font-size:10px;font-weight:800;color:rgba(0,212,255,0.5);letter-spacing:2px;text-transform:uppercase;">SOKONI TRUST PASSPORT</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.2);font-weight:600;" id="passportIssued"></div>
+    </div>
+    <div class="passport-header">
+      <div class="passport-avatar" id="passportAvatar">👤</div>
+      <div class="passport-info">
+        <div class="passport-name" id="passportName">Your Name</div>
+        <div class="passport-id" id="passportId">SKN-000000</div>
+        <div class="passport-location" id="passportLoc">📍 Nairobi, Kenya</div>
+        <div class="passport-verified-badge" id="passportVerifiedBadge" style="display:none;">✅ VERIFIED MEMBER</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="trust-score-value" id="passportScore">0</div>
+        <div class="trust-score-tier" id="passportTier">Unverified</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px;">Trust Score</div>
+      </div>
+    </div>
+
+    <div class="passport-score-row">
+      <div class="passport-score-box">
+        <div class="passport-score-num" id="pScoreTransactions">0</div>
+        <div class="passport-score-label">Transactions</div>
+      </div>
+      <div class="passport-score-box">
+        <div class="passport-score-num" id="pScoreDeliveries">0</div>
+        <div class="passport-score-label">Deliveries</div>
+      </div>
+      <div class="passport-score-box">
+        <div class="passport-score-num" id="pScoreDisputes" style="color:#4ade80;">0</div>
+        <div class="passport-score-label">Disputes</div>
+      </div>
+      <div class="passport-score-box">
+        <div class="passport-score-num" id="pScoreDays">0</div>
+        <div class="passport-score-label">Days Active</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:8px;">VERIFICATION STATUS</div>
+      <div class="verif-grid" id="verifGrid"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.12);border-radius:10px;">
+      <span style="font-size:11px;color:rgba(255,255,255,0.35);">Passport ID</span>
+      <span style="font-size:12px;font-weight:800;color:#00d4ff;letter-spacing:1px;" id="passportIdBottom">SKN-000000</span>
+    </div>
+  </div>
+
+  <!-- HUB REPUTATION -->
+  <div class="tp-section-h">🏆 Hub Reputation Scores</div>
+  <div class="hub-rep-grid" id="trustHubRepGrid"></div>
+
+  <!-- WHAT IT UNLOCKS -->
+  <div class="tp-section-h">🔓 What Your Passport Unlocks</div>
+  <div class="tp-unlock-grid">
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">🛒</div><div><div class="tp-unlock-name">Marketplace Trust Badge</div><div class="tp-unlock-desc">Buyers see you're verified — higher conversion, less friction.</div></div></div>
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">🏠</div><div><div class="tp-unlock-name">Property Rentals</div><div class="tp-unlock-desc">Landlords shortlist verified tenants first. No guesswork.</div></div></div>
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">🏦</div><div><div class="tp-unlock-name">Finance Applications</div><div class="tp-unlock-desc">Loan & SACCO applications pre-filled from your trust record.</div></div></div>
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">🚗</div><div><div class="tp-unlock-name">Car Purchases</div><div class="tp-unlock-desc">Dealers and sellers trust verified buyers — smoother deals.</div></div></div>
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">⚖️</div><div><div class="tp-unlock-name">Legal Services</div><div class="tp-unlock-desc">Lawyers see your verified ID before engagement — no delays.</div></div></div>
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">📦</div><div><div class="tp-unlock-name">Pay-on-Delivery</div><div class="tp-unlock-desc">High trust score unlocks pay-on-delivery for orders.</div></div></div>
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">💰</div><div><div class="tp-unlock-name">Seller Credit</div><div class="tp-unlock-desc">Unlock working capital and invoice financing based on your activity.</div></div></div>
+    <div class="tp-unlock-card"><div class="tp-unlock-icon">⭐</div><div><div class="tp-unlock-name">Priority Support</div><div class="tp-unlock-desc">Verified users get priority in disputes, support and refunds.</div></div></div>
+  </div>
+
+  <!-- PAYMENT SECURITY TRUST SIGNAL -->
+  <div style="text-align:center;margin:8px 0 24px;padding:20px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:16px;">
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">Secured Payments</div>
+    <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;">
+      <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-no-mpesa-hr-dark.png" width="280" alt="IntaSend Secure Payments (PCI-DSS Compliant)" style="max-width:100%;height:auto;">
+    </a>
+    <strong><a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:block;color:rgba(255,255,255,0.4);text-decoration:none;font-size:11px;margin-top:8px;font-weight:600;">Secured by IntaSend Payments</a></strong>
+  </div>
+
+  <!-- VERIFY / BUILD YOUR PASSPORT -->
+  <div class="tp-section-h">⚡ Build Your Passport</div>
+  <div style="background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:20px;padding:24px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <label class="tp-label">Full Name *</label>
+        <input type="text" id="tpName" class="tp-input" placeholder="Your full name">
+        <label class="tp-label">Phone / WhatsApp *</label>
+        <input type="tel" id="tpPhone" class="tp-input" placeholder="07XXXXXXXX">
+        <label class="tp-label">Location</label>
+        <select id="tpLoc" class="tp-input">
+          <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
+          <option>Nakuru</option><option>Eldoret</option><option>Thika</option><option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="tp-label">ID / Passport Number *</label>
+        <input type="text" id="tpIdNum" class="tp-input" placeholder="National ID or Passport #">
+        <label class="tp-label">KRA PIN (optional)</label>
+        <input type="text" id="tpKra" class="tp-input" placeholder="AXXXXXXXXX">
+        <label class="tp-label">Verification Level</label>
+        <select id="tpLevel" class="tp-input">
+          <option value="basic">Basic — Name + Phone</option>
+          <option value="standard">Standard — + ID Number</option>
+          <option value="full">Full — + KRA + Documents</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button type="button" onclick="buildPassport()" style="flex:1;padding:14px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);border:none;border-radius:12px;color:#050a10;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;min-width:180px;">🛂 Build My Passport</button>
+      <button type="button" onclick="sharePassport()" style="padding:14px 20px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.6);font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">📤 Share Passport</button>
+    </div>
+    <div id="tpMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="trust.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛂</span><span>Passport</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="opportunity.html" class="bnav-item"><span class="bnav-emoji">💼</span><span>Earn</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+const VERIF_ITEMS = [
+  { icon:'📞', label:'Phone', key:'phone' },
+  { icon:'🪪', label:'National ID', key:'id' },
+  { icon:'📧', label:'Email', key:'email' },
+  { icon:'💰', label:'KRA PIN', key:'kra' },
+  { icon:'🏦', label:'M-Pesa', key:'mpesa' },
+  { icon:'🤳', label:'Selfie ID', key:'selfie' },
+];
+
+const HUB_REPS = [
+  { key:'marketplace', label:'Marketplace', emoji:'🛒', color:'#71ff00' },
+  { key:'mechanics',   label:'Mechanics',   emoji:'🔧', color:'#f97316' },
+  { key:'sports',      label:'Sports',      emoji:'⚽', color:'#39ff14' },
+  { key:'entertainment',label:'Entertainment',emoji:'🎵',color:'#a855f7'},
+  { key:'tech',        label:'Tech Hub',    emoji:'📱', color:'#00d4ff' },
+  { key:'carhub',      label:'Car Hub',     emoji:'🚗', color:'#fbbf24' },
+  { key:'healthcare',  label:'Healthcare',  emoji:'🏥', color:'#10b981' },
+  { key:'legal',       label:'Legal',       emoji:'⚖️', color:'#818cf8' },
+];
+
+function loadPassport() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem('sokoniPassport')||'{}'); } catch(e) {}
+
+  const name   = p.name   || localStorage.getItem('sokoniUserName') || 'Your Name';
+  const loc    = p.loc    || 'Nairobi, Kenya';
+  const joined = p.joined || Date.now();
+  const days   = Math.max(1, Math.floor((Date.now()-joined)/(1000*60*60*24)));
+  const txns   = p.transactions || Math.floor(Math.random()*80)+5;
+  const dels   = p.deliveries   || 0;
+  const disp   = p.disputes     || 0;
+  const verifs = p.verifications || {};
+
+  /* trust score calculation */
+  let score = 0;
+  if (verifs.phone)  score += 20;
+  if (verifs.id)     score += 25;
+  if (verifs.email)  score += 10;
+  if (verifs.kra)    score += 15;
+  if (verifs.mpesa)  score += 15;
+  if (verifs.selfie) score += 15;
+  score = Math.min(100, score + Math.min(20, Math.floor(txns/10)));
+
+  const tier = score >= 85 ? '🥇 Platinum Verified' : score >= 60 ? '🥈 Gold Trusted' : score >= 30 ? '🥉 Silver Active' : '👤 Unverified';
+  const id = p.id || ('SKN-' + String(joined).slice(-6));
+
+  /* Update card */
+  const set = (el, val) => { const e=document.getElementById(el); if(e) e.textContent=val; };
+  set('passportName', name);
+  set('passportId', id);
+  set('passportIdBottom', id);
+  set('passportLoc', '📍 '+loc);
+  set('passportScore', score);
+  set('passportTier', tier);
+  set('pScoreTransactions', txns);
+  set('pScoreDeliveries', dels);
+  set('pScoreDisputes', disp);
+  set('pScoreDays', days);
+  const issued = document.getElementById('passportIssued');
+  if (issued) issued.textContent = 'Member since '+new Date(joined).toLocaleDateString('en-KE',{month:'short',year:'numeric'});
+  const vBadge = document.getElementById('passportVerifiedBadge');
+  if (vBadge) vBadge.style.display = score >= 30 ? 'inline-flex' : 'none';
+
+  /* Verifications */
+  const vGrid = document.getElementById('verifGrid');
+  if (vGrid) {
+    vGrid.innerHTML = VERIF_ITEMS.map(v => `
+      <div class="verif-item">
+        <span class="verif-icon">${v.icon}</span>
+        <span class="verif-label">${v.label}</span>
+        <span class="verif-status ${verifs[v.key]?'verif-done':'verif-pending'}">${verifs[v.key]?'✓ Done':'Pending'}</span>
+      </div>`).join('');
+  }
+
+  /* Hub rep */
+  const hrGrid = document.getElementById('trustHubRepGrid');
+  if (hrGrid) {
+    hrGrid.innerHTML = HUB_REPS.map(h => {
+      let rep = 0; try { rep = parseInt(localStorage.getItem('hubRep_'+h.key)||'0'); } catch(e){}
+      const t = rep>=90?'Expert':rep>=60?'Trusted':rep>=30?'Active':'New';
+      return `<div class="hub-rep-item">
+        <div style="font-size:24px;margin-bottom:6px;">${h.emoji}</div>
+        <div style="font-size:11px;font-weight:800;color:white;margin-bottom:4px;">${h.label}</div>
+        <div style="font-size:18px;font-weight:900;color:${h.color};">${rep}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:6px;">${t}</div>
+        <div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:${rep}%;background:${h.color};border-radius:2px;"></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function buildPassport() {
+  const name  = (document.getElementById('tpName')?.value||'').trim();
+  const phone = (document.getElementById('tpPhone')?.value||'').trim();
+  const idNum = (document.getElementById('tpIdNum')?.value||'').trim();
+  const kra   = (document.getElementById('tpKra')?.value||'').trim();
+  const loc   = document.getElementById('tpLoc')?.value||'Nairobi';
+  const level = document.getElementById('tpLevel')?.value||'basic';
+  const msgEl = document.getElementById('tpMsg');
+  if (!name||!phone) { if(msgEl){msgEl.textContent='Please enter your name and phone';msgEl.style.color='#f97316';} return; }
+
+  let verifs = {};
+  verifs.phone = true;
+  if (level !== 'basic' && idNum) verifs.id = true;
+  if (level === 'full' && kra) verifs.kra = true;
+
+  const existing = (() => { try { return JSON.parse(localStorage.getItem('sokoniPassport')||'{}'); } catch(e){return{};} })();
+  const passport = {
+    name, phone, loc, joined: existing.joined || Date.now(),
+    id: existing.id || ('SKN-'+String(Date.now()).slice(-6)),
+    verifications: { ...existing.verifications, ...verifs },
+    transactions: existing.transactions || 0,
+    deliveries: existing.deliveries || 0,
+    disputes: existing.disputes || 0,
+  };
+  localStorage.setItem('sokoniPassport', JSON.stringify(passport));
+  localStorage.setItem('sokoniUserName', name);
+
+  loadPassport();
+  if(msgEl){msgEl.innerHTML='✅ Passport created! Share it with any hub.';msgEl.style.color='#00d4ff';}
+}
+window.buildPassport = buildPassport;
+
+function sharePassport() {
+  let p = {}; try { p = JSON.parse(localStorage.getItem('sokoniPassport')||'{}'); } catch(e) {}
+  const name = p.name || 'Sokoni User';
+  const id   = p.id   || 'SKN-000000';
+  const msg  = `🛂 *SOKONI Trust Passport*\n\n👤 ${name}\n🆔 ID: ${id}\n📍 ${p.loc||'Kenya'}\n\nVerified member of SOKONI — Kenya's City Super-App.\n\nhttps://mysokoni.co.ke/trust.html`;
+  if (navigator.share) {
+    navigator.share({ title:'My SOKONI Trust Passport', text: msg }).catch(()=>{});
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+}
+window.sharePassport = sharePassport;
+
+loadPassport();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-verifications.js" defer></script>
+<script>
+/* Show verified badge on passport card if user is verified in Firestore */
+document.addEventListener('sokoniAuthReady', function(e) {
+  var uid = e.detail && e.detail.uid;
+  if (!uid || !window.SokoniVerifications) return;
+  SokoniVerifications.check(uid).then(function(v) {
+    if (!v) return;
+    var nameEl = document.getElementById('passportName');
+    if (nameEl) SokoniVerifications.badge(uid, nameEl, { size: 'md' });
+  });
+});
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

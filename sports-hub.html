@@ -1,0 +1,796 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Sports Hub — Teams, Players, Venues & Tournaments</title>
+<meta name="description" content="Kenya's complete sports ecosystem. Find teams, book venues, join tournaments, discover coaches, and shop sports gear on SOKONI Sports Hub.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f59e0b">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.sh-nav{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.sh-logo{font-size:18px;font-weight:900;color:#f59e0b;flex:1;}
+.sh-logo span{color:white;}
+.sh-nav-btn{padding:7px 14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:9px;color:#f59e0b;font-size:12px;font-weight:800;cursor:pointer;text-decoration:none;font-family:inherit;white-space:nowrap;}
+.sh-notif-btn{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;font-size:16px;flex-shrink:0;}
+.sh-notif-badge{position:absolute;top:-3px;right:-3px;background:#ef4444;color:white;font-size:9px;font-weight:900;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;}
+.sh-hero{background:linear-gradient(135deg,rgba(245,158,11,0.12) 0%,rgba(8,8,8,0) 70%);border-bottom:1px solid rgba(245,158,11,0.1);padding:24px 16px 20px;}
+.sh-hero-title{font-size:26px;font-weight:900;line-height:1.1;margin-bottom:6px;}
+.sh-hero-sub{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:16px;}
+.sh-search{display:flex;gap:8px;}
+.sh-search input{flex:1;padding:12px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-family:inherit;font-size:16px;}
+.sh-search input::placeholder{color:rgba(255,255,255,0.3);}
+.sh-search input:focus{outline:none;border-color:rgba(245,158,11,0.4);}
+.sh-search-btn{padding:12px 18px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:16px;cursor:pointer;font-weight:800;font-family:inherit;}
+.sh-quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:16px;}
+.sh-quick-item{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;text-decoration:none;transition:all .2s;display:block;}
+.sh-quick-item:hover{border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.05);}
+.sh-quick-icon{font-size:24px;margin-bottom:6px;}
+.sh-quick-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);}
+.sh-section{padding:0 16px;margin-bottom:24px;}
+.sh-section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.sh-section-title{font-size:15px;font-weight:900;}
+.sh-section-link{font-size:11px;color:#f59e0b;font-weight:700;cursor:pointer;background:none;border:none;font-family:inherit;}
+.sh-sport-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 16px;margin-bottom:16px;}
+.sh-sport-tabs::-webkit-scrollbar{display:none;}
+.sh-sport-tab{padding:8px 14px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;flex-shrink:0;transition:all .2s;}
+.sh-sport-tab.active{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.35);color:#f59e0b;}
+.sh-tn-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color .2s;}
+.sh-tn-card:hover{border-color:rgba(245,158,11,0.25);}
+.sh-tn-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;}
+.sh-tn-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+.sh-tn-name{font-size:14px;font-weight:800;margin-bottom:3px;}
+.sh-tn-meta{font-size:11px;color:rgba(255,255,255,0.4);}
+.sh-tn-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+.sh-tn-badge{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:900;}
+.sh-tn-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);}
+.sh-tn-stat{text-align:center;}
+.sh-tn-stat-num{font-size:16px;font-weight:900;color:#f59e0b;}
+.sh-tn-stat-lbl{font-size:9px;color:rgba(255,255,255,0.35);}
+.sh-teams-scroll{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding:0 0 4px;}
+.sh-teams-scroll::-webkit-scrollbar{display:none;}
+.sh-team-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;min-width:160px;flex-shrink:0;cursor:pointer;transition:border-color .2s;}
+.sh-team-card:hover{border-color:rgba(245,158,11,0.3);}
+.sh-team-icon{font-size:32px;margin-bottom:8px;}
+.sh-team-name{font-size:12px;font-weight:800;margin-bottom:3px;}
+.sh-team-meta{font-size:10px;color:rgba(255,255,255,0.35);}
+.sh-team-open{display:inline-block;margin-top:6px;padding:3px 8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:6px;color:#22c55e;font-size:9px;font-weight:900;}
+.sh-venue-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .2s;}
+.sh-venue-card:hover{border-color:rgba(245,158,11,0.25);}
+.sh-venue-img{height:100px;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(8,8,8,0.8));display:flex;align-items:center;justify-content:center;font-size:48px;}
+.sh-venue-body{padding:12px;}
+.sh-venue-name{font-size:13px;font-weight:800;margin-bottom:3px;}
+.sh-venue-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:6px;}
+.sh-venue-price{font-size:13px;font-weight:900;color:#f59e0b;}
+.sh-venue-sports{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+.sh-venue-sport-tag{padding:2px 7px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:5px;font-size:9px;font-weight:700;color:#f59e0b;}
+.sh-venue-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.sh-scroll-row{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding:0 0 4px;}
+.sh-scroll-row::-webkit-scrollbar{display:none;}
+.sh-player-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;min-width:150px;flex-shrink:0;cursor:pointer;}
+.sh-player-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(245,158,11,0.2),rgba(245,158,11,0.05));border:2px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:8px;}
+.sh-player-name{font-size:12px;font-weight:800;margin-bottom:2px;}
+.sh-player-pos{font-size:10px;font-weight:700;margin-bottom:4px;}
+.sh-player-stat{font-size:10px;color:rgba(255,255,255,0.4);}
+.sh-coach-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;cursor:pointer;transition:border-color .2s;}
+.sh-coach-card:hover{border-color:rgba(245,158,11,0.25);}
+.sh-coach-avatar{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(8,8,8,0.5));border:2px solid rgba(245,158,11,0.25);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+.sh-coach-name{font-size:13px;font-weight:800;margin-bottom:2px;}
+.sh-coach-spec{font-size:11px;font-weight:700;margin-bottom:4px;}
+.sh-coach-meta{font-size:11px;color:rgba(255,255,255,0.4);}
+.sh-coach-rate{font-size:13px;font-weight:900;color:#f59e0b;margin-top:4px;}
+.sh-market-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden;cursor:pointer;min-width:140px;flex-shrink:0;transition:border-color .2s;}
+.sh-market-card:hover{border-color:rgba(245,158,11,0.25);}
+.sh-market-img{height:80px;background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(8,8,8,0.6));display:flex;align-items:center;justify-content:center;font-size:40px;}
+.sh-market-body{padding:10px;}
+.sh-market-name{font-size:11px;font-weight:800;margin-bottom:3px;}
+.sh-market-price{font-size:13px;font-weight:900;color:#f59e0b;}
+.sh-post-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;}
+.sh-post-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.sh-post-avatar{width:36px;height:36px;border-radius:50%;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.sh-post-author{font-size:12px;font-weight:800;}
+.sh-post-time{font-size:10px;color:rgba(255,255,255,0.3);}
+.sh-post-body{font-size:12px;line-height:1.6;color:rgba(255,255,255,0.7);}
+.sh-post-actions{display:flex;gap:14px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);}
+.sh-post-action{font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:700;background:none;border:none;font-family:inherit;}
+.sh-post-action:hover{color:#f59e0b;}
+.sh-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:none;align-items:flex-end;justify-content:center;}
+.sh-modal-overlay.open{display:flex;}
+.sh-modal{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px 16px;width:100%;max-width:540px;max-height:85vh;overflow-y:auto;}
+.sh-modal-title{font-size:16px;font-weight:900;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+.sh-modal-close{background:rgba(255,255,255,0.07);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.sh-field{margin-bottom:14px;}
+.sh-field label{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:5px;}
+.sh-field input,.sh-field select,.sh-field textarea{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;}
+.sh-field input:focus,.sh-field select:focus,.sh-field textarea:focus{outline:none;border-color:rgba(245,158,11,0.4);}
+.sh-field select option{background:#111;}
+.sh-field textarea{resize:vertical;min-height:80px;}
+.sh-submit-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+.sh-notif-panel{position:fixed;top:58px;right:12px;width:300px;background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;z-index:150;box-shadow:0 20px 60px rgba(0,0,0,0.8);display:none;max-height:400px;overflow-y:auto;}
+.sh-notif-panel.open{display:block;}
+.sh-notif-head{padding:14px;border-bottom:1px solid rgba(255,255,255,0.07);font-size:13px;font-weight:800;}
+.sh-notif-item{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;}
+.sh-notif-item:hover{background:rgba(255,255,255,0.03);}
+.sh-notif-title{font-size:12px;font-weight:700;margin-bottom:2px;}
+.sh-notif-body{font-size:11px;color:rgba(255,255,255,0.4);}
+.sh-empty{text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);}
+.sh-empty-icon{font-size:40px;margin-bottom:10px;}
+.sh-empty-title{font-size:14px;font-weight:700;margin-bottom:6px;}
+.sh-empty-sub{font-size:11px;line-height:1.5;}
+.sh-cta-banner{background:linear-gradient(135deg,rgba(34,197,94,0.06),rgba(8,8,8,0));border:1px solid rgba(34,197,94,0.15);border-radius:16px;padding:18px;margin:0 16px 24px;display:flex;gap:14px;align-items:center;}
+.sh-cta-icon{font-size:32px;flex-shrink:0;}
+.sh-cta-title{font-size:13px;font-weight:800;margin-bottom:4px;}
+.sh-cta-sub{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;line-height:1.5;}
+.sh-cta-btn{display:inline-block;padding:8px 16px;border-radius:9px;font-size:12px;font-weight:800;text-decoration:none;border:1px solid;cursor:pointer;}
+@media(min-width:600px){.sh-venue-grid{grid-template-columns:repeat(3,1fr);}.sh-quick{grid-template-columns:repeat(8,1fr);}}
+</style>
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-sports.js"></script>
+
+<nav class="sh-nav">
+  <a href="index.html" style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;">←</a>
+  <div class="sh-logo">🏆 <span>SOKONI</span> Sports</div>
+  <button class="sh-nav-btn" onclick="openJoinModal()">+ Register</button>
+  <a href="notifications.html" class="sh-notif-btn" style="text-decoration:none;color:inherit;">🔔<div class="sh-notif-badge" id="notifBadge" style="display:none">0</div></a>
+</nav>
+
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('notifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
+<div class="sh-notif-panel" id="notifPanel">
+  <div class="sh-notif-head">🔔 Notifications</div>
+  <div id="notifList"></div>
+</div>
+
+<div class="sh-hero">
+  <div class="sh-hero-title">🏆 Kenya's Sports<br>Ecosystem</div>
+  <div class="sh-hero-sub">Teams · Venues · Tournaments · Coaches · Marketplace</div>
+  <div class="sh-search">
+    <input type="text" id="searchInput" placeholder="Search teams, players, venues…" oninput="onSearch(this.value)">
+    <button class="sh-search-btn" onclick="onSearch(document.getElementById('searchInput').value)">🔍</button>
+  </div>
+</div>
+
+<div class="sh-quick">
+  <div class="sh-quick-item" onclick="scrollToSection('sTournaments')"><div class="sh-quick-icon">🏆</div><div class="sh-quick-label">Tournaments</div></div>
+  <div class="sh-quick-item" onclick="scrollToSection('sTeams')"><div class="sh-quick-icon">🤝</div><div class="sh-quick-label">Teams</div></div>
+  <div class="sh-quick-item" onclick="scrollToSection('sPlayers')"><div class="sh-quick-icon">⚡</div><div class="sh-quick-label">Players</div></div>
+  <div class="sh-quick-item" onclick="scrollToSection('sVenues')"><div class="sh-quick-icon">🏟️</div><div class="sh-quick-label">Venues</div></div>
+  <div class="sh-quick-item" onclick="scrollToSection('sCoaches')"><div class="sh-quick-icon">🎯</div><div class="sh-quick-label">Coaches</div></div>
+  <div class="sh-quick-item" onclick="scrollToSection('sMarket')"><div class="sh-quick-icon">🛒</div><div class="sh-quick-label">Gear</div></div>
+  <div class="sh-quick-item" onclick="scrollToSection('sCommunity')"><div class="sh-quick-icon">💬</div><div class="sh-quick-label">Community</div></div>
+  <div class="sh-quick-item" onclick="openJoinModal()"><div class="sh-quick-icon">➕</div><div class="sh-quick-label">Register</div></div>
+</div>
+
+<div class="sh-sport-tabs" id="sportTabs"></div>
+
+<div class="sh-section" id="sTournaments">
+  <div class="sh-section-head">
+    <div class="sh-section-title">🏆 Tournaments</div>
+    <button class="sh-section-link" onclick="renderTournaments(true)">View All →</button>
+  </div>
+  <div id="tournamentList"></div>
+</div>
+
+<div id="sTeams" class="sh-section">
+  <div class="sh-section-head">
+    <div class="sh-section-title">🤝 Teams & Clubs</div>
+    <button class="sh-section-link" onclick="showAllTeams()">View All →</button>
+  </div>
+  <div class="sh-teams-scroll" id="teamsList"></div>
+</div>
+
+<div id="sPlayers" class="sh-section">
+  <div class="sh-section-head">
+    <div class="sh-section-title">⚡ Players & Athletes</div>
+    <button class="sh-section-link" onclick="showAllPlayersModal()">View All →</button>
+  </div>
+  <div class="sh-scroll-row" id="playersList"></div>
+</div>
+
+<div class="sh-section" id="sVenues">
+  <div class="sh-section-head">
+    <div class="sh-section-title">🏟️ Book a Venue</div>
+    <button class="sh-section-link" onclick="renderVenues(true)">View All →</button>
+  </div>
+  <div class="sh-venue-grid" id="venueGrid"></div>
+</div>
+
+<div class="sh-section" id="sCoaches">
+  <div class="sh-section-head">
+    <div class="sh-section-title">🎯 Coaches & Trainers</div>
+    <button class="sh-section-link" onclick="renderCoaches(true)">View All →</button>
+  </div>
+  <div id="coachesList"></div>
+</div>
+
+<div id="sMarket" class="sh-section">
+  <div class="sh-section-head">
+    <div class="sh-section-title">🛒 Sports Marketplace</div>
+    <button class="sh-section-link" onclick="renderMarket()">View All →</button>
+  </div>
+  <div class="sh-scroll-row" id="marketList"></div>
+</div>
+
+<div class="sh-section" id="sCommunity">
+  <div class="sh-section-head">
+    <div class="sh-section-title">💬 Community</div>
+    <button class="sh-section-link" onclick="openPostModal()" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:5px 10px;color:#f59e0b;">+ Post</button>
+  </div>
+  <div id="postsList"></div>
+</div>
+
+<div class="sh-cta-banner">
+  <div class="sh-cta-icon">🏠</div>
+  <div>
+    <div class="sh-cta-title">Looking for Property?</div>
+    <div class="sh-cta-sub">Houses, apartments, offices and land — all on SOKONI Property Hub.</div>
+    <a href="property-hub.html" class="sh-cta-btn" style="color:#22c55e;border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.08);">🏠 Property Hub</a>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="javascript:void(0)" onclick="scrollToSection('sTournaments')" class="bnav-item"><span class="bnav-emoji">🏆</span><span>Tournaments</span></a>
+  <a href="sports-hub.html" class="bnav-item active-bnav"><span class="bnav-emoji">⚽</span><span>Sports</span></a>
+  <a href="javascript:void(0)" onclick="scrollToSection('sVenues')" class="bnav-item"><span class="bnav-emoji">📍</span><span>Venues</span></a>
+  <a href="javascript:void(0)" onclick="scrollToSection('sCommunity')" class="bnav-item"><span class="bnav-emoji">👥</span><span>Community</span></a>
+</nav>
+
+<!-- JOIN MODAL -->
+<div class="sh-modal-overlay" id="joinModal">
+  <div class="sh-modal">
+    <div class="sh-modal-title">🏆 Register on SOKONI Sports<button class="sh-modal-close" onclick="closeModal('joinModal')">✕</button></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+      <button onclick="setJoinType('team')" class="sh-nav-btn" style="padding:12px;border-radius:10px;width:100%;font-size:12px;">🤝 Register Team</button>
+      <button onclick="setJoinType('player')" class="sh-nav-btn" style="padding:12px;border-radius:10px;width:100%;font-size:12px;">⚡ Register Player</button>
+      <button onclick="setJoinType('coach')" class="sh-nav-btn" style="padding:12px;border-radius:10px;width:100%;font-size:12px;">🎯 Register Coach</button>
+      <button onclick="setJoinType('venue')" class="sh-nav-btn" style="padding:12px;border-radius:10px;width:100%;font-size:12px;">🏟️ List Venue</button>
+    </div>
+    <div id="joinForm"></div>
+  </div>
+</div>
+
+<!-- BOOK COACH MODAL -->
+<div class="sh-modal-overlay" id="coachModal">
+  <div class="sh-modal">
+    <div class="sh-modal-title">🎯 Book Coach Session<button class="sh-modal-close" onclick="closeModal('coachModal')">✕</button></div>
+    <div id="coachModalBody"></div>
+  </div>
+</div>
+
+<!-- POST MODAL -->
+<div class="sh-modal-overlay" id="postModal">
+  <div class="sh-modal">
+    <div class="sh-modal-title">💬 New Community Post<button class="sh-modal-close" onclick="closeModal('postModal')">✕</button></div>
+    <div class="sh-field"><label>Sport</label><select id="postSport" style="font-size:16px;"></select></div>
+    <div class="sh-field"><label>Post Type</label>
+      <select id="postType" style="font-size:16px;">
+        <option value="discussion">💬 Discussion</option>
+        <option value="announcement">📢 Announcement</option>
+        <option value="result">🏆 Match Result</option>
+        <option value="update">📰 Update</option>
+      </select>
+    </div>
+    <div class="sh-field"><label>Your Name</label><input type="text" id="postAuthor" placeholder="e.g. John Kamau" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Message</label><textarea id="postBody" placeholder="What's happening in your sports community?"></textarea></div>
+    <button class="sh-submit-btn" onclick="submitPost()">📤 Post to Community</button>
+  </div>
+</div>
+
+<!-- TEAM DETAIL MODAL -->
+<div class="sh-modal-overlay" id="teamModal">
+  <div class="sh-modal">
+    <div class="sh-modal-title" id="teamModalTitle">Team<button class="sh-modal-close" onclick="closeModal('teamModal')">✕</button></div>
+    <div id="teamModalBody"></div>
+  </div>
+</div>
+
+<!-- PLAYER MODAL -->
+<div class="sh-modal-overlay" id="playerModal">
+  <div class="sh-modal">
+    <div class="sh-modal-title" id="playerModalTitle">Player<button class="sh-modal-close" onclick="closeModal('playerModal')">✕</button></div>
+    <div id="playerModalBody"></div>
+  </div>
+</div>
+
+<!-- ALL PLAYERS MODAL -->
+<div class="sh-modal-overlay" id="allPlayersModal">
+  <div class="sh-modal">
+    <div class="sh-modal-title">⚡ All Players<button class="sh-modal-close" onclick="closeModal('allPlayersModal')">✕</button></div>
+    <div id="allPlayersBody"></div>
+  </div>
+</div>
+
+<!-- MARKET ITEM MODAL -->
+<div class="sh-modal-overlay" id="marketModal">
+  <div class="sh-modal">
+    <div class="sh-modal-title" id="marketModalTitle">🛒 Product<button class="sh-modal-close" onclick="closeModal('marketModal')">✕</button></div>
+    <div id="marketModalBody"></div>
+  </div>
+</div>
+
+<script>
+const S = window.SokoniSports;
+let activeSport = 'all';
+
+function init() {
+  renderSportTabs();
+  renderTournaments();
+  renderTeams();
+  renderPlayers();
+  renderVenues();
+  renderCoaches();
+  renderMarket();
+  renderPosts();
+  updateNotifBadge();
+  populatePostSport();
+}
+
+function renderSportTabs() {
+  document.getElementById('sportTabs').innerHTML = S.SPORT_CATEGORIES.map(c =>
+    `<button class="sh-sport-tab${c.id===activeSport?' active':''}" onclick="setActiveSport('${c.id}')">${c.icon} ${c.label}</button>`
+  ).join('');
+}
+
+function setActiveSport(sport) {
+  activeSport = sport;
+  renderSportTabs();
+  renderTournaments();
+  renderTeams();
+  renderPlayers();
+  renderVenues();
+  renderCoaches();
+}
+
+function renderTournaments(all) {
+  const el = document.getElementById('tournamentList');
+  let list = S.getTournaments(activeSport==='all'?null:{sport:activeSport});
+  if (!all) list = list.slice(0,3);
+  if (!list.length) { el.innerHTML = emptyHTML('🏆','No tournaments yet','Create a tournament or check back soon.'); return; }
+  el.innerHTML = list.map(tn => {
+    const sb = S.statusBadge(tn.status), sc = S.sportColor(tn.sport);
+    return `<div class="sh-tn-card" onclick="openTournament('${tn.id}')">
+      <div class="sh-tn-head">
+        <div class="sh-tn-icon" style="background:${sc}15;border:1px solid ${sc}25;">${S.sportIcon(tn.sport)}</div>
+        <div style="flex:1;">
+          <div class="sh-tn-name">${tn.name}</div>
+          <div class="sh-tn-meta">📍 ${tn.location} · 🗓 ${tn.startDate}</div>
+          <div class="sh-tn-badges">
+            <span class="sh-tn-badge" style="background:${sb.c}15;border:1px solid ${sb.c}30;color:${sb.c};">${sb.l}</span>
+            ${tn.prize?`<span class="sh-tn-badge" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#22c55e;">🏅 ${tn.prize}</span>`:''}
+          </div>
+        </div>
+      </div>
+      <div class="sh-tn-stats">
+        <div class="sh-tn-stat"><div class="sh-tn-stat-num">${tn.teamsRegistered||0}</div><div class="sh-tn-stat-lbl">Teams</div></div>
+        <div class="sh-tn-stat"><div class="sh-tn-stat-num">${tn.maxTeams}</div><div class="sh-tn-stat-lbl">Max</div></div>
+        <div class="sh-tn-stat"><div class="sh-tn-stat-num">${tn.entryFee?'KES '+S.fmt(tn.entryFee):'Free'}</div><div class="sh-tn-stat-lbl">Entry</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openTournament(id) { window.location.href = 'sports-tournament.html?id=' + id; }
+
+function renderTeams() {
+  const el = document.getElementById('teamsList');
+  let list = S.getTeams(activeSport==='all'?null:{sport:activeSport});
+  if (!list.length) { el.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:12px;padding:20px 0;">No teams for this sport yet.</div>`; return; }
+  el.innerHTML = list.map(t => `
+    <div class="sh-team-card" onclick="openTeam('${t.id}')">
+      <div class="sh-team-icon">${t.icon}</div>
+      <div class="sh-team-name">${t.name}</div>
+      <div class="sh-team-meta">📍 ${t.location}</div>
+      <div class="sh-team-meta">${t.wins}W · ${t.losses}L · ${t.members} members</div>
+      ${t.openToPlayers?'<div class="sh-team-open">🔓 Recruiting</div>':''}
+    </div>`).join('');
+}
+
+function showAllTeams() {
+  document.getElementById('teamsList').innerHTML = S.getTeams().map(t => `
+    <div class="sh-team-card" onclick="openTeam('${t.id}')">
+      <div class="sh-team-icon">${t.icon}</div>
+      <div class="sh-team-name">${t.name}</div>
+      <div class="sh-team-meta">📍 ${t.location}</div>
+      <div class="sh-team-meta">${t.wins}W · ${t.losses}L</div>
+      ${t.openToPlayers?'<div class="sh-team-open">🔓 Recruiting</div>':''}
+    </div>`).join('');
+}
+
+function openTeam(id) {
+  const t = S.getTeamById(id); if (!t) return;
+  const sc = S.sportColor(t.sport);
+  document.getElementById('teamModalTitle').textContent = t.name;
+  document.getElementById('teamModalBody').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:56px;margin-bottom:8px;">${t.icon}</div>
+      <div style="font-size:17px;font-weight:900;">${t.name}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">${t.league} · ${t.location}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      ${[['Wins',t.wins,'#22c55e'],['Losses',t.losses,'#ef4444'],['Members',t.members,'#f59e0b']].map(([l,v,c])=>`
+        <div style="background:${c}08;border:1px solid ${c}20;border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:20px;font-weight:900;color:${c};">${v}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);">${l}</div>
+        </div>`).join('')}
+    </div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:14px;">${t.description}</p>
+    <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:10px;">📍 ${t.location} · Founded ${t.founded} · ${S.sportIcon(t.sport)} ${t.sport}</div>
+    ${t.openToPlayers
+      ? `<a href="https://wa.me/254${(t.social?.whatsapp||'700000000').replace(/^0/,'')}" target="_blank" style="display:block;text-align:center;padding:12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);border-radius:10px;color:#25d366;font-weight:800;font-size:13px;text-decoration:none;">📲 WhatsApp to Join Team</a>`
+      : '<div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;text-align:center;font-size:12px;color:rgba(255,255,255,0.3);">Team not currently recruiting</div>'}`;
+  document.getElementById('teamModal').classList.add('open');
+}
+
+function renderPlayers() {
+  const el = document.getElementById('playersList');
+  let list = S.getPlayers(activeSport==='all'?null:{sport:activeSport});
+  if (!list.length) { el.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:12px;padding:20px 0;">No players for this sport yet.</div>`; return; }
+  el.innerHTML = list.map(p => `
+    <div class="sh-player-card" onclick="openPlayer('${p.id}')">
+      <div class="sh-player-avatar">${p.icon||'🏃'}</div>
+      <div class="sh-player-name">${p.name}</div>
+      <div class="sh-player-pos" style="color:${S.sportColor(p.sport)}">${p.position}</div>
+      <div class="sh-player-stat">📍 ${p.county||'Nairobi'}</div>
+    </div>`).join('');
+}
+
+function showAllPlayersModal() {
+  document.getElementById('allPlayersBody').innerHTML = S.getPlayers().map(p => `
+    <div class="sh-coach-card" onclick="closeModal('allPlayersModal');openPlayer('${p.id}')">
+      <div class="sh-coach-avatar">${p.icon||'🏃'}</div>
+      <div style="flex:1;">
+        <div class="sh-coach-name">${p.name}</div>
+        <div class="sh-coach-spec" style="color:${S.sportColor(p.sport)}">${p.position} · ${S.sportIcon(p.sport)}</div>
+        <div class="sh-coach-meta">🏟 ${p.club} · 📍 ${p.county||'Nairobi'}</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('allPlayersModal').classList.add('open');
+}
+
+function openPlayer(id) {
+  const p = S.getPlayerById(id); if (!p) return;
+  const sc = S.sportColor(p.sport);
+  document.getElementById('playerModalTitle').textContent = p.name;
+  const statsKeys = p.stats ? Object.entries(p.stats) : [];
+  document.getElementById('playerModalBody').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:56px;margin-bottom:8px;">${p.icon||'🏃'}</div>
+      <div style="font-size:17px;font-weight:900;">${p.name}</div>
+      <div style="font-size:12px;color:${sc};font-weight:700;margin-top:3px;">${p.position}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">🏟 ${p.club} · 📍 ${p.county||'Nairobi'}</div>
+      <div style="margin-top:6px;">${S.starsHTML(p.rating||4)} <span style="font-size:11px;color:rgba(255,255,255,0.4);">${p.rating||4.0}</span></div>
+    </div>
+    ${statsKeys.length?`<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;display:grid;grid-template-columns:repeat(${Math.min(statsKeys.length,4)},1fr);gap:8px;margin-bottom:12px;">
+      ${statsKeys.map(([k,v])=>`<div style="text-align:center;"><div style="font-size:18px;font-weight:900;color:${sc};">${v}</div><div style="font-size:9px;color:rgba(255,255,255,0.3);">${k}</div></div>`).join('')}
+    </div>`:''}
+    ${p.bio?`<p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:12px;">${p.bio}</p>`:''}
+    ${p.achievements?.length?`<div style="font-size:11px;color:rgba(255,255,255,0.35);font-weight:700;margin-bottom:6px;">🏅 Achievements</div>${p.achievements.map(a=>`<div style="font-size:11px;color:rgba(255,255,255,0.5);padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">✓ ${a}</div>`).join('')}`:''}
+    ${p.recruitmentOpen?`<a href="https://wa.me/254700000000?text=Hi, I'm interested in ${encodeURIComponent(p.name)}'s profile on SOKONI Sports" target="_blank" style="display:block;text-align:center;padding:12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);border-radius:10px;color:#25d366;font-weight:800;font-size:13px;text-decoration:none;margin-top:12px;">📲 Contact for Recruitment</a>`:''}`;
+  document.getElementById('playerModal').classList.add('open');
+}
+
+function renderVenues(all) {
+  const el = document.getElementById('venueGrid');
+  let list = S.getVenues(activeSport==='all'?null:{sport:activeSport});
+  if (!all) list = list.slice(0,4);
+  if (!list.length) { el.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:12px;padding:20px 0;grid-column:span 2;">No venues for this sport yet.</div>`; return; }
+  el.innerHTML = list.map(v => `
+    <div class="sh-venue-card" onclick="openVenue('${v.id}')">
+      <div class="sh-venue-img">${v.icon||'🏟️'}</div>
+      <div class="sh-venue-body">
+        <div class="sh-venue-name">${v.name}</div>
+        <div class="sh-venue-meta">📍 ${v.location}</div>
+        <div class="sh-venue-price">KES ${S.fmt(v.pricePerHour)}/hr</div>
+        <div class="sh-venue-sports">${(v.sports||[]).slice(0,3).map(sp=>`<span class="sh-venue-sport-tag">${S.sportIcon(sp)}</span>`).join('')}</div>
+      </div>
+    </div>`).join('');
+}
+
+function openVenue(id) { window.location.href = 'sports-venue.html?id=' + id; }
+
+function renderCoaches(all) {
+  const el = document.getElementById('coachesList');
+  let list = S.getCoaches(activeSport==='all'?null:{sport:activeSport});
+  if (!all) list = list.slice(0,3);
+  if (!list.length) { el.innerHTML = emptyHTML('🎯','No coaches yet','Coaches will appear here soon.'); return; }
+  el.innerHTML = list.map(c => `
+    <div class="sh-coach-card">
+      <div class="sh-coach-avatar">${c.icon||'🎯'}</div>
+      <div style="flex:1;">
+        <div class="sh-coach-name">${c.name}</div>
+        <div class="sh-coach-spec" style="color:${S.sportColor(c.sport)}">${S.sportIcon(c.sport)} ${c.specialization}</div>
+        <div class="sh-coach-meta">📍 ${c.location} · ⭐ ${c.rating} · ${c.experience}yrs exp</div>
+        <div class="sh-coach-rate">KES ${S.fmt(c.ratePerSession)}/session</div>
+      </div>
+      <button onclick="openCoachModal('${c.id}')" style="padding:7px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;color:#f59e0b;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">Book</button>
+    </div>`).join('');
+}
+
+function openCoachModal(id) {
+  const c = S.getCoachById(id); if (!c) return;
+  const sc = S.sportColor(c.sport);
+  document.getElementById('coachModalBody').innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+      <div style="width:60px;height:60px;border-radius:50%;background:${sc}15;border:2px solid ${sc}30;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;">${c.icon||'🎯'}</div>
+      <div>
+        <div style="font-size:15px;font-weight:900;">${c.name}</div>
+        <div style="font-size:12px;color:${sc};font-weight:700;">${c.specialization}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">⭐ ${c.rating} · ${c.experience} yrs exp · 📍 ${c.location}</div>
+        <div style="font-size:13px;font-weight:900;color:#f59e0b;margin-top:4px;">KES ${S.fmt(c.ratePerSession)}/session</div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:14px;">${c.bio}</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+      ${c.specialties.map(sp=>`<span style="padding:4px 10px;background:${sc}10;border:1px solid ${sc}25;border-radius:6px;font-size:10px;font-weight:700;color:${sc};">${sp}</span>`).join('')}
+    </div>
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin-bottom:14px;">
+    <div class="sh-field"><label>Your Name</label><input type="text" id="cbName" placeholder="Full name" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Phone Number</label><input type="tel" id="cbPhone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Preferred Date</label><input type="date" id="cbDate" min="${new Date().toISOString().split('T')[0]}" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Session Type</label>
+      <select id="cbType" style="font-size:16px;">
+        <option value="individual">Individual Training</option>
+        <option value="group">Group Session</option>
+        <option value="video">Video Analysis</option>
+        <option value="fitness">Fitness Assessment</option>
+      </select>
+    </div>
+    <div class="sh-field"><label>Notes</label><textarea id="cbNotes" placeholder="Goals or requirements…"></textarea></div>
+    <button class="sh-submit-btn" onclick="submitCoachBooking('${c.id}')">🎯 Book — KES ${S.fmt(c.ratePerSession)}</button>
+    <a href="https://wa.me/254${(c.phone||'700000000').replace(/^0/,'')}" target="_blank" style="display:block;text-align:center;padding:11px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-weight:800;font-size:13px;text-decoration:none;margin-top:8px;">📲 WhatsApp Coach</a>`;
+  document.getElementById('coachModal').classList.add('open');
+}
+
+function submitCoachBooking(coachId) {
+  const name = document.getElementById('cbName').value.trim();
+  const phone = document.getElementById('cbPhone').value.trim();
+  const date = document.getElementById('cbDate').value;
+  if (!name || !phone || !date) { (window._skToast||alert)('Please fill in name, phone, and preferred date.'); return; }
+  const bk = S.bookCoach({coachId, name, phone, date, sessionType: document.getElementById('cbType').value, notes: document.getElementById('cbNotes').value});
+  S.addNotification({type:'coach', title:'Session Booked!', body:`Coach session booked. Ref: ${bk.id}`});
+  updateNotifBadge();
+  closeModal('coachModal');
+  (window._skToast||alert)('✅ Coach session booked!\nRef: ' + bk.id + '\nThe coach will contact you on ' + phone);
+}
+
+function renderMarket() {
+  document.getElementById('marketList').innerHTML = S.getMarketplace().map(m => `
+    <div class="sh-market-card" onclick="openMarketItem('${m.id}')">
+      <div class="sh-market-img">${m.icon}</div>
+      <div class="sh-market-body">
+        <div class="sh-market-name">${m.name}</div>
+        <div class="sh-market-price">KES ${S.fmt(m.price)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function openMarketItem(id) {
+  const m = S.getMarketplace().find(x => x.id === id); if (!m) return;
+  document.getElementById('marketModalTitle').textContent = m.name;
+  document.getElementById('marketModalBody').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:72px;margin-bottom:10px;">${m.icon}</div>
+      <div style="font-size:17px;font-weight:900;">${m.name}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-top:4px;">${m.category}</div>
+      <div style="font-size:22px;font-weight:900;color:#f59e0b;margin-top:8px;">KES ${S.fmt(m.price)}</div>
+      ${m.originalPrice>m.price?`<div style="font-size:12px;color:rgba(255,255,255,0.3);text-decoration:line-through;">Was KES ${S.fmt(m.originalPrice)}</div>`:''}
+    </div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:14px;">${m.description}</p>
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:12px;">📦 Brand: ${m.brand} · Stock: ${m.stock} units</div>
+    <div class="sh-field"><label>Quantity</label><input type="number" id="mktQty" value="1" min="1" max="${m.stock}" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Delivery Phone</label><input type="tel" id="mktPhone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <button class="sh-submit-btn" onclick="submitMarketOrder('${m.id}')">🛒 Order Now</button>`;
+  document.getElementById('marketModal').classList.add('open');
+}
+
+function submitMarketOrder(itemId) {
+  const phone = document.getElementById('mktPhone').value.trim();
+  if (!phone) { (window._skToast||alert)('Please enter your phone number.'); return; }
+  const qty = parseInt(document.getElementById('mktQty').value)||1;
+  const order = S.createOrder({itemId, qty, phone});
+  S.addNotification({type:'market', title:'Order Placed!', body:`Order placed. Ref: ${order.id}`});
+  updateNotifBadge();
+  closeModal('marketModal');
+  (window._skToast||alert)('✅ Order placed!\nRef: ' + order.id);
+}
+
+function populatePostSport() {
+  document.getElementById('postSport').innerHTML = S.SPORT_CATEGORIES.map(c=>`<option value="${c.id}">${c.icon} ${c.label}</option>`).join('');
+}
+
+function renderPosts() {
+  const el = document.getElementById('postsList');
+  const list = S.getPosts(activeSport==='all'?null:{sport:activeSport}).slice(0,5);
+  if (!list.length) { el.innerHTML = emptyHTML('💬','No posts yet','Be the first to post!'); return; }
+  el.innerHTML = list.map(p => `
+    <div class="sh-post-card">
+      <div class="sh-post-head">
+        <div class="sh-post-avatar">${S.sportIcon(p.sport)}</div>
+        <div>
+          <div class="sh-post-author">${p.author}</div>
+          <div class="sh-post-time">${S.timeSince(p.ts)}</div>
+        </div>
+        <span style="margin-left:auto;padding:3px 8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:6px;font-size:9px;font-weight:900;color:#f59e0b;">${p.type||'discussion'}</span>
+      </div>
+      <div class="sh-post-body">${p.body}</div>
+      <div class="sh-post-actions">
+        <button class="sh-post-action" onclick="likePost('${p.id}',this)">❤️ <span>${p.likes||0}</span></button>
+        <span class="sh-post-action">💬 ${p.comments||0}</span>
+        <button class="sh-post-action" onclick="sharePost()">📤 Share</button>
+      </div>
+    </div>`).join('');
+}
+
+function likePost(id, el) {
+  S.likePost(id);
+  const sp = el.querySelector('span');
+  if (sp) sp.textContent = parseInt(sp.textContent||0)+1;
+  el.style.color = '#ef4444';
+}
+
+function sharePost() {
+  if (navigator.share) navigator.share({title:'SOKONI Sports',url:location.href});
+  else navigator.clipboard.writeText(location.href).then(()=>(window._skToast||alert)('Link copied!')).catch(()=>{});
+}
+
+function openPostModal() { document.getElementById('postModal').classList.add('open'); }
+
+function submitPost() {
+  const author = document.getElementById('postAuthor').value.trim();
+  const body = document.getElementById('postBody').value.trim();
+  if (!author || !body) { (window._skToast||alert)('Please enter your name and message.'); return; }
+  S.createPost({sport:document.getElementById('postSport').value, type:document.getElementById('postType').value, author, body});
+  closeModal('postModal');
+  document.getElementById('postAuthor').value = '';
+  document.getElementById('postBody').value = '';
+  renderPosts();
+}
+
+let joinType = 'team';
+const joinForms = {
+  team:`<div class="sh-field"><label>Team Name</label><input type="text" id="jf_name" placeholder="e.g. Nairobi Tigers FC" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Sport</label><select id="jf_sport" style="font-size:16px;"></select></div>
+    <div class="sh-field"><label>County / Location</label><input type="text" id="jf_county" placeholder="Nairobi" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Captain Name</label><input type="text" id="jf_captain" placeholder="Full name" style="font-size:16px;"></div>
+    <div class="sh-field"><label>WhatsApp Number</label><input type="tel" id="jf_phone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Description</label><textarea id="jf_desc" placeholder="Tell us about your team…"></textarea></div>
+    <button class="sh-submit-btn" onclick="submitJoin()">🤝 Register Team</button>`,
+  player:`<div class="sh-field"><label>Full Name</label><input type="text" id="jf_name" placeholder="Your name" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Sport</label><select id="jf_sport" style="font-size:16px;"></select></div>
+    <div class="sh-field"><label>Position / Speciality</label><input type="text" id="jf_position" placeholder="e.g. Striker" style="font-size:16px;"></div>
+    <div class="sh-field"><label>County</label><input type="text" id="jf_county" placeholder="Nairobi" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Phone</label><input type="tel" id="jf_phone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Bio</label><textarea id="jf_desc" placeholder="Sports background and achievements…"></textarea></div>
+    <button class="sh-submit-btn" onclick="submitJoin()">⚡ Register as Player</button>`,
+  coach:`<div class="sh-field"><label>Full Name</label><input type="text" id="jf_name" placeholder="Coach name" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Sport</label><select id="jf_sport" style="font-size:16px;"></select></div>
+    <div class="sh-field"><label>Specialization</label><input type="text" id="jf_position" placeholder="e.g. Fitness & Conditioning" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Rate per Session (KES)</label><input type="number" id="jf_rate" placeholder="2500" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Phone</label><input type="tel" id="jf_phone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Bio</label><textarea id="jf_desc" placeholder="Coaching experience…"></textarea></div>
+    <button class="sh-submit-btn" onclick="submitJoin()">🎯 Register as Coach</button>`,
+  venue:`<div class="sh-field"><label>Venue Name</label><input type="text" id="jf_name" placeholder="e.g. Kasarani Arena" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Primary Sport</label><select id="jf_sport" style="font-size:16px;"></select></div>
+    <div class="sh-field"><label>Location</label><input type="text" id="jf_county" placeholder="e.g. Kasarani, Nairobi" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Price per Hour (KES)</label><input type="number" id="jf_rate" placeholder="3000" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Owner Phone</label><input type="tel" id="jf_phone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <div class="sh-field"><label>Description</label><textarea id="jf_desc" placeholder="Facilities and capacity…"></textarea></div>
+    <button class="sh-submit-btn" onclick="submitJoin()">🏟️ List Venue</button>`,
+};
+
+function setJoinType(type) {
+  joinType = type;
+  document.getElementById('joinForm').innerHTML = joinForms[type];
+  const sel = document.getElementById('jf_sport');
+  if (sel) sel.innerHTML = S.SPORT_CATEGORIES.filter(c=>c.id!=='all').map(c=>`<option value="${c.id}">${c.icon} ${c.label}</option>`).join('');
+}
+
+function openJoinModal() { setJoinType('team'); document.getElementById('joinModal').classList.add('open'); }
+
+function submitJoin() {
+  const name = document.getElementById('jf_name')?.value.trim();
+  const phone = document.getElementById('jf_phone')?.value.trim();
+  if (!name || !phone) { (window._skToast||alert)('Please fill in the required fields.'); return; }
+  const sport   = document.getElementById('jf_sport')?.value || '';
+  const county  = document.getElementById('jf_county')?.value || '';
+  const desc    = document.getElementById('jf_desc')?.value || '';
+  const rate    = Number(document.getElementById('jf_rate')?.value || 0);
+  const pos     = document.getElementById('jf_position')?.value || '';
+
+  const captain = document.getElementById('jf_captain')?.value || '';
+  if (joinType==='team')   S.createTeam({name,sport,location:county,captain,social:{whatsapp:phone},description:desc});
+  else if (joinType==='player') S.createPlayer({name,sport,position:pos,county,phone,bio:desc,recruitmentOpen:true});
+
+  /* Save ALL types to Firestore — teams/players to sportsMembers; coaches/venues to applications */
+  const catMap = { team:'team', player:'player', coach:'coach', venue:'sports-venue' };
+  const collection = (joinType==='team'||joinType==='player') ? 'sportsMembers' : 'applications';
+  const payload = {
+    id: 'SPT'+Date.now(), name, phone, category: catMap[joinType]||joinType,
+    hub: 'sports', location: county, description: desc, sport,
+    rate: rate || 0, captain: captain||'', position: pos||'',
+    status: 'pending', type: 'sports-'+joinType,
+    submittedAt: new Date().toISOString(), createdAt: Date.now()
+  };
+  if (window.firebaseDB) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
+      fs.addDoc(fs.collection(window.firebaseDB, collection), payload);
+    }).catch(function(){});
+  }
+  /* localStorage backup */
+  try {
+    const apps = JSON.parse(localStorage.getItem('sokoniPendingApplications')||'[]');
+    apps.unshift(payload);
+    localStorage.setItem('sokoniPendingApplications', JSON.stringify(apps.slice(0,50)));
+  } catch(e) {}
+
+  closeModal('joinModal');
+  (window._skToast||alert)('✅ ' + name + ' registered on SOKONI Sports!');
+  renderTeams(); renderPlayers();
+}
+
+function onSearch(q) {
+  if (!q.trim()) { renderTeams(); return; }
+  q = q.toLowerCase();
+  const filtered = S.getTeams().filter(t=>t.name.toLowerCase().includes(q)||t.location.toLowerCase().includes(q)||t.sport.includes(q));
+  document.getElementById('teamsList').innerHTML = filtered.length
+    ? filtered.map(t=>`<div class="sh-team-card" onclick="openTeam('${t.id}')"><div class="sh-team-icon">${t.icon}</div><div class="sh-team-name">${t.name}</div><div class="sh-team-meta">📍 ${t.location}</div></div>`).join('')
+    : '<div style="color:rgba(255,255,255,0.3);font-size:12px;padding:16px 0;">No results.</div>';
+}
+
+function toggleNotif() { document.getElementById('notifPanel').classList.toggle('open'); renderNotifs(); }
+
+function renderNotifs() {
+  const list = S.getNotifications();
+  const el = document.getElementById('notifList');
+  if (!list.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,255,255,0.3);font-size:12px;">No notifications</div>'; return; }
+  el.innerHTML = list.slice(0,10).map(n=>`
+    <div class="sh-notif-item" onclick="S.markNotifRead('${n.id}');updateNotifBadge();this.style.opacity='0.5';" style="${n.read?'opacity:0.5':''}">
+      <div class="sh-notif-title">${n.title}</div>
+      <div class="sh-notif-body">${n.body} · ${S.timeSince(n.ts)}</div>
+    </div>`).join('');
+}
+
+function updateNotifBadge() {
+  const cnt = S.getUnreadCount(), el = document.getElementById('notifBadge');
+  if (cnt>0) { el.style.display='flex'; el.textContent=cnt; } else { el.style.display='none'; }
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function scrollToSection(id) { document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}); }
+function emptyHTML(icon,title,sub) { return `<div class="sh-empty"><div class="sh-empty-icon">${icon}</div><div class="sh-empty-title">${title}</div><div class="sh-empty-sub">${sub}</div></div>`; }
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#notifPanel') && !e.target.closest('.sh-notif-btn'))
+    document.getElementById('notifPanel').classList.remove('open');
+});
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <!-- REGISTER CTA — universal fallback for other business types -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
+    <button onclick="HubRegister.open({hub:'sports', category:'sports-venue'})" style="padding:10px 24px;background:#22d3ee;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

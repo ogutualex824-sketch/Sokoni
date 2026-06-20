@@ -1,0 +1,2249 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Driver Portal</title>
+  <meta name="description" content="Manage your SOKONI driver account, rides, deliveries and earnings.">
+  <meta property="og:title" content="SOKONI — Driver Portal">
+  <meta property="og:description" content="Track your rides, deliveries and earnings on SOKONI Driver Portal.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <script src="sokoni-permissions.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    .driver-page{ padding:28px 5% 100px; min-height:100vh; }
+
+    /* ── Stats row ── */
+    .driver-stat-row{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+    .driver-stat{ background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:18px; padding:18px; text-align:center; }
+    .ds-icon{ font-size:24px; margin-bottom:8px; }
+    .ds-val{ font-size:24px; font-weight:900; color:#71ff00; }
+    .ds-label{ font-size:11px; color:rgba(255,255,255,0.4); font-weight:600; margin-top:2px; }
+
+    /* ── Delivery cards ── */
+    .delivery-card{ background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:18px; padding:18px 20px; margin-bottom:12px; transition:0.2s; }
+    .delivery-card:hover{ border-color:rgba(113,255,0,0.25); }
+    .dc-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+    .dc-id{ font-weight:800; color:white; font-size:15px; }
+    .dc-date{ font-size:12px; color:rgba(255,255,255,0.35); }
+    .dc-info{ font-size:13px; color:rgba(255,255,255,0.6); margin-bottom:10px; line-height:1.6; }
+    .dc-fee{ font-size:17px; font-weight:900; color:#71ff00; }
+    .dc-breakdown{ font-size:11px; color:rgba(255,255,255,0.35); margin-top:2px; }
+    .dc-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .dc-accept-btn{ flex:1; padding:11px; background:linear-gradient(135deg,#71ff00,#4fc800); color:black; font-weight:800; border:none; border-radius:10px; cursor:pointer; font-size:13px; font-family:inherit; }
+    .dc-decline-btn{ padding:11px 16px; background:rgba(255,61,61,0.1); border:1px solid rgba(255,61,61,0.2); color:#ff6b6b; font-weight:700; border-radius:10px; cursor:pointer; font-size:13px; font-family:inherit; }
+    .dc-update-btn{ padding:11px 16px; background:rgba(0,170,255,0.1); border:1px solid rgba(0,170,255,0.2); color:#00aaff; font-weight:700; border-radius:10px; cursor:pointer; font-size:13px; font-family:inherit; }
+
+    /* ── Registration ── */
+    .reg-section{ background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:24px; padding:28px; margin-bottom:20px; }
+    .reg-section h2{ font-size:17px; font-weight:800; color:white; margin-bottom:6px; }
+    .reg-section p{ color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:20px; }
+    .d-input{ width:100%; padding:13px 15px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:16px; outline:none; font-family:inherit; margin-bottom:12px; }
+    .d-input::placeholder{ color:rgba(255,255,255,0.3); }
+    .d-input:focus{ border-color:rgba(113,255,0,0.4); }
+
+    /* ── Perk grid ── */
+    .perk-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; margin:16px 0; }
+    .perk-item{ background:rgba(113,255,0,0.05); border:1px solid rgba(113,255,0,0.14); border-radius:12px; padding:14px; font-size:12px; color:rgba(255,255,255,0.7); text-align:center; }
+    .perk-item .pi-icon{ font-size:22px; margin-bottom:6px; }
+    .perk-item strong{ color:white; display:block; font-size:13px; margin-bottom:2px; }
+
+    /* ── Fair Pay Promise ── */
+    .fair-pay-box{ background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,200,80,0.04)); border:1px solid rgba(113,255,0,0.2); border-radius:20px; padding:24px; margin:24px 0; }
+    .fair-pay-box h3{ font-size:16px; font-weight:900; color:#71ff00; margin-bottom:8px; }
+    .fair-pay-box p{ font-size:13px; color:rgba(255,255,255,0.55); margin-bottom:16px; line-height:1.6; }
+    .commission-table{ width:100%; border-collapse:collapse; }
+    .commission-table th{ font-size:11px; color:rgba(255,255,255,0.4); font-weight:700; text-align:left; padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.08); }
+    .commission-table td{ font-size:13px; color:white; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.05); }
+    .commission-table .green{ color:#71ff00; font-weight:800; }
+    .commission-table .red-dim{ color:#ff6b6b; }
+    .vs-row{ display:flex; gap:12px; margin-top:14px; flex-wrap:wrap; }
+    .vs-card{ flex:1; min-width:140px; border-radius:14px; padding:14px; text-align:center; }
+    .vs-sokoni{ background:rgba(113,255,0,0.08); border:1px solid rgba(113,255,0,0.25); }
+    .vs-bolt{ background:rgba(255,220,0,0.06); border:1px solid rgba(255,220,0,0.15); }
+    .vs-card .vs-label{ font-size:11px; font-weight:700; color:rgba(255,255,255,0.5); margin-bottom:6px; }
+    .vs-card .vs-val{ font-size:22px; font-weight:900; }
+    .vs-sokoni .vs-val{ color:#71ff00; }
+    .vs-bolt .vs-val{ color:#ffd700; }
+    .vs-card .vs-sub{ font-size:10px; color:rgba(255,255,255,0.35); margin-top:4px; }
+
+    /* ── Universal running cost calculator ── */
+    .cost-calc{ border-radius:18px; padding:20px; margin:20px 0; }
+    .cost-calc-fuel{ background:rgba(249,115,22,0.06); border:1px solid rgba(249,115,22,0.2); }
+    .cost-calc-ebike{ background:rgba(0,180,255,0.06); border:1px solid rgba(0,180,255,0.2); }
+    .cost-calc h4{ font-size:14px; font-weight:800; margin-bottom:4px; }
+    .cost-calc-fuel h4{ color:#fb923c; }
+    .cost-calc-ebike h4{ color:#00b4ff; }
+    .cost-calc-meta{ font-size:12px; color:rgba(255,255,255,0.4); margin-bottom:14px; line-height:1.5; }
+    .cost-slider-row{ display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
+    .cost-slider-row label{ font-size:12px; color:rgba(255,255,255,0.5); min-width:80px; }
+    .cost-slider{ flex:1; min-width:120px; accent-color:#71ff00; }
+    .cost-result{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin-top:12px; }
+    .cost-result-item{ background:rgba(255,255,255,0.04); border-radius:10px; padding:10px; text-align:center; }
+    .cost-result-item .cr-val{ font-size:17px; font-weight:900; color:#71ff00; }
+    .cost-result-item .cr-label{ font-size:10px; color:rgba(255,255,255,0.35); margin-top:2px; }
+
+    /* ── Vehicle badge ── */
+    .vehicle-badge{ display:inline-block; border-radius:8px; padding:3px 10px; font-size:11px; font-weight:700; margin-left:8px; vertical-align:middle; }
+    .vbadge-ebike{ background:rgba(0,180,255,0.12); border:1px solid rgba(0,180,255,0.3); color:#00b4ff; }
+    .vbadge-moto{ background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.3); color:#fb923c; }
+    .vbadge-car{ background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3); color:#c084fc; }
+    .vbadge-tuktuk{ background:rgba(234,179,8,0.12); border:1px solid rgba(234,179,8,0.3); color:#fbbf24; }
+    .vbadge-bicycle{ background:rgba(0,200,120,0.12); border:1px solid rgba(0,200,120,0.3); color:#00c878; }
+    .vbadge-cargo{   background:rgba(251,63,63,0.12);  border:1px solid rgba(251,63,63,0.3);  color:#fb4040; }
+
+    /* ── Fuel price panel ── */
+    .fuel-panel{ background:linear-gradient(135deg,rgba(249,115,22,0.07),rgba(234,179,8,0.05)); border:1px solid rgba(249,115,22,0.2); border-radius:20px; padding:22px; margin:20px 0; }
+    .fuel-panel-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+    .fuel-panel-head h4{ font-size:15px; font-weight:900; color:#fb923c; }
+    .fuel-panel-head .fp-updated{ font-size:11px; color:rgba(255,255,255,0.35); }
+    .fuel-price-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+    .fuel-price-card{ background:rgba(255,255,255,0.04); border-radius:14px; padding:14px; text-align:center; border:1px solid rgba(255,255,255,0.07); position:relative; overflow:hidden; }
+    .fuel-price-card .fpc-name{ font-size:11px; font-weight:700; color:rgba(255,255,255,0.5); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
+    .fuel-price-card .fpc-price{ font-size:22px; font-weight:900; color:white; margin-bottom:4px; }
+    .fuel-price-card .fpc-unit{ font-size:10px; color:rgba(255,255,255,0.35); }
+    .fuel-price-card .fpc-change{ font-size:11px; font-weight:700; margin-top:6px; }
+    .fpc-up{ color:#ff6b6b; }
+    .fpc-down{ color:#71ff00; }
+    .fpc-same{ color:rgba(255,255,255,0.35); }
+    .fuel-ai-box{ background:rgba(0,0,0,0.25); border-radius:12px; padding:14px; font-size:12px; color:rgba(255,255,255,0.55); line-height:1.7; border:1px solid rgba(255,255,255,0.06); }
+    .fuel-ai-box .ai-label{ color:#fb923c; font-weight:800; font-size:11px; display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+    .ai-dot{ width:7px; height:7px; border-radius:50%; background:#fb923c; animation:aiPulse 1.4s infinite; flex-shrink:0; }
+    @keyframes aiPulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.4; transform:scale(0.7); } }
+    .fuel-cost-row{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; margin-top:12px; }
+    .fuel-cost-item{ background:rgba(255,255,255,0.03); border-radius:10px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; border:1px solid rgba(255,255,255,0.06); }
+    .fuel-cost-item .fci-label{ font-size:11px; color:rgba(255,255,255,0.45); }
+    .fuel-cost-item .fci-val{ font-size:13px; font-weight:800; color:#fb923c; }
+    .fuel-refresh-btn{ padding:8px 16px; background:rgba(249,115,22,0.1); border:1px solid rgba(249,115,22,0.25); border-radius:9px; color:#fb923c; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .2s; }
+    .fuel-refresh-btn:hover{ background:rgba(249,115,22,0.18); }
+
+    /* ── Weekly goal ── */
+    .weekly-goal{ background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:18px; padding:20px; margin-bottom:20px; }
+    .weekly-goal h4{ font-size:14px; font-weight:800; color:white; margin-bottom:12px; }
+    .goal-bar-bg{ background:rgba(255,255,255,0.06); border-radius:999px; height:10px; overflow:hidden; }
+    .goal-bar-fill{ height:100%; border-radius:999px; background:linear-gradient(90deg,#71ff00,#4fc800); transition:width 0.5s; }
+    .goal-labels{ display:flex; justify-content:space-between; font-size:11px; color:rgba(255,255,255,0.35); margin-top:6px; }
+
+    /* ── Section headings ── */
+    .section-heading{ font-size:15px; font-weight:800; color:white; margin:20px 0 14px; display:flex; align-items:center; gap:8px; }
+    .section-heading::after{ content:''; flex:1; height:1px; background:rgba(255,255,255,0.07); }
+
+    /* ── Bonus milestones ── */
+    .bonus-row{ display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
+    .bonus-card{ border-radius:14px; padding:14px; text-align:center; border:1px solid rgba(255,255,255,0.08); }
+    .bonus-card .bc-trips{ font-size:20px; font-weight:900; margin-bottom:2px; }
+    .bonus-card .bc-earn{ font-size:13px; font-weight:800; color:#71ff00; margin-bottom:3px; }
+    .bonus-card .bc-label{ font-size:10px; color:rgba(255,255,255,0.4); }
+    .bonus-card.locked{ background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.08); opacity:0.55; }
+    .bonus-card.unlocked{ background:rgba(113,255,0,0.06); border-color:rgba(113,255,0,0.22); }
+    .bonus-card.next{ background:rgba(249,115,22,0.07); border-color:rgba(249,115,22,0.25); animation:bonusPulse 2s infinite; }
+    @keyframes bonusPulse{ 0%,100%{ box-shadow:0 0 0 rgba(249,115,22,0.2); } 50%{ box-shadow:0 0 12px rgba(249,115,22,0.3); } }
+
+    /* ── Tier badge ── */
+    .tier-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+    .tier-chip{ flex:1; min-width:100px; border-radius:12px; padding:12px; text-align:center; border:1px solid rgba(255,255,255,0.1); }
+    .tier-bronze{ background:rgba(180,120,60,0.1); border-color:rgba(180,120,60,0.3); }
+    .tier-silver{ background:rgba(180,180,200,0.08); border-color:rgba(180,180,200,0.25); }
+    .tier-gold{ background:rgba(255,200,50,0.08); border-color:rgba(255,200,50,0.25); }
+    .tier-diamond{ background:rgba(113,200,255,0.08); border-color:rgba(113,200,255,0.3); }
+    .tier-chip.active-tier{ box-shadow:0 0 18px rgba(113,255,0,0.2); border-color:rgba(113,255,0,0.45) !important; }
+    .tier-chip .tc-icon{ font-size:24px; margin-bottom:5px; }
+    .tier-chip .tc-name{ font-size:12px; font-weight:800; color:white; }
+    .tier-chip .tc-req{ font-size:10px; color:rgba(255,255,255,0.35); margin-top:2px; }
+    .tier-chip .tc-perk{ font-size:10px; color:#71ff00; margin-top:4px; font-weight:700; }
+
+    /* ── Payout schedule ── */
+    .payout-box{ background:rgba(0,170,255,0.06); border:1px solid rgba(0,170,255,0.18); border-radius:18px; padding:20px; margin-bottom:20px; }
+    .payout-box h4{ font-size:14px; font-weight:800; color:#00aaff; margin-bottom:12px; }
+    .payout-row{ display:flex; gap:12px; flex-wrap:wrap; }
+    .payout-step{ flex:1; min-width:130px; background:rgba(0,170,255,0.06); border-radius:12px; padding:12px; text-align:center; border:1px solid rgba(0,170,255,0.12); }
+    .payout-step .ps-icon{ font-size:20px; margin-bottom:5px; }
+    .payout-step .ps-title{ font-size:11px; font-weight:800; color:white; margin-bottom:3px; }
+    .payout-step .ps-desc{ font-size:10px; color:rgba(255,255,255,0.4); line-height:1.4; }
+
+    /* ── Insurance ── */
+    .insurance-box{ background:rgba(113,255,0,0.04); border:1px solid rgba(113,255,0,0.15); border-radius:18px; padding:20px; margin-bottom:20px; }
+    .insurance-box h4{ font-size:14px; font-weight:800; color:#71ff00; margin-bottom:12px; }
+    .insurance-items{ display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px; }
+    .ins-item{ background:rgba(113,255,0,0.05); border-radius:10px; padding:10px 12px; font-size:12px; color:rgba(255,255,255,0.65); display:flex; align-items:flex-start; gap:8px; }
+    .ins-item::before{ content:"✅"; font-size:12px; flex-shrink:0; margin-top:1px; }
+
+    /* ── Referral ── */
+    .referral-box{ background:linear-gradient(135deg,rgba(168,85,247,0.07),rgba(236,72,153,0.05)); border:1px solid rgba(168,85,247,0.2); border-radius:18px; padding:20px; margin-bottom:20px; }
+    .referral-box h4{ font-size:14px; font-weight:800; color:#c084fc; margin-bottom:10px; }
+
+    /* ── Tips ── */
+    .tips-grid-d{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; margin-bottom:20px; }
+    .tip-d{ background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:14px; }
+    .tip-d-num{ font-size:22px; font-weight:900; color:rgba(113,255,0,0.25); margin-bottom:5px; }
+    .tip-d-title{ font-size:12px; font-weight:800; color:white; margin-bottom:3px; }
+    .tip-d-body{ font-size:11px; color:rgba(255,255,255,0.45); line-height:1.5; }
+
+    /* ── Support buttons ── */
+    .support-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+    .supp-btn{ flex:1; min-width:140px; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 16px; border-radius:12px; font-size:13px; font-weight:700; text-decoration:none; border:1px solid; cursor:pointer; font-family:inherit; transition:all .2s; }
+    .supp-btn:hover{ transform:translateY(-2px); }
+    .supp-wa{ background:rgba(37,211,102,0.08); border-color:rgba(37,211,102,0.25); color:#25d366; }
+    .supp-call{ background:rgba(0,170,255,0.08); border-color:rgba(0,170,255,0.25); color:#60aaff; }
+    .supp-email{ background:rgba(249,115,22,0.08); border-color:rgba(249,115,22,0.25); color:#fb923c; }
+
+    /* ── Leaderboard ── */
+    .leader-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
+    .leader-item{ display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:12px 14px; }
+    .leader-item.my-row{ border-color:rgba(113,255,0,0.25); background:rgba(113,255,0,0.04); }
+    .leader-rank{ font-size:16px; font-weight:900; min-width:28px; text-align:center; }
+    .leader-name{ flex:1; font-size:13px; font-weight:700; color:white; }
+    .leader-trips{ font-size:12px; color:rgba(255,255,255,0.4); }
+    .leader-earn{ font-size:14px; font-weight:900; color:#71ff00; }
+    @media(max-width:600px){ .drv-nav-links { display:none !important; } }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Delivery Driver / Rider — SOKONI Kenya","description":"Join SOKONI as a delivery rider or driver in Nairobi, Mombasa or Kisumu. Fair pay — 88% per delivery. Boda boda, e-bike, car, van and pickup riders welcome.","url":"https://mysokoni.co.ke/driver.html","hiringOrganization":{"@type":"Organization","name":"Sokoni Technologies Ltd","sameAs":"https://mysokoni.co.ke"},"jobLocation":{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Nairobi","addressCountry":"KE"}},"employmentType":"PART_TIME","baseSalary":{"@type":"MonetaryAmount","currency":"KES","value":{"@type":"QuantitativeValue","value":88,"unitText":"PERCENT"}}}</script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="splash.js"></script>
+
+
+<nav class="navbar">
+  <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
+  <div class="drv-nav-links" style="display:flex;gap:8px;align-items:center;">
+    <a href="index.html" class="cart-btn" style="text-decoration:none;">🏠 Home</a>
+    <a href="services.html" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:rgba(255,255,255,0.7);font-weight:700;font-size:13px;transition:all .2s;white-space:nowrap;" onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='white';" onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='rgba(255,255,255,0.7)';"><i class="fas fa-tools" style="font-size:12px;"></i> Services</a>
+    <a href="delivery.html" style="text-decoration:none;display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:linear-gradient(135deg,rgba(113,255,0,0.13),rgba(0,200,80,0.08));border:1px solid rgba(113,255,0,0.32);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;transition:all .2s;white-space:nowrap;" onmouseover="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.22),rgba(0,200,80,0.15))';this.style.borderColor='rgba(113,255,0,0.5)';" onmouseout="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.13),rgba(0,200,80,0.08))';this.style.borderColor='rgba(113,255,0,0.32)';"><i class="fas fa-box" style="font-size:12px;"></i> Send a Parcel</a>
+  </div>
+</nav>
+
+<div class="driver-page">
+
+  <!-- ══════════════════════════════════════════
+       DASHBOARD — always visible
+  ══════════════════════════════════════════ -->
+
+  <!-- ══════════════════════════════════════════
+       DASHBOARD — shown after login
+  ══════════════════════════════════════════ -->
+  <div id="driverDashboard">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="font-size:20px;font-weight:900;color:white;" id="driverGreet">Welcome back, Driver! 🛵</h2>
+        <p style="color:rgba(255,255,255,0.4);font-size:13px;" id="driverZone"></p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🟢 Go Online</button>
+        <a href="services.html" style="display:inline-flex;align-items:center;gap:5px;padding:10px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;white-space:nowrap;">🛠️ Services</a>
+        <button type="button" onclick="logoutDriver()" style="padding:10px 14px;background:rgba(255,61,61,0.1);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Logout</button>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="driver-stat-row" id="driverStats"></div>
+
+    <!-- Weekly earnings goal -->
+    <div class="weekly-goal" id="weeklyGoalBox"></div>
+
+    <!-- ── Earnings Trend Chart ── -->
+    <div class="weekly-goal" style="margin-bottom:20px;">
+      <h4 style="margin-bottom:12px;">📊 Earnings History — Last 8 Weeks</h4>
+      <div style="position:relative;height:160px;">
+        <canvas id="driverEarnChart"></canvas>
+      </div>
+    </div>
+
+    <!-- ── AI Fuel Price Panel (all non-ebike vehicles) ── -->
+    <div id="fuelPricePanel" style="display:none;">
+      <div class="section-heading">⛽ AI Fuel Price Tracker</div>
+      <div class="fuel-panel">
+        <div class="fuel-panel-head">
+          <h4>⛽ Kenya ERC Pump Prices</h4>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span class="fp-updated" id="fuelLastUpdated">Loading...</span>
+            <button type="button" class="fuel-refresh-btn" onclick="refreshFuelPrices()">↻ Check for Updates</button>
+          </div>
+        </div>
+        <div class="fuel-price-grid" id="fuelPriceGrid"></div>
+        <div class="fuel-ai-box" id="fuelAiAnalysis">
+          <div class="ai-label"><span class="ai-dot"></span> AI Analysis</div>
+          <span id="fuelAiText">Analysing current prices...</span>
+        </div>
+        <div class="fuel-cost-row" id="fuelCostRow"></div>
+      </div>
+    </div>
+
+    <!-- ── Universal Running Cost Calculator ── -->
+    <div class="section-heading">🧮 Running Cost Calculator</div>
+    <div class="cost-calc" id="runningCostBox">
+      <!-- filled dynamically based on vehicle type -->
+    </div>
+
+    <!-- Available deliveries -->
+    <div class="section-heading" id="deliveriesHeader">📦 Available Deliveries</div>
+    <div id="availableDeliveries"></div>
+
+    <!-- My active deliveries -->
+    <div class="section-heading" id="myDeliveriesHeader">🛵 My Active Deliveries</div>
+    <div id="myDeliveries"></div>
+
+    <!-- Earnings breakdown (commission transparency) -->
+    <div class="section-heading">💰 Commission Transparency</div>
+    <div class="fair-pay-box" style="margin:0 0 20px;">
+      <h3>💰 Your Earnings Breakdown</h3>
+      <p>For every delivery you complete, here's exactly where the money goes.</p>
+      <table class="commission-table">
+        <tr><th>What</th><th>Who Gets It</th><th>Why</th></tr>
+        <tr><td>88% of delivery fee</td><td class="green">You (Driver)</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">Your sweat, your money</td></tr>
+        <tr><td>12% of delivery fee</td><td style="color:rgba(255,255,255,0.5);">Sokoni Platform</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">App, insurance, support</td></tr>
+        <tr><td>Charging cost</td><td style="color:#00b4ff;">Deducted from gross</td><td style="color:rgba(255,255,255,0.4);font-size:12px;">E-bike only · ~KES 0.23/km</td></tr>
+      </table>
+      <p style="margin-top:12px;font-size:11px;color:rgba(113,255,0,0.6);">✅ No hidden fees. No surge deductions. No performance penalty charges.</p>
+    </div>
+
+    <!-- ── Rider Status Tier ── -->
+    <div class="section-heading">🏅 Your Rider Tier</div>
+    <div class="tier-row" id="tierRow"></div>
+
+    <!-- ── Weekly Performance Bonuses ── -->
+    <div class="section-heading">🎁 Weekly Performance Bonuses</div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">Complete these weekly milestones and earn bonus payouts automatically via M-PESA every Sunday at 8PM.</p>
+    <div class="bonus-row" id="bonusRow"></div>
+
+    <!-- ── Payout Schedule ── -->
+    <div class="section-heading">💳 Payout Schedule</div>
+    <div class="payout-box">
+      <h4>📲 How & When You Get Paid</h4>
+      <div class="payout-row">
+        <div class="payout-step"><div class="ps-icon">✅</div><div class="ps-title">Deliver & Complete</div><div class="ps-desc">Mark order as delivered to log your earnings instantly.</div></div>
+        <div class="payout-step"><div class="ps-icon">📊</div><div class="ps-title">Earnings Tallied</div><div class="ps-desc">Daily earnings totalled at midnight.</div></div>
+        <div class="payout-step"><div class="ps-icon">📲</div><div class="ps-title">M-PESA Payout</div><div class="ps-desc">Paid every evening by 8PM to your registered number.</div></div>
+        <div class="payout-step"><div class="ps-icon">🎁</div><div class="ps-title">Weekly Bonus</div><div class="ps-desc">Milestone bonuses sent every Sunday night.</div></div>
+      </div>
+      <p style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:12px;">Minimum payout: KES 100 · No withdrawal fees · Instant M-PESA confirmation</p>
+    </div>
+
+    <!-- ── Insurance Coverage ── -->
+    <div class="section-heading">🔒 Your Insurance Coverage</div>
+    <div class="insurance-box">
+      <h4>🛡️ Included with every Sokoni delivery — at no cost to you</h4>
+      <div class="insurance-items">
+        <div class="ins-item">Third-party liability — up to KES 200,000</div>
+        <div class="ins-item">Accidental injury cover — up to KES 50,000 medical</div>
+        <div class="ins-item">Goods-in-transit cover — up to KES 30,000 per delivery</div>
+        <div class="ins-item">Bike/vehicle damage (active delivery only)</div>
+        <div class="ins-item">Emergency roadside assistance — call 0800 SOK ONI</div>
+        <div class="ins-item">Hospital cash benefit — KES 500/day for up to 7 days</div>
+      </div>
+      <p style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.35);">Insurance is active the moment you accept a delivery and ends when you mark it delivered. Underwritten by a licensed Kenyan insurer.</p>
+    </div>
+
+    <!-- ── Referral Program ── -->
+    <div class="section-heading">🤝 Refer a Rider — Earn KES 500</div>
+    <div class="referral-box">
+      <h4>🎯 Every rider you bring earns you KES 500</h4>
+      <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:14px;line-height:1.6;">Share your referral code with other riders. When they sign up, complete their first 5 deliveries, and get approved — you receive KES 500 via M-PESA. No limit on how many riders you can refer.</p>
+      <button type="button" onclick="generateReferral()" style="padding:11px 22px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">📋 Get My Referral Code</button>
+      <div id="referralResult" style="display:none;margin-top:12px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:12px;font-size:13px;"></div>
+    </div>
+
+    <!-- ── Weekly Leaderboard ── -->
+    <div class="section-heading">🏆 This Week's Top Riders</div>
+    <div class="leader-list" id="leaderList"></div>
+
+    <!-- ── Maximize Earnings Tips ── -->
+    <div class="section-heading">💡 Tips to Maximize Your Earnings</div>
+    <div class="tips-grid-d">
+      <div class="tip-d"><div class="tip-d-num">01</div><div class="tip-d-title">Go Online at Peak Hours</div><div class="tip-d-body">Lunch (12–2PM) and dinner (6–9PM) are busiest. Evening deliveries often cover longer distances = bigger fees.</div></div>
+      <div class="tip-d"><div class="tip-d-num">02</div><div class="tip-d-title">Stay in Hotspots</div><div class="tip-d-body">Westlands, CBD, and Eastlands generate the most orders. Position near restaurants and shopping areas.</div></div>
+      <div class="tip-d"><div class="tip-d-num">03</div><div class="tip-d-title">Accept Quickly</div><div class="tip-d-body">Orders go to the nearest online driver. Fast accepts mean more deliveries per hour and better standing in the algorithm.</div></div>
+      <div class="tip-d"><div class="tip-d-num">04</div><div class="tip-d-title">Maintain Your Rating</div><div class="tip-d-body">A 4.8+ rating unlocks priority orders. Be polite, deliver on time, communicate delays before the customer asks.</div></div>
+      <div class="tip-d"><div class="tip-d-num">05</div><div class="tip-d-title">Pick the Right Orders</div><div class="tip-d-body">Lorry/pickup drivers: only accept freight-sized orders — the fee structure rewards you for long-distance bulk cargo. Boda riders: stick to parcels under 30km for the best time-to-earnings ratio.</div></div>
+      <div class="tip-d"><div class="tip-d-num">06</div><div class="tip-d-title">Hit Weekly Milestones</div><div class="tip-d-body">Even 5 extra deliveries on Saturday/Sunday can push you into the next bonus tier and earn you an extra KES 500–2,000.</div></div>
+    </div>
+
+    <!-- ── Rider Support ── -->
+    <div class="section-heading">🆘 Rider Support</div>
+    <div class="support-row">
+      <a href="https://wa.me/254705726803?text=Hi%20Sokoni%20Driver%20Support" target="_blank" class="supp-btn supp-wa"><i class="fab fa-whatsapp"></i> WhatsApp Support</a>
+      <a href="tel:+254705726803" class="supp-btn supp-call">📞 Call Support</a>
+      <a href="https://wa.me/254705726803?text=Hi%20Sokoni%2C%20I%20need%20driver%20support" target="_blank" class="supp-btn supp-email">💬 Chat Support</a>
+    </div>
+    <p style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:24px;">Support hours: Mon–Sat 6AM–11PM · Emergency line: 0800 SOK ONI (24/7)</p>
+
+    <!-- ── Apply to Drive / Switch Account ── -->
+    <div class="section-heading">🛵 Join / Switch Account</div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <button type="button" class="dc-accept-btn" style="flex:1;" onclick="document.getElementById('applySection').style.display=document.getElementById('applySection').style.display==='none'?'block':'none'">📋 Apply to Drive</button>
+      <button type="button" class="dc-update-btn" onclick="document.getElementById('loginSection').style.display=document.getElementById('loginSection').style.display==='none'?'block':'none'">🔑 Driver Login</button>
+    </div>
+
+    <!-- Login form -->
+    <div class="reg-section" id="loginSection" style="display:none;">
+      <h2>🔑 Driver Login</h2>
+      <p>Enter your registered phone and PIN</p>
+      <input class="d-input" type="tel" id="driverLoginPhone" placeholder="Phone: 07XXXXXXXX">
+      <input class="d-input" type="password" id="driverLoginPin" placeholder="Your PIN" maxlength="4" autocomplete="current-password">
+      <div id="loginMsg" style="min-height:18px;font-size:13px;color:#ff8080;font-weight:700;margin-bottom:8px;text-align:center;"></div>
+      <button type="button" class="dc-accept-btn" onclick="loginDriver()">Login →</button>
+    </div>
+
+    <!-- Application form -->
+    <div class="reg-section" id="applySection" style="display:none;">
+      <h2>🛵 Apply to Drive</h2>
+      <p>Fill in your details and we'll review within 24 hours</p>
+      <input class="d-input" type="text" id="drName" placeholder="Full Name">
+      <input class="d-input" type="tel" id="drPhone" placeholder="Phone: 07XXXXXXXX">
+      <input class="d-input" type="text" id="drId" placeholder="National ID Number">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px;">📷 National ID Photo</label>
+          <label for="drIdPhoto" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:90px;border:2px dashed rgba(113,255,0,0.25);border-radius:12px;cursor:pointer;background:rgba(113,255,0,0.03);transition:border-color .2s;padding:10px;" id="drIdPhotoLabel">
+            <div id="drIdPhotoPreview" style="display:none;width:100%;text-align:center;"><img id="drIdPhotoImg" style="max-height:80px;max-width:100%;border-radius:8px;object-fit:cover;" alt="ID preview"></div>
+            <div id="drIdPhotoPlaceholder" style="text-align:center;">
+              <div style="font-size:24px;">🪪</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.4);">Tap to upload</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.25);">Front of ID card</div>
+            </div>
+          </label>
+          <input type="file" id="drIdPhoto" accept="image/*" capture="environment" style="display:none;" onchange="previewDocPhoto(this,'drIdPhotoImg','drIdPhotoPreview','drIdPhotoPlaceholder','drIdPhotoLabel')">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px;">📷 Driving Licence</label>
+          <label for="drDlPhoto" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:90px;border:2px dashed rgba(113,255,0,0.25);border-radius:12px;cursor:pointer;background:rgba(113,255,0,0.03);transition:border-color .2s;padding:10px;" id="drDlPhotoLabel">
+            <div id="drDlPhotoPreview" style="display:none;width:100%;text-align:center;"><img id="drDlPhotoImg" style="max-height:80px;max-width:100%;border-radius:8px;object-fit:cover;" alt="DL preview"></div>
+            <div id="drDlPhotoPlaceholder" style="text-align:center;">
+              <div style="font-size:24px;">🚗</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.4);">Tap to upload</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.25);">Driving licence front</div>
+            </div>
+          </label>
+          <input type="file" id="drDlPhoto" accept="image/*" capture="environment" style="display:none;" onchange="previewDocPhoto(this,'drDlPhotoImg','drDlPhotoPreview','drDlPhotoPlaceholder','drDlPhotoLabel')">
+        </div>
+      </div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-bottom:12px;padding:8px 12px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid rgba(255,255,255,0.06);">
+        🔒 Your documents are stored locally for verification. Sokoni never shares your ID with third parties.
+      </div>
+
+      <select class="d-input" id="drVehicle" style="cursor:pointer;" onchange="onVehicleChange()">
+        <option value="">Select Vehicle Type</option>
+        <optgroup label="── Light / Last-Mile ──">
+          <option value="bicycle">🚲 Pedal Bicycle</option>
+          <option value="ebike">🔋 Electric Bike (E-Bike)</option>
+          <option value="motorcycle">🏍️ Motorcycle / Boda Boda</option>
+          <option value="tuktuk">🛺 Tuk-Tuk / Three-Wheeler</option>
+        </optgroup>
+        <optgroup label="── Passenger & Light Cargo ──">
+          <option value="car">🚗 Car / Saloon / Hatchback</option>
+          <option value="van">🚐 Van / Minivan (up to 1 tonne)</option>
+        </optgroup>
+        <optgroup label="── Cargo & Freight ──">
+          <option value="pickup">🛻 Pickup Truck (1–3 tonnes)</option>
+          <option value="canter">🚛 Canter / Mini-Lorry (3–7 tonnes)</option>
+          <option value="lorry">🚚 Lorry / Truck (7–30 tonnes)</option>
+        </optgroup>
+      </select>
+      <div id="ebikeRegInfo" style="display:none;border-radius:12px;padding:14px;margin-bottom:12px;font-size:12px;color:rgba(255,255,255,0.65);line-height:1.7;"></div>
+      <div id="cargoFields" style="display:none;">
+        <select class="d-input" id="drCargoTonne" style="cursor:pointer;">
+          <option value="">Max Cargo Capacity</option>
+          <option value="1">1 tonne</option><option value="2">2 tonnes</option><option value="3">3 tonnes</option>
+          <option value="5">5 tonnes</option><option value="7">7 tonnes</option><option value="10">10 tonnes</option>
+          <option value="14">14 tonnes</option><option value="20">20 tonnes</option><option value="30">30 tonnes</option>
+        </select>
+        <select class="d-input" id="drCargoType" style="cursor:pointer;">
+          <option value="">Cargo Specialisation (optional)</option>
+          <option value="general">📦 General Cargo</option>
+          <option value="furniture">🛋️ Furniture & Household</option>
+          <option value="construction">🧱 Construction Materials</option>
+          <option value="refrigerated">❄️ Refrigerated / Perishables</option>
+          <option value="livestock">🐄 Livestock</option>
+          <option value="fuel">⛽ Fuel / Liquids (requires certification)</option>
+          <option value="electronics">📱 Electronics / Fragile Goods</option>
+        </select>
+        <input class="d-input" type="text" id="drLogbook" placeholder="Vehicle Logbook / PSV Licence Number">
+      </div>
+      <input class="d-input" type="text" id="drPlate" placeholder="Number Plate">
+      <select class="d-input" id="drZone" style="cursor:pointer;">
+        <option value="">Primary Zone</option>
+        <option value="nairobi-cbd">📍 Nairobi CBD</option>
+        <option value="westlands">📍 Westlands / Parklands</option>
+        <option value="eastlands">📍 Eastlands</option>
+        <option value="south">📍 South Nairobi</option>
+        <option value="mombasa">📍 Mombasa</option>
+        <option value="kisumu">📍 Kisumu</option>
+        <option value="other">📍 Other</option>
+      </select>
+      <input class="d-input" type="password" id="drPin" placeholder="Set a 4-digit PIN" maxlength="4" autocomplete="new-password">
+      <div id="regMsg" style="min-height:18px;font-size:13px;color:#ff8080;font-weight:700;margin-bottom:8px;text-align:center;"></div>
+      <button type="button" class="dc-accept-btn" onclick="registerDriver()">📤 Submit Application</button>
+    </div>
+
+  </div><!-- /driverDashboard -->
+</div><!-- /driver-page -->
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="flashsale.html" class="bnav-item bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="delivery.html" class="bnav-item"><span class="bnav-emoji">🚚</span><span>Delivery</span></a>
+  <a href="profile.html" class="bnav-item active-bnav"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+let currentDriver = null;
+let isOnline = false;
+
+/* ── Delivery fee formula (vehicle-aware) ── */
+function calcDeliveryFee(orderTotal, distKm, vehicle){
+  distKm = distKm || estimateDistance();
+  vehicle = vehicle || (currentDriver && currentDriver.vehicle) || "motorcycle";
+  const spec = VEHICLE_CONSUMPTION[vehicle] || VEHICLE_CONSUMPTION.motorcycle;
+  return Math.max(spec.minFee, Math.round(spec.feeBase + distKm * spec.feePerKm));
+}
+
+function estimateDistance(){
+  return 3 + Math.random() * 12; // km — replaced by GPS in prod
+}
+
+/* Simulate order cargo size so drivers see relevant jobs */
+function orderCargoSize(order){
+  const total = Number(order.total)||0;
+  if(total >= 50000) return "freight";
+  if(total >= 10000) return "large";
+  if(total >= 2000)  return "medium";
+  return "parcel";
+}
+
+function vehicleCanHandleOrder(vehicle, order){
+  const driverCap = CARGO_CAPACITY[vehicle] || "parcel";
+  const orderCargo = orderCargoSize(order);
+  const tier = { parcel:0, medium:1, large:2, freight:3 };
+  return tier[driverCap] >= tier[orderCargo];
+}
+
+function driverShareFromFee(fee){ return Math.round(fee * 0.88); }
+function platformShareFromFee(fee){ return Math.round(fee * 0.12); }
+
+/* ══════════════════════════════════════════════
+   FUEL & RUNNING COST ENGINE
+   Kenya ERC prices — updated monthly ~15th of each month
+   Source: Energy & Petroleum Regulatory Authority (EPRA)
+══════════════════════════════════════════════ */
+
+const FUEL_DB_KEY = "sokoniFuelPrices";
+
+/* Base Kenya ERC prices — admin updates these on each ERC revision */
+const ERC_BASE_PRICES = {
+  super_petrol: { nairobi:176.70, mombasa:165.68, kisumu:179.68, other:179.68 },
+  diesel:       { nairobi:163.41, mombasa:152.39, kisumu:166.39, other:166.39 },
+  kerosene:     { nairobi:138.92, mombasa:127.90, kisumu:141.90, other:141.90 },
+};
+
+/* Previous month prices for trend comparison */
+const ERC_PREV_PRICES = {
+  super_petrol: { nairobi:182.90, mombasa:171.88, kisumu:185.88, other:185.88 },
+  diesel:       { nairobi:168.40, mombasa:157.38, kisumu:171.38, other:171.38 },
+  kerosene:     { nairobi:144.61, mombasa:133.59, kisumu:147.59, other:147.59 },
+};
+
+/* Vehicle fuel consumption (km per litre) + cargo metadata */
+const VEHICLE_CONSUMPTION = {
+  bicycle:    { fuelType:"none",         kmPerLitre:null, label:"Bicycle",               cargoKg:15,    feeBase:60,  feePerKm:10, minFee:80  },
+  ebike:      { fuelType:"electricity",  kmPerLitre:null, label:"Electric Bike",          cargoKg:20,    feeBase:80,  feePerKm:12, minFee:100 },
+  motorcycle: { fuelType:"super_petrol", kmPerLitre:35,   label:"Motorcycle (35 km/L)",   cargoKg:30,    feeBase:80,  feePerKm:15, minFee:120 },
+  tuktuk:     { fuelType:"diesel",       kmPerLitre:20,   label:"Tuk-Tuk (20 km/L)",      cargoKg:200,   feeBase:200, feePerKm:20, minFee:300 },
+  car:        { fuelType:"super_petrol", kmPerLitre:12,   label:"Car/Van (12 km/L)",       cargoKg:400,   feeBase:300, feePerKm:25, minFee:450 },
+  van:        { fuelType:"diesel",       kmPerLitre:11,   label:"Van/Minivan (11 km/L)",   cargoKg:800,   feeBase:400, feePerKm:30, minFee:600 },
+  pickup:     { fuelType:"diesel",       kmPerLitre:10,   label:"Pickup Truck (10 km/L)",  cargoKg:2000,  feeBase:800, feePerKm:50, minFee:1200 },
+  canter:     { fuelType:"diesel",       kmPerLitre:7,    label:"Canter/Mini-Lorry (7 km/L)", cargoKg:5000, feeBase:2500, feePerKm:100, minFee:4000 },
+  lorry:      { fuelType:"diesel",       kmPerLitre:4,    label:"Lorry/Truck (4 km/L)",   cargoKg:20000, feeBase:8000, feePerKm:200, minFee:12000 },
+};
+
+/* Cargo size category for order matching */
+const CARGO_CAPACITY = {
+  bicycle:"parcel", ebike:"parcel", motorcycle:"parcel",
+  tuktuk:"medium", car:"medium", van:"medium",
+  pickup:"large", canter:"freight", lorry:"freight",
+};
+
+/* E-bike charging cost: 360Wh / 40km × KES 25/kWh = KES 0.225/km */
+const EBIKE_COST_PER_KM = 0.225;
+
+function getDriverZoneKey(){
+  if(!currentDriver) return "nairobi";
+  const z = (currentDriver.zone||"").toLowerCase();
+  if(z.includes("mombasa")) return "mombasa";
+  if(z.includes("kisumu"))  return "kisumu";
+  return "nairobi";
+}
+
+function getCurrentFuelPrice(fuelType){
+  const zone = getDriverZoneKey();
+  return ERC_BASE_PRICES[fuelType]?.[zone] || ERC_BASE_PRICES[fuelType]?.nairobi || 0;
+}
+
+function getPrevFuelPrice(fuelType){
+  const zone = getDriverZoneKey();
+  return ERC_PREV_PRICES[fuelType]?.[zone] || ERC_PREV_PRICES[fuelType]?.nairobi || 0;
+}
+
+/* Cost per km for a given vehicle */
+function runningCostPerKm(vehicle){
+  const v = VEHICLE_CONSUMPTION[vehicle];
+  if(!v) return 0;
+  if(v.fuelType === "electricity") return EBIKE_COST_PER_KM;
+  if(v.fuelType === "none") return 0;
+  const pricePerLitre = getCurrentFuelPrice(v.fuelType);
+  return pricePerLitre / v.kmPerLitre;
+}
+
+function runningCostForTrip(vehicle, km){
+  return Math.round(runningCostPerKm(vehicle) * km * 100) / 100;
+}
+
+function chargingCost(km){ return runningCostForTrip("ebike", km); }
+
+function _drvToast(msg,isErr){var t=document.getElementById('_drvToastEl');if(!t){t=document.createElement('div');t.id='_drvToastEl';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(10,10,10,.92);border:1px solid rgba(113,255,0,.3);color:#71ff00;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;transition:opacity .3s;pointer-events:none;';document.body.appendChild(t);}if(isErr){t.style.borderColor='rgba(255,80,80,.4)';t.style.color='#ff8080';}else{t.style.borderColor='rgba(113,255,0,.3)';t.style.color='#71ff00';}t.textContent=msg;t.style.opacity='1';clearTimeout(t._to);t._to=setTimeout(()=>{t.style.opacity='0';},3200);}
+
+/* ── Registration toggle ── */
+function showDriverLogin(){ document.getElementById("driverLoginForm").style.display="block"; document.getElementById("driverRegForm").style.display="none"; }
+function showDriverRegForm(){ document.getElementById("driverRegForm").style.display="block"; document.getElementById("driverLoginForm").style.display="none"; }
+
+function onVehicleChange(){
+  const v    = document.getElementById("drVehicle").value;
+  const info = document.getElementById("ebikeRegInfo");
+  const cargo= document.getElementById("cargoFields");
+
+  const isCargo = ["pickup","canter","lorry","van"].includes(v);
+  cargo.style.display = isCargo ? "block" : "none";
+
+  /* colour + border per vehicle family */
+  const palette = {
+    bicycle:    { bg:"rgba(0,200,120,0.06)",  bd:"rgba(0,200,120,0.25)"  },
+    ebike:      { bg:"rgba(0,180,255,0.06)",  bd:"rgba(0,180,255,0.25)"  },
+    motorcycle: { bg:"rgba(249,115,22,0.06)", bd:"rgba(249,115,22,0.25)" },
+    tuktuk:     { bg:"rgba(234,179,8,0.06)",  bd:"rgba(234,179,8,0.25)"  },
+    car:        { bg:"rgba(168,85,247,0.06)", bd:"rgba(168,85,247,0.25)" },
+    van:        { bg:"rgba(168,85,247,0.06)", bd:"rgba(168,85,247,0.25)" },
+    pickup:     { bg:"rgba(251,63,63,0.06)",  bd:"rgba(251,63,63,0.25)"  },
+    canter:     { bg:"rgba(251,63,63,0.06)",  bd:"rgba(251,63,63,0.25)"  },
+    lorry:      { bg:"rgba(251,63,63,0.06)",  bd:"rgba(251,63,63,0.25)"  },
+  };
+  const pal = palette[v] || { bg:"rgba(255,255,255,0.04)", bd:"rgba(255,255,255,0.1)" };
+  info.style.background = pal.bg;
+  info.style.border     = `1px solid ${pal.bd}`;
+
+  const sp = ERC_BASE_PRICES.super_petrol.nairobi;
+  const ds = ERC_BASE_PRICES.diesel.nairobi;
+  const msgs = {
+    bicycle:    `🚲 <strong style="color:#00c878;">Bicycle perks:</strong> Zero fuel cost — keep full 88% every trip · Eco Rider badge · Best for parcels within 5km`,
+    ebike:      `⚡ <strong style="color:#00b4ff;">E-Bike perks:</strong> Charging tracked automatically · KES 0.23/km · Eco badge · Priority for short city deliveries`,
+    motorcycle: `🏍️ <strong style="color:#fb923c;">Boda Boda perks:</strong> Live ERC Super Petrol tracked · KES ${(sp/35).toFixed(2)}/km · Delivery fee KES 80 base + KES 15/km · Widest coverage`,
+    tuktuk:     `🛺 <strong style="color:#fbbf24;">Tuk-Tuk perks:</strong> Diesel tracked live · KES ${(ds/20).toFixed(2)}/km · Up to 200kg cargo · Fee KES 200 base + KES 20/km`,
+    car:        `🚗 <strong style="color:#c084fc;">Car/Van perks:</strong> Petrol tracked · KES ${(sp/12).toFixed(2)}/km · Up to 400kg · Fee KES 300 base + KES 25/km · Bulky/fragile orders`,
+    van:        `🚐 <strong style="color:#c084fc;">Van perks:</strong> Diesel tracked · KES ${(ds/11).toFixed(2)}/km · Up to 800kg · Fee KES 400 base + KES 30/km · Furniture, appliances`,
+    pickup:     `🛻 <strong style="color:#fb4040;">Pickup perks:</strong> Diesel tracked · KES ${(ds/10).toFixed(2)}/km · Up to 2 tonnes · Fee KES 800 base + KES 50/km · High-value cargo orders`,
+    canter:     `🚛 <strong style="color:#fb4040;">Canter perks:</strong> Diesel tracked · KES ${(ds/7).toFixed(2)}/km · Up to 5 tonnes · Fee KES 2,500 base + KES 100/km · Stock delivery, moves`,
+    lorry:      `🚚 <strong style="color:#fb4040;">Lorry perks:</strong> Diesel tracked · KES ${(ds/4).toFixed(2)}/km · Up to 20 tonnes · Fee KES 8,000 base + KES 200/km · Freight, construction`,
+  };
+
+  info.style.display = v && msgs[v] ? "block" : "none";
+  info.innerHTML     = msgs[v] || "";
+}
+
+/* ── Doc photo preview ── */
+function previewDocPhoto(input, imgId, previewId, placeholderId, labelId){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = document.getElementById(imgId);
+    const preview = document.getElementById(previewId);
+    const placeholder = document.getElementById(placeholderId);
+    const label = document.getElementById(labelId);
+    if(img) img.src = e.target.result;
+    if(preview) preview.style.display = "block";
+    if(placeholder) placeholder.style.display = "none";
+    if(label){ label.style.borderColor = "rgba(113,255,0,0.6)"; label.style.background = "rgba(113,255,0,0.06)"; }
+  };
+  reader.readAsDataURL(file);
+}
+window.previewDocPhoto = previewDocPhoto;
+
+/* ── Registration ── */
+function registerDriver(){
+  const _regMsg = (m)=>{ var el=document.getElementById('regMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},4000); } };
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_reg', 3, 3600000)){
+    _regMsg('Too many registration attempts. Please wait 1 hour.'); return;
+  }
+  const name    = document.getElementById("drName").value.trim();
+  const phone   = document.getElementById("drPhone").value.trim();
+  const idNum   = document.getElementById("drId").value.trim();
+  const vehicle = document.getElementById("drVehicle").value;
+  const plate   = document.getElementById("drPlate").value.trim();
+  const zone    = document.getElementById("drZone").value;
+  const pin     = document.getElementById("drPin").value.trim();
+
+  /* Validate ID and DL photos */
+  const idPhotoFile = document.getElementById("drIdPhoto")?.files[0];
+  const dlPhotoFile = document.getElementById("drDlPhoto")?.files[0];
+  if(!name||!phone||!idNum||!vehicle||!pin){ _regMsg("Please fill all required fields."); return; }
+  if(!idPhotoFile){ _regMsg("Please upload a photo of your National ID."); return; }
+  if(!dlPhotoFile){ _regMsg("Please upload a photo of your Driving Licence."); return; }
+
+  const cargoTonne = document.getElementById("drCargoTonne")?.value || "";
+  const cargoType  = document.getElementById("drCargoType")?.value  || "";
+  const logbook    = document.getElementById("drLogbook")?.value.trim() || "";
+
+  /* Read both photos as base64 then save */
+  const readFile = (file) => new Promise(res=>{
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.readAsDataURL(file);
+  });
+
+  Promise.all([readFile(idPhotoFile), readFile(dlPhotoFile)]).then(([idPhoto, dlPhoto])=>{
+    const driver = { id:"DRV"+Date.now(), name, phone, idNum, vehicle, plate, zone, pin, cargoTonne, cargoType, logbook, idPhoto, dlPhoto, status:"pending", deliveries:[], earnings:0, weeklyEarnings:0, rating:5.0, tripsCompleted:0, createdAt:new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}) };
+    let drivers = [];
+    try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
+    drivers.push(driver);
+    localStorage.setItem("sokoniDrivers", JSON.stringify(drivers));
+    /* Submit to admin applications queue in Firestore (no photos — too large) */
+    if(window.SokoniDB){
+      window.SokoniDB.saveApplication({
+        id: driver.id, name, phone,
+        category: vehicle, location: zone,
+        type: 'driver', hub: 'delivery',
+        vehicle, plate, status: 'pending',
+        date: driver.createdAt,
+        submittedAt: new Date().toISOString()
+      }).catch(e=>console.warn('[SOKONI] Driver app save:',e.message));
+    }
+    /* Also save to sokoniPendingApplications for admin same-device */
+    try {
+      const _dApps = JSON.parse(localStorage.getItem('sokoniPendingApplications')||'[]');
+      _dApps.unshift({ id:driver.id, name, phone, category:vehicle, location:zone, type:'driver', hub:'delivery', vehicle, status:'pending', date:driver.createdAt });
+      localStorage.setItem('sokoniPendingApplications', JSON.stringify(_dApps));
+    } catch(e){}
+    const vehicleNotes = {
+      bicycle:    "\n🚲 Bicycle registered — zero fuel cost, keep your full 88% every trip!",
+      ebike:      "\n⚡ E-Bike registered — charging cost (KES 0.23/km) tracked automatically.",
+      motorcycle: "\n🏍️ Boda Boda registered — live ERC Super Petrol prices tracked per trip.",
+      tuktuk:     "\n🛺 Tuk-Tuk registered — live ERC Diesel prices applied automatically.",
+      car:        "\n🚗 Car/Van registered — ERC Super Petrol tracked. Handles up to 400kg orders.",
+      van:        "\n🚐 Van registered — ERC Diesel tracked. Handles up to 800kg. Higher fees per order.",
+      pickup:     "\n🛻 Pickup registered — ERC Diesel tracked. Up to 2 tonnes. Cargo orders prioritised.",
+      canter:     "\n🚛 Canter/Mini-Lorry registered — Diesel tracked. Up to 5 tonnes. Freight orders unlocked.",
+      lorry:      "\n🚚 Lorry/Truck registered — Diesel tracked. Up to 20 tonnes. Full freight marketplace access.",
+    };
+    /* Show success banner with PIN before logging in */
+    var banner=document.createElement('div');
+    banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#71ff00;color:black;padding:18px 20px;font-weight:900;font-size:14px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    banner.innerHTML='✅ Welcome '+name+'! Your PIN: <span style="background:black;color:#71ff00;padding:2px 8px;border-radius:6px;font-size:16px;letter-spacing:3px;">'+pin+'</span>&nbsp; Save this PIN — you\'ll need it to log in.';
+    document.body.prepend(banner);
+    setTimeout(function(){banner.remove();},6000);
+    loginDriverWith(phone, pin);
+  });
+}
+
+/* ── Login ── */
+function loginDriver(){
+  const _lgMsg = (m)=>{ var el=document.getElementById('loginMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},4000); } };
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_login', 5, 60000)){
+    _lgMsg("Too many login attempts. Wait 1 minute.");
+    return;
+  }
+  const phone = document.getElementById("driverLoginPhone").value.trim();
+  const pin   = document.getElementById("driverLoginPin").value.trim();
+  loginDriverWith(phone, pin);
+}
+
+function loginDriverWith(phone, pin){
+  let drivers = [];
+  try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
+  const driver = drivers.find(d => d.phone === phone && d.pin === pin);
+  if(!driver){ var _lm=document.getElementById('loginMsg'); if(_lm){_lm.textContent='Driver not found or wrong PIN. Apply first.'; setTimeout(()=>{_lm.textContent='';},4000);} return; }
+  currentDriver = driver;
+  sessionStorage.setItem("sokoniDriverSession", driver.id);
+  showDriverDashboard();
+}
+
+function logoutDriver(){
+  sessionStorage.removeItem("sokoniDriverSession");
+  /* Stop GPS tracking before signing out */
+  if(window.SokoniDB?.stopGPSTracking) window.SokoniDB.stopGPSTracking();
+  if(window.sokoniSignOut){
+    window.sokoniSignOut().finally(()=>{ window.location.href="login.html"; });
+  } else {
+    localStorage.removeItem("loggedIn");
+    localStorage.removeItem("sokoniUser");
+    window.location.href = "login.html";
+  }
+}
+
+/* ── Online toggle ── */
+function toggleOnline(){
+  isOnline = !isOnline;
+  const btn = document.getElementById("driverOnlineBtn");
+  btn.textContent = isOnline ? "🟢 Online — Taking Orders" : "🔴 Go Offline";
+  btn.style.background = isOnline ? "rgba(113,255,0,0.18)" : "rgba(255,61,61,0.1)";
+  btn.style.borderColor = isOnline ? "rgba(113,255,0,0.4)" : "rgba(255,61,61,0.25)";
+  btn.style.color = isOnline ? "#71ff00" : "#ff6b6b";
+  if(isOnline){
+    if(window.SokoniDB?.startGPSTracking && currentDriver){
+      window.SokoniDB.startGPSTracking(currentDriver.id);
+    }
+  } else {
+    if(window.SokoniDB?.stopGPSTracking) window.SokoniDB.stopGPSTracking();
+  }
+  renderDeliveries();
+}
+
+/* ── Dashboard ── */
+function showDriverDashboard(){
+  if(!currentDriver) return;
+  const _gate = document.getElementById("driverGate");
+  if(_gate) _gate.style.display="none";
+  document.getElementById("driverDashboard").style.display="block";
+
+  const v = currentDriver.vehicle;
+  const isEbike   = v === "ebike";
+  const hasFuel   = v === "motorcycle" || v === "car" || v === "tuktuk";
+  const vEmoji = {
+    bicycle:"🚲", ebike:"⚡", motorcycle:"🏍️", tuktuk:"🛺",
+    car:"🚗", van:"🚐", pickup:"🛻", canter:"🚛", lorry:"🚚"
+  }[v] || "🛵";
+  const vBadgeCls = {
+    bicycle:"vbadge-bicycle", ebike:"vbadge-ebike", motorcycle:"vbadge-moto",
+    tuktuk:"vbadge-tuktuk",   car:"vbadge-car",     van:"vbadge-car",
+    pickup:"vbadge-cargo",    canter:"vbadge-cargo", lorry:"vbadge-cargo"
+  }[v] || "vbadge-moto";
+  const vLabel = {
+    bicycle:"Bicycle", ebike:"E-Bike ⚡", motorcycle:"Boda Boda",
+    tuktuk:"Tuk-Tuk",  car:"Car/Van",    van:"Van",
+    pickup:"Pickup 🛻", canter:"Canter 🚛", lorry:"Lorry 🚚"
+  }[v] || v;
+
+  document.getElementById("driverGreet").innerHTML =
+    `Welcome, ${currentDriver.name}! ${vEmoji}<span class="vehicle-badge ${vBadgeCls}">${vLabel}</span>`;
+  const capacityStr = currentDriver.cargoTonne ? ` · ${currentDriver.cargoTonne}t capacity` : "";
+  const cargoTypeStr = currentDriver.cargoType ? ` · ${currentDriver.cargoType}` : "";
+  document.getElementById("driverZone").textContent =
+    `Zone: ${currentDriver.zone||"All"}${capacityStr}${cargoTypeStr} · ${currentDriver.status==="approved"?"✅ Verified":"⏳ Pending Review"}`;
+
+  /* Show AI fuel tracker for petrol/diesel vehicles */
+  const fuelPanel = document.getElementById("fuelPricePanel");
+  fuelPanel.style.display = hasFuel ? "block" : "none";
+  if(hasFuel) renderFuelPanel();
+
+  renderDriverStats();
+  renderWeeklyGoal();
+  renderDeliveries();
+  renderRunningCostBox();
+  renderTierRow();
+  renderBonusRow();
+  renderLeaderboard();
+}
+
+/* ── Stats ── */
+function renderDriverStats(){
+  if(!currentDriver) return;
+  const earnings = currentDriver.earnings || 0;
+  const trips    = currentDriver.tripsCompleted || 0;
+  const rating   = currentDriver.rating || 5.0;
+  const activeOrders = (currentDriver.deliveries||[]).filter(d=>d.status!=="delivered").length;
+  const isEbike  = currentDriver.vehicle === "ebike";
+
+  const v = currentDriver.vehicle;
+  const kmToday = trips * 8;
+  const runCost = runningCostForTrip(v, kmToday);
+  const costIcon = isEbike ? "⚡" : v==="bicycle" ? "🚲" : "⛽";
+  const costLabel = isEbike ? "Charging Cost Today" : v==="bicycle" ? "No Fuel Costs" : "Fuel Cost Today";
+
+  const stats = [
+    { icon:"💰", label:"Today's Earnings",  val:"KES "+earnings.toLocaleString() },
+    { icon:"🛵", label:"Trips Done",         val:trips },
+    { icon:"⭐", label:"Rating",             val:rating.toFixed(1)+"/5" },
+    { icon:"📦", label:"Active Orders",      val:activeOrders },
+  ];
+  if(currentDriver.vehicle !== "bicycle"){
+    stats.push({ icon:costIcon, label:costLabel, val:"KES "+runCost.toFixed(0) });
+  }
+  document.getElementById("driverStats").innerHTML = stats
+    .map(s=>`<div class="driver-stat"><div class="ds-icon">${s.icon}</div><div class="ds-val">${s.val}</div><div class="ds-label">${s.label}</div></div>`)
+    .join("");
+  const _seeds=[0.68,0.82,0.55,0.91,0.74,1.08,0.88,1.0];
+  const _base=Math.max(earnings||400,400);
+  const _weekEarn=_seeds.map((m,i)=>i===7?_base:Math.round(_base*m));
+  const _weekLabels=['Wk-7','Wk-6','Wk-5','Wk-4','Wk-3','Wk-2','Last','This'];
+  window._drvPendingChart={weekEarn:_weekEarn,weekLabels:_weekLabels,trips,rating:currentDriver.rating||5.0};
+  if(typeof window._updateDriverCharts==='function') window._updateDriverCharts(window._drvPendingChart);
+}
+
+/* ── Weekly goal ── */
+function renderWeeklyGoal(){
+  if(!currentDriver) return;
+  const WEEKLY_TARGET = 7000; // KES
+  const earned = currentDriver.weeklyEarnings || currentDriver.earnings || 0;
+  const pct = Math.min(100, Math.round((earned / WEEKLY_TARGET) * 100));
+  document.getElementById("weeklyGoalBox").innerHTML = `
+    <h4>🎯 Weekly Earnings Goal</h4>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+      <span style="color:#71ff00;font-weight:800;">KES ${earned.toLocaleString()}</span>
+      <span style="color:rgba(255,255,255,0.3);">Target: KES ${WEEKLY_TARGET.toLocaleString()}</span>
+    </div>
+    <div class="goal-bar-bg"><div class="goal-bar-fill" style="width:${pct}%;"></div></div>
+    <div class="goal-labels"><span>${pct}% done</span><span>${pct>=100?"🎉 Goal reached!":"KES "+(WEEKLY_TARGET-earned).toLocaleString()+" to go"}</span></div>
+  `;
+}
+
+/* ══════════════════════════════════════════════
+   AI FUEL PRICE PANEL
+══════════════════════════════════════════════ */
+function renderFuelPanel(){
+  if(!currentDriver) return;
+  const zone     = getDriverZoneKey();
+  const veh      = currentDriver.vehicle;
+  const fuelSpec = VEHICLE_CONSUMPTION[veh];
+  if(!fuelSpec || fuelSpec.fuelType === "electricity" || fuelSpec.fuelType === "none") return;
+
+  /* Price cards */
+  const fuelTypes = [
+    { key:"super_petrol", label:"Super Petrol", icon:"🔴" },
+    { key:"diesel",       label:"Diesel",       icon:"🟡" },
+    { key:"kerosene",     label:"Kerosene",      icon:"🟠" },
+  ];
+
+  const now  = new Date();
+  const ercDate = now.getDate() >= 15
+    ? now.toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"})
+    : new Date(now.getFullYear(), now.getMonth(), 15).toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
+
+  document.getElementById("fuelLastUpdated").textContent =
+    `ERC revision: 15 ${now.toLocaleDateString("en-KE",{month:"long",year:"numeric"})} · ${zone.charAt(0).toUpperCase()+zone.slice(1)} prices`;
+
+  const grid = document.getElementById("fuelPriceGrid");
+  grid.innerHTML = fuelTypes.map(ft=>{
+    const cur  = getCurrentFuelPrice(ft.key);
+    const prev = getPrevFuelPrice(ft.key);
+    const diff = cur - prev;
+    const pct  = ((diff/prev)*100).toFixed(1);
+    const cls  = diff > 0 ? "fpc-up" : diff < 0 ? "fpc-down" : "fpc-same";
+    const arrow= diff > 0 ? "▲" : diff < 0 ? "▼" : "▬";
+    const isMyFuel = ft.key === fuelSpec.fuelType;
+    return `
+      <div class="fuel-price-card" style="${isMyFuel?"border-color:rgba(249,115,22,0.4);background:rgba(249,115,22,0.06);":""}">
+        ${isMyFuel?`<div style="position:absolute;top:8px;right:8px;font-size:9px;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);padding:2px 6px;border-radius:4px;">YOUR FUEL</div>`:""}
+        <div class="fpc-name">${ft.icon} ${ft.label}</div>
+        <div class="fpc-price">KES ${cur.toFixed(2)}</div>
+        <div class="fpc-unit">per litre · ${zone.charAt(0).toUpperCase()+zone.slice(1)}</div>
+        <div class="fpc-change ${cls}">${arrow} ${Math.abs(diff).toFixed(2)} (${pct}%) from last month</div>
+      </div>`;
+  }).join("");
+
+  /* AI analysis */
+  const myFuelPrice = getCurrentFuelPrice(fuelSpec.fuelType);
+  const prevMyFuelPrice = getPrevFuelPrice(fuelSpec.fuelType);
+  const myDiff = myFuelPrice - prevMyFuelPrice;
+  const costPerKm = runningCostPerKm(veh).toFixed(2);
+  const dailyKm = (currentDriver.tripsCompleted||1) * 8;
+  const dailyFuelCost = (runningCostPerKm(veh) * dailyKm).toFixed(0);
+
+  const fuelName = fuelSpec.fuelType==="diesel" ? "Diesel" : "Super Petrol";
+  const isHeavy  = ["lorry","canter","pickup","van"].includes(veh);
+  const heavyTip = isHeavy
+    ? ` As a ${vLabel} driver, a typical 50km job costs KES ${(runningCostPerKm(veh)*50).toFixed(0)} in fuel — well covered by your KES ${calcDeliveryFee(0,50,veh).toLocaleString()} gross fee on that run.`
+    : "";
+
+  let aiText = "";
+  if(myDiff < -2){
+    aiText = `✅ Good news! ${fuelName} dropped KES ${Math.abs(myDiff).toFixed(2)}/L this month — your cost per km fell to KES ${costPerKm}. You save ~KES ${Math.abs((myDiff/VEHICLE_CONSUMPTION[veh].kmPerLitre)*dailyKm).toFixed(0)} per day vs last month. Great time to take on more orders.${heavyTip}`;
+  } else if(myDiff > 2){
+    aiText = `⚠️ ${fuelName} rose KES ${myDiff.toFixed(2)}/L this month. Your cost is now KES ${costPerKm}/km — KES ${(runningCostPerKm(veh)*10).toFixed(2)} for a 10km trip. Prioritise longer-distance orders where Sokoni's higher base fee absorbs the cost increase.${heavyTip}`;
+  } else {
+    aiText = `ℹ️ Fuel stable — ${fuelName} at KES ${myFuelPrice.toFixed(2)}/L in ${getDriverZoneKey().charAt(0).toUpperCase()+getDriverZoneKey().slice(1)}. At KES ${costPerKm}/km, your estimated daily fuel bill is KES ${dailyFuelCost}. Sokoni's 88% cut is engineered to keep all vehicle types well above operating costs.${heavyTip}`;
+  }
+
+  document.getElementById("fuelAiText").textContent = aiText;
+
+  /* Cost breakdown for driver's vehicle */
+  document.getElementById("fuelCostRow").innerHTML = `
+    <div class="fuel-cost-item"><span class="fci-label">Cost per km</span><span class="fci-val">KES ${costPerKm}</span></div>
+    <div class="fuel-cost-item"><span class="fci-label">5km delivery</span><span class="fci-val">KES ${(runningCostPerKm(veh)*5).toFixed(2)}</span></div>
+    <div class="fuel-cost-item"><span class="fci-label">10km delivery</span><span class="fci-val">KES ${(runningCostPerKm(veh)*10).toFixed(2)}</span></div>
+    <div class="fuel-cost-item"><span class="fci-label">20km delivery</span><span class="fci-val">KES ${(runningCostPerKm(veh)*20).toFixed(2)}</span></div>
+    <div class="fuel-cost-item"><span class="fci-label">Est. daily (~${dailyKm}km)</span><span class="fci-val">KES ${dailyFuelCost}</span></div>
+    <div class="fuel-cost-item"><span class="fci-label">Fuel type</span><span class="fci-val">${fuelSpec.fuelType==="diesel"?"⛽ Diesel":"⛽ Super Petrol"}</span></div>
+  `;
+}
+
+function refreshFuelPrices(){
+  /* In a real deployment this would call ERC's API or a scraper.
+     For now, simulate a network refresh with an optimistic AI message. */
+  const btn = document.querySelector(".fuel-refresh-btn");
+  if(btn){ btn.textContent="↻ Checking ERC..."; btn.disabled=true; }
+  setTimeout(()=>{
+    renderFuelPanel();
+    if(btn){ btn.textContent="✅ Up to date"; btn.disabled=false;
+      setTimeout(()=>{ btn.textContent="↻ Check for Updates"; }, 2500);
+    }
+  }, 1800);
+}
+window.refreshFuelPrices = refreshFuelPrices;
+
+/* ── Universal running cost calculator ── */
+function renderRunningCostBox(){
+  if(!currentDriver) return;
+  const veh = currentDriver.vehicle;
+  const box = document.getElementById("runningCostBox");
+  if(!box) return;
+
+  const isEbike   = veh === "ebike";
+  const isBicycle = veh === "bicycle";
+  const hasFuel   = !isEbike && !isBicycle;
+
+  const costColor = isEbike ? "#00b4ff" : hasFuel ? "#fb923c" : "#71ff00";
+  const costName  = isEbike ? "Charging Cost" : hasFuel ? "Fuel Cost" : "No Cost";
+  const costClass = isEbike ? "cost-calc-ebike" : "cost-calc-fuel";
+  const headColor = isEbike ? "#00b4ff" : "#fb923c";
+
+  const fuelType  = VEHICLE_CONSUMPTION[veh]?.fuelType;
+  const priceText = isEbike
+    ? `Battery: 360Wh · Range: 40km · KPLC rate: KES 25/kWh · Cost: KES ${EBIKE_COST_PER_KM}/km`
+    : hasFuel
+      ? `${VEHICLE_CONSUMPTION[veh]?.label} · ${fuelType==="super_petrol"?"Super Petrol":"Diesel"}: KES ${getCurrentFuelPrice(fuelType).toFixed(2)}/L · Cost: KES ${runningCostPerKm(veh).toFixed(2)}/km`
+      : "Zero fuel cost — no deductions for bicycle riders";
+
+  box.className = `cost-calc ${isBicycle ? "cost-calc-ebike" : costClass}`;
+  box.innerHTML = `
+    <h4>${isEbike?"⚡ E-Bike Charging":"⛽ Fuel Cost"} Calculator</h4>
+    <p class="cost-calc-meta">${priceText}</p>
+    <div class="cost-slider-row">
+      <label>Distance (km)</label>
+      <input type="range" class="cost-slider" id="costDistSlider" min="1" max="60" value="10" oninput="updateCostCalc(this.value)">
+      <span id="costDistVal" style="font-weight:800;color:white;min-width:40px;">10 km</span>
+    </div>
+    <div class="cost-result" id="costCalcResult"></div>
+  `;
+  updateCostCalc(10);
+}
+
+function updateCostCalc(km){
+  km = parseInt(km);
+  const distEl = document.getElementById("costDistVal");
+  if(distEl) distEl.textContent = km+" km";
+  const fee       = calcDeliveryFee(0, km);
+  const driverCut = driverShareFromFee(fee);
+  const runCost   = runningCostForTrip(currentDriver.vehicle, km);
+  const net       = Math.round(driverCut - runCost);
+  const isEbike   = currentDriver.vehicle === "ebike";
+  const hasFuel   = currentDriver.vehicle !== "bicycle";
+  const costColor = isEbike ? "#00b4ff" : "#fb923c";
+  const costLabel = isEbike ? "Charging Cost" : hasFuel ? "Fuel Cost" : "Fuel Cost";
+  const result = document.getElementById("costCalcResult");
+  if(!result) return;
+  result.innerHTML = `
+    <div class="cost-result-item"><div class="cr-val">KES ${fee}</div><div class="cr-label">Gross Fee</div></div>
+    <div class="cost-result-item"><div class="cr-val">KES ${driverCut}</div><div class="cr-label">Your 88%</div></div>
+    <div class="cost-result-item"><div class="cr-val" style="color:${costColor};">KES ${runCost.toFixed(2)}</div><div class="cr-label">${costLabel}</div></div>
+    <div class="cost-result-item"><div class="cr-val" style="color:#71ff00;">KES ${net}</div><div class="cr-label">Net Earnings</div></div>
+  `;
+}
+window.updateCostCalc = updateCostCalc;
+
+/* ── Render available + my deliveries ── */
+function renderDeliveries(){
+  const avEl = document.getElementById("availableDeliveries");
+  const myEl = document.getElementById("myDeliveries");
+  const veh  = currentDriver && currentDriver.vehicle;
+
+  let orders = [];
+  try { orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
+  const myDeliveries = (currentDriver && currentDriver.deliveries) || [];
+  const myOrderIds = new Set(myDeliveries.map(d=>d.orderId));
+  /* Filter orders by cargo capacity match */
+  const filtered = isOnline
+    ? orders.filter(o => ["processing","shipped"].includes(o.status) && !myOrderIds.has(o.id) && vehicleCanHandleOrder(veh, o))
+    : [];
+
+  const CARGO_ICON = { parcel:"📦", medium:"🛋️", large:"🧱", freight:"🏗️" };
+  const CARGO_NAME = { parcel:"Parcel", medium:"Bulk Goods", large:"Large Cargo", freight:"Freight" };
+
+  avEl.innerHTML = filtered.length ? filtered.map(o=>{
+    const distKm    = Math.round(3 + Math.random()*15);
+    const fee       = calcDeliveryFee(Number(o.total), distKm, veh);
+    const driverCut = driverShareFromFee(fee);
+    const runCost   = runningCostForTrip(veh, distKm);
+    const net       = Math.round(driverCut - runCost);
+    const hasRunCost = runCost > 0;
+    const costLabel  = veh==="ebike" ? "Charge" : "Fuel";
+    const cargo      = orderCargoSize(o);
+    return `
+    <div class="delivery-card">
+      <div class="dc-top">
+        <div>
+          <div class="dc-id">Order ${o.id}</div>
+          <div class="dc-date">${o.date} · ${CARGO_ICON[cargo]} ${CARGO_NAME[cargo]}</div>
+        </div>
+        <div>
+          <div class="dc-fee">KES ${net.toLocaleString()} <span style="font-size:11px;color:rgba(255,255,255,0.35);">net to you</span></div>
+          <div class="dc-breakdown">Gross KES ${fee} · Platform KES ${platformShareFromFee(fee)}${hasRunCost?` · ${costLabel} KES ${runCost.toFixed(2)}`:""} · ~${distKm}km</div>
+        </div>
+      </div>
+      <div class="dc-info">📦 ${(o.items||[]).length} item(s) · 📍 ${o.address||"Nairobi"} · 💳 ${(o.method||"M-PESA").toUpperCase()}</div>
+      <div class="dc-actions">
+        <button type="button" class="dc-accept-btn" onclick="acceptDelivery('${o.id}',${distKm})">✅ Accept — Earn KES ${net}</button>
+        <button type="button" class="dc-decline-btn" onclick="this.closest('.delivery-card').remove()">Decline</button>
+      </div>
+    </div>`;
+  }).join("") : `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:16px 0;">${isOnline?`No ${CARGO_NAME[CARGO_CAPACITY[veh]]||"matching"} deliveries right now. Check back soon.`:"Go online to see available deliveries."}</div>`;
+
+  const statusMap = { picked:"📦 Picked Up", transit:"🛵 In Transit", arrived:"🏠 Arrived", delivered:"✅ Delivered" };
+  myEl.innerHTML = myDeliveries.length ? myDeliveries.map(d=>`
+    <div class="delivery-card">
+      <div class="dc-top">
+        <div><div class="dc-id">Order ${d.orderId}</div><div class="dc-date">${statusMap[d.status]||d.status}</div></div>
+        <div>
+          <div class="dc-fee">KES ${d.net || d.fee}</div>
+          <div class="dc-breakdown">Net after all deductions</div>
+        </div>
+      </div>
+      <div class="dc-actions">
+        ${d.status!=="delivered"?`
+          <select onchange="updateDeliveryStatus('${d.orderId}',this.value)" style="flex:1;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-family:inherit;font-size:16px;outline:none;">
+            <option value="picked" ${d.status==="picked"?"selected":""}>📦 Picked Up</option>
+            <option value="transit" ${d.status==="transit"?"selected":""}>🛵 In Transit</option>
+            <option value="arrived" ${d.status==="arrived"?"selected":""}>🏠 Arrived at Location</option>
+            <option value="delivered" ${d.status==="delivered"?"selected":""}>✅ Delivered</option>
+          </select>
+        `:`<span style="color:#71ff00;font-weight:800;">✅ Delivered · KES ${d.net||d.fee} earned</span>`}
+      </div>
+    </div>
+  `).join("") : `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:16px 0;">No active deliveries</div>`;
+}
+
+/* ── Accept delivery ── */
+function acceptDelivery(orderId, distKm){
+  if(!currentDriver) return;
+  const orders = JSON.parse(localStorage.getItem("sokoniOrders")||"[]");
+  const order  = orders.find(o=>o.id===orderId);
+  if(!order) return;
+
+  const veh       = currentDriver.vehicle;
+  const fee       = calcDeliveryFee(Number(order.total), distKm);
+  const driverCut = driverShareFromFee(fee);
+  const runCost   = runningCostForTrip(veh, distKm);
+  const net       = Math.round(driverCut - runCost);
+  const costLabel = veh==="ebike" ? "Charging cost" : veh==="bicycle" ? null : "Fuel cost";
+
+  if(!currentDriver.deliveries) currentDriver.deliveries = [];
+  currentDriver.deliveries.unshift({ orderId, status:"picked", fee, driverCut, runCost, net, distKm, vehicle:veh, acceptedAt:Date.now() });
+
+  const idx = orders.findIndex(o=>o.id===orderId);
+  if(idx!==-1){ orders[idx].status="out_for_delivery"; localStorage.setItem("sokoniOrders",JSON.stringify(orders)); }
+
+  saveDriver();
+
+  const costLine = costLabel ? ` · ${costLabel}: KES ${runCost.toFixed(2)}` : "";
+  _drvToast(`✅ Order ${orderId} accepted · ${distKm}km · Net KES ${net}${costLine} — pick up from seller.`);
+  renderDriverStats();
+  renderDeliveries();
+}
+
+/* ── Update delivery status ── */
+function updateDeliveryStatus(orderId, newStatus){
+  if(!currentDriver) return;
+  const d = currentDriver.deliveries.find(d=>d.orderId===orderId);
+  if(d){ d.status=newStatus; }
+
+  if(newStatus==="delivered"){
+    const orders = JSON.parse(localStorage.getItem("sokoniOrders")||"[]");
+    const idx = orders.findIndex(o=>o.id===orderId);
+    if(idx!==-1){ orders[idx].status="delivered"; localStorage.setItem("sokoniOrders",JSON.stringify(orders)); }
+    const earned = d ? (d.net || d.driverCut || d.fee) : 0;
+    currentDriver.earnings = (currentDriver.earnings||0) + earned;
+    currentDriver.weeklyEarnings = (currentDriver.weeklyEarnings||0) + earned;
+    currentDriver.tripsCompleted = (currentDriver.tripsCompleted||0) + 1;
+    /* Record SOKONI's 12% platform cut on the delivery fee */
+    if(window.SokoniPay && SokoniPay.saveCommission && d && d.fee > 0){
+      const _plCut = Math.round(d.fee * 0.12);
+      SokoniPay.saveCommission({ref:'DLV-'+orderId,providerName:currentDriver.name||'Driver',category:'delivery',commissionPct:12,sokoniCut:_plCut,providerNet:d.fee-_plCut,serviceTotal:d.fee,status:'auto_collected',note:'Delivery completed: '+orderId,createdAt:Date.now()});
+    }
+  }
+
+  saveDriver();
+  renderDriverStats();
+  renderWeeklyGoal();
+  renderDeliveries();
+}
+
+/* ── Persist driver ── */
+function saveDriver(){
+  let drivers = JSON.parse(localStorage.getItem("sokoniDrivers")||"[]");
+  const idx = drivers.findIndex(d=>d.id===currentDriver.id);
+  if(idx!==-1){ drivers[idx]=currentDriver; localStorage.setItem("sokoniDrivers",JSON.stringify(drivers)); }
+}
+
+/* ── Tier system ── */
+const TIERS = [
+  { name:"Bronze", icon:"🥉", minTrips:0,   maxTrips:19,  perk:"Basic listings priority",  cls:"tier-bronze" },
+  { name:"Silver", icon:"🥈", minTrips:20,  maxTrips:49,  perk:"+KES 50 bonus/week",        cls:"tier-silver" },
+  { name:"Gold",   icon:"🥇", minTrips:50,  maxTrips:99,  perk:"+KES 200 bonus/week",       cls:"tier-gold" },
+  { name:"Diamond",icon:"💎", minTrips:100, maxTrips:9999, perk:"+KES 500 bonus/week + VIP insurance", cls:"tier-diamond" },
+];
+
+function getCurrentTier(trips){
+  return TIERS.slice().reverse().find(t => trips >= t.minTrips) || TIERS[0];
+}
+
+function renderTierRow(){
+  if(!currentDriver) return;
+  const trips = currentDriver.tripsCompleted || 0;
+  const current = getCurrentTier(trips);
+  document.getElementById("tierRow").innerHTML = TIERS.map(t=>{
+    const isActive = t.name === current.name;
+    return `<div class="tier-chip ${t.cls}${isActive?" active-tier":""}">
+      <div class="tc-icon">${t.icon}</div>
+      <div class="tc-name">${t.name}${isActive?' ✓':''}</div>
+      <div class="tc-req">${t.minTrips}–${t.maxTrips<9999?t.maxTrips+"":"∞"} trips</div>
+      <div class="tc-perk">${t.perk}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ── Weekly bonus milestones ── */
+const BONUSES = [
+  { trips:5,  bonus:200,  label:"Starter" },
+  { trips:10, bonus:500,  label:"Active" },
+  { trips:20, bonus:1000, label:"Hustler" },
+  { trips:35, bonus:2000, label:"Champion" },
+  { trips:50, bonus:3500, label:"Legend" },
+];
+
+function renderBonusRow(){
+  if(!currentDriver) return;
+  const weekTrips = Math.min(currentDriver.tripsCompleted || 0, 50); // simulated; real app resets weekly
+  const nextBonus = BONUSES.find(b => weekTrips < b.trips);
+  document.getElementById("bonusRow").innerHTML = BONUSES.map(b=>{
+    const done = weekTrips >= b.trips;
+    const isNext = !done && b === nextBonus;
+    const remaining = isNext ? `${b.trips - weekTrips} more trips` : "";
+    return `<div class="bonus-card ${done?"unlocked":isNext?"next":"locked"}">
+      <div class="bc-trips">${done?"✅":isNext?"🔥":"🔒"} ${b.trips} trips</div>
+      <div class="bc-earn">+KES ${b.bonus.toLocaleString()}</div>
+      <div class="bc-label">${done?"Earned!":isNext?remaining:b.label+" tier"}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ── Leaderboard (simulated) ── */
+function renderLeaderboard(){
+  if(!currentDriver) return;
+  const myTrips = currentDriver.tripsCompleted || 0;
+  const fakeLeaders = [
+    { name:"Kevin M.", trips:48, earn:38400 },
+    { name:"Wanjiru A.", trips:41, earn:32800 },
+    { name:"Omar K.", trips:37, earn:29600 },
+    { name:"Faith C.", trips:30, earn:24000 },
+    { name:"James O.", trips:26, earn:20800 },
+  ];
+
+  /* Insert current driver */
+  const myEntry = { name:currentDriver.name+" (You)", trips:myTrips, earn:currentDriver.earnings||0, isMe:true };
+  const allLeaders = [...fakeLeaders, myEntry].sort((a,b)=>b.trips-a.trips).slice(0,6);
+
+  const medals = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣"];
+  document.getElementById("leaderList").innerHTML = allLeaders.map((l,i)=>`
+    <div class="leader-item${l.isMe?" my-row":""}">
+      <div class="leader-rank">${medals[i]||i+1}</div>
+      <div class="leader-name">${l.name}${l.isMe?' <span style="font-size:10px;color:#71ff00;font-weight:800;">YOU</span>':''}</div>
+      <div class="leader-trips">${l.trips} trips this week</div>
+      <div class="leader-earn">KES ${l.earn.toLocaleString()}</div>
+    </div>
+  `).join("");
+}
+
+/* ── Referral ── */
+function generateReferral(){
+  if(!currentDriver) return;
+  const code = "DRV-"+currentDriver.id.slice(-5).toUpperCase();
+  const result = document.getElementById("referralResult");
+  result.style.display = "block";
+  result.innerHTML = `
+    <div style="margin-bottom:8px;color:rgba(255,255,255,0.5);font-size:11px;">Your referral code:</div>
+    <div style="font-size:20px;font-weight:900;color:#c084fc;letter-spacing:2px;margin-bottom:10px;">${code}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:10px;">Share this message on WhatsApp:</div>
+    <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:10px;font-size:12px;color:rgba(255,255,255,0.6);line-height:1.6;margin-bottom:10px;">"Join Sokoni Riders and earn on your terms! 88% commission, paid daily to M-PESA, e-bike friendly. Sign up at mysokoni.co.ke/driver.html and use code <strong style="color:#c084fc;">${code}</strong> — you'll earn a bonus once approved."</div>
+    <a href="https://wa.me/?text=Join%20Sokoni%20Riders%20and%20earn%20on%20your%20terms!%2088%25%20commission%2C%20paid%20daily%20to%20M-PESA%2C%20e-bike%20friendly.%20Sign%20up%20at%20mysokoni.co.ke%2Fdriver.html%20and%20use%20code%20${code}" target="_blank" style="display:inline-block;padding:9px 18px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.25);border-radius:9px;color:#25d366;font-size:12px;font-weight:700;text-decoration:none;">📤 Share on WhatsApp</a>
+  `;
+}
+
+window.generateReferral = generateReferral;
+window.acceptDelivery = acceptDelivery;
+window.updateDeliveryStatus = updateDeliveryStatus;
+
+/* Auto-login or create a demo session so dashboard is always visible */
+(function(){
+  const savedId = sessionStorage.getItem("sokoniDriverSession");
+  let drivers = [];
+  try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
+
+  if(savedId){
+    currentDriver = drivers.find(d=>d.id===savedId);
+  }
+
+  if(!currentDriver){
+    /* Use first registered driver, or create a demo profile */
+    currentDriver = drivers[0] || {
+      id:"DRV-DEMO",
+      name:"Sokoni Rider",
+      phone:"",
+      vehicle:"motorcycle",
+      zone:"nairobi-cbd",
+      status:"approved",
+      earnings:0,
+      weeklyEarnings:0,
+      tripsCompleted:0,
+      rating:5.0,
+      deliveries:[],
+      isDemo:true
+    };
+  }
+
+  showDriverDashboard();
+})();
+</script>
+<script src="sokoni-pay.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script type="module">import SokoniDB from './sokoni-db.js'; window.SokoniDB = SokoniDB;</script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<script>
+(function(){
+  var _dc;
+  function _init(){
+    if(typeof Chart==='undefined') return false;
+    Chart.defaults.color='rgba(255,255,255,0.38)';
+    Chart.defaults.borderColor='rgba(255,255,255,0.06)';
+    var de=document.getElementById('driverEarnChart');
+    if(de&&!_dc){
+      _dc=new Chart(de,{type:'bar',data:{labels:[],datasets:[{label:'Earnings',data:[],backgroundColor:function(c){var i=c.dataIndex,n=(c.chart.data.labels||[]).length-1;return i===n?'rgba(113,255,0,0.85)':'rgba(113,255,0,0.3)';},borderColor:'rgba(113,255,0,0.6)',borderWidth:1.5,borderRadius:8,hoverBackgroundColor:'rgba(113,255,0,0.6)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:10,callbacks:{label:function(c){return 'KES '+Number(c.parsed.y).toLocaleString();}}}},scales:{x:{grid:{display:false},ticks:{color:'rgba(255,255,255,0.38)',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'rgba(255,255,255,0.38)',callback:function(v){return v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}});
+    }
+    return true;
+  }
+  window._updateDriverCharts=function(d){
+    window._drvLastData=d;
+    if(!_init()){setTimeout(function(){if(window._drvLastData)window._updateDriverCharts(window._drvLastData);},600);return;}
+    if(_dc){_dc.data.labels=d.weekLabels||[];_dc.data.datasets[0].data=d.weekEarn||[];_dc.update();}
+  };
+  // Consume any data stored before this script ran
+  setTimeout(function(){
+    var pending=window._drvPendingChart||window._drvLastData;
+    if(pending) window._updateDriverCharts(pending);
+  },50);
+})();
+</script>
+
+<!-- ═══ DRIVER PRODUCTION MODULE — Real GPS, Firestore, Live Requests ═══ -->
+<script src="sokoni-routing.js"></script>
+<script type="module">
+import SokoniDB from './sokoni-db.js';
+
+var _drvDeliveryUnsub  = null;  /* listener: incoming delivery assignments */
+var _drvGpsActive      = false;
+
+/* ── Helpers ── */
+function _drvId() {
+  const d = window.currentDriver;
+  if (d?.id) return d.id;
+  try {
+    const ds = JSON.parse(localStorage.getItem('sokoniDrivers')||'[]');
+    if (ds.length) return ds[ds.length-1].id;
+  } catch(e){}
+  return 'driver-'+Date.now();
+}
+
+/* ══ EXTEND toggleOnline — add Firestore + GPS ══════════════ */
+const _origToggleOnline = window.toggleOnline;
+window.toggleOnline = async function() {
+  if (_origToggleOnline) _origToggleOnline(); /* toggles isOnline flag + UI */
+  const drv = window.currentDriver;
+  if (!drv) return;
+
+  if (window.isOnline) {
+    /* Get current GPS */
+    let lat = null, lng = null;
+    if (navigator.geolocation) {
+      await new Promise(res => navigator.geolocation.getCurrentPosition(
+        pos => { lat=pos.coords.latitude; lng=pos.coords.longitude; res(); },
+        () => res(), { timeout:6000, enableHighAccuracy:true }
+      ));
+    }
+    /* Write to Firestore */
+    try {
+      await SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat, lng, {
+        name:drv.name, phone:drv.phone, plate:drv.plate||'', area:drv.zone||'',
+        vehicleLabel:(drv.vehicle||'motorcycle'), rating:drv.rating||5.0,
+        ridesCompleted:drv.tripsCompleted||0,
+      });
+    } catch(e) { console.warn('[driver] setDriverOnline:', e.message); }
+
+    /* Start GPS continuous tracking */
+    if (!_drvGpsActive) {
+      _drvGpsActive = true;
+      SokoniDB.startGPSTracking(drv.id, (lat2, lng2) => {
+        SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat2, lng2).catch(()=>{});
+      });
+    }
+
+    /* Listen for incoming delivery assignments */
+    if (_drvDeliveryUnsub) { _drvDeliveryUnsub(); _drvDeliveryUnsub = null; }
+    _drvDeliveryUnsub = SokoniDB.listenDriverDeliveryRequests(drv.id, deliveries => {
+      if (deliveries.length) _showDrvDelivery(deliveries[0]);
+      else _clearDrvDelivery();
+    });
+
+  } else {
+    /* Going offline */
+    try {
+      await SokoniDB.setDriverOnline(drv.id, false, drv.vehicle, null, null);
+    } catch(e) { console.warn('[driver] setDriverOnline offline:', e.message); }
+    SokoniDB.stopGPSTracking();
+    _drvGpsActive = false;
+    if (_drvDeliveryUnsub) { _drvDeliveryUnsub(); _drvDeliveryUnsub = null; }
+    _clearDrvDelivery();
+  }
+};
+
+/* ════════════════════════════════════════════════════
+   DELIVERY / PACKAGE REQUEST HANDLING
+   Listens to packageRequests where assignedDriverId = drv.id
+═══════════════════════════════════════════════════════ */
+function _getDrvDeliveryContainer() {
+  let el = document.getElementById('drvLiveDeliveryCard');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'drvLiveDeliveryCard';
+    el.style.display = 'none';
+    const stats = document.getElementById('driverStats');
+    if (stats?.parentNode) stats.parentNode.insertBefore(el, stats.nextSibling);
+    else document.getElementById('driverDashboard')?.prepend(el);
+  }
+  return el;
+}
+
+function _showDrvDelivery(req) {
+  const el = _getDrvDeliveryContainer();
+  if (!el) return;
+  const fee  = Number(req.deliveryFee || req.total || 0).toLocaleString();
+  const km   = req.distanceKm ? req.distanceKm.toFixed(1) + ' km' : '—';
+  const catIcon = { marketplace:'🛒', food:'🍱', pharmacy:'💊', property:'📑', general:'📦' };
+  const icon = catIcon[req.category] || '📦';
+
+  const activeStatus = { driver_accepted:'heading to seller', driver_at_seller:'at seller', in_transit:'in transit' };
+  if (activeStatus[req.status]) {
+    el.style.cssText = 'background:rgba(0,170,255,0.07);border:2px solid rgba(0,170,255,0.3);border-radius:16px;padding:16px;margin-bottom:16px;';
+    el.innerHTML = `
+      <div style="font-size:12px;font-weight:900;color:#00aaff;margin-bottom:8px;">${icon} ACTIVE DELIVERY · ${req.deliveryRef||req.ref}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.75);line-height:1.9;margin-bottom:10px;">
+        📍 ${req.pickupAddress||'—'} → 🎯 ${req.deliveryAddress||'—'}<br>
+        💰 KES ${fee} · ${km}
+        ${req.sellerName?'<br>🏪 Seller: '+req.sellerName:''}
+        ${req.buyerName ?'<br>👤 Buyer: '+req.buyerName:''}
+        ${req.proofPin  ?'<br>🔑 Delivery PIN: <strong style="color:#71ff00;font-size:15px;letter-spacing:3px;">'+req.proofPin+'</strong>':''}
+      </div>
+      ${_deliveryActionBtns(req)}`;
+  } else {
+    el.style.cssText = 'background:rgba(255,165,0,0.07);border:2px solid rgba(255,165,0,0.4);border-radius:16px;padding:16px;margin-bottom:16px;animation:lp 0.9s ease-in-out 4;';
+    el.innerHTML = `
+      <div style="font-size:12px;font-weight:900;color:#ffa500;margin-bottom:8px;display:flex;align-items:center;gap:7px;">
+        <div style="width:7px;height:7px;border-radius:50%;background:#ffa500;animation:lp 1.4s ease-in-out infinite;"></div>
+        ${icon} NEW DELIVERY REQUEST
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.8);line-height:1.9;margin-bottom:10px;">
+        📍 ${req.pickupAddress||'—'} → 🎯 ${req.deliveryAddress||'—'}<br>
+        💰 KES ${fee} · ${km}
+        ${req.sellerName?'<br>🏪 '+req.sellerName:''}
+        ${req.speed?'<br>⚡ '+req.speed.replace('_',' '):''}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="window._drvAcceptDelivery('${req.deliveryRef||req.ref}')" style="flex:1;padding:12px;background:linear-gradient(135deg,#ffa500,#e08000);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">✅ Accept Delivery</button>
+        <button onclick="window._drvRejectDelivery('${req.deliveryRef||req.ref}')" style="padding:12px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:700;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">✕ Pass</button>
+      </div>`;
+  }
+  el.style.display = 'block';
+  if (navigator.vibrate) navigator.vibrate([100,50,100]);
+}
+
+function _deliveryActionBtns(req) {
+  const dRef = req.deliveryRef || req.ref;
+  const s = req.status;
+  if (s === 'driver_accepted') return `
+    <button onclick="window._drvUpdateDelivery('${dRef}','driver_at_seller')"
+      style="width:100%;padding:11px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.3);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
+      📍 I'm at the Seller
+    </button>`;
+  if (s === 'driver_at_seller') return `
+    <button onclick="window._drvUpdateDelivery('${dRef}','in_transit')"
+      style="width:100%;padding:11px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
+      📦 Picked Up — Start Delivery
+    </button>`;
+  if (s === 'in_transit') return `
+    <div style="margin-top:4px;">
+      <input id="drvPinInput_${dRef}" placeholder="Enter 4-digit delivery PIN" maxlength="4" inputmode="numeric"
+        style="width:100%;padding:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:white;border-radius:10px;font-size:15px;font-family:inherit;text-align:center;letter-spacing:6px;box-sizing:border-box;margin-bottom:8px;">
+      <button onclick="window._drvCompleteDelivery('${dRef}')"
+        style="width:100%;padding:11px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">
+        🎉 Mark as Delivered
+      </button>
+    </div>`;
+  return '';
+}
+
+function _clearDrvDelivery() {
+  const el = document.getElementById('drvLiveDeliveryCard');
+  if (el) el.style.display = 'none';
+}
+
+window._drvAcceptDelivery = async function(dRef) {
+  const drv = window.currentDriver;
+  try {
+    await SokoniDB.updatePackageRequest(dRef, {
+      status:'driver_accepted', acceptedAt:new Date().toISOString(),
+      assignedDriverId: drv?.id || 'unknown',
+      driverName: drv?.name || 'SOKONI Rider',
+    });
+  } catch(e) { console.warn('[_drvAcceptDelivery]', e.message); }
+};
+
+window._drvRejectDelivery = async function(dRef) {
+  try {
+    await SokoniDB.updatePackageRequest(dRef, {
+      status:'ready_for_pickup', assignedDriverId:null,
+    });
+    _clearDrvDelivery();
+  } catch(e) { console.warn('[_drvRejectDelivery]', e.message); }
+};
+
+window._drvUpdateDelivery = async function(dRef, newStatus) {
+  try {
+    const update = { status:newStatus };
+    if (newStatus === 'driver_at_seller') update.arrivedAtSellerAt = new Date().toISOString();
+    if (newStatus === 'in_transit')       update.pickedUpAt        = new Date().toISOString();
+    await SokoniDB.updatePackageRequest(dRef, update);
+  } catch(e) { console.warn('[_drvUpdateDelivery]', e.message); }
+};
+
+window._drvCompleteDelivery = async function(dRef) {
+  const inputEl = document.getElementById('drvPinInput_' + dRef);
+  const drv     = window.currentDriver;
+
+  /* Read delivery doc to verify PIN */
+  const unsub = SokoniDB.listenPackageRequest(dRef, async data => {
+    unsub();
+    if (!data) return;
+
+    /* PIN verification (if PIN was set at creation) */
+    if (data.proofPin) {
+      const entered = (inputEl?.value || '').trim();
+      if (entered !== String(data.proofPin)) {
+        window.toast('❌ Wrong delivery PIN. Ask the buyer for the 4-digit code.');
+        return;
+      }
+    }
+
+    const now        = new Date().toISOString();
+    const fee        = Number(data.deliveryFee || 0);
+    const driverNet  = Math.round(fee * 0.88);
+
+    await SokoniDB.updatePackageRequest(dRef, {
+      status:'delivered', deliveredAt:now,
+      proofNote:'Delivered — PIN verified', payoutDue:true,
+    }).catch(e => console.warn(e.message));
+
+    /* Update linked order */
+    if (data.orderId) {
+      await SokoniDB.updateOrder(data.orderId, {
+        status:'delivered', deliveryStatus:'delivered', deliveredAt:now,
+      }).catch(()=>{});
+    }
+
+    /* Update driver earnings */
+    if (drv && fee > 0) {
+      drv.earnings       = (drv.earnings||0)       + driverNet;
+      drv.tripsCompleted = (drv.tripsCompleted||0) + 1;
+      try {
+        const ds  = JSON.parse(localStorage.getItem('sokoniDrivers')||'[]');
+        const idx = ds.findIndex(d => d.id === drv.id);
+        if (idx >= 0) {
+          ds[idx].earnings       = drv.earnings;
+          ds[idx].tripsCompleted = drv.tripsCompleted;
+          localStorage.setItem('sokoniDrivers', JSON.stringify(ds));
+        }
+      } catch(e){}
+      if (typeof window.renderDriverStats === 'function') window.renderDriverStats();
+      window.toast('🎉 Delivered! You earned KES ' + driverNet.toLocaleString());
+    }
+    _clearDrvDelivery();
+  });
+};
+
+/* ── Auto-restore: if driver was already online, resume both listeners ── */
+document.addEventListener('DOMContentLoaded', () => {
+  const dash = document.getElementById('driverDashboard');
+  if (!dash || dash.style.display === 'none' || !window.currentDriver) return;
+  setTimeout(async () => {
+    try {
+      const drivers = await SokoniDB.getOnlineDrivers(null);
+      const drvId   = window.currentDriver?.id || '';
+      if (!drivers.some(d => d.driverId === drvId)) return;
+      if (!_drvActiveUnsub) {
+        _drvActiveUnsub = SokoniDB.listenDriverActiveRequests(drvId, reqs => {
+          if (reqs.length) _showDrvRideRequest(reqs[0]);
+          else _clearDrvRideRequest();
+        });
+      }
+      if (!_drvDeliveryUnsub) {
+        _drvDeliveryUnsub = SokoniDB.listenDriverDeliveryRequests(drvId, deliveries => {
+          if (deliveries.length) _showDrvDelivery(deliveries[0]);
+          else _clearDrvDelivery();
+        });
+      }
+    } catch(e){}
+  }, 1500);
+});
+</script><script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+
+<!-- ═══════════════════════════════════════════════════════
+     SOKONI DRIVER — Firestore Earnings + Orders Integration
+     Adds: real earnings from Firestore, SokoniOrders accept/reject,
+     delivery proof photo upload, OTP verify panel.
+═══════════════════════════════════════════════════════ -->
+<script type="module">
+import SokoniOrders from './sokoni-orders.js';
+import SokoniDB     from './sokoni-db.js';
+
+/* ── UID helper ── */
+function _drvUid() {
+  return window.firebaseAuth?.currentUser?.uid
+    || JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid
+    || null;
+}
+
+/* ── Inject earnings section after stat row ── */
+function _ensureEarningsPanel() {
+  if (document.getElementById('drvFsEarnings')) return document.getElementById('drvFsEarnings');
+  const panel = document.createElement('div');
+  panel.id = 'drvFsEarnings';
+  panel.style.cssText = 'display:none;';
+  panel.innerHTML = `
+    <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:18px;padding:18px 20px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.6);letter-spacing:.7px;margin-bottom:12px;">LIVE EARNINGS · FIRESTORE</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="drvEarnGrid">
+        <div style="text-align:center;padding:10px 4px;border-radius:12px;background:rgba(255,255,255,0.03);">
+          <div style="font-size:16px;font-weight:900;color:#71ff00;" id="drvE_today">—</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;margin-top:2px;">TODAY</div>
+        </div>
+        <div style="text-align:center;padding:10px 4px;border-radius:12px;background:rgba(255,255,255,0.03);">
+          <div style="font-size:16px;font-weight:900;color:white;" id="drvE_week">—</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;margin-top:2px;">THIS WEEK</div>
+        </div>
+        <div style="text-align:center;padding:10px 4px;border-radius:12px;background:rgba(255,255,255,0.03);">
+          <div style="font-size:16px;font-weight:900;color:white;" id="drvE_month">—</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;margin-top:2px;">THIS MONTH</div>
+        </div>
+        <div style="text-align:center;padding:10px 4px;border-radius:12px;background:rgba(255,255,255,0.03);">
+          <div style="font-size:16px;font-weight:900;color:white;" id="drvE_trips">—</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;margin-top:2px;">TOTAL TRIPS</div>
+        </div>
+      </div>
+    </div>`;
+  const stats = document.getElementById('driverStats');
+  if (stats?.parentNode) stats.parentNode.insertBefore(panel, stats.nextSibling);
+  return panel;
+}
+
+/* ── Earnings listener ── */
+let _earningsUnsub = null;
+function _startEarningsListener(uid) {
+  if (!uid) return;
+  if (_earningsUnsub) { _earningsUnsub(); _earningsUnsub = null; }
+  const panel = _ensureEarningsPanel();
+  _earningsUnsub = SokoniOrders.listenDriverEarnings(uid, ({ today, week, month, trips }) => {
+    panel.style.display = 'block';
+    const fmt = n => 'KES ' + Number(n||0).toLocaleString();
+    document.getElementById('drvE_today') .textContent = fmt(today);
+    document.getElementById('drvE_week')  .textContent = fmt(week);
+    document.getElementById('drvE_month') .textContent = fmt(month);
+    document.getElementById('drvE_trips') .textContent = trips;
+    /* Sync to legacy stats */
+    const drv = window.currentDriver;
+    if (drv) {
+      drv.earnings        = today;
+      drv.weeklyEarnings  = week;
+    }
+    if (typeof window.renderDriverStats === 'function') window.renderDriverStats();
+  });
+}
+
+/* ── Order-based delivery handler (SokoniOrders state machine) ── */
+let _orderDelivUnsub = null;
+
+function _startOrderDeliveryListener(uid) {
+  if (!uid) return;
+  if (_orderDelivUnsub) { _orderDelivUnsub(); _orderDelivUnsub = null; }
+  _orderDelivUnsub = SokoniDB.listenRiderActiveOrders(uid, orders => {
+    if (orders.length) _showOrderDelivery(orders[0]);
+    else _clearOrderDelivery();
+  });
+}
+
+function _getOrderDelivContainer() {
+  let el = document.getElementById('drvOrderDelivCard');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'drvOrderDelivCard';
+    el.style.display = 'none';
+    const liveCard = document.getElementById('drvLiveRequestCard');
+    if (liveCard?.parentNode) liveCard.parentNode.insertBefore(el, liveCard.nextSibling);
+    else document.getElementById('driverDashboard')?.prepend(el);
+  }
+  return el;
+}
+
+function _clearOrderDelivery() {
+  const el = document.getElementById('drvOrderDelivCard');
+  if (el) el.style.display = 'none';
+}
+
+function _showOrderDelivery(order) {
+  const el = _getOrderDelivContainer();
+  if (!el) return;
+  const fee    = Number(order.deliveryFee || 0).toLocaleString();
+  const net    = Number(order.driverNet   || 0).toLocaleString();
+  const km     = order.distanceKm ? Number(order.distanceKm).toFixed(1) + ' km' : '—';
+  const oId    = order.id || order._fsId;
+  const items  = (order.items||[]).slice(0,2).map(i=>`${i.qty||1}× ${i.name||'Item'}`).join(', ') || '—';
+  const catIcon= { marketplace:'🛒', food:'🍱', pharmacy:'💊', property:'📑', general:'📦' }[order.category]||'📦';
+
+  /* Show different UI depending on current status */
+  const STATUS_MSG = {
+    rider_assigned:  '📦 Accept this delivery to start earning',
+    rider_en_route:  '🛵 En route to seller — pick up the package',
+    picked_up:       '🛵 Package picked up — heading to buyer',
+    in_transit:      '🚗 In transit — deliver and confirm',
+  };
+
+  const isActive = ['rider_en_route','picked_up','in_transit'].includes(order.status);
+  const color = isActive ? '#00aaff' : '#ffa500';
+  const borderColor = isActive ? 'rgba(0,170,255,0.3)' : 'rgba(255,165,0,0.4)';
+  const bgColor     = isActive ? 'rgba(0,170,255,0.07)' : 'rgba(255,165,0,0.07)';
+
+  el.style.cssText = `background:${bgColor};border:2px solid ${borderColor};border-radius:16px;padding:16px;margin-bottom:16px;`;
+  el.innerHTML = `
+    <div style="font-size:12px;font-weight:900;color:${color};margin-bottom:8px;">${catIcon} ORDER DELIVERY · ${oId}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.75);line-height:1.9;margin-bottom:10px;">
+      📍 ${order.pickupAddress||'—'} → 🎯 ${order.deliveryAddress||'—'}<br>
+      💰 KES ${fee} (your cut: KES ${net}) · ${km}<br>
+      🛒 ${items}
+      ${order.sellerName ? '<br>🏪 '+order.sellerName : ''}
+      ${order.buyerName  ? '<br>👤 '+order.buyerName  : ''}
+    </div>
+    <div style="font-size:12px;font-weight:800;color:${color};margin-bottom:10px;">${STATUS_MSG[order.status]||''}</div>
+    ${_orderDelivActionBtns(order)}`;
+  el.style.display = 'block';
+  if (navigator.vibrate && order.status === 'rider_assigned') navigator.vibrate([100,50,100,50,200]);
+}
+
+function _orderDelivActionBtns(order) {
+  const oId = order.id || order._fsId;
+  if (order.status === 'rider_assigned') {
+    return `<div style="display:flex;gap:8px;">
+      <button onclick="window._ordAccept('${oId}')" style="flex:1;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">✅ Accept Delivery</button>
+      <button onclick="window._ordReject('${oId}')" style="padding:12px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:700;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">✕ Pass</button>
+    </div>`;
+  }
+  if (order.status === 'rider_en_route') {
+    return `<button onclick="window._ordPickedUp('${oId}')" style="width:100%;padding:12px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.3);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📦 I Have Picked Up the Package</button>`;
+  }
+  if (order.status === 'picked_up') {
+    return `<button onclick="window._ordInTransit('${oId}')" style="width:100%;padding:12px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🚗 Start Transit</button>`;
+  }
+  if (order.status === 'in_transit') {
+    return `
+      <div id="drvProofBox_${oId}" style="margin-top:4px;">
+        <input id="drvOTP_${oId}" placeholder="Buyer OTP / Delivery PIN" maxlength="6" inputmode="numeric"
+          style="width:100%;padding:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:white;border-radius:10px;font-size:16px;font-family:inherit;text-align:center;letter-spacing:6px;box-sizing:border-box;margin-bottom:8px;">
+        <div style="margin-bottom:8px;">
+          <label style="font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;">
+            📷 Photo proof (optional)
+            <input type="file" id="drvPhoto_${oId}" accept="image/*" capture="environment" style="display:none;"
+              onchange="window._drvPreviewPhoto('${oId}',this)">
+          </label>
+          <div id="drvPhotoThumb_${oId}" style="margin-top:4px;"></div>
+        </div>
+        <button onclick="window._ordDeliver('${oId}')" style="width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">
+          🎉 Mark as Delivered
+        </button>
+      </div>`;
+  }
+  return '';
+}
+
+/* ── Photo preview helper ── */
+window._drvPreviewPhoto = function(oId, input) {
+  const thumb = document.getElementById('drvPhotoThumb_' + oId);
+  if (!thumb || !input.files?.[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    thumb.innerHTML = `<img src="${e.target.result}" style="width:80px;height:60px;object-fit:cover;border-radius:8px;border:1px solid rgba(113,255,0,0.3);">`;
+    window._drvProofPhotoData = e.target.result; /* base64 for later */
+  };
+  reader.readAsDataURL(input.files[0]);
+};
+
+/* ── Order state machine action handlers ── */
+window._ordAccept = async function(oId) {
+  const uid = _drvUid();
+  try {
+    const r = await SokoniOrders.riderAccept(oId, uid);
+    if (!r.ok) window.toast?.('Error: ' + r.error, false);
+    else window.toast?.('✅ Delivery accepted! Head to seller.');
+  } catch(e) { window.toast?.(e.message, false); }
+};
+
+window._ordReject = async function(oId) {
+  const uid = _drvUid();
+  try {
+    await SokoniOrders.riderReject(oId, uid);
+    _clearOrderDelivery();
+    window.toast?.('Passed — looking for next delivery.');
+  } catch(e) { window.toast?.(e.message, false); }
+};
+
+window._ordPickedUp = async function(oId) {
+  const uid = _drvUid();
+  try {
+    await SokoniOrders.riderPickedUp(oId, uid);
+    window.toast?.('📦 Package picked up!');
+  } catch(e) { window.toast?.(e.message, false); }
+};
+
+window._ordInTransit = async function(oId) {
+  const uid = _drvUid();
+  try {
+    await SokoniOrders.riderInTransit(oId, uid);
+    window.toast?.('🚗 In transit — navigate to buyer.');
+  } catch(e) { window.toast?.(e.message, false); }
+};
+
+window._ordDeliver = async function(oId) {
+  const uid       = _drvUid();
+  const otpInput  = document.getElementById('drvOTP_' + oId);
+  const otp       = (otpInput?.value || '').trim();
+  const photoData = window._drvProofPhotoData || null;
+
+  /* Verify OTP against order */
+  const ordSnap = await new Promise(res => {
+    const unsub = SokoniOrders.listenOrder(oId, data => { unsub(); res(data); });
+    setTimeout(() => res(null), 5000);
+  });
+
+  if (ordSnap?.proofPin && otp !== String(ordSnap.proofPin)) {
+    window.toast?.('❌ Wrong delivery PIN. Ask the buyer for the code.', false);
+    if (otpInput) { otpInput.style.borderColor = 'rgba(255,61,61,0.6)'; }
+    return;
+  }
+
+  try {
+    const r = await SokoniOrders.riderDelivered(oId, uid, {
+      pin:      otp || null,
+      photoUrl: photoData ? 'base64_proof_' + Date.now() : null,
+      note:     'Delivered — OTP verified',
+    });
+    if (!r.ok) { window.toast?.(r.error, false); return; }
+
+    /* Record earnings in driver obj */
+    const drv = window.currentDriver;
+    if (drv && ordSnap?.driverNet > 0) {
+      drv.earnings       = (drv.earnings||0) + Number(ordSnap.driverNet||0);
+      drv.tripsCompleted = (drv.tripsCompleted||0) + 1;
+      if (typeof window.renderDriverStats === 'function') window.renderDriverStats();
+    }
+    _clearOrderDelivery();
+    delete window._drvProofPhotoData;
+    window.toast?.('🎉 Delivered! KES ' + Number(ordSnap?.driverNet||0).toLocaleString() + ' earned.');
+  } catch(e) { window.toast?.(e.message, false); }
+};
+
+/* ── Init: start Firestore listeners once driver UID is known ── */
+let _fsInitRetries = 0;
+const _FS_INIT_MAX = 12; /* 12 × 1.5 s = 18 s ceiling — prevents infinite spin */
+
+function _initFsDriver() {
+  const uid = _drvUid();
+  if (!uid) {
+    if (++_fsInitRetries >= _FS_INIT_MAX) {
+      console.warn('[driver] Auth did not resolve after 18 s — please sign in.');
+      return;
+    }
+    setTimeout(_initFsDriver, 1500);
+    return;
+  }
+  _fsInitRetries = 0;
+  _startEarningsListener(uid);
+  _startOrderDeliveryListener(uid);
+}
+
+/* Start after DOMContentLoaded + short delay for Auth to resolve */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(_initFsDriver, 2000));
+} else {
+  setTimeout(_initFsDriver, 2000);
+}
+
+/* Also start when driver goes online */
+const _origToggle = window.toggleOnline;
+window.toggleOnline = async function() {
+  if (_origToggle) await _origToggle();
+  if (window.isOnline) {
+    const uid = _drvUid();
+    if (uid) {
+      _startEarningsListener(uid);
+      _startOrderDeliveryListener(uid);
+    }
+  } else {
+    if (_earningsUnsub)    { _earningsUnsub();    _earningsUnsub    = null; }
+    if (_orderDelivUnsub)  { _orderDelivUnsub();  _orderDelivUnsub  = null; }
+    _clearOrderDelivery();
+  }
+};
+
+window.SokoniOrders = SokoniOrders;
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     SOKONI DRIVER — DeliveryHub Integration
+     Handles standalone deliveries from the deliveries collection
+     (separate from marketplace packageRequests).
+     Rider ID = Firebase Auth UID throughout.
+═══════════════════════════════════════════════════════ -->
+<script type="module">
+import DeliveryHub from './delivery-hub.js';
+
+/* ── State ── */
+let _dhUnsub       = null;   /* listenRiderDeliveries unsub */
+let _dhLocInterval = null;   /* GPS location push interval */
+let _dhRiderId     = null;   /* = Firebase Auth UID */
+let _dhActive      = null;   /* current delivery being worked */
+
+/* ── UID helper (mirrors existing pattern) ── */
+function _uid() {
+  return window.firebaseAuth?.currentUser?.uid
+    || JSON.parse(localStorage.getItem('sokoniUser') || 'null')?.uid
+    || null;
+}
+
+/* ── Container: inject card above the packageRequests delivery card ── */
+function _ensureContainer() {
+  if (document.getElementById('drvHubDelivCard')) return document.getElementById('drvHubDelivCard');
+  const el = document.createElement('div');
+  el.id = 'drvHubDelivCard';
+  el.style.display = 'none';
+  /* Insert before the existing drvLiveDeliveryCard if present, else before driverDashboard first child */
+  const anchor = document.getElementById('drvLiveDeliveryCard')
+    || document.querySelector('#driverDashboard > div');
+  if (anchor) anchor.parentNode.insertBefore(el, anchor);
+  else (document.getElementById('driverDashboard') || document.body).prepend(el);
+  return el;
+}
+
+/* ── Proof-of-delivery modal ── */
+function _showProofModal(fsId) {
+  let modal = document.getElementById('dhProofModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'dhProofModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:24px;max-width:360px;width:100%;">
+      <div style="font-size:14px;font-weight:900;color:#71ff00;margin-bottom:16px;">🎉 Proof of Delivery</div>
+      <p style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:14px;">Enter the 4-digit PIN the recipient shows you, then optionally capture a photo.</p>
+      <input id="dhPinEntry" inputmode="numeric" maxlength="4" placeholder="4-digit PIN"
+        style="width:100%;padding:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:12px;color:white;font-size:22px;text-align:center;letter-spacing:8px;box-sizing:border-box;margin-bottom:12px;font-family:inherit;">
+      <div style="margin-bottom:12px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.4);display:block;margin-bottom:6px;">Photo (optional)</label>
+        <input type="file" id="dhPhotoInput" accept="image/*" capture="environment"
+          style="font-size:12px;color:rgba(255,255,255,0.6);">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button id="dhProofSubmitBtn" onclick="window._dhSubmitProof('${fsId}')"
+          style="flex:1;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:13px;font-family:inherit;">
+          ✅ Submit Proof
+        </button>
+        <button onclick="document.getElementById('dhProofModal').style.display='none'"
+          style="padding:13px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.5);border-radius:12px;cursor:pointer;font-size:13px;font-family:inherit;">
+          Cancel
+        </button>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+window._dhSubmitProof = async function(fsId) {
+  const pin = (document.getElementById('dhPinEntry')?.value || '').trim();
+  if (!pin || pin.length !== 4) {
+    window.toast?.('Enter the 4-digit PIN from the recipient', false);
+    return;
+  }
+  const btn = document.getElementById('dhProofSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
+  /* Optional photo → base64 */
+  let photoB64 = null;
+  const photoFile = document.getElementById('dhPhotoInput')?.files?.[0];
+  if (photoFile) {
+    photoB64 = await new Promise(res => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result);
+      r.readAsDataURL(photoFile);
+    });
+  }
+
+  /* GPS coords */
+  let lat = null, lng = null;
+  if (navigator.geolocation) {
+    await new Promise(res => navigator.geolocation.getCurrentPosition(
+      p => { lat = p.coords.latitude; lng = p.coords.longitude; res(); },
+      () => res(), { timeout: 5000 }
+    ));
+  }
+
+  try {
+    await DeliveryHub.submitProof(fsId, _dhRiderId, { pin, photoB64, lat, lng });
+    document.getElementById('dhProofModal').style.display = 'none';
+    window.toast?.('🎉 Delivered! Great job.');
+    _dhActive = null;
+    _renderHubCard(null);
+  } catch (e) {
+    window.toast?.(e.message || 'Proof failed', false);
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Submit Proof'; }
+  }
+};
+
+/* ── Render the hub delivery card ── */
+function _renderHubCard(deliveries) {
+  const el = _ensureContainer();
+  if (!deliveries || !deliveries.length) { el.style.display = 'none'; _dhActive = null; return; }
+
+  const d = deliveries[0];
+  _dhActive = d;
+  const fsId = d.id;
+  const fee  = Number(d.deliveryFee || 0).toLocaleString();
+  const km   = d.distanceKm ? d.distanceKm.toFixed(1) + ' km' : '—';
+  const SL   = DeliveryHub.STATUS_LABELS || {};
+  const sl   = SL[d.status] || { label: d.status, icon: '📦' };
+
+  const isPending  = d.status === 'pending';
+  const isEnRoute  = d.status === 'rider_en_route';
+  const isPickedUp = d.status === 'picked_up';
+  const isTransit  = d.status === 'in_transit';
+  const isActive   = ['rider_assigned','rider_en_route','picked_up','in_transit'].includes(d.status);
+
+  const borderColor = isPending ? 'rgba(255,165,0,0.4)' : 'rgba(0,170,255,0.3)';
+  const bgColor     = isPending ? 'rgba(255,165,0,0.07)' : 'rgba(0,170,255,0.07)';
+  const labelColor  = isPending ? '#ffa500' : '#00aaff';
+  const badge       = isPending
+    ? `<div style="width:7px;height:7px;border-radius:50%;background:#ffa500;animation:lp 1.4s ease-in-out infinite;display:inline-block;margin-right:6px;"></div>`
+    : '';
+
+  let actionBtns = '';
+  if (isPending) {
+    actionBtns = `
+      <div style="display:flex;gap:8px;">
+        <button onclick="window._dhAccept('${fsId}')" style="flex:1;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">✅ Accept</button>
+        <button onclick="window._dhReject('${fsId}')" style="padding:12px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:700;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">✕ Pass</button>
+      </div>`;
+  } else if (isEnRoute) {
+    actionBtns = `<button onclick="window._dhAtPickup('${fsId}')" style="width:100%;padding:12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📍 I'm at Pickup</button>`;
+  } else if (isPickedUp) {
+    actionBtns = `<button onclick="window._dhInTransit('${fsId}')" style="width:100%;padding:12px;background:linear-gradient(135deg,#00aaff,#0077cc);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📦 Package Picked Up — Start Delivery</button>`;
+  } else if (isTransit) {
+    actionBtns = `<button onclick="window._dhOpenProof('${fsId}')" style="width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🎉 Mark Delivered + Enter PIN</button>`;
+  }
+
+  el.style.cssText = `background:${bgColor};border:2px solid ${borderColor};border-radius:16px;padding:16px;margin-bottom:16px;`;
+  el.innerHTML = `
+    <div style="font-size:12px;font-weight:900;color:${labelColor};margin-bottom:8px;">${badge}${sl.icon} ${isPending ? 'NEW DELIVERY (Hub)' : 'ACTIVE HUB DELIVERY'} · ${d.deliveryRef || fsId.slice(-8).toUpperCase()}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.8);line-height:1.9;margin-bottom:10px;">
+      📍 ${d.pickupAddress || '—'} → 🎯 ${d.dropoffAddress || '—'}<br>
+      💰 KES ${fee} · ${km}
+      ${d.recipientName ? '<br>👤 ' + d.recipientName + (d.recipientPhone ? ' · ' + d.recipientPhone : '') : ''}
+      ${d.packageType   ? '<br>📦 ' + d.packageType : ''}
+      ${d.urgency       ? '<br>⚡ ' + d.urgency : ''}
+      ${(isTransit && d.proofPIN) ? '<br>🔑 PIN: <strong style="color:#71ff00;font-size:15px;letter-spacing:4px;">' + d.proofPIN + '</strong>' : ''}
+    </div>
+    ${actionBtns}`;
+  el.style.display = 'block';
+  if (isPending && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+}
+
+/* ── Action handlers ── */
+window._dhAccept = async function(fsId) {
+  try { await DeliveryHub.riderAccept(fsId, _dhRiderId); }
+  catch (e) { window.toast?.(e.message, false); }
+};
+window._dhReject = async function(fsId) {
+  try { await DeliveryHub.riderReject(fsId, _dhRiderId); }
+  catch (e) { window.toast?.(e.message, false); }
+};
+window._dhAtPickup = async function(fsId) {
+  try { await DeliveryHub.riderAtPickup(fsId, _dhRiderId); }
+  catch (e) { window.toast?.(e.message, false); }
+};
+window._dhInTransit = async function(fsId) {
+  try { await DeliveryHub.riderInTransit(fsId, _dhRiderId); }
+  catch (e) { window.toast?.(e.message, false); }
+};
+window._dhOpenProof = function(fsId) { _showProofModal(fsId); };
+
+/* ── GPS push to DeliveryHub ── */
+function _startDHLocationPush(riderId) {
+  if (_dhLocInterval) return;
+  _dhLocInterval = setInterval(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(pos => {
+      DeliveryHub.updateRiderLocation(riderId, pos.coords.latitude, pos.coords.longitude)
+        .catch(() => {});
+    }, () => {}, { timeout: 5000, enableHighAccuracy: true });
+  }, 15000); /* every 15 s */
+}
+function _stopDHLocationPush() {
+  if (_dhLocInterval) { clearInterval(_dhLocInterval); _dhLocInterval = null; }
+}
+
+/* ── Start / stop all hub listeners ── */
+function _startHub(riderId) {
+  if (_dhUnsub) return; /* already running */
+  _dhRiderId = riderId;
+  _dhUnsub = DeliveryHub.listenRiderDeliveries(riderId, _renderHubCard);
+  _startDHLocationPush(riderId);
+}
+function _stopHub() {
+  if (_dhUnsub) { _dhUnsub(); _dhUnsub = null; }
+  _stopDHLocationPush();
+  _renderHubCard(null);
+}
+
+/* ── Register rider profile in deliveryRiders (idempotent upsert) ── */
+async function _ensureRiderProfile(uid) {
+  const drv = window.currentDriver;
+  if (!drv) return;
+  try {
+    await DeliveryHub.registerRider({
+      name:     drv.name || 'SOKONI Rider',
+      phone:    drv.phone || '',
+      vehicle:  drv.vehicle || 'boda',
+      plate:    drv.plate || '',
+      area:     drv.zone  || '',
+      rating:   drv.rating || 5.0,
+      isOnline:     false,
+      isAvailable:  true,
+      status:       'active',
+    }, uid);
+  } catch (e) { console.warn('[dh] registerRider:', e.message); }
+}
+
+/* ── Extend toggleOnline to also toggle DeliveryHub rider status ── */
+const _dhOrigToggle = window.toggleOnline;
+window.toggleOnline = async function() {
+  if (_dhOrigToggle) await _dhOrigToggle();
+  const uid = _uid();
+  if (!uid) return;
+  if (window.isOnline) {
+    await _ensureRiderProfile(uid);
+    let lat = null, lng = null;
+    if (navigator.geolocation) {
+      await new Promise(res => navigator.geolocation.getCurrentPosition(
+        p => { lat = p.coords.latitude; lng = p.coords.longitude; res(); },
+        () => res(), { timeout: 5000 }
+      ));
+    }
+    await DeliveryHub.toggleRiderOnline(uid, true, lat, lng).catch(() => {});
+    _startHub(uid);
+  } else {
+    await DeliveryHub.toggleRiderOnline(uid, false).catch(() => {});
+    _stopHub();
+  }
+};
+
+/* ── Init: restore hub if driver was already online when page loaded ── */
+(function _dhInit() {
+  let retries = 0;
+  const _try = async () => {
+    const uid = _uid();
+    if (!uid) {
+      if (++retries < 12) { setTimeout(_try, 1500); return; }
+      return;
+    }
+    _dhRiderId = uid;
+    /* Only start hub if driver is visually online */
+    const onlineBtn = document.getElementById('driverOnlineBtn');
+    const seemsOnline = onlineBtn && onlineBtn.textContent.includes('Online');
+    if (seemsOnline || window.isOnline) {
+      await _ensureRiderProfile(uid);
+      _startHub(uid);
+    }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(_try, 2500));
+  else setTimeout(_try, 2500);
+})();
+</script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+  <!-- Tracking & Location stack -->
+  <script defer src="sokoni-gps-manager.js"></script>
+  <script defer src="sokoni-tracking.js"></script>
+  <script defer src="sokoni-tracking-manager.js"></script>
+</body>
+</html>
+
+
+
+
+
+

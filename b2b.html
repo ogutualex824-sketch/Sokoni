@@ -1,0 +1,1096 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>B2B Hub — SOKONI Business Procurement</title>
+<meta name="description" content="Kenya's premier B2B procurement platform. Find suppliers, post RFQs, compare quotes, place wholesale orders and manage business procurement on SOKONI.">
+<meta property="og:title" content="SOKONI B2B Hub — Wholesale Trade & Supplier Discovery">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00aaff">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+a{text-decoration:none;}
+
+/* ── NAV ── */
+.b2-nav{display:flex;align-items:center;gap:12px;padding:12px 20px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.b2-logo{height:30px;}
+.b2-nav-actions{margin-left:auto;display:flex;gap:8px;align-items:center;}
+.b2-nav-btn{padding:8px 16px;border-radius:10px;font-size:12px;font-weight:800;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);background:transparent;cursor:pointer;font-family:inherit;text-decoration:none;transition:all .2s;white-space:nowrap;}
+.b2-nav-btn:hover{color:white;border-color:rgba(255,255,255,0.25);}
+.b2-nav-btn.primary{background:rgba(0,170,255,0.1);border-color:rgba(0,170,255,0.3);color:#00aaff;}
+.b2-notif-btn{position:relative;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;}
+.b2-notif-badge{position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;font-size:9px;font-weight:900;width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;display:none;}
+
+/* ── HERO ── */
+.b2-hero{background:linear-gradient(135deg,rgba(0,170,255,0.1),rgba(113,255,0,0.05));border-bottom:1px solid rgba(255,255,255,0.07);padding:44px 20px 36px;text-align:center;}
+.b2-hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 16px;border-radius:999px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-size:11px;font-weight:800;margin-bottom:16px;}
+.b2-hero h1{font-size:clamp(24px,5vw,42px);font-weight:900;line-height:1.15;margin-bottom:10px;}
+.b2-hero p{font-size:14px;color:rgba(255,255,255,0.5);max-width:560px;margin:0 auto 24px;line-height:1.6;}
+.b2-hero-search{display:flex;max-width:600px;margin:0 auto 20px;gap:8px;}
+.b2-hero-search input{flex:1;padding:13px 18px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+.b2-hero-search input:focus{border-color:rgba(0,170,255,0.4);}
+.b2-hero-search input::placeholder{color:rgba(255,255,255,0.3);}
+.b2-hero-search button{padding:13px 22px;background:linear-gradient(135deg,#00aaff,#0066cc);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.b2-hero-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+.b2-hero-btn{padding:11px 22px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;border:none;transition:filter .2s;}
+.b2-hero-btn.blue{background:linear-gradient(135deg,#00aaff,#0066cc);color:white;}
+.b2-hero-btn.green{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;}
+.b2-hero-btn.outline{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);}
+
+/* ── STATS ── */
+.b2-stats{display:flex;justify-content:center;gap:30px;flex-wrap:wrap;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.015);}
+.b2-stat{text-align:center;}
+.b2-stat-val{font-size:22px;font-weight:900;color:#00aaff;}
+.b2-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+
+/* ── TAB BAR ── */
+.b2-tab-bar{display:flex;overflow-x:auto;gap:4px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.07);scrollbar-width:none;position:sticky;top:57px;z-index:90;background:rgba(8,8,8,0.97);backdrop-filter:blur(16px);}
+.b2-tab-bar::-webkit-scrollbar{display:none;}
+.b2-tab{padding:8px 18px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.4);font-family:inherit;transition:all .2s;}
+.b2-tab.active{background:rgba(0,170,255,0.12);border-color:rgba(0,170,255,0.35);color:#00aaff;}
+
+/* ── BODY ── */
+.b2-body{max-width:1200px;margin:0 auto;padding:20px;}
+.b2-pane{display:none;}
+.b2-pane.active{display:block;}
+
+/* ── SECTION HEADERS ── */
+.b2-sh{font-size:14px;font-weight:900;color:white;margin:0 0 14px;display:flex;align-items:center;gap:10px;}
+.b2-sh::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+/* ── SUPPLIER CARD ── */
+.b2-sup-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.b2-sup-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:18px;cursor:pointer;transition:all .2s;position:relative;}
+.b2-sup-card:hover{border-color:rgba(0,170,255,0.3);transform:translateY(-2px);}
+.b2-sup-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;}
+.b2-sup-avatar{width:48px;height:48px;border-radius:12px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
+.b2-sup-name{font-size:14px;font-weight:900;color:white;margin-bottom:3px;}
+.b2-sup-type{font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;}
+.b2-sup-verified{position:absolute;top:14px;right:14px;font-size:10px;font-weight:800;color:#22c55e;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);padding:2px 8px;border-radius:5px;}
+.b2-sup-desc{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.5;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.b2-sup-meta{display:flex;gap:12px;font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;flex-wrap:wrap;}
+.b2-sup-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.b2-sup-tag{font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.4);}
+.b2-sup-actions{display:flex;gap:8px;margin-top:12px;}
+.b2-sup-btn{flex:1;padding:8px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid;text-align:center;}
+.b2-sup-btn.contact{background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.25);color:#00aaff;}
+.b2-sup-btn.rfq{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;}
+
+/* ── PRODUCT GRID ── */
+.b2-prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+.b2-prod-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;transition:all .2s;}
+.b2-prod-card:hover{border-color:rgba(0,170,255,0.3);transform:translateY(-2px);}
+.b2-prod-img{height:140px;background:linear-gradient(135deg,rgba(0,170,255,0.08),rgba(0,70,160,0.05));display:flex;align-items:center;justify-content:center;font-size:52px;position:relative;}
+.b2-prod-save{position:absolute;top:10px;right:10px;background:#71ff00;color:black;font-size:10px;font-weight:900;padding:3px 8px;border-radius:6px;}
+.b2-prod-body{padding:14px;}
+.b2-prod-name{font-size:13px;font-weight:800;color:white;margin-bottom:4px;}
+.b2-prod-sup{font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:8px;}
+.b2-prod-price{font-size:18px;font-weight:900;color:#00aaff;margin-bottom:2px;}
+.b2-prod-retail{font-size:11px;color:rgba(255,255,255,0.3);text-decoration:line-through;}
+.b2-prod-moq{font-size:10px;color:rgba(255,255,255,0.4);background:rgba(0,170,255,0.07);border:1px solid rgba(0,170,255,0.15);padding:2px 8px;border-radius:5px;margin-top:4px;display:inline-block;}
+.b2-prod-btn{width:100%;padding:9px;margin-top:10px;border-radius:10px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;}
+.b2-prod-btn:hover{background:rgba(0,170,255,0.18);}
+
+/* ── RFQ CARD ── */
+.b2-rfq-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:12px;transition:border-color .2s;}
+.b2-rfq-card:hover{border-color:rgba(0,170,255,0.2);}
+.b2-rfq-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px;}
+.b2-rfq-title{font-size:14px;font-weight:800;color:white;}
+.b2-rfq-badge{font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;flex-shrink:0;}
+.b2-rfq-meta{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:8px;display:flex;gap:16px;flex-wrap:wrap;}
+.b2-rfq-desc{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.b2-rfq-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.b2-rfq-budget{font-size:15px;font-weight:900;color:#71ff00;}
+.b2-rfq-actions{display:flex;gap:8px;}
+.b2-rfq-btn{padding:7px 14px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid;}
+.b2-rfq-btn.quote{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;}
+.b2-rfq-btn.view{background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.25);color:#00aaff;}
+.b2-rfq-btn.del{background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.2);color:#ef4444;}
+
+/* ── FILTER ROW ── */
+.b2-filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;}
+.b2-filter-row::-webkit-scrollbar{display:none;}
+.b2-filter-pill{padding:7px 16px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-family:inherit;transition:all .2s;}
+.b2-filter-pill.active{background:rgba(0,170,255,0.1);border-color:rgba(0,170,255,0.3);color:#00aaff;}
+
+/* ── SEARCH ROW ── */
+.b2-search-row{display:flex;gap:8px;margin-bottom:14px;}
+.b2-search-input{flex:1;padding:11px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+.b2-search-input:focus{border-color:rgba(0,170,255,0.35);}
+.b2-search-input::placeholder{color:rgba(255,255,255,0.3);}
+.b2-search-btn{padding:11px 20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);border-radius:12px;color:#00aaff;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
+
+/* ── FORM ── */
+.b2-form-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px;margin-bottom:20px;}
+.b2-form-title{font-size:15px;font-weight:900;color:white;margin-bottom:18px;}
+.b2-field{margin-bottom:14px;}
+.b2-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:5px;display:block;}
+.b2-input,.b2-textarea,.b2-select{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:14px;outline:none;font-family:inherit;}
+.b2-input:focus,.b2-textarea:focus,.b2-select:focus{border-color:rgba(0,170,255,0.35);}
+.b2-input::placeholder,.b2-textarea::placeholder{color:rgba(255,255,255,0.25);}
+.b2-textarea{resize:vertical;min-height:80px;}
+.b2-select option{background:#1a1a1a;}
+.b2-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.b2-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.b2-submit{padding:13px 28px;background:linear-gradient(135deg,#00aaff,#0066cc);color:white;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;}
+.b2-submit:hover{filter:brightness(1.1);}
+.b2-form-msg{font-size:12px;margin-top:10px;min-height:16px;}
+
+/* ── QUOTE CARD ── */
+.b2-quote-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;margin-bottom:10px;}
+.b2-qt-sup{font-size:13px;font-weight:800;color:white;margin-bottom:4px;}
+.b2-qt-price{font-size:20px;font-weight:900;color:#71ff00;}
+.b2-qt-meta{font-size:11px;color:rgba(255,255,255,0.4);margin:4px 0 10px;}
+.b2-qt-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.b2-qt-btn{padding:8px 14px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid;}
+.b2-qt-accept{background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:#22c55e;}
+.b2-qt-reject{background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.2);color:#ef4444;}
+.b2-qt-msg{background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.25);color:#00aaff;}
+
+/* ── DASHBOARD STATS ── */
+.b2-dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.b2-dash-stat{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;}
+.b2-dash-val{font-size:24px;font-weight:900;color:white;margin-bottom:4px;}
+.b2-dash-val.blue{color:#00aaff;}
+.b2-dash-val.green{color:#22c55e;}
+.b2-dash-val.amber{color:#f59e0b;}
+.b2-dash-lbl{font-size:10px;color:rgba(255,255,255,0.35);}
+.b2-dash-icon{font-size:22px;margin-bottom:6px;}
+
+/* ── ORDER CARD ── */
+.b2-order-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;margin-bottom:12px;}
+.b2-ord-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.b2-ord-id{font-size:12px;font-weight:800;color:white;font-family:monospace;}
+.b2-ord-sup{font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px;}
+.b2-ord-total{font-size:16px;font-weight:900;color:#71ff00;}
+.b2-ord-badge{font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;}
+
+/* ── MESSAGING ── */
+.b2-chat-list{display:flex;flex-direction:column;gap:10px;max-height:400px;overflow-y:auto;}
+.b2-thread{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;cursor:pointer;transition:border-color .2s;}
+.b2-thread:hover{border-color:rgba(0,170,255,0.3);}
+.b2-thread-name{font-size:13px;font-weight:800;color:white;margin-bottom:3px;}
+.b2-thread-last{font-size:11px;color:rgba(255,255,255,0.4);}
+.b2-thread-unread{background:#00aaff;color:black;font-size:10px;font-weight:900;padding:2px 7px;border-radius:10px;margin-left:auto;}
+
+/* ── MSG WINDOW ── */
+.b2-msg-window{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;height:360px;display:flex;flex-direction:column;}
+.b2-msg-list{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;}
+.b2-bubble{max-width:75%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;}
+.b2-bubble.mine{background:rgba(0,170,255,0.15);border:1px solid rgba(0,170,255,0.2);align-self:flex-end;}
+.b2-bubble.theirs{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);align-self:flex-start;}
+.b2-bubble-time{font-size:9px;color:rgba(255,255,255,0.3);margin-top:3px;}
+.b2-msg-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,0.07);}
+.b2-msg-input{flex:1;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;}
+.b2-msg-input:focus{border-color:rgba(0,170,255,0.35);}
+.b2-msg-send{padding:10px 18px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.3);border-radius:10px;color:#00aaff;font-weight:900;cursor:pointer;font-family:inherit;}
+
+/* ── CTA ── */
+.b2-cta{background:linear-gradient(135deg,rgba(0,170,255,0.08),rgba(113,255,0,0.04));border:1px solid rgba(0,170,255,0.18);border-radius:18px;padding:24px;margin-top:28px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+.b2-cta-icon{font-size:44px;flex-shrink:0;}
+.b2-cta h3{font-size:16px;font-weight:900;color:white;margin-bottom:4px;}
+.b2-cta p{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;}
+.b2-cta-btn{padding:12px 24px;background:linear-gradient(135deg,#00aaff,#0066cc);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;white-space:nowrap;margin-left:auto;}
+
+/* ── EMPTY ── */
+.b2-empty{text-align:center;padding:44px 16px;color:rgba(255,255,255,0.3);}
+.b2-empty .big{font-size:48px;margin-bottom:12px;}
+
+/* ── PERKS ── */
+.b2-perks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+.b2-perk{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;display:flex;align-items:flex-start;gap:12px;}
+.b2-perk-icon{font-size:22px;flex-shrink:0;}
+.b2-perk h4{font-size:12px;font-weight:800;color:white;margin-bottom:3px;}
+.b2-perk p{font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5;}
+
+/* ── MODAL ── */
+.b2-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+.b2-modal-ov.open{opacity:1;pointer-events:all;}
+.b2-modal-box{background:#111;border-radius:24px 24px 0 0;padding:22px;max-width:700px;width:100%;max-height:92vh;overflow-y:auto;transform:translateY(40px);transition:transform .3s;}
+.b2-modal-ov.open .b2-modal-box{transform:translateY(0);}
+.b2-modal-title{font-size:16px;font-weight:900;color:white;margin-bottom:16px;padding-right:40px;}
+.b2-modal-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:white;cursor:pointer;font-size:18px;}
+
+/* ── NOTIF PANEL ── */
+.b2-notif-panel{position:fixed;top:60px;right:16px;width:320px;background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;z-index:150;max-height:400px;overflow-y:auto;display:none;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+.b2-notif-panel.open{display:block;}
+.b2-notif-hdr{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:800;}
+.b2-notif-item{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;}
+.b2-notif-item:hover{background:rgba(255,255,255,0.03);}
+.b2-notif-item.unread{background:rgba(0,170,255,0.03);}
+.b2-notif-body{font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px;}
+.b2-notif-time{font-size:10px;color:rgba(255,255,255,0.3);margin-top:3px;}
+
+/* ── CHART BAR ── */
+.b2-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.b2-bar-lbl{font-size:11px;color:rgba(255,255,255,0.4);width:90px;flex-shrink:0;text-align:right;}
+.b2-bar-track{flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:16px;overflow:hidden;}
+.b2-bar-fill{height:100%;background:linear-gradient(90deg,#00aaff,#0066cc);border-radius:4px;transition:width .6s;}
+.b2-bar-val{font-size:11px;color:#00aaff;width:80px;font-weight:700;}
+
+/* ── ROLE TOGGLE ── */
+.b2-role-toggle{display:flex;gap:4px;background:rgba(255,255,255,0.05);border-radius:10px;padding:4px;margin-bottom:16px;width:fit-content;}
+.b2-role-btn{padding:7px 18px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;border:none;font-family:inherit;color:rgba(255,255,255,0.4);background:transparent;transition:all .2s;}
+.b2-role-btn.active{background:rgba(0,170,255,0.15);color:#00aaff;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#00aaff;}
+
+@media(max-width:600px){.b2-grid2,.b2-grid3{grid-template-columns:1fr;}.b2-cta{flex-direction:column;}.b2-cta-btn{margin-left:0;width:100%;}}
+</style>
+</head>
+<body>
+<script src="sokoni-b2b.js"></script>
+<script src="sokoni-pay.js" defer></script>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="b2-nav">
+  <a href="index.html"><img src="assets/Sokonilogo2.png" class="b2-logo" alt="SOKONI"></a>
+  <span style="font-size:12px;font-weight:900;color:#00aaff;letter-spacing:.5px;">B2B HUB</span>
+  <div class="b2-nav-actions">
+    <div class="b2-notif-btn" onclick="toggleNotifPanel()" id="notifBtn">
+      🔔
+      <div class="b2-notif-badge" id="notifBadge"></div>
+    </div>
+    <a href="b2b-dashboard.html" class="b2-nav-btn">📊 Dashboard</a>
+    <a href="b2b-seller-dashboard.html" class="b2-nav-btn primary">🏭 Supplier Portal</a>
+  </div>
+</nav>
+
+<!-- NOTIFICATION PANEL -->
+<div class="b2-notif-panel" id="notifPanel">
+  <div class="b2-notif-hdr">
+    <span>🔔 Notifications</span>
+    <button onclick="markAllRead()" style="background:none;border:none;color:#00aaff;font-size:11px;font-weight:800;cursor:pointer;">Mark all read</button>
+  </div>
+  <div id="notifList"></div>
+</div>
+
+<!-- HERO -->
+<div class="b2-hero">
+  <div class="b2-hero-badge">🤝 Business-to-Business Procurement Platform</div>
+  <h1>Kenya's #1 B2B Hub<br><span style="color:#00aaff;">Suppliers · RFQs · Wholesale Orders</span></h1>
+  <p>Discover verified suppliers, post procurement requests, compare quotes and manage your entire business supply chain in one place.</p>
+  <div class="b2-hero-search">
+    <input type="text" id="heroSearch" placeholder="🔍 Search suppliers, products, categories..." onkeydown="if(event.key==='Enter')doHeroSearch()">
+    <button onclick="doHeroSearch()">Search B2B</button>
+  </div>
+  <div class="b2-hero-btns">
+    <button class="b2-hero-btn blue" onclick="openTab('rfq-create')">📋 Post RFQ</button>
+    <button class="b2-hero-btn green" onclick="openTab('suppliers')">🏭 Find Suppliers</button>
+    <button class="b2-hero-btn outline" onclick="openTab('marketplace')">📦 Browse Wholesale</button>
+    <a href="b2b-dashboard.html" class="b2-hero-btn outline">📊 My Dashboard</a>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="b2-stats">
+  <div class="b2-stat"><div class="b2-stat-val" id="statSuppliers">15+</div><div class="b2-stat-lbl">Verified Suppliers</div></div>
+  <div class="b2-stat"><div class="b2-stat-val" id="statProducts">23+</div><div class="b2-stat-lbl">Wholesale Products</div></div>
+  <div class="b2-stat"><div class="b2-stat-val" id="statRFQs">0</div><div class="b2-stat-lbl">Open RFQs</div></div>
+  <div class="b2-stat"><div class="b2-stat-val" id="statOrders">0</div><div class="b2-stat-lbl">Orders Placed</div></div>
+  <div class="b2-stat"><div class="b2-stat-val">KES</div><div class="b2-stat-lbl">Kenya Shillings</div></div>
+</div>
+
+<!-- TAB BAR -->
+<div class="b2-tab-bar" id="b2TabBar">
+  <button class="b2-tab active" onclick="openTab('overview',this)">🏠 Overview</button>
+  <button class="b2-tab" onclick="openTab('suppliers',this)">🏭 Suppliers</button>
+  <button class="b2-tab" onclick="openTab('marketplace',this)">📦 Marketplace</button>
+  <button class="b2-tab" onclick="openTab('rfqs',this)">📋 Open RFQs</button>
+  <button class="b2-tab" onclick="openTab('rfq-create',this)">✏️ Post RFQ</button>
+  <button class="b2-tab" onclick="openTab('my-rfqs',this)">📌 My RFQs</button>
+  <button class="b2-tab" onclick="openTab('my-orders',this)">📦 My Orders</button>
+  <button class="b2-tab" onclick="openTab('messages',this)">💬 Messages</button>
+</div>
+
+<div class="b2-body">
+
+  <!-- ══ OVERVIEW ══ -->
+  <div class="b2-pane active" id="pane-overview">
+    <div class="b2-perks">
+      <div class="b2-perk"><div class="b2-perk-icon">💰</div><div><h4>Wholesale Pricing</h4><p>Save 20–55% versus retail. Unlock tiered pricing when you meet MOQs.</p></div></div>
+      <div class="b2-perk"><div class="b2-perk-icon">✅</div><div><h4>Verified Suppliers</h4><p>All suppliers are KRA-registered, vetted and badge-verified.</p></div></div>
+      <div class="b2-perk"><div class="b2-perk-icon">📋</div><div><h4>RFQ Engine</h4><p>Post what you need — verified suppliers compete with their best offers.</p></div></div>
+      <div class="b2-perk"><div class="b2-perk-icon">🤝</div><div><h4>Quote Comparison</h4><p>Compare multiple supplier quotes side by side. Accept or negotiate.</p></div></div>
+      <div class="b2-perk"><div class="b2-perk-icon">📱</div><div><h4>M-Pesa & Bank Transfer</h4><p>Pay via M-Pesa, EFT or LPO. Credit terms for verified buyers.</p></div></div>
+      <div class="b2-perk"><div class="b2-perk-icon">🚛</div><div><h4>Logistics Integration</h4><p>Bulk transport, freight forwarding and last-mile delivery through Sokoni.</p></div></div>
+    </div>
+
+    <!-- FEATURED SUPPLIERS -->
+    <div class="b2-sh">🏆 Featured Suppliers</div>
+    <div class="b2-sup-grid" id="featuredSuppliers"></div>
+
+    <!-- TOP PRODUCTS -->
+    <div class="b2-sh" style="margin-top:24px;">📦 Top Wholesale Products</div>
+    <div class="b2-prod-grid" id="featuredProducts"></div>
+
+    <!-- OPEN RFQS PREVIEW -->
+    <div class="b2-sh" style="margin-top:24px;">📋 Latest Open RFQs</div>
+    <div id="overviewRFQs"></div>
+
+    <div class="b2-cta">
+      <div class="b2-cta-icon">🏭</div>
+      <div style="flex:1;">
+        <h3>Are You a Supplier or Manufacturer?</h3>
+        <p>List your products, receive RFQs from verified buyers and grow your B2B business on Sokoni. Free to join — commission only when you sell.</p>
+      </div>
+      <button class="b2-cta-btn" onclick="window.location.href='b2b-seller-dashboard.html'">🚀 Join as Supplier →</button>
+    </div>
+  </div>
+
+  <!-- ══ SUPPLIERS ══ -->
+  <div class="b2-pane" id="pane-suppliers">
+    <div class="b2-search-row">
+      <input type="text" id="supSearch" class="b2-search-input" placeholder="🔍 Search suppliers by name, product, industry..." oninput="renderSuppliers()">
+      <button class="b2-search-btn" onclick="renderSuppliers()">Search</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:5px;">TYPE</div>
+        <div class="b2-filter-row" id="supTypeFilter"></div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:5px;">INDUSTRY</div>
+        <div class="b2-filter-row" id="supIndustryFilter"></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.5);cursor:pointer;">
+        <input type="checkbox" id="verifiedOnly" onchange="renderSuppliers()"> Verified Only
+      </label>
+      <span id="supCount" style="font-size:12px;color:rgba(255,255,255,0.35);margin-left:auto;"></span>
+    </div>
+    <div class="b2-sup-grid" id="supplierGrid"></div>
+    <div class="b2-empty" id="supEmpty" style="display:none;"><div class="big">🏭</div><p>No suppliers found.</p></div>
+  </div>
+
+  <!-- ══ MARKETPLACE ══ -->
+  <div class="b2-pane" id="pane-marketplace">
+    <div class="b2-search-row">
+      <input type="text" id="prodSearch" class="b2-search-input" placeholder="🔍 Search wholesale products..." oninput="renderProducts()">
+    </div>
+    <div class="b2-filter-row" id="prodCatFilter"></div>
+    <div class="b2-sh" id="prodLabel">Wholesale Products</div>
+    <div class="b2-prod-grid" id="prodGrid"></div>
+    <div class="b2-empty" id="prodEmpty" style="display:none;"><div class="big">📦</div><p>No products found.</p></div>
+  </div>
+
+  <!-- ══ OPEN RFQS ══ -->
+  <div class="b2-pane" id="pane-rfqs">
+    <div class="b2-search-row">
+      <input type="text" id="rfqSearch" class="b2-search-input" placeholder="🔍 Search open RFQs..." oninput="renderOpenRFQs()">
+    </div>
+    <div class="b2-filter-row" id="rfqCatFilter"></div>
+    <div class="b2-sh" id="rfqLabel">Open RFQs</div>
+    <div id="openRFQsList"></div>
+  </div>
+
+  <!-- ══ POST RFQ ══ -->
+  <div class="b2-pane" id="pane-rfq-create">
+    <div class="b2-form-card">
+      <div class="b2-form-title">📋 Post a Request for Quotation (RFQ)</div>
+      <div class="b2-grid2">
+        <div class="b2-field"><label class="b2-label">Product / Service Required *</label><input id="rfqTitle" class="b2-input" placeholder="e.g. 500 units branded polo shirts"></div>
+        <div class="b2-field"><label class="b2-label">Industry Category *</label>
+          <select id="rfqCat" class="b2-select">
+            <option value="">Select category...</option>
+            <option value="agriculture">🌱 Agriculture</option>
+            <option value="electronics">📱 Electronics</option>
+            <option value="fashion">👕 Fashion & Textiles</option>
+            <option value="food">🍎 Food & Beverages</option>
+            <option value="construction">🧱 Construction</option>
+            <option value="chemicals">🧪 Chemicals & Cleaning</option>
+            <option value="machinery">⚙️ Machinery & Tools</option>
+            <option value="healthcare">💊 Healthcare & Pharma</option>
+            <option value="printing">🖨️ Printing & Branding</option>
+            <option value="furniture">🛋️ Furniture & Décor</option>
+            <option value="logistics">🚚 Logistics</option>
+            <option value="beauty">💄 Beauty & Personal Care</option>
+            <option value="other">🛍️ Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="b2-field"><label class="b2-label">Detailed Specifications *</label><textarea id="rfqDesc" class="b2-textarea" rows="3" placeholder="Product specs, materials, colours, delivery location, quality standards, etc."></textarea></div>
+      <div class="b2-grid3">
+        <div class="b2-field"><label class="b2-label">Quantity Required *</label><input id="rfqQty" class="b2-input" type="number" placeholder="500" min="1"></div>
+        <div class="b2-field"><label class="b2-label">Unit</label><input id="rfqUnit" class="b2-input" placeholder="pcs / kg / cartons"></div>
+        <div class="b2-field"><label class="b2-label">Budget (KES)</label><input id="rfqBudget" class="b2-input" type="number" placeholder="250000"></div>
+      </div>
+      <div class="b2-grid2">
+        <div class="b2-field"><label class="b2-label">Required Delivery By</label><input id="rfqDeadline" class="b2-input" type="date"></div>
+        <div class="b2-field"><label class="b2-label">Delivery Location</label><input id="rfqLocation" class="b2-input" placeholder="e.g. Nairobi Industrial Area"></div>
+      </div>
+      <div class="b2-grid2">
+        <div class="b2-field"><label class="b2-label">Your Name / Business *</label><input id="rfqName" class="b2-input" placeholder="ABC Enterprises Ltd."></div>
+        <div class="b2-field"><label class="b2-label">Contact (Phone / Email) *</label><input id="rfqContact" class="b2-input" placeholder="07XXXXXXXX"></div>
+      </div>
+      <div class="b2-field">
+        <label class="b2-label">Additional Notes</label>
+        <textarea id="rfqNotes" class="b2-textarea" rows="2" placeholder="Any other requirements, preferred suppliers, certifications needed..."></textarea>
+      </div>
+      <button class="b2-submit" onclick="postRFQ()">📋 Post RFQ — Suppliers Will Respond</button>
+      <div class="b2-form-msg" id="rfqMsg"></div>
+    </div>
+  </div>
+
+  <!-- ══ MY RFQS ══ -->
+  <div class="b2-pane" id="pane-my-rfqs">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:15px;font-weight:800;color:white;">My RFQs</div>
+      <button class="b2-rfq-btn view" onclick="openTab('rfq-create')">+ Post New RFQ</button>
+    </div>
+    <div id="myRFQsList"></div>
+  </div>
+
+  <!-- ══ MY ORDERS ══ -->
+  <div class="b2-pane" id="pane-my-orders">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:15px;font-weight:800;color:white;">My Purchase Orders</div>
+      <a href="b2b-orders.html" style="font-size:12px;font-weight:800;color:#00aaff;">View All →</a>
+    </div>
+    <div id="myOrdersList"></div>
+  </div>
+
+  <!-- ══ MESSAGES ══ -->
+  <div class="b2-pane" id="pane-messages">
+    <div class="b2-sh">💬 Business Messages <a href="b2b-chat.html" style="font-size:11px;font-weight:700;color:#00aaff;margin-left:8px;">Open Full Chat →</a></div>
+    <div id="chatView">
+      <div id="threadList"></div>
+      <div id="msgWindow" style="display:none;margin-top:14px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <button onclick="document.getElementById('msgWindow').style.display='none';document.getElementById('threadList').style.display='block';" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:white;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;">← Back</button>
+          <span style="font-size:14px;font-weight:800;color:white;" id="activeChatTitle"></span>
+        </div>
+        <div class="b2-msg-window">
+          <div class="b2-msg-list" id="msgList"></div>
+          <div class="b2-msg-input-row">
+            <input class="b2-msg-input" id="msgInput" placeholder="Type your message..." onkeydown="if(event.key==='Enter')sendChatMsg()">
+            <button class="b2-msg-send" onclick="sendChatMsg()">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /b2-body -->
+
+<!-- MODAL -->
+<div class="b2-modal-ov" id="b2Modal">
+  <div class="b2-modal-box" id="b2ModalBox" style="position:relative;">
+    <div class="b2-modal-title" id="b2ModalTitle"></div>
+    <div id="b2ModalBody"></div>
+    <button class="b2-modal-close" onclick="closeModal()">×</button>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="category.html" class="bnav-item"><i class="fas fa-shopping-bag"></i><span>Shop</span></a>
+  <a href="b2b.html" class="bnav-item active"><i class="fas fa-handshake"></i><span>B2B</span></a>
+  <a href="b2b-dashboard.html" class="bnav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script>
+const B = window.SokoniB2B;
+let _supType = 'all', _supInd = 'all', _prodCat = 'all', _rfqCat = 'all', _activeThread = null;
+
+/* ── INIT ── */
+function init() {
+  updateStats();
+  renderNotifBadge();
+  buildFilters();
+  renderOverview();
+  handleURLParams();
+}
+
+function updateStats() {
+  document.getElementById('statRFQs').textContent = B.getRFQs().filter(r=>r.status==='open').length;
+  document.getElementById('statOrders').textContent = B.getOrders().length;
+}
+
+/* ── TAB SWITCHING ── */
+function openTab(name, btn) {
+  document.querySelectorAll('.b2-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.b2-tab').forEach(t=>t.classList.remove('active'));
+  const pane = document.getElementById('pane-'+name);
+  if (pane) pane.classList.add('active');
+  if (btn) btn.classList.add('active');
+  else {
+    document.querySelectorAll('.b2-tab').forEach(t=>{
+      if (t.getAttribute('onclick')?.includes("'"+name+"'")) t.classList.add('active');
+    });
+  }
+  /* Lazy render */
+  if (name==='suppliers') renderSuppliers();
+  if (name==='marketplace') renderProducts();
+  if (name==='rfqs') renderOpenRFQs();
+  if (name==='my-rfqs') renderMyRFQs();
+  if (name==='my-orders') renderMyOrders();
+  if (name==='messages') renderThreads();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+window.openTab = openTab;
+
+/* ── BUILD FILTERS ── */
+function buildFilters() {
+  /* Supplier type */
+  document.getElementById('supTypeFilter').innerHTML = B.SUPPLIER_TYPES.map(t=>
+    `<button class="b2-filter-pill ${t.id==='all'?'active':''}" onclick="setSupType('${t.id}',this)">${t.icon} ${t.label}</button>`
+  ).join('');
+  /* Supplier industry */
+  document.getElementById('supIndustryFilter').innerHTML = B.INDUSTRIES.slice(0,8).map(i=>
+    `<button class="b2-filter-pill ${i.id==='all'?'active':''}" onclick="setSupInd('${i.id}',this)">${i.icon} ${i.label}</button>`
+  ).join('');
+  /* Product category */
+  const cats = [{id:'all',icon:'🌐',label:'All'},...B.INDUSTRIES.filter(i=>i.id!=='all')];
+  document.getElementById('prodCatFilter').innerHTML = cats.map(c=>
+    `<button class="b2-filter-pill ${c.id==='all'?'active':''}" onclick="setProdCat('${c.id}',this)">${c.icon} ${c.label}</button>`
+  ).join('');
+  /* RFQ category */
+  document.getElementById('rfqCatFilter').innerHTML = cats.map(c=>
+    `<button class="b2-filter-pill ${c.id==='all'?'active':''}" onclick="setRfqCat('${c.id}',this)">${c.icon} ${c.label}</button>`
+  ).join('');
+}
+
+function setSupType(v,el){_supType=v;document.querySelectorAll('#supTypeFilter .b2-filter-pill').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderSuppliers();}
+function setSupInd(v,el){_supInd=v;document.querySelectorAll('#supIndustryFilter .b2-filter-pill').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderSuppliers();}
+function setProdCat(v,el){_prodCat=v;document.querySelectorAll('#prodCatFilter .b2-filter-pill').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderProducts();}
+function setRfqCat(v,el){_rfqCat=v;document.querySelectorAll('#rfqCatFilter .b2-filter-pill').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderOpenRFQs();}
+window.setSupType=setSupType;window.setSupInd=setSupInd;window.setProdCat=setProdCat;window.setRfqCat=setRfqCat;
+
+/* ── OVERVIEW ── */
+function renderOverview() {
+  /* Featured suppliers */
+  const sups = B.getSuppliers({verified:true}).slice(0,4);
+  document.getElementById('featuredSuppliers').innerHTML = sups.map(s=>supplierCardHTML(s)).join('') || '<div class="b2-empty"><div class="big">🏭</div><p>No suppliers yet</p></div>';
+  /* Featured products */
+  const prods = B.getProducts({}).slice(0,6);
+  document.getElementById('featuredProducts').innerHTML = prods.map(p=>productCardHTML(p)).join('');
+  /* Open RFQs preview */
+  const rfqs = B.getRFQs().filter(r=>r.status==='open').slice(0,3);
+  document.getElementById('overviewRFQs').innerHTML = rfqs.length ? rfqs.map(r=>rfqCardHTML(r, false)).join('') : `<div class="b2-empty" style="padding:20px;"><p>No open RFQs yet. <button onclick="openTab('rfq-create')" style="background:none;border:none;color:#00aaff;font-weight:800;cursor:pointer;">Post the first one →</button></p></div>`;
+}
+
+/* ── SUPPLIERS ── */
+function renderSuppliers() {
+  const q = document.getElementById('supSearch')?.value || '';
+  const verifiedOnly = document.getElementById('verifiedOnly')?.checked;
+  const list = B.getSuppliers({type:_supType, industry:_supInd, q, verified:verifiedOnly||undefined});
+  document.getElementById('supCount').textContent = `${list.length} suppliers`;
+  const grid = document.getElementById('supplierGrid');
+  const empty = document.getElementById('supEmpty');
+  if (!list.length) { grid.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  grid.innerHTML = list.map(s=>supplierCardHTML(s)).join('');
+}
+
+function supplierCardHTML(s) {
+  const ind = B.INDUSTRIES.find(i=>i.id===s.industry)||{icon:'🏢'};
+  const type = B.SUPPLIER_TYPES.find(t=>t.id===s.type)||{label:s.type};
+  return `
+  <div class="b2-sup-card" onclick="viewSupplier('${s.id}')">
+    ${s.verified?'<div class="b2-sup-verified">✅ Verified</div>':''}
+    <div class="b2-sup-top">
+      <div class="b2-sup-avatar">${ind.icon}</div>
+      <div>
+        <div class="b2-sup-name">${s.name}</div>
+        <span class="b2-sup-type">${type.label}</span>
+      </div>
+    </div>
+    <div class="b2-sup-desc">${s.desc}</div>
+    <div class="b2-sup-meta">
+      <span>📍 ${s.location}</span>
+      <span>⭐ ${s.rating} (${s.reviews})</span>
+      <span>📦 Min: ${s.minOrder}</span>
+      ${s.exportReady?'<span style="color:#22c55e;">✈️ Export Ready</span>':''}
+    </div>
+    <div class="b2-sup-tags">${(s.tags||[]).slice(0,3).map(t=>`<span class="b2-sup-tag">${t}</span>`).join('')}</div>
+    <div class="b2-sup-actions">
+      <button class="b2-sup-btn contact" onclick="event.stopPropagation();openChat('${s.id}','${s.name}')">💬 Message</button>
+      <button class="b2-sup-btn rfq" onclick="event.stopPropagation();openRFQForSupplier('${s.id}','${s.name}')">📋 Send RFQ</button>
+      <button class="b2-sup-btn contact" onclick="event.stopPropagation();viewSupplier('${s.id}')">👁 Profile</button>
+    </div>
+  </div>`;
+}
+window.renderSuppliers = renderSuppliers;
+
+/* ── PRODUCTS ── */
+function renderProducts() {
+  const q = document.getElementById('prodSearch')?.value || '';
+  const list = B.getProducts({category:_prodCat==='all'?undefined:_prodCat, q});
+  document.getElementById('prodLabel').textContent = `Wholesale Products (${list.length})`;
+  const grid = document.getElementById('prodGrid');
+  const empty = document.getElementById('prodEmpty');
+  if (!list.length) { grid.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  grid.innerHTML = list.map(p=>productCardHTML(p)).join('');
+}
+
+function productCardHTML(p) {
+  const icon = B.CAT_ICONS[p.category]||'📦';
+  return `
+  <div class="b2-prod-card">
+    <div class="b2-prod-img">
+      <span>${icon}</span>
+      ${p.savings?`<div class="b2-prod-save">-${p.savings}%</div>`:''}
+    </div>
+    <div class="b2-prod-body">
+      <div class="b2-prod-name">${p.name}</div>
+      <div class="b2-prod-sup">🏭 ${p.supplierName}</div>
+      <div class="b2-prod-retail">Retail: KES ${B.fmt(p.price)}</div>
+      <div class="b2-prod-price">KES ${B.fmt(p.wholesalePrice)} <span style="font-size:12px;color:rgba(255,255,255,0.3);">/ ${p.unit||'unit'}</span></div>
+      <div class="b2-prod-moq">Min: ${p.moq} ${p.unit||'units'}</div>
+      ${p.desc?`<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:6px;line-height:1.5;">${p.desc.slice(0,80)}...</div>`:''}
+      <button class="b2-prod-btn" onclick="enquireProduct('${p.id}')">💬 Enquire / Order Bulk</button>
+    </div>
+  </div>`;
+}
+window.renderProducts = renderProducts;
+
+/* ── OPEN RFQS ── */
+function renderOpenRFQs() {
+  const q = document.getElementById('rfqSearch')?.value || '';
+  let list = B.getRFQs().filter(r=>r.status==='open');
+  if (_rfqCat !== 'all') list = list.filter(r=>r.category===_rfqCat);
+  if (q) list = list.filter(r=>(r.title+r.desc+(r.name||'')).toLowerCase().includes(q.toLowerCase()));
+  document.getElementById('rfqLabel').textContent = `Open RFQs (${list.length})`;
+  const cont = document.getElementById('openRFQsList');
+  cont.innerHTML = list.length ? list.map(r=>rfqCardHTML(r,true)).join('') : `<div class="b2-empty"><div class="big">📋</div><p>No open RFQs right now.<br>Be the first to post one!</p><button onclick="openTab('rfq-create')" style="margin-top:14px;padding:10px 20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.3);color:#00aaff;border-radius:10px;cursor:pointer;font-weight:800;font-family:inherit;">Post RFQ →</button></div>`;
+}
+window.renderOpenRFQs = renderOpenRFQs;
+
+function rfqCardHTML(rfq, showQuote) {
+  const st = B.RFQ_STATUS[rfq.status] || {label:rfq.status,color:'white'};
+  const cat = B.INDUSTRIES.find(i=>i.id===rfq.category)||{icon:'🛍️'};
+  const qCount = (rfq.quotes||[]).length;
+  return `
+  <div class="b2-rfq-card">
+    <div class="b2-rfq-top">
+      <div>
+        <div class="b2-rfq-title">${cat.icon} ${rfq.title}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;">#${rfq.id} · ${B.timeSince(rfq.createdAt)}</div>
+      </div>
+      <span class="b2-rfq-badge" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
+    </div>
+    <div class="b2-rfq-meta">
+      <span>📍 ${rfq.deliveryLocation||'Kenya'}</span>
+      <span>📦 Qty: ${rfq.qty||'—'} ${rfq.unit||'units'}</span>
+      ${rfq.deadline?`<span>📅 By: ${rfq.deadline}</span>`:''}
+      <span>💬 ${qCount} quote${qCount!==1?'s':''}</span>
+    </div>
+    ${rfq.desc?`<div class="b2-rfq-desc">${rfq.desc}</div>`:''}
+    <div class="b2-rfq-footer">
+      <div class="b2-rfq-budget">${rfq.budget?'Budget: KES '+B.fmt(rfq.budget):'Budget: Negotiable'}</div>
+      <div class="b2-rfq-actions">
+        ${showQuote?`<button class="b2-rfq-btn quote" onclick="openSubmitQuote('${rfq.id}','${rfq.title.replace(/'/g,"\\'")}')">📤 Submit Quote</button>`:''}
+        <button class="b2-rfq-btn view" onclick="openRFQDetail('${rfq.id}')">👁 View</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ── MY RFQS ── */
+function renderMyRFQs() {
+  const list = B.getRFQs();
+  const cont = document.getElementById('myRFQsList');
+  if (!list.length) { cont.innerHTML=`<div class="b2-empty"><div class="big">📋</div><p>You haven't posted any RFQs yet.</p><button onclick="openTab('rfq-create')" style="margin-top:14px;padding:10px 20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.3);color:#00aaff;border-radius:10px;cursor:pointer;font-weight:800;font-family:inherit;">Post Your First RFQ →</button></div>`; return; }
+  cont.innerHTML = list.map(rfq => {
+    const quotes = B.getQuotes(rfq.id);
+    const st = B.RFQ_STATUS[rfq.status]||{label:rfq.status,color:'white'};
+    return `
+    <div class="b2-rfq-card">
+      <div class="b2-rfq-top">
+        <div>
+          <div class="b2-rfq-title">${rfq.title}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;">#${rfq.id} · ${B.timeSince(rfq.createdAt)}</div>
+        </div>
+        <span class="b2-rfq-badge" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
+      </div>
+      <div class="b2-rfq-meta">
+        <span>📦 ${rfq.qty||'—'} ${rfq.unit||'units'}</span>
+        <span>💬 ${quotes.length} Quote${quotes.length!==1?'s':''} received</span>
+        ${rfq.budget?`<span>💰 Budget: KES ${B.fmt(rfq.budget)}</span>`:''}
+      </div>
+      <div class="b2-rfq-footer">
+        <div></div>
+        <div class="b2-rfq-actions">
+          ${quotes.length?`<button class="b2-rfq-btn view" onclick="viewQuotes('${rfq.id}')">📊 View ${quotes.length} Quote${quotes.length!==1?'s':''}</button>`:''}
+          <button class="b2-rfq-btn view" onclick="openRFQDetail('${rfq.id}')">👁 Details</button>
+          <button class="b2-rfq-btn del" onclick="delRFQ('${rfq.id}')">🗑 Remove</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── MY ORDERS ── */
+function renderMyOrders() {
+  const list = B.getOrders();
+  const cont = document.getElementById('myOrdersList');
+  if (!list.length) { cont.innerHTML=`<div class="b2-empty"><div class="big">📦</div><p>No purchase orders yet.</p></div>`; return; }
+  cont.innerHTML = list.slice(0,8).map(o=>{
+    const st = B.ORDER_STATUS[o.status]||{label:o.status,icon:'📦'};
+    return `
+    <div class="b2-order-card">
+      <div class="b2-ord-top">
+        <div class="b2-ord-id">${o.id}</div>
+        <span class="b2-ord-badge" style="background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;">${st.icon} ${st.label}</span>
+      </div>
+      <div class="b2-ord-sup">🏭 ${o.supplierName||'Supplier'} · 📅 ${o.createdAt?new Date(o.createdAt).toLocaleDateString():'—'}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:8px;">${(o.items||[]).map(i=>i.name+'×'+i.qty).join(', ')}</div>
+      <div class="b2-ord-total">KES ${B.fmt(o.total)}</div>
+    </div>`;
+  }).join('') + `<div style="text-align:center;margin-top:14px;"><a href="b2b-orders.html" style="color:#00aaff;font-size:13px;font-weight:800;">View All Orders →</a></div>`;
+}
+
+/* ── THREADS ── */
+function renderThreads() {
+  const threads = B.getThreads();
+  const tl = document.getElementById('threadList');
+  if (!threads.length) { tl.innerHTML=`<div class="b2-empty"><div class="big">💬</div><p>No messages yet.<br>Message a supplier to start a conversation.</p></div>`; return; }
+  tl.innerHTML = `<div class="b2-chat-list">${threads.map(t=>`
+  <div class="b2-thread" onclick="openThread('${t.threadId}','${(t.lastMsg?.to||t.threadId).replace(/'/g,"\\'")}')">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div class="b2-thread-name">${t.threadId.replace('_',' ')}</div>
+      ${t.unread?`<span class="b2-thread-unread">${t.unread}</span>`:''}
+    </div>
+    <div class="b2-thread-last">${t.lastMsg?.text||''} · ${B.timeSince(t.lastMsg?.ts||0)}</div>
+  </div>`).join('')}</div>`;
+}
+
+function openThread(threadId, title) {
+  _activeThread = threadId;
+  B.markThreadRead(threadId);
+  document.getElementById('threadList').style.display = 'none';
+  document.getElementById('msgWindow').style.display = 'block';
+  document.getElementById('activeChatTitle').textContent = '💬 ' + title;
+  renderMsgs();
+}
+
+function renderMsgs() {
+  const msgs = B.getMessages(_activeThread);
+  const list = document.getElementById('msgList');
+  const myUid = 'me';
+  list.innerHTML = msgs.length ? msgs.map(m=>`
+  <div class="b2-bubble ${m.from===myUid?'mine':'theirs'}">
+    <div>${m.text}</div>
+    <div class="b2-bubble-time">${B.timeSince(m.ts)}</div>
+  </div>`).join('') : '<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.3);font-size:13px;">Start the conversation!</div>';
+  list.scrollTop = list.scrollHeight;
+}
+
+function sendChatMsg() {
+  const input = document.getElementById('msgInput');
+  const text = input?.value.trim();
+  if (!text || !_activeThread) return;
+  B.sendMessage({ threadId:_activeThread, from:'me', to:_activeThread, text });
+  input.value = '';
+  renderMsgs();
+}
+window.sendChatMsg = sendChatMsg;
+
+/* ── POST RFQ ── */
+function postRFQ() {
+  const title = document.getElementById('rfqTitle')?.value.trim();
+  const category = document.getElementById('rfqCat')?.value;
+  const desc = document.getElementById('rfqDesc')?.value.trim();
+  const qty = document.getElementById('rfqQty')?.value;
+  const unit = document.getElementById('rfqUnit')?.value.trim() || 'units';
+  const budget = document.getElementById('rfqBudget')?.value;
+  const deadline = document.getElementById('rfqDeadline')?.value;
+  const deliveryLocation = document.getElementById('rfqLocation')?.value.trim();
+  const name = document.getElementById('rfqName')?.value.trim();
+  const contact = document.getElementById('rfqContact')?.value.trim();
+  const notes = document.getElementById('rfqNotes')?.value.trim();
+  const msg = document.getElementById('rfqMsg');
+
+  if (!title) { msg.innerHTML='<span style="color:#ef4444;">⚠️ Product / service required</span>'; return; }
+  if (!name || !contact) { msg.innerHTML='<span style="color:#ef4444;">⚠️ Name and contact required</span>'; return; }
+
+  const rfq = B.createRFQ({ title, category, desc, qty:Number(qty)||0, unit, budget:Number(budget)||0, deadline, deliveryLocation, name, contact, notes });
+  msg.innerHTML = `<span style="color:#22c55e;">✅ RFQ posted! Ref: ${rfq.id} — Suppliers will respond soon.</span>`;
+  /* Track B2B platform fee — fire-and-forget */
+  (async function(){try{
+    const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const{getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyBmPL3mFJXFN3LXY_gPuH2HSJY8oWmyOJ4",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.appspot.com",messagingSenderId:"448791489749",appId:"1:448791489749:web:your-app-id"};
+    const _a=getApps().find(a=>a.name==="b2b-fee")||initializeApp(_cfg,"b2b-fee");
+    await addDoc(collection(getFirestore(_a),"b2bFees"),{feeType:"rfq_creation",rfqId:rfq.id,rfqTitle:title,rfqCategory:category,contactName:name,contactPhone:contact,budgetKES:Number(budget)||0,feeKES:100,status:"pending",createdAt:serverTimestamp()});
+  }catch(e){}})();
+
+  /* Clear form */
+  ['rfqTitle','rfqDesc','rfqQty','rfqUnit','rfqBudget','rfqDeadline','rfqLocation','rfqName','rfqContact','rfqNotes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('rfqCat').value='';
+
+  updateStats();
+  setTimeout(()=>openTab('my-rfqs'), 1500);
+}
+window.postRFQ = postRFQ;
+
+/* ── VIEW SUPPLIER ── */
+function viewSupplier(id) {
+  window.location.href = 'b2b-supplier.html?id=' + id;
+}
+window.viewSupplier = viewSupplier;
+
+/* ── ENQUIRE PRODUCT ── */
+function enquireProduct(id) {
+  const p = B.getProducts({}).find(x=>x.id===id);
+  if (!p) return;
+  openModal('💬 Enquire — ' + p.name, `
+    <div style="background:rgba(0,170,255,0.06);border:1px solid rgba(0,170,255,0.15);border-radius:12px;padding:14px;margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:800;color:white;">${p.name}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:3px;">🏭 ${p.supplierName} · Min Order: ${p.moq} ${p.unit||'units'}</div>
+      <div style="font-size:18px;font-weight:900;color:#00aaff;margin-top:8px;">KES ${B.fmt(p.wholesalePrice)} / ${p.unit||'unit'}</div>
+    </div>
+    <div style="margin-bottom:10px;"><label class="b2-label">Quantity Required</label><input id="enqQty" class="b2-input" type="number" placeholder="${p.moq}" min="${p.moq}"></div>
+    <div style="margin-bottom:10px;"><label class="b2-label">Your Business Name</label><input id="enqBiz" class="b2-input" placeholder="ABC Ltd."></div>
+    <div style="margin-bottom:10px;"><label class="b2-label">Your Phone / Email</label><input id="enqPhone" class="b2-input" placeholder="07XXXXXXXX"></div>
+    <div style="margin-bottom:14px;"><label class="b2-label">Message to Supplier</label><textarea id="enqMsg" class="b2-textarea" rows="2" placeholder="Delivery location, timeline, special requirements..."></textarea></div>
+    <button class="b2-submit" style="width:100%;" onclick="sendEnquiry('${id}')">📤 Send Enquiry to Supplier</button>
+    <div style="text-align:center;margin-top:10px;"><a href="https://wa.me/${(p.supplierPhone||'254705726803').replace(/\D/g,'')}?text=${encodeURIComponent('Hi, I am interested in '+p.name+' (wholesale). Min order: '+p.moq+' '+p.unit+'. Please advise on availability. — via SOKONI B2B')}" target="_blank" style="font-size:12px;color:#25d366;font-weight:700;">💬 Or contact via WhatsApp →</a></div>
+  `);
+}
+window.enquireProduct = enquireProduct;
+
+function sendEnquiry(productId) {
+  const qty = document.getElementById('enqQty')?.value;
+  const biz = document.getElementById('enqBiz')?.value.trim();
+  const phone = document.getElementById('enqPhone')?.value.trim();
+  const msg = document.getElementById('enqMsg')?.value.trim();
+  if (!biz || !phone) { B.showToast('⚠️ Business name and phone required','warn'); return; }
+  const p = B.getProducts({}).find(x=>x.id===productId);
+  B.sendMessage({ threadId:`${p.supplierId}_enquiry`, from:'me', to:p.supplierId, text:`Hi, I'd like to order ${qty||p.moq} ${p.unit||'units'} of ${p.name}. ${msg}` });
+  B.showToast('✅ Enquiry sent to supplier!');
+  closeModal();
+}
+
+/* ── RFQ DETAIL ── */
+function openRFQDetail(rfqId) {
+  const rfq = B.getRFQById(rfqId);
+  if (!rfq) return;
+  const quotes = B.getQuotes(rfqId);
+  openModal('📋 RFQ: ' + rfq.title, `
+    <div class="b2-rfq-card" style="margin-bottom:14px;">
+      <div class="b2-rfq-meta" style="flex-direction:column;gap:5px;">
+        <div><strong>Category:</strong> ${rfq.category||'—'}</div>
+        <div><strong>Quantity:</strong> ${rfq.qty||'—'} ${rfq.unit||'units'}</div>
+        <div><strong>Budget:</strong> ${rfq.budget?'KES '+B.fmt(rfq.budget):'Negotiable'}</div>
+        <div><strong>Deadline:</strong> ${rfq.deadline||'Flexible'}</div>
+        <div><strong>Delivery Location:</strong> ${rfq.deliveryLocation||'Kenya'}</div>
+        <div><strong>Buyer:</strong> ${rfq.name} · ${rfq.contact}</div>
+      </div>
+      ${rfq.desc?`<div style="margin-top:10px;font-size:13px;color:rgba(255,255,255,0.6);line-height:1.6;">${rfq.desc}</div>`:''}
+      ${rfq.notes?`<div style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.4);">Notes: ${rfq.notes}</div>`:''}
+    </div>
+    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;">💬 Quotes Received (${quotes.length})</div>
+    ${quotes.length ? quotes.map(q=>quoteCardHTML(q,true)).join('') : '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);">No quotes yet.</div>'}
+  `);
+}
+window.openRFQDetail = openRFQDetail;
+
+/* ── VIEW QUOTES ── */
+function viewQuotes(rfqId) {
+  window.location.href = 'b2b-rfq.html?id=' + rfqId;
+}
+window.viewQuotes = viewQuotes;
+
+/* ── SUBMIT QUOTE (as supplier) ── */
+function openSubmitQuote(rfqId, rfqTitle) {
+  openModal('📤 Submit Quote for: ' + rfqTitle, `
+    <div style="margin-bottom:10px;"><label class="b2-label">Your Company Name *</label><input id="qtSup" class="b2-input" placeholder="XYZ Suppliers Ltd."></div>
+    <div class="b2-grid2" style="margin-bottom:10px;">
+      <div><label class="b2-label">Unit Price (KES) *</label><input id="qtPrice" class="b2-input" type="number" placeholder="450"></div>
+      <div><label class="b2-label">Quantity You Can Supply</label><input id="qtQty" class="b2-input" type="number" placeholder="500"></div>
+    </div>
+    <div class="b2-grid2" style="margin-bottom:10px;">
+      <div><label class="b2-label">Lead Time</label><input id="qtLead" class="b2-input" placeholder="e.g. 5 working days"></div>
+      <div><label class="b2-label">Quote Valid Until</label><input id="qtValid" class="b2-input" type="date"></div>
+    </div>
+    <div style="margin-bottom:14px;"><label class="b2-label">Quote Details / Notes</label><textarea id="qtNotes" class="b2-textarea" rows="3" placeholder="Describe what's included, delivery terms, payment terms, warranty..."></textarea></div>
+    <div style="margin-bottom:10px;"><label class="b2-label">Contact Phone / Email *</label><input id="qtContact" class="b2-input" placeholder="07XXXXXXXX"></div>
+    <button class="b2-submit" style="width:100%;" onclick="submitQuote('${rfqId}')">📤 Submit Quote</button>
+    <div class="b2-form-msg" id="qtMsg"></div>
+  `);
+}
+window.openSubmitQuote = openSubmitQuote;
+
+function submitQuote(rfqId) {
+  const supplierName = document.getElementById('qtSup')?.value.trim();
+  const unitPrice = parseFloat(document.getElementById('qtPrice')?.value);
+  const qty = parseInt(document.getElementById('qtQty')?.value) || 0;
+  const leadTime = document.getElementById('qtLead')?.value.trim();
+  const validUntil = document.getElementById('qtValid')?.value;
+  const notes = document.getElementById('qtNotes')?.value.trim();
+  const contact = document.getElementById('qtContact')?.value.trim();
+  const msg = document.getElementById('qtMsg');
+  if (!supplierName || !contact) { msg.innerHTML='<span style="color:#ef4444;">⚠️ Company name and contact required</span>'; return; }
+  if (!unitPrice || unitPrice < 1) { msg.innerHTML='<span style="color:#ef4444;">⚠️ Enter a valid unit price</span>'; return; }
+  const rfq = B.getRFQById(rfqId);
+  const totalPrice = unitPrice * (qty || rfq?.qty || 1);
+  B.submitQuote({ rfqId, supplierName, unitPrice, totalPrice, qty, leadTime, validUntil, notes, contact });
+  msg.innerHTML='<span style="color:#22c55e;">✅ Quote submitted! Buyer will be notified.</span>';
+  setTimeout(closeModal, 1500);
+  updateStats();
+}
+window.submitQuote = submitQuote;
+
+function quoteCardHTML(q, showActions) {
+  const st = B.QUOTE_STATUS[q.status]||{label:q.status,color:'white'};
+  return `
+  <div class="b2-quote-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <div class="b2-qt-sup">🏭 ${q.supplierName}</div>
+      <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
+    </div>
+    <div class="b2-qt-price">KES ${B.fmt(q.unitPrice)} / unit <span style="font-size:12px;color:rgba(255,255,255,0.4);">· Total: KES ${B.fmt(q.totalPrice)}</span></div>
+    <div class="b2-qt-meta">Lead time: ${q.leadTime||'—'} · Valid: ${q.validUntil||'—'} · Contact: ${q.contact}</div>
+    ${q.notes?`<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px;line-height:1.5;">${q.notes}</div>`:''}
+    ${showActions && q.status==='pending' ? `
+    <div class="b2-qt-actions">
+      <button class="b2-qt-btn b2-qt-accept" onclick="acceptQuoteAction('${q.id}','${q.rfqId}')">✅ Accept</button>
+      <button class="b2-qt-btn b2-qt-msg" onclick="openChat('${q.supplierId||q.id}','${q.supplierName}')">💬 Negotiate</button>
+      <button class="b2-qt-btn b2-qt-reject" onclick="B.updateQuoteStatus('${q.id}','rejected');B.showToast('Quote rejected');openRFQDetail('${q.rfqId}')">✗ Reject</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function acceptQuoteAction(quoteId, rfqId) {
+  B.acceptQuote(quoteId, rfqId);
+  const q = B.getQuoteById(quoteId);
+  const rfq = B.getRFQById(rfqId);
+  const order = B.createOrder({
+    rfqId, quoteId, supplierId: q.supplierId, supplierName: q.supplierName,
+    items:[{name:rfq?.title||'B2B Order',qty:q.qty||rfq?.qty||1,unitPrice:q.unitPrice}],
+    total: q.totalPrice, deliveryAddress: rfq?.deliveryLocation,
+  });
+  B.showToast('✅ Quote accepted! PO ' + order.id + ' created.');
+  closeModal();
+  openTab('my-orders');
+}
+window.acceptQuoteAction = acceptQuoteAction;
+
+/* ── RFQ FOR SUPPLIER ── */
+function openRFQForSupplier(supId, supName) {
+  openTab('rfq-create');
+  setTimeout(()=>{ const el = document.getElementById('rfqNotes'); if(el) el.value = 'Directed to: ' + supName; }, 100);
+}
+window.openRFQForSupplier = openRFQForSupplier;
+
+/* ── CHAT ── */
+function openChat(threadId, name) {
+  openTab('messages');
+  setTimeout(()=>openThread(threadId.replace(/\W/g,'_'), name), 100);
+}
+window.openChat = openChat;
+window.openThread = openThread;
+
+/* ── DELETE RFQ ── */
+function delRFQ(id) {
+  if(!_c){_skConfirm('Remove this RFQ?',()=>_doRmRFQ(_rfqId,true));return;}
+  B.deleteRFQ(id);
+  renderMyRFQs();
+  updateStats();
+}
+window.delRFQ = delRFQ;
+
+/* ── NOTIFICATIONS ── */
+function renderNotifBadge() {
+  const n = B.getUnreadCount();
+  const badge = document.getElementById('notifBadge');
+  badge.style.display = n > 0 ? 'flex' : 'none';
+  badge.textContent = n > 9 ? '9+' : n;
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notifPanel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) renderNotifPanel();
+}
+window.toggleNotifPanel = toggleNotifPanel;
+
+function renderNotifPanel() {
+  const notifs = B.getNotifications();
+  const list = document.getElementById('notifList');
+  list.innerHTML = notifs.length ? notifs.slice(0,10).map(n=>`
+  <div class="b2-notif-item ${n.read?'':'unread'}">
+    <div style="font-size:12px;font-weight:800;color:white;">${n.title}</div>
+    <div class="b2-notif-body">${n.body||''}</div>
+    <div class="b2-notif-time">${B.timeSince(n.ts)}</div>
+  </div>`).join('') : '<div style="padding:20px;text-align:center;font-size:13px;color:rgba(255,255,255,0.3);">No notifications yet</div>';
+}
+
+function markAllRead() {
+  B.markNotifsRead();
+  renderNotifBadge();
+  renderNotifPanel();
+}
+window.markAllRead = markAllRead;
+
+/* ── MODAL ── */
+function openModal(title, body) {
+  document.getElementById('b2ModalTitle').textContent = title;
+  document.getElementById('b2ModalBody').innerHTML = body;
+  document.getElementById('b2Modal').classList.add('open');
+}
+function closeModal() { document.getElementById('b2Modal').classList.remove('open'); }
+window.closeModal = closeModal;
+document.getElementById('b2Modal').addEventListener('click', e=>{ if(e.target===document.getElementById('b2Modal')) closeModal(); });
+
+/* ── HERO SEARCH ── */
+function doHeroSearch() {
+  const q = document.getElementById('heroSearch')?.value.trim();
+  if (!q) return;
+  openTab('suppliers');
+  setTimeout(()=>{ const el=document.getElementById('supSearch'); if(el){el.value=q;renderSuppliers();} }, 100);
+}
+window.doHeroSearch = doHeroSearch;
+
+/* ── URL PARAMS ── */
+function handleURLParams() {
+  const p = new URLSearchParams(window.location.search);
+  const tab = p.get('tab');
+  if (tab) {
+    const btn = document.querySelector(`.b2-tab[onclick*="'${tab}'"]`);
+    openTab(tab, btn);
+  }
+}
+
+document.addEventListener('click', e=>{ if(!document.getElementById('notifPanel')?.contains(e.target) && !document.getElementById('notifBtn')?.contains(e.target)) document.getElementById('notifPanel')?.classList.remove('open'); });
+
+init();
+</script>
+<script src="shared-header.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script type="module" src="firebase.js"></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'b2b', category:'wholesaler'})" style="padding:12px 28px;background:#f472b6;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,839 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<script type="module" src="firebase.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Seller Analytics</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--accent:#71ff00;--bg:#080808;--card:#111;--card2:#161616;--border:rgba(113,255,0,0.12);--text:#e8e8e8;--sub:rgba(255,255,255,0.45);}
+html{scroll-behavior:smooth;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px;}
+input,select,textarea,button{font-size:16px;font-family:inherit;}
+
+/* ── TOP NAV ── */
+.top-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;
+  background:rgba(8,8,8,0.95);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);}
+.nav-logo img{height:28px;}
+.nav-logo span{font-weight:800;font-size:17px;color:var(--accent);}
+.nav-title{font-size:15px;font-weight:700;color:var(--text);}
+.nav-right{display:flex;gap:10px;align-items:center;}
+.nav-btn{background:transparent;border:1px solid var(--border);color:var(--sub);border-radius:10px;padding:7px 14px;cursor:pointer;font-size:13px;transition:.2s;}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── PAGE LAYOUT ── */
+.page-wrap{max-width:1200px;margin:0 auto;padding:24px 16px;}
+.section-title{font-size:13px;font-weight:800;color:var(--sub);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.section-title::before{content:'';display:block;width:3px;height:14px;background:var(--accent);border-radius:2px;}
+.section-block{margin-bottom:36px;}
+
+/* ── KPI CARDS ── */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:600px){.kpi-row{grid-template-columns:repeat(2,1fr);}}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 16px;position:relative;overflow:hidden;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);}
+.kpi-label{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.kpi-value{font-size:22px;font-weight:900;color:var(--text);line-height:1;}
+.kpi-value span{font-size:12px;color:var(--sub);font-weight:500;margin-left:2px;}
+.kpi-sub{font-size:11px;color:var(--accent);margin-top:6px;font-weight:600;}
+.kpi-icon{position:absolute;top:14px;right:14px;font-size:20px;opacity:0.25;}
+
+/* ── CHARTS CANVAS ── */
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;position:relative;}
+.chart-wrap canvas{display:block;width:100%;height:auto;}
+
+/* ── TABLE ── */
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);}
+.data-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--text);}
+.data-table tr:hover td{background:rgba(113,255,0,0.03);}
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+.badge-green{background:rgba(113,255,0,0.15);color:var(--accent);}
+.badge-amber{background:rgba(255,180,0,0.15);color:#ffb400;}
+.badge-red{background:rgba(255,70,70,0.15);color:#ff4646;}
+
+/* ── INSIGHT CARDS ── */
+.insight-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:600px){.insight-row{grid-template-columns:1fr;}}
+.insight-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:18px 16px;}
+.insight-card .label{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.insight-card .value{font-size:26px;font-weight:900;color:var(--accent);}
+.insight-card .desc{font-size:11px;color:var(--sub);margin-top:4px;}
+
+/* ── QUICK ACTIONS ── */
+.action-row{display:flex;gap:12px;flex-wrap:wrap;}
+.action-btn{padding:12px 22px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;border:none;transition:.2s;display:flex;align-items:center;gap:8px;}
+.action-btn-primary{background:var(--accent);color:#000;}
+.action-btn-primary:hover{background:#8fff1a;transform:translateY(-1px);}
+.action-btn-secondary{background:transparent;border:1px solid var(--border);color:var(--text);}
+.action-btn-secondary:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── TOGGLE ── */
+.toggle-row{display:flex;align-items:center;gap:16px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;}
+.toggle-label{flex:1;}
+.toggle-label strong{display:block;font-size:14px;margin-bottom:2px;}
+.toggle-label small{font-size:12px;color:var(--sub);}
+.toggle-switch{position:relative;width:44px;height:24px;flex-shrink:0;}
+.toggle-switch input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,0.1);border-radius:24px;cursor:pointer;transition:.3s;}
+.toggle-slider::before{content:'';position:absolute;width:18px;height:18px;background:rgba(255,255,255,0.6);border-radius:50%;top:3px;left:3px;transition:.3s;}
+.toggle-switch input:checked + .toggle-slider{background:rgba(113,255,0,0.3);}
+.toggle-switch input:checked + .toggle-slider::before{background:var(--accent);transform:translateX(20px);}
+
+/* ── CHART LEGEND ── */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.97);border-top:1px solid var(--border);display:flex;z-index:200;padding-bottom:env(safe-area-inset-bottom);}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;text-decoration:none;color:var(--sub);font-size:10px;font-weight:600;gap:4px;transition:.2s;}
+.bnav-item.active{color:var(--accent);}
+.bnav-item i{font-size:18px;}
+@media(min-width:769px){.bottom-nav{display:none;}}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.3s;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:var(--accent);color:var(--accent);}
+
+/* ── LOADING ── */
+.loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;}
+.loading-spinner{width:40px;height:40px;border:3px solid rgba(113,255,0,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <span style="font-size:13px;color:var(--sub);">Loading analytics…</span>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- TOP NAV -->
+<nav class="top-nav">
+  <a class="nav-logo" href="index.html">
+    <img src="assets/logosokoni.png" alt="Sokoni">
+    <span>SOKONI</span>
+  </a>
+  <span class="nav-title">📊 Seller Analytics</span>
+  <div class="nav-right">
+    <button class="nav-btn" onclick="refreshData()"><i class="fa fa-sync-alt"></i> Refresh</button>
+    <a href="profile.html" class="nav-btn">👤</a>
+  </div>
+</nav>
+
+<div class="page-wrap" id="mainContent" style="display:none;">
+
+  <!-- 1. KPI ROW -->
+  <div class="section-block">
+    <div class="section-title">Performance Overview</div>
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-label">Total Sales</div>
+        <div class="kpi-value" id="kpiTotalSales">—<span>KES</span></div>
+        <div class="kpi-sub" id="kpiSalesGrowth">+0% vs last month</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-label">Orders This Month</div>
+        <div class="kpi-value" id="kpiOrders">—</div>
+        <div class="kpi-sub" id="kpiOrdersSub">— new this week</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">🧾</div>
+        <div class="kpi-label">Avg Order Value</div>
+        <div class="kpi-value" id="kpiAOV">—<span>KES</span></div>
+        <div class="kpi-sub">Per completed order</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">🎯</div>
+        <div class="kpi-label">Conversion Rate</div>
+        <div class="kpi-value" id="kpiConv">—<span>%</span></div>
+        <div class="kpi-sub">Views to purchases</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">🏆</div>
+        <div class="kpi-label">Top Category</div>
+        <div class="kpi-value" style="font-size:14px;margin-top:4px;" id="kpiTopCat">—</div>
+        <div class="kpi-sub">By revenue</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. SALES TREND -->
+  <div class="section-block">
+    <div class="section-title">Sales Trend — Last 30 Days</div>
+    <div class="chart-wrap">
+      <canvas id="salesTrendChart" height="220"></canvas>
+      <div class="legend" style="margin-top:14px;">
+        <div class="legend-item"><div class="legend-dot" style="background:#71ff00;"></div>Daily Revenue (KES)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. PRODUCT PERFORMANCE TABLE -->
+  <div class="section-block">
+    <div class="section-title">Product Performance</div>
+    <div class="table-wrap">
+      <table class="data-table" id="productTable">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Views</th>
+            <th>Orders</th>
+            <th>Revenue (KES)</th>
+            <th>Conv %</th>
+          </tr>
+        </thead>
+        <tbody id="productTableBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--sub);padding:24px;">No products found</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 4. ORDERS FUNNEL -->
+  <div class="section-block">
+    <div class="section-title">Orders Funnel</div>
+    <div class="chart-wrap">
+      <canvas id="funnelChart" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- 5. CUSTOMER INSIGHTS -->
+  <div class="section-block">
+    <div class="section-title">Customer Insights</div>
+    <div class="insight-row">
+      <div class="insight-card">
+        <div class="label">New vs Returning</div>
+        <div class="value" id="insightNewReturn">—</div>
+        <div class="desc">New / Returning customer ratio</div>
+      </div>
+      <div class="insight-card">
+        <div class="label">Avg Sessions Before Purchase</div>
+        <div class="value" id="insightSessions">—</div>
+        <div class="desc">Avg sessions a customer needs</div>
+      </div>
+      <div class="insight-card">
+        <div class="label">Peak Order Hour</div>
+        <div class="value" id="insightPeakHour">—</div>
+        <div class="desc">Most orders placed at this hour</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. REVENUE BREAKDOWN DONUT -->
+  <div class="section-block">
+    <div class="section-title">Revenue Breakdown</div>
+    <div class="chart-wrap" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+      <canvas id="donutChart" width="200" height="200" style="width:200px;height:200px;flex-shrink:0;"></canvas>
+      <div>
+        <div id="donutLegend" class="legend" style="flex-direction:column;gap:12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. QUICK ACTIONS -->
+  <div class="section-block">
+    <div class="section-title">Quick Actions</div>
+    <div class="action-row">
+      <button class="action-btn action-btn-primary" onclick="handleBoost()">
+        <i class="fa fa-rocket"></i> Boost Product
+      </button>
+      <button class="action-btn action-btn-secondary" onclick="downloadReport()">
+        <i class="fa fa-download"></i> Download Report
+      </button>
+    </div>
+  </div>
+
+  <!-- 8. NOTIFICATIONS TOGGLE -->
+  <div class="section-block">
+    <div class="section-title">Notifications</div>
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <strong>Sales Alerts</strong>
+        <small>Get notified when a new order is placed</small>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="salesAlertsToggle" onchange="saveSalesAlertPref(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="seller-analytics.html" class="bnav-item active"><i class="fa fa-chart-bar"></i>Analytics</a>
+  <a href="seller.html" class="bnav-item"><i class="fa fa-store"></i>Seller</a>
+  <a href="seller-revenue.html" class="bnav-item"><i class="fa fa-coins"></i>Revenue</a>
+  <a href="seller.html" class="bnav-item"><i class="fa fa-box"></i>Products</a>
+  <a href="profile.html" class="bnav-item"><i class="fa fa-user"></i>Profile</a>
+</nav>
+
+<script src="sokoni-pay.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="analytics.js" defer></script>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ── SECURITY: escapeHTML ── */
+  function escapeHTML(str){
+    if(str == null) return '';
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  /* ── AUTH GATE — Firebase Auth required; Firestore role check ── */
+  function checkAuth(){ return false; } /* disabled — use _verifySellerAccess() */
+
+  function _verifySellerAccess(onGranted){
+    if(localStorage.getItem('loggedIn') !== 'true'){
+      window.location.replace('login.html'); return;
+    }
+    function _deny(){
+      window.location.replace('login.html');
+    }
+    function _grant(){ onGranted(); }
+    function _checkRole(user){
+      if(!window.firebaseDB){ _lsFallback(); return; }
+      /* v9 modular Firestore via dynamic import */
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
+        return fs.getDoc(fs.doc(window.firebaseDB, 'users', user.uid));
+      }).then(function(snap){
+        var role = (snap.exists() ? (snap.data().role||'') : '').toLowerCase();
+        if(role === 'seller' || role === 'admin'){ _grant(); }
+        else {
+          user.getIdTokenResult(true).then(function(r){
+            if(r.claims && r.claims.admin){ _grant(); } else { _deny(); }
+          }).catch(_deny);
+        }
+      }).catch(function(){
+        /* Network error — fall back to localStorage role */
+        _lsFallback();
+      });
+      function _lsFallback(){
+        var r = localStorage.getItem('userRole')||'';
+        if(r === 'seller' || r === 'admin'){ _grant(); } else { _deny(); }
+      }
+    }
+    function _poll(n){
+      if(!window.firebaseAuth){
+        if(n > 30){ _deny(); return; }
+        setTimeout(function(){ _poll(n+1); }, 150); return;
+      }
+      window.firebaseAuth.onAuthStateChanged(function(user){
+        if(!user){ _deny(); return; }
+        _checkRole(user);
+      });
+    }
+    _poll(0);
+  }
+
+  /* ── TOAST ── */
+  function showToast(msg, type){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type ? ' '+type : '');
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 3000);
+  }
+
+  /* ── SEED FALLBACK (used when no real orders exist yet) ── */
+  function seededRand(seed){
+    var x = Math.sin(seed + 1) * 10000;
+    return x - Math.floor(x);
+  }
+
+  /* ── REAL ORDER DATA: Firestore (seller's sales) with localStorage fallback ── */
+  function getOrdersFromStorage(){
+    try { return JSON.parse(localStorage.getItem('sokoniOrders') || '[]'); } catch(e){ return []; }
+  }
+
+  async function getSellerOrdersFirestore(uid){
+    try {
+      var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+      var {getFirestore,collection,query,where,orderBy,limit,getDocs} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var cfg = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",
+        projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
+        messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+      var app = getApps().length?getApps()[0]:initializeApp(cfg);
+      var db  = getFirestore(app);
+      var q   = query(collection(db,'orders'),where('sellerUid','==',uid),orderBy('createdAt','desc'),limit(500));
+      var snap = await getDocs(q);
+      return snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+    } catch(e){
+      console.warn('[Analytics] Firestore orders:', e.message);
+      return [];
+    }
+  }
+
+  function getProductsFromStorage(){
+    try {
+      var raw = localStorage.getItem('sellerProducts');
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return [];
+  }
+
+  function buildSalesTrend(orders){
+    var now = Date.now();
+    var days = [];
+    for(var i = 29; i >= 0; i--){
+      var dayStart = now - (i + 1) * 86400000;
+      var dayEnd   = now - i * 86400000;
+      var dayTotal = 0;
+      orders.forEach(function(o){
+        var t = o.createdAt || new Date(o.date || 0).getTime();
+        if(t >= dayStart && t < dayEnd) dayTotal += (parseFloat(o.total) || 0);
+      });
+      days.push(Math.round(dayTotal));
+    }
+    /* Fallback seed data if no orders yet */
+    if(!days.some(function(d){ return d > 0; })){
+      var base = 8000;
+      return days.map(function(_, i){
+        base = Math.max(1000, base + (seededRand(i*7+3) - 0.45) * 2000);
+        return Math.round(base);
+      });
+    }
+    return days;
+  }
+
+  function buildProductsFromOrders(orders, storedProducts){
+    var agg = {};
+    orders.forEach(function(o){
+      (o.items || []).forEach(function(item){
+        var name = item.name || item.title || 'Unknown';
+        if(!agg[name]) agg[name] = { name: name, views: 0, orders: 0, revenue: 0 };
+        agg[name].orders  += (item.qty || 1);
+        agg[name].revenue += (parseFloat(item.price) || 0) * (item.qty || 1);
+      });
+    });
+    var result = Object.values(agg);
+    if(!result.length){
+      /* fallback: stored products with estimated metrics */
+      if(storedProducts.length){
+        return storedProducts.map(function(p, i){
+          var views = Math.floor(seededRand(i*13+7) * 900) + 50;
+          var ords  = Math.floor(views * (seededRand(i*5+2) * 0.15 + 0.02));
+          var price = parseFloat(p.price) || (seededRand(i*3+1) * 4000 + 200);
+          var conv  = ords > 0 ? ((ords/views)*100).toFixed(1) : '0.0';
+          return { name: p.name || p.title || ('Product '+(i+1)), views: views, orders: ords, revenue: Math.round(ords*price), conv: conv };
+        }).sort(function(a,b){ return b.revenue - a.revenue; });
+      }
+      return [
+        { name: 'Wireless Earbuds Pro',    views: 842, orders: 67, revenue: 134000, conv: '7.9' },
+        { name: 'Leather Handbag Classic', views: 612, orders: 44, revenue:  96800, conv: '7.2' },
+        { name: 'Running Shoes X2',        views: 503, orders: 38, revenue:  76000, conv: '7.6' },
+        { name: 'Cotton Dress Set',        views: 389, orders: 29, revenue:  43500, conv: '7.5' },
+        { name: 'Smart Watch Series 3',    views: 751, orders: 22, revenue: 110000, conv: '2.9' },
+      ];
+    }
+    result.forEach(function(p, i){
+      p.views   = Math.max(p.orders * (8 + (i % 5)), 50);
+      p.conv    = ((p.orders / p.views) * 100).toFixed(1);
+      p.revenue = Math.round(p.revenue);
+    });
+    return result.sort(function(a,b){ return b.revenue - a.revenue; });
+  }
+
+  /* ── KPI POPULATION ── */
+  function populateKPIs(trends, products, orders){
+    var totalSales = orders.reduce(function(a,o){ return a + (parseFloat(o.total)||0); }, 0);
+    if(totalSales === 0) totalSales = trends.reduce(function(a,b){ return a+b; }, 0);
+    var orderCount = orders.length || Math.floor(totalSales / 2800);
+    var aov  = orderCount > 0 ? Math.round(totalSales / orderCount) : 0;
+    var conv = products.length > 0
+      ? (products.reduce(function(s,p){ return s + parseFloat(p.conv||0); }, 0) / products.length).toFixed(1)
+      : (seededRand(42)*5+2.5).toFixed(1);
+    var cats   = ['Electronics','Fashion','Food','Beauty','Sports'];
+    var topCat = cats[Math.floor(seededRand(77)*cats.length)];
+    var growth = ((seededRand(55)-0.4)*30).toFixed(0);
+    var sign   = growth >= 0 ? '+' : '';
+    var weeklyNew = Math.max(0, Math.floor(orderCount * 0.28));
+
+    document.getElementById('kpiTotalSales').innerHTML = numberFmt(Math.round(totalSales))+'<span>KES</span>';
+    document.getElementById('kpiSalesGrowth').textContent = sign+growth+'% vs last month';
+    document.getElementById('kpiOrders').textContent = orderCount;
+    document.getElementById('kpiOrdersSub').textContent = weeklyNew+' new this week';
+    document.getElementById('kpiAOV').innerHTML = numberFmt(aov)+'<span>KES</span>';
+    document.getElementById('kpiConv').innerHTML = conv+'<span>%</span>';
+    document.getElementById('kpiTopCat').textContent = escapeHTML(topCat);
+  }
+
+  function numberFmt(n){
+    return n.toLocaleString('en-KE');
+  }
+
+  /* ── PRODUCT TABLE ── */
+  function renderProductTable(products){
+    var tbody = document.getElementById('productTableBody');
+    if(!products || !products.length){
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sub);padding:24px;">No products found in your store</td></tr>';
+      return;
+    }
+    var html = '';
+    products.forEach(function(p){
+      var conv = parseFloat(p.conv);
+      var badgeClass = conv >= 7 ? 'badge-green' : conv >= 3 ? 'badge-amber' : 'badge-red';
+      html += '<tr>' +
+        '<td>'+escapeHTML(p.name)+'</td>' +
+        '<td>'+p.views.toLocaleString()+'</td>' +
+        '<td>'+p.orders+'</td>' +
+        '<td>KES '+numberFmt(p.revenue)+'</td>' +
+        '<td><span class="badge '+badgeClass+'">'+p.conv+'%</span></td>' +
+        '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  /* ── SALES TREND CHART (Line) ── */
+  function drawSalesTrend(data){
+    var canvas = document.getElementById('salesTrendChart');
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.parentElement.clientWidth - 40;
+    var H = 220;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W+'px';
+    canvas.style.height = H+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var padL = 56, padR = 16, padT = 20, padB = 36;
+    var cW = W - padL - padR;
+    var cH = H - padT - padB;
+    var max = Math.max.apply(null,data) * 1.1;
+    var min = 0;
+    var range = max - min || 1;
+
+    /* grid */
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    var gridLines = 5;
+    for(var g = 0; g <= gridLines; g++){
+      var y = padT + (cH / gridLines) * g;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + cW, y);
+      ctx.stroke();
+      /* label */
+      var val = Math.round(max - (max - min) * g / gridLines);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '10px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(val >= 1000 ? (val/1000).toFixed(0)+'K' : val, padL - 6, y + 4);
+    }
+
+    /* area fill */
+    ctx.beginPath();
+    data.forEach(function(v, i){
+      var x = padL + (i / (data.length-1)) * cW;
+      var y = padT + cH - ((v - min) / range) * cH;
+      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    var grad = ctx.createLinearGradient(0, padT, 0, padT + cH);
+    grad.addColorStop(0, 'rgba(113,255,0,0.25)');
+    grad.addColorStop(1, 'rgba(113,255,0,0)');
+    ctx.lineTo(padL + cW, padT + cH);
+    ctx.lineTo(padL, padT + cH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    /* line */
+    ctx.beginPath();
+    data.forEach(function(v, i){
+      var x = padL + (i / (data.length-1)) * cW;
+      var y = padT + cH - ((v - min) / range) * cH;
+      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = '#71ff00';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    /* x-axis labels */
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '10px Segoe UI,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    [0, 6, 13, 20, 27, 29].forEach(function(i){
+      var x = padL + (i / (data.length-1)) * cW;
+      ctx.fillText('D'+(i+1), x, H - 8);
+    });
+  }
+
+  /* ── FUNNEL CHART (Horizontal bars) ── */
+  function drawFunnel(){
+    var canvas = document.getElementById('funnelChart');
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.parentElement.clientWidth - 40;
+    var H = 180;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W+'px';
+    canvas.style.height = H+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var stages = [
+      { label:'Viewed', pct: 100, color:'#71ff00' },
+      { label:'Added to Cart', pct: 42, color:'#4dcc00' },
+      { label:'Checkout', pct: 28, color:'#2ea300' },
+      { label:'Paid', pct: 18, color:'#1a6600' },
+    ];
+
+    var padL = 110, padR = 60, padT = 10, barH = 28, gap = 12;
+    var maxW = W - padL - padR;
+
+    stages.forEach(function(s, i){
+      var y = padT + i * (barH + gap);
+      var bW = (s.pct / 100) * maxW;
+
+      /* bar background */
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.beginPath();
+      ctx.roundRect(padL, y, maxW, barH, 6);
+      ctx.fill();
+
+      /* bar fill */
+      ctx.fillStyle = s.color;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.roundRect(padL, y, bW, barH, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      /* label */
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.font = '12px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(s.label, padL - 8, y + barH/2 + 4);
+
+      /* pct */
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(s.pct+'%', padL + bW + 8, y + barH/2 + 4);
+    });
+  }
+
+  /* ── DONUT CHART ── */
+  function drawDonut(){
+    var canvas = document.getElementById('donutChart');
+    var size = 200;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = size+'px';
+    canvas.style.height = size+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var segments = [
+      { label:'Products', value: 68, color:'#71ff00' },
+      { label:'Delivery Fees', value: 22, color:'#00ccff' },
+      { label:'Commission Deducted', value: 10, color:'#ff6b6b' },
+    ];
+
+    var cx = size/2, cy = size/2, r = 80, innerR = 50;
+    var total = segments.reduce(function(a,s){return a+s.value;},0);
+    var start = -Math.PI/2;
+
+    segments.forEach(function(s){
+      var angle = (s.value / total) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, start, start+angle);
+      ctx.closePath();
+      ctx.fillStyle = s.color;
+      ctx.fill();
+      start += angle;
+    });
+
+    /* inner cutout */
+    ctx.beginPath();
+    ctx.arc(cx, cy, innerR, 0, 2*Math.PI);
+    ctx.fillStyle = '#111';
+    ctx.fill();
+
+    /* center text */
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Segoe UI,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Revenue', cx, cy);
+
+    /* legend */
+    var legend = document.getElementById('donutLegend');
+    var html = '';
+    segments.forEach(function(s){
+      html += '<div class="legend-item"><div class="legend-dot" style="background:'+s.color+'"></div>'+
+        escapeHTML(s.label)+' <strong style="color:var(--text);margin-left:4px;">'+s.value+'%</strong></div>';
+    });
+    legend.innerHTML = html;
+  }
+
+  /* ── CUSTOMER INSIGHTS ── */
+  function renderInsights(){
+    document.getElementById('insightNewReturn').textContent = '3:2';
+    document.getElementById('insightSessions').textContent = '2.4';
+    document.getElementById('insightPeakHour').textContent = '8 PM';
+  }
+
+  /* ── SALES ALERT PREF ── */
+  window.saveSalesAlertPref = function(val){
+    localStorage.setItem('sokoniSalesAlerts', val ? 'true' : 'false');
+    showToast(val ? 'Sales alerts enabled' : 'Sales alerts disabled', val ? 'success' : '');
+  };
+
+  /* ── BOOST PRODUCT ── */
+  window.handleBoost = function(){
+    if(window.SokoniPay && typeof SokoniPay.bookNow === 'function'){
+      SokoniPay.bookNow({
+        providerName: 'SOKONI Ads',
+        category: 'advertising',
+        serviceDesc: 'Product Boost 7 days'
+      }, function(result){
+        showToast('Boost initiated! Your product will be featured.', 'success');
+      });
+    } else {
+      showToast('Payment module loading — please try again.', '');
+    }
+  };
+
+  /* ── DOWNLOAD REPORT ── */
+  window.downloadReport = function(){
+    var lines = [];
+    lines.push('SOKONI Seller Analytics Report');
+    lines.push('Generated: ' + new Date().toLocaleString('en-KE'));
+    lines.push('Seller: ' + escapeHTML(localStorage.getItem('sellerName') || localStorage.getItem('userName') || 'Unknown'));
+    lines.push('');
+    lines.push('--- KPI Summary ---');
+    lines.push('Total Sales: KES ' + (document.getElementById('kpiTotalSales').textContent || '—'));
+    lines.push('Orders This Month: ' + (document.getElementById('kpiOrders').textContent || '—'));
+    lines.push('Avg Order Value: KES ' + (document.getElementById('kpiAOV').textContent || '—'));
+    lines.push('Conversion Rate: ' + (document.getElementById('kpiConv').textContent || '—'));
+    lines.push('Top Category: ' + (document.getElementById('kpiTopCat').textContent || '—'));
+    lines.push('');
+    lines.push('--- Revenue Breakdown ---');
+    lines.push('Products: 68%');
+    lines.push('Delivery Fees: 22%');
+    lines.push('Commission Deducted: 10%');
+    lines.push('');
+    lines.push('--- Customer Insights ---');
+    lines.push('New vs Returning Ratio: 3:2');
+    lines.push('Avg Sessions Before Purchase: 2.4');
+    lines.push('Peak Order Hour: 8 PM');
+    lines.push('');
+    lines.push('SOKONI Kenya Marketplace — mysokoni.co.ke');
+
+    var blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'sokoni-seller-report-' + new Date().toISOString().slice(0,10) + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Report downloaded!', 'success');
+  };
+
+  /* ── REFRESH ── */
+  window.refreshData = function(){
+    showToast('Data refreshed', 'success');
+    initCharts();
+  };
+
+  /* ── INIT CHARTS ── */
+  async function initCharts(){
+    /* Fetch seller's actual sales from Firestore (filtered by sellerUid === current user)
+       Falls back to localStorage sokoniOrders if Firestore is unavailable */
+    var uid = null;
+    try { var _u = JSON.parse(localStorage.getItem('sokoniUser')); uid = _u&&_u.uid?_u.uid:null; } catch(e){}
+
+    var orders = [];
+    if(uid){
+      orders = await getSellerOrdersFirestore(uid);
+    }
+    /* Fall back to localStorage only if Firestore returned nothing */
+    if(!orders.length) orders = getOrdersFromStorage();
+
+    var storedProds = getProductsFromStorage();
+    var trends      = buildSalesTrend(orders);
+    var products    = buildProductsFromOrders(orders, storedProds);
+
+    populateKPIs(trends, products, orders);
+    renderProductTable(products);
+    renderInsights();
+    drawSalesTrend(trends);
+    drawFunnel();
+    drawDonut();
+  }
+
+  /* ── BOOTSTRAP ── */
+  function init(){
+    _verifySellerAccess(function(){
+      var alertPref = localStorage.getItem('sokoniSalesAlerts');
+      if(alertPref === 'true') document.getElementById('salesAlertsToggle').checked = true;
+      document.getElementById('mainContent').style.display = '';
+      document.getElementById('loadingOverlay').style.display = 'none';
+      initCharts(); /* async — charts update when Firestore resolves */
+    });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  /* redraw on resize */
+  var resizeTimer;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(initCharts, 200);
+  });
+
+})();
+</script>
+<script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

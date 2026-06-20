@@ -1,0 +1,1456 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI MiniStore — Your Online Shop in Kenya</title>
+  <meta name="description" content="Launch your own online mini store on SOKONI. Sell products and services to customers across Kenya.">
+  <meta property="og:title" content="SOKONI MiniStore — Your Online Shop in Kenya">
+  <meta property="og:description" content="Create your free online store on SOKONI and start selling to customers all over Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI Store">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#070707;color:white;min-height:100vh;padding-bottom:80px;}
+
+    /* ═══════════════════════════════ NAV ═══════════════════════════════ */
+    .ms-nav{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:10px 18px;background:rgba(7,7,7,0.98);
+      border-bottom:1px solid rgba(255,255,255,0.06);
+      position:sticky;top:0;z-index:200;backdrop-filter:blur(24px) saturate(200%);
+    }
+    .ms-nav-logo{height:28px;}
+    .ms-nav-center{display:flex;gap:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:3px;}
+    .ms-mode-btn{
+      padding:6px 14px;border-radius:8px;border:none;background:transparent;
+      color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;
+      font-family:inherit;transition:all .15s;white-space:nowrap;
+    }
+    .ms-mode-btn.active{background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.22);}
+    .ms-nav-right{display:flex;gap:6px;align-items:center;}
+    .ms-nav-btn{padding:7px 12px;border:1px solid rgba(255,255,255,0.08);border-radius:9px;color:rgba(255,255,255,0.5);text-decoration:none;font-size:11px;font-weight:600;transition:all .15s;background:transparent;cursor:pointer;font-family:inherit;}
+    .ms-nav-btn:hover{color:white;border-color:rgba(255,255,255,0.2);}
+    .ms-nav-btn.green{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.25);color:#71ff00;}
+    .ms-nav-btn.green:hover{background:rgba(113,255,0,0.18);}
+
+    /* ═══════════════════════════════ SHARED UTILS ═══════════════════════ */
+    .ms-body{max-width:1200px;margin:0 auto;padding:16px 18px 70px;}
+    .ms-section-h{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin:18px 0 10px;display:flex;align-items:center;gap:8px;}
+    .ms-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.06);}
+
+    /* ═══════════════════════════════ STORE BANNER ═══════════════════════ */
+    .ms-banner{
+      width:100%;height:180px;position:relative;overflow:hidden;
+      background:var(--store-bg,linear-gradient(135deg,#0d2010,#0a1020,#1a0d10));
+      border-radius:0 0 20px 20px;
+    }
+    .ms-banner-img{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.6);}
+    .ms-banner-overlay{
+      position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(113,255,0,0.12),rgba(0,170,255,0.08));
+      display:flex;align-items:flex-end;padding:18px 20px;gap:16px;
+    }
+    .ms-store-avatar{
+      width:64px;height:64px;border-radius:16px;flex-shrink:0;
+      background:linear-gradient(135deg,rgba(113,255,0,0.2),rgba(0,170,255,0.15));
+      border:2px solid rgba(113,255,0,0.35);
+      display:flex;align-items:center;justify-content:center;
+      font-size:26px;font-weight:900;color:#71ff00;
+      box-shadow:0 4px 20px rgba(0,0,0,0.5);
+    }
+    .ms-store-info{flex:1;min-width:0;}
+    .ms-store-name{font-size:18px;font-weight:900;color:white;line-height:1.15;margin-bottom:3px;}
+    .ms-store-tagline{font-size:11px;color:rgba(255,255,255,0.55);margin-bottom:6px;}
+    .ms-store-badges{display:flex;gap:5px;flex-wrap:wrap;}
+    .ms-badge{font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;}
+    .ms-badge-verified{background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);}
+    .ms-badge-cat{background:rgba(0,170,255,0.1);color:#00aaff;border:1px solid rgba(0,170,255,0.2);}
+    .ms-badge-rating{background:rgba(255,193,7,0.1);color:#ffc107;border:1px solid rgba(255,193,7,0.22);}
+    .ms-banner-edit-btn{
+      position:absolute;top:12px;right:12px;padding:6px 12px;
+      background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.15);
+      border-radius:8px;color:rgba(255,255,255,0.7);font-size:11px;font-weight:700;
+      cursor:pointer;font-family:inherit;backdrop-filter:blur(8px);
+    }
+
+    /* ═══════════════════════════════ STORE STATS STRIP ══════════════════ */
+    .ms-stats-strip{
+      display:flex;gap:0;background:rgba(255,255,255,0.025);
+      border:1px solid rgba(255,255,255,0.07);border-radius:14px;
+      overflow:hidden;margin:12px 0;
+    }
+    .ms-stat-box{
+      flex:1;padding:12px 8px;text-align:center;
+      border-right:1px solid rgba(255,255,255,0.06);
+      transition:background .15s;cursor:default;
+    }
+    .ms-stat-box:last-child{border-right:none;}
+    .ms-stat-box:hover{background:rgba(255,255,255,0.03);}
+    .ms-stat-num{font-size:18px;font-weight:900;color:#71ff00;line-height:1.1;}
+    .ms-stat-lbl{font-size:9px;font-weight:600;color:rgba(255,255,255,0.35);margin-top:2px;text-transform:uppercase;letter-spacing:.04em;}
+
+    /* ═══════════════════════════════ MANAGEMENT TABS ════════════════════ */
+    .ms-mgmt-tabs{
+      display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;
+      -ms-overflow-style:none;scrollbar-width:none;
+      margin-bottom:14px;padding-bottom:4px;
+    }
+    .ms-mgmt-tabs::-webkit-scrollbar{display:none;}
+    .ms-mgmt-tab{
+      flex-shrink:0;padding:7px 13px;border-radius:9px;
+      border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);
+      color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;
+      cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;
+    }
+    .ms-mgmt-tab:hover,.ms-mgmt-tab.active{
+      background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.28);color:#71ff00;
+    }
+
+    /* ═══════════════════════════════ PRODUCT MANAGEMENT TABLE ══════════ */
+    .ms-prod-grid{display:flex;flex-direction:column;gap:7px;}
+    .ms-prod-row{
+      display:flex;align-items:center;gap:12px;
+      background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);
+      border-radius:12px;padding:10px 12px;transition:border-color .15s;
+    }
+    .ms-prod-row:hover{border-color:rgba(113,255,0,0.18);}
+    .ms-prod-thumb{
+      width:50px;height:50px;border-radius:9px;object-fit:cover;flex-shrink:0;
+      background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,170,255,0.06));
+      display:flex;align-items:center;justify-content:center;font-size:22px;
+    }
+    .ms-prod-info{flex:1;min-width:0;}
+    .ms-prod-name{font-size:13px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;}
+    .ms-prod-sub{font-size:10px;color:rgba(255,255,255,0.35);display:flex;gap:8px;flex-wrap:wrap;}
+    .ms-prod-price{font-size:14px;font-weight:900;color:#71ff00;white-space:nowrap;flex-shrink:0;}
+    .ms-prod-actions{display:flex;gap:5px;flex-shrink:0;}
+    .ms-prod-btn{width:30px;height:30px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+    .ms-prod-btn:hover{background:rgba(255,255,255,0.1);color:white;}
+    .ms-prod-btn.edit:hover{background:rgba(0,170,255,0.12);border-color:rgba(0,170,255,0.25);color:#00aaff;}
+    .ms-prod-btn.del:hover{background:rgba(255,77,77,0.1);border-color:rgba(255,77,77,0.25);color:#ff6b6b;}
+    .ms-stock-badge{font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;}
+    .stock-ok{background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);}
+    .stock-low{background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);}
+    .stock-out{background:rgba(255,77,77,0.1);color:#ff6b6b;border:1px solid rgba(255,77,77,0.2);}
+
+    /* ═══════════════════════════════ ADD PRODUCT FORM ═══════════════════ */
+    .ms-add-form{
+      background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.15);
+      border-radius:16px;padding:18px;margin-bottom:16px;
+    }
+    .ms-form-h{font-size:14px;font-weight:800;color:white;margin-bottom:4px;}
+    .ms-form-sub{font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:14px;}
+    .ms-input{width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:9px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:8px;transition:border-color .15s;}
+    .ms-input:focus{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.02);}
+    .ms-input::placeholder{color:rgba(255,255,255,0.25);}
+    .ms-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .ms-g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .ms-submit-btn{width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:900;font-size:13px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;margin-top:4px;transition:filter .15s,transform .15s;}
+    .ms-submit-btn:hover{filter:brightness(1.08);transform:translateY(-1px);}
+    .ms-form-msg{font-size:11px;min-height:14px;margin-top:6px;text-align:center;}
+
+    /* ═══════════════════════════════ ORDERS ════════════════════════════ */
+    .ms-order-card{
+      background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);
+      border-radius:12px;padding:12px 14px;margin-bottom:8px;
+    }
+    .ms-order-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:7px;}
+    .ms-order-id{font-size:11px;font-weight:800;color:white;}
+    .ms-order-status{font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;}
+    .os-pending{background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);}
+    .os-processing{background:rgba(0,170,255,0.1);color:#00aaff;border:1px solid rgba(0,170,255,0.2);}
+    .os-delivered{background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);}
+    .os-cancelled{background:rgba(255,77,77,0.08);color:#ff6b6b;border:1px solid rgba(255,77,77,0.18);}
+    .ms-order-items{font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:6px;}
+    .ms-order-total{font-size:14px;font-weight:900;color:#71ff00;}
+    .ms-order-meta{font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;}
+    .ms-order-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+    .ms-oa-btn{padding:5px 12px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid;transition:all .15s;}
+
+    /* ═══════════════════════════════ ANALYTICS ═════════════════════════ */
+    .ms-analytics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:9px;margin-bottom:16px;}
+    .ms-an-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;}
+    .ms-an-val{font-size:22px;font-weight:900;margin-bottom:3px;}
+    .ms-an-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.35);}
+    .ms-an-trend{font-size:10px;margin-top:4px;}
+
+    /* ═══════════════════════════════ STORE SETTINGS ════════════════════ */
+    .ms-settings-section{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px 16px;margin-bottom:10px;}
+    .ms-settings-h{font-size:12px;font-weight:800;color:white;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+    .ms-color-swatch-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+    .ms-swatch{width:32px;height:32px;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:all .15s;}
+    .ms-swatch:hover,.ms-swatch.selected{border-color:white;transform:scale(1.15);}
+
+    /* ═══════════════════════════════ SELLER TYPE CARDS ════════════════ */
+    .ms-stype-card{
+      background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+      border-radius:12px;padding:14px 12px;cursor:pointer;transition:all .2s;text-align:center;
+    }
+    .ms-stype-card:hover{border-color:rgba(113,255,0,0.2);background:rgba(113,255,0,0.04);}
+    .ms-stype-card.selected{border-color:rgba(113,255,0,0.35);background:rgba(113,255,0,0.08);box-shadow:0 0 0 1px rgba(113,255,0,0.18);}
+
+    /* ═══════════════════════════════ PUBLIC STOREFRONT ═════════════════ */
+    .ms-storefront-tabs{
+      display:flex;gap:5px;background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.07);border-radius:11px;padding:4px;
+      margin-bottom:14px;overflow-x:auto;flex-wrap:nowrap;
+      -ms-overflow-style:none;scrollbar-width:none;
+    }
+    .ms-storefront-tabs::-webkit-scrollbar{display:none;}
+    .ms-sf-tab{flex-shrink:0;padding:7px 14px;border-radius:8px;border:none;background:transparent;color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+    .ms-sf-tab.active{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.22);}
+    .ms-sf-tab:hover{color:rgba(255,255,255,0.8);}
+
+    /* Store product grid */
+    .ms-store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;}
+    .ms-store-prod{
+      background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.08);
+      border-radius:16px;overflow:hidden;cursor:pointer;position:relative;
+      transition:transform .18s,border-color .18s,box-shadow .18s;
+    }
+    .ms-store-prod:hover{transform:translateY(-3px);border-color:rgba(113,255,0,0.28);box-shadow:0 10px 28px rgba(0,0,0,0.45),0 0 0 1px rgba(113,255,0,0.1);}
+    .ms-store-prod-img{width:100%;height:145px;object-fit:cover;display:block;background:linear-gradient(135deg,rgba(113,255,0,0.06),rgba(0,170,255,0.04));}
+    .ms-store-prod-emoji{width:100%;height:145px;display:flex;align-items:center;justify-content:center;font-size:52px;background:linear-gradient(135deg,rgba(113,255,0,0.06),rgba(0,170,255,0.04));}
+    .ms-store-prod-body{padding:10px 11px 11px;}
+    .ms-store-prod-name{font-size:12px;font-weight:800;color:white;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;}
+    .ms-store-prod-price{font-size:15px;font-weight:900;color:#71ff00;margin-bottom:8px;}
+    .ms-store-add-btn{width:100%;padding:8px;border:none;border-radius:9px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit;transition:all .15s;}
+    .ms-store-add-btn:hover{background:rgba(113,255,0,0.2);box-shadow:0 0 12px rgba(113,255,0,0.15);}
+
+    /* ── Adult gate overlay ── */
+    .ms-adult-gate{
+      position:absolute;inset:0;z-index:20;border-radius:inherit;
+      background:rgba(8,4,14,0.82);
+      backdrop-filter:blur(18px) saturate(120%);
+      -webkit-backdrop-filter:blur(18px) saturate(120%);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+      cursor:pointer;
+      transition:opacity .25s,transform .25s;
+    }
+    .ms-adult-gate.ms-gate-hidden{opacity:0;transform:scale(1.04);pointer-events:none;}
+    .ms-adult-gate-icon{font-size:26px;line-height:1;}
+    .ms-adult-gate-title{font-size:11px;font-weight:900;color:rgba(255,255,255,0.92);letter-spacing:.02em;}
+    .ms-adult-gate-sub{font-size:9px;color:rgba(255,255,255,0.4);margin-top:-2px;}
+    .ms-adult-gate-btn{
+      margin-top:6px;padding:6px 16px;
+      background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+      border-radius:8px;color:rgba(255,255,255,0.8);font-size:10px;font-weight:800;
+      font-family:inherit;cursor:pointer;letter-spacing:.03em;
+      transition:background .15s,border-color .15s;
+    }
+    .ms-adult-gate-btn:hover{background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.3);}
+
+    /* ── Review cards ── */
+    .ms-review-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 14px;margin-bottom:8px;}
+    .ms-review-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+    .ms-review-avatar{width:34px;height:34px;border-radius:50%;background:rgba(113,255,0,0.12);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#71ff00;flex-shrink:0;}
+    .ms-review-stars{color:#ffc107;font-size:11px;}
+    .ms-review-text{font-size:12px;color:rgba(255,255,255,0.6);line-height:1.6;}
+
+    /* ── Share store ── */
+    .ms-share-strip{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+    .ms-share-btn{display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:10px;border:1px solid;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;font-family:inherit;transition:all .15s;}
+
+    /* ── QR Code placeholder ── */
+    .ms-qr-box{width:100px;height:100px;background:white;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#111;font-weight:700;text-align:center;padding:6px;}
+
+    /* Bottom nav */
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(5,5,5,0.98);border-top:1px solid rgba(255,255,255,0.055);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(28px);}
+    .bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:9px;font-weight:600;min-width:46px;transition:color .15s;border-radius:8px;padding:3px 5px;}
+    .bnav-item i{font-size:17px;}
+    .bnav-item:hover,.bnav-item.active{color:#71ff00;}
+
+    /* Toast */
+    .ms-toast{position:fixed;top:68px;left:50%;transform:translateX(-50%);background:#111;border:1px solid rgba(113,255,0,0.3);border-radius:12px;padding:10px 18px;font-size:12px;font-weight:700;color:#71ff00;z-index:9999;display:none;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.5);}
+
+    /* ══════════════════════════════════════════════════════════════════
+       PREMIUM MOBILE LAYOUT  ≤ 600px
+    ══════════════════════════════════════════════════════════════════ */
+    @media(max-width:600px){
+      /* ── NAV ── */
+      .ms-nav{padding:8px 14px;}
+      .ms-nav-logo{height:26px;}
+      .ms-nav-right .ms-nav-btn:not(.green){display:none;}
+      .ms-nav-btn{padding:6px 11px;font-size:10px;}
+      .ms-mode-btn{padding:5px 12px;font-size:11px;}
+
+      /* ── BANNER: taller hero with deep overlay ── */
+      .ms-banner{
+        height:220px !important;
+        border-radius:0 0 28px 28px;
+      }
+      .ms-banner-overlay{
+        background:linear-gradient(to top,rgba(7,7,7,0.88) 0%,rgba(0,0,0,0.35) 55%,transparent 100%),
+                   linear-gradient(135deg,rgba(113,255,0,0.1),rgba(0,170,255,0.07));
+        padding:16px 16px 20px;gap:14px;align-items:flex-end;
+      }
+      .ms-store-avatar{
+        width:78px !important;height:78px !important;font-size:30px !important;
+        border-radius:20px !important;
+        border:2.5px solid rgba(113,255,0,0.55) !important;
+        box-shadow:0 0 30px rgba(113,255,0,0.28),0 8px 28px rgba(0,0,0,0.65) !important;
+      }
+      .ms-store-name{font-size:19px !important;text-shadow:0 2px 8px rgba(0,0,0,0.6);}
+      .ms-store-tagline{font-size:11px;color:rgba(255,255,255,0.65);}
+      .ms-badge{font-size:9.5px;padding:3px 9px;}
+      .ms-banner-edit-btn{top:10px;right:10px;padding:5px 10px;font-size:10px;}
+
+      /* ── STATS: single-row horizontal scroll ── */
+      .ms-stats-strip{
+        flex-wrap:nowrap !important;overflow-x:auto;-webkit-overflow-scrolling:touch;
+        scrollbar-width:none;-ms-overflow-style:none;border-radius:14px;
+      }
+      .ms-stats-strip::-webkit-scrollbar{display:none;}
+      .ms-stat-box{min-width:72px !important;flex-shrink:0;padding:11px 8px;}
+      .ms-stat-num{font-size:16px;}
+      .ms-stat-lbl{font-size:8.5px;}
+
+      /* ── BODY PADDING ── */
+      .ms-body{padding:12px 13px 80px;}
+
+      /* ── FORMS ── */
+      .ms-g2,.ms-g3{grid-template-columns:1fr !important;}
+
+      /* ── PRODUCT GRID: premium cards ── */
+      .ms-store-grid{grid-template-columns:1fr 1fr !important;gap:10px;}
+      .ms-store-prod-img,.ms-store-prod-emoji{height:140px;}
+      .ms-store-prod-body{padding:9px 10px 10px;}
+      .ms-store-prod-name{font-size:12px;}
+      .ms-store-prod-price{font-size:14px;font-weight:900;}
+      .ms-store-add-btn{font-size:11px;padding:8px;border-radius:8px;}
+
+      /* ── MANAGEMENT TABS ── */
+      .ms-mgmt-tab{padding:7px 12px;font-size:10.5px;}
+
+      /* ── ANALYTICS ── */
+      .ms-analytics-grid{grid-template-columns:1fr 1fr !important;}
+
+      /* ── SETTINGS ── */
+      .ms-settings-section{padding:12px 13px;}
+      #sellerTypeOptions{grid-template-columns:1fr !important;}
+
+      /* ── ORDERS ── */
+      .ms-order-actions{gap:5px;}
+      .ms-oa-btn{padding:5px 10px;font-size:10px;}
+
+      /* ── SHARE STRIP ── */
+      .ms-share-strip{flex-direction:column;gap:7px;}
+      .ms-share-btn{justify-content:center;}
+
+      /* ── STOREFRONT SOCIAL LINKS: branded pill row ── */
+      #storeSocialRow{
+        overflow-x:auto !important;flex-wrap:nowrap !important;
+        -webkit-overflow-scrolling:touch;scrollbar-width:none;
+        padding-bottom:4px;gap:6px !important;
+      }
+      #storeSocialRow::-webkit-scrollbar{display:none;}
+      #storeSocialRow a{flex-shrink:0 !important;}
+
+      /* ── STOREFRONT TABS ── */
+      .ms-storefront-tabs{padding:3px;gap:4px;}
+      .ms-sf-tab{padding:6px 12px;font-size:11px;}
+
+      /* ── CONTACT STRIP ── */
+      .ms-contact-strip > a{flex:1 1 100% !important;}
+    }
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<!-- ══ NAV ══ -->
+<nav class="ms-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="ms-nav-logo" alt="Sokoni"></a>
+  <div class="ms-nav-center" id="msModeToggle">
+    <button type="button" class="ms-mode-btn active" id="msBtnManage" onclick="switchMode('manage')">⚙️ Manage</button>
+    <button type="button" class="ms-mode-btn" id="msBtnStore"  onclick="switchMode('store')">🏪 My Store</button>
+  </div>
+  <div class="ms-nav-right">
+    <a href="seller.html" class="ms-nav-btn">📊 Full Dashboard</a>
+    <button type="button" class="ms-nav-btn green" onclick="shareMyStore()">🔗 Share Store</button>
+  </div>
+</nav>
+
+<!-- ══ STORE BANNER (shared between both modes) ══ -->
+<div class="ms-banner" id="msBanner">
+  <div class="ms-banner-overlay">
+    <div class="ms-store-avatar" id="msAvatar">🛍️</div>
+    <div class="ms-store-info">
+      <div class="ms-store-name" id="msStoreName">My SOKONI Store</div>
+      <div class="ms-store-tagline" id="msTagline">Quality products · Fast delivery · Verified seller</div>
+      <div class="ms-store-badges">
+        <span class="ms-badge ms-badge-verified">✅ Verified</span>
+        <span class="ms-badge ms-badge-cat" id="msCatBadge">🛍️ General</span>
+        <span class="ms-badge ms-badge-rating" id="msRatingBadge">★ 4.8</span>
+      </div>
+    </div>
+  </div>
+  <button type="button" class="ms-banner-edit-btn" onclick="switchMgmtTab('settings',null)">✏️ Edit Store</button>
+</div>
+
+<!-- ══ STATS STRIP ══ -->
+<div class="ms-body" style="padding:10px 18px 0;">
+  <div class="ms-stats-strip">
+    <div class="ms-stat-box"><div class="ms-stat-num" id="stProducts">0</div><div class="ms-stat-lbl">Products</div></div>
+    <div class="ms-stat-box"><div class="ms-stat-num" id="stOrders">0</div><div class="ms-stat-lbl">Orders</div></div>
+    <div class="ms-stat-box"><div class="ms-stat-num" id="stRevenue">0</div><div class="ms-stat-lbl">Revenue</div></div>
+    <div class="ms-stat-box"><div class="ms-stat-num" id="stViews">0</div><div class="ms-stat-lbl">Views</div></div>
+    <div class="ms-stat-box"><div class="ms-stat-num" id="stFollowers">0</div><div class="ms-stat-lbl">Followers</div></div>
+    <div class="ms-stat-box"><div class="ms-stat-num" id="stLikes">0</div><div class="ms-stat-lbl">Likes</div></div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════
+     MANAGE MODE
+═════════════════════════════════════════════ -->
+<div id="paneManage" class="ms-body">
+
+  <!-- Management tab row -->
+  <div class="ms-mgmt-tabs">
+    <button type="button" class="ms-mgmt-tab active" id="mgmtTab-products" onclick="switchMgmtTab('products',this)">📦 Products</button>
+    <button type="button" class="ms-mgmt-tab" id="mgmtTab-add" onclick="switchMgmtTab('add',this)">➕ Add Product</button>
+    <button type="button" class="ms-mgmt-tab" id="mgmtTab-orders" onclick="switchMgmtTab('orders',this)">🛒 Orders</button>
+    <button type="button" class="ms-mgmt-tab" id="mgmtTab-analytics" onclick="switchMgmtTab('analytics',this)">📈 Analytics</button>
+    <button type="button" class="ms-mgmt-tab" id="mgmtTab-settings" onclick="switchMgmtTab('settings',this)">⚙️ Store Settings</button>
+  </div>
+
+  <!-- ── PRODUCTS LIST ── -->
+  <div id="mgmt-products">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:800;color:white;">📦 Your Products <span id="prodListCount" style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:400;"></span></div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="prodSearch" class="ms-input" placeholder="🔍 Search..." oninput="renderProdList()" style="width:160px;margin:0;">
+        <button type="button" class="ms-nav-btn green" onclick="switchMgmtTab('add',null)" style="white-space:nowrap;">+ Add Product</button>
+      </div>
+    </div>
+    <div class="ms-prod-grid" id="prodListGrid"></div>
+  </div>
+
+  <!-- ── ADD PRODUCT FORM ── -->
+  <div id="mgmt-add" style="display:none;">
+    <div class="ms-add-form">
+      <div class="ms-form-h" id="addFormTitle">➕ Add New Product</div>
+      <div class="ms-form-sub">List a new product on your SOKONI store. It goes live instantly.</div>
+      <div class="ms-g2">
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Product Name *</label>
+          <input class="ms-input" id="apName" placeholder="e.g. Samsung Galaxy A55 5G">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Category *</label>
+          <select class="ms-input" id="apCat">
+            <option value="">Select category</option>
+            <option value="electronics">📱 Electronics</option>
+            <option value="fashion">👕 Fashion</option>
+            <option value="beauty">💄 Beauty</option>
+            <option value="food">🥦 Groceries</option>
+            <option value="shoes">👟 Shoes</option>
+            <option value="computers">💻 Computers</option>
+            <option value="appliances">🔌 Appliances</option>
+            <option value="furniture">🛋️ Furniture</option>
+            <option value="sports">⚽ Sports</option>
+            <option value="books">📚 Books</option>
+            <option value="printing">🖨️ Printing</option>
+            <option value="graphic-design">🎨 Design Services</option>
+            <option value="laundry">🧺 Laundry</option>
+            <option value="food-restaurant">🍽️ Food / Restaurant</option>
+            <option value="alcohol">🍺 Alcohol (18+)</option>
+            <option value="vape">💨 Vape (18+)</option>
+            <option value="tobacco">🚬 Tobacco (18+)</option>
+            <option value="adult">🔞 Adult Products (18+)</option>
+            <option value="other">🔧 Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="ms-g3">
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Selling Price (KES) *</label>
+          <input class="ms-input" id="apPrice" type="number" placeholder="5000" min="0">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Cost Price (KES)</label>
+          <input class="ms-input" id="apCost" type="number" placeholder="3500" min="0">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Stock (units)</label>
+          <input class="ms-input" id="apStock" type="number" placeholder="10" min="0">
+        </div>
+      </div>
+      <div class="ms-g2">
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Delivery Cost (KES)</label>
+          <input class="ms-input" id="apDelivery" type="number" placeholder="150" min="0">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Location</label>
+          <select class="ms-input" id="apLocation">
+            <option value="nairobi">Nairobi</option>
+            <option value="mombasa">Mombasa</option>
+            <option value="kisumu">Kisumu</option>
+            <option value="nakuru">Nakuru</option>
+            <option value="eldoret">Eldoret</option>
+            <option value="thika">Thika</option>
+            <option value="nyeri">Nyeri</option>
+            <option value="meru">Meru</option>
+            <option value="embu">Embu</option>
+            <option value="machakos">Machakos</option>
+            <option value="naivasha">Naivasha</option>
+            <option value="nanyuki">Nanyuki</option>
+            <option value="kisii">Kisii</option>
+            <option value="kericho">Kericho</option>
+            <option value="kakamega">Kakamega</option>
+            <option value="kitale">Kitale</option>
+            <option value="bungoma">Bungoma</option>
+            <option value="malindi">Malindi</option>
+            <option value="isiolo">Isiolo</option>
+            <option value="garissa">Garissa</option>
+            <option value="nationwide">Nationwide</option>
+            <option value="remote">Remote/Online</option>
+          </select>
+        </div>
+      </div>
+      <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Description</label>
+      <textarea class="ms-input" id="apDesc" placeholder="Describe your product — specs, features, condition, warranty..." style="min-height:70px;resize:vertical;"></textarea>
+      <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;">Image URL (optional — paste a photo link)</label>
+      <input class="ms-input" id="apImage" placeholder="https://... or leave blank for emoji preview">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.5);">
+          <input type="checkbox" id="apIsService" style="accent-color:#71ff00;"> This is a service (not a physical product)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.5);">
+          <input type="checkbox" id="apWholesale" style="accent-color:#71ff00;"> Available for wholesale/bulk
+        </label>
+      </div>
+      <button type="button" class="ms-submit-btn" onclick="addProduct()" id="apSubmitBtn">✅ List Product on My Store</button>
+      <div class="ms-form-msg" id="apMsg"></div>
+    </div>
+  </div>
+
+  <!-- ── ORDERS ── -->
+  <div id="mgmt-orders" style="display:none;">
+    <div style="display:flex;gap:5px;margin-bottom:12px;overflow-x:auto;flex-wrap:nowrap;">
+      <button type="button" class="ms-mgmt-tab active" onclick="filterOrders('all',this)">All Orders</button>
+      <button type="button" class="ms-mgmt-tab" onclick="filterOrders('pending',this)">⏳ Pending</button>
+      <button type="button" class="ms-mgmt-tab" onclick="filterOrders('processing',this)">🔄 Processing</button>
+      <button type="button" class="ms-mgmt-tab" onclick="filterOrders('delivered',this)">✅ Delivered</button>
+      <button type="button" class="ms-mgmt-tab" onclick="filterOrders('cancelled',this)">❌ Cancelled</button>
+    </div>
+    <div id="ordersList"></div>
+  </div>
+
+  <!-- ── ANALYTICS ── -->
+  <div id="mgmt-analytics" style="display:none;">
+    <div class="ms-analytics-grid" id="analyticsGrid"></div>
+    <div class="ms-section-h">📊 Top Performing Products</div>
+    <div id="topProductsList"></div>
+    <div class="ms-section-h" style="margin-top:16px;">💡 Growth Tips</div>
+    <div id="growthTips"></div>
+  </div>
+
+  <!-- ── SETTINGS ── -->
+  <div id="mgmt-settings" style="display:none;">
+
+    <!-- SELLER TYPE -->
+    <div class="ms-settings-section">
+      <div class="ms-settings-h">🏷️ Seller Type</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:4px;" id="sellerTypeOptions">
+        <div class="ms-stype-card" data-type="longterm" onclick="selectSellerType('longterm',this)">
+          <div style="font-size:24px;margin-bottom:6px;">🏪</div>
+          <div style="font-size:12px;font-weight:800;color:white;">Long-term Seller</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;">Established business · Regular stock · Fixed pricing</div>
+        </div>
+        <div class="ms-stype-card" data-type="shortterm" onclick="selectSellerType('shortterm',this)">
+          <div style="font-size:24px;margin-bottom:6px;">🛒</div>
+          <div style="font-size:12px;font-weight:800;color:white;">Short-term Seller</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;">Clearing items · Seasonal · One-time sales</div>
+        </div>
+        <div class="ms-stype-card" data-type="service" onclick="selectSellerType('service',this)">
+          <div style="font-size:24px;margin-bottom:6px;">🔧</div>
+          <div style="font-size:12px;font-weight:800;color:white;">Service Provider</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;">Skills &amp; services · Bookings · Per-job pricing</div>
+        </div>
+      </div>
+      <div id="sellerTypeTip" style="font-size:11px;color:rgba(255,255,255,0.4);padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);min-height:36px;margin-top:6px;"></div>
+    </div>
+
+    <div class="ms-settings-section">
+      <div class="ms-settings-h">🏪 Store Identity</div>
+      <div class="ms-g2">
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;">Store Name *</label>
+          <input class="ms-input" id="setStoreName" placeholder="e.g. TechMart Nairobi">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;">Store Emoji / Icon</label>
+          <input class="ms-input" id="setStoreEmoji" placeholder="e.g. 📱 or 👗 or 🍔" maxlength="4">
+        </div>
+      </div>
+      <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;">Store Tagline</label>
+      <input class="ms-input" id="setTagline" placeholder="e.g. Best electronics prices in Nairobi · Fast delivery">
+      <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;">Main Category / Niche</label>
+      <select class="ms-input" id="setMainCat">
+        <option value="electronics">📱 Electronics</option>
+        <option value="fashion">👕 Fashion</option>
+        <option value="beauty">💄 Beauty & Skincare</option>
+        <option value="food">🍎 Food & Groceries</option>
+        <option value="furniture">🛋️ Furniture & Home</option>
+        <option value="services">🛠️ Services</option>
+        <option value="printing">🖨️ Printing</option>
+        <option value="general">🛍️ General Store</option>
+      </select>
+      <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;">Your Phone (for customers to reach you)</label>
+      <input class="ms-input" id="setPhone" type="tel" placeholder="07XXXXXXXX">
+      <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;">About Your Store</label>
+      <textarea class="ms-input" id="setAbout" placeholder="Tell customers about your store, what you sell, your guarantee..." style="min-height:70px;resize:vertical;"></textarea>
+    </div>
+
+    <!-- SOCIAL HANDLES -->
+    <div class="ms-settings-section">
+      <div class="ms-settings-h">📱 Social Media Handles</div>
+      <div class="ms-g2">
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#e1306c;">●</span> Instagram</label>
+          <input class="ms-input" id="setSocIG" placeholder="@yourhandle">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#69c9d0;">●</span> TikTok</label>
+          <input class="ms-input" id="setSocTK" placeholder="@yourhandle">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#1da1f2;">●</span> X / Twitter</label>
+          <input class="ms-input" id="setSocTW" placeholder="@yourhandle">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#1877f2;">●</span> Facebook</label>
+          <input class="ms-input" id="setSocFB" placeholder="Page name or URL">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#ff0000;">●</span> YouTube</label>
+          <input class="ms-input" id="setSocYT" placeholder="@channel or URL">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#25d366;">●</span> WhatsApp Business</label>
+          <input class="ms-input" id="setSocWA" type="tel" placeholder="07XXXXXXXX">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#0077b5;">●</span> LinkedIn</label>
+          <input class="ms-input" id="setSocLI" placeholder="Company or personal URL">
+        </div>
+        <div>
+          <label style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:3px;text-transform:uppercase;display:flex;align-items:center;gap:5px;"><span style="color:#71ff00;">●</span> Website / Portfolio</label>
+          <input class="ms-input" id="setSocWeb" type="url" placeholder="https://yoursite.com">
+        </div>
+      </div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:6px;">These will appear as clickable buttons on your public storefront.</div>
+    </div>
+
+    <div class="ms-settings-section">
+      <div class="ms-settings-h">🎨 Store Theme Colour</div>
+      <div class="ms-color-swatch-row" id="colorSwatches"></div>
+    </div>
+
+    <div class="ms-settings-section">
+      <div class="ms-settings-h">📲 Share & Promote Your Store</div>
+      <div class="ms-share-strip">
+        <button type="button" class="ms-share-btn" style="background:rgba(37,211,102,0.08);border-color:rgba(37,211,102,0.2);color:#25d366;" onclick="shareWA()"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+        <button type="button" class="ms-share-btn" style="background:rgba(0,150,255,0.08);border-color:rgba(0,150,255,0.2);color:#0096ff;" onclick="copyLink()">🔗 Copy Link</button>
+        <button type="button" class="ms-share-btn" style="background:rgba(255,152,0,0.08);border-color:rgba(255,152,0,0.2);color:#ff9800;" onclick="shareStore()">🔗 Share</button>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+        <div class="ms-qr-box" id="storeQR">📱 QR Code<br>for your store</div>
+        <div style="flex:1;min-width:140px;">
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.7;">
+            Share your store QR code on packaging, business cards or WhatsApp. Customers scan → land on your store.<br><br>
+            <strong style="color:rgba(255,255,255,0.7);">Your store link:</strong><br>
+            <span id="storeLinkDisplay" style="color:#71ff00;font-size:10px;word-break:break-all;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="ms-submit-btn" onclick="saveSettings()">💾 Save Store Settings</button>
+    <div class="ms-form-msg" id="settingsMsg"></div>
+  </div>
+
+</div><!-- end paneManage -->
+
+<!-- ═════════════════════════════════════════════
+     STORE MODE (public storefront)
+═════════════════════════════════════════════ -->
+<div id="paneStore" class="ms-body" style="display:none;">
+
+  <!-- Contact strip -->
+  <div class="ms-contact-strip" style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;">
+    <a id="storeWABtn" href="javascript:void(0)" target="_blank" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.22);border-radius:11px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;flex:1;min-width:130px;"><i class="fab fa-whatsapp"></i> Chat on WhatsApp</a>
+    <a id="storeCallBtn" href="javascript:void(0)" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.22);border-radius:11px;color:#00aaff;font-size:11px;font-weight:700;text-decoration:none;flex:1;min-width:130px;">📞 Call Seller</a>
+    <a href="messages.html" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:11px;color:#71ff00;font-size:11px;font-weight:700;text-decoration:none;flex:1;min-width:130px;">💬 Message</a>
+    <button type="button" id="storeLikeBtn" onclick="toggleStoreLike()" style="display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(255,60,100,0.07);border:1px solid rgba(255,60,100,0.22);border-radius:11px;color:#ff6b9d;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;min-width:100px;transition:all .2s;">❤️ Like <span id="storeLikeBtnCount" style="opacity:0.7;font-weight:500;"></span></button>
+  </div>
+
+  <!-- About store -->
+  <div id="storeAboutBox" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;display:none;"></div>
+
+  <!-- Storefront tabs -->
+  <div class="ms-storefront-tabs">
+    <button type="button" class="ms-sf-tab active" onclick="setSFTab('all',this)">🛍️ All Products</button>
+    <button type="button" class="ms-sf-tab" onclick="setSFTab('featured',this)">⭐ Featured</button>
+    <button type="button" class="ms-sf-tab" onclick="setSFTab('electronics',this)">📱 Electronics</button>
+    <button type="button" class="ms-sf-tab" onclick="setSFTab('fashion',this)">👕 Fashion</button>
+    <button type="button" class="ms-sf-tab" onclick="setSFTab('beauty',this)">💄 Beauty</button>
+    <button type="button" class="ms-sf-tab" onclick="setSFTab('food',this)">🥦 Groceries</button>
+    <button type="button" class="ms-sf-tab" onclick="setSFTab('services',this)">🛠️ Services</button>
+    <button type="button" class="ms-sf-tab" onclick="setSFTab('reviews',this)">⭐ Reviews</button>
+  </div>
+
+  <!-- Hot picks strip (hidden until populated by JS) -->
+  <div id="sfHotStrip" style="display:none;margin-bottom:14px;">
+    <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:8px;display:flex;align-items:center;gap:8px;">🔥 Hot Picks <span style="flex:1;height:1px;background:rgba(255,255,255,0.06);display:block;"></span></div>
+    <div id="sfHotList" style="display:flex;gap:9px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;"></div>
+  </div>
+
+  <!-- Product/review content -->
+  <div id="sfProductGrid" class="ms-store-grid"></div>
+  <div id="sfReviewsPane" style="display:none;"></div>
+
+</div>
+
+<div class="ms-toast" id="msToast"></div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="ministore.html" class="bnav-item active-bnav"><span class="bnav-emoji">🏪</span><span>My Store</span></a>
+  <a href="seller.html" class="bnav-item"><span class="bnav-emoji">📊</span><span>Dashboard</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* ══════════════════════════════════════════════
+   STATE & HELPERS
+══════════════════════════════════════════════ */
+const CAT_EMOJI = {electronics:"📱",fashion:"👕",beauty:"💄",food:"🥦",shoes:"👟",computers:"💻",appliances:"🔌",furniture:"🛋️",sports:"⚽",books:"📚",printing:"🖨️","graphic-design":"🎨",laundry:"🧺",alcohol:"🍺",vape:"💨",tobacco:"🚬",adult:"🔞","food-restaurant":"🍽️",services:"🛠️",general:"🛍️",other:"🔧"};
+const STORE_COLORS = [
+  {name:"Lime",val:"linear-gradient(135deg,#0d2010,#0a1a0d)"},
+  {name:"Ocean",val:"linear-gradient(135deg,#0a1020,#0d1525)"},
+  {name:"Purple",val:"linear-gradient(135deg,#180d24,#0d0a1a)"},
+  {name:"Ember",val:"linear-gradient(135deg,#200d0a,#1a0d05)"},
+  {name:"Rose",val:"linear-gradient(135deg,#200a12,#1a0508)"},
+  {name:"Gold",val:"linear-gradient(135deg,#201508,#181005)"},
+  {name:"Teal",val:"linear-gradient(135deg,#0a1a18,#080f0e)"},
+  {name:"Night",val:"linear-gradient(135deg,#0a0a14,#050508)"}
+];
+
+function getProds(){ try{return JSON.parse(localStorage.getItem("sellerProducts"))||[];}catch(e){return[];} }
+function getOrders(){ try{return JSON.parse(localStorage.getItem("sokoniOrders"))||[];}catch(e){return[];} }
+function getUser(){ try{return JSON.parse(localStorage.getItem("sokoniUser"))||{};}catch(e){return{};} }
+function getStoreSettings(){ try{return JSON.parse(localStorage.getItem("msStoreSettings"))||{};}catch(e){return{};} }
+function saveStoreSettings(d){ localStorage.setItem("msStoreSettings",JSON.stringify(d)); }
+
+let _editingProdId = null;
+let _sfTab = "all";
+let _mgmtTab = "products";
+let _mode = "manage";
+let _orderFilter = "all";
+
+/* ── Toast ── */
+function toast(msg, duration=2500){
+  const el = document.getElementById("msToast");
+  el.textContent = "✅ "+msg; el.style.display="block";
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.style.display="none"; }, duration);
+}
+
+/* ══════════════════════════════════════════════
+   MODE SWITCHER
+══════════════════════════════════════════════ */
+function switchMode(mode){
+  _mode = mode;
+  document.getElementById("paneManage").style.display = mode==="manage" ? "block" : "none";
+  document.getElementById("paneStore").style.display  = mode==="store"  ? "block" : "none";
+  document.getElementById("msBtnManage").classList.toggle("active", mode==="manage");
+  document.getElementById("msBtnStore").classList.toggle("active",  mode==="store");
+  if(mode==="store")  renderStorefront("all");
+  if(mode==="manage") renderProdList();
+}
+window.switchMode = switchMode;
+
+/* ══════════════════════════════════════════════
+   STORE BANNER & STATS
+══════════════════════════════════════════════ */
+function loadStoreUI(){
+  const s = getStoreSettings();
+  const user = getUser();
+  const name = s.storeName || user.name || "My SOKONI Store";
+  const emoji = s.emoji || "🛍️";
+  const tagline = s.tagline || "Quality products · Fast delivery · Verified seller";
+  const catLabel = CAT_EMOJI[s.mainCat||"general"]||"🛍️";
+
+  document.getElementById("msStoreName").textContent = name;
+  document.getElementById("msTagline").textContent = tagline;
+  document.getElementById("msAvatar").textContent = emoji;
+  document.getElementById("msCatBadge").textContent = catLabel+" "+(s.mainCat||"General");
+
+  if(s.themeColor) document.getElementById("msBanner").style.background = s.themeColor;
+
+  /* Stats */
+  const myProds = getMyProducts();
+  const myOrders = getOrders();
+  const revenue = myOrders.reduce((s,o)=>{
+    return s + (o.items||[]).filter(i=>i.sellerEmail===user.email).reduce((x,i)=>x+(i.price*(i.qty||1)),0);
+  },0);
+  const views = myProds.reduce((s,p)=>s+(p.views||0),0);
+  document.getElementById("stProducts").textContent = myProds.length;
+  document.getElementById("stOrders").textContent = myOrders.length;
+  document.getElementById("stRevenue").textContent = revenue>0 ? "KES "+Math.round(revenue/1000)+"K" : "KES 0";
+  document.getElementById("stViews").textContent = views>999?Math.round(views/1000)+"K":views;
+  document.getElementById("stFollowers").textContent = s.followers||0;
+
+  /* Likes count */
+  const storeKey = user.email || name;
+  const likeCounts = JSON.parse(localStorage.getItem('sokoniStoreLikeCounts')||'{}');
+  const likeCount = likeCounts[storeKey] || 0;
+  document.getElementById("stLikes").textContent = likeCount > 999 ? Math.round(likeCount/1000)+'K' : likeCount;
+
+  /* Sync like button in visitor pane */
+  const myLikes = JSON.parse(localStorage.getItem('sokoniStoreLikes')||'{}');
+  const liked = !!myLikes[storeKey];
+  const likeBtn = document.getElementById('storeLikeBtn');
+  if (likeBtn) {
+    likeBtn.style.background = liked ? 'rgba(255,60,100,0.18)' : 'rgba(255,60,100,0.07)';
+    likeBtn.style.borderColor = liked ? 'rgba(255,60,100,0.5)' : 'rgba(255,60,100,0.22)';
+    likeBtn.firstChild.textContent = liked ? '❤️ Liked ' : '❤️ Like ';
+    const cnt = document.getElementById('storeLikeBtnCount');
+    if (cnt) cnt.textContent = likeCount > 0 ? likeCount : '';
+  }
+
+  /* Store link */
+  const link = window.location.origin+"/ministore.html?store="+encodeURIComponent(user.email||name);
+  const linkEl = document.getElementById("storeLinkDisplay");
+  if(linkEl) linkEl.textContent = link.replace("https://","");
+
+  /* WA/Call buttons in store mode */
+  if(s.phone){
+    const phone = s.phone.replace(/^0/,"254");
+    const waEl = document.getElementById("storeWABtn");
+    if(waEl) waEl.href = "https://wa.me/"+phone+"?text="+encodeURIComponent("Hello! I found your store on SOKONI. I'd like to enquire about a product.");
+    const callEl = document.getElementById("storeCallBtn");
+    if(callEl) callEl.href = "tel:+"+phone;
+  }
+
+  /* About box */
+  if(s.about){
+    const aBox = document.getElementById("storeAboutBox");
+    if(aBox){ aBox.textContent = s.about; aBox.style.display="block"; }
+  }
+  /* Seller type badge */
+  const typeBadges={longterm:"🏪 Established Seller",shortterm:"🛒 Clearing Sale",service:"🔧 Service Provider"};
+  if(s.sellerType && typeBadges[s.sellerType]){
+    let bEl=document.getElementById("sellerTypeBadge");
+    if(!bEl){bEl=document.createElement("div");bEl.id="sellerTypeBadge";bEl.style.cssText="font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.22);color:#71ff00;display:inline-block;margin-bottom:8px;";const storeName=document.getElementById("stStoreName");if(storeName)storeName.parentNode.insertBefore(bEl,storeName.nextSibling);}
+    bEl.textContent=typeBadges[s.sellerType];
+  }
+  /* Social links row */
+  const socHtml=renderSocialLinks(s);
+  if(socHtml){
+    let socRow=document.getElementById("storeSocialRow");
+    if(!socRow){socRow=document.createElement("div");socRow.id="storeSocialRow";socRow.style.cssText="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;";const contactBar=document.querySelector("#paneStore > div");if(contactBar)contactBar.parentNode.insertBefore(socRow,contactBar);}
+    socRow.innerHTML=socHtml;
+  }
+}
+
+/* ══════════════════════════════════════════════
+   GET MY PRODUCTS (filter by current seller)
+══════════════════════════════════════════════ */
+function getMyProducts(){
+  const user = getUser();
+  const settings = getStoreSettings();
+  const all = getProds();
+  /* Filter by user email OR store name */
+  const email = user.email || "";
+  const name  = settings.storeName || user.name || "";
+  return all.filter(p=>
+    (email && p.sellerEmail===email) ||
+    (name  && p.sellerName===name)   ||
+    (!email && !name) // demo: show all if no user set
+  );
+}
+
+/* ══════════════════════════════════════════════
+   PRODUCT LIST (management)
+══════════════════════════════════════════════ */
+function renderProdList(){
+  const grid = document.getElementById("prodListGrid");
+  const count = document.getElementById("prodListCount");
+  if(!grid) return;
+  const q = (document.getElementById("prodSearch")?.value||"").toLowerCase();
+  let prods = getMyProducts();
+  if(q) prods = prods.filter(p=>p.name.toLowerCase().includes(q)||(p.category||"").toLowerCase().includes(q));
+  if(count) count.textContent = "("+prods.length+")";
+
+  if(!prods.length){
+    grid.innerHTML=`<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.22);">
+      <div style="font-size:40px;margin-bottom:10px;">📦</div>
+      <p style="font-size:13px;">No products yet.<br>
+      <button type="button" onclick="switchMgmtTab('add',null)" style="margin-top:10px;padding:9px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:9px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;">+ Add Your First Product</button></p>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = prods.map(p=>{
+    const stockClass = !p.stock||p.outOfStock?"stock-out":p.stock<5?"stock-low":"stock-ok";
+    const stockLabel = p.outOfStock||!p.stock?"Out of stock":p.stock<5?"Low: "+p.stock:"In stock: "+p.stock;
+    const emoji = CAT_EMOJI[p.category||"other"]||"📦";
+    return `
+    <div class="ms-prod-row">
+      ${p.image&&!p.image.startsWith("data:")
+        ?`<img class="ms-prod-thumb" src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:""}
+      <div class="ms-prod-thumb" ${p.image&&!p.image.startsWith("data:")?"style='display:none'":''}>${emoji}</div>
+      <div class="ms-prod-info">
+        <div class="ms-prod-name">${p.name}</div>
+        <div class="ms-prod-sub">
+          <span>${CAT_EMOJI[p.category||"other"]||"📦"} ${p.category||"Other"}</span>
+          <span>📍 ${p.location||"Kenya"}</span>
+          <span>👁 ${p.views||0} views</span>
+          <span class="ms-stock-badge ${stockClass}">${stockLabel}</span>
+        </div>
+      </div>
+      <div class="ms-prod-price">KES ${Number(p.price||0).toLocaleString()}</div>
+      <div class="ms-prod-actions">
+        <button type="button" class="ms-prod-btn edit" onclick="editProduct('${p.id}')" title="Edit">✏️</button>
+        <button type="button" class="ms-prod-btn" onclick="toggleStock('${p.id}')" title="Toggle stock">${p.outOfStock?"📦":"🚫"}</button>
+        <button type="button" class="ms-prod-btn del" onclick="deleteProduct('${p.id}')" title="Delete">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ── Edit product: pre-fill add form ── */
+function editProduct(id){
+  const p = getProds().find(x=>x.id===id);
+  if(!p) return;
+  _editingProdId = id;
+  switchMgmtTab("add", null);
+  document.getElementById("addFormTitle").textContent = "✏️ Edit Product";
+  document.getElementById("apSubmitBtn").textContent = "💾 Save Changes";
+  document.getElementById("apName").value = p.name||"";
+  document.getElementById("apCat").value  = p.category||"";
+  document.getElementById("apPrice").value= p.price||"";
+  document.getElementById("apCost").value = p.costPrice||"";
+  document.getElementById("apStock").value= p.stock||"";
+  document.getElementById("apDelivery").value = p.deliveryCost||"";
+  document.getElementById("apLocation").value = p.location||"nairobi";
+  document.getElementById("apDesc").value  = p.description||"";
+  document.getElementById("apImage").value = p.image||"";
+}
+function toggleStock(id){
+  const all = getProds();
+  const p = all.find(x=>x.id===id);
+  if(!p) return;
+  p.outOfStock = !p.outOfStock;
+  localStorage.setItem("sellerProducts", JSON.stringify(all));
+  renderProdList();
+  toast(p.outOfStock ? "Product marked Out of Stock" : "Product marked In Stock");
+}
+function deleteProduct(id){
+  if(!(window._skConfirm||window.confirm)('Delete this product? It will be removed from your store.')){if(window._skConfirm){_skConfirm('Delete this product? It will be removed from your store.',()=>_doDelProd(id));return;} return;}
+  const all = getProds().filter(p=>p.id!==id);
+  localStorage.setItem("sellerProducts", JSON.stringify(all));
+  renderProdList(); loadStoreUI();
+  toast("Product deleted");
+}
+window.editProduct=editProduct; window.toggleStock=toggleStock; window.deleteProduct=deleteProduct;
+
+/* ══════════════════════════════════════════════
+   ADD / EDIT PRODUCT
+══════════════════════════════════════════════ */
+function addProduct(){
+  const user     = getUser();
+  const settings = getStoreSettings();
+  const name   = document.getElementById("apName")?.value.trim();
+  const cat    = document.getElementById("apCat")?.value;
+  const price  = Number(document.getElementById("apPrice")?.value||0);
+  const cost   = Number(document.getElementById("apCost")?.value||0);
+  const stock  = Number(document.getElementById("apStock")?.value||10);
+  const delCost= Number(document.getElementById("apDelivery")?.value||0);
+  const loc    = document.getElementById("apLocation")?.value||"nairobi";
+  const desc   = document.getElementById("apDesc")?.value.trim();
+  const image  = document.getElementById("apImage")?.value.trim();
+  const isService = document.getElementById("apIsService")?.checked;
+  const isWholesale = document.getElementById("apWholesale")?.checked;
+  const msgEl  = document.getElementById("apMsg");
+
+  if(!name||!price){ if(msgEl){msgEl.textContent="⚠️ Name and price are required";msgEl.style.color="#ff9800";} return; }
+
+  const sellerName  = settings.storeName || user.name || "My Store";
+  const sellerEmail = user.email || "seller@sokoni.ke";
+
+  const all = getProds();
+  if(_editingProdId){
+    const idx = all.findIndex(p=>p.id===_editingProdId);
+    if(idx>-1){
+      Object.assign(all[idx],{name,category:cat,price,costPrice:cost,stock,deliveryCost:delCost,location:loc,description:desc,image,sellerName,sellerEmail,isService,isWholesale,outOfStock:false,updatedAt:Date.now()});
+    }
+    _editingProdId=null;
+    document.getElementById("addFormTitle").textContent="➕ Add New Product";
+    document.getElementById("apSubmitBtn").textContent="✅ List Product on My Store";
+  } else {
+    const adult = ["alcohol","vape","tobacco","adult"].includes(cat);
+    all.unshift({
+      id:"MS"+Date.now(),name,category:cat,price,costPrice:cost,stock,
+      deliveryCost:delCost,location:loc,description:desc,image,
+      sellerName,sellerEmail,isService,isWholesale,
+      uploadedAt:Date.now(),views:0,sold:0,outOfStock:false,wishlistCount:0,
+      isAdult:adult,kebsCert:"",priceHistory:[]
+    });
+  }
+  localStorage.setItem("sellerProducts",JSON.stringify(all));
+
+  ["apName","apPrice","apCost","apStock","apDelivery","apDesc","apImage"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("apCat").value="";
+  if(msgEl){msgEl.innerHTML='✅ Product listed! <button type="button" onclick="switchMgmtTab(\'products\',null)" style="color:#71ff00;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">View all →</button>';msgEl.style.color="#71ff00";}
+  loadStoreUI();
+  setTimeout(()=>{if(mgmtPanes.products) switchMgmtTab("products",null);},2000);
+}
+window.addProduct = addProduct;
+
+/* ══════════════════════════════════════════════
+   ORDERS
+══════════════════════════════════════════════ */
+function filterOrders(status, btn){
+  _orderFilter = status;
+  document.querySelectorAll("#mgmt-orders .ms-mgmt-tab").forEach(b=>b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  renderOrders();
+}
+function renderOrders(){
+  const el = document.getElementById("ordersList");
+  if(!el) return;
+  let orders = getOrders();
+  if(_orderFilter!=="all") orders=orders.filter(o=>o.status===_orderFilter);
+  if(!orders.length){
+    el.innerHTML=`<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.22);"><div style="font-size:40px;margin-bottom:10px;">🛒</div><p style="font-size:13px;">No orders yet</p></div>`;
+    return;
+  }
+  const STATUS = {pending:"⏳ Pending",processing:"🔄 Processing",shipped:"📦 Shipped",delivered:"✅ Delivered",cancelled:"❌ Cancelled"};
+  const STATUS_CLASS = {pending:"os-pending",processing:"os-processing",shipped:"os-processing",delivered:"os-delivered",cancelled:"os-cancelled"};
+  el.innerHTML = orders.map(o=>`
+  <div class="ms-order-card">
+    <div class="ms-order-top">
+      <div>
+        <div class="ms-order-id">📋 ${o.id}</div>
+        <div class="ms-order-meta">👤 ${o.name||"Customer"} · 📱 ${o.phone||""} · 📅 ${o.date||""}</div>
+      </div>
+      <span class="ms-order-status ${STATUS_CLASS[o.status]||"os-pending"}">${STATUS[o.status]||o.status}</span>
+    </div>
+    <div class="ms-order-items">${(o.items||[]).map(i=>i.name||"Item").join(", ").substring(0,80)}</div>
+    <div class="ms-order-total">KES ${Number(o.total||0).toLocaleString()}</div>
+    <div class="ms-order-actions">
+      ${o.phone?`<a href="tel:+254${o.phone.replace(/^0/,"")}" class="ms-oa-btn" style="background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.2);color:#71ff00;text-decoration:none;">📞 Call</a>`:""}
+      ${o.phone?`<a href="https://wa.me/254${o.phone.replace(/^0/,"")}?text=${encodeURIComponent("Hi "+o.name+"! Your Sokoni order "+o.id+" is being processed.")}" target="_blank" class="ms-oa-btn" style="background:rgba(37,211,102,0.08);border-color:rgba(37,211,102,0.2);color:#25d366;text-decoration:none;">💬 WhatsApp</a>`:""}
+      <button type="button" class="ms-oa-btn" onclick="updateOrder('${o.id}','shipped')" style="background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.2);color:#00aaff;">📦 Mark Shipped</button>
+      <button type="button" class="ms-oa-btn" onclick="updateOrder('${o.id}','delivered')" style="background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2);color:#10b981;">✅ Mark Delivered</button>
+    </div>
+  </div>`).join("");
+}
+function updateOrder(id, status){
+  const all = getOrders();
+  const o = all.find(x=>x.id===id);
+  if(o){ o.status=status; o.updatedAt=Date.now(); localStorage.setItem("sokoniOrders",JSON.stringify(all)); renderOrders(); toast("Order "+id+" → "+status); }
+}
+window.updateOrder=updateOrder; window.filterOrders=filterOrders;
+
+/* ══════════════════════════════════════════════
+   ANALYTICS
+══════════════════════════════════════════════ */
+function renderAnalytics(){
+  const prods = getMyProducts();
+  const orders = getOrders();
+  const revenue = orders.reduce((s,o)=>s+(o.total||0),0);
+  const views = prods.reduce((s,p)=>s+(p.views||0),0);
+  const topProd = [...prods].sort((a,b)=>(b.sold||0)-(a.sold||0)).slice(0,5);
+
+  const grid = document.getElementById("analyticsGrid");
+  if(grid) grid.innerHTML = [
+    {val:"KES "+Math.round(revenue/1000)+"K",lbl:"Total Revenue",color:"#71ff00",trend:"📈 Growing"},
+    {val:orders.length,lbl:"Total Orders",color:"#00aaff",trend:"📦 All time"},
+    {val:prods.length,lbl:"Active Products",color:"#a855f7",trend:"🛍️ Listed"},
+    {val:views>999?Math.round(views/1000)+"K":views,lbl:"Product Views",color:"#f59e0b",trend:"👁 All time"},
+    {val:prods.filter(p=>p.sold>10).length,lbl:"Best Sellers",color:"#10b981",trend:"🔥 10+ sold"},
+    {val:prods.reduce((s,p)=>s+(p.wishlistCount||0),0),lbl:"Wishlisted",color:"#ef4444",trend:"❤️ Saved by buyers"},
+  ].map(a=>`
+  <div class="ms-an-card">
+    <div class="ms-an-val" style="color:${a.color};">${a.val}</div>
+    <div class="ms-an-lbl">${a.lbl}</div>
+    <div class="ms-an-trend" style="color:rgba(255,255,255,0.3);">${a.trend}</div>
+  </div>`).join("");
+
+  const tpEl = document.getElementById("topProductsList");
+  if(tpEl) tpEl.innerHTML = topProd.length ? topProd.map(p=>`
+  <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:6px;">
+    <div style="font-size:22px;">${CAT_EMOJI[p.category||"other"]||"📦"}</div>
+    <div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">${p.sold||0} sold · ${p.views||0} views</div></div>
+    <div style="font-size:13px;font-weight:900;color:#71ff00;flex-shrink:0;">KES ${Number(p.price||0).toLocaleString()}</div>
+  </div>`).join("") : `<p style="font-size:12px;color:rgba(255,255,255,0.3);text-align:center;padding:20px;">No sales data yet — start selling!</p>`;
+
+  const gtEl = document.getElementById("growthTips");
+  const tips = [
+    {icon:"📸",tip:"Add high-quality product photos — listings with photos get 4× more views."},
+    {icon:"💬",tip:"Respond to customer messages within 1 hour — fast replies build trust and sales."},
+    {icon:"🏷️",tip:"Price competitively. Check similar products on Sokoni and price 5–10% lower initially."},
+    {icon:"📣",tip:"Share your store link on WhatsApp and Instagram — social traffic converts well."},
+    {icon:"⭐",tip:"Ask happy buyers for reviews. 5-star reviews increase conversion by 40%."},
+    {icon:"📦",tip:"Offer free delivery for orders above KES 2,000 — drives larger basket sizes."},
+  ];
+  if(gtEl) gtEl.innerHTML = tips.map(t=>`
+  <div style="display:flex;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;">
+    <span style="font-size:18px;flex-shrink:0;">${t.icon}</span>
+    <span style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.6;">${t.tip}</span>
+  </div>`).join("");
+}
+
+/* ══════════════════════════════════════════════
+   SETTINGS
+══════════════════════════════════════════════ */
+function loadSettingsForm(){
+  const s = getStoreSettings();
+  document.getElementById("setStoreName").value = s.storeName||"";
+  document.getElementById("setStoreEmoji").value = s.emoji||"🛍️";
+  document.getElementById("setTagline").value = s.tagline||"";
+  document.getElementById("setMainCat").value = s.mainCat||"general";
+  document.getElementById("setPhone").value = s.phone||"";
+  document.getElementById("setAbout").value = s.about||"";
+  /* Seller type */
+  if(s.sellerType) selectSellerType(s.sellerType, null);
+  /* Socials */
+  ["IG","TK","TW","FB","YT","WA","LI","Web"].forEach(k=>{
+    const el=document.getElementById("setSoc"+k);
+    if(el) el.value=s["soc"+k]||"";
+  });
+
+  const sw = document.getElementById("colorSwatches");
+  if(sw) sw.innerHTML = STORE_COLORS.map((c,i)=>`
+    <div class="ms-swatch ${s.themeColor===c.val?"selected":""}" style="background:${c.val};" onclick="selectColor('${c.val}',this)" title="${c.name}"></div>
+  `).join("");
+}
+function selectColor(val, el){
+  document.querySelectorAll(".ms-swatch").forEach(s=>s.classList.remove("selected"));
+  el.classList.add("selected");
+  const s = getStoreSettings(); s.themeColor = val; saveStoreSettings(s);
+  document.getElementById("msBanner").style.background = val;
+}
+function saveSettings(){
+  const s = getStoreSettings();
+  s.storeName  = document.getElementById("setStoreName")?.value.trim();
+  s.emoji      = document.getElementById("setStoreEmoji")?.value.trim()||"🛍️";
+  s.tagline    = document.getElementById("setTagline")?.value.trim();
+  s.mainCat    = document.getElementById("setMainCat")?.value;
+  s.phone      = document.getElementById("setPhone")?.value.trim();
+  s.about      = document.getElementById("setAbout")?.value.trim();
+  /* Seller type */
+  const selCard=document.querySelector(".ms-stype-card.selected");
+  if(selCard) s.sellerType=selCard.dataset.type;
+  /* Socials */
+  ["IG","TK","TW","FB","YT","WA","LI","Web"].forEach(k=>{
+    const el=document.getElementById("setSoc"+k); if(el) s["soc"+k]=el.value.trim();
+  });
+  saveStoreSettings(s);
+  loadStoreUI();
+  const msgEl = document.getElementById("settingsMsg");
+  if(msgEl){msgEl.textContent="✅ Store settings saved!";msgEl.style.color="#71ff00";}
+  toast("Store settings saved!");
+  setTimeout(()=>{if(msgEl)msgEl.textContent="";},3000);
+}
+function shareWA(){ const s=getStoreSettings();const name=s.storeName||"My Store";window.open(`https://wa.me/?text=${encodeURIComponent("Check out my store on SOKONI: "+name+" — "+window.location.href)}`) }
+function copyLink(){ navigator.clipboard.writeText(window.location.href).then(()=>toast("Store link copied!")); }
+function shareStore(){ if(navigator.share) navigator.share({title:"SOKONI Store",url:window.location.href}); else copyLink(); }
+function shareMyStore(){ shareStore(); }
+const STYPE_TIPS={
+  longterm:"Long-term Seller: Your store shows an 🏪 Established badge. Ideal for businesses with consistent inventory. Lower per-sale commission.",
+  shortterm:"Short-term Seller: Your store shows a 🛒 Clearing Sale badge. Great for decluttering, seasonal goods, or trial sales.",
+  service:"Service Provider: Your store shows a 🔧 Services badge. Customers can book you directly. No stock tracking needed."
+};
+function selectSellerType(type, el){
+  document.querySelectorAll(".ms-stype-card").forEach(c=>c.classList.remove("selected"));
+  const card=el||document.querySelector(`.ms-stype-card[data-type="${type}"]`);
+  if(card) card.classList.add("selected");
+  const tip=document.getElementById("sellerTypeTip");
+  if(tip) tip.textContent=STYPE_TIPS[type]||"";
+}
+
+function renderSocialLinks(s){
+  const socials=[
+    {key:"socIG",  icon:"fab fa-instagram", color:"#e1306c", label:"Instagram", base:"https://instagram.com/"},
+    {key:"socTK",  icon:"fab fa-tiktok",    color:"#69c9d0", label:"TikTok",    base:"https://tiktok.com/@"},
+    {key:"socTW",  icon:"fab fa-twitter",   color:"#1da1f2", label:"X",         base:"https://x.com/"},
+    {key:"socFB",  icon:"fab fa-facebook",  color:"#1877f2", label:"Facebook",  base:"https://facebook.com/"},
+    {key:"socYT",  icon:"fab fa-youtube",   color:"#ff0000", label:"YouTube",   base:"https://youtube.com/@"},
+    {key:"socWA",  icon:"fab fa-whatsapp",  color:"#25d366", label:"WhatsApp",  base:"https://wa.me/254"},
+    {key:"socLI",  icon:"fab fa-linkedin",  color:"#0077b5", label:"LinkedIn",  base:"https://linkedin.com/in/"},
+    {key:"socWeb", icon:"fas fa-globe",     color:"#71ff00", label:"Website",   base:""},
+  ];
+  return socials.filter(sc=>s[sc.key]).map(sc=>{
+    const val=s[sc.key].replace(/^@/,"").replace(/^https?:\/\//,"");
+    const url=sc.key==="socWeb"?"https://"+val:sc.base+val.replace(/^0/,"");
+    return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:${sc.color};text-decoration:none;font-size:11px;font-weight:700;transition:filter .2s;white-space:nowrap;" onmouseover="this.style.filter='brightness(1.15)'" onmouseout="this.style.filter='none'"><i class="${sc.icon}"></i> ${sc.label}</a>`;
+  }).join("");
+}
+
+window.selectSellerType=selectSellerType;
+window.saveSettings=saveSettings; window.selectColor=selectColor; window.shareWA=shareWA; window.copyLink=copyLink; window.shareStore=shareStore; window.shareMyStore=shareMyStore;
+
+/* ── Store Like ── */
+function toggleStoreLike() {
+  const user = getUser();
+  const s = getStoreSettings();
+  const storeKey = user.email || s.storeName || user.name || 'store';
+  const myLikes = JSON.parse(localStorage.getItem('sokoniStoreLikes')||'{}');
+  const likeCounts = JSON.parse(localStorage.getItem('sokoniStoreLikeCounts')||'{}');
+  const wasLiked = !!myLikes[storeKey];
+  myLikes[storeKey] = !wasLiked;
+  likeCounts[storeKey] = Math.max(0, (likeCounts[storeKey]||0) + (wasLiked ? -1 : 1));
+  localStorage.setItem('sokoniStoreLikes', JSON.stringify(myLikes));
+  localStorage.setItem('sokoniStoreLikeCounts', JSON.stringify(likeCounts));
+
+  const liked = !wasLiked;
+  const likeCount = likeCounts[storeKey];
+  const btn = document.getElementById('storeLikeBtn');
+  if (btn) {
+    btn.style.background = liked ? 'rgba(255,60,100,0.18)' : 'rgba(255,60,100,0.07)';
+    btn.style.borderColor = liked ? 'rgba(255,60,100,0.5)' : 'rgba(255,60,100,0.22)';
+    btn.firstChild.textContent = liked ? '❤️ Liked ' : '❤️ Like ';
+    const cnt = document.getElementById('storeLikeBtnCount');
+    if (cnt) cnt.textContent = likeCount > 0 ? likeCount : '';
+    /* pop animation */
+    btn.style.transform = 'scale(1.06)';
+    setTimeout(() => { btn.style.transform = ''; }, 200);
+  }
+  /* Update stats strip */
+  const stLikes = document.getElementById('stLikes');
+  if (stLikes) stLikes.textContent = likeCount > 999 ? Math.round(likeCount/1000)+'K' : likeCount;
+  toast(liked ? '❤️ You liked this store!' : 'Like removed');
+}
+window.toggleStoreLike = toggleStoreLike;
+
+/* ══════════════════════════════════════════════
+   MANAGEMENT TAB SWITCHER
+══════════════════════════════════════════════ */
+const mgmtPanes = {products:true,add:false,orders:false,analytics:false,settings:false};
+function switchMgmtTab(name, btn){
+  Object.keys(mgmtPanes).forEach(k=>{
+    const el=document.getElementById("mgmt-"+k);
+    if(el) el.style.display = k===name?"block":"none";
+    const b=document.getElementById("mgmtTab-"+k);
+    if(b) b.classList.toggle("active",k===name);
+  });
+  _mgmtTab = name;
+  if(btn){ document.querySelectorAll(".ms-mgmt-tab").forEach(b=>b.classList.remove("active")); btn.classList.add("active"); }
+  if(name==="products")  renderProdList();
+  if(name==="orders")    renderOrders();
+  if(name==="analytics") renderAnalytics();
+  if(name==="settings")  loadSettingsForm();
+}
+window.switchMgmtTab = switchMgmtTab;
+
+/* ══════════════════════════════════════════════
+   PUBLIC STOREFRONT
+══════════════════════════════════════════════ */
+function setSFTab(tab, btn){
+  _sfTab = tab;
+  document.querySelectorAll(".ms-sf-tab").forEach(b=>b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  const prodGrid  = document.getElementById("sfProductGrid");
+  const revPane   = document.getElementById("sfReviewsPane");
+  if(tab==="reviews"){
+    if(prodGrid) prodGrid.style.display="none";
+    if(revPane)  revPane.style.display="block";
+    renderStoreReviews();
+  } else {
+    if(prodGrid) prodGrid.style.display="grid";
+    if(revPane)  revPane.style.display="none";
+    renderStorefront(tab);
+  }
+}
+window.setSFTab=setSFTab;
+
+function renderStorefront(tab){
+  const grid = document.getElementById("sfProductGrid");
+  if(!grid) return;
+  let allProds = getMyProducts();
+  const ADULT = new Set(["alcohol","vape","tobacco","adult"]);
+
+  /* ── Hot Picks strip (top sellers / most wishlisted, tab=all only) ── */
+  const hotStrip = document.getElementById("sfHotStrip");
+  const hotList  = document.getElementById("sfHotList");
+  if(hotStrip && hotList && tab==="all"){
+    const hotItems = [...allProds].filter(p=>!ADULT.has(p.category)&&(p.sold>2||p.wishlistCount>2)).sort((a,b)=>((b.sold||0)+(b.wishlistCount||0))-((a.sold||0)+(a.wishlistCount||0))).slice(0,8);
+    if(hotItems.length){
+      hotStrip.style.display="block";
+      hotList.innerHTML = hotItems.map(p=>{
+        const emoji = CAT_EMOJI[p.category||"other"]||"🛍️";
+        return `<div onclick="openStoreProduct('${p.id}')" style="flex-shrink:0;width:110px;cursor:pointer;">
+          <div style="width:110px;height:90px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:linear-gradient(135deg,rgba(113,255,0,0.06),rgba(0,170,255,0.04));display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:6px;">
+            ${p.image&&!p.image.startsWith("data:")
+              ?`<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.innerHTML='${emoji}'">`
+              :emoji}
+          </div>
+          <div style="font-size:11px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
+          <div style="font-size:12px;font-weight:900;color:#71ff00;">KES ${Number(p.price||0).toLocaleString()}</div>
+        </div>`;
+      }).join("");
+    } else { hotStrip.style.display="none"; }
+  } else if(hotStrip){ hotStrip.style.display="none"; }
+
+  let prods = allProds;
+  if(tab==="featured")  prods = prods.filter(p=>p.wishlistCount>5||p.sold>5).slice(0,12);
+  else if(tab!=="all")  prods = prods.filter(p=>p.category===tab||p.isService);
+
+  if(!prods.length){
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.22);"><div style="font-size:40px;margin-bottom:10px;">📦</div><p>No products in this category yet.</p></div>`;
+    return;
+  }
+  grid.innerHTML = prods.map(p=>{
+    const emoji   = CAT_EMOJI[p.category||"other"]||"🛍️";
+    const isAdult = ADULT.has(p.category);
+    /* Adult products: render content normally but cover with a gate overlay.
+       First tap removes gate, subsequent taps open product page. */
+    const gateHtml = isAdult ? `
+      <div class="ms-adult-gate" onclick="event.stopPropagation();_revealAdultCard(this)">
+        <div class="ms-adult-gate-icon">🔞</div>
+        <div class="ms-adult-gate-title">Adults Only</div>
+        <div class="ms-adult-gate-sub">18+ restricted content</div>
+        <button type="button" class="ms-adult-gate-btn">Tap to View</button>
+      </div>` : "";
+    return `
+    <div class="ms-store-prod" onclick="_msCardClick(this,'${p.id}')">
+      ${gateHtml}
+      ${p.image&&!p.image.startsWith("data:")
+        ? `<img class="ms-store-prod-img" src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.parentNode.querySelector('.ms-store-prod-emoji').style.display='flex';this.style.display='none'">`
+        : `<div class="ms-store-prod-emoji">${emoji}</div>`}
+      ${p.image&&!p.image.startsWith("data:") ? `<div class="ms-store-prod-emoji" style="display:none;">${emoji}</div>` : ""}
+      ${(p.wishlistCount||0)>10 ? `<div style="position:absolute;top:6px;right:6px;background:rgba(113,255,0,0.85);color:#070707;font-size:8px;font-weight:900;padding:2px 6px;border-radius:4px;z-index:5;">🔥 HOT</div>` : ""}
+      <div class="ms-store-prod-body">
+        <div class="ms-store-prod-name">${p.name}</div>
+        <div class="ms-store-prod-price">KES ${Number(p.price||0).toLocaleString()}</div>
+        <button type="button" class="ms-store-add-btn" onclick="event.stopPropagation();addToCartFromStore('${p.id}')">🛒 Add to Cart</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openStoreProduct(id){
+  const p = getProds().find(x=>x.id===id);
+  if(!p) return;
+  localStorage.setItem("selectedProduct",JSON.stringify(p));
+  window.location.href="product.html";
+}
+
+/* ── Adult gate: fade out overlay on first tap, navigate on second ── */
+function _revealAdultCard(gateEl){
+  gateEl.classList.add("ms-gate-hidden");
+  setTimeout(()=>{ try{ gateEl.remove(); }catch(e){} }, 260);
+}
+function _msCardClick(cardEl, id){
+  /* If gate is still present, do nothing (gate handles its own tap) */
+  if(cardEl.querySelector(".ms-adult-gate")) return;
+  openStoreProduct(id);
+}
+window._revealAdultCard=_revealAdultCard; window._msCardClick=_msCardClick;
+
+function addToCartFromStore(id){
+  const p = getProds().find(x=>x.id===id);
+  if(!p) return;
+  let cart = []; try{cart=JSON.parse(localStorage.getItem("sokoniCart"))||[];}catch(e){}
+  const ex = cart.find(c=>c.id===id);
+  if(ex){ ex.qty=(ex.qty||1)+1; } else { cart.push({...p,qty:1}); }
+  localStorage.setItem("sokoniCart",JSON.stringify(cart));
+  toast(p.name.substring(0,25)+" added to cart!");
+}
+
+function renderStoreReviews(){
+  const el = document.getElementById("sfReviewsPane");
+  if(!el) return;
+  const user = getUser();
+  const settings = getStoreSettings();
+  const name = settings.storeName||user.name||"";
+  let allRatings = {}; try{allRatings=JSON.parse(localStorage.getItem("sokoniSellerRatings"))||{};}catch(e){}
+  const reviews = allRatings[name]||[];
+  if(!reviews.length){
+    el.innerHTML=`<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.22);"><div style="font-size:40px;margin-bottom:10px;">⭐</div><p>No reviews yet — start selling and ask customers for feedback!</p></div>`;
+    return;
+  }
+  const avg = reviews.reduce((s,r)=>s+(r.stars||5),0)/reviews.length;
+  el.innerHTML = `
+  <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div style="text-align:center;"><div style="font-size:32px;font-weight:900;color:#ffc107;">${avg.toFixed(1)}</div><div style="color:#ffc107;">${"★".repeat(Math.round(avg))}${"☆".repeat(5-Math.round(avg))}</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;">${reviews.length} review${reviews.length!==1?"s":""}</div></div>
+    <div style="flex:1;min-width:100px;font-size:11px;color:rgba(255,255,255,0.45);">Your seller rating on SOKONI. Each review counts — respond to feedback promptly to maintain your rating.</div>
+  </div>
+  ${reviews.map(r=>`
+  <div class="ms-review-card">
+    <div class="ms-review-top">
+      <div class="ms-review-avatar">${r.buyerName?.[0]?.toUpperCase()||"?"}</div>
+      <div style="flex:1;"><div style="font-size:12px;font-weight:700;color:white;">${r.buyerName||"Buyer"}</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">${r.date||""}</div></div>
+      <div class="ms-review-stars">${"★".repeat(r.stars||5)}${"☆".repeat(5-(r.stars||5))}</div>
+    </div>
+    <div class="ms-review-text">${r.comment||""}</div>
+  </div>`).join("")}`;
+}
+
+window.openStoreProduct=openStoreProduct; window.addToCartFromStore=addToCartFromStore;
+
+/* ══════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════ */
+loadStoreUI();
+renderProdList();
+/* Check URL for ?store= param to show public view */
+const _storeParam = new URLSearchParams(window.location.search).get("store");
+if(_storeParam){ switchMode("store"); document.getElementById("msModeToggle").style.display="none"; }
+</script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="demo-seed.js"></script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+

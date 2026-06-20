@@ -1,0 +1,235 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Beta Testing Program</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#080808">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;padding-bottom:40px;}
+.bt-nav{display:flex;align-items:center;gap:12px;padding:14px 18px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:10;}
+.bt-nav-logo{font-size:16px;font-weight:900;color:#71ff00;text-decoration:none;}
+.bt-hero{background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,0,0,0));border-bottom:1px solid rgba(113,255,0,0.1);padding:40px 20px 32px;text-align:center;}
+.bt-hero h1{font-size:clamp(22px,5vw,36px);font-weight:900;line-height:1.2;margin-bottom:10px;}
+.bt-hero h1 span{color:#71ff00;}
+.bt-hero p{color:rgba(255,255,255,0.45);font-size:14px;max-width:480px;margin:0 auto;}
+.bt-body{max-width:600px;margin:0 auto;padding:20px 16px;}
+.bt-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;}
+.bt-card h2{font-size:14px;font-weight:900;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.bt-label{font-size:11px;font-weight:800;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;}
+.bt-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:#fff;font-size:16px;font-family:inherit;outline:none;margin-bottom:14px;}
+.bt-input:focus{border-color:rgba(113,255,0,0.4);}
+.bt-roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:0;}
+.bt-role{padding:14px 10px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);cursor:pointer;text-align:center;transition:all .2s;}
+.bt-role:hover{border-color:rgba(113,255,0,0.3);}
+.bt-role.active{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.35);}
+.bt-role-icon{font-size:28px;margin-bottom:6px;}
+.bt-role-name{font-size:12px;font-weight:800;color:rgba(255,255,255,0.6);}
+.bt-role.active .bt-role-name{color:#71ff00;}
+.bt-checklist{display:none;}
+.bt-checklist.active{display:block;}
+.bt-step{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.bt-step:last-child{border-bottom:none;}
+.bt-step-num{width:28px;height:28px;border-radius:50%;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.bt-step-text{flex:1;}
+.bt-step-title{font-size:13px;font-weight:800;color:#fff;margin-bottom:3px;}
+.bt-step-sub{font-size:12px;color:rgba(255,255,255,0.4);}
+.bt-step-link{display:inline-block;margin-top:6px;padding:5px 12px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:8px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;}
+.bt-start-btn{width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#5ccc00);border:none;border-radius:13px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+.bt-start-btn:disabled{opacity:.4;cursor:default;}
+.bt-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:20px;font-size:12px;font-weight:800;color:#71ff00;margin-bottom:20px;}
+.bt-active-card{background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;text-align:center;margin-bottom:16px;display:none;}
+.bt-active-card h3{font-size:16px;font-weight:900;color:#71ff00;margin-bottom:8px;}
+.bt-active-card p{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:14px;}
+.bt-links{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.bt-link-card{padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;text-decoration:none;text-align:center;}
+.bt-link-card .icon{font-size:24px;margin-bottom:6px;}
+.bt-link-card .lbl{font-size:12px;font-weight:800;color:rgba(255,255,255,0.6);}
+.bt-exit-btn{padding:9px 18px;background:rgba(255,68,68,0.08);border:1px solid rgba(255,68,68,0.2);border-radius:10px;color:#ff4444;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;}
+</style>
+</head>
+<body>
+
+<nav class="bt-nav">
+  <a href="index.html" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:15px;">←</a>
+  <span class="bt-nav-logo">SOKONI Beta</span>
+  <span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,0.25);">v1.0</span>
+</nav>
+
+<div class="bt-hero">
+  <h1>You're invited to<br><span>Beta Test SOKONI</span></h1>
+  <p>Help us find bugs, test flows, and shape the future of Kenya's marketplace. Your feedback is critical before public launch.</p>
+</div>
+
+<div class="bt-body">
+
+  <!-- ALREADY ACTIVE STATE -->
+  <div class="bt-active-card" id="btActiveCard">
+    <h3>✅ Beta Mode Active</h3>
+    <p id="btActiveDesc">You are registered as a beta tester.</p>
+    <div class="bt-links" id="btActiveLinks"></div>
+    <div style="margin-top:14px;">
+      <button class="bt-exit-btn" onclick="exitBeta()">Exit Beta Mode</button>
+    </div>
+  </div>
+
+  <!-- REGISTRATION FORM -->
+  <div id="btRegForm">
+    <div class="bt-card">
+      <h2>1️⃣ Your Details</h2>
+      <div class="bt-label">Full Name</div>
+      <input class="bt-input" id="btName" type="text" placeholder="Your name">
+      <div class="bt-label">Phone Number</div>
+      <input class="bt-input" id="btPhone" type="tel" placeholder="07XXXXXXXX">
+    </div>
+
+    <div class="bt-card">
+      <h2>2️⃣ Testing Role</h2>
+      <div class="bt-roles" id="btRoles">
+        <div class="bt-role" data-role="buyer" onclick="selectRole(this)">
+          <div class="bt-role-icon">🛒</div>
+          <div class="bt-role-name">Buyer</div>
+        </div>
+        <div class="bt-role" data-role="seller" onclick="selectRole(this)">
+          <div class="bt-role-icon">🏪</div>
+          <div class="bt-role-name">Seller</div>
+        </div>
+        <div class="bt-role" data-role="driver" onclick="selectRole(this)">
+          <div class="bt-role-icon">🛵</div>
+          <div class="bt-role-name">Driver</div>
+        </div>
+        <div class="bt-role" data-role="provider" onclick="selectRole(this)">
+          <div class="bt-role-icon">🔧</div>
+          <div class="bt-role-name">Provider</div>
+        </div>
+        <div class="bt-role" data-role="business" onclick="selectRole(this)">
+          <div class="bt-role-icon">🏢</div>
+          <div class="bt-role-name">Business</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROLE CHECKLISTS -->
+    <div class="bt-card" id="btChecklist" style="display:none;">
+      <h2>3️⃣ Your Test Scenarios</h2>
+
+      <div class="bt-checklist" id="btCL-buyer">
+        <div class="bt-step"><div class="bt-step-num">1</div><div class="bt-step-text"><div class="bt-step-title">Sign Up</div><div class="bt-step-sub">Create a new account with your phone number.</div><a href="signup.html" class="bt-step-link">→ Go to Sign Up</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">2</div><div class="bt-step-text"><div class="bt-step-title">Search for a Product</div><div class="bt-step-sub">Use search to find phones, clothes, or food.</div><a href="search.html" class="bt-step-link">→ Search</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">3</div><div class="bt-step-text"><div class="bt-step-title">Browse & Favourite</div><div class="bt-step-sub">Open a product page. Save to wishlist.</div><a href="index.html" class="bt-step-link">→ Browse</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">4</div><div class="bt-step-text"><div class="bt-step-title">Contact a Seller</div><div class="bt-step-sub">Tap a seller and send a message via inbox.</div><a href="messages.html" class="bt-step-link">→ Inbox</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">5</div><div class="bt-step-text"><div class="bt-step-title">Add to Cart & Checkout</div><div class="bt-step-sub">Add items to cart, fill delivery address, initiate M-Pesa.</div><a href="cart.html" class="bt-step-link">→ Cart</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">6</div><div class="bt-step-text"><div class="bt-step-title">Track Your Order</div><div class="bt-step-sub">After checkout, track delivery in real-time.</div><a href="track.html" class="bt-step-link">→ Track</a></div></div>
+      </div>
+
+      <div class="bt-checklist" id="btCL-seller">
+        <div class="bt-step"><div class="bt-step-num">1</div><div class="bt-step-text"><div class="bt-step-title">Create a Seller Account</div><div class="bt-step-sub">Sign up and complete your seller profile.</div><a href="signup.html" class="bt-step-link">→ Sign Up</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">2</div><div class="bt-step-text"><div class="bt-step-title">List a Product</div><div class="bt-step-sub">Upload a product with photo, price and description.</div><a href="seller.html" class="bt-step-link">→ Seller Dashboard</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">3</div><div class="bt-step-text"><div class="bt-step-title">View Your Shop</div><div class="bt-step-sub">Check how your shop looks to buyers.</div><a href="seller-public.html" class="bt-step-link">→ Public Shop</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">4</div><div class="bt-step-text"><div class="bt-step-title">Respond to an Inquiry</div><div class="bt-step-sub">Reply to a buyer message in the inbox.</div><a href="messages.html" class="bt-step-link">→ Messages</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">5</div><div class="bt-step-text"><div class="bt-step-title">Process an Order</div><div class="bt-step-sub">Mark an order as confirmed and dispatched.</div><a href="seller.html" class="bt-step-link">→ Orders Tab</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">6</div><div class="bt-step-text"><div class="bt-step-title">Check Analytics</div><div class="bt-step-sub">Review sales, views and earnings.</div><a href="seller-analytics.html" class="bt-step-link">→ Analytics</a></div></div>
+      </div>
+
+      <div class="bt-checklist" id="btCL-driver">
+        <div class="bt-step"><div class="bt-step-num">1</div><div class="bt-step-text"><div class="bt-step-title">Register as Driver</div><div class="bt-step-sub">Complete driver onboarding and verification.</div><a href="onboarding-driver.html" class="bt-step-link">→ Onboarding</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">2</div><div class="bt-step-text"><div class="bt-step-title">Go Online</div><div class="bt-step-sub">Toggle online in the driver dashboard.</div><a href="driver.html" class="bt-step-link">→ Driver Dashboard</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">3</div><div class="bt-step-text"><div class="bt-step-title">Accept a Delivery</div><div class="bt-step-sub">Accept an incoming delivery and navigate to pickup.</div><a href="driver.html" class="bt-step-link">→ Accept Delivery</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">4</div><div class="bt-step-text"><div class="bt-step-title">Test Food Rider Flow</div><div class="bt-step-sub">Go online in food rider, accept and deliver an order.</div><a href="food-rider.html" class="bt-step-link">→ Food Rider</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">5</div><div class="bt-step-text"><div class="bt-step-title">Mark Delivered</div><div class="bt-step-sub">Complete delivery and confirm earnings recorded.</div></div></div>
+        <div class="bt-step"><div class="bt-step-num">6</div><div class="bt-step-text"><div class="bt-step-title">Check Earnings</div><div class="bt-step-sub">Verify daily/weekly earnings and transaction history.</div><a href="driver.html" class="bt-step-link">→ Earnings</a></div></div>
+      </div>
+
+      <div class="bt-checklist" id="btCL-provider">
+        <div class="bt-step"><div class="bt-step-num">1</div><div class="bt-step-text"><div class="bt-step-title">Register as Provider</div><div class="bt-step-sub">Sign up and choose your service category.</div><a href="onboarding-professional.html" class="bt-step-link">→ Onboarding</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">2</div><div class="bt-step-text"><div class="bt-step-title">Create Service Listing</div><div class="bt-step-sub">List your service with description, pricing and availability.</div><a href="services.html" class="bt-step-link">→ Services</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">3</div><div class="bt-step-text"><div class="bt-step-title">Receive a Booking</div><div class="bt-step-sub">Accept a booking request from a customer.</div><a href="messages.html" class="bt-step-link">→ Inbox</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">4</div><div class="bt-step-text"><div class="bt-step-title">Confirm and Complete</div><div class="bt-step-sub">Confirm booking, complete service, mark done.</div></div></div>
+        <div class="bt-step"><div class="bt-step-num">5</div><div class="bt-step-text"><div class="bt-step-title">Get a Review</div><div class="bt-step-sub">Ask customer to leave a rating for your service.</div></div></div>
+      </div>
+
+      <div class="bt-checklist" id="btCL-business">
+        <div class="bt-step"><div class="bt-step-num">1</div><div class="bt-step-text"><div class="bt-step-title">Register Business</div><div class="bt-step-sub">List your business and complete profile.</div><a href="businesses.html" class="bt-step-link">→ Businesses</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">2</div><div class="bt-step-text"><div class="bt-step-title">Set Up Business OS</div><div class="bt-step-sub">Add inventory, customers and team members.</div><a href="business-os.html" class="bt-step-link">→ Business OS</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">3</div><div class="bt-step-text"><div class="bt-step-title">Post an RFQ (B2B)</div><div class="bt-step-sub">Post a procurement request and receive quotes.</div><a href="b2b.html" class="bt-step-link">→ B2B Hub</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">4</div><div class="bt-step-text"><div class="bt-step-title">Check Analytics</div><div class="bt-step-sub">Review business performance and customer insights.</div><a href="business-analytics.html" class="bt-step-link">→ Analytics</a></div></div>
+        <div class="bt-step"><div class="bt-step-num">5</div><div class="bt-step-text"><div class="bt-step-title">Use POS</div><div class="bt-step-sub">Process a sale using the point-of-sale system.</div><a href="pos.html" class="bt-step-link">→ POS</a></div></div>
+      </div>
+    </div>
+
+    <div class="bt-card" id="btStartCard" style="display:none;">
+      <h2>4️⃣ Start Testing</h2>
+      <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:16px;">The 🐛 bug button will appear on every page. Use it to report issues, rate experiences, and submit ideas as you test.</p>
+      <button class="bt-start-btn" id="btStartBtn" onclick="startBeta()">🚀 Activate Beta Mode</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="sokoni-beta.js"></script>
+<script>
+var _selectedRole = null;
+
+function selectRole(el) {
+  document.querySelectorAll('.bt-role').forEach(function(r){ r.classList.remove('active'); });
+  el.classList.add('active');
+  _selectedRole = el.dataset.role;
+
+  document.querySelectorAll('.bt-checklist').forEach(function(c){ c.classList.remove('active'); });
+  var cl = document.getElementById('btCL-'+_selectedRole);
+  if (cl) cl.classList.add('active');
+  document.getElementById('btChecklist').style.display = 'block';
+  document.getElementById('btStartCard').style.display = 'block';
+}
+
+function startBeta() {
+  var name = document.getElementById('btName').value.trim();
+  var phone = document.getElementById('btPhone').value.trim();
+  if (!name) { (window._skToast||alert)('Please enter your name.'); return; }
+  if (!_selectedRole) { (window._skToast||alert)('Please select your testing role.'); return; }
+
+  var tester = SokoniBeta.registerTester({ name: name, phone: phone, role: _selectedRole });
+  showActiveState(tester);
+}
+
+function showActiveState(tester) {
+  document.getElementById('btRegForm').style.display = 'none';
+  var card = document.getElementById('btActiveCard');
+  card.style.display = 'block';
+  var roleLabels = { buyer:'Buyer', seller:'Seller', driver:'Driver', provider:'Service Provider', business:'Business' };
+  document.getElementById('btActiveDesc').textContent =
+    'Welcome, ' + (tester.name || 'Tester') + '! You are testing as a ' + (roleLabels[tester.role]||tester.role) + '. The 🐛 button is now active on all pages.';
+  var links = { buyer:[['🛒','index.html','Browse'],['🔍','search.html','Search'],['🛒','cart.html','Cart'],['📦','track.html','Track']], seller:[['🏪','seller.html','Dashboard'],['📊','seller-analytics.html','Analytics'],['💬','messages.html','Messages'],['🏷️','seller-public.html','Shop']], driver:[['🛵','driver.html','Driver'],['🍔','food-rider.html','Food Rider'],['📍','track.html','Tracking'],['💬','messages.html','Messages']], provider:[['🔧','services.html','Services'],['💬','messages.html','Messages'],['👤','profile.html','Profile'],['📋','requests.html','Requests']], business:[['🏢','business-os.html','Business OS'],['📊','business-analytics.html','Analytics'],['🤝','b2b.html','B2B'],['🧾','pos.html','POS']] };
+  var roleLinks = links[tester.role] || links.buyer;
+  document.getElementById('btActiveLinks').innerHTML = roleLinks.map(function(l){
+    return '<a href="'+l[1]+'" class="bt-link-card"><div class="icon">'+l[0]+'</div><div class="lbl">'+l[2]+'</div></a>';
+  }).join('');
+}
+
+function exitBeta() {
+  if(!_c){_skConfirm('Exit beta mode? This will remove the bug button and your tester profile.',()=>_doExitBeta(true));return;}
+  SokoniBeta.deactivate();
+  location.reload();
+}
+
+/* Check if already active */
+window.addEventListener('DOMContentLoaded', function() {
+  if (SokoniBeta.isActive()) {
+    showActiveState(SokoniBeta.getTester());
+  }
+});
+</script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+

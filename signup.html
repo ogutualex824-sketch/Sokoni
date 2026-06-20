@@ -1,0 +1,215 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Create Account</title>
+  <meta name="description" content="Create your free SOKONI account and start buying or selling on Kenya's #1 marketplace.">
+  <meta property="og:title" content="SOKONI — Create Account">
+  <meta property="og:description" content="Join thousands of buyers and sellers on SOKONI — Kenya's #1 marketplace.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="auth.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+<script src="shared-header.js" defer></script>
+</head>
+<body>
+<script>/* Capture ?ref=CODE on signup page */
+(function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
+<script src="splash.js"></script>
+
+  <div class="auth-bg"></div>
+
+  <section class="auth-page">
+    <div class="auth-card">
+
+      <div class="auth-logo-wrap">
+        <img loading="lazy" src="assets/Sokonilogo2.png" class="auth-logo" alt="Sokoni">
+      </div>
+
+      <!-- Security trust strip -->
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.18);border-radius:20px;font-size:10px;font-weight:700;color:rgba(113,255,0,0.85);letter-spacing:0.4px;">🔒 256-bit SSL</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(0,180,255,0.07);border:1px solid rgba(0,180,255,0.18);border-radius:20px;font-size:10px;font-weight:700;color:rgba(0,180,255,0.85);letter-spacing:0.4px;">🔐 Firebase Auth</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.45);letter-spacing:0.4px;">🛡️ Kenya DPA 2019</span>
+      </div>
+
+      <h2 class="auth-title">🚀 Create Account</h2>
+      <p class="auth-sub">Join thousands of buyers and sellers on Sokoni</p>
+
+      <div id="authMsg" class="auth-msg"></div>
+
+      <div class="auth-field">
+        👤
+        <input type="text" id="signupName" placeholder="Full Name">
+      </div>
+
+      <div class="auth-field">
+        📧
+        <input type="email" id="signupEmail" placeholder="Email address">
+      </div>
+
+      <!-- Password with show/hide + live strength bar -->
+      <div class="auth-field" style="position:relative;">
+        🔒
+        <input type="password" id="signupPassword" placeholder="Password" autocomplete="new-password" oninput="checkPwStrength(this.value)" onkeydown="if(event.key==='Enter')signupUser()" style="padding-right:44px;">
+        <button type="button" onclick="togglePw()" tabindex="-1"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:16px;padding:4px;" title="Show/hide password">
+          👁
+        </button>
+      </div>
+      <!-- Password requirements checklist -->
+      <div id="pwReqs" style="margin:-8px 0 12px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;font-size:11px;line-height:1.8;display:none;">
+        <div id="req-len"  style="color:rgba(255,255,255,0.35);">✗ At least 8 characters</div>
+        <div id="req-up"   style="color:rgba(255,255,255,0.35);">✗ One uppercase letter (A–Z)</div>
+        <div id="req-lo"   style="color:rgba(255,255,255,0.35);">✗ One lowercase letter (a–z)</div>
+        <div id="req-num"  style="color:rgba(255,255,255,0.35);">✗ One number (0–9)</div>
+      </div>
+
+      <!-- Date of Birth — single native picker -->
+      <div class="auth-field">
+        🎂
+        <input type="date" id="dobDate" placeholder="Date of Birth"
+          style="color-scheme:dark;">
+      </div>
+
+      <div style="margin-bottom:16px;padding:12px 14px;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.15);border-radius:12px;display:flex;align-items:flex-start;gap:10px;">
+        <input type="checkbox" id="privacyConsent" style="margin-top:3px;accent-color:#71ff00;flex-shrink:0;width:16px;height:16px;cursor:pointer;">
+        <label for="privacyConsent" style="font-size:12px;color:rgba(255,255,255,0.6);line-height:1.7;cursor:pointer;">
+          I agree to SOKONI's <a href="legal.html#terms" style="color:#71ff00;text-decoration:underline;">Terms of Service</a> and <a href="legal.html#privacy" style="color:#71ff00;text-decoration:underline;">Privacy Policy</a>. I consent to data processing per the <strong style="color:rgba(255,255,255,0.7);">Kenya Data Protection Act 2019</strong>. <span style="color:#ff6b6b;">*</span>
+        </label>
+      </div>
+
+      <button type="button" class="auth-btn" id="createAccBtn" onclick="signupUser()">
+        Create Account →
+      </button>
+
+      <!-- Role Selection (shown after successful signup) -->
+      <div id="roleSelectionSection" style="display:none;margin-top:24px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.1);max-height:65vh;overflow-y:auto;overscroll-behavior:contain;">
+        <p style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:16px;text-align:center;">
+          <strong>What would you like to do on Sokoni?</strong><br>You can select multiple roles
+        </p>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid rgba(113,255,0,0.2);border-radius:10px;background:rgba(113,255,0,0.03);cursor:pointer;transition:all .2s;font-size:13px;color:white;">
+            <input type="checkbox" id="roleSellerCb" onchange="updateRoleSelection()"> <i class="fas fa-store" style="color:#71ff00;"></i> Sell
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid rgba(113,255,0,0.2);border-radius:10px;background:rgba(113,255,0,0.03);cursor:pointer;transition:all .2s;font-size:13px;color:white;">
+            <input type="checkbox" id="roleHealthcareCb" onchange="updateRoleSelection()"> <i class="fas fa-hospital" style="color:#00d4ff;"></i> Healthcare
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid rgba(113,255,0,0.2);border-radius:10px;background:rgba(113,255,0,0.03);cursor:pointer;transition:all .2s;font-size:13px;color:white;">
+            <input type="checkbox" id="roleDriverCb" onchange="updateRoleSelection()"> <i class="fas fa-car" style="color:#fb923c;"></i> Drive
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid rgba(113,255,0,0.2);border-radius:10px;background:rgba(113,255,0,0.03);cursor:pointer;transition:all .2s;font-size:13px;color:white;">
+            <input type="checkbox" id="roleDeliveryCb" onchange="updateRoleSelection()"> <i class="fas fa-box" style="color:#9b59b6;"></i> Deliver
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid rgba(113,255,0,0.2);border-radius:10px;background:rgba(113,255,0,0.03);cursor:pointer;transition:all .2s;font-size:13px;color:white;">
+            <input type="checkbox" id="roleLandlordCb" onchange="updateRoleSelection()"> <i class="fas fa-home" style="color:#2ecc71;"></i> Rent Property
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:12px;border:1px solid rgba(113,255,0,0.2);border-radius:10px;background:rgba(113,255,0,0.03);cursor:pointer;transition:all .2s;font-size:13px;color:white;">
+            <input type="checkbox" id="roleLegalCb" onchange="updateRoleSelection()"> <i class="fas fa-gavel" style="color:#e74c3c;"></i> Legal Services
+          </label>
+        </div>
+
+        <button type="button" class="auth-btn" onclick="completeRoleSelection()" id="startBtn">
+          🚀 Get Started →
+        </button>
+        <button type="button" onclick="window.location.href='index.html'" style="width:100%;margin-top:8px;padding:12px;background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.45);border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.25)';this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.1)';this.style.color='rgba(255,255,255,0.45)'">
+          Skip — Browse as Buyer
+        </button>
+      </div>
+
+      <p class="auth-switch" id="signupSwitch" style="display:none;">
+        You can add more roles anytime from your profile
+      </p>
+
+      <p class="auth-switch" id="loginSwitch">
+        Already have an account? <a href="login.html">Sign In</a>
+      </p>
+
+      <a href="index.html" class="auth-skip">
+        🏪 Continue as Guest
+      </a>
+
+    </div>
+  </section>
+
+  <script>
+    /* Set max date so only 18+ birthdays are selectable */
+    (function(){
+      var el = document.getElementById('dobDate');
+      if(!el) return;
+      var max = new Date();
+      max.setFullYear(max.getFullYear() - 18);
+      el.max = max.toISOString().split('T')[0];
+      el.min = new Date(max.getFullYear() - 100, 0, 1).toISOString().split('T')[0];
+    })();
+
+    /* Password show/hide */
+    function togglePw(){
+      var f = document.getElementById('signupPassword');
+      if(!f) return;
+      f.type = f.type === 'password' ? 'text' : 'password';
+    }
+
+    /* Live password strength checklist */
+    function checkPwStrength(val){
+      var box = document.getElementById('pwReqs');
+      if(!box) return;
+      box.style.display = val ? 'block' : 'none';
+      function mark(id, ok){
+        var el = document.getElementById(id);
+        if(!el) return;
+        el.style.color = ok ? '#71ff00' : 'rgba(255,255,255,0.35)';
+        el.textContent = (ok ? '✓ ' : '✗ ') + el.textContent.slice(2);
+      }
+      mark('req-len', val.length >= 8);
+      mark('req-up',  /[A-Z]/.test(val));
+      mark('req-lo',  /[a-z]/.test(val));
+      mark('req-num', /[0-9]/.test(val));
+
+      /* Enable/disable button based on all passing */
+      var btn = document.getElementById('createAccBtn');
+      var allOk = val.length >= 8 && /[A-Z]/.test(val) && /[a-z]/.test(val) && /[0-9]/.test(val);
+      if(btn){ btn.style.opacity = allOk ? '1' : '0.55'; }
+    }
+  </script>
+  <script src="sokoni-security.js"></script>
+  <script src="sokoni-alerts.js"></script>
+  <script type="module" src="firebase.js"></script>
+  <script src="sokoni-audit.js" defer></script>
+<script src="auth.js"></script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+

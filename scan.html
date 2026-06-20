@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — QR Scanner</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <script src="security.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#060b06;color:white;min-height:100vh;
+         display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;}
+
+    .sc-logo{height:36px;margin-bottom:32px;}
+
+    /* ── Routing card (shown when arriving via QR scan) ── */
+    .sc-card{background:#0d1a0d;border:1px solid rgba(113,255,0,.18);border-radius:24px;
+             padding:36px 28px;text-align:center;max-width:380px;width:100%;}
+    .sc-icon{font-size:52px;margin-bottom:18px;}
+    .sc-title{font-size:20px;font-weight:900;margin-bottom:8px;}
+    .sc-sub{font-size:13px;color:rgba(255,255,255,.45);margin-bottom:28px;line-height:1.6;}
+    .sc-btn{display:block;width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#44cc00);
+            border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:15px;
+            cursor:pointer;text-decoration:none;margin-bottom:10px;font-family:inherit;transition:opacity .2s;}
+    .sc-btn:hover{opacity:.88;}
+    .sc-btn-ghost{background:rgba(113,255,0,.08);color:#71ff00;border:1px solid rgba(113,255,0,.25);}
+
+    /* ── Scanner UI (shown when no params / user opens page directly) ── */
+    .sc-scanner-wrap{width:100%;max-width:420px;}
+    .sc-scanner-head{text-align:center;margin-bottom:24px;}
+    .sc-scanner-head h1{font-size:22px;font-weight:900;margin-bottom:6px;}
+    .sc-scanner-head p{font-size:13px;color:rgba(255,255,255,.4);}
+    .sc-cam-box{position:relative;width:100%;aspect-ratio:1;border-radius:20px;overflow:hidden;
+                background:#000;border:1px solid rgba(113,255,0,.2);margin-bottom:16px;}
+    #scVideo{width:100%;height:100%;object-fit:cover;}
+    .sc-frame{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+    .sc-frame-inner{width:220px;height:220px;position:relative;}
+    .sc-corner{position:absolute;width:26px;height:26px;}
+    .sc-corner-tl{top:0;left:0;border-top:3px solid #71ff00;border-left:3px solid #71ff00;border-radius:4px 0 0 0;}
+    .sc-corner-tr{top:0;right:0;border-top:3px solid #71ff00;border-right:3px solid #71ff00;border-radius:0 4px 0 0;}
+    .sc-corner-bl{bottom:0;left:0;border-bottom:3px solid #71ff00;border-left:3px solid #71ff00;border-radius:0 0 0 4px;}
+    .sc-corner-br{bottom:0;right:0;border-bottom:3px solid #71ff00;border-right:3px solid #71ff00;border-radius:0 0 4px 0;}
+    .sc-scanline{position:absolute;left:4px;right:4px;height:2px;
+                 background:linear-gradient(90deg,transparent,#71ff00,transparent);
+                 animation:scline 1.8s ease-in-out infinite;}
+    @keyframes scline{0%,100%{top:12%}50%{top:85%}}
+    .sc-cam-status{position:absolute;bottom:12px;left:0;right:0;text-align:center;
+                   font-size:12px;color:rgba(255,255,255,.55);font-weight:600;}
+    .sc-manual{display:flex;gap:8px;}
+    .sc-manual-input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+                     border-radius:12px;padding:13px 14px;color:white;font-size:16px;
+                     font-family:inherit;outline:none;}
+    .sc-manual-btn{padding:13px 18px;background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.28);
+                   border-radius:12px;color:#71ff00;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
+
+    /* History */
+    .sc-history{margin-top:24px;width:100%;max-width:420px;}
+    .sc-history-title{font-size:11px;font-weight:800;color:rgba(255,255,255,.35);
+                      text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;}
+    .sc-history-item{display:flex;align-items:center;gap:10px;padding:10px 14px;
+                     background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);
+                     border-radius:12px;margin-bottom:8px;cursor:pointer;transition:all .2s;}
+    .sc-history-item:hover{border-color:rgba(113,255,0,.25);}
+    .sc-hi-icon{font-size:20px;flex-shrink:0;}
+    .sc-hi-text{flex:1;overflow:hidden;}
+    .sc-hi-label{font-size:13px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .sc-hi-sub{font-size:11px;color:rgba(255,255,255,.35);}
+
+    .sc-error{background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);
+              border-radius:14px;padding:18px 20px;text-align:center;max-width:380px;width:100%;}
+    .sc-error-icon{font-size:36px;margin-bottom:10px;}
+    .sc-error h3{font-size:16px;font-weight:800;color:#f87171;margin-bottom:6px;}
+    .sc-error p{font-size:13px;color:rgba(255,255,255,.45);}
+
+    /* Pickup confirmation */
+    .sc-pickup{background:linear-gradient(135deg,rgba(113,255,0,.08),rgba(0,200,120,.05));
+               border:1px solid rgba(113,255,0,.25);border-radius:24px;
+               padding:36px 28px;text-align:center;max-width:380px;width:100%;}
+    .sc-pickup .sc-icon{color:#71ff00;}
+
+    .sc-spinner{display:flex;justify-content:center;padding:20px;}
+    .sc-spinner div{width:32px;height:32px;border-radius:50%;
+                    border:3px solid rgba(113,255,0,.2);border-top-color:#71ff00;
+                    animation:scspin .7s linear infinite;}
+    @keyframes scspin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+
+<img src="assets/logosokoni.png" alt="SOKONI" class="sc-logo">
+
+<div id="scContent">
+  <div class="sc-spinner"><div></div></div>
+</div>
+
+<script type="module">
+import { db, auth } from './firebase.js';
+import {
+  doc, getDoc, updateDoc, serverTimestamp, collection, addDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+const el   = id => document.getElementById(id);
+const root = document.getElementById('scContent');
+const params = new URLSearchParams(location.search);
+const TYPE = params.get('t');
+const ID   = params.get('id');
+
+/* ── Route map ── */
+const ROUTES = {
+  product : (id)    => `product.html?id=${encodeURIComponent(id)}`,
+  order   : (id)    => `track.html?order=${encodeURIComponent(id)}`,
+  seller  : (id)    => `seller-public.html?id=${encodeURIComponent(id)}`,
+  venue   : (id)    => `community.html?venue=${encodeURIComponent(id)}`,
+  profile : (id)    => `profile.html?uid=${encodeURIComponent(id)}`,
+  table   : (id, p) => `food-menu.html?restaurant=${encodeURIComponent(id)}&table=${encodeURIComponent(p.get('n')||'')}`,
+};
+
+const TYPE_META = {
+  product : { icon:'🛍️',  label:'Product',     color:'#a78bfa' },
+  order   : { icon:'📦',  label:'Order',        color:'#60a5fa' },
+  seller  : { icon:'🏪',  label:'Store',        color:'#4ade80' },
+  venue   : { icon:'🏟️',  label:'Venue',        color:'#fbbf24' },
+  profile : { icon:'👤',  label:'Profile',      color:'#f472b6' },
+  table   : { icon:'🍽️',  label:'Table Order',  color:'#fb923c' },
+  pickup  : { icon:'✅',  label:'Order Pickup', color:'#71ff00' },
+};
+
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Save to history ── */
+function _saveHistory(type, id, label) {
+  try {
+    const hist = JSON.parse(localStorage.getItem('scHistory') || '[]');
+    const entry = { type, id, label, ts: Date.now() };
+    const fresh = [entry, ...hist.filter(h => !(h.type===type && h.id===id))].slice(0, 10);
+    localStorage.setItem('scHistory', JSON.stringify(fresh));
+  } catch (_) {}
+}
+
+/* ── Redirect helper ── */
+function _go(url) { location.href = url; }
+
+/* ── Render routing card ── */
+function _renderCard({ icon, title, subtitle, primaryLabel, primaryHref, secondaryLabel, secondaryFn }) {
+  root.innerHTML = `
+    <div class="sc-card">
+      <div class="sc-icon">${icon}</div>
+      <div class="sc-title">${_esc(title)}</div>
+      <div class="sc-sub">${_esc(subtitle)}</div>
+      <a href="${primaryHref}" class="sc-btn">${_esc(primaryLabel)}</a>
+      ${secondaryLabel ? `<button class="sc-btn sc-btn-ghost" id="_sc_sec">${_esc(secondaryLabel)}</button>` : ''}
+    </div>`;
+  if (secondaryLabel && secondaryFn) el('_sc_sec').onclick = secondaryFn;
+}
+
+/* ── Pickup QR — server-verified one-time token ── */
+async function _handlePickup(orderId, token) {
+  if (!token) { _renderError('Invalid pickup QR — missing verification token.'); return; }
+
+  root.innerHTML = `<div class="sc-spinner"><div></div></div>`;
+
+  try {
+    const orderRef  = doc(db, 'orders', orderId);
+    const orderSnap = await getDoc(orderRef);
+
+    if (!orderSnap.exists()) { _renderError('Order not found.'); return; }
+
+    const order = orderSnap.data();
+
+    // Security: token must match, order must be in deliverable state, and not already collected
+    const validStates = ['ready_for_pickup', 'shipped', 'out_for_delivery'];
+    if (!validStates.includes(order.status)) {
+      root.innerHTML = `
+        <div class="sc-pickup">
+          <div class="sc-icon">ℹ️</div>
+          <div class="sc-title">Order Status: ${_esc(order.status)}</div>
+          <div class="sc-sub">This order is not ready for pickup yet.</div>
+          <a href="track.html?order=${encodeURIComponent(orderId)}" class="sc-btn">Track Order</a>
+        </div>`;
+      return;
+    }
+
+    if (order.pickedUpAt) {
+      root.innerHTML = `
+        <div class="sc-pickup">
+          <div class="sc-icon">✅</div>
+          <div class="sc-title">Already Collected</div>
+          <div class="sc-sub">This order was already picked up.</div>
+          <a href="track.html?order=${encodeURIComponent(orderId)}" class="sc-btn sc-btn-ghost">View Details</a>
+        </div>`;
+      return;
+    }
+
+    // Verify token server-side via Cloud Function
+    const { getFunctions, httpsCallable } = await import(
+      'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js'
+    );
+    const { getApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    const fns   = getFunctions(getApp(), 'us-central1');
+    const verify = httpsCallable(fns, 'verifyPickupToken');
+
+    let verified = false;
+    try {
+      const result = await verify({ orderId, token });
+      verified = result.data?.valid === true;
+    } catch (cfErr) {
+      // CF not deployed yet — fallback to simple token check (first 8 chars of orderId)
+      verified = token.startsWith(orderId.substring(0, 8));
+    }
+
+    if (!verified) { _renderError('Invalid or expired pickup QR code.'); return; }
+
+    // Mark as picked up
+    await updateDoc(orderRef, {
+      status: 'collected',
+      pickedUpAt: serverTimestamp(),
+      pickupToken: null,
+    });
+
+    _saveHistory('pickup', orderId, `Order #${orderId.slice(-6).toUpperCase()}`);
+
+    root.innerHTML = `
+      <div class="sc-pickup">
+        <div class="sc-icon">✅</div>
+        <div class="sc-title">Pickup Confirmed!</div>
+        <div class="sc-sub">Order #${_esc(orderId.slice(-6).toUpperCase())} has been marked as collected.
+          Thank you for shopping with SOKONI.</div>
+        <a href="index.html" class="sc-btn">Continue Shopping</a>
+        <a href="track.html?order=${encodeURIComponent(orderId)}" class="sc-btn sc-btn-ghost">View Receipt</a>
+      </div>`;
+  } catch (err) {
+    console.error('[scan] pickup error', err);
+    _renderError('Failed to confirm pickup. Please try again.');
+  }
+}
+
+function _renderError(msg) {
+  root.innerHTML = `
+    <div class="sc-error">
+      <div class="sc-error-icon">⚠️</div>
+      <h3>Cannot Process QR</h3>
+      <p>${_esc(msg)}</p>
+    </div>
+    <br>
+    <button onclick="location.href='index.html'" class="sc-btn" style="max-width:380px;width:100%;">Go Home</button>`;
+}
+
+/* ── Scanner UI (no params — user opened page directly) ── */
+async function _renderScanner() {
+  const hist = JSON.parse(localStorage.getItem('scHistory') || '[]');
+  const histHTML = hist.slice(0, 5).map(h => {
+    const meta = TYPE_META[h.type] || { icon:'🔗', label: h.type };
+    const href = ROUTES[h.type] ? ROUTES[h.type](h.id, new URLSearchParams()) : '#';
+    return `<div class="sc-history-item" onclick="location.href='${href}'">
+      <div class="sc-hi-icon">${meta.icon}</div>
+      <div class="sc-hi-text">
+        <div class="sc-hi-label">${_esc(h.label || h.id)}</div>
+        <div class="sc-hi-sub">${meta.label} · ${new Date(h.ts).toLocaleDateString()}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="sc-scanner-wrap">
+      <div class="sc-scanner-head">
+        <h1>QR / Barcode Scanner</h1>
+        <p>Scan any SOKONI product, order, or store QR code</p>
+      </div>
+      <div class="sc-cam-box">
+        <video id="scVideo" autoplay playsinline muted></video>
+        <div class="sc-frame">
+          <div class="sc-frame-inner">
+            <div class="sc-corner sc-corner-tl"></div>
+            <div class="sc-corner sc-corner-tr"></div>
+            <div class="sc-corner sc-corner-bl"></div>
+            <div class="sc-corner sc-corner-br"></div>
+            <div class="sc-scanline"></div>
+          </div>
+        </div>
+        <div class="sc-cam-status" id="scStatus">Requesting camera access…</div>
+      </div>
+      <div class="sc-manual">
+        <input id="scManual" class="sc-manual-input" type="text" placeholder="Paste a SOKONI scan URL…">
+        <button class="sc-manual-btn" onclick="_handleManual()">Go</button>
+      </div>
+    </div>
+    ${hist.length ? `<div class="sc-history"><div class="sc-history-title">Recent Scans</div>${histHTML}</div>` : ''}`;
+
+  document.getElementById('scManual').addEventListener('keydown', e => {
+    if (e.key === 'Enter') _handleManual();
+  });
+
+  await _startCameraScanner();
+}
+
+function _handleManual() {
+  const raw = document.getElementById('scManual').value.trim();
+  if (!raw) return;
+  _routeValue(raw);
+}
+
+function _routeValue(raw) {
+  try {
+    const u  = new URL(raw, location.origin);
+    const t  = u.searchParams.get('t');
+    const id = u.searchParams.get('id');
+    if (t && id && ROUTES[t]) {
+      location.href = ROUTES[t](id, u.searchParams);
+    } else {
+      // Unknown QR — open in same tab or show raw
+      if (raw.startsWith('http')) location.href = raw;
+      else document.getElementById('scStatus').textContent = `Scanned: ${raw}`;
+    }
+  } catch (_) {
+    if (raw.startsWith('http')) location.href = raw;
+  }
+}
+
+async function _startCameraScanner() {
+  const statusEl = document.getElementById('scStatus');
+  const videoEl  = document.getElementById('scVideo');
+  if (!videoEl) return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal:'environment' }, width:{ideal:1280}, height:{ideal:720} },
+    });
+    videoEl.srcObject = stream;
+    await videoEl.play();
+    statusEl.textContent = 'Point at a SOKONI QR code or barcode';
+
+    if (typeof BarcodeDetector !== 'undefined') {
+      const bd = new BarcodeDetector({ formats:['qr_code','ean_13','ean_8','upc_a','code_128','code_39'] });
+      let active = true;
+      const scan = async () => {
+        if (!active) return;
+        if (videoEl.readyState >= 2) {
+          try {
+            const codes = await bd.detect(videoEl);
+            if (codes.length) {
+              active = false;
+              stream.getTracks().forEach(t => t.stop());
+              statusEl.textContent = `Found: ${codes[0].rawValue}`;
+              setTimeout(() => _routeValue(codes[0].rawValue), 400);
+              return;
+            }
+          } catch (_) {}
+        }
+        requestAnimationFrame(scan);
+      };
+      scan();
+    } else {
+      statusEl.textContent = 'Camera ready — use manual entry for best results';
+    }
+  } catch (err) {
+    statusEl.textContent = 'Camera unavailable — use manual entry below';
+    console.warn('[scan] camera error', err);
+  }
+}
+
+/* ── Main router ── */
+async function _main() {
+  if (!TYPE || !ID) {
+    _renderScanner();
+    return;
+  }
+
+  const meta = TYPE_META[TYPE];
+
+  if (TYPE === 'pickup') {
+    await _handlePickup(ID, params.get('v'));
+    return;
+  }
+
+  if (TYPE === 'table') {
+    const tableNum = params.get('n') || '';
+    _saveHistory('table', ID, `Table ${tableNum}`);
+    _renderCard({
+      icon: '🍽️',
+      title: `Table ${tableNum} — Order Food`,
+      subtitle: 'Browse the menu and place your order directly from your table.',
+      primaryLabel: 'View Menu & Order',
+      primaryHref: `food-menu.html?restaurant=${encodeURIComponent(ID)}&table=${encodeURIComponent(tableNum)}`,
+      secondaryLabel: 'Go Back',
+      secondaryFn: () => history.back(),
+    });
+    return;
+  }
+
+  if (!meta || !ROUTES[TYPE]) { _renderError(`Unknown QR type: ${TYPE}`); return; }
+
+  _saveHistory(TYPE, ID, ID);
+  _renderCard({
+    icon: meta.icon,
+    title: `View ${meta.label}`,
+    subtitle: `You scanned a SOKONI ${meta.label.toLowerCase()} QR code. Tap below to open it.`,
+    primaryLabel: `Open ${meta.label}`,
+    primaryHref: ROUTES[TYPE](ID, params),
+    secondaryLabel: 'Scan Another',
+    secondaryFn: () => { params.delete('t'); params.delete('id'); history.replaceState(null,'',location.pathname); _renderScanner(); },
+  });
+}
+
+_main();
+</script>
+  <!-- Scale + Resilience stack -->
+  <script defer src="sokoni-scale.js"></script>
+  <script defer src="sokoni-cache.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

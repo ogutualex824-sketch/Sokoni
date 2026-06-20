@@ -1,0 +1,269 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Food Hub — Restaurants, Delivery & Groceries Nairobi</title>
+<meta name="description" content="Order food from top Nairobi restaurants, home chefs, bakeries and grocery stores. Fast delivery or pickup.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(8,8,8,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.fn-logo{height:32px;}
+.fn-right{display:flex;align-items:center;gap:10px;}
+.fn-cart-btn{position:relative;padding:10px 16px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:12px;color:#22c55e;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:6px;transition:all .2s;}
+.fn-cart-btn:hover{background:rgba(34,197,94,0.2);}
+.food-cart-badge{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#22c55e;color:#000;font-size:9px;font-weight:900;display:none;align-items:center;justify-content:center;}
+.fn-dash-btn{padding:8px 14px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:10px;color:#f59e0b;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;}
+.food-hero{background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(245,158,11,0.08),rgba(34,197,94,0.04));border-bottom:1px solid rgba(255,255,255,0.07);padding:36px 20px 30px;position:relative;overflow:hidden;}
+.food-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(34,197,94,0.08),transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(245,158,11,0.06),transparent 50%);pointer-events:none;}
+.food-hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:999px;font-size:11px;font-weight:700;color:#22c55e;margin-bottom:12px;}
+.food-hero h1{font-size:clamp(24px,5vw,38px);font-weight:900;line-height:1.2;margin-bottom:8px;}
+.food-hero h1 span{background:linear-gradient(135deg,#22c55e,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.food-hero p{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:20px;max-width:500px;}
+.food-search{display:flex;gap:8px;max-width:600px;}
+.food-search-input{flex:1;padding:13px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+.food-search-input::placeholder{color:rgba(255,255,255,0.3);}
+.food-search-input:focus{border-color:rgba(34,197,94,0.4);}
+.food-search-btn{padding:13px 20px;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;border-radius:12px;color:black;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.food-hero-stats{display:flex;gap:24px;flex-wrap:wrap;margin-top:20px;}
+.fhs-num{font-size:20px;font-weight:900;color:#22c55e;}
+.fhs-lbl{font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;}
+.food-cats{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.food-cats::-webkit-scrollbar{display:none;}
+.food-cat{display:flex;align-items:center;gap:6px;padding:9px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.65);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;}
+.food-cat:hover,.food-cat.active{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#22c55e;}
+.food-body{max-width:1200px;margin:0 auto;padding:0 16px 60px;}
+.food-sh{font-size:15px;font-weight:800;color:white;margin:24px 0 14px;display:flex;align-items:center;gap:8px;}
+.food-sh::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+.food-promo-banner{background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(245,158,11,0.08));border:1px solid rgba(34,197,94,0.2);border-radius:18px;padding:16px 20px;margin:16px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.fpb-icon{font-size:32px;flex-shrink:0;}
+.fpb-info{flex:1;}
+.fpb-info h3{font-size:14px;font-weight:900;color:#22c55e;margin-bottom:3px;}
+.fpb-info p{font-size:11px;color:rgba(255,255,255,0.45);}
+.fpb-code{padding:7px 14px;background:rgba(34,197,94,0.12);border:1px dashed rgba(34,197,94,0.4);border-radius:8px;color:#22c55e;font-weight:900;font-size:12px;letter-spacing:.05em;cursor:pointer;white-space:nowrap;font-family:monospace;}
+.food-featured-scroll{display:flex;gap:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;}
+.food-featured-scroll::-webkit-scrollbar{display:none;}
+.food-feat-card{flex-shrink:0;width:240px;border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:all .2s;}
+.food-feat-card:hover{transform:translateY(-3px);border-color:rgba(34,197,94,0.3);}
+.food-feat-cover{height:110px;display:flex;align-items:center;justify-content:center;font-size:52px;position:relative;}
+.food-feat-promo{position:absolute;top:8px;left:8px;background:rgba(34,197,94,0.9);color:black;font-size:9px;font-weight:900;padding:3px 8px;border-radius:6px;}
+.food-feat-body{padding:12px;}
+.food-feat-name{font-size:13px;font-weight:800;color:white;margin-bottom:4px;}
+.food-feat-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:rgba(255,255,255,0.4);}
+.food-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}
+.food-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;overflow:hidden;cursor:pointer;transition:all .2s;}
+.food-card:hover{transform:translateY(-3px);border-color:rgba(34,197,94,0.25);box-shadow:0 8px 32px rgba(34,197,94,0.08);}
+.food-card-cover{height:130px;display:flex;align-items:center;justify-content:center;font-size:60px;position:relative;}
+.food-card-badges{position:absolute;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap;}
+.food-badge{font-size:9px;font-weight:900;padding:3px 8px;border-radius:6px;}
+.food-badge.featured{background:rgba(245,158,11,0.9);color:black;}
+.food-badge.promo{background:rgba(34,197,94,0.9);color:black;}
+.food-card-open{position:absolute;top:10px;right:10px;font-size:9px;font-weight:900;padding:3px 8px;border-radius:6px;background:rgba(34,197,94,0.9);color:black;}
+.food-card-body{padding:14px 16px;}
+.food-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:5px;}
+.food-card-rating{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+.food-card-stars{color:#f59e0b;font-size:12px;}
+.food-card-rev{font-size:10px;color:rgba(255,255,255,0.35);}
+.food-card-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
+.food-meta-item{text-align:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:6px 4px;}
+.food-meta-val{font-size:11px;font-weight:700;color:white;}
+.food-meta-lbl{font-size:9px;color:rgba(255,255,255,0.3);font-weight:600;}
+.food-card-tags{display:flex;gap:4px;flex-wrap:wrap;}
+.food-tag{font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);color:#22c55e;font-weight:700;}
+.food-card-promo{margin-top:10px;font-size:10px;color:#f59e0b;font-weight:700;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);border-radius:6px;padding:4px 8px;display:inline-block;}
+.food-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,0.25);}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;transition:color .2s;}
+.bnav-item i{font-size:18px;}
+.bnav-item:hover,.bnav-item.active{color:#22c55e;}
+.food-sort{padding:8px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;outline:none;}
+@media(max-width:600px){.food-grid{grid-template-columns:1fr;}}
+</style>
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-food.js"></script>
+
+<nav class="fn">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="fn-logo" alt="SOKONI"></a>
+  <div class="fn-right">
+    <a href="food-dashboard.html" class="fn-dash-btn">🍴 Restaurant Login</a>
+    <a href="food-cart.html" class="fn-cart-btn">
+      🛒 Cart
+      <span class="food-cart-badge" id="cartBadge"></span>
+    </a>
+  </div>
+</nav>
+
+<div class="food-hero">
+  <div class="food-hero-badge">🍽️ Sokoni Food Hub — Nairobi</div>
+  <h1>Delicious Food,<br><span>Delivered Fast</span></h1>
+  <p>Restaurants, groceries, home chefs, bakeries & butcheries — all in one place. Delivered to your door.</p>
+  <div class="food-search">
+    <input class="food-search-input" type="text" id="foodSearch" placeholder="Search restaurants, dishes, groceries..." oninput="renderGrid()">
+    <button class="food-search-btn" type="button" onclick="renderGrid()">🔍 Search</button>
+  </div>
+  <div class="food-hero-stats">
+    <div><div class="fhs-num">16+</div><div class="fhs-lbl">Restaurants</div></div>
+    <div><div class="fhs-num">30 min</div><div class="fhs-lbl">Avg Delivery</div></div>
+    <div><div class="fhs-num">24/7</div><div class="fhs-lbl">Available</div></div>
+    <div><div class="fhs-num">M-Pesa</div><div class="fhs-lbl">Easy Pay</div></div>
+  </div>
+</div>
+
+<div class="food-cats" id="foodCats"></div>
+
+<div class="food-body">
+
+  <div class="food-promo-banner">
+    <div class="fpb-icon">🎉</div>
+    <div class="fpb-info">
+      <h3>50% OFF your first Sokoni Food order!</h3>
+      <p>Use code at checkout. Valid for new customers. Min order KES 500.</p>
+    </div>
+    <div class="fpb-code" onclick="copyPromo('WELCOME50')" title="Click to copy">WELCOME50 📋</div>
+  </div>
+
+  <div class="food-sh" id="featuredSection">⭐ Featured</div>
+  <div class="food-featured-scroll" id="featuredScroll"></div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:24px;margin-bottom:14px;">
+    <div class="food-sh" style="margin:0;" id="gridHeading">🍽️ All Vendors</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select class="food-sort" id="foodSort" onchange="renderGrid()">
+        <option value="default">Recommended</option>
+        <option value="rating">Highest Rated</option>
+        <option value="delivery_time">Fastest</option>
+        <option value="delivery_fee">Lowest Fee</option>
+      </select>
+      <span style="font-size:11px;color:rgba(255,255,255,0.35);" id="foodCount"></span>
+    </div>
+  </div>
+  <div class="food-grid" id="foodGrid"></div>
+
+  <!-- VENDOR REGISTRATION CTA -->
+  <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:20px;padding:22px;margin:24px 0;text-align:center;">
+    <div style="font-size:16px;font-weight:900;color:white;margin-bottom:6px;">🍽️ Are You a Restaurant, Chef or Food Vendor?</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:14px;">List your restaurant, home kitchen, bakery, café or food truck on SOKONI and reach hungry customers near you.</div>
+    <button onclick="HubRegister.open({hub:'food',category:'restaurant'})" style="padding:12px 28px;background:#f97316;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🚀 List My Food Business</button>
+    <div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.25);">Restaurants · Home chefs · Bakeries · Cafés · Caterers · Food trucks</div>
+  </div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><i class="fas fa-store"></i><span>Shop</span></a>
+  <a href="food.html" class="bnav-item active"><i class="fas fa-utensils"></i><span>Food</span></a>
+  <a href="food-cart.html" class="bnav-item"><i class="fas fa-shopping-cart"></i><span>Cart</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script>
+let _activeCat='all';
+function renderCats(){
+  const el=document.getElementById('foodCats');if(!el)return;
+  el.innerHTML=SokoniFood.CATEGORIES.map(c=>`<button type="button" class="food-cat ${c.id===_activeCat?'active':''}" onclick="setCat('${c.id}')"><span style="font-size:16px;">${c.emoji}</span>${c.label}</button>`).join('');
+}
+function setCat(id){
+  _activeCat=id; renderCats(); renderGrid();
+  const h=document.getElementById('gridHeading');
+  const cat=SokoniFood.CATEGORIES.find(c=>c.id===id);
+  if(h) h.textContent=(cat?.emoji||'🍽️')+' '+(id==='all'?'All Vendors':cat?.label||'Vendors');
+  const showFeat=id==='all';
+  const fs=document.getElementById('featuredSection'); if(fs)fs.style.display=showFeat?'':'none';
+  const fsc=document.getElementById('featuredScroll'); if(fsc)fsc.style.display=showFeat?'':'none';
+}
+function renderFeatured(){
+  const el=document.getElementById('featuredScroll');if(!el)return;
+  const list=SokoniFood.RESTAURANTS.filter(r=>r.featured&&r.open);
+  el.innerHTML=list.map(r=>`
+  <div class="food-feat-card" onclick="window.location.href='food-menu.html?id=${r.id}'">
+    <div class="food-feat-cover" style="background:${r.coverGrad};">${r.emoji}${r.promo?'<div class="food-feat-promo">PROMO</div>':''}</div>
+    <div class="food-feat-body">
+      <div class="food-feat-name">${r.name}</div>
+      <div class="food-feat-meta"><span style="color:#f59e0b;">★ ${r.rating}</span><span>🕐 ${r.deliveryTime}</span><span style="color:#22c55e;">KES ${r.deliveryFee} delivery</span></div>
+    </div>
+  </div>`).join('');
+}
+function renderGrid(){
+  const el=document.getElementById('foodGrid');if(!el)return;
+  const q=(document.getElementById('foodSearch')?.value||'').toLowerCase();
+  const sort=document.getElementById('foodSort')?.value||'default';
+  let list=SokoniFood.RESTAURANTS.slice();
+  if(_activeCat!=='all') list=list.filter(r=>r.cat===_activeCat);
+  if(q) list=list.filter(r=>r.name.toLowerCase().includes(q)||r.tags.some(t=>t.toLowerCase().includes(q))||r.address.toLowerCase().includes(q));
+  if(sort==='rating') list.sort((a,b)=>b.rating-a.rating);
+  else if(sort==='delivery_fee') list.sort((a,b)=>a.deliveryFee-b.deliveryFee);
+  else if(sort==='delivery_time') list.sort((a,b)=>parseInt(a.deliveryTime)-parseInt(b.deliveryTime));
+  const countEl=document.getElementById('foodCount'); if(countEl) countEl.textContent=`${list.length} vendor${list.length!==1?'s':''}`;
+  if(!list.length){
+    el.innerHTML=`<div class="food-empty" style="grid-column:1/-1;"><div style="font-size:52px;margin-bottom:12px;">🔍</div><p>No restaurants found.<br>Try a different search or category.</p></div>`;
+    return;
+  }
+  el.innerHTML=list.map(r=>`
+  <div class="food-card" onclick="window.location.href='food-menu.html?id=${r.id}'">
+    <div class="food-card-cover" style="background:${r.coverGrad};">
+      ${r.emoji}
+      <div class="food-card-badges">${r.featured?'<span class="food-badge featured">⭐ Featured</span>':''}${r.promo?'<span class="food-badge promo">🏷️ Promo</span>':''}</div>
+      <div class="food-card-open" style="${r.open?'':'background:rgba(80,80,80,0.9);color:rgba(255,255,255,0.7);'}">${r.open?'🟢 Open':'🔴 Closed'}</div>
+    </div>
+    <div class="food-card-body">
+      <div class="food-card-name">${r.name}</div>
+      <div class="food-card-rating">
+        <span class="food-card-stars">${'★'.repeat(Math.floor(r.rating))}${'☆'.repeat(5-Math.floor(r.rating))}</span>
+        <span style="font-size:12px;font-weight:700;">${r.rating}</span>
+        <span class="food-card-rev">(${r.reviews.toLocaleString()})</span>
+        <span style="font-size:10px;color:rgba(255,255,255,0.35);margin-left:auto;">${r.distance}</span>
+      </div>
+      <div class="food-card-meta">
+        <div class="food-meta-item"><div class="food-meta-val">🕐 ${r.deliveryTime.split('-')[0]}m</div><div class="food-meta-lbl">Delivery</div></div>
+        <div class="food-meta-item"><div class="food-meta-val" style="color:#22c55e;">KES ${r.deliveryFee}</div><div class="food-meta-lbl">Fee</div></div>
+        <div class="food-meta-item"><div class="food-meta-val">KES ${r.minOrder}</div><div class="food-meta-lbl">Min</div></div>
+      </div>
+      <div class="food-card-tags">${r.tags.slice(0,4).map(t=>`<span class="food-tag">${t}</span>`).join('')}</div>
+      ${r.promo?`<div class="food-card-promo">🏷️ ${r.promo}</div>`:''}
+    </div>
+  </div>`).join('');
+}
+function copyPromo(code){
+  navigator.clipboard?.writeText(code).catch(()=>{});
+  const btn=document.querySelector('.fpb-code');
+  if(btn){const orig=btn.textContent;btn.textContent='✅ Copied!';setTimeout(()=>btn.textContent=orig,1800);}
+}
+renderCats(); renderFeatured(); renderGrid();
+const _urlCat=new URLSearchParams(window.location.search).get('cat');
+if(_urlCat&&SokoniFood.CATEGORIES.find(c=>c.id===_urlCat)) setCat(_urlCat);
+</script>
+<script src="shared-header.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'food', category:'restaurant'})" style="padding:12px 28px;background:#f97316;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

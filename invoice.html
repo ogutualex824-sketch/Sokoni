@@ -1,0 +1,526 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI â€” Invoice</title>
+  <meta name="description" content="View and print your SOKONI order invoice.">
+  <meta property="og:title" content="SOKONI â€” Invoice">
+  <meta property="og:description" content="View, download or print your SOKONI order invoice.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    @media print {
+      .no-print { display:none !important; }
+      body { background:#fff !important; color:#000 !important; }
+      .invoice-shell { box-shadow:none !important; border:1px solid #eee !important; }
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:Arial,sans-serif; background:#0b0b0b; color:white; padding:20px; min-height:100vh; }
+
+    .inv-topbar{
+      display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+      padding:14px 20px;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:16px;
+      margin-bottom:20px;
+    }
+
+    .inv-topbar-title{ font-size:17px; font-weight:800; color:white; }
+
+    .inv-action-btn{
+      display:flex; align-items:center; gap:8px;
+      padding:10px 20px;
+      border:none; border-radius:10px;
+      font-weight:700; font-size:13px;
+      cursor:pointer; transition:0.2s; font-family:inherit;
+    }
+
+    .btn-print{ background:linear-gradient(135deg,#71ff00,#4fc800); color:black; }
+    .btn-download{ background:rgba(0,170,255,0.12); border:1px solid rgba(0,170,255,0.3); color:#00aaff; }
+    .btn-back{ background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:white; text-decoration:none; }
+
+    /* Invoice Shell */
+    .invoice-shell{
+      max-width:800px;
+      margin:0 auto;
+      background:#fff;
+      color:#111;
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .inv-header{
+      background:linear-gradient(135deg,#0a1a00,#111);
+      padding:36px 40px;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      flex-wrap:wrap;
+      gap:20px;
+    }
+
+    .inv-logo{ font-size:28px; font-weight:900; color:#71ff00; letter-spacing:2px; }
+    .inv-logo-sub{ font-size:11px; color:rgba(255,255,255,0.4); margin-top:2px; }
+
+    .inv-invoice-label{ text-align:right; }
+    .inv-invoice-label h1{ font-size:22px; font-weight:900; color:white; }
+    .inv-invoice-label p{ font-size:12px; color:rgba(255,255,255,0.5); margin-top:2px; }
+    .inv-invoice-label .inv-id{ font-size:14px; color:#71ff00; font-weight:800; margin-top:4px; }
+
+    /* Status ribbon */
+    .inv-status-ribbon{
+      padding:10px 40px;
+      font-size:12px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:1px;
+      color:white;
+    }
+
+    .ribbon-paid{ background:#22a000; }
+    .ribbon-processing{ background:#e07000; }
+    .ribbon-placed{ background:#0066cc; }
+
+    /* Body */
+    .inv-body{ padding:32px 40px; }
+
+    .inv-parties{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:30px;
+      margin-bottom:28px;
+      padding-bottom:24px;
+      border-bottom:2px solid #f0f0f0;
+    }
+
+    .inv-party-label{
+      font-size:10px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:1px;
+      color:#999;
+      margin-bottom:8px;
+    }
+
+    .inv-party-name{ font-size:15px; font-weight:800; color:#111; margin-bottom:4px; }
+    .inv-party-detail{ font-size:13px; color:#555; line-height:1.6; }
+
+    /* Items table */
+    .inv-table{ width:100%; border-collapse:collapse; margin-bottom:24px; }
+    .inv-table th{
+      padding:10px 14px;
+      text-align:left;
+      font-size:11px;
+      font-weight:800;
+      color:#999;
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+      border-bottom:2px solid #f0f0f0;
+      background:#fafafa;
+    }
+    .inv-table th:last-child{ text-align:right; }
+    .inv-table td{ padding:12px 14px; font-size:13px; color:#333; border-bottom:1px solid #f5f5f5; }
+    .inv-table td:last-child{ text-align:right; font-weight:700; }
+    .inv-table tr:last-child td{ border-bottom:none; }
+    .inv-item-img{ width:36px; height:36px; border-radius:8px; object-fit:cover; margin-right:10px; vertical-align:middle; }
+    .inv-item-name{ font-weight:700; color:#111; }
+
+    /* Totals */
+    .inv-totals{
+      display:flex;
+      justify-content:flex-end;
+    }
+
+    .inv-totals-box{
+      width:280px;
+      background:#f9f9f9;
+      border-radius:12px;
+      padding:16px 20px;
+    }
+
+    .inv-total-row{
+      display:flex;
+      justify-content:space-between;
+      font-size:13px;
+      padding:6px 0;
+      border-bottom:1px solid #eee;
+    }
+
+    .inv-total-row:last-child{ border-bottom:none; }
+    .inv-total-row.grand{ font-size:16px; font-weight:900; color:#111; padding-top:10px; margin-top:4px; border-top:2px solid #ddd; border-bottom:none; }
+    .inv-total-label{ color:#666; }
+    .inv-total-val{ font-weight:700; }
+    .inv-grand-val{ color:#22a000; font-size:18px; font-weight:900; }
+
+    /* Footer */
+    .inv-footer{
+      padding:20px 40px;
+      background:#fafafa;
+      border-top:1px solid #eee;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:12px;
+    }
+
+    .inv-footer-note{ font-size:11px; color:#999; line-height:1.5; }
+    .inv-footer-brand{ font-size:13px; font-weight:800; color:#22a000; }
+
+    /* QR placeholder */
+    .inv-qr{
+      width:60px;
+      height:60px;
+      background:#f0f0f0;
+      border-radius:8px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:24px;
+    }
+
+    /* Order select */
+    .order-picker{
+      max-width:800px;
+      margin:0 auto 20px;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:16px;
+      padding:24px;
+    }
+
+    .order-picker h3{ font-size:15px; font-weight:800; color:white; margin-bottom:14px; }
+
+    .order-picker-list{ display:flex; flex-direction:column; gap:8px; }
+
+    .order-picker-item{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:12px 16px;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:12px;
+      cursor:pointer;
+      transition:0.2s;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    .order-picker-item:hover{ border-color:rgba(113,255,0,0.3); background:rgba(113,255,0,0.05); }
+
+    .opi-id{ font-weight:800; color:white; }
+    .opi-date{ color:rgba(255,255,255,0.4); font-size:12px; }
+    .opi-total{ color:#71ff00; font-weight:800; }
+    .opi-btn{ padding:7px 14px; background:linear-gradient(135deg,#71ff00,#4fc800); color:black; font-weight:800; font-size:12px; border:none; border-radius:8px; cursor:pointer; font-family:inherit; }
+
+    @media(max-width:600px){
+      .inv-body{ padding:20px; }
+      .inv-header{ padding:24px 20px; }
+      .inv-parties{ grid-template-columns:1fr; }
+      .inv-totals-box{ width:100%; }
+      .invoice-shell{ overflow-x:auto; }
+    }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<div class="no-print">
+  <div class="inv-topbar">
+    <div class="inv-topbar-title">ðŸ§¾ Invoice Generator</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <a href="track.html" class="inv-action-btn btn-back">â† Orders</a>
+      <a href="seller.html#tax-section" class="inv-action-btn btn-back" style="text-decoration:none;">ðŸ§¾ Tax Dashboard</a>
+      <button type="button" class="inv-action-btn btn-download" onclick="downloadInvoice()">â¬‡ï¸ Download Invoice</button>
+      <button type="button" class="inv-action-btn btn-print" onclick="window.print()">ðŸ–¨ï¸ Print / Save PDF (KRA)</button>
+    </div>
+  </div>
+
+  <!-- Order Picker -->
+  <div class="order-picker" id="orderPicker">
+    <h3>ðŸ§¾ Select an order to generate invoice</h3>
+    <div class="order-picker-list" id="orderPickerList"></div>
+  </div>
+</div>
+
+<!-- Invoice -->
+<div class="invoice-shell" id="invoiceEl" style="display:none;">
+
+  <div class="inv-header">
+    <div>
+      <div class="inv-logo">SOKONI</div>
+      <div class="inv-logo-sub">Kenya's Global Marketplace</div>
+      <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.4);line-height:1.6;">
+        info@sokoni.co.ke<br>
+        +254 705 726 803<br>
+        Nairobi, Kenya
+      </div>
+    </div>
+    <div class="inv-invoice-label">
+      <h1>INVOICE</h1>
+      <p>Issue Date: <span id="invDate"></span></p>
+      <div class="inv-id" id="invId"></div>
+    </div>
+  </div>
+
+  <div class="inv-status-ribbon" id="invRibbon">PAID</div>
+
+  <div class="inv-body">
+
+    <div class="inv-parties">
+      <div>
+        <div class="inv-party-label">Bill To</div>
+        <div class="inv-party-name" id="invBuyerName">Customer</div>
+        <div class="inv-party-detail" id="invBuyerDetail"></div>
+      </div>
+      <div>
+        <div class="inv-party-label">Sold By</div>
+        <div class="inv-party-name">Sokoni Marketplace</div>
+        <div class="inv-party-detail">
+          <span id="invSellerName">Verified Seller</span><br>
+          info@sokoni.co.ke Â· +254 705 726 803<br>
+          Nairobi, Kenya<br>
+          KRA PIN: <span id="invSellerKraPin" style="font-weight:700;color:#22a000;">â€”</span><br>
+          <span style="font-size:10px;background:#e8ffe8;color:#2e7d32;padding:1px 6px;border-radius:4px;font-weight:700;">KRA TAX INVOICE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Items -->
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item</th>
+          <th>Category</th>
+          <th>Unit Price</th>
+          <th>Qty</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody id="invItemsBody"></tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="inv-totals">
+      <div class="inv-totals-box" id="invTotalsBox"></div>
+    </div>
+
+    <!-- Payment -->
+    <div style="margin-top:20px;padding:14px;background:#f9f9f9;border-radius:10px;font-size:12px;color:#666;">
+      <strong style="color:#111;">Payment Method:</strong> <span id="invPayMethod">M-PESA</span> &nbsp;Â·&nbsp;
+      <strong style="color:#111;">Status:</strong> <span style="color:#22a000;font-weight:800;">PAID</span> &nbsp;Â·&nbsp;
+      <strong style="color:#111;">Reference:</strong> <span id="invRef"></span>
+    </div>
+  </div>
+
+  <div class="inv-footer">
+    <div>
+      <div class="inv-footer-brand">SOKONI</div>
+      <div class="inv-footer-note">
+        Thank you for shopping with us!<br>
+        For returns or disputes: info@sokoni.co.ke | dispute.html
+      </div>
+    </div>
+    <div class="inv-qr">ðŸ§¾</div>
+  </div>
+
+</div>
+
+<script>
+const orders = JSON.parse(localStorage.getItem("sokoniOrders")||"[]");
+const listEl = document.getElementById("orderPickerList");
+
+if(!orders.length){
+  listEl.innerHTML = `<div style="color:rgba(255,255,255,0.35);font-size:13px;">No orders found. Place an order first.</div>`;
+} else {
+  listEl.innerHTML = orders.map(o=>`
+    <div class="order-picker-item">
+      <div>
+        <div class="opi-id">${o.id}</div>
+        <div class="opi-date">${o.date}</div>
+      </div>
+      <div class="opi-total">KES ${Number(o.total).toLocaleString()}</div>
+      <button type="button" class="opi-btn" onclick="generateInvoice('${o.id}')">Generate â†’</button>
+    </div>
+  `).join("");
+}
+
+/* Check URL param */
+const urlId = new URLSearchParams(window.location.search).get("order");
+if(urlId) generateInvoice(urlId);
+
+function generateInvoice(orderId){
+  const o = orders.find(x => x.id === orderId);
+  if(!o) return;
+
+  document.getElementById("orderPicker").style.display = "none";
+  document.getElementById("invoiceEl").style.display = "block";
+
+  document.getElementById("invDate").textContent = o.date || new Date().toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
+  document.getElementById("invId").textContent = "Invoice #" + o.id;
+  document.getElementById("invRef").textContent = o.id;
+  document.getElementById("invBuyerName").textContent = o.name || "Valued Customer";
+  document.getElementById("invBuyerDetail").textContent = (o.address||"") + (o.phone ? "\n" + o.phone : "");
+  document.getElementById("invSellerName").textContent = (o.items&&o.items[0]&&o.items[0].sellerName) || "Sokoni Seller";
+  document.getElementById("invPayMethod").textContent = (o.method||"M-PESA").toUpperCase();
+  const kraPin = localStorage.getItem("kraPinSaved") || "â€”";
+  const kraEl  = document.getElementById("invSellerKraPin");
+  if(kraEl) kraEl.textContent = kraPin;
+
+  /* Status ribbon */
+  const ribbon = document.getElementById("invRibbon");
+  const statusMap = { processing:"PROCESSING â€” PAYMENT RECEIVED", shipped:"SHIPPED", out_for_delivery:"OUT FOR DELIVERY", delivered:"DELIVERED & PAID", placed:"ORDER PLACED" };
+  const ribbonClass= { processing:"ribbon-processing", shipped:"ribbon-paid", out_for_delivery:"ribbon-paid", delivered:"ribbon-paid", placed:"ribbon-placed" };
+  ribbon.textContent = statusMap[o.status] || "PAID";
+  ribbon.className = "inv-status-ribbon " + (ribbonClass[o.status]||"ribbon-paid");
+
+  /* Items */
+  const items = o.items || [];
+  document.getElementById("invItemsBody").innerHTML = items.length ? items.map((p,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>
+        <img loading="lazy" src="${p.image||'assets/default-product.png'}" class="inv-item-img" onerror="this.style.display='none'">
+        <span class="inv-item-name">${p.name}</span>
+      </td>
+      <td style="color:#888;">${p.category||"â€”"}</td>
+      <td>KES ${Number(p.price).toLocaleString()}</td>
+      <td>1</td>
+      <td>KES ${Number(p.price).toLocaleString()}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="6" style="color:#999;text-align:center;padding:20px;">No items</td></tr>`;
+
+  /* â”€â”€ KRA-Compliant VAT Totals â”€â”€ */
+  const grossTotal   = Number(o.total) || items.reduce((s,p)=>s+Number(p.price),0);
+  const vatRate      = 0.16;
+  const vatExcl      = Math.round(grossTotal / (1 + vatRate));
+  const vatAmount    = grossTotal - vatExcl;
+  const commission   = Math.round(grossTotal * 0.12);
+  const sellerPayout = grossTotal - commission;
+  document.getElementById("invTotalsBox").innerHTML = `
+    <div class="inv-total-row"><span class="inv-total-label">Subtotal (VAT Excl.)</span><span class="inv-total-val">KES ${vatExcl.toLocaleString()}</span></div>
+    <div class="inv-total-row"><span class="inv-total-label" style="color:#e07000;">VAT @ 16%</span><span class="inv-total-val" style="color:#e07000;">KES ${vatAmount.toLocaleString()}</span></div>
+    <div class="inv-total-row"><span class="inv-total-label">Delivery</span><span class="inv-total-val">FREE</span></div>
+    <div class="inv-total-row"><span class="inv-total-label">Sokoni Platform Fee (12%)</span><span class="inv-total-val">KES ${commission.toLocaleString()}</span></div>
+    <div class="inv-total-row grand"><span class="inv-total-label">TOTAL (VAT Incl.)</span><span class="inv-grand-val">KES ${grossTotal.toLocaleString()}</span></div>
+    <div style="margin-top:10px;padding:10px 14px;background:#f0fff0;border:1px solid #c8e6c9;border-radius:8px;font-size:11px;color:#2e7d32;line-height:1.7;">
+      <strong>KRA Tax Invoice</strong><br>
+      VAT Reg. No.: <strong>${kraPin}</strong><br>
+      Seller KRA PIN: <strong>${kraPin}</strong><br>
+      ETR Serial: <strong>SKN-ETR-${o.id}</strong><br>
+      Taxable Amount: KES ${vatExcl.toLocaleString()} | VAT Amount: KES ${vatAmount.toLocaleString()}
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:#888;">Seller net payout: KES ${sellerPayout.toLocaleString()} (after 12% platform fee)</div>
+  `;
+
+  /* Inject KRA fields into header area if not already there */
+  const invLabel = document.querySelector(".inv-invoice-label");
+  if(invLabel && !document.getElementById("invKraTag")){
+    const tag = document.createElement("div");
+    tag.id = "invKraTag";
+    tag.style.cssText = "margin-top:8px;font-size:10px;color:rgba(113,255,0,0.8);font-weight:700;letter-spacing:1px;text-transform:uppercase;";
+    tag.textContent = "KRA TAX INVOICE";
+    invLabel.appendChild(tag);
+  }
+}
+
+function downloadInvoice(){
+  const shell = document.getElementById("invoiceEl");
+  if(!shell || shell.style.display === "none"){
+    (window._skToast||alert)("Generate an invoice first by selecting an order.");
+    return;
+  }
+  const content = `<!DOCTYPE html><html data-require-auth="true"><head><meta charset="UTF-8"><title>SOKONI Tax Invoice</title>
+  <style>
+    @media print { .no-print{display:none!important;} body{background:#fff!important;} .invoice-shell{box-shadow:none!important;} }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:Arial,sans-serif;background:#fff;padding:20px;}
+    ${Array.from(document.styleSheets).flatMap(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText);}catch(e){return [];}}).join("\n")}
+  </style>
+  <script src="shared-header.js" defer></script>
+</head><body>
+${shell.outerHTML}<script>window.onload=()=>{setTimeout(()=>window.print(),400);}<\/script><nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">ðŸ›ï¸</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">ðŸ› ï¸</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">ðŸ”</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">ðŸ‘¤</span><span>Profile</span></a>
+</nav>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+<\/script>
+<\/body><\/html>`;
+
+  const blob = new Blob([content],{type:"text/html"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = "sokoni-tax-invoice.html";
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function printInvoice(){
+  const shell = document.getElementById("invoiceEl");
+  if(!shell || shell.style.display === "none"){ (window._skToast||alert)("Generate an invoice first."); return; }
+  window.print();
+}
+
+window.generateInvoice = generateInvoice;
+window.downloadInvoice = downloadInvoice;
+window.printInvoice    = printInvoice;
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

@@ -1,0 +1,1110 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <script src="sokoni-inbox.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Seller Profile — SOKONI</title>
+  <meta name="description" content="View seller profile, products, and ratings on SOKONI marketplace.">
+  <meta property="og:title" content="Seller Profile — SOKONI">
+  <meta property="og:description" content="Browse products and reviews from verified sellers on SOKONI Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a0a;
+      color: white;
+      min-height: 100vh;
+    }
+
+    /* ── NAV ── */
+    .sp-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: rgba(10,10,10,0.95);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .sp-nav-logo { height: 36px; }
+    .sp-nav-back {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      transition: all .2s;
+    }
+    .sp-nav-back:hover { color: white; border-color: rgba(255,255,255,0.25); }
+
+    /* ── HERO ── */
+    .sp-hero {
+      background: linear-gradient(135deg, rgba(113,255,0,0.07), rgba(0,170,255,0.05));
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 40px 24px 32px;
+    }
+    .sp-hero-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      flex-wrap: wrap;
+    }
+    .sp-avatar {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(113,255,0,0.2), rgba(0,170,255,0.2));
+      border: 3px solid rgba(113,255,0,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 900;
+      color: #71ff00;
+      flex-shrink: 0;
+    }
+    .sp-hero-info { flex: 1; min-width: 0; }
+    .sp-name {
+      font-size: 26px;
+      font-weight: 900;
+      color: white;
+      margin-bottom: 6px;
+    }
+    .sp-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .sp-badge-verified {
+      background: rgba(113,255,0,0.1);
+      border: 1px solid rgba(113,255,0,0.3);
+      color: #71ff00;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .sp-badge-location {
+      background: rgba(0,170,255,0.08);
+      border: 1px solid rgba(0,170,255,0.2);
+      color: #00aaff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    /* Trust Score */
+    .sp-trust-score {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(0,212,255,0.07); border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 12px; padding: 6px 12px; margin-top: 8px;
+    }
+    .sp-trust-ring {
+      position: relative; width: 38px; height: 38px; flex-shrink: 0;
+    }
+    .sp-trust-ring svg { transform: rotate(-90deg); }
+    .sp-trust-ring-bg { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 3; }
+    .sp-trust-ring-fill { fill: none; stroke-width: 3; stroke-linecap: round;
+      transition: stroke-dashoffset 0.8s ease; }
+    .sp-trust-num {
+      position: absolute; inset: 0; display: flex; align-items: center;
+      justify-content: center; font-size: 10px; font-weight: 900; color: #00d4ff;
+    }
+    .sp-trust-info { display: flex; flex-direction: column; gap: 1px; }
+    .sp-trust-label { font-size: 11px; font-weight: 800; color: white; }
+    .sp-trust-tier { font-size: 10px; font-weight: 700; }
+
+    .sp-rating-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .sp-stars { color: #ffc107; font-size: 16px; letter-spacing: 1px; }
+    .sp-rating-text { color: rgba(255,255,255,0.5); font-size: 13px; }
+
+    /* ── STATS STRIP ── */
+    .sp-stats {
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sp-stats-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+    }
+    .sp-stat {
+      padding: 22px 20px;
+      border-right: 1px solid rgba(255,255,255,0.06);
+      text-align: center;
+    }
+    .sp-stat:last-child { border-right: none; }
+    .sp-stat-val {
+      font-size: 22px;
+      font-weight: 900;
+      color: #71ff00;
+      margin-bottom: 4px;
+    }
+    .sp-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── TABS ── */
+    .sp-tabs {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      gap: 4px;
+      padding: 20px 24px 0;
+    }
+    .sp-tab {
+      padding: 10px 22px;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 10px 10px 0 0;
+      border: none;
+      cursor: pointer;
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-bottom: none;
+      font-family: inherit;
+      transition: all .2s;
+    }
+    .sp-tab.active {
+      background: rgba(113,255,0,0.08);
+      color: #71ff00;
+      border-color: rgba(113,255,0,0.2);
+    }
+
+    /* ── CONTENT ── */
+    .sp-content {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .sp-panel { display: none; }
+    .sp-panel.active { display: block; }
+
+    /* ── PRODUCTS GRID ── */
+    .sp-products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+    }
+    .sp-product-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: transform .2s, border-color .2s;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .sp-product-card:hover { transform: translateY(-3px); border-color: rgba(113,255,0,0.25); }
+    .sp-product-card img {
+      width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
+      background: rgba(255,255,255,0.05);
+    }
+    .sp-product-info { padding: 12px; }
+    .sp-product-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sp-product-price { font-size: 14px; font-weight: 900; color: #71ff00; }
+
+    /* ── PERFORMANCE CARDS ── */
+    .sp-perf-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .sp-perf-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+    }
+    .sp-perf-icon { font-size: 28px; margin-bottom: 10px; }
+    .sp-perf-val { font-size: 22px; font-weight: 900; margin-bottom: 4px; }
+    .sp-perf-label { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 600; }
+
+    /* ── SALES HISTORY TABLE ── */
+    .sp-table-wrap { overflow-x: auto; margin-bottom: 28px; }
+    .sp-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .sp-table th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: rgba(255,255,255,0.35);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .sp-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.75);
+    }
+    .sp-table tr:last-child td { border-bottom: none; }
+
+    /* ── FUNNEL BAR ── */
+    .sp-funnel-bar-wrap { margin-bottom: 8px; }
+    .sp-funnel-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .sp-funnel-label { width: 110px; color: rgba(255,255,255,0.5); flex-shrink: 0; }
+    .sp-funnel-track { flex: 1; height: 7px; background: rgba(255,255,255,0.07); border-radius: 999px; overflow: hidden; }
+    .sp-funnel-fill { height: 100%; border-radius: 999px; transition: width .8s ease; }
+    .sp-funnel-count { width: 28px; text-align: right; font-weight: 800; color: white; }
+
+    /* ── RATINGS ── */
+    .sp-rating-overview {
+      display: flex;
+      gap: 28px;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .sp-rating-big { font-size: 52px; font-weight: 900; color: #ffc107; }
+    .sp-rating-stars-big { color: #ffc107; font-size: 20px; letter-spacing: 2px; margin-bottom: 4px; }
+    .sp-rating-count { color: rgba(255,255,255,0.35); font-size: 12px; }
+    .sp-dist-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-size: 12px;
+    }
+    .sp-dist-star { color: #ffc107; font-weight: 700; width: 28px; }
+    .sp-dist-track { flex: 1; height: 7px; background: rgba(255,255,255,0.07); border-radius: 999px; overflow: hidden; }
+    .sp-dist-fill { height: 100%; background: #ffc107; border-radius: 999px; }
+    .sp-dist-count { width: 20px; color: rgba(255,255,255,0.4); }
+
+    .sp-review-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .sp-review-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .sp-reviewer-row { display: flex; align-items: center; gap: 8px; }
+    .sp-reviewer-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(113,255,0,0.12);
+      border: 1px solid rgba(113,255,0,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 900; color: #71ff00; flex-shrink: 0;
+    }
+    .sp-reviewer-name { font-weight: 700; color: white; font-size: 13px; }
+    .sp-reviewer-meta { font-size: 10px; color: rgba(255,255,255,0.35); }
+    .sp-review-stars { color: #ffc107; font-size: 14px; }
+    .sp-review-comment { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.5; font-style: italic; }
+
+    /* ── STATUS PILL ── */
+    .sp-pill {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .sp-pill-green { background: rgba(113,255,0,0.12); color: #71ff00; }
+    .sp-pill-blue  { background: rgba(0,170,255,0.12); color: #00aaff; }
+    .sp-pill-orange{ background: rgba(255,152,0,0.12);  color: #ff9800; }
+    .sp-pill-purple{ background: rgba(160,128,255,0.12); color: #a080ff; }
+
+    /* ── EMPTY ── */
+    .sp-empty { color: rgba(255,255,255,0.25); font-size: 13px; padding: 24px 0; text-align: center; }
+
+    /* ── SECTION HEADING ── */
+    .sp-section-h {
+      font-size: 14px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 14px;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media(max-width: 600px){
+      .sp-stats-inner { grid-template-columns: repeat(3, 1fr); }
+      .sp-hero-inner  { gap: 16px; }
+      .sp-avatar      { width: 68px; height: 68px; font-size: 24px; }
+      .sp-name        { font-size: 20px; }
+    }
+
+    /* ── FOLLOW BUTTON ── */
+    .sp-follow-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .25s;}
+    .sp-follow-btn.not-following{background:#71ff00;color:black;box-shadow:0 4px 18px rgba(113,255,0,0.3);}
+    .sp-follow-btn.not-following:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(113,255,0,0.4);}
+    .sp-follow-btn.following{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;}
+
+    /* ── ACHIEVEMENT BADGE ── */
+    .sp-ach-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:800;border:1px solid;}
+
+    /* ── ACHIEVEMENT PANEL ── */
+    .ach-tier-hero{border-radius:22px;padding:32px 28px;text-align:center;margin-bottom:24px;border:1px solid;}
+    .ach-score-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:28px;}
+    .ach-score-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 14px;text-align:center;}
+    .ach-progress-bar{background:rgba(255,255,255,0.07);border-radius:999px;height:8px;overflow:hidden;margin:10px 0 6px;}
+    .ach-progress-fill{height:100%;border-radius:999px;transition:width 1s ease;}
+    .ach-milestones{display:flex;flex-direction:column;gap:10px;}
+    .ach-ms-item{display:flex;align-items:center;gap:14px;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 18px;transition:.2s;}
+    .ach-ms-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+    .ach-ms-item.locked{opacity:0.38;}
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="sp-nav">
+  <a href="index.html">
+    <img loading="lazy" src="assets/Sokonilogo2.png" alt="Sokoni" class="sp-nav-logo">
+  </a>
+  <a href="javascript:history.back()" class="sp-nav-back">
+    ← Back
+  </a>
+</nav>
+
+<!-- HERO -->
+<div class="sp-hero">
+  <div class="sp-hero-inner">
+    <div class="sp-avatar" id="spAvatar">?</div>
+    <div class="sp-hero-info">
+      <div class="sp-name" id="spName">Loading...</div>
+      <div class="sp-badges" id="spBadges"></div>
+      <div class="sp-rating-row" id="spRatingRow"></div>
+      <div id="spTrustScore" class="sp-trust-score" style="display:none;">
+        <div class="sp-trust-ring">
+          <svg width="38" height="38" viewBox="0 0 38 38">
+            <circle class="sp-trust-ring-bg" cx="19" cy="19" r="16"/>
+            <circle class="sp-trust-ring-fill" id="spTrustArc" cx="19" cy="19" r="16"
+              stroke="#00d4ff" stroke-dasharray="100.5" stroke-dashoffset="100.5"/>
+          </svg>
+          <div class="sp-trust-num" id="spTrustNum">0</div>
+        </div>
+        <div class="sp-trust-info">
+          <div class="sp-trust-label">Trust Score</div>
+          <div class="sp-trust-tier" id="spTrustTier"></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap;">
+        <button type="button" id="spFollowBtn" onclick="toggleFollow()" class="sp-follow-btn not-following">
+          <i class="fas fa-user-plus" id="spFollowIcon"></i>
+          <span id="spFollowText">Follow Store</span>
+        </button>
+        <span id="spFollowerCount" style="font-size:12px;color:rgba(255,255,255,0.45);">— followers</span>
+        <button type="button" onclick="(function(){var sid=new URLSearchParams(window.location.search).get('id')||'store';var sname=document.getElementById('spName')&&document.getElementById('spName').textContent||'Store';var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial)SokoniSocial.openShareModal({id:sid,name:sname,category:'Store',tagline:'Shop on SOKONI',rating:5,type:'store',shareURL:url});else if(navigator.share)navigator.share({title:sname+' on SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent('Check out '+sname+' on SOKONI: '+url),'_blank');})()" style="display:flex;align-items:center;gap:7px;padding:9px 18px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:12px;color:#71ff00;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">📣 Share &amp; Earn</button>
+        <button type="button" onclick="if(window.SokoniInbox&&window._spSellerName)SokoniInbox.openChat({otherUid:window._spSellerName.toLowerCase().replace(/\W+/g,'-'),otherName:window._spSellerName,type:'buyer-seller',context:'Store: '+window._spSellerName});else window.location.href='messages.html';" style="display:flex;align-items:center;gap:7px;padding:9px 18px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:12px;color:#71ff00;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">💬 Message</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="sp-stats">
+  <div class="sp-stats-inner">
+    <div class="sp-stat">
+      <div class="sp-stat-val" id="spStatProducts">—</div>
+      <div class="sp-stat-label">Products</div>
+    </div>
+    <div class="sp-stat">
+      <div class="sp-stat-val" id="spStatSales">—</div>
+      <div class="sp-stat-label">Total Sales</div>
+    </div>
+    <div class="sp-stat">
+      <div class="sp-stat-val" id="spStatDelivery">—</div>
+      <div class="sp-stat-label">Delivery Rate</div>
+    </div>
+    <div class="sp-stat">
+      <div class="sp-stat-val" id="spStatRating">—</div>
+      <div class="sp-stat-label">Avg Rating</div>
+    </div>
+    <div class="sp-stat">
+      <div class="sp-stat-val" id="spStatFollowers">—</div>
+      <div class="sp-stat-label">Followers</div>
+    </div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="sp-tabs">
+  <button type="button" class="sp-tab active" onclick="switchTab('products', this)">🛍️ Products</button>
+  <button type="button" class="sp-tab" onclick="switchTab('history', this)">🗂️ Sales History</button>
+  <button type="button" class="sp-tab" onclick="switchTab('performance', this)">🚚 Delivery</button>
+  <button type="button" class="sp-tab" onclick="switchTab('ratings', this)">⭐ Ratings</button>
+  <button type="button" class="sp-tab" onclick="switchTab('achievements', this)">🏆 Achievements</button>
+</div>
+
+<!-- CONTENT -->
+<div class="sp-content">
+
+  <!-- PRODUCTS -->
+  <div class="sp-panel active" id="tab-products">
+    <div id="spProductsGrid" class="sp-products-grid"></div>
+    <div class="sp-empty" id="spProductsEmpty" style="display:none;">No products listed yet.</div>
+  </div>
+
+  <!-- SALES HISTORY -->
+  <div class="sp-panel" id="tab-history">
+    <div class="sp-section-h">Recent Sales</div>
+    <div class="sp-table-wrap">
+      <table class="sp-table">
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Revenue</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="spSalesTbody"></tbody>
+      </table>
+    </div>
+    <div class="sp-empty" id="spSalesEmpty" style="display:none;">No sales history available.</div>
+  </div>
+
+  <!-- DELIVERY PERFORMANCE -->
+  <div class="sp-panel" id="tab-performance">
+    <div class="sp-section-h">Delivery Performance</div>
+    <div class="sp-perf-grid" id="spPerfGrid"></div>
+    <div class="sp-section-h" style="margin-top:8px;">Order Funnel</div>
+    <div id="spFunnel"></div>
+  </div>
+
+  <!-- RATINGS -->
+  <div class="sp-panel" id="tab-ratings">
+    <div id="spRatingsContent"></div>
+  </div>
+
+  <!-- ACHIEVEMENTS -->
+  <div class="sp-panel" id="tab-achievements">
+    <div id="spAchContent"></div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+
+  /* ── helpers ── */
+  function qs(id){ return document.getElementById(id); }
+
+  /* ── read seller name from URL ── */
+  const params = new URLSearchParams(window.location.search);
+  const sellerName = params.get("seller") || "";
+
+  if(!sellerName){
+    qs("spName").textContent = "Seller not found";
+    return;
+  }
+
+  document.title = sellerName + " — SOKONI";
+
+  /* ── load data ── */
+  let allProducts = [];
+  try { allProducts = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
+
+  const products = allProducts.filter(p => (p.sellerName || "Sokoni Seller") === sellerName);
+
+  let allOrders = [];
+  try { allOrders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
+
+  /* orders that contain at least one product from this seller */
+  const sellerProductIds = new Set(products.map(p => p.id));
+  const sellerOrders = allOrders.filter(o =>
+    (o.items||[]).some(item => sellerProductIds.has(item.id))
+  );
+
+  let allRatings = {};
+  try { allRatings = JSON.parse(localStorage.getItem("sokoniSellerRatings"))||{}; } catch(e){}
+  const ratings = allRatings[sellerName] || [];
+
+  let disputes = [];
+  try { disputes = JSON.parse(localStorage.getItem("sokoniDisputes"))||[]; } catch(e){}
+
+  /* verification */
+  let verified = false;
+  try {
+    const v = JSON.parse(localStorage.getItem("sokoniSellerVerification")||"null");
+    if(v && v.status === "verified" && v.business === sellerName) verified = true;
+  } catch(e){}
+
+  /* location — prefer miniStore city, fall back to first product location */
+  let miniStore = null;
+  try { miniStore = JSON.parse(localStorage.getItem("sokoniStore") || localStorage.getItem("sokoniMiniStore")); } catch(e){}
+  const CITY_NAMES = { nairobi:"Nairobi", mombasa:"Mombasa", kisumu:"Kisumu", nakuru:"Nakuru", eldoret:"Eldoret", thika:"Thika", nyeri:"Nyeri", machakos:"Machakos", malindi:"Malindi", garissa:"Garissa", kisii:"Kisii", kericho:"Kericho", meru:"Meru", nanyuki:"Nanyuki", kakamega:"Kakamega", bungoma:"Bungoma", kitale:"Kitale", bomet:"Bomet", lamu:"Lamu", naivasha:"Naivasha", nationwide:"Nationwide", worldwide:"Worldwide" };
+  const locationRaw  = miniStore?.city || products[0]?.location || "nairobi";
+  const locationName = CITY_NAMES[locationRaw] || locationRaw;
+
+  /* ── hero ── */
+  const initials = sellerName.split(" ").map(w=>w[0]).join("").substring(0,2).toUpperCase();
+  qs("spAvatar").textContent = initials;
+  qs("spName").textContent = sellerName;
+  window._spSellerName = sellerName;
+  /* Expose seller uid (from first product with a uid) for verification badge */
+  window._spSellerUid = (products.find(function(p){ return p.sellerUid || p.sellerId; }) || {}).sellerUid ||
+                        (products.find(function(p){ return p.sellerId; }) || {}).sellerId || null;
+
+  const badgesEl = qs("spBadges");
+  var _vmap={}; try{_vmap=JSON.parse(localStorage.getItem('sokoniVerifiedSellers')||'{}');}catch(e){}
+  var _vb=_vmap[sellerName]||{};
+  if(!_vb.verifiedSeller && verified) _vb.verifiedSeller=true;
+  if(_vb.verifiedSeller)  badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-seller">&#10003; Verified Seller</span>';
+  if(_vb.verifiedBusiness)badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-business">&#10003; Verified Business</span>';
+  if(_vb.verifiedShop)    badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-shop">&#10003; Verified Shop</span>';
+  if(_vb.sameDayDelivery) badgesEl.innerHTML+='<span class="vbadge vbadge-lg vbadge-sameday">&#9889; Same Day Delivery</span>';
+  badgesEl.innerHTML += `<span class="sp-badge-location">📍 ${locationName}</span>`;
+
+  /* Physical address + Maps link */
+  if(miniStore?.address) {
+    const addrWrap = document.createElement('div');
+    addrWrap.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.4);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+    addrWrap.innerHTML = `<span>🏬 ${miniStore.address}</span>` +
+      (miniStore.mapsLink ? `<a href="${miniStore.mapsLink}" target="_blank" rel="noopener" style="color:#00aaff;font-size:11px;font-weight:700;text-decoration:none;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);border-radius:7px;padding:2px 9px;">🗺️ Get Directions</a>` : '');
+    const ratingRow = document.getElementById('spRatingRow');
+    if(ratingRow) ratingRow.parentNode.insertBefore(addrWrap, ratingRow);
+  }
+
+  const avgRating = ratings.length ? (ratings.reduce((s,r)=>s+(r.avgScore||r.stars||0),0)/ratings.length) : 0;
+  const ratingEl = qs("spRatingRow");
+  if(avgRating){
+    const starsStr = "★".repeat(Math.round(avgRating)) + "☆".repeat(5-Math.round(avgRating));
+    ratingEl.innerHTML = `
+      <span class="sp-stars">${starsStr}</span>
+      <span class="sp-rating-text">${avgRating.toFixed(1)} · ${ratings.length} review${ratings.length!==1?"s":""}</span>`;
+  } else {
+    ratingEl.innerHTML = `<span class="sp-rating-text" style="color:rgba(255,255,255,0.3);">No ratings yet</span>`;
+  }
+
+  /* Visit Store link */
+  const spBadgesEl = qs("spBadges");
+  if(miniStore && (miniStore.ownerName === sellerName || miniStore.name)){
+    spBadgesEl.innerHTML += `<a href="store.html?store=${encodeURIComponent(miniStore.name||sellerName)}" style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;text-decoration:none;">🏪 Visit Store</a>`;
+  }
+
+  /* ── stats ── */
+  const totalSales  = sellerOrders.filter(o=>o.status==="delivered").length;
+  const deliveryRate = sellerOrders.length > 0
+    ? Math.round((sellerOrders.filter(o=>o.status==="delivered").length / sellerOrders.length)*100)
+    : null;
+
+  qs("spStatProducts").textContent = products.length;
+  qs("spStatSales").textContent    = totalSales;
+  qs("spStatDelivery").textContent = deliveryRate !== null ? deliveryRate + "%" : "—";
+  qs("spStatRating").textContent   = avgRating ? "⭐ " + avgRating.toFixed(1) : "—";
+
+  /* ── Trust Score ── */
+  (function(){
+    const verScore = (_vb.verifiedSeller?15:0)+(_vb.verifiedBusiness?10:0)+(_vb.verifiedShop?5:0);
+    const ratScore = avgRating ? Math.round((avgRating/5)*30) : 0;
+    const delScore = deliveryRate !== null ? Math.round((deliveryRate/100)*25) : 0;
+    const salScore = Math.min(Math.round((Math.min(totalSales,50)/50)*15),15);
+    const score    = Math.min(verScore+ratScore+delScore+salScore,100);
+    if(!score) return;
+    const tier      = score>=90?"🏅 Elite":score>=75?"⭐ Trusted":score>=55?"✅ Good":"🔰 New";
+    const tierColor = score>=90?"#ffc107":score>=75?"#4ade80":score>=55?"#00d4ff":"rgba(255,255,255,0.45)";
+    const circ = 2*Math.PI*16;
+    const offset = circ-(score/100)*circ;
+    document.getElementById("spTrustNum").textContent  = score;
+    document.getElementById("spTrustTier").textContent = tier;
+    document.getElementById("spTrustTier").style.color = tierColor;
+    document.getElementById("spTrustArc").setAttribute("stroke-dashoffset", circ);
+    document.getElementById("spTrustScore").style.display = "inline-flex";
+    setTimeout(()=>document.getElementById("spTrustArc").setAttribute("stroke-dashoffset",offset),120);
+  })();
+
+  /* ── products tab ── */
+  if(!products.length){
+    qs("spProductsEmpty").style.display = "block";
+  } else {
+    qs("spProductsGrid").innerHTML = products.map(p => `
+      <a class="sp-product-card" href="product.html?id=${p.id}">
+        <img src="${p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy">
+        <div class="sp-product-info">
+          <div class="sp-product-name">${p.name}</div>
+          <div class="sp-product-price">KES ${Number(p.price).toLocaleString()}</div>
+        </div>
+      </a>
+    `).join("");
+  }
+
+  /* ── sales history tab ── */
+  const statusPill = { placed:"sp-pill-blue", processing:"sp-pill-orange", shipped:"sp-pill-purple", out_for_delivery:"sp-pill-orange", delivered:"sp-pill-green" };
+  const salesRows = [];
+  sellerOrders.forEach(o => {
+    (o.items||[]).forEach(item => {
+      if(sellerProductIds.has(item.id)){
+        salesRows.push({
+          orderId: o.id,
+          date:    o.date || "—",
+          product: item.name || "—",
+          revenue: Number(item.price||0),
+          status:  o.status || "placed"
+        });
+      }
+    });
+  });
+
+  if(!salesRows.length){
+    qs("spSalesEmpty").style.display = "block";
+    qs("spSalesTbody").closest(".sp-table-wrap").style.display = "none";
+  } else {
+    qs("spSalesTbody").innerHTML = salesRows.slice(0,30).map(r => `
+      <tr>
+        <td style="color:#71ff00;font-weight:800;">${r.orderId}</td>
+        <td style="color:rgba(255,255,255,0.5);">${r.date}</td>
+        <td style="font-weight:600;">${r.product}</td>
+        <td style="color:#71ff00;font-weight:800;">KES ${r.revenue.toLocaleString()}</td>
+        <td><span class="sp-pill ${statusPill[r.status]||'sp-pill-orange'}">${r.status}</span></td>
+      </tr>
+    `).join("");
+  }
+
+  /* ── delivery performance tab ── */
+  const total      = sellerOrders.length;
+  const delivered  = sellerOrders.filter(o=>o.status==="delivered").length;
+  const processing = sellerOrders.filter(o=>["placed","processing"].includes(o.status)).length;
+  const shipped    = sellerOrders.filter(o=>["shipped","out_for_delivery"].includes(o.status)).length;
+  const dispCount  = disputes.filter(d => sellerOrders.find(o=>o.id===d.orderId)).length;
+  const dispRate   = total > 0 ? ((dispCount/total)*100).toFixed(1) : 0;
+
+  qs("spPerfGrid").innerHTML = [
+    { icon:"📦", val: total,        label:"Total Orders",    color:"white" },
+    { icon:"✅", val: delivered,    label:"Delivered",       color:"#71ff00" },
+    { icon:"🚚", val: shipped,      label:"In Transit",      color:"#00aaff" },
+    { icon:"⏳", val: processing,   label:"Processing",      color:"#ff9800" },
+    { icon:"📊", val: (deliveryRate!==null?deliveryRate+"%":"—"), label:"Delivery Rate", color: deliveryRate>=80?"#71ff00":deliveryRate>=50?"#ff9800":"#ff4444" },
+    { icon:"⚠️", val: dispRate+"%", label:"Dispute Rate",   color: dispRate>5?"#ff4444":"#71ff00" },
+  ].map(c=>`
+    <div class="sp-perf-card">
+      <div class="sp-perf-icon">${c.icon}</div>
+      <div class="sp-perf-val" style="color:${c.color};">${c.val}</div>
+      <div class="sp-perf-label">${c.label}</div>
+    </div>
+  `).join("");
+
+  const funnelItems = [
+    { label:"Orders Placed", val:total,       color:"#00aaff" },
+    { label:"Processing",    val:processing,   color:"#ff9800" },
+    { label:"Shipped",       val:shipped,      color:"#a080ff" },
+    { label:"Delivered",     val:delivered,    color:"#71ff00" },
+  ];
+  const maxFunnel = Math.max(total, 1);
+  qs("spFunnel").innerHTML = `
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px;">
+      ${funnelItems.map(f=>`
+        <div class="sp-funnel-row">
+          <span class="sp-funnel-label">${f.label}</span>
+          <div class="sp-funnel-track">
+            <div class="sp-funnel-fill" style="background:${f.color};width:${Math.round(f.val/maxFunnel*100)}%;"></div>
+          </div>
+          <span class="sp-funnel-count" style="color:${f.color};">${f.val}</span>
+        </div>
+      `).join("")}
+    </div>`;
+
+  /* ── ratings tab ── */
+  const ratingsEl = qs("spRatingsContent");
+  if(!ratings.length){
+    ratingsEl.innerHTML = `<div class="sp-empty">No reviews yet. Be the first to rate this seller!</div>`;
+  } else {
+    const avg       = ratings.reduce((s,r)=>s+(r.avgScore||r.stars||0),0)/ratings.length;
+    const dist      = [5,4,3,2,1].map(n=>({ n, count: ratings.filter(r=>(r.stars||0)===n).length }));
+    const maxD      = Math.max(...dist.map(d=>d.count),1);
+    const starsDisp = "★".repeat(Math.round(avg)) + "☆".repeat(5-Math.round(avg));
+    const catAvg    = (key) => { const v=ratings.map(r=>r[key]).filter(v=>v>0); return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):null; };
+    const dimData   = [
+      { key:"delivery",     label:"🚚 Delivery" },
+      { key:"responseTime", label:"⚡ Response" },
+      { key:"returns",      label:"🔄 Returns"  },
+      { key:"satisfaction", label:"😊 Satisfaction" },
+    ];
+
+    ratingsEl.innerHTML = `
+      <div class="sp-rating-overview">
+        <div style="text-align:center;">
+          <div class="sp-rating-big">${avg.toFixed(1)}</div>
+          <div class="sp-rating-stars-big">${starsDisp}</div>
+          <div class="sp-rating-count">${ratings.length} review${ratings.length!==1?"s":""}</div>
+        </div>
+        <div style="flex:1;min-width:180px;">
+          ${dist.map(d=>`
+            <div class="sp-dist-row">
+              <span class="sp-dist-star">${d.n} ★</span>
+              <div class="sp-dist-track"><div class="sp-dist-fill" style="width:${Math.round(d.count/maxD*100)}%;"></div></div>
+              <span class="sp-dist-count">${d.count}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+
+      <!-- 4-dimension breakdown -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:24px;">
+        ${dimData.map(d=>{ const v=catAvg(d.key); if(!v) return ""; const pct=Math.round(parseFloat(v)/5*100); const col=pct>=80?"#71ff00":pct>=60?"#ffc107":"#ff9800"; return `
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;text-align:center;">
+            <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:6px;">${d.label}</div>
+            <div style="font-size:22px;font-weight:900;color:${col};">${v}<span style="font-size:11px;color:rgba(255,255,255,0.3);"> / 5</span></div>
+            <div style="background:rgba(255,255,255,0.07);border-radius:999px;height:4px;overflow:hidden;margin-top:6px;">
+              <div style="background:${col};height:100%;border-radius:999px;width:${pct}%;"></div>
+            </div>
+          </div>`;}).join("")}
+      </div>
+
+      ${ratings.slice(0,15).map(r=>{
+        const rAvg = r.avgScore||r.stars||0;
+        const dims = [
+          r.delivery     ? `🚚 ${r.delivery}`     : "",
+          r.responseTime ? `⚡ ${r.responseTime}` : "",
+          r.returns      ? `🔄 ${r.returns}`      : "",
+          r.satisfaction ? `😊 ${r.satisfaction}` : "",
+        ].filter(Boolean);
+        return `<div class="sp-review-card">
+          <div class="sp-review-top">
+            <div class="sp-reviewer-row">
+              <div class="sp-reviewer-avatar">${(r.buyerName||"A").charAt(0).toUpperCase()}</div>
+              <div>
+                <div class="sp-reviewer-name">${r.buyerName||"Anonymous"}</div>
+                <div class="sp-reviewer-meta">${r.date||""} · Order ${r.orderId||""}</div>
+              </div>
+            </div>
+            <div class="sp-review-stars">${"★".repeat(Math.round(rAvg))}${"☆".repeat(5-Math.round(rAvg))} <span style="font-size:11px;color:rgba(255,255,255,0.35);">${rAvg}</span></div>
+          </div>
+          ${dims.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${dims.map(d=>`<span style="font-size:10px;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.15);color:#ffc107;padding:2px 7px;border-radius:5px;">${d}</span>`).join("")}</div>` : ""}
+          ${r.comment ? `<div class="sp-review-comment">"${r.comment}"</div>` : ""}
+        </div>`;
+      }).join("")}
+    `;
+  }
+
+  /* ═══════════════════════════════════════════
+     FOLLOWERS & ACHIEVEMENTS
+  ═══════════════════════════════════════════ */
+
+  /* helpers */
+  function computeAchievement(sales, avgR, delivRate, follCount){
+    const s = sales >= 500 ? 4 : sales >= 100 ? 3 : sales >= 20 ? 2 : sales >= 5 ? 1 : 0;
+    const r = avgR >= 4.8 ? 4 : avgR >= 4.5 ? 3 : avgR >= 4.0 ? 2 : avgR >= 3.5 ? 1 : 0;
+    const d = delivRate >= 95 ? 4 : delivRate >= 85 ? 3 : delivRate >= 70 ? 2 : delivRate >= 50 ? 1 : 0;
+    const f = follCount >= 200 ? 4 : follCount >= 50 ? 3 : follCount >= 10 ? 2 : follCount >= 1 ? 1 : 0;
+    const score = s + r + d + f;
+    const TIERS = [
+      { min:14, tier:'Legend',  icon:'👑', color:'#ff8c00', border:'rgba(255,140,0,0.4)',  bg:'rgba(255,140,0,0.08)',   next:null,     need:16 },
+      { min:10, tier:'Diamond', icon:'💎', color:'#00aaff', border:'rgba(0,170,255,0.4)',  bg:'rgba(0,170,255,0.08)',   next:'Legend', need:14 },
+      { min:7,  tier:'Gold',    icon:'🥇', color:'#ffc107', border:'rgba(255,193,7,0.4)',  bg:'rgba(255,193,7,0.07)',   next:'Diamond',need:10 },
+      { min:4,  tier:'Silver',  icon:'🥈', color:'#c0c0c0', border:'rgba(192,192,192,0.35)',bg:'rgba(192,192,192,0.05)',next:'Gold',   need:7  },
+      { min:1,  tier:'Bronze',  icon:'🥉', color:'#cd7f32', border:'rgba(205,127,50,0.4)', bg:'rgba(205,127,50,0.08)', next:'Silver', need:4  },
+      { min:0,  tier:'Newcomer',icon:'🌱', color:'rgba(255,255,255,0.45)', border:'rgba(255,255,255,0.12)', bg:'rgba(255,255,255,0.03)', next:'Bronze', need:1 },
+    ];
+    const t = TIERS.find(t => score >= t.min) || TIERS[TIERS.length-1];
+    return { ...t, score, maxScore:16, breakdown:{sales:s,rating:r,delivery:d,followers:f} };
+  }
+
+  function renderAchievements(ach, sales, avgR, delivRate, follCount){
+    const el = qs("spAchContent");
+    if(!el) return;
+    const nextPct = ach.next ? Math.min(100, Math.round(ach.score / ach.need * 100)) : 100;
+    const scoreDetails = [
+      { label:"📦 Sales",     sc:ach.breakdown.sales,    val: sales,
+        tips:["—","5+ sales","20+ sales","100+ sales","500+ sales"] },
+      { label:"⭐ Rating",    sc:ach.breakdown.rating,   val: avgR ? avgR.toFixed(1)+"★" : "None",
+        tips:["—","3.5+","4.0+","4.5+","4.8+ stars"] },
+      { label:"🚚 Delivery",  sc:ach.breakdown.delivery, val: delivRate !== null ? delivRate+"%" : "—",
+        tips:["—","50%+","70%+","85%+","95%+ rate"] },
+      { label:"👥 Followers", sc:ach.breakdown.followers,val: follCount,
+        tips:["—","1+","10+","50+","200+ followers"] },
+    ];
+    const MILESTONES = [
+      { icon:"🌱", tier:"Newcomer", minScore:0,  color:"rgba(255,255,255,0.5)", bg:"rgba(255,255,255,0.04)" },
+      { icon:"🥉", tier:"Bronze",   minScore:1,  color:"#cd7f32", bg:"rgba(205,127,50,0.1)" },
+      { icon:"🥈", tier:"Silver",   minScore:4,  color:"#c0c0c0", bg:"rgba(192,192,192,0.08)" },
+      { icon:"🥇", tier:"Gold",     minScore:7,  color:"#ffc107", bg:"rgba(255,193,7,0.1)" },
+      { icon:"💎", tier:"Diamond",  minScore:10, color:"#00aaff", bg:"rgba(0,170,255,0.1)" },
+      { icon:"👑", tier:"Legend",   minScore:14, color:"#ff8c00", bg:"rgba(255,140,0,0.1)" },
+    ];
+    el.innerHTML = `
+      <div class="ach-tier-hero" style="background:${ach.bg};border-color:${ach.border};">
+        <div style="font-size:60px;line-height:1;margin-bottom:12px;">${ach.icon}</div>
+        <div style="font-size:24px;font-weight:900;color:${ach.color};margin-bottom:6px;">${ach.tier} Seller</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Achievement Score: <strong style="color:white;">${ach.score}</strong> / ${ach.maxScore}</div>
+        ${ach.next ? `
+          <div style="max-width:340px;margin:0 auto;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.38);margin-bottom:6px;">
+              <span>${ach.tier}</span><span style="color:${ach.color};">${ach.next} at ${ach.need} pts</span>
+            </div>
+            <div class="ach-progress-bar"><div class="ach-progress-fill" style="background:${ach.color};width:${nextPct}%;"></div></div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">${ach.need - ach.score} more point${ach.need - ach.score !== 1?"s":""} to reach ${ach.next}</div>
+          </div>
+        ` : `<div style="font-size:14px;color:${ach.color};font-weight:800;">🎉 Maximum Achievement Unlocked!</div>`}
+      </div>
+
+      <div class="sp-section-h">Score Breakdown</div>
+      <div class="ach-score-grid">
+        ${scoreDetails.map(d=>`
+          <div class="ach-score-card">
+            <div style="font-size:14px;margin-bottom:8px;">${d.label}</div>
+            <div style="font-size:22px;font-weight:900;color:${d.sc===4?'#71ff00':'#ffc107'};">${d.sc}<span style="font-size:13px;color:rgba(255,255,255,0.3);font-weight:400;"> / 4</span></div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;">Current: <strong style="color:white;">${d.val}</strong></div>
+            <div class="ach-progress-bar"><div class="ach-progress-fill" style="background:${d.sc===4?'#71ff00':'#ffc107'};width:${Math.round(d.sc/4*100)}%;"></div></div>
+            ${d.sc < 4 ? `<div style="font-size:10px;color:rgba(255,255,255,0.3);">Next: ${d.tips[d.sc+1]||"Max"}</div>` : `<div style="font-size:10px;color:#71ff00;">✓ Max score</div>`}
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="sp-section-h">All Tiers</div>
+      <div class="ach-milestones">
+        ${MILESTONES.map(m=>{
+          const unlocked = ach.score >= m.minScore;
+          return `<div class="ach-ms-item ${unlocked?'':'locked'}" style="${unlocked?'border-color:'+m.color.replace(/[^,)]+\)$/,"0.3)"):''}">
+            <div class="ach-ms-icon" style="background:${unlocked?m.bg:'rgba(255,255,255,0.04)'};">${m.icon}</div>
+            <div style="flex:1;">
+              <div style="font-size:14px;font-weight:800;color:${unlocked?m.color:'rgba(255,255,255,0.35)'};">${m.tier}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.28);margin-top:2px;">Requires ${m.minScore} achievement point${m.minScore!==1?"s":""}</div>
+            </div>
+            <div style="font-size:${unlocked?18:14}px;${unlocked?'':'color:rgba(255,255,255,0.18);'}">${unlocked?"✅":"🔒"}</div>
+          </div>`;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  /* ── followers state ── */
+  let spFollowerData = {};
+  try { spFollowerData = JSON.parse(localStorage.getItem("sokoniStoreFollowers"))||{}; } catch(e){}
+  let spMyFollowing = {};
+  try { spMyFollowing = JSON.parse(localStorage.getItem("sokoniFollowing"))||{}; } catch(e){}
+
+  const spFollowers = spFollowerData[sellerName] || 0;
+  const spIsFollowing = !!spMyFollowing[sellerName];
+
+  /* update UI */
+  qs("spStatFollowers").textContent = spFollowers;
+  qs("spFollowerCount").textContent = spFollowers.toLocaleString() + " follower" + (spFollowers!==1?"s":"");
+
+  const spFollowBtn  = qs("spFollowBtn");
+  const spFollowIcon = qs("spFollowIcon");
+  const spFollowText = qs("spFollowText");
+
+  function _setFollowUI(following){
+    if(following){
+      spFollowBtn.className  = "sp-follow-btn following";
+      spFollowIcon.className = "fas fa-check";
+      spFollowText.textContent = "Following";
+    } else {
+      spFollowBtn.className  = "sp-follow-btn not-following";
+      spFollowIcon.className = "fas fa-user-plus";
+      spFollowText.textContent = "Follow Store";
+    }
+  }
+  _setFollowUI(spIsFollowing);
+
+  /* Load real follower count from Firestore */
+  if(window.SokoniDB){
+    SokoniDB.getFollowerCount('seller', sellerName).then(cnt => {
+      qs("spFollowerCount").textContent = cnt.toLocaleString() + " follower" + (cnt!==1?"s":"");
+      qs("spStatFollowers").textContent = cnt;
+    });
+    SokoniDB.isFollowing('seller', sellerName).then(f => _setFollowUI(f));
+    SokoniDB.listenFollowerCount('seller', sellerName, cnt => {
+      qs("spFollowerCount").textContent = cnt.toLocaleString() + " follower" + (cnt!==1?"s":"");
+      qs("spStatFollowers").textContent = cnt;
+    });
+  }
+
+  /* expose toggle */
+  window.toggleFollow = async function(){
+    const btn = qs("spFollowBtn");
+    btn.disabled = true;
+    const isNow = btn.classList.contains("following");
+    if(window.SokoniDB){
+      if(isNow){ await SokoniDB.unfollow('seller', sellerName); _setFollowUI(false); }
+      else      { await SokoniDB.follow('seller', sellerName, sellerName); _setFollowUI(true); }
+    } else {
+      /* localStorage fallback */
+      let myF={},allF={};
+      try{myF=JSON.parse(localStorage.getItem("sokoniFollowing"))||{};}catch(e){}
+      try{allF=JSON.parse(localStorage.getItem("sokoniStoreFollowers"))||{};}catch(e){}
+      if(isNow){ delete myF[sellerName]; allF[sellerName]=Math.max(0,(allF[sellerName]||1)-1); _setFollowUI(false); }
+      else      { myF[sellerName]={followedAt:Date.now()}; allF[sellerName]=(allF[sellerName]||0)+1; _setFollowUI(true); }
+      localStorage.setItem("sokoniFollowing",JSON.stringify(myF));
+      localStorage.setItem("sokoniStoreFollowers",JSON.stringify(allF));
+      const cnt=allF[sellerName]||0;
+      qs("spFollowerCount").textContent=cnt.toLocaleString()+" follower"+(cnt!==1?"s":"");
+      qs("spStatFollowers").textContent=cnt;
+    }
+    btn.disabled = false;
+  };
+
+  /* ── achievement badge in hero ── */
+  const spAch = computeAchievement(totalSales, avgRating, deliveryRate||0, spFollowers);
+  spBadgesEl.innerHTML += `<span class="sp-ach-badge" style="background:${spAch.bg};border-color:${spAch.border};color:${spAch.color};">${spAch.icon} ${spAch.tier}</span>`;
+
+  /* ── render achievements tab ── */
+  renderAchievements(spAch, totalSales, avgRating, deliveryRate, spFollowers);
+
+})();
+
+/* ── tab switching ── */
+function switchTab(name, btn){
+  document.querySelectorAll(".sp-tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".sp-panel").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  const panel = document.getElementById("tab-" + name);
+  if(panel) panel.classList.add("active");
+}
+</script>
+
+<script src="scroll-top.js" defer></script>
+<script src="sokoni-trust.js" defer></script>
+<script src="sokoni-verifications.js" defer></script>
+<script>
+/* Badge the store name once seller uid is known (_spSellerUid set by page JS) */
+(function() {
+  var _t = setInterval(function() {
+    if (!window.SokoniVerifications || !window._spSellerUid) return;
+    clearInterval(_t);
+    var nameEl = document.getElementById('spSellerName') || document.querySelector('.sp-seller-name');
+    if (nameEl) SokoniVerifications.badge(window._spSellerUid, nameEl, { size: 'md' });
+    SokoniVerifications.wireAll({ size: 'sm' });
+  }, 400);
+  setTimeout(function() { clearInterval(_t); }, 8000);
+})();
+</script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script type="module">import SokoniDB from './sokoni-db.js'; window.SokoniDB = SokoniDB;</script>
+  <script defer src="kass-widget.js"></script>
+<!-- ── Report Seller ── -->
+<div style="text-align:center;padding:4px 16px 16px;">
+  <button onclick="openReportSeller()" style="background:none;border:none;color:rgba(255,255,255,0.25);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;">⚑ Report this seller</button>
+</div>
+<div id="reportSellerModal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:20px;padding:24px;width:100%;max-width:400px;">
+    <h3 style="margin:0 0 16px;color:white;font-size:16px;">⚑ Report Seller</h3>
+    <select id="reportSellerReason" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;margin-bottom:12px;font-family:inherit;">
+      <option value="">Select a reason...</option>
+      <option>Scam / fraud</option>
+      <option>Fake profile</option>
+      <option>Harassment</option>
+      <option>Selling prohibited items</option>
+      <option>Fake reviews</option>
+      <option>Other</option>
+    </select>
+    <textarea id="reportSellerDetails" placeholder="Tell us what happened..." style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;resize:vertical;min-height:80px;font-family:inherit;margin-bottom:12px;"></textarea>
+    <div style="display:flex;gap:10px;">
+      <button onclick="submitSellerReport()" style="flex:1;padding:12px;background:#71ff00;border:none;border-radius:10px;color:#000;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">Submit Report</button>
+      <button onclick="document.getElementById('reportSellerModal').style.display='none'" style="padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;cursor:pointer;font-family:inherit;">Cancel</button>
+    </div>
+  </div>
+</div>
+<script>
+function openReportSeller(){
+  var u = window.firebaseAuth && window.firebaseAuth.currentUser;
+  if(!u){ (window._skToast||alert)('Please sign in to report a seller.'); window.location.href='login.html?next='+encodeURIComponent(location.pathname+location.search); return; }
+  document.getElementById('reportSellerModal').style.display='flex';
+}
+function submitSellerReport(){
+  var reason=document.getElementById('reportSellerReason').value;
+  var details=document.getElementById('reportSellerDetails').value;
+  if(!reason){(window._skToast||alert)('Please select a reason.');return;}
+  var sid=new URLSearchParams(location.search).get('seller')||new URLSearchParams(location.search).get('id')||'unknown';
+  if(window.SokoniReport){
+    SokoniReport.submit('user',sid,reason,details).then(function(){
+      document.getElementById('reportSellerModal').style.display='none';
+    });
+  } else {
+    document.getElementById('reportSellerModal').style.display='none';
+    (window._skToast||alert)('Report submitted. Thank you.');
+  }
+}
+</script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+

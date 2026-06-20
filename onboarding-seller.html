@@ -1,0 +1,484 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Seller Setup — SOKONI</title>
+  <meta name="description" content="Set up your seller account on SOKONI in 4 easy steps.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding-bottom:60px;}
+
+    /* ── Top bar ── */
+    .wiz-topbar{display:flex;align-items:center;padding:14px 18px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);gap:12px;}
+    .wiz-back{background:none;border:none;color:rgba(255,255,255,0.6);font-size:20px;cursor:pointer;padding:4px;font-family:inherit;line-height:1;}
+    .wiz-back:hover{color:#fff;}
+    .wiz-topbar-title{font-size:15px;font-weight:800;flex:1;}
+    .wiz-topbar-logo{height:26px;}
+    .wiz-step-counter{font-size:12px;color:rgba(255,255,255,0.4);font-weight:600;white-space:nowrap;}
+
+    /* ── Progress strip ── */
+    .wiz-progress{display:flex;gap:6px;padding:14px 18px 0;}
+    .wiz-prog-seg{flex:1;height:4px;border-radius:4px;background:rgba(255,255,255,0.1);transition:background .3s;}
+    .wiz-prog-seg.done{background:#71ff00;}
+    .wiz-prog-seg.active{background:rgba(113,255,0,0.45);}
+
+    /* ── Steps ── */
+    .wiz-step{display:none;padding:24px 18px;max-width:560px;margin:0 auto;animation:fadeIn .25s ease;}
+    .wiz-step.active{display:block;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+    .wiz-step-hero{text-align:center;padding:12px 0 24px;}
+    .wiz-step-hero .step-icon{font-size:44px;line-height:1;margin-bottom:12px;}
+    .wiz-step-hero h2{font-size:22px;font-weight:900;margin-bottom:6px;}
+    .wiz-step-hero h2 span{color:#71ff00;}
+    .wiz-step-hero p{color:rgba(255,255,255,0.45);font-size:14px;line-height:1.5;}
+
+    /* ── Form elements ── */
+    .wiz-field{margin-bottom:16px;}
+    .wiz-label{display:block;font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;}
+    .wiz-input,.wiz-select,.wiz-textarea{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:16px;font-family:inherit;outline:none;transition:border-color .2s,background .2s;}
+    .wiz-input{padding:13px 16px;}
+    .wiz-select{padding:13px 16px;-webkit-appearance:none;appearance:none;cursor:pointer;}
+    .wiz-textarea{padding:13px 16px;resize:vertical;min-height:90px;line-height:1.5;}
+    .wiz-input:focus,.wiz-select:focus,.wiz-textarea:focus{border-color:rgba(113,255,0,0.45);background:rgba(113,255,0,0.04);}
+    .wiz-input::placeholder,.wiz-textarea::placeholder{color:rgba(255,255,255,0.25);}
+    .wiz-select option{background:#1a1a1a;color:#fff;}
+    .wiz-char-count{text-align:right;font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;}
+
+    /* ── Info box ── */
+    .wiz-info{background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.18);border-radius:14px;padding:14px 16px;margin:16px 0;display:flex;gap:12px;align-items:flex-start;}
+    .wiz-info-icon{font-size:20px;flex-shrink:0;margin-top:1px;}
+    .wiz-info p{font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;}
+    .wiz-info strong{color:#71ff00;}
+
+    /* ── Checkboxes ── */
+    .wiz-check-group{display:flex;flex-direction:column;gap:10px;margin:10px 0;}
+    .wiz-check-label{display:flex;align-items:center;gap:12px;cursor:pointer;font-size:14px;color:rgba(255,255,255,0.8);}
+    .wiz-check-label input[type=checkbox]{width:20px;height:20px;accent-color:#71ff00;cursor:pointer;flex-shrink:0;font-size:16px;}
+
+    /* ── Buttons ── */
+    .wiz-btn-row{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;}
+    .wiz-btn{flex:1;min-width:140px;padding:15px 20px;border:none;border-radius:14px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;transition:filter .15s,transform .1s;letter-spacing:0.2px;}
+    .wiz-btn:active{transform:scale(0.98);}
+    .wiz-btn.primary{background:linear-gradient(135deg,#71ff00,#4dcc00);color:#0a0a0a;}
+    .wiz-btn.primary:hover{filter:brightness(1.08);}
+    .wiz-btn.ghost{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.1);}
+    .wiz-btn.ghost:hover{background:rgba(255,255,255,0.09);color:#fff;}
+
+    /* ── Multi-select chips ── */
+    .wiz-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+    .wiz-chip{padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);cursor:pointer;transition:all .15s;}
+    .wiz-chip.selected{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00;}
+
+    /* ── Success Modal ── */
+    .wiz-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;backdrop-filter:blur(6px);animation:fadeIn .25s ease;}
+    .wiz-modal{background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:24px;padding:36px 28px;text-align:center;max-width:380px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.7);}
+    .wiz-modal .modal-icon{font-size:56px;line-height:1;margin-bottom:16px;}
+    .wiz-modal h2{font-size:22px;font-weight:900;margin-bottom:8px;color:#71ff00;}
+    .wiz-modal p{color:rgba(255,255,255,0.55);font-size:14px;line-height:1.6;margin-bottom:24px;}
+    .wiz-modal-btns{display:flex;flex-direction:column;gap:10px;}
+    .wiz-modal-btn{padding:13px 20px;border:none;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:filter .15s;}
+    .wiz-modal-btn.primary{background:linear-gradient(135deg,#71ff00,#4dcc00);color:#0a0a0a;}
+    .wiz-modal-btn.ghost{background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.12);}
+
+    /* ── Error hint ── */
+    .wiz-error{color:#ff6b6b;font-size:12px;margin-top:5px;font-weight:600;display:none;}
+    .wiz-input.invalid,.wiz-select.invalid,.wiz-textarea.invalid{border-color:rgba(255,100,100,0.5);}
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="wiz-topbar">
+    <button class="wiz-back" onclick="goBack()" aria-label="Back">&#8592;</button>
+    <img src="assets/logosokoni.png" alt="SOKONI" class="wiz-topbar-logo">
+    <span class="wiz-topbar-title">Seller Setup</span>
+    <span class="wiz-step-counter" id="stepCounter">Step 1 of 4</span>
+  </div>
+
+  <!-- Progress -->
+  <div class="wiz-progress" id="wizProgress">
+    <div class="wiz-prog-seg active" id="seg0"></div>
+    <div class="wiz-prog-seg" id="seg1"></div>
+    <div class="wiz-prog-seg" id="seg2"></div>
+    <div class="wiz-prog-seg" id="seg3"></div>
+  </div>
+
+  <!-- ══════════════ STEP 1: Account Setup ══════════════ -->
+  <div class="wiz-step active" id="step0">
+    <div class="wiz-step-hero">
+      <div class="step-icon">🏪</div>
+      <h2>Set up your <span>shop</span></h2>
+      <p>Tell buyers who you are and what you sell</p>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label" for="shopName">Shop Name *</label>
+      <input class="wiz-input" id="shopName" type="text" placeholder="e.g. Nairobi Electronics Hub" autocomplete="organization" required>
+      <div class="wiz-error" id="errShopName">Please enter a shop name.</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="displayName">Your Display Name</label>
+      <input class="wiz-input" id="displayName" type="text" placeholder="e.g. John Kamau" autocomplete="name">
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="shopCounty">County / Location *</label>
+      <select class="wiz-select" id="shopCounty" required>
+        <option value="">Select county...</option>
+        <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
+        <option>Nakuru</option><option>Eldoret</option><option>Thika</option>
+        <option>Machakos</option><option>Nyeri</option><option>Other</option>
+      </select>
+      <div class="wiz-error" id="errCounty">Please select your county.</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="shopBio">Shop Bio</label>
+      <textarea class="wiz-textarea" id="shopBio" maxlength="200" placeholder="Tell buyers what makes your shop special..." oninput="updateCharCount('shopBio','bioCnt',200)"></textarea>
+      <div class="wiz-char-count"><span id="bioCnt">0</span>/200</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="shopCat">Main Category *</label>
+      <select class="wiz-select" id="shopCat" required>
+        <option value="">Select category...</option>
+        <option>Electronics</option><option>Fashion</option><option>Food</option>
+        <option>Home &amp; Living</option><option>Beauty</option><option>Sports</option>
+        <option>Books</option><option>Other</option>
+      </select>
+      <div class="wiz-error" id="errCat">Please select a category.</div>
+    </div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn primary" onclick="step1Next()">Next &#8594;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ STEP 2: First Listing ══════════════ -->
+  <div class="wiz-step" id="step1">
+    <div class="wiz-step-hero">
+      <div class="step-icon">📦</div>
+      <h2>Add your <span>first product</span></h2>
+      <p>Let's create your first listing — takes under a minute</p>
+    </div>
+
+    <div class="wiz-info">
+      <div class="wiz-info-icon">📸</div>
+      <p><strong>Photo tip:</strong> Products with clear photos sell 3x faster. Add real photos from your gallery when you go live on the seller dashboard.</p>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label" for="prod1Name">Product Name</label>
+      <input class="wiz-input" id="prod1Name" type="text" placeholder="e.g. Samsung Galaxy A55 — 256GB">
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="prod1Price">Price (KES)</label>
+      <input class="wiz-input" id="prod1Price" type="number" placeholder="e.g. 45000" min="1" inputmode="numeric">
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="prod1Cat">Category</label>
+      <select class="wiz-select" id="prod1Cat">
+        <option value="">Select category...</option>
+        <option>Electronics</option><option>Fashion</option><option>Food</option>
+        <option>Home &amp; Living</option><option>Beauty</option><option>Sports</option>
+        <option>Books</option><option>Other</option>
+      </select>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="prod1Desc">Description</label>
+      <textarea class="wiz-textarea" id="prod1Desc" placeholder="Describe your product — condition, specs, what's included..."></textarea>
+    </div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn ghost" onclick="goToStep(2)">Skip for now</button>
+      <button class="wiz-btn primary" onclick="step2Next()">Add This Product &#8594;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ STEP 3: Payment Setup ══════════════ -->
+  <div class="wiz-step" id="step2">
+    <div class="wiz-step-hero">
+      <div class="step-icon">💳</div>
+      <h2>Payment <span>setup</span></h2>
+      <p>How do you want to receive your payments?</p>
+    </div>
+
+    <div class="wiz-info">
+      <div class="wiz-info-icon">🔒</div>
+      <p><strong>SOKONI Escrow</strong> protects all payments. Funds are held securely and released to you once the buyer confirms delivery.</p>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label" for="mpesaNum">M-Pesa Number *</label>
+      <input class="wiz-input" id="mpesaNum" type="tel" placeholder="07XXXXXXXX" autocomplete="tel" inputmode="tel" required>
+      <div class="wiz-error" id="errMpesa">Please enter a valid Safaricom number (07XX or 01XX).</div>
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="tillNum">Till Number (optional)</label>
+      <input class="wiz-input" id="tillNum" type="text" placeholder="e.g. 123456" inputmode="numeric">
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="paybillNum">Paybill Number (optional)</label>
+      <input class="wiz-input" id="paybillNum" type="text" placeholder="e.g. 888880" inputmode="numeric">
+    </div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn ghost" onclick="goToStep(1)">&#8592; Back</button>
+      <button class="wiz-btn primary" onclick="step3Next()">Save Payment Details &#8594;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ STEP 4: Delivery Setup ══════════════ -->
+  <div class="wiz-step" id="step3">
+    <div class="wiz-step-hero">
+      <div class="step-icon">🚚</div>
+      <h2>Delivery <span>options</span></h2>
+      <p>How will you get orders to your customers?</p>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label">Delivery methods (select all that apply)</label>
+      <div class="wiz-check-group">
+        <label class="wiz-check-label">
+          <input type="checkbox" id="delSelf" value="self"> I'll arrange my own delivery
+        </label>
+        <label class="wiz-check-label">
+          <input type="checkbox" id="delSokoni" value="sokoni" onchange="toggleZones()"> Use SOKONI delivery riders
+        </label>
+        <label class="wiz-check-label">
+          <input type="checkbox" id="delPickup" value="pickup"> Pickup only (buyer comes to me)
+        </label>
+      </div>
+    </div>
+
+    <div class="wiz-field" id="zonesSection" style="display:none;">
+      <label class="wiz-label">Delivery zones</label>
+      <div class="wiz-chips" id="zoneChips"></div>
+    </div>
+
+    <div class="wiz-field">
+      <label class="wiz-label" for="stdRate">Standard delivery rate (KES)</label>
+      <input class="wiz-input" id="stdRate" type="number" placeholder="e.g. 150" min="0" inputmode="numeric">
+    </div>
+    <div class="wiz-field">
+      <label class="wiz-label" for="exprRate">Express delivery rate (KES)</label>
+      <input class="wiz-input" id="exprRate" type="number" placeholder="e.g. 350" min="0" inputmode="numeric">
+    </div>
+
+    <div class="wiz-btn-row">
+      <button class="wiz-btn ghost" onclick="goToStep(2)">&#8592; Back</button>
+      <button class="wiz-btn primary" onclick="step4Complete()">Complete Setup ✓</button>
+    </div>
+  </div>
+
+  <!-- ══════════════ Success Modal ══════════════ -->
+  <div class="wiz-modal-bg" id="successModal" style="display:none;">
+    <div class="wiz-modal">
+      <div class="modal-icon">🎉</div>
+      <h2>You're ready to sell!</h2>
+      <p>Your seller profile is live on SOKONI. Start adding products and reach thousands of buyers across Kenya.</p>
+      <div class="wiz-modal-btns">
+        <button class="wiz-modal-btn primary" onclick="window.location.href='seller-success.html'">Go to Seller Dashboard →</button>
+        <button class="wiz-modal-btn ghost" onclick="window.location.href='seller.html?tab=products'">Add Products Now</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="firebase.js"></script>
+  <script src="sokoni-trust.js" defer></script>
+  <script src="kass-widget.js" defer></script>
+  <script src="scroll-top.js" defer></script>
+  <script>
+    var currentStep = 0;
+    var TOTAL_STEPS  = 4;
+    var sellerData   = {};
+
+    var zones = ['Nairobi','Mombasa','Kisumu','Nakuru','Eldoret','Thika','Machakos','Nyeri'];
+
+    /* ── Build zone chips ── */
+    (function buildChips(){
+      var container = document.getElementById('zoneChips');
+      if(!container) return;
+      zones.forEach(function(z){
+        var chip = document.createElement('div');
+        chip.className = 'wiz-chip';
+        chip.textContent = z;
+        chip.dataset.zone = z;
+        chip.addEventListener('click', function(){
+          chip.classList.toggle('selected');
+        });
+        container.appendChild(chip);
+      });
+    })();
+
+    function toggleZones(){
+      var sec = document.getElementById('zonesSection');
+      if(sec) sec.style.display = document.getElementById('delSokoni').checked ? 'block' : 'none';
+    }
+
+    function updateCharCount(textareaId, counterId, max){
+      var val = document.getElementById(textareaId).value.length;
+      var el  = document.getElementById(counterId);
+      if(el) el.textContent = val;
+    }
+
+    function updateProgressUI(){
+      for(var i=0;i<TOTAL_STEPS;i++){
+        var seg = document.getElementById('seg'+i);
+        if(!seg) continue;
+        if(i < currentStep)       seg.className = 'wiz-prog-seg done';
+        else if(i === currentStep) seg.className = 'wiz-prog-seg active';
+        else                      seg.className = 'wiz-prog-seg';
+      }
+      var ctr = document.getElementById('stepCounter');
+      if(ctr) ctr.textContent = 'Step '+(currentStep+1)+' of '+TOTAL_STEPS;
+    }
+
+    function goToStep(n){
+      document.getElementById('step'+currentStep).classList.remove('active');
+      currentStep = n;
+      document.getElementById('step'+currentStep).classList.add('active');
+      updateProgressUI();
+      window.scrollTo({top:0,behavior:'smooth'});
+      if(window.SokoniOnboarding){
+        SokoniOnboarding.setStep('seller', n, sellerData);
+      }
+    }
+
+    function goBack(){
+      if(currentStep > 0) goToStep(currentStep-1);
+      else window.location.href = 'onboarding.html';
+    }
+
+    function showErr(id, show){
+      var el = document.getElementById(id);
+      if(el) el.style.display = show ? 'block' : 'none';
+    }
+    function markInvalid(id, invalid){
+      var el = document.getElementById(id);
+      if(el){ if(invalid) el.classList.add('invalid'); else el.classList.remove('invalid'); }
+    }
+
+    /* ── Step 1 validation ── */
+    function step1Next(){
+      var shopName = document.getElementById('shopName').value.trim();
+      var county   = document.getElementById('shopCounty').value;
+      var cat      = document.getElementById('shopCat').value;
+      var valid    = true;
+      if(!shopName){ showErr('errShopName',true); markInvalid('shopName',true); valid=false; }
+      else { showErr('errShopName',false); markInvalid('shopName',false); }
+      if(!county){ showErr('errCounty',true); markInvalid('shopCounty',true); valid=false; }
+      else { showErr('errCounty',false); markInvalid('shopCounty',false); }
+      if(!cat){ showErr('errCat',true); markInvalid('shopCat',true); valid=false; }
+      else { showErr('errCat',false); markInvalid('shopCat',false); }
+      if(!valid) return;
+      sellerData.shopName    = shopName;
+      sellerData.displayName = document.getElementById('displayName').value.trim();
+      sellerData.county      = county;
+      sellerData.shopBio     = document.getElementById('shopBio').value.trim();
+      sellerData.category    = cat;
+      goToStep(1);
+    }
+
+    /* ── Step 2: save draft product ── */
+    function step2Next(){
+      var name  = document.getElementById('prod1Name').value.trim();
+      var price = document.getElementById('prod1Price').value;
+      var cat   = document.getElementById('prod1Cat').value;
+      var desc  = document.getElementById('prod1Desc').value.trim();
+      if(name){
+        var draft = { name:name, price:parseFloat(price)||0, category:cat, description:desc, createdAt: new Date().toISOString() };
+        try {
+          var drafts = JSON.parse(localStorage.getItem('sokoniDraftProducts')||'[]');
+          drafts.push(draft);
+          localStorage.setItem('sokoniDraftProducts', JSON.stringify(drafts));
+        } catch(e){}
+        sellerData.firstProduct = draft;
+      }
+      goToStep(2);
+    }
+
+    /* ── Step 3: payment ── */
+    function step3Next(){
+      var mpesa = document.getElementById('mpesaNum').value.trim();
+      var valid = /^(07|01)\d{8}$/.test(mpesa);
+      if(!valid){ showErr('errMpesa',true); markInvalid('mpesaNum',true); return; }
+      showErr('errMpesa',false); markInvalid('mpesaNum',false);
+      sellerData.mpesa   = mpesa;
+      sellerData.till    = document.getElementById('tillNum').value.trim();
+      sellerData.paybill = document.getElementById('paybillNum').value.trim();
+      goToStep(3);
+    }
+
+    /* ── Step 4: complete ── */
+    async function step4Complete(){
+      var methods = [];
+      if(document.getElementById('delSelf').checked)   methods.push('self');
+      if(document.getElementById('delSokoni').checked) methods.push('sokoni');
+      if(document.getElementById('delPickup').checked) methods.push('pickup');
+
+      var selectedZones = [];
+      document.querySelectorAll('#zoneChips .wiz-chip.selected').forEach(function(c){
+        selectedZones.push(c.dataset.zone);
+      });
+
+      sellerData.deliveryMethods = methods;
+      sellerData.deliveryZones   = selectedZones;
+      sellerData.stdRate         = document.getElementById('stdRate').value;
+      sellerData.exprRate        = document.getElementById('exprRate').value;
+      sellerData.completedAt     = new Date().toISOString();
+
+      /* Save to localStorage */
+      try { localStorage.setItem('sokoniSellerOnboarding', JSON.stringify(sellerData)); } catch(e){}
+
+      /* Save to Firestore via SokoniOnboarding */
+      if(window.SokoniOnboarding){
+        SokoniOnboarding.setStep('seller', 4, sellerData);
+        await SokoniOnboarding.complete('seller');
+      }
+
+      /* Also save to Firestore directly if DB available */
+      try {
+        var db   = window.firebaseDB;
+        var auth = window.firebaseAuth;
+        if(db && auth && auth.currentUser){
+          var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+          await fs.addDoc(fs.collection(db, 'onboardingCompleted'), {
+            role:  'seller',
+            uid:   auth.currentUser.uid,
+            data:  sellerData,
+            completedAt: new Date().toISOString()
+          });
+        }
+      } catch(err){ console.warn('[SellerOnboarding]', err); }
+
+      document.getElementById('successModal').style.display = 'flex';
+    }
+
+    /* ── Init progress from saved state ── */
+    window.addEventListener('load', function(){
+      try {
+        var saved = localStorage.getItem('sokoniSellerOnboarding');
+        if(saved) sellerData = JSON.parse(saved);
+      } catch(e){}
+      updateProgressUI();
+    });
+  </script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+{
+  "_comment": "SOKONI Operational Alerting — Google Cloud Monitoring alert policies.",
+  "_setup": [
+    "1. Install gcloud CLI: https://cloud.google.com/sdk/docs/install",
+    "2. Authenticate: gcloud auth login",
+    "3. Set project: gcloud config set project sokoni-aeb26",
+    "4. Apply all policies: node monitoring/apply-alerts.js",
+    "   OR apply one at a time: gcloud alpha monitoring policies create --policy-from-file=<policy_file.json>"
+  ],
+  "_notification_channels": [
+    "Create a notification channel first:",
+    "  gcloud alpha monitoring channels create --display-name='SOKONI Ops' --type=email --channel-labels=email_address=devops@mysokoni.co.ke",
+    "  Then copy the channel ID into NOTIFICATION_CHANNEL_ID below."
+  ],
+  "NOTIFICATION_CHANNEL_ID": "projects/sokoni-aeb26/notificationChannels/REPLACE_WITH_CHANNEL_ID",
+
+  "policies": [
+
+    {
+      "displayName": "Cloud Function Error Rate > 5%",
+      "documentation": {
+        "content": "More than 5% of Cloud Function executions are failing. Check function logs: https://console.cloud.google.com/functions?project=sokoni-aeb26",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "CF error rate over 5%",
+        "conditionThreshold": {
+          "filter": "resource.type=\"cloud_function\" AND metric.type=\"cloudfunctions.googleapis.com/function/execution_count\" AND metric.labels.status!=\"ok\"",
+          "comparison": "COMPARISON_GT",
+          "thresholdValue": 0.05,
+          "duration": "300s",
+          "aggregations": [{
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_RATE"
+          }]
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Cloud Function P95 Latency > 10s",
+      "documentation": {
+        "content": "95th percentile latency for Cloud Functions exceeds 10 seconds. Payment and webhook functions may be timing out.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "CF p95 latency > 10s",
+        "conditionThreshold": {
+          "filter": "resource.type=\"cloud_function\" AND metric.type=\"cloudfunctions.googleapis.com/function/execution_times\"",
+          "comparison": "COMPARISON_GT",
+          "thresholdValue": 10000,
+          "duration": "300s",
+          "aggregations": [{
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_PERCENTILE_95"
+          }]
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Firestore Read Latency P99 > 2s",
+      "documentation": {
+        "content": "Firestore reads are abnormally slow. Check for missing indexes or hot documents.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "Firestore p99 read latency > 2s",
+        "conditionThreshold": {
+          "filter": "resource.type=\"firestore_instance\" AND metric.type=\"firestore.googleapis.com/api/request_latencies\" AND metric.labels.op=\"RunQuery\"",
+          "comparison": "COMPARISON_GT",
+          "thresholdValue": 2000,
+          "duration": "300s",
+          "aggregations": [{
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_PERCENTILE_99"
+          }]
+        }
+      }],
+      "alertStrategy": { "autoClose": "3600s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Webhook DLQ Depth > 10",
+      "documentation": {
+        "content": "More than 10 webhooks are in the dead-letter queue. Payment confirmations may be failing. Check: https://us-central1-sokoni-aeb26.cloudfunctions.net/webhookHealth",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "DLQ depth over 10 (log-based)",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND jsonPayload.dlqDepth>10",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "86400s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Fraud Block Rate > 10/hour",
+      "documentation": {
+        "content": "More than 10 payments blocked by fraud engine in the past hour. Possible attack in progress. Review fraudLog and fraudBlocklist in Firestore.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "High fraud block rate",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND jsonPayload.fraudDecision=\"block\"",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "3600s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "HTTP 5xx Error Rate > 1%",
+      "documentation": {
+        "content": "Firebase Hosting is returning 5xx errors. CDN or origin may be degraded.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "Hosting 5xx rate > 1%",
+        "conditionThreshold": {
+          "filter": "resource.type=\"http_load_balancer\" AND metric.type=\"loadbalancing.googleapis.com/https/request_count\" AND metric.labels.response_code_class=\"500\"",
+          "comparison": "COMPARISON_GT",
+          "thresholdValue": 0.01,
+          "duration": "300s",
+          "aggregations": [{
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_RATE"
+          }]
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Hardcoded Secret Detected in Build",
+      "documentation": {
+        "content": "CI pipeline detected a potential hardcoded secret (ISPrivKey_live_, sk_live_, pk_live_). Build blocked. Review the commit immediately.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "CI secret scan failure",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"build\" AND textPayload:\"HARDCODED SECRET DETECTED\"",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "86400s" },
+      "combiner": "OR"
+    }
+
+  ]
+}

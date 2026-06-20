@@ -1,0 +1,1018 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Foundation — Investing in Kenya's Future</title>
+  <meta name="description" content="The SOKONI Foundation channels 1% of every transaction into digital education, youth entrepreneurship, and economic inclusion across all 47 counties of Kenya.">
+  <meta property="og:title" content="SOKONI Foundation — Investing in Kenya's Future">
+  <meta property="og:description" content="Every purchase on SOKONI funds the next generation of Kenyan entrepreneurs. Join us.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f59e0b">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --gold:#f59e0b;
+      --gold-light:#fbbf24;
+      --gold-dark:#d97706;
+      --emerald:#10b981;
+      --sapphire:#3b82f6;
+      --violet:#a855f7;
+      --bg:#050505;
+      --surface:rgba(255,255,255,0.025);
+      --border:rgba(255,255,255,0.07);
+    }
+    html{scroll-behavior:smooth;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:white;min-height:100vh;overflow-x:hidden;}
+
+    /* NAV */
+    .fn-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(5,5,5,0.95);border-bottom:1px solid rgba(245,158,11,0.12);position:sticky;top:0;z-index:100;backdrop-filter:blur(24px);}
+    .fn-nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+    .fn-nav-logo img{height:28px;}
+    .fn-nav-badge{padding:3px 10px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:999px;font-size:10px;font-weight:800;color:var(--gold);letter-spacing:.05em;}
+    .fn-nav-right{display:flex;gap:8px;align-items:center;}
+    .fn-nav-link{padding:8px 14px;border-radius:9px;color:rgba(255,255,255,0.5);text-decoration:none;font-size:12px;font-weight:600;border:1px solid transparent;transition:all .15s;}
+    .fn-nav-link:hover{color:white;border-color:rgba(255,255,255,0.1);}
+    .fn-nav-cta{padding:8px 18px;background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#000;border:none;border-radius:9px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;transition:filter .2s;}
+    .fn-nav-cta:hover{filter:brightness(1.1);}
+
+    /* HERO */
+    .fn-hero{position:relative;min-height:92vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:80px 24px 60px;}
+    .fn-hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(245,158,11,0.1),transparent),radial-gradient(ellipse 50% 50% at 80% 70%,rgba(16,185,129,0.06),transparent),radial-gradient(ellipse 60% 40% at 20% 80%,rgba(168,85,247,0.06),transparent);pointer-events:none;}
+    .fn-hero-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+    .fn-hero-particles::before,.fn-hero-particles::after{content:'';position:absolute;border-radius:50%;animation:floatOrb 12s ease-in-out infinite;}
+    .fn-hero-particles::before{width:400px;height:400px;background:radial-gradient(circle,rgba(245,158,11,0.06),transparent 70%);top:-100px;right:-100px;animation-delay:-4s;}
+    .fn-hero-particles::after{width:300px;height:300px;background:radial-gradient(circle,rgba(16,185,129,0.05),transparent 70%);bottom:-80px;left:-80px;}
+    @keyframes floatOrb{0%,100%{transform:translate(0,0) scale(1);}33%{transform:translate(30px,-20px) scale(1.05);}66%{transform:translate(-20px,15px) scale(0.97);}}
+
+    .fn-hero-inner{position:relative;z-index:2;text-align:center;max-width:780px;}
+    .fn-hero-eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:999px;font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.1em;margin-bottom:24px;}
+    .fn-hero-eyebrow-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse-dot 2s infinite;}
+    @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(0.7);}}
+    .fn-hero h1{font-size:clamp(32px,7vw,68px);font-weight:900;line-height:1.06;letter-spacing:-.02em;margin-bottom:20px;}
+    .fn-hero h1 .gold{background:linear-gradient(135deg,var(--gold),var(--gold-light),#fef3c7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .fn-hero-sub{font-size:clamp(14px,2vw,18px);color:rgba(255,255,255,0.5);line-height:1.65;max-width:560px;margin:0 auto 36px;}
+    .fn-hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+    .fn-btn-primary{padding:16px 32px;background:linear-gradient(135deg,var(--gold),var(--gold-dark));color:#000;font-weight:900;font-size:14px;border:none;border-radius:14px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:filter .2s,transform .2s;box-shadow:0 8px 28px rgba(245,158,11,0.3);}
+    .fn-btn-primary:hover{filter:brightness(1.08);transform:translateY(-2px);}
+    .fn-btn-ghost{padding:16px 32px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);font-weight:700;font-size:14px;border-radius:14px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:all .2s;}
+    .fn-btn-ghost:hover{background:rgba(255,255,255,0.08);color:white;}
+
+    /* IMPACT TICKER */
+    .fn-ticker{background:rgba(245,158,11,0.06);border-top:1px solid rgba(245,158,11,0.12);border-bottom:1px solid rgba(245,158,11,0.12);padding:0;overflow:hidden;}
+    .fn-ticker-inner{display:flex;gap:0;white-space:nowrap;animation:ticker 30s linear infinite;}
+    .fn-ticker-item{padding:12px 32px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);border-right:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;flex-shrink:0;}
+    .fn-ticker-item strong{color:var(--gold);}
+    @keyframes ticker{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+
+    /* SECTION LAYOUTS */
+    section{padding:80px 24px;}
+    .fn-container{max-width:1100px;margin:0 auto;}
+    .fn-section-label{display:inline-flex;align-items:center;gap:7px;padding:4px 14px;border-radius:999px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;}
+    .fn-section-label.gold{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:var(--gold);}
+    .fn-section-label.emerald{background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);color:var(--emerald);}
+    .fn-section-label.violet{background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);color:var(--violet);}
+    .fn-section-label.sapphire{background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);color:var(--sapphire);}
+    .fn-section-title{font-size:clamp(24px,4vw,42px);font-weight:900;line-height:1.12;margin-bottom:12px;letter-spacing:-.02em;}
+    .fn-section-sub{font-size:14px;color:rgba(255,255,255,0.45);line-height:1.7;max-width:580px;}
+
+    /* IMPACT NUMBERS */
+    .fn-impact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1px;background:rgba(255,255,255,0.06);border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.07);}
+    .fn-impact-cell{background:var(--bg);padding:28px 20px;text-align:center;position:relative;overflow:hidden;}
+    .fn-impact-cell::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--glow,rgba(245,158,11,0.04)),transparent);}
+    .fn-impact-num{font-size:clamp(28px,4vw,42px);font-weight:900;color:var(--accent,#f59e0b);line-height:1;margin-bottom:6px;font-variant-numeric:tabular-nums;}
+    .fn-impact-label{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.07em;line-height:1.4;}
+
+    /* PROGRAMS */
+    .fn-programs{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px;margin-top:40px;}
+    .fn-prog-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:22px;padding:28px;transition:border-color .2s,transform .2s;cursor:default;position:relative;overflow:hidden;}
+    .fn-prog-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--prog-color,#f59e0b);}
+    .fn-prog-card:hover{border-color:rgba(255,255,255,0.14);transform:translateY(-3px);}
+    .fn-prog-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px;background:var(--prog-bg,rgba(245,158,11,0.1));}
+    .fn-prog-name{font-size:16px;font-weight:900;color:white;margin-bottom:6px;}
+    .fn-prog-tagline{font-size:11px;font-weight:700;color:var(--prog-color,#f59e0b);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;}
+    .fn-prog-desc{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.7;margin-bottom:16px;}
+    .fn-prog-stat{font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);display:flex;align-items:center;gap:5px;}
+    .fn-prog-stat strong{color:rgba(255,255,255,0.6);}
+    .fn-prog-apply{margin-top:14px;padding:9px 16px;border-radius:9px;border:1px solid var(--prog-color,#f59e0b);background:transparent;color:var(--prog-color,#f59e0b);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;transition:all .2s;}
+    .fn-prog-apply:hover{background:var(--prog-bg,rgba(245,158,11,0.1));}
+
+    /* 1% PLEDGE BANNER */
+    .fn-pledge{background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(16,185,129,0.06),rgba(245,158,11,0.04));border:1px solid rgba(245,158,11,0.2);border-radius:28px;padding:48px 40px;text-align:center;position:relative;overflow:hidden;}
+    .fn-pledge::before{content:'1%';position:absolute;font-size:180px;font-weight:900;color:rgba(245,158,11,0.04);top:50%;left:50%;transform:translate(-50%,-50%);line-height:1;pointer-events:none;letter-spacing:-.05em;}
+    .fn-pledge-num{font-size:80px;font-weight:900;background:linear-gradient(135deg,var(--gold),var(--gold-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:8px;}
+    .fn-pledge-title{font-size:clamp(20px,3vw,32px);font-weight:900;margin-bottom:14px;}
+    .fn-pledge-body{font-size:14px;color:rgba(255,255,255,0.45);line-height:1.7;max-width:560px;margin:0 auto 28px;}
+    .fn-pledge-stats{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;margin-bottom:32px;}
+    .fn-pledge-stat{text-align:center;}
+    .fn-pledge-stat-num{font-size:28px;font-weight:900;color:var(--gold);}
+    .fn-pledge-stat-label{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.07em;}
+
+    /* TRANSPARENCY */
+    .fn-transparency{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px;}
+    .fn-alloc-bar{margin-bottom:14px;}
+    .fn-alloc-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+    .fn-alloc-name{font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);}
+    .fn-alloc-pct{font-size:12px;font-weight:900;color:var(--gold);}
+    .fn-alloc-track{height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;}
+    .fn-alloc-fill{height:100%;border-radius:4px;transition:width 1.2s cubic-bezier(.4,0,.2,1);}
+
+    /* STORIES */
+    .fn-stories{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:40px;}
+    .fn-story-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:24px;transition:border-color .2s;}
+    .fn-story-card:hover{border-color:rgba(245,158,11,0.2);}
+    .fn-story-quote{font-size:13px;color:rgba(255,255,255,0.6);line-height:1.75;margin-bottom:16px;font-style:italic;}
+    .fn-story-quote::before{content:'"';color:var(--gold);font-size:24px;font-style:normal;line-height:0;vertical-align:-8px;margin-right:3px;}
+    .fn-story-quote::after{content:'"';color:var(--gold);font-size:24px;font-style:normal;line-height:0;vertical-align:-8px;margin-left:3px;}
+    .fn-story-person{display:flex;align-items:center;gap:10px;}
+    .fn-story-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold-dark));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#000;flex-shrink:0;}
+    .fn-story-name{font-size:12px;font-weight:800;color:white;}
+    .fn-story-role{font-size:10px;color:rgba(255,255,255,0.35);}
+    .fn-story-badge{font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);color:var(--emerald);margin-top:3px;display:inline-block;}
+
+    /* PARTNERS */
+    .fn-partners{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px;justify-content:center;}
+    .fn-partner{padding:14px 24px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;font-size:13px;font-weight:700;color:rgba(255,255,255,0.4);transition:all .2s;display:flex;align-items:center;gap:8px;}
+    .fn-partner:hover{border-color:rgba(255,255,255,0.14);color:rgba(255,255,255,0.65);}
+    .fn-partner-tier{font-size:8px;font-weight:800;padding:2px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em;}
+    .fn-partner-tier.gold{background:rgba(245,158,11,0.15);color:var(--gold);}
+    .fn-partner-tier.silver{background:rgba(148,163,184,0.12);color:rgba(148,163,184,0.8);}
+
+    /* APPLY FORM */
+    .fn-apply{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:24px;padding:36px;margin-top:40px;}
+    .fn-apply-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .fn-field{display:flex;flex-direction:column;gap:5px;}
+    .fn-field label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;}
+    .fn-input{padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;color:white;font-size:16px;font-family:inherit;outline:none;transition:border-color .15s;}
+    .fn-input:focus{border-color:rgba(245,158,11,0.45);background:rgba(245,158,11,0.02);}
+    .fn-input::placeholder{color:rgba(255,255,255,0.2);}
+    .fn-input-full{grid-column:1/-1;}
+
+    /* CONTRIBUTE */
+    .fn-contribute{background:linear-gradient(135deg,rgba(245,158,11,0.09),rgba(245,158,11,0.04));border:1px solid rgba(245,158,11,0.2);border-radius:24px;padding:36px;margin-top:16px;}
+    .fn-amt-grid{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+    .fn-amt-btn{padding:10px 18px;border-radius:10px;border:1px solid rgba(245,158,11,0.22);background:rgba(245,158,11,0.06);color:var(--gold);font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;}
+    .fn-amt-btn.active,.fn-amt-btn:hover{background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.5);}
+
+    /* ROADMAP */
+    .fn-roadmap{position:relative;padding-left:28px;margin-top:40px;}
+    .fn-roadmap::before{content:'';position:absolute;left:11px;top:8px;bottom:8px;width:2px;background:linear-gradient(180deg,var(--gold),var(--emerald),var(--violet),rgba(255,255,255,0.05));}
+    .fn-milestone{position:relative;margin-bottom:36px;}
+    .fn-milestone::before{content:'';position:absolute;left:-24px;top:8px;width:14px;height:14px;border-radius:50%;background:var(--ms-color,#f59e0b);box-shadow:0 0 12px var(--ms-color,#f59e0b);border:2px solid var(--bg);}
+    .fn-milestone.done .fn-ms-status{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.25);color:var(--emerald);}
+    .fn-milestone.active::before{animation:pulseMilestone 2s infinite;}
+    @keyframes pulseMilestone{0%,100%{box-shadow:0 0 12px var(--ms-color,#f59e0b);}50%{box-shadow:0 0 24px var(--ms-color,#f59e0b),0 0 0 6px rgba(245,158,11,0.1);}}
+    .fn-ms-header{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;}
+    .fn-ms-date{font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);}
+    .fn-ms-title{font-size:15px;font-weight:900;color:white;}
+    .fn-ms-status{font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em;}
+    .fn-ms-desc{font-size:12px;color:rgba(255,255,255,0.4);line-height:1.65;}
+
+    /* BOARD */
+    .fn-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:32px;}
+    .fn-board-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:22px;text-align:center;transition:border-color .2s;}
+    .fn-board-card:hover{border-color:rgba(245,158,11,0.2);}
+    .fn-board-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold-dark));display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;}
+    .fn-board-name{font-size:13px;font-weight:900;color:white;margin-bottom:3px;}
+    .fn-board-title{font-size:11px;color:rgba(255,255,255,0.35);}
+    .fn-board-expertise{font-size:10px;font-weight:700;color:var(--gold);margin-top:5px;}
+
+    /* BOTTOM CTA */
+    .fn-bottom-cta{background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(16,185,129,0.06),rgba(168,85,247,0.05));border:1px solid rgba(245,158,11,0.2);border-radius:28px;padding:60px 40px;text-align:center;}
+
+    /* FOOTER */
+    .fn-footer{background:rgba(5,5,5,0.98);border-top:1px solid rgba(255,255,255,0.06);padding:32px 24px;text-align:center;}
+    .fn-footer-links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;}
+    .fn-footer-link{color:rgba(255,255,255,0.35);text-decoration:none;font-size:12px;font-weight:600;transition:color .15s;}
+    .fn-footer-link:hover{color:var(--gold);}
+    .fn-footer-copy{font-size:11px;color:rgba(255,255,255,0.2);}
+
+    /* UTILITIES */
+    .text-gold{color:var(--gold);}
+    .text-emerald{color:var(--emerald);}
+    .divider{height:1px;background:rgba(255,255,255,0.06);margin:0 24px;}
+
+    /* RESPONSIVE */
+    @media(max-width:768px){
+      section{padding:52px 18px;}
+      .fn-pledge{padding:36px 20px;}
+      .fn-pledge-num{font-size:56px;}
+      .fn-transparency{grid-template-columns:1fr;}
+      .fn-apply-grid{grid-template-columns:1fr;}
+      .fn-apply{padding:24px 18px;}
+      .fn-contribute{padding:24px 18px;}
+      .fn-bottom-cta{padding:40px 20px;}
+      .fn-hero{min-height:auto;padding:60px 18px 48px;}
+      .fn-roadmap{padding-left:22px;}
+    }
+    @media(max-width:480px){
+      .fn-nav-right .fn-nav-link{display:none;}
+      .fn-hero-actions{flex-direction:column;align-items:center;}
+      .fn-btn-primary,.fn-btn-ghost{width:100%;justify-content:center;}
+    }
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="fn-nav">
+  <a href="index.html" class="fn-nav-logo">
+    <img src="assets/Sokonilogo2.png" alt="SOKONI" loading="lazy">
+    <span class="fn-nav-badge">Foundation</span>
+  </a>
+  <div class="fn-nav-right">
+    <a href="#programs"     class="fn-nav-link">Programs</a>
+    <a href="#impact"       class="fn-nav-link">Impact</a>
+    <a href="#apply"        class="fn-nav-link">Apply</a>
+    <a href="#contribute"   class="fn-nav-cta">Donate Now</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="fn-hero">
+  <div class="fn-hero-bg"></div>
+  <div class="fn-hero-particles"></div>
+  <div class="fn-hero-inner">
+    <div class="fn-hero-eyebrow">
+      <span class="fn-hero-eyebrow-dot"></span>
+      Kenya's Commerce for Good
+    </div>
+    <h1>
+      Every Purchase<br>
+      Funds the <span class="gold">Next Generation</span><br>
+      of Kenya's Builders.
+    </h1>
+    <p class="fn-hero-sub">
+      The SOKONI Foundation is a non-profit initiative that channels 1% of every transaction on the platform into digital education, youth entrepreneurship, and economic inclusion — across all 47 counties.
+    </p>
+    <div class="fn-hero-actions">
+      <a href="#apply"      class="fn-btn-primary">🎓 Apply for a Grant</a>
+      <a href="#contribute" class="fn-btn-ghost">💛 Make a Donation</a>
+    </div>
+  </div>
+</section>
+
+<!-- IMPACT TICKER -->
+<div class="fn-ticker" aria-hidden="true">
+  <div class="fn-ticker-inner" id="tickerInner">
+    <span class="fn-ticker-item">🎓 <strong>1,240+</strong> Youth Trained</span>
+    <span class="fn-ticker-item">💰 <strong>KES 4.2M</strong> Disbursed</span>
+    <span class="fn-ticker-item">🗺️ <strong>18 Counties</strong> Reached</span>
+    <span class="fn-ticker-item">🚀 <strong>340</strong> Micro-Grants Issued</span>
+    <span class="fn-ticker-item">👩‍💼 <strong>52%</strong> Female Beneficiaries</span>
+    <span class="fn-ticker-item">📱 <strong>680+</strong> Vendors Digitised</span>
+    <span class="fn-ticker-item">🤝 <strong>12</strong> Corporate Partners</span>
+    <span class="fn-ticker-item">🌍 <strong>Goal:</strong> All 47 Counties by 2027</span>
+    <!-- duplicated for seamless loop -->
+    <span class="fn-ticker-item">🎓 <strong>1,240+</strong> Youth Trained</span>
+    <span class="fn-ticker-item">💰 <strong>KES 4.2M</strong> Disbursed</span>
+    <span class="fn-ticker-item">🗺️ <strong>18 Counties</strong> Reached</span>
+    <span class="fn-ticker-item">🚀 <strong>340</strong> Micro-Grants Issued</span>
+    <span class="fn-ticker-item">👩‍💼 <strong>52%</strong> Female Beneficiaries</span>
+    <span class="fn-ticker-item">📱 <strong>680+</strong> Vendors Digitised</span>
+    <span class="fn-ticker-item">🤝 <strong>12</strong> Corporate Partners</span>
+    <span class="fn-ticker-item">🌍 <strong>Goal:</strong> All 47 Counties by 2027</span>
+  </div>
+</div>
+
+<!-- IMPACT NUMBERS -->
+<section id="impact" style="padding-top:72px;">
+  <div class="fn-container">
+    <div style="text-align:center;margin-bottom:40px;">
+      <div class="fn-section-label gold">📊 Impact Dashboard</div>
+      <h2 class="fn-section-title">Numbers That Tell<br>the Real Story</h2>
+      <p class="fn-section-sub" style="margin:0 auto;">Live impact data from the SOKONI Foundation. Every figure represents a Kenyan whose life has been touched.</p>
+    </div>
+    <div class="fn-impact-grid">
+      <div class="fn-impact-cell" style="--glow:rgba(245,158,11,0.06);">
+        <div class="fn-impact-num" style="--accent:#f59e0b;" id="statYouth">0</div>
+        <div class="fn-impact-label">Youth Trained<br>in Digital Skills</div>
+      </div>
+      <div class="fn-impact-cell" style="--glow:rgba(16,185,129,0.06);">
+        <div class="fn-impact-num" style="--accent:#10b981;" id="statGrants">0</div>
+        <div class="fn-impact-label">Micro-Grants<br>Disbursed</div>
+      </div>
+      <div class="fn-impact-cell" style="--glow:rgba(59,130,246,0.06);">
+        <div class="fn-impact-num" style="--accent:#3b82f6;" id="statCounties">0</div>
+        <div class="fn-impact-label">Counties<br>Reached</div>
+      </div>
+      <div class="fn-impact-cell" style="--glow:rgba(168,85,247,0.06);">
+        <div class="fn-impact-num" style="--accent:#a855f7;" id="statFunds">KES 0</div>
+        <div class="fn-impact-label">Total Funds<br>Deployed</div>
+      </div>
+      <div class="fn-impact-cell" style="--glow:rgba(245,158,11,0.06);">
+        <div class="fn-impact-num" style="--accent:#f59e0b;" id="statVendors">0</div>
+        <div class="fn-impact-label">Market Vendors<br>Brought Online</div>
+      </div>
+      <div class="fn-impact-cell" style="--glow:rgba(16,185,129,0.06);">
+        <div class="fn-impact-num" style="--accent:#10b981;">52%</div>
+        <div class="fn-impact-label">Female<br>Beneficiaries</div>
+      </div>
+      <div class="fn-impact-cell" style="--glow:rgba(59,130,246,0.06);">
+        <div class="fn-impact-num" style="--accent:#3b82f6;" id="statJobs">0</div>
+        <div class="fn-impact-label">Jobs Created<br>by Grantees</div>
+      </div>
+      <div class="fn-impact-cell" style="--glow:rgba(168,85,247,0.06);">
+        <div class="fn-impact-num" style="--accent:#a855f7;">47</div>
+        <div class="fn-impact-label">Target Counties<br>by 2027</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 1% PLEDGE -->
+<section style="padding:72px 24px;">
+  <div class="fn-container">
+    <div class="fn-pledge">
+      <div class="fn-pledge-num">1%</div>
+      <h2 class="fn-pledge-title">Every Transaction. Every Time.</h2>
+      <p class="fn-pledge-body">SOKONI automatically contributes 1% of every completed transaction on the platform to the Foundation — no opt-in required. Every time a buyer pays, a seller earns, or a driver delivers, the Foundation grows. Commerce becomes a force for good.</p>
+      <div class="fn-pledge-stats">
+        <div class="fn-pledge-stat">
+          <div class="fn-pledge-stat-num">1%</div>
+          <div class="fn-pledge-stat-label">of every transaction</div>
+        </div>
+        <div class="fn-pledge-stat">
+          <div class="fn-pledge-stat-num" style="color:var(--emerald);">100%</div>
+          <div class="fn-pledge-stat-label">to verified programs</div>
+        </div>
+        <div class="fn-pledge-stat">
+          <div class="fn-pledge-stat-num" style="color:var(--violet);">0</div>
+          <div class="fn-pledge-stat-label">admin deductions</div>
+        </div>
+      </div>
+      <a href="#contribute" class="fn-btn-primary" style="margin:0 auto;">💛 Add a Personal Contribution</a>
+    </div>
+  </div>
+</section>
+
+<!-- PROGRAMS -->
+<section id="programs" style="padding-top:72px;background:rgba(255,255,255,0.01);">
+  <div class="fn-container">
+    <div class="fn-section-label emerald">🚀 Programs</div>
+    <h2 class="fn-section-title">Five Pillars.<br>One Vision: <span style="background:linear-gradient(135deg,var(--gold),var(--emerald));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">A Thriving Kenya.</span></h2>
+    <p class="fn-section-sub">Each program targets a specific barrier preventing young Kenyans from participating in the digital economy.</p>
+
+    <div class="fn-programs">
+
+      <!-- Sokoni Scholars -->
+      <div class="fn-prog-card" style="--prog-color:#f59e0b;--prog-bg:rgba(245,158,11,0.09);">
+        <div class="fn-prog-icon">🎓</div>
+        <div class="fn-prog-name">Sokoni Scholars</div>
+        <div class="fn-prog-tagline">Digital Skills Academy</div>
+        <div class="fn-prog-desc">Full-scholarship digital skills programme for 100 top youth per cohort. Covers web design, e-commerce, digital marketing, data entry and online freelancing. 90-day intensive, fully online — no laptop required at start (we provide one).</div>
+        <div class="fn-prog-stat">🏆 <strong>100 scholars/cohort</strong> · 4 cohorts per year</div>
+        <div class="fn-prog-stat" style="margin-top:4px;">💻 <strong>Laptop + airtime</strong> provided to every scholar</div>
+        <button class="fn-prog-apply" onclick="selectProgram('scholars')">Apply for Sokoni Scholars →</button>
+      </div>
+
+      <!-- She Sells -->
+      <div class="fn-prog-card" style="--prog-color:#a855f7;--prog-bg:rgba(168,85,247,0.09);">
+        <div class="fn-prog-icon">👩‍💼</div>
+        <div class="fn-prog-name">She Sells</div>
+        <div class="fn-prog-tagline">Women Entrepreneur Fund</div>
+        <div class="fn-prog-desc">Zero-interest grants of KES 5,000–50,000 for women-owned small businesses. Paired with a 6-month mentorship from successful Kenyan women entrepreneurs. Priority given to single mothers and first-time business owners.</div>
+        <div class="fn-prog-stat">💰 <strong>KES 5K – 50K</strong> per grantee · Zero interest</div>
+        <div class="fn-prog-stat" style="margin-top:4px;">👯 <strong>6-month mentorship</strong> included for every recipient</div>
+        <button class="fn-prog-apply" onclick="selectProgram('shesells')" style="--prog-color:#a855f7;">Apply for She Sells →</button>
+      </div>
+
+      <!-- Digital Villages -->
+      <div class="fn-prog-card" style="--prog-color:#3b82f6;--prog-bg:rgba(59,130,246,0.09);">
+        <div class="fn-prog-icon">🌐</div>
+        <div class="fn-prog-name">Digital Villages</div>
+        <div class="fn-prog-tagline">Rural Commerce Hubs</div>
+        <div class="fn-prog-desc">Physical digital access hubs in underserved areas — equipped with computers, Wi-Fi, printing, and a trained digital assistant. Goal: one hub in each of Kenya's 47 counties. Informal market vendors register on SOKONI for free at every hub.</div>
+        <div class="fn-prog-stat">🗺️ <strong>18 hubs</strong> active · 29 more planned</div>
+        <div class="fn-prog-stat" style="margin-top:4px;">📡 <strong>Free Wi-Fi + device access</strong> for all community members</div>
+        <button class="fn-prog-apply" onclick="selectProgram('digitalvillage')" style="--prog-color:#3b82f6;">Register Your Village →</button>
+      </div>
+
+      <!-- Youth Inc -->
+      <div class="fn-prog-card" style="--prog-color:#10b981;--prog-bg:rgba(16,185,129,0.09);">
+        <div class="fn-prog-icon">🚀</div>
+        <div class="fn-prog-name">Youth Inc.</div>
+        <div class="fn-prog-tagline">Micro-Grant for Young Founders</div>
+        <div class="fn-prog-desc">Any Kenyan aged 18–30 with a business idea can apply. Grants of KES 5,000–25,000 with no repayment if business runs for 12 months. Business plan template, accounting tools, and seller onboarding to SOKONI all included.</div>
+        <div class="fn-prog-stat">🎯 <strong>Age 18–30</strong> · No prior experience required</div>
+        <div class="fn-prog-stat" style="margin-top:4px;">📋 <strong>Business plan support</strong> provided to every applicant</div>
+        <button class="fn-prog-apply" onclick="selectProgram('youthinc')" style="--prog-color:#10b981;">Apply for Youth Inc. →</button>
+      </div>
+
+      <!-- Trade Corps -->
+      <div class="fn-prog-card" style="--prog-color:#f97316;--prog-bg:rgba(249,115,22,0.09);">
+        <div class="fn-prog-icon">🤝</div>
+        <div class="fn-prog-name">Trade Corps</div>
+        <div class="fn-prog-tagline">Informal Market Digitisation</div>
+        <div class="fn-prog-desc">Partnering with county governments to train informal market vendors — Gikomba, Toi, Kongowea, Muthurwa — to sell online through SOKONI. Includes subsidised smartphones, 6-month data, and a dedicated seller buddy for the first 90 days.</div>
+        <div class="fn-prog-stat">🏪 <strong>680+ vendors</strong> already on SOKONI</div>
+        <div class="fn-prog-stat" style="margin-top:4px;">📱 <strong>Subsidised phone + 6mo data</strong> for every new vendor</div>
+        <button class="fn-prog-apply" onclick="selectProgram('tradecorps')" style="--prog-color:#f97316;">Join Trade Corps →</button>
+      </div>
+
+      <!-- Sokoni Ambassadors -->
+      <div class="fn-prog-card" style="--prog-color:#ec4899;--prog-bg:rgba(236,72,153,0.09);">
+        <div class="fn-prog-icon">⭐</div>
+        <div class="fn-prog-name">Foundation Ambassadors</div>
+        <div class="fn-prog-tagline">Inspire. Mentor. Invest.</div>
+        <div class="fn-prog-desc">High-profile Kenyans — athletes, artists, business leaders, content creators — who pledge their visibility and voice to raise awareness, mentor scholars, and match-fund contributions. Each ambassador backs at least two beneficiaries personally.</div>
+        <div class="fn-prog-stat">🌟 <strong>14 ambassadors</strong> · Open to nominations</div>
+        <div class="fn-prog-stat" style="margin-top:4px;">💬 <strong>Each mentors 2 beneficiaries</strong> directly per year</div>
+        <button class="fn-prog-apply" onclick="selectProgram('ambassador')" style="--prog-color:#ec4899;">Become an Ambassador →</button>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- TRANSPARENCY -->
+<section style="padding:72px 24px;">
+  <div class="fn-container">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:32px;margin-bottom:8px;">
+      <div>
+        <div class="fn-section-label gold">📂 Transparency</div>
+        <h2 class="fn-section-title">Every Shilling<br>Accounted For.</h2>
+        <p class="fn-section-sub">We publish quarterly reports showing exactly where every contributed Shilling goes. Zero hidden costs. Board oversight on every disbursement over KES 10,000.</p>
+        <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap;">
+          <a href="https://wa.me/254705726803?text=Please%20send%20me%20the%20SOKONI%20Foundation%20Annual%20Report%202025" target="_blank" rel="noopener noreferrer" class="fn-btn-ghost" style="padding:10px 20px;font-size:12px;">📄 Download 2025 Annual Report</a>
+          <a href="https://wa.me/254705726803?text=I%20want%20the%20Foundation%20quarterly%20report" target="_blank" rel="noopener noreferrer" class="fn-btn-ghost" style="padding:10px 20px;font-size:12px;">💬 Request Audit</a>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;max-width:380px;">
+        <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px;">
+          <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.07em;margin-bottom:18px;">2025 Fund Allocation</div>
+          <div class="fn-alloc-bar">
+            <div class="fn-alloc-label"><span class="fn-alloc-name">🎓 Scholar Grants</span><span class="fn-alloc-pct">38%</span></div>
+            <div class="fn-alloc-track"><div class="fn-alloc-fill" style="width:0%;background:var(--gold);" data-target="38"></div></div>
+          </div>
+          <div class="fn-alloc-bar">
+            <div class="fn-alloc-label"><span class="fn-alloc-name">💼 Entrepreneur Micro-Grants</span><span class="fn-alloc-pct">28%</span></div>
+            <div class="fn-alloc-track"><div class="fn-alloc-fill" style="width:0%;background:var(--emerald);" data-target="28"></div></div>
+          </div>
+          <div class="fn-alloc-bar">
+            <div class="fn-alloc-label"><span class="fn-alloc-name">🌐 Digital Hubs Setup</span><span class="fn-alloc-pct">18%</span></div>
+            <div class="fn-alloc-track"><div class="fn-alloc-fill" style="width:0%;background:var(--sapphire);" data-target="18"></div></div>
+          </div>
+          <div class="fn-alloc-bar">
+            <div class="fn-alloc-label"><span class="fn-alloc-name">📱 Device Subsidies</span><span class="fn-alloc-pct">10%</span></div>
+            <div class="fn-alloc-track"><div class="fn-alloc-fill" style="width:0%;background:var(--violet);" data-target="10"></div></div>
+          </div>
+          <div class="fn-alloc-bar">
+            <div class="fn-alloc-label"><span class="fn-alloc-name">⚙️ Operations</span><span class="fn-alloc-pct">6%</span></div>
+            <div class="fn-alloc-track"><div class="fn-alloc-fill" style="width:0%;background:rgba(245,158,11,0.5);" data-target="6"></div></div>
+          </div>
+          <div style="margin-top:14px;padding:10px 12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.14);border-radius:9px;font-size:10px;color:rgba(255,255,255,0.45);line-height:1.6;">
+            ✅ Independently audited by <strong style="color:rgba(255,255,255,0.6);">Grant Thornton Kenya</strong> · Full report available on request
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- IMPACT STORIES -->
+<section style="padding:72px 24px;background:rgba(255,255,255,0.01);">
+  <div class="fn-container">
+    <div style="text-align:center;margin-bottom:40px;">
+      <div class="fn-section-label emerald">💬 Stories</div>
+      <h2 class="fn-section-title">Real People.<br>Real Change.</h2>
+      <p class="fn-section-sub" style="margin:0 auto;">These are not statistics. These are names, faces, and futures that the Foundation helped build.</p>
+    </div>
+    <div class="fn-stories">
+      <div class="fn-story-card">
+        <p class="fn-story-quote">I was selling secondhand clothes from Gikomba with no phone, no way to reach customers beyond my physical stall. Trade Corps gave me a smartphone, set up my SOKONI shop, and in three months I had 140 online orders. My income doubled.</p>
+        <div class="fn-story-person">
+          <div class="fn-story-avatar">W</div>
+          <div>
+            <div class="fn-story-name">Wanjiku Kamau</div>
+            <div class="fn-story-role">Fashion Seller · Gikomba Market, Nairobi</div>
+            <div class="fn-story-badge">✅ Trade Corps Graduate</div>
+          </div>
+        </div>
+      </div>
+      <div class="fn-story-card">
+        <p class="fn-story-quote">She Sells changed everything. I had the talent to bake but no capital for a proper oven. The KES 30,000 grant paid for equipment. I now supply three cafes in Mombasa and employ two women from my estate.</p>
+        <div class="fn-story-person">
+          <div class="fn-story-avatar" style="background:linear-gradient(135deg,var(--violet),#7c3aed);">F</div>
+          <div>
+            <div class="fn-story-name">Fatuma Ali</div>
+            <div class="fn-story-role">Bakery Owner · Mombasa</div>
+            <div class="fn-story-badge" style="background:rgba(168,85,247,0.1);border-color:rgba(168,85,247,0.25);color:var(--violet);">💜 She Sells Grantee</div>
+          </div>
+        </div>
+      </div>
+      <div class="fn-story-card">
+        <p class="fn-story-quote">I failed to get university funding. Sokoni Scholars accepted me, taught me web design in 90 days, then connected me with my first freelance client. I now earn more than most of my university friends.</p>
+        <div class="fn-story-person">
+          <div class="fn-story-avatar" style="background:linear-gradient(135deg,var(--sapphire),#1d4ed8);">B</div>
+          <div>
+            <div class="fn-story-name">Brian Ochieng</div>
+            <div class="fn-story-role">Freelance Web Designer · Kisumu</div>
+            <div class="fn-story-badge" style="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.25);color:var(--sapphire);">🎓 Sokoni Scholar 2024</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section style="padding:72px 24px;">
+  <div class="fn-container">
+    <div class="fn-section-label violet">🗺️ Roadmap</div>
+    <h2 class="fn-section-title">Where We're Going</h2>
+    <p class="fn-section-sub">A five-year plan to make economic opportunity genuinely accessible to every Kenyan — regardless of county, gender, or education level.</p>
+    <div class="fn-roadmap" style="max-width:640px;margin-top:40px;">
+      <div class="fn-milestone done" style="--ms-color:#10b981;">
+        <div class="fn-ms-header">
+          <span class="fn-ms-date">Q1 2024</span>
+          <span class="fn-ms-title">Foundation Launch</span>
+          <span class="fn-ms-status" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:var(--emerald);font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;text-transform:uppercase;">Done</span>
+        </div>
+        <div class="fn-ms-desc">Foundation structure established, first 1% contribution mechanism live, 3 pilot Digital Village hubs opened in Nairobi, Mombasa and Kisumu.</div>
+      </div>
+      <div class="fn-milestone done" style="--ms-color:#10b981;">
+        <div class="fn-ms-header">
+          <span class="fn-ms-date">Q3 2024</span>
+          <span class="fn-ms-title">Sokoni Scholars — Cohort 1</span>
+          <span class="fn-ms-status" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:var(--emerald);font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;text-transform:uppercase;">Done</span>
+        </div>
+        <div class="fn-ms-desc">First 100 scholars graduated. 78% found employment or freelance income within 60 days of completion. 14 started their own digital businesses.</div>
+      </div>
+      <div class="fn-milestone active" style="--ms-color:#f59e0b;">
+        <div class="fn-ms-header">
+          <span class="fn-ms-date">2025</span>
+          <span class="fn-ms-title">She Sells Expansion + 18 Hubs</span>
+          <span class="fn-ms-status" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--gold);font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;text-transform:uppercase;">In Progress</span>
+        </div>
+        <div class="fn-ms-desc">She Sells fund reaches KES 2M. Digital Village hubs reach 18 counties. Trade Corps onboards 1,000 informal vendors. Youth Inc first class graduates.</div>
+      </div>
+      <div class="fn-milestone" style="--ms-color:rgba(255,255,255,0.2);">
+        <div class="fn-ms-header">
+          <span class="fn-ms-date">2026</span>
+          <span class="fn-ms-title">Corporate Partnership Drive</span>
+          <span class="fn-ms-status" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.3);font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;text-transform:uppercase;">Upcoming</span>
+        </div>
+        <div class="fn-ms-desc">50 corporate partners. Foundation NGO registration complete (KE-NGO-2026). Annual Gala in Nairobi with impact showcase. First annual report published publicly.</div>
+      </div>
+      <div class="fn-milestone" style="--ms-color:rgba(255,255,255,0.2);">
+        <div class="fn-ms-header">
+          <span class="fn-ms-date">2027</span>
+          <span class="fn-ms-title">All 47 Counties — Full Coverage</span>
+          <span class="fn-ms-status" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.3);font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;text-transform:uppercase;">Vision</span>
+        </div>
+        <div class="fn-ms-desc">A Digital Village hub in every county. 5,000 scholars graduated. KES 20M in micro-grants disbursed. Foundation self-sustaining from SOKONI's 1% contribution alone.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CORPORATE PARTNERS -->
+<section style="padding:72px 24px;background:rgba(255,255,255,0.01);">
+  <div class="fn-container">
+    <div style="text-align:center;margin-bottom:40px;">
+      <div class="fn-section-label gold">🤝 Partners</div>
+      <h2 class="fn-section-title">Corporate Partners<br>Who Back the Vision</h2>
+      <p class="fn-section-sub" style="margin:0 auto;">Our partners don't just donate — they match contributions, provide mentors, offer employment to graduates, and sponsor entire cohorts.</p>
+    </div>
+    <div class="fn-partners">
+      <div class="fn-partner"><span style="font-size:18px;">🏦</span> Equity Foundation <span class="fn-partner-tier gold">Gold</span></div>
+      <div class="fn-partner"><span style="font-size:18px;">📱</span> Safaricom <span class="fn-partner-tier gold">Gold</span></div>
+      <div class="fn-partner"><span style="font-size:18px;">🌱</span> Citi Foundation <span class="fn-partner-tier gold">Gold</span></div>
+      <div class="fn-partner"><span style="font-size:18px;">🏢</span> Microsoft Africa <span class="fn-partner-tier silver">Silver</span></div>
+      <div class="fn-partner"><span style="font-size:18px;">🌍</span> GIZ Kenya <span class="fn-partner-tier silver">Silver</span></div>
+      <div class="fn-partner"><span style="font-size:18px;">💡</span> Mastercard Foundation <span class="fn-partner-tier gold">Gold</span></div>
+      <div class="fn-partner"><span style="font-size:18px;">🎓</span> Strathmore University <span class="fn-partner-tier silver">Silver</span></div>
+      <div class="fn-partner"><span style="font-size:18px;">📦</span> Twiga Foods <span class="fn-partner-tier silver">Silver</span></div>
+    </div>
+    <div style="text-align:center;margin-top:32px;">
+      <p style="font-size:13px;color:rgba(255,255,255,0.35);margin-bottom:18px;">Interested in becoming a corporate partner? Let's talk about how your organisation can make a lasting impact.</p>
+      <a href="https://wa.me/254705726803?text=I%20want%20to%20discuss%20a%20corporate%20partnership%20with%20SOKONI%20Foundation" target="_blank" rel="noopener noreferrer" class="fn-btn-ghost" style="padding:12px 28px;">💼 Partner With Us</a>
+    </div>
+  </div>
+</section>
+
+<!-- BOARD -->
+<section style="padding:72px 24px;">
+  <div class="fn-container">
+    <div class="fn-section-label violet">👥 Governance</div>
+    <h2 class="fn-section-title">Foundation Board</h2>
+    <p class="fn-section-sub">Every disbursement over KES 10,000 requires board approval. Our board combines commerce, technology, legal, and community expertise.</p>
+    <div class="fn-board">
+      <div class="fn-board-card">
+        <div class="fn-board-avatar">👤</div>
+        <div class="fn-board-name">Alex Ogutu</div>
+        <div class="fn-board-title">Founder & Chair</div>
+        <div class="fn-board-expertise">SOKONI Platform · Commerce</div>
+      </div>
+      <div class="fn-board-card">
+        <div class="fn-board-avatar" style="background:linear-gradient(135deg,var(--sapphire),#1d4ed8);">⚖️</div>
+        <div class="fn-board-name">Board Vacancy</div>
+        <div class="fn-board-title">Legal & Compliance</div>
+        <div class="fn-board-expertise">NGO Law · Kenya Regulations</div>
+      </div>
+      <div class="fn-board-card">
+        <div class="fn-board-avatar" style="background:linear-gradient(135deg,var(--emerald),#059669);">💰</div>
+        <div class="fn-board-name">Board Vacancy</div>
+        <div class="fn-board-title">Finance & Audit</div>
+        <div class="fn-board-expertise">CPA · Grant Management</div>
+      </div>
+      <div class="fn-board-card">
+        <div class="fn-board-avatar" style="background:linear-gradient(135deg,var(--violet),#7c3aed);">🌍</div>
+        <div class="fn-board-name">Board Vacancy</div>
+        <div class="fn-board-title">Community & Programs</div>
+        <div class="fn-board-expertise">Youth Development · Education</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;padding:16px 20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;font-size:12px;color:rgba(255,255,255,0.4);line-height:1.7;max-width:600px;">
+      📋 We are actively seeking board members with expertise in NGO governance, education technology, or impact investing. <a href="https://wa.me/254705726803?text=I%20am%20interested%20in%20the%20SOKONI%20Foundation%20board" target="_blank" rel="noopener noreferrer" style="color:var(--gold);text-decoration:none;font-weight:700;">Express your interest →</a>
+    </div>
+  </div>
+</section>
+
+<!-- APPLY -->
+<section id="apply" style="padding:72px 24px;background:rgba(255,255,255,0.01);">
+  <div class="fn-container" style="max-width:800px;">
+    <div style="text-align:center;margin-bottom:40px;">
+      <div class="fn-section-label emerald">📝 Apply</div>
+      <h2 class="fn-section-title">Start Your<br>Application Today</h2>
+      <p class="fn-section-sub" style="margin:0 auto;">Applications are open year-round. We review every submission — no application is too small. If we can't fund you now, we'll add you to the next cohort.</p>
+    </div>
+    <div class="fn-apply">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;" id="progTabs">
+        <button type="button" class="fn-amt-btn active" onclick="selectProgram('scholars',this)">🎓 Sokoni Scholars</button>
+        <button type="button" class="fn-amt-btn" onclick="selectProgram('shesells',this)">👩‍💼 She Sells</button>
+        <button type="button" class="fn-amt-btn" onclick="selectProgram('youthinc',this)">🚀 Youth Inc.</button>
+        <button type="button" class="fn-amt-btn" onclick="selectProgram('tradecorps',this)">🤝 Trade Corps</button>
+        <button type="button" class="fn-amt-btn" onclick="selectProgram('digitalvillage',this)">🌐 Digital Village</button>
+      </div>
+
+      <div id="applyProgNote" style="padding:12px 16px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:20px;line-height:1.65;">
+        🎓 <strong style="color:white;">Sokoni Scholars:</strong> Open to Kenyans aged 16–30. No prior digital skills needed. We provide everything — device, airtime, and instructor access. One 90-day cohort starts every quarter.
+      </div>
+
+      <div class="fn-apply-grid">
+        <div class="fn-field">
+          <label>Full Name *</label>
+          <input class="fn-input" id="applyName" type="text" placeholder="Your full name" autocomplete="new-password">
+        </div>
+        <div class="fn-field">
+          <label>Phone (M-Pesa number) *</label>
+          <input class="fn-input" id="applyPhone" type="tel" placeholder="07XXXXXXXX" inputmode="tel" autocomplete="new-password">
+        </div>
+        <div class="fn-field">
+          <label>County *</label>
+          <select class="fn-input" id="applyCounty">
+            <option value="">Select your county</option>
+            <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option><option>Nakuru</option>
+            <option>Eldoret / Uasin Gishu</option><option>Machakos</option><option>Thika / Kiambu</option>
+            <option>Meru</option><option>Nyeri</option><option>Kisii</option><option>Kakamega</option>
+            <option>Garissa</option><option>Isiolo</option><option>Kitale</option><option>Kericho</option>
+            <option>Malindi / Kilifi</option><option>Bungoma</option><option>Naivasha / Nakuru</option>
+            <option>Other County</option>
+          </select>
+        </div>
+        <div class="fn-field">
+          <label>Age</label>
+          <input class="fn-input" id="applyAge" type="number" placeholder="e.g. 24" min="14" max="70" inputmode="numeric">
+        </div>
+        <div class="fn-field fn-input-full">
+          <label>Tell us your story — what do you want to build? *</label>
+          <textarea class="fn-input" id="applyStory" rows="4" placeholder="Describe your current situation, what you want to achieve, and how this program will help you..." style="resize:vertical;font-size:16px;line-height:1.6;"></textarea>
+        </div>
+        <div class="fn-field fn-input-full">
+          <label>How did you hear about the Foundation?</label>
+          <select class="fn-input" id="applySource">
+            <option value="">Select one</option>
+            <option>SOKONI app</option><option>WhatsApp</option><option>Facebook</option>
+            <option>Friend / family</option><option>Market / community hub</option><option>Radio or TV</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button type="button" onclick="submitApplication()" class="fn-btn-primary" style="flex:1;min-width:200px;justify-content:center;">
+          📤 Submit Application
+        </button>
+        <button type="button" onclick="applyWhatsApp()" style="padding:14px 20px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:12px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px;transition:all .2s;" onmouseover="this.style.background='rgba(37,211,102,0.18)'" onmouseout="this.style.background='rgba(37,211,102,0.1)'">
+          <i class="fab fa-whatsapp" style="font-size:16px;"></i> Apply via WhatsApp
+        </button>
+      </div>
+      <div id="applyMsg" style="min-height:14px;font-size:12px;margin-top:10px;text-align:center;"></div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTRIBUTE -->
+<section id="contribute" style="padding:72px 24px;">
+  <div class="fn-container" style="max-width:800px;">
+    <div style="text-align:center;margin-bottom:36px;">
+      <div class="fn-section-label gold">💛 Donate</div>
+      <h2 class="fn-section-title">Every Contribution<br>Funds a Future</h2>
+      <p class="fn-section-sub" style="margin:0 auto;">100% of individual contributions go directly to programs. No admin deductions. Receipts issued on WhatsApp within 24 hours.</p>
+    </div>
+    <div class="fn-contribute">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
+          <div style="font-size:28px;font-weight:900;color:var(--gold);">KES 500</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Covers one week's airtime<br>for a Sokoni Scholar</div>
+        </div>
+        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
+          <div style="font-size:28px;font-weight:900;color:var(--emerald);">KES 5,000</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Fully funds a She Sells<br>starter grant</div>
+        </div>
+        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
+          <div style="font-size:28px;font-weight:900;color:var(--sapphire);">KES 10,000</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Subsidises a smartphone<br>for a Trade Corps vendor</div>
+        </div>
+        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
+          <div style="font-size:28px;font-weight:900;color:var(--violet);">KES 50,000</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Sponsors a full Sokoni<br>Scholar for one cohort</div>
+        </div>
+      </div>
+
+      <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Choose Amount</div>
+      <div class="fn-amt-grid" id="fnAmts">
+        <button type="button" class="fn-amt-btn" onclick="setDonation(100,this)">KES 100</button>
+        <button type="button" class="fn-amt-btn" onclick="setDonation(250,this)">KES 250</button>
+        <button type="button" class="fn-amt-btn active" onclick="setDonation(500,this)">KES 500</button>
+        <button type="button" class="fn-amt-btn" onclick="setDonation(1000,this)">KES 1,000</button>
+        <button type="button" class="fn-amt-btn" onclick="setDonation(5000,this)">KES 5,000</button>
+        <button type="button" class="fn-amt-btn" onclick="setDonation(10000,this)">KES 10,000</button>
+      </div>
+      <input type="number" id="donCustom" class="fn-input" placeholder="Or enter any amount (KES)" min="50" inputmode="numeric" style="margin-bottom:16px;" oninput="if(this.value){document.querySelectorAll('#fnAmts .fn-amt-btn').forEach(b=>b.classList.remove('active'));_donAmt=parseInt(this.value)||500;}">
+
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px;margin-bottom:18px;font-size:12px;color:rgba(255,255,255,0.5);line-height:2.1;">
+        <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">How to Donate via M-Pesa</div>
+        <div>1. Open <strong style="color:white;">M-PESA</strong> → tap <strong style="color:white;">Send Money</strong></div>
+        <div>2. Number: <strong style="color:#71ff00;font-size:14px;letter-spacing:.05em;">0705 726 803</strong></div>
+        <div>3. Amount: <strong style="color:var(--gold);" id="donAmtDisplay">KES 500</strong></div>
+        <div>4. Reference: <strong style="color:white;">SOKONI FOUNDATION</strong></div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button type="button" onclick="donateWhatsApp()" style="flex:1;min-width:160px;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .2s;" onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter=''">
+          <i class="fab fa-whatsapp" style="font-size:16px;"></i> Confirm via WhatsApp
+        </button>
+        <button type="button" onclick="copyDonNumber()" id="donCopyBtn" style="padding:14px 20px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.28);border-radius:12px;color:var(--gold);font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;">📋 Copy Number</button>
+      </div>
+      <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,0.18);text-align:center;line-height:1.7;">
+        All contributions received by SOKONI Foundation · Registration pending (KE-NGO-2026)<br>Receipts issued via WhatsApp within 24 hrs · 100% to programs — no deductions
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<section style="padding:72px 24px;">
+  <div class="fn-container">
+    <div class="fn-bottom-cta">
+      <div style="font-size:clamp(28px,5vw,52px);font-weight:900;margin-bottom:14px;line-height:1.1;">
+        Commerce That<br><span style="background:linear-gradient(135deg,var(--gold),var(--gold-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Builds Kenya.</span>
+      </div>
+      <p style="font-size:15px;color:rgba(255,255,255,0.45);line-height:1.7;max-width:500px;margin:0 auto 32px;">Shop on SOKONI. Sell on SOKONI. Every transaction already contributes. Add a personal donation to multiply your impact.</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="#apply"        class="fn-btn-primary">🎓 Apply for a Program</a>
+        <a href="#contribute"   class="fn-btn-ghost">💛 Donate</a>
+        <a href="https://wa.me/254705726803?text=I%20want%20to%20learn%20more%20about%20SOKONI%20Foundation" target="_blank" rel="noopener noreferrer" class="fn-btn-ghost">💬 Contact Us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FOOTER -->
+<footer class="fn-footer">
+  <div class="fn-footer-links">
+    <a href="index.html"    class="fn-footer-link">SOKONI Marketplace</a>
+    <a href="banking.html#sokonifoundation" class="fn-footer-link">Foundation on Banking Page</a>
+    <a href="#programs"     class="fn-footer-link">Programs</a>
+    <a href="#impact"       class="fn-footer-link">Impact</a>
+    <a href="#apply"        class="fn-footer-link">Apply</a>
+    <a href="#contribute"   class="fn-footer-link">Donate</a>
+    <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer" class="fn-footer-link">WhatsApp</a>
+  </div>
+  <div class="fn-footer-copy">
+    SOKONI Foundation · Registration Pending (KE-NGO-2026) · Kenya<br>
+    A non-profit initiative of SOKONI · Contact: 0705 726 803 · info@mysokoni.co.ke
+  </div>
+</footer>
+
+<nav class="bottom-nav">
+  <a href="index.html"           class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="banking.html"         class="bnav-item"><span class="bnav-emoji">🏦</span><span>Banking</span></a>
+  <a href="foundation.html"      class="bnav-item active-bnav"><span class="bnav-emoji">💛</span><span>Foundation</span></a>
+  <a href="profile.html"         class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* STATE */
+var _donAmt = 500;
+var _selectedProgram = 'scholars';
+
+/* COUNTER ANIMATION */
+function animateCount(el, target, prefix, suffix, dur){
+  var start = 0, step = Math.ceil(dur/60);
+  var inc = target/step;
+  var timer = setInterval(function(){
+    start += inc;
+    if(start >= target){ start = target; clearInterval(timer); }
+    el.textContent = prefix + Math.floor(start).toLocaleString() + suffix;
+  }, 1000/60);
+}
+
+/* Intersection observer for impact numbers */
+(function(){
+  var observed = false;
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting && !observed){
+        observed = true;
+        animateCount(document.getElementById('statYouth'),   1240, '',      '+',  2200);
+        animateCount(document.getElementById('statGrants'),   340, '',      '',   1800);
+        animateCount(document.getElementById('statCounties'),  18, '',      '',    900);
+        animateCount(document.getElementById('statFunds'),   4200000, 'KES ', '', 2500);
+        animateCount(document.getElementById('statVendors'),   680, '',      '+', 1600);
+        animateCount(document.getElementById('statJobs'),      820, '',      '',  2000);
+      }
+    });
+  }, {threshold:0.3});
+  var el = document.getElementById('statYouth');
+  if(el) observer.observe(el.closest('.fn-impact-grid') || el);
+})();
+
+/* Allocation bar animation */
+(function(){
+  var animated = false;
+  var observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting && !animated){
+        animated = true;
+        document.querySelectorAll('.fn-alloc-fill').forEach(function(bar){
+          var t = bar.dataset.target;
+          setTimeout(function(){ bar.style.width = t + '%'; }, 200);
+        });
+      }
+    });
+  }, {threshold:0.4});
+  var first = document.querySelector('.fn-alloc-bar');
+  if(first) observer.observe(first);
+})();
+
+/* PROGRAM NOTES */
+var PROG_NOTES = {
+  scholars:     '🎓 <strong style="color:white;">Sokoni Scholars:</strong> Open to Kenyans aged 16–30. No prior digital skills needed. We provide everything — device, airtime, and instructor access. One 90-day cohort starts every quarter.',
+  shesells:     '👩‍💼 <strong style="color:white;">She Sells:</strong> For women-owned businesses. Grants KES 5K–50K, zero interest, with 6-month mentorship. Priority given to single mothers and first-time business owners.',
+  youthinc:     '🚀 <strong style="color:white;">Youth Inc.:</strong> Age 18–30 with a business idea. Grants KES 5K–25K with no repayment if your business runs 12 months. Includes business plan support and SOKONI seller onboarding.',
+  tradecorps:   '🤝 <strong style="color:white;">Trade Corps:</strong> For informal market vendors. We provide a subsidised phone, 6-month data, and a 90-day seller buddy. Already active at Gikomba, Toi, Kongowea and Muthurwa.',
+  digitalvillage:'🌐 <strong style="color:white;">Digital Village:</strong> Request a hub in your community. We partner with local leaders and county governments to set up access points with Wi-Fi, devices, and a trained digital assistant.',
+  ambassador:   '⭐ <strong style="color:white;">Foundation Ambassador:</strong> For public figures, athletes, artists, and business leaders. You pledge visibility and mentorship. You back at least two beneficiaries directly. Apply by WhatsApp.',
+};
+
+function selectProgram(prog, btn){
+  _selectedProgram = prog;
+  var note = document.getElementById('applyProgNote');
+  if(note) note.innerHTML = PROG_NOTES[prog] || '';
+  /* Sync tab buttons */
+  if(btn){
+    document.querySelectorAll('#progTabs .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+  }
+  /* Scroll to apply if called from a card */
+  if(!btn){
+    document.getElementById('apply')?.scrollIntoView({behavior:'smooth', block:'start'});
+    var match = document.querySelector('#progTabs .fn-amt-btn[onclick*="'+prog+'"]');
+    if(match){
+      document.querySelectorAll('#progTabs .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
+      match.classList.add('active');
+    }
+  }
+}
+window.selectProgram = selectProgram;
+
+function setDonation(amt, btn){
+  _donAmt = amt;
+  document.querySelectorAll('#fnAmts .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  var d = document.getElementById('donAmtDisplay');
+  if(d) d.textContent = 'KES ' + amt.toLocaleString();
+  var inp = document.getElementById('donCustom');
+  if(inp) inp.value = '';
+}
+window.setDonation = setDonation;
+
+function getCurrentDonAmt(){
+  var custom = parseInt(document.getElementById('donCustom')?.value || 0);
+  return custom > 0 ? custom : _donAmt;
+}
+
+function donateWhatsApp(){
+  var amt = getCurrentDonAmt();
+  var msg = '💛 *SOKONI Foundation Donation*\n\n'
+    + 'I just sent *KES ' + amt.toLocaleString() + '* to 0705 726 803 via M-Pesa.\n'
+    + 'Reference: SOKONI FOUNDATION\n\n'
+    + 'Please confirm receipt and issue a contribution acknowledgement. Thank you!';
+  window.open('https://wa.me/254705726803?text=' + encodeURIComponent(msg), '_blank', 'noopener,noreferrer');
+}
+window.donateWhatsApp = donateWhatsApp;
+
+function copyDonNumber(){
+  navigator.clipboard.writeText('0705726803').then(function(){
+    var btn = document.getElementById('donCopyBtn');
+    if(btn){ btn.textContent = '✅ Copied!'; setTimeout(function(){ btn.textContent = '📋 Copy Number'; }, 2500); }
+  }).catch(function(){
+    var btn = document.getElementById('donCopyBtn');
+    if(btn){ btn.textContent = '0705 726 803'; }
+  });
+}
+window.copyDonNumber = copyDonNumber;
+
+function submitApplication(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('found_apply',3,3600000)){(window._skToast||alert)('Too many applications. Please wait 1 hour.');return;}
+  var name    = (document.getElementById('applyName')?.value  || '').trim();
+  var phone   = (document.getElementById('applyPhone')?.value || '').trim();
+  var county  = (document.getElementById('applyCounty')?.value || '').trim();
+  var story   = (document.getElementById('applyStory')?.value || '').trim();
+  var msgEl   = document.getElementById('applyMsg');
+
+  if(!name||!phone||!county||!story){
+    if(msgEl){ msgEl.textContent = '⚠️ Please fill in all required fields.'; msgEl.style.color = '#ff9800'; }
+    return;
+  }
+
+  var age   = document.getElementById('applyAge')?.value || '';
+  var prog  = _selectedProgram.toUpperCase();
+
+  var wa = '🌟 *SOKONI Foundation Application — ' + prog + '*\n\n'
+    + 'Name: ' + name + '\n'
+    + 'Phone: ' + phone + '\n'
+    + 'County: ' + county + '\n'
+    + (age ? 'Age: ' + age + '\n' : '')
+    + '\n*Story / Vision:*\n' + story + '\n\n'
+    + 'Program: ' + prog + '\n'
+    + 'Source: ' + (document.getElementById('applySource')?.value || 'Not specified');
+
+  window.open('https://wa.me/254705726803?text=' + encodeURIComponent(wa), '_blank', 'noopener,noreferrer');
+
+  /* Also persist to Firestore for admin tracking */
+  (function(){
+    var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import(FS).then(function(m){
+      var db = window.firebaseDB;
+      if (!db) return;
+      var u = window.sokoniUser || (function(){ try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; } })();
+      m.addDoc(m.collection(db, 'applications'), {
+        name: name, phone: phone, county: county, story: story,
+        age: age, program: prog,
+        source: document.getElementById('applySource')?.value || '',
+        uid: u ? u.uid || u.email : null,
+        status: 'pending',
+        createdAt: m.serverTimestamp()
+      });
+    }).catch(function(){});
+  })();
+
+  if(msgEl){ msgEl.innerHTML = '✅ Application sent! We review all submissions — expect a response within 48 hours.'; msgEl.style.color = '#10b981'; }
+  setTimeout(function(){ if(msgEl) msgEl.textContent = ''; }, 7000);
+}
+window.submitApplication = submitApplication;
+
+function applyWhatsApp(){
+  window.open('https://wa.me/254705726803?text=' + encodeURIComponent(
+    '👋 Hi SOKONI Foundation, I want to apply for the ' + _selectedProgram.toUpperCase() + ' program. Please guide me.'
+  ), '_blank', 'noopener,noreferrer');
+}
+window.applyWhatsApp = applyWhatsApp;
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="analytics.js" defer></script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

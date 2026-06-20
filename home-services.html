@@ -1,0 +1,748 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI Home Services — Plumbers, Electricians, Cleaners, Movers Kenya</title>
+<meta name="description" content="Book verified plumbers, electricians, cleaners, painters, movers and handymen across Kenya on SOKONI Home Services Hub.">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mysokoni.co.ke/home-services.html">
+<meta property="og:title" content="SOKONI Home Services — Plumbers, Electricians, Cleaners, Movers Kenya">
+<meta property="og:description" content="Book verified plumbers, electricians, cleaners, painters, movers and handymen across Kenya on SOKONI Home Services Hub.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:site_name" content="SOKONI">
+<meta property="og:locale" content="en_KE">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f59e0b">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0805;color:white;min-height:100vh;padding-bottom:100px;}
+:root{--hc:#f59e0b;--hc2:#fbbf24;}
+
+.hs-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(10,8,5,0.97);border-bottom:1px solid rgba(245,158,11,0.1);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.hs-nav-logo{height:30px;}
+.hs-nav-tabs{display:flex;gap:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:4px;overflow-x:auto;scrollbar-width:none;}
+.hs-nav-tabs::-webkit-scrollbar{display:none;}
+.hs-nav-tab{padding:7px 14px;border-radius:9px;border:none;background:transparent;color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.hs-nav-tab.active{background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);}
+
+.hs-panel{display:none;}
+.hs-panel.active{display:block;}
+
+.hs-hero{padding:44px 24px 32px;background:linear-gradient(135deg,rgba(245,158,11,0.07),rgba(251,191,36,0.04),rgba(0,0,0,0));border-bottom:1px solid rgba(245,158,11,0.1);position:relative;overflow:hidden;}
+.hs-hero::before{content:'🏠';position:absolute;right:3%;top:50%;transform:translateY(-50%);font-size:180px;opacity:0.04;}
+.hs-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:rgba(245,158,11,0.09);border:1px solid rgba(245,158,11,0.28);border-radius:999px;font-size:11px;font-weight:800;color:#f59e0b;margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;}
+.hs-hero h1{font-size:clamp(24px,5vw,40px);font-weight:900;line-height:1.2;margin-bottom:10px;}
+.hs-hero h1 span{background:linear-gradient(135deg,#f59e0b,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hs-hero p{color:rgba(255,255,255,0.5);font-size:14px;max-width:500px;line-height:1.7;margin-bottom:20px;}
+
+.hs-service-types{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:28px;}
+.hs-service-type{padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;text-align:center;cursor:pointer;transition:all .2s;font-family:inherit;}
+.hs-service-type:hover,.hs-service-type.active{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);}
+.hs-service-type-emoji{font-size:28px;display:block;margin-bottom:6px;}
+.hs-service-type-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);}
+.hs-service-type.active .hs-service-type-label{color:#f59e0b;}
+
+.hs-body{max-width:1200px;margin:0 auto;padding:24px 18px 60px;}
+.hs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px;}
+.hs-section-h{font-size:15px;font-weight:800;color:white;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.hs-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+.hs-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:18px;transition:all .2s;}
+.hs-card:hover{transform:translateY(-3px);border-color:rgba(245,158,11,0.25);box-shadow:0 8px 28px rgba(245,158,11,0.06);}
+.hs-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+.hs-input:focus{border-color:rgba(245,158,11,0.4);}
+.hs-input::placeholder{color:rgba(255,255,255,0.3);}
+.hs-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+.hs-wa-btn{width:100%;padding:10px;border:1px solid rgba(37,211,102,0.3);border-radius:10px;background:rgba(37,211,102,0.07);color:#25d366;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center;margin-top:6px;}
+.hs-book-btn{width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#0a0805;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;}
+</style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="hs-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="hs-nav-logo" alt="SOKONI"></a>
+  <div class="hs-nav-tabs">
+    <button type="button" class="hs-nav-tab active" onclick="showHsPanel('find',this)">🔍 Find</button>
+    <button type="button" class="hs-nav-tab" onclick="showHsPanel('book',this)">📋 Book</button>
+    <button type="button" class="hs-nav-tab" onclick="showHsPanel('quotes',this)">💰 Quotes</button>
+    <button type="button" class="hs-nav-tab" onclick="showHsPanel('askhub',this)">💬 Ask</button>
+    <button type="button" class="hs-nav-tab" onclick="showHsPanel('myjobs',this);renderMyJobs();">📦 My Jobs</button>
+    <button type="button" class="hs-nav-tab" onclick="showHsPanel('register',this)">➕ Join</button>
+  </div>
+  <a href="index.html" style="padding:8px 14px;border:1px solid rgba(245,158,11,0.2);border-radius:10px;color:#f59e0b;font-size:12px;font-weight:700;text-decoration:none;">🏠</a>
+</nav>
+
+<!-- FIND PROVIDERS PANEL -->
+<div id="hspanel-find" class="hs-panel active">
+  <div class="hs-hero">
+    <div class="hs-badge">🏠 Home Services Hub</div>
+    <h1>Find Trusted<br><span>Home Professionals</span></h1>
+    <p>Verified plumbers, electricians, cleaners, painters, movers and handymen — book in minutes, pay safely.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.35);"><span style="color:#22c55e;font-size:14px;">●</span> 200+ Verified Providers</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.35);">⭐ 4.8 Avg Rating</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.35);">⚡ Same-Day Bookings</div>
+    </div>
+  </div>
+  <!-- 7 Category Quick Links -->
+  <div style="padding:18px 18px 0;max-width:1200px;margin:0 auto;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;margin-bottom:16px;">
+      <a href="cleaning.html" style="text-decoration:none;padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;" onmouseover="this.style.borderColor='rgba(245,158,11,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+        <div style="font-size:26px;margin-bottom:5px;">🧹</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Cleaning</div>
+      </a>
+      <a href="plumbing.html" style="text-decoration:none;padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;" onclick="setHsType('repairs',null);showHsPanel('find',null);" onmouseover="this.style.borderColor='rgba(245,158,11,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+        <div style="font-size:26px;margin-bottom:5px;">🔧</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Repairs</div>
+      </a>
+      <a href="electrical.html" style="text-decoration:none;padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;" onmouseover="this.style.borderColor='rgba(245,158,11,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+        <div style="font-size:26px;margin-bottom:5px;">⚡</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Electrical</div>
+      </a>
+      <button type="button" onclick="goFindType('installation')" style="padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;font-family:inherit;">
+        <div style="font-size:26px;margin-bottom:5px;">🔌</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Installation</div>
+      </button>
+      <button type="button" onclick="goFindType('outdoor')" style="padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;font-family:inherit;">
+        <div style="font-size:26px;margin-bottom:5px;">🌿</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Outdoor</div>
+      </button>
+      <button type="button" onclick="goFindType('moving')" style="padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;font-family:inherit;">
+        <div style="font-size:26px;margin-bottom:5px;">📦</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Moving</div>
+      </button>
+      <button type="button" onclick="goFindType('interiors')" style="padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;font-family:inherit;">
+        <div style="font-size:26px;margin-bottom:5px;">🪑</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Interiors</div>
+      </button>
+      <button type="button" onclick="goFindType('security')" style="padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-align:center;cursor:pointer;transition:all .2s;font-family:inherit;">
+        <div style="font-size:26px;margin-bottom:5px;">🔒</div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);">Security</div>
+      </button>
+    </div>
+  </div>
+  <div class="hs-body">
+    <div style="display:none;" id="hsTypeGrid"></div>
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+      <input type="text" id="hsSearch" placeholder="Search provider name or service…" oninput="filterProviders()" style="flex:1;min-width:180px;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <select id="hsArea" onchange="filterProviders()" style="padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+        <option value="">All Areas</option>
+        <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option><option>Nakuru</option><option>Eldoret</option>
+      </select>
+    </div>
+    <div class="hs-section-h">Available Providers <span id="hsProviderCount" style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div class="hs-grid" id="hsProvidersGrid"></div>
+  </div>
+</div>
+
+<!-- BOOK A SERVICE PANEL -->
+<div id="hspanel-book" class="hs-panel">
+  <div class="hs-body" style="max-width:700px;">
+    <div style="padding-top:12px;margin-bottom:22px;">
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:5px;">📋 Book a Home Service</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);">Tell us what you need — we connect you to the right professional</div>
+    </div>
+    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.14);border-radius:20px;padding:24px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;">
+        <div>
+          <label class="hs-label">Your Name *</label>
+          <input type="text" id="bkName" class="hs-input" placeholder="Full name">
+          <label class="hs-label">Phone (WhatsApp) *</label>
+          <input type="tel" id="bkPhone" class="hs-input" placeholder="07XXXXXXXX">
+          <label class="hs-label">Service Type *</label>
+          <select id="bkService" class="hs-input">
+            <option value="">Select service</option>
+            <option>🔧 Plumbing</option><option>⚡ Electrical</option><option>🧹 Cleaning</option>
+            <option>🎨 Painting</option><option>📦 Moving & Packing</option><option>🪟 Carpentry</option>
+            <option>🌿 Gardening</option><option>🔒 Security / Locks</option><option>❄️ AC / Appliance Repair</option><option>🧰 General Handyman</option>
+          </select>
+        </div>
+        <div>
+          <label class="hs-label">Your Location / Estate *</label>
+          <input type="text" id="bkLocation" class="hs-input" placeholder="e.g. Kilimani, Nairobi">
+          <label class="hs-label">Preferred Date</label>
+          <input type="date" id="bkDate" class="hs-input">
+          <label class="hs-label">Preferred Time</label>
+          <select id="bkTime" class="hs-input">
+            <option>Morning (7am–12pm)</option><option>Afternoon (12pm–5pm)</option>
+            <option>Evening (5pm–8pm)</option><option>Any time</option><option>ASAP / Emergency</option>
+          </select>
+        </div>
+      </div>
+      <label class="hs-label">Describe the Job *</label>
+      <textarea id="bkDesc" class="hs-input" style="min-height:80px;resize:vertical;" placeholder="e.g. Burst pipe under kitchen sink, need urgent fix. Also dripping tap in bathroom."></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.5);cursor:pointer;"><input type="checkbox" id="bkUrgent" style="accent-color:#f59e0b;"> 🚨 Urgent / Emergency</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.5);cursor:pointer;"><input type="checkbox" id="bkGetQuotes"> 💰 Get quotes from 3 providers</label>
+      </div>
+      <button type="button" onclick="bookHomeService()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:12px;color:#0a0805;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">📋 Book via WhatsApp</button>
+      <div id="bkMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- GET QUOTES PANEL -->
+<div id="hspanel-quotes" class="hs-panel">
+  <div class="hs-body" style="max-width:700px;">
+    <div style="padding-top:12px;margin-bottom:22px;">
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:5px;">💰 Get Multiple Quotes</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);">Post your job once — up to 5 providers respond with their best price</div>
+    </div>
+    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.14);border-radius:20px;padding:24px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="hs-label">Service Needed *</label>
+          <select id="qtService" class="hs-input">
+            <option value="">Select type</option>
+            <option>🔧 Plumbing</option><option>⚡ Electrical</option><option>🧹 Cleaning</option>
+            <option>🎨 Painting</option><option>📦 Moving</option><option>🪟 Carpentry</option>
+            <option>🌿 Gardening</option><option>❄️ AC / Appliance</option><option>🧰 Handyman</option>
+          </select>
+          <label class="hs-label">Location *</label>
+          <input type="text" id="qtLocation" class="hs-input" placeholder="e.g. Westlands, Nairobi">
+        </div>
+        <div>
+          <label class="hs-label">Your Phone *</label>
+          <input type="tel" id="qtPhone" class="hs-input" placeholder="07XXXXXXXX">
+          <label class="hs-label">Budget (optional)</label>
+          <input type="text" id="qtBudget" class="hs-input" placeholder="e.g. KES 2,000–5,000">
+        </div>
+      </div>
+      <label class="hs-label">Job Description *</label>
+      <textarea id="qtDesc" class="hs-input" style="min-height:80px;resize:vertical;" placeholder="Describe the work needed in detail. The more detail, the better the quotes you'll receive."></textarea>
+      <button type="button" onclick="requestQuotes()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:12px;color:#0a0805;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">📢 Request Quotes from Providers</button>
+      <div id="qtMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+    <!-- Quotes feed -->
+    <div class="hs-section-h">📥 Quote Requests Near You</div>
+    <div id="hsQuotesFeed" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- ASK HUB PANEL -->
+<div id="hspanel-askhub" class="hs-panel">
+  <div class="hs-body" style="max-width:800px;">
+    <div style="text-align:center;padding:20px 0 16px;">
+      <div style="font-size:40px;margin-bottom:10px;">💬</div>
+      <h2 style="font-size:20px;font-weight:900;margin-bottom:6px;">Ask the Home Services Hub</h2>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);">Post your home problem — plumbers, electricians and handymen respond</p>
+    </div>
+    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.14);border-radius:20px;padding:22px;margin-bottom:20px;">
+      <textarea id="hsAskText" placeholder="e.g. My electricity keeps tripping at night. Happens when I turn on the water heater. Need an electrician in Langata this weekend…" style="width:100%;padding:13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;min-height:80px;resize:vertical;outline:none;font-family:inherit;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <select id="hsAskType" style="flex:1;min-width:120px;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+          <option>Plumbing</option><option>Electrical</option><option>Cleaning</option><option>Painting</option>
+          <option>Moving</option><option>Carpentry</option><option>Appliance Repair</option><option>Handyman</option>
+        </select>
+        <input type="tel" id="hsAskPhone" placeholder="Your phone" style="flex:1;min-width:120px;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        <button type="button" onclick="postHsRequest()" style="padding:10px 20px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:10px;color:#0a0805;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">📢 Post</button>
+      </div>
+    </div>
+    <div id="hsAskFeed" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- REGISTER AS PROVIDER PANEL -->
+<div id="hspanel-register" class="hs-panel">
+  <div class="hs-body" style="max-width:700px;">
+    <div style="padding-top:12px;margin-bottom:22px;">
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:5px;">➕ Join as a Home Service Provider</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);">List your skills. Get job alerts. Earn more.</div>
+    </div>
+    <div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.14);border-radius:20px;padding:24px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="hs-label">Full Name *</label>
+          <input type="text" id="regName" class="hs-input" placeholder="Your name">
+          <label class="hs-label">Phone (WhatsApp) *</label>
+          <input type="tel" id="regPhone" class="hs-input" placeholder="07XXXXXXXX">
+          <label class="hs-label">Primary Service *</label>
+          <select id="regService" class="hs-input">
+            <option>🔧 Plumber</option><option>⚡ Electrician</option><option>🧹 Cleaner</option>
+            <option>🎨 Painter</option><option>📦 Mover</option><option>🪟 Carpenter</option>
+            <option>🌿 Gardener</option><option>❄️ AC / Appliance</option><option>🧰 Handyman</option>
+          </select>
+        </div>
+        <div>
+          <label class="hs-label">Years Experience</label>
+          <select id="regExp" class="hs-input">
+            <option>Less than 1 year</option><option>1–3 years</option>
+            <option>3–5 years</option><option>5–10 years</option><option>10+ years</option>
+          </select>
+          <label class="hs-label">Service Area *</label>
+          <input type="text" id="regArea" class="hs-input" placeholder="e.g. Nairobi – Westlands, Kilimani">
+          <label class="hs-label">Daily Rate / Estimate (KES)</label>
+          <input type="text" id="regRate" class="hs-input" placeholder="e.g. 2,000–5,000/day">
+        </div>
+      </div>
+      <label class="hs-label">Tell clients about your skills & experience</label>
+      <textarea id="regBio" class="hs-input" style="min-height:70px;resize:vertical;" placeholder="e.g. 8 years licensed electrician. KEBS certified. Residential and commercial wiring, solar installation, security systems."></textarea>
+      <button type="button" onclick="registerProvider()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:12px;color:#0a0805;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">✅ Register as Provider</button>
+      <div id="regMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MY JOBS PANEL -->
+<div id="hspanel-myjobs" class="hs-panel">
+  <div class="hs-body" style="max-width:700px;">
+    <div style="padding-top:12px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:20px;font-weight:900;color:white;margin-bottom:3px;">📦 My Job Bookings</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.4);">Track the status of all your home service bookings</div>
+      </div>
+      <button type="button" onclick="goToPanel('book')" style="padding:8px 16px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:10px;color:#0a0805;font-weight:900;font-size:12px;cursor:pointer;font-family:inherit;">+ New Booking</button>
+    </div>
+    <div id="hsMyJobsList" style="display:flex;flex-direction:column;gap:12px;"></div>
+  </div>
+</div>
+
+<!-- REVIEW MODAL -->
+<div id="hsReviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px);" onclick="if(event.target===this)closeReviewModal()">
+  <div style="background:#0f0d09;border:1px solid rgba(245,158,11,0.2);border-radius:24px 24px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:900;">⭐ Rate Provider</div>
+      <button type="button" onclick="closeReviewModal()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div id="hsReviewProviderName" style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:14px;"></div>
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);margin-bottom:8px;">YOUR RATING</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;" id="hsStarRow">
+      <button type="button" onclick="setReviewStar(1)" class="hs-star-btn" style="font-size:28px;background:none;border:none;cursor:pointer;padding:0;opacity:0.3;">★</button>
+      <button type="button" onclick="setReviewStar(2)" class="hs-star-btn" style="font-size:28px;background:none;border:none;cursor:pointer;padding:0;opacity:0.3;">★</button>
+      <button type="button" onclick="setReviewStar(3)" class="hs-star-btn" style="font-size:28px;background:none;border:none;cursor:pointer;padding:0;opacity:0.3;">★</button>
+      <button type="button" onclick="setReviewStar(4)" class="hs-star-btn" style="font-size:28px;background:none;border:none;cursor:pointer;padding:0;opacity:0.3;">★</button>
+      <button type="button" onclick="setReviewStar(5)" class="hs-star-btn" style="font-size:28px;background:none;border:none;cursor:pointer;padding:0;opacity:0.3;">★</button>
+    </div>
+    <label class="hs-label">Your Review (optional)</label>
+    <textarea id="hsReviewText" class="hs-input" style="min-height:70px;resize:vertical;" placeholder="Share your experience — quality of work, punctuality, value for money…"></textarea>
+    <label class="hs-label">Your Name</label>
+    <input type="text" id="hsReviewerName" class="hs-input" placeholder="e.g. James M.">
+    <button type="button" onclick="submitReview()" style="width:100%;padding:12px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:11px;color:#0a0805;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;margin-top:4px;">Submit Review</button>
+    <div id="hsReviewMsg" style="font-size:12px;margin-top:8px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="home-services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🔧</span><span>Home Svcs</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="opportunity.html" class="bnav-item"><span class="bnav-emoji">💼</span><span>Earn</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+const HS_TYPES = [
+  {key:'plumbing',emoji:'🔧',label:'Plumbing'},
+  {key:'electrical',emoji:'⚡',label:'Electrical'},
+  {key:'cleaning',emoji:'🧹',label:'Cleaning'},
+  {key:'painting',emoji:'🎨',label:'Painting'},
+  {key:'moving',emoji:'📦',label:'Moving'},
+  {key:'carpentry',emoji:'🪟',label:'Carpentry'},
+  {key:'gardening',emoji:'🌿',label:'Gardening'},
+  {key:'appliance',emoji:'❄️',label:'Appliances'},
+  {key:'handyman',emoji:'🧰',label:'Handyman'},
+  {key:'security',emoji:'🔒',label:'Security'},
+];
+
+const DEMO_PROVIDERS = [
+  {id:'HS01',type:'plumbing',emoji:'🔧',name:'James Mwangi',area:'Nairobi',specialty:'Plumber',exp:'8 years',rate:'KES 2,500/day',rating:4.9,jobs:312,phone:'0712100001',bio:'Licensed plumber. Burst pipes, drainage, bathroom fitting, borehole pumps.',certified:true},
+  {id:'HS02',type:'electrical',emoji:'⚡',name:'Peter Otieno',area:'Nairobi',specialty:'Electrician',exp:'12 years',rate:'KES 3,000/day',rating:5.0,jobs:445,phone:'0723100002',bio:'KEBS certified. Wiring, solar, security systems, phase balancing.',certified:true},
+  {id:'HS03',type:'cleaning',emoji:'🧹',name:'Grace Wanjiku',area:'Nairobi',specialty:'Cleaning Specialist',exp:'5 years',rate:'KES 1,500/visit',rating:4.8,jobs:280,phone:'0734100003',bio:'Deep cleaning, move-in/out, carpet, sofa, curtain cleaning. Team available.',certified:false},
+  {id:'HS04',type:'painting',emoji:'🎨',name:'Samuel Kariuki',area:'Nairobi',specialty:'Painter & Decorator',exp:'10 years',rate:'KES 150/sqm',rating:4.7,jobs:156,phone:'0745100004',bio:'Interior & exterior painting, texture finishes, waterproofing, wallpaper.',certified:false},
+  {id:'HS05',type:'moving',emoji:'📦',name:'Quick Movers Kenya',area:'Nairobi',specialty:'Movers & Packers',exp:'7 years',rate:'From KES 5,000',rating:4.8,jobs:623,phone:'0756100005',bio:'Trucks from 1 ton to 10 ton. Packing, assembly, same-day moves. All Nairobi.',certified:true},
+  {id:'HS06',type:'carpentry',emoji:'🪟',name:'David Njoroge',area:'Nairobi',specialty:'Carpenter',exp:'15 years',rate:'KES 2,000/day',rating:4.9,jobs:198,phone:'0767100006',bio:'Fitted wardrobes, doors, windows, decking, custom furniture. Hardwood specialist.',certified:true},
+  {id:'HS07',type:'plumbing',emoji:'🔧',name:'Coastal Plumbing Ltd',area:'Mombasa',specialty:'Plumber',exp:'9 years',rate:'KES 2,000/day',rating:4.7,jobs:220,phone:'0700100007',bio:'All plumbing works in Mombasa, Kilifi, Malindi. Emergency 24hr service.',certified:true},
+  {id:'HS08',type:'appliance',emoji:'❄️',name:'Cool Air Services',area:'Nairobi',specialty:'AC & Appliance',exp:'6 years',rate:'KES 1,500–4,000',rating:4.6,jobs:134,phone:'0711100008',bio:'AC install, service & repair. Fridge, washer, dryer, oven repair. All brands.',certified:false},
+  {id:'HS09',type:'gardening',emoji:'🌿',name:'Green Thumb Gardens',area:'Nairobi',specialty:'Gardener & Landscaper',exp:'8 years',rate:'KES 1,200/visit',rating:4.8,jobs:167,phone:'0722100009',bio:'Lawn mowing, hedge trimming, garden design, irrigation systems, tree felling.',certified:false},
+  {id:'HS10',type:'handyman',emoji:'🧰',name:'Fix It Fast Kenya',area:'Nairobi',specialty:'General Handyman',exp:'4 years',rate:'KES 1,000/hr',rating:4.7,jobs:89,phone:'0733100010',bio:'Everything your home needs — assembly, repairs, installations, tiling, grouting.',certified:false},
+  {id:'HS11',type:'security',emoji:'🔒',name:'SecureHome Kenya',area:'Nairobi',specialty:'Security & Locks',exp:'5 years',rate:'KES 2,500–8,000',rating:4.9,jobs:201,phone:'0744100011',bio:'Locks, door grills, burglar bars, safes, alarm systems, CCTV installation.',certified:true},
+  {id:'HS12',type:'electrical',emoji:'⚡',name:'Mombasa Electrical Pro',area:'Mombasa',specialty:'Electrician',exp:'7 years',rate:'KES 2,500/day',rating:4.6,jobs:123,phone:'0755100012',bio:'Residential & commercial electrical. Generator install. Solar PV systems.',certified:true},
+  {id:'HS13',type:'painting',emoji:'🎨',name:'Decor Pro Painters',area:'Nairobi',specialty:'Painter & Decorator',exp:'6 years',rate:'KES 120–180/sqm',rating:4.8,jobs:145,phone:'0766100013',bio:'Interior & exterior painting. Texture finishes, epoxy floors, waterproofing. Clean finish guaranteed.',certified:false},
+  {id:'HS14',type:'moving',emoji:'🚚',name:'Swift Movers Kenya',area:'Kisumu',specialty:'Movers & Packers',exp:'5 years',rate:'From KES 4,500',rating:4.7,jobs:312,phone:'0777100014',bio:'Kisumu region moves. Trucks from 1 to 14 ton. Packaging materials provided. Fragile handling.',certified:false},
+  {id:'HS15',type:'installation',emoji:'🔌',name:'TechInstall Kenya',area:'Nairobi',specialty:'AC & Appliance Install',exp:'4 years',rate:'KES 1,500–5,000',rating:4.7,jobs:203,phone:'0788100015',bio:'AC installation & service (all brands), water heater, washing machine, dishwasher install. Solar connections.',certified:true},
+  {id:'HS16',type:'carpentry',emoji:'🪵',name:'Master Craft Carpentry',area:'Nairobi',specialty:'Carpenter & Furniture',exp:'11 years',rate:'KES 1,800/day',rating:4.9,jobs:267,phone:'0799100016',bio:'Custom wardrobes, kitchen cabinets, beds, office furniture. Hardwood & MDF. Quote visits free.',certified:true},
+];
+
+let _hsTypeFilter = 'all';
+function showHsPanel(name,btn){
+  document.querySelectorAll('.hs-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.hs-nav-tab').forEach(t=>t.classList.remove('active'));
+  const p=document.getElementById('hspanel-'+name);if(p)p.classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+window.showHsPanel=showHsPanel;
+
+/* Switch to any panel and activate its nav tab */
+function goToPanel(name){
+  const tabMap={find:0,book:1,quotes:2,askhub:3,myjobs:4,register:5};
+  const tabs=document.querySelectorAll('.hs-nav-tab');
+  tabs.forEach(t=>t.classList.remove('active'));
+  const idx=tabMap[name]??-1;
+  if(idx>=0&&tabs[idx])tabs[idx].classList.add('active');
+  showHsPanel(name,null);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+window.goToPanel=goToPanel;
+
+/* Render type chips */
+function renderTypeChips(){
+  const grid=document.getElementById('hsTypeGrid');if(!grid)return;
+  grid.innerHTML=`<div class="hs-service-type ${_hsTypeFilter==='all'?'active':''}" onclick="setHsType('all',this)"><span class="hs-service-type-emoji">🏠</span><div class="hs-service-type-label">All</div></div>`
+    +HS_TYPES.map(t=>`<div class="hs-service-type ${_hsTypeFilter===t.key?'active':''}" onclick="setHsType('${t.key}',this)"><span class="hs-service-type-emoji">${t.emoji}</span><div class="hs-service-type-label">${t.label}</div></div>`).join('');
+}
+
+function setHsType(key,el){
+  _hsTypeFilter=key;
+  renderTypeChips();
+  filterProviders();
+  setTimeout(function(){var g=document.getElementById('hsProvidersGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+}
+window.setHsType=setHsType;
+
+/* Switch to Find panel then filter — used by category quick-links */
+function goFindType(key){
+  /* Activate the Find tab */
+  const tabs=document.querySelectorAll('.hs-nav-tab');
+  tabs.forEach(t=>t.classList.remove('active'));
+  tabs[0]&&tabs[0].classList.add('active');
+  showHsPanel('find',null);
+  /* Wait one tick for panel to display, then filter + scroll */
+  setTimeout(function(){
+    setHsType(key,null);
+    var g=document.getElementById('hsProvidersGrid');
+    if(g)g.scrollIntoView({behavior:'smooth',block:'start'});
+  },80);
+}
+window.goFindType=goFindType;
+
+function filterProviders(){
+  const q=(document.getElementById('hsSearch')?.value||'').toLowerCase();
+  const area=document.getElementById('hsArea')?.value||'';
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniHomeProviders')||'[]');}catch(e){}
+  let list=[...local,...DEMO_PROVIDERS.filter(d=>!local.some(l=>l.id===d.id))];
+  if(_hsTypeFilter!=='all'){
+    const mapped=window.HS_TYPE_MAP&&window.HS_TYPE_MAP[_hsTypeFilter];
+    if(mapped)list=list.filter(p=>mapped.includes(p.type));
+    else list=list.filter(p=>p.type===_hsTypeFilter);
+  }
+  if(area)list=list.filter(p=>p.area.toLowerCase()===area.toLowerCase());
+  if(q)list=list.filter(p=>(p.name+p.specialty+p.bio).toLowerCase().includes(q));
+  const cnt=document.getElementById('hsProviderCount');if(cnt)cnt.textContent=list.length+' found';
+  renderProvidersGrid(list);
+}
+
+function renderProvidersGrid(list){
+  const grid=document.getElementById('hsProvidersGrid');if(!grid)return;
+  if(!list.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;color:rgba(255,255,255,0.3);">No providers found</div>';return;}
+  grid.innerHTML=list.map(p=>`
+    <div class="hs-card">
+      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
+        <div style="width:48px;height:48px;border-radius:12px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:1px solid rgba(245,158,11,0.15);">${p.emoji}</div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:1px;">${p.name} ${p.certified?'<span style="font-size:8px;background:rgba(245,158,11,0.1);color:#f59e0b;padding:1px 5px;border-radius:3px;border:1px solid rgba(245,158,11,0.2);">✓ Verified</span>':''}</div>
+          <div style="font-size:11px;color:#f59e0b;font-weight:700;">${p.specialty}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">📍 ${p.area} · ${p.exp} · ⭐ ${p.rating} <span style="color:rgba(255,255,255,0.2);">(${p.jobs} jobs)</span></div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;margin-bottom:10px;">${p.bio}</div>
+      <div style="font-size:15px;font-weight:900;color:#f59e0b;margin-bottom:12px;">${p.rate}</div>
+      <div style="display:flex;gap:6px;">
+        <button type="button" onclick="contactProvider('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}','${(p.phone||'').replace(/'/g,'').replace(/"/g,'')}')" class="hs-wa-btn" style="flex:1;">💬 WhatsApp</button>
+        <button type="button" onclick="openReviewModal('${(p.id||'').replace(/'/g,'').replace(/"/g,'')}','${(p.name||'').replace(/'/g,'\\\'').replace(/"/g,'')}')" style="padding:8px 12px;border:1px solid rgba(245,158,11,0.2);border-radius:9px;background:rgba(245,158,11,0.05);color:#f59e0b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;" title="Rate this provider">⭐ Rate</button>
+      </div>
+    </div>`).join('');
+}
+
+function bookHomeService(){
+  const name=(document.getElementById('bkName')?.value||'').trim();
+  const phone=(document.getElementById('bkPhone')?.value||'').trim();
+  const service=document.getElementById('bkService')?.value||'';
+  const loc=(document.getElementById('bkLocation')?.value||'').trim();
+  const desc=(document.getElementById('bkDesc')?.value||'').trim();
+  const msgEl=document.getElementById('bkMsg');
+  if(!name||!phone||!service||!loc){if(msgEl){msgEl.textContent='Please fill all required fields';msgEl.style.color='#f97316';}return;}
+  const date=document.getElementById('bkDate')?.value||'ASAP';
+  const time=document.getElementById('bkTime')?.value||'Any time';
+  const urgent=document.getElementById('bkUrgent')?.checked?'\n🚨 URGENT':'';
+  const ref='HS'+Date.now().toString().slice(-6);
+  const msg=`🏠 *SOKONI Home Services Booking*${urgent}\n\nRef: ${ref}\n👤 ${name}\n📞 ${phone}\n🔧 Service: ${service}\n📍 Location: ${loc}\n📅 ${date} · ${time}\n\n${desc}`;
+  let bks=[];try{bks=JSON.parse(localStorage.getItem('sokoniHomeBookings')||'[]');}catch(e){}
+  bks.unshift({ref,name,phone,service,loc,date,status:'sent',ts:Date.now()});
+  localStorage.setItem('sokoniHomeBookings',JSON.stringify(bks.slice(0,30)));
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
+    SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Home Services',category:'home-services',serviceDesc:'Home service: '+service});
+  } else {
+    window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
+  }
+  if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong>${ref}</strong>`;msgEl.style.color='#f59e0b';}
+  /* Firestore write — fire-and-forget */
+  _hsFireWrite('homeServiceBookings',{ref,name,phone,service,loc,date,description:desc,status:'pending',hub:'home-services'});
+  /* Invoice */
+  if(window.SokoniInvoice){
+    setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:service,category:'Home Service',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'TBD',paymentRef:ref,sellerName:'SOKONI Home Services',location:loc,notes:'Date: '+(document.getElementById('bkDate')?.value||'ASAP')}),600);
+  }
+}
+window.bookHomeService=bookHomeService;
+
+function requestQuotes(){
+  const service=document.getElementById('qtService')?.value||'';
+  const loc=(document.getElementById('qtLocation')?.value||'').trim();
+  const phone=(document.getElementById('qtPhone')?.value||'').trim();
+  const desc=(document.getElementById('qtDesc')?.value||'').trim();
+  const msgEl=document.getElementById('qtMsg');
+  if(!service||!loc||!phone||!desc){if(msgEl){msgEl.textContent='Please fill all fields';msgEl.style.color='#f97316';}return;}
+  let quotes=[];try{quotes=JSON.parse(localStorage.getItem('hsQuoteRequests')||'[]');}catch(e){}
+  const budget=document.getElementById('qtBudget')?.value||'';
+  quotes.unshift({id:'QT'+Date.now(),service,loc,phone,desc,budget,ts:Date.now()});
+  localStorage.setItem('hsQuoteRequests',JSON.stringify(quotes.slice(0,30)));
+  const msg=`💰 *SOKONI Home Services — Quote Request*\n\n🔧 Service: ${service}\n📍 Location: ${loc}\n📞 Contact: ${phone}${budget?'\n💰 Budget: '+budget:''}\n\n📝 ${desc}\n\nPlease send your best quote!`;
+  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
+  if(msgEl){msgEl.innerHTML='✅ Quote request sent to providers!';msgEl.style.color='#f59e0b';}
+  renderQuotesFeed();
+}
+window.requestQuotes=requestQuotes;
+
+function renderQuotesFeed(){
+  const feed=document.getElementById('hsQuotesFeed');if(!feed)return;
+  let quotes=[];try{quotes=JSON.parse(localStorage.getItem('hsQuoteRequests')||'[]');}catch(e){}
+  if(!quotes.length){feed.innerHTML='<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.3);font-size:13px;">No quote requests yet</div>';return;}
+  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
+  feed.innerHTML=quotes.slice(0,6).map(q=>`
+    <div style="padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;font-weight:700;">${q.service}</span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.3);">📍 ${q.loc}</span>
+        <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.3);">${ago(q.ts)}</span>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.65);">${q.desc.slice(0,120)}${q.desc.length>120?'…':''}</div>
+      ${q.budget?`<div style="font-size:11px;color:#f59e0b;margin-top:4px;">Budget: ${q.budget}</div>`:''}
+      <a href="https://wa.me/254${q.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I saw your quote request for '+q.service+' on SOKONI Home Services. I can help. My rate is: ')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Send Quote</a>
+    </div>`).join('');
+}
+
+function postHsRequest(){
+  const text=(document.getElementById('hsAskText')?.value||'').trim();
+  const type=document.getElementById('hsAskType')?.value||'';
+  const phone=document.getElementById('hsAskPhone')?.value||'';
+  if(!text){showHsToast('Please describe your issue');return;}
+  let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_homeservices')||'[]');}catch(e){}
+  reqs.unshift({id:'HSR'+Date.now(),text,type,phone,ts:Date.now()});
+  localStorage.setItem('askHub_homeservices',JSON.stringify(reqs.slice(0,30)));
+  document.getElementById('hsAskText').value='';
+  document.getElementById('hsAskPhone').value='';
+  renderHsAskFeed();
+  showHsToast('Posted to Home Services Hub!');
+}
+window.postHsRequest=postHsRequest;
+
+function renderHsAskFeed(){
+  const feed=document.getElementById('hsAskFeed');if(!feed)return;
+  let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_homeservices')||'[]');}catch(e){}
+  if(!reqs.length){feed.innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No requests yet</div>';return;}
+  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
+  feed.innerHTML=reqs.slice(0,8).map(r=>`
+    <div style="padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);color:#f59e0b;font-weight:700;">${r.type}</span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
+      </div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      ${r.phone?`<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I can help with your home service request: '+r.text)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>`:''}
+    </div>`).join('');
+}
+
+function registerProvider(){
+  const name=(document.getElementById('regName')?.value||'').trim();
+  const phone=(document.getElementById('regPhone')?.value||'').trim();
+  const service=document.getElementById('regService')?.value||'';
+  const area=(document.getElementById('regArea')?.value||'').trim();
+  const msgEl=document.getElementById('regMsg');
+  if(!name||!phone||!area){if(msgEl){msgEl.textContent='Please fill name, phone and area';msgEl.style.color='#f97316';}return;}
+  const typeMap={'🔧 Plumber':'plumbing','⚡ Electrician':'electrical','🧹 Cleaner':'cleaning','🎨 Painter':'painting','📦 Mover':'moving','🪟 Carpenter':'carpentry','🌿 Gardener':'gardening','❄️ AC / Appliance':'appliance','🧰 Handyman':'handyman','🔒 Security / Locks':'security'};
+  const p={
+    id:'HS'+Date.now(),type:typeMap[service]||'handyman',emoji:service.split(' ')[0]||'🔧',
+    name,phone,specialty:service,area,
+    exp:document.getElementById('regExp')?.value||'',
+    rate:document.getElementById('regRate')?.value||'',
+    bio:document.getElementById('regBio')?.value||'',
+    rating:5.0,jobs:0,certified:false
+  };
+  let local=[];try{local=JSON.parse(localStorage.getItem('sokoniHomeProviders')||'[]');}catch(e){}
+  local.unshift(p);localStorage.setItem('sokoniHomeProviders',JSON.stringify(local.slice(0,50)));
+  const msg=`🏠 *SOKONI Home Services — New Provider Registration*\n\n👤 ${name}\n📞 ${phone}\n🔧 Service: ${service}\n📍 Area: ${area}\n${p.rate?'💰 Rate: '+p.rate:''}${p.bio?'\n\n'+p.bio:''}`;
+  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
+  if(msgEl){msgEl.innerHTML='✅ Registered! You\'ll start receiving job alerts.';msgEl.style.color='#f59e0b';}
+  /* Firestore write — fire-and-forget */
+  _hsFireWrite('homeServiceProviders',{...p,registrationStatus:'pending',hub:'home-services'});
+  ['regName','regPhone','regArea','regRate','regBio'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+}
+window.registerProvider=registerProvider;
+
+function showHsToast(msg){
+  if(typeof window._sokoniToast==='function'){window._sokoniToast(msg,'warning',2800);return;}
+  /* fallback if script.js not yet loaded */
+  var t=document.getElementById('hsToast');
+  if(t)t.remove();
+  t=document.createElement('div');t.id='hsToast';
+  t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#0a0805;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:700;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2800);
+}
+
+renderTypeChips();
+filterProviders();
+renderHsAskFeed();
+renderQuotesFeed();
+
+/* ── URL HASH DEEP-LINK ── */
+(function(){
+  var h=location.hash.replace('#','');
+  if(!h)return;
+  var types=['cleaning','repairs','installation','outdoor','moving','interiors','security'];
+  if(types.indexOf(h)>=0){setTimeout(function(){goFindType(h);},200);}
+  else if(['find','book','quotes','askhub','myjobs','register'].indexOf(h)>=0){setTimeout(function(){goToPanel(h);},200);}
+})();
+
+/* ── FIRESTORE FIRE-AND-FORGET ── */
+async function _hsFireWrite(coll, data) {
+  try {
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyBmPL3mFJXFN3LXY_gPuH2HSJY8oWmyOJ4",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.appspot.com",messagingSenderId:"448791489749",appId:"1:448791489749:web:a1b2c3d4e5f6g7h8"};
+    const _a=getApps().find(a=>a.name==="hs-write")||initializeApp(_cfg,"hs-write");
+    await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
+  } catch(e){}
+}
+window._hsFireWrite=_hsFireWrite;
+
+/* ── CONTACT PROVIDER (lead fee tracking) ── */
+function contactProvider(id, name, phone) {
+  /* Track lead fee — fire-and-forget */
+  _hsFireWrite('homeServiceLeads',{providerId:id,providerName:name,hub:'home-services',feeKES:30,status:'pending'});
+  const msg=encodeURIComponent('Hi '+name+', I found you on SOKONI Home Services. I need help with: ');
+  window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+msg,'_blank');
+}
+window.contactProvider=contactProvider;
+
+/* ── REVIEWS ── */
+let _reviewTarget={id:'',name:''};
+let _selectedStars=0;
+
+function openReviewModal(id, name) {
+  _reviewTarget={id,name};
+  _selectedStars=0;
+  document.getElementById('hsReviewProviderName').textContent=name;
+  document.querySelectorAll('.hs-star-btn').forEach(b=>b.style.opacity='0.3');
+  document.getElementById('hsReviewText').value='';
+  document.getElementById('hsReviewerName').value='';
+  document.getElementById('hsReviewMsg').textContent='';
+  document.getElementById('hsReviewModal').style.display='flex';
+}
+function closeReviewModal(){document.getElementById('hsReviewModal').style.display='none';}
+function setReviewStar(n){
+  _selectedStars=n;
+  document.querySelectorAll('.hs-star-btn').forEach((b,i)=>{b.style.opacity=i<n?'1':'0.3';b.style.color=i<n?'#f59e0b':'rgba(255,255,255,0.3)';});
+}
+async function submitReview(){
+  if(!_selectedStars){showHsToast('Please select a star rating');return;}
+  const text=(document.getElementById('hsReviewText')?.value||'').trim();
+  const reviewer=(document.getElementById('hsReviewerName')?.value||'').trim()||'Anonymous';
+  const msgEl=document.getElementById('hsReviewMsg');
+  await _hsFireWrite('homeServiceReviews',{providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,hub:'home-services'});
+  /* Save to localStorage for immediate display */
+  let revs=[];try{revs=JSON.parse(localStorage.getItem('hsReviews')||'[]');}catch(e){}
+  revs.unshift({providerId:_reviewTarget.id,providerName:_reviewTarget.name,rating:_selectedStars,text,reviewer,ts:Date.now()});
+  localStorage.setItem('hsReviews',JSON.stringify(revs.slice(0,50)));
+  if(msgEl){msgEl.textContent='✅ Thank you for your review!';msgEl.style.color='#f59e0b';}
+  setTimeout(closeReviewModal,1800);
+}
+window.openReviewModal=openReviewModal;
+window.closeReviewModal=closeReviewModal;
+window.setReviewStar=setReviewStar;
+window.submitReview=submitReview;
+
+/* ── MY JOBS TRACKER ── */
+function renderMyJobs(){
+  const feed=document.getElementById('hsMyJobsList');if(!feed)return;
+  let jobs=[];try{jobs=JSON.parse(localStorage.getItem('sokoniHomeBookings')||'[]');}catch(e){}
+  if(!jobs.length){
+    feed.innerHTML='<div style="text-align:center;padding:50px 20px;color:rgba(255,255,255,0.3);"><div style="font-size:36px;margin-bottom:10px;">📋</div><div style="font-size:14px;margin-bottom:12px;">No bookings yet</div><button type="button" onclick="goToPanel(\'book\')" style="padding:10px 20px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border:none;border-radius:10px;color:#0a0805;font-weight:900;font-size:12px;cursor:pointer;font-family:inherit;">Book a Service →</button></div>';
+    return;
+  }
+  const STEPS=['Sent','Confirmed','In Progress','Completed'];
+  const ago=ts=>{const s=Math.floor((Date.now()-ts)/1000);return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':s<86400?Math.floor(s/3600)+'h ago':Math.floor(s/86400)+'d ago';};
+  feed.innerHTML=jobs.slice(0,15).map(j=>{
+    const rawStatus=j.status||'sent';
+    const stepIdx=rawStatus==='sent'||rawStatus==='pending'?0:rawStatus==='confirmed'?1:rawStatus==='in_progress'?2:rawStatus==='completed'?3:0;
+    const stepsHtml=STEPS.map((s,i)=>{
+      const done=i<stepIdx,active=i===stepIdx;
+      const circleCss=active?'background:rgba(245,158,11,0.25);border:2px solid #f59e0b;color:#f59e0b;font-weight:900;':done?'background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;':'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.2);';
+      const lineCss=i<STEPS.length-1?(i<stepIdx?'background:rgba(245,158,11,0.3);':'background:rgba(255,255,255,0.07);'):'';
+      return `<div style="display:flex;align-items:center;flex:1;">`
+        +`<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;">`
+        +`<div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;margin-bottom:3px;${circleCss}">${done?'✓':i+1}</div>`
+        +`<div style="font-size:8px;font-weight:700;color:${active?'#f59e0b':done?'rgba(245,158,11,0.6)':'rgba(255,255,255,0.25)'};text-align:center;white-space:nowrap;">${s}</div>`
+        +`</div>`
+        +(i<STEPS.length-1?`<div style="flex:1;height:1px;margin:0 2px;margin-bottom:14px;${lineCss}"></div>`:'')
+        +'</div>';
+    }).join('');
+    return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;transition:border-color .2s;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;">
+        <div>
+          <div style="font-size:13px;font-weight:900;color:white;margin-bottom:2px;">${(j.service||'Home Service').replace(/</g,'&lt;')}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Ref: ${j.ref} · ${ago(j.ts||Date.now())}</div>
+        </div>
+        <span style="flex-shrink:0;font-size:9px;padding:3px 8px;border-radius:5px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;font-weight:700;white-space:nowrap;">${STEPS[stepIdx]}</span>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-bottom:12px;">${stepsHtml}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);display:flex;gap:12px;flex-wrap:wrap;">
+        ${j.loc?`<span>📍 ${j.loc.replace(/</g,'&lt;')}</span>`:''}
+        ${j.date&&j.date!=='ASAP'?`<span>📅 ${j.date}</span>`:'<span>📅 ASAP</span>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+window.renderMyJobs=renderMyJobs;
+
+/* ── TYPE FILTER MAPPING for 7 categories ── */
+const HS_TYPE_MAP={
+  cleaning:['cleaning'],
+  repairs:['plumbing','handyman'],
+  installation:['appliance'],
+  outdoor:['gardening'],
+  moving:['moving'],
+  interiors:['carpentry','painting'],
+  security:['security'],
+};
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="nav-active.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'home-services'})" style="padding:12px 28px;background:#39ff14;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Education — Schools, Tutors, Courses & Exam Prep in Kenya</title>
+  <meta name="description" content="Find schools, tutors, online courses, KCSE prep and professional certifications across Kenya on SOKONI Education Hub.">
+  <meta property="og:title" content="SOKONI Education — Learn & Grow in Kenya">
+  <meta property="og:description" content="Schools, universities, tutors, online courses, KCSE/KCPE prep, and professional certifications.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:url" content="https://mysokoni.co.ke/education.html">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0ea5e9">
+  <script src="security.js"></script>
+  <script src="sokoni-permissions.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="seo.js" defer></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#040c18;color:white;min-height:100vh;padding-bottom:90px;}
+
+    /* ── Nav ── */
+    .ed-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;
+            background:rgba(4,12,24,.97);border-bottom:1px solid rgba(14,165,233,.18);
+            position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);}
+    .ed-nav-logo{height:32px;}
+    .ed-nav-links{display:flex;gap:8px;}
+    .ed-nav-btn{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:700;
+                cursor:pointer;font-family:inherit;border:none;text-decoration:none;
+                display:inline-block;transition:all .2s;}
+    .ed-btn-outline{background:transparent;border:1px solid rgba(14,165,233,.35);color:rgba(255,255,255,.65);}
+    .ed-btn-outline:hover{border-color:#0ea5e9;color:white;}
+    .ed-btn-primary{background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;}
+
+    /* ── Hero ── */
+    .ed-hero{background:linear-gradient(135deg,rgba(14,165,233,.1),rgba(99,102,241,.06));
+             border-bottom:1px solid rgba(14,165,233,.12);padding:52px 24px 44px;text-align:center;}
+    .ed-hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,.12);
+                   border:1px solid rgba(14,165,233,.3);border-radius:20px;padding:5px 14px;
+                   font-size:12px;font-weight:700;color:#38bdf8;margin-bottom:18px;letter-spacing:.04em;}
+    .ed-hero h1{font-size:clamp(26px,5.5vw,44px);font-weight:900;line-height:1.15;margin-bottom:12px;}
+    .ed-hero h1 span{background:linear-gradient(135deg,#0ea5e9,#38bdf8);-webkit-background-clip:text;
+                     -webkit-text-fill-color:transparent;background-clip:text;}
+    .ed-hero p{color:rgba(255,255,255,.5);font-size:15px;margin-bottom:28px;max-width:500px;margin-left:auto;margin-right:auto;}
+    .ed-search-wrap{max-width:560px;margin:0 auto;display:flex;gap:10px;}
+    .ed-search-field{flex:1;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);
+                     border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:0 16px;}
+    .ed-search-field i{color:rgba(255,255,255,.35);font-size:14px;}
+    .ed-search-field input{flex:1;background:none;border:none;outline:none;color:white;font-size:16px;
+                           font-family:inherit;padding:14px 0;}
+    .ed-search-field input::placeholder{color:rgba(255,255,255,.3);}
+    .ed-search-go{padding:14px 24px;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;
+                  border-radius:14px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;}
+    .ed-hero-stats{display:flex;gap:32px;justify-content:center;margin-top:28px;flex-wrap:wrap;}
+    .ed-stat{text-align:center;}
+    .ed-stat strong{display:block;font-size:22px;font-weight:900;color:#38bdf8;}
+    .ed-stat span{font-size:12px;color:rgba(255,255,255,.4);font-weight:600;}
+
+    /* ── Category pills ── */
+    .ed-body{max-width:1200px;margin:0 auto;padding:28px 20px 60px;}
+    .ed-cats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;}
+    .ed-cat{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;
+            border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.55);
+            background:transparent;transition:all .2s;font-family:inherit;}
+    .ed-cat:hover,.ed-cat.active{background:rgba(14,165,233,.15);border-color:rgba(14,165,233,.4);color:#38bdf8;}
+
+    /* ── Section headings ── */
+    .ed-section-h{font-size:15px;font-weight:800;color:white;margin:32px 0 16px;
+                  display:flex;align-items:center;gap:8px;}
+    .ed-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07);}
+
+    /* ── Provider / course cards ── */
+    .ed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+    .ed-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:20px;
+             overflow:hidden;transition:all .2s;cursor:pointer;}
+    .ed-card:hover{border-color:rgba(14,165,233,.3);transform:translateY(-3px);}
+    .ed-card-head{padding:18px 18px 0;display:flex;align-items:flex-start;gap:14px;}
+    .ed-card-icon{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;
+                  justify-content:center;font-size:26px;flex-shrink:0;}
+    .ed-card-meta{flex:1;}
+    .ed-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:3px;}
+    .ed-card-sub{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:8px;}
+    .ed-card-tags{display:flex;gap:6px;flex-wrap:wrap;}
+    .ed-tag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;}
+    .ed-tag-cat{background:rgba(14,165,233,.1);color:#38bdf8;border:1px solid rgba(14,165,233,.2);}
+    .ed-tag-mode{background:rgba(74,222,128,.08);color:#4ade80;border:1px solid rgba(74,222,128,.18);}
+    .ed-tag-price{background:rgba(251,191,36,.08);color:#fbbf24;border:1px solid rgba(251,191,36,.18);}
+    .ed-card-body{padding:14px 18px 18px;}
+    .ed-card-desc{font-size:13px;color:rgba(255,255,255,.45);line-height:1.5;
+                  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:14px;}
+    .ed-card-footer{display:flex;align-items:center;justify-content:space-between;}
+    .ed-card-price{font-size:16px;font-weight:900;color:#38bdf8;}
+    .ed-card-price small{font-size:11px;font-weight:600;color:rgba(255,255,255,.35);}
+    .ed-book-btn{padding:9px 18px;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;
+                 border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}
+
+    /* ── Exam prep banner ── */
+    .ed-exam-banner{background:linear-gradient(135deg,rgba(14,165,233,.12),rgba(99,102,241,.08));
+                    border:1px solid rgba(14,165,233,.25);border-radius:20px;padding:24px;
+                    margin:28px 0;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+    .ed-exam-icon{font-size:48px;flex-shrink:0;}
+    .ed-exam-text h3{font-size:18px;font-weight:900;margin-bottom:6px;}
+    .ed-exam-text p{font-size:13px;color:rgba(255,255,255,.5);line-height:1.5;}
+    .ed-exam-btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+    .ed-exam-btn{padding:9px 18px;border-radius:10px;font-size:12px;font-weight:800;
+                 cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;}
+    .ed-exam-blue{background:rgba(14,165,233,.2);border:1px solid rgba(14,165,233,.35);color:#38bdf8;}
+    .ed-exam-green{background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.28);color:#4ade80;}
+
+    /* ── Register CTA ── */
+    .ed-register-cta{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);
+                     border-radius:16px;padding:24px;text-align:center;margin-top:32px;}
+    .ed-register-cta h3{font-size:17px;font-weight:900;margin-bottom:8px;}
+    .ed-register-cta p{font-size:13px;color:rgba(255,255,255,.45);margin-bottom:18px;}
+
+    /* ── Spinner ── */
+    .ed-spinner{display:flex;justify-content:center;padding:40px;}
+    .ed-spinner div{width:36px;height:36px;border-radius:50%;border:3px solid rgba(14,165,233,.2);
+                    border-top-color:#0ea5e9;animation:edspin .7s linear infinite;}
+    @keyframes edspin{to{transform:rotate(360deg)}}
+
+    /* ── Modal ── */
+    .ed-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;
+                      display:flex;align-items:flex-end;justify-content:center;
+                      opacity:0;pointer-events:none;transition:opacity .25s;}
+    .ed-modal-overlay.open{opacity:1;pointer-events:all;}
+    @media(min-width:600px){.ed-modal-overlay{align-items:center;}}
+    .ed-modal{background:#0d1a28;border:1px solid rgba(14,165,233,.15);border-radius:24px 24px 0 0;
+              width:100%;max-width:560px;max-height:90vh;overflow-y:auto;
+              transform:translateY(40px);transition:transform .28s cubic-bezier(.25,.8,.25,1);}
+    @media(min-width:600px){.ed-modal{border-radius:24px;transform:scale(.95);}}
+    .ed-modal-overlay.open .ed-modal{transform:none;}
+    .ed-modal-head{padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,.07);
+                   display:flex;align-items:center;justify-content:space-between;
+                   position:sticky;top:0;background:#0d1a28;z-index:2;}
+    .ed-modal-title{font-size:17px;font-weight:900;}
+    .ed-modal-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.07);
+                    border:none;color:rgba(255,255,255,.55);font-size:18px;cursor:pointer;}
+    .ed-modal-body{padding:20px 24px 28px;}
+    .ed-detail-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;
+                   border-bottom:1px solid rgba(255,255,255,.05);}
+    .ed-detail-row:last-child{border-bottom:none;}
+    .ed-detail-label{font-size:12px;color:rgba(255,255,255,.4);font-weight:700;min-width:90px;padding-top:1px;}
+    .ed-detail-val{font-size:13px;color:rgba(255,255,255,.75);flex:1;line-height:1.5;}
+    .ed-enrol-btn{width:100%;padding:15px;background:linear-gradient(135deg,#0ea5e9,#0284c7);
+                  border:none;border-radius:14px;color:white;font-weight:900;font-size:15px;
+                  cursor:pointer;font-family:inherit;margin-top:20px;}
+
+    .ed-empty{text-align:center;padding:50px 20px;color:rgba(255,255,255,.3);}
+    .ed-empty-icon{font-size:44px;margin-bottom:12px;}
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="ed-nav">
+  <a href="index.html"><img src="assets/logosokoni.png" alt="SOKONI" class="ed-nav-logo"></a>
+  <div class="ed-nav-links">
+    <a href="jobs.html" class="ed-nav-btn ed-btn-outline">Jobs</a>
+    <button class="ed-nav-btn ed-btn-primary" onclick="EDApp.openRegister()">List Your Institution</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="ed-hero">
+  <div class="ed-hero-badge">📚 Kenya Education Hub</div>
+  <h1>Learn, Grow &amp; <span>Excel</span></h1>
+  <p>Schools, tutors, online courses, KCSE/KCPE prep and professional certifications — all in one place.</p>
+  <div class="ed-search-wrap">
+    <div class="ed-search-field">
+      <i class="fas fa-search"></i>
+      <input id="edSearch" type="text" placeholder="Search courses, schools, tutors…" autocomplete="off">
+    </div>
+    <button class="ed-search-go" onclick="EDApp.search()">Search</button>
+  </div>
+  <div class="ed-hero-stats">
+    <div class="ed-stat"><strong id="edStatProviders">—</strong><span>Providers</span></div>
+    <div class="ed-stat"><strong id="edStatCourses">—</strong><span>Courses</span></div>
+    <div class="ed-stat"><strong>8</strong><span>Categories</span></div>
+  </div>
+</section>
+
+<!-- Body -->
+<div class="ed-body">
+
+  <!-- Category pills -->
+  <div class="ed-cats" id="edCats">
+    <button class="ed-cat active" data-cat="All" onclick="EDApp.setCategory(this)">All</button>
+    <button class="ed-cat" data-cat="School" onclick="EDApp.setCategory(this)">🏫 Schools</button>
+    <button class="ed-cat" data-cat="University" onclick="EDApp.setCategory(this)">🎓 Universities</button>
+    <button class="ed-cat" data-cat="Tutor" onclick="EDApp.setCategory(this)">👨‍🏫 Tutors</button>
+    <button class="ed-cat" data-cat="Online Course" onclick="EDApp.setCategory(this)">💻 Online Courses</button>
+    <button class="ed-cat" data-cat="Exam Prep" onclick="EDApp.setCategory(this)">📝 Exam Prep</button>
+    <button class="ed-cat" data-cat="Professional" onclick="EDApp.setCategory(this)">🏅 Professional Certs</button>
+    <button class="ed-cat" data-cat="Vocational" onclick="EDApp.setCategory(this)">🔧 Vocational</button>
+    <button class="ed-cat" data-cat="Language" onclick="EDApp.setCategory(this)">🌍 Language</button>
+  </div>
+
+  <!-- Exam prep spotlight -->
+  <div class="ed-exam-banner">
+    <div class="ed-exam-icon">📝</div>
+    <div class="ed-exam-text">
+      <h3>KCSE &amp; KCPE Exam Prep</h3>
+      <p>Connect with experienced tutors and access past papers, revision notes, and mock exams.
+         Prepare with confidence across all subjects.</p>
+      <div class="ed-exam-btns">
+        <button class="ed-exam-btn ed-exam-blue" onclick="EDApp.setCategory(document.querySelector('[data-cat=\'Exam Prep\']'))">
+          Find Exam Prep
+        </button>
+        <button class="ed-exam-btn ed-exam-green" onclick="EDApp.setCategory(document.querySelector('[data-cat=\'Tutor\']'))">
+          Find a Tutor
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="ed-section-h" id="edSectionLabel">All Providers &amp; Courses</div>
+  <div id="edGrid" class="ed-grid">
+    <div class="ed-spinner"><div></div></div>
+  </div>
+
+  <!-- Register CTA -->
+  <div class="ed-register-cta">
+    <h3>Are you an educator or institution?</h3>
+    <p>List your school, courses, or tutoring services and reach thousands of learners across Kenya.</p>
+    <button class="ed-book-btn" onclick="EDApp.openRegister()">List Your Institution</button>
+  </div>
+
+</div>
+
+<!-- Detail modal -->
+<div class="ed-modal-overlay" id="edDetailModal">
+  <div class="ed-modal">
+    <div class="ed-modal-head">
+      <span class="ed-modal-title" id="edDetailTitle">Details</span>
+      <button class="ed-modal-close" onclick="EDApp.closeModal('edDetailModal')">×</button>
+    </div>
+    <div class="ed-modal-body" id="edDetailBody"></div>
+  </div>
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav" id="bottomNav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="search.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Search</span></a>
+  <a href="cart.html" class="bnav-item"><span class="bnav-emoji">🛒</span><span>Cart</span></a>
+  <a href="education.html" class="bnav-item active"><span class="bnav-emoji">📚</span><span>Learn</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script type="module">
+import { db, auth } from './firebase.js';
+import {
+  collection, query, where, orderBy, limit, getDocs,
+  getCountFromServer, serverTimestamp, addDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const PAGE = 12;
+const CAT_ICONS = {
+  'School':'🏫','University':'🎓','Tutor':'👨‍🏫','Online Course':'💻',
+  'Exam Prep':'📝','Professional':'🏅','Vocational':'🔧','Language':'🌍',
+};
+const CAT_COLORS = {
+  'School':'rgba(14,165,233,.1)','University':'rgba(124,58,237,.1)',
+  'Tutor':'rgba(74,222,128,.1)','Online Course':'rgba(251,191,36,.1)',
+  'Exam Prep':'rgba(239,68,68,.1)','Professional':'rgba(14,165,233,.1)',
+  'Vocational':'rgba(251,191,36,.1)','Language':'rgba(74,222,128,.1)',
+};
+
+let _cat = 'All';
+let _kw  = '';
+const _cache = {};
+
+function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _fmt(n){ return n > 0 ? `KES ${Number(n).toLocaleString('en-KE')}` : 'Free'; }
+
+function _renderCard(p) {
+  const icon  = CAT_ICONS[p.category] || '📚';
+  const color = CAT_COLORS[p.category] || 'rgba(14,165,233,.1)';
+  const mode  = p.mode || (p.category === 'Online Course' ? 'Online' : 'In-Person');
+  return `
+  <div class="ed-card" onclick="EDApp.openDetail('${_esc(p._id)}')">
+    <div class="ed-card-head">
+      <div class="ed-card-icon" style="background:${color};">${icon}</div>
+      <div class="ed-card-meta">
+        <div class="ed-card-name">${_esc(p.name)}</div>
+        <div class="ed-card-sub">${_esc(p.location || 'Kenya')}</div>
+        <div class="ed-card-tags">
+          <span class="ed-tag ed-tag-cat">${_esc(p.category)}</span>
+          <span class="ed-tag ed-tag-mode">${_esc(mode)}</span>
+          ${p.price > 0 ? `<span class="ed-tag ed-tag-price">${_fmt(p.price)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="ed-card-body">
+      <div class="ed-card-desc">${_esc(p.description)}</div>
+      <div class="ed-card-footer">
+        <div class="ed-card-price">${_fmt(p.price)}<small>${p.price > 0 ? ' / '+_esc(p.priceUnit||'course') : ''}</small></div>
+        <button class="ed-book-btn" onclick="event.stopPropagation();EDApp.openDetail('${_esc(p._id)}')">
+          ${p.category === 'Tutor' ? 'Book Tutor' : p.category === 'School' ? 'Enquire' : 'Enrol'}
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function _load() {
+  const grid = document.getElementById('edGrid');
+  grid.innerHTML = '<div class="ed-spinner"><div></div></div>';
+
+  try {
+    let q = query(collection(db, 'education'), where('active','==',true));
+    if (_cat !== 'All') q = query(q, where('category','==',_cat));
+    q = query(q, orderBy('featured','desc'), orderBy('createdAt','desc'), limit(PAGE));
+
+    const snap  = await getDocs(q);
+    let providers = snap.docs.map(d => ({ _id:d.id, ...d.data() }));
+    providers.forEach(p => { _cache[p._id] = p; });
+
+    // Client-side keyword filter
+    if (_kw) {
+      const kw = _kw.toLowerCase();
+      providers = providers.filter(p =>
+        (p.name||'').toLowerCase().includes(kw) ||
+        (p.description||'').toLowerCase().includes(kw) ||
+        (p.category||'').toLowerCase().includes(kw)
+      );
+    }
+
+    grid.innerHTML = providers.length
+      ? providers.map(_renderCard).join('')
+      : `<div class="ed-empty"><div class="ed-empty-icon">🔍</div><h3>No results found</h3><p>Try a different category or search term.</p></div>`;
+
+    // Update stats
+    try {
+      const total = await getCountFromServer(query(collection(db,'education'),where('active','==',true)));
+      document.getElementById('edStatProviders').textContent = total.data().count + '+';
+      document.getElementById('edStatCourses').textContent = total.data().count + '+';
+    } catch(_){}
+  } catch(err) {
+    console.error('[EDApp]', err);
+    grid.innerHTML = '<div class="ed-empty"><div class="ed-empty-icon">⚠️</div><h3>Failed to load</h3><p>Check your connection.</p></div>';
+  }
+}
+
+window.EDApp = {
+  search() { _kw = document.getElementById('edSearch').value.trim(); _load(); },
+  setCategory(el) {
+    if (!el) return;
+    document.querySelectorAll('.ed-cat').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    _cat = el.dataset.cat;
+    document.getElementById('edSectionLabel').textContent =
+      _cat === 'All' ? 'All Providers & Courses' : _cat + 's';
+    _load();
+  },
+  openModal(id) { document.getElementById(id).classList.add('open'); },
+  closeModal(id) { document.getElementById(id).classList.remove('open'); },
+  openDetail(pid) {
+    const p = _cache[pid];
+    if (!p) return;
+    document.getElementById('edDetailTitle').textContent = p.name;
+    const icon = CAT_ICONS[p.category] || '📚';
+    const actionLabel = p.category==='Tutor' ? 'Book Tutor Session' : p.category==='School' ? 'Send Enquiry' : 'Enrol Now';
+    document.getElementById('edDetailBody').innerHTML = `
+      <div style="font-size:42px;text-align:center;margin-bottom:14px;">${icon}</div>
+      <div class="ed-detail-row"><span class="ed-detail-label">Category</span><span class="ed-detail-val">${_esc(p.category)}</span></div>
+      <div class="ed-detail-row"><span class="ed-detail-label">Location</span><span class="ed-detail-val">${_esc(p.location||'Kenya')}</span></div>
+      <div class="ed-detail-row"><span class="ed-detail-label">Mode</span><span class="ed-detail-val">${_esc(p.mode||'In-Person')}</span></div>
+      <div class="ed-detail-row"><span class="ed-detail-label">Price</span><span class="ed-detail-val" style="color:#38bdf8;font-weight:800;">${_fmt(p.price)} ${p.price>0 ? '/ '+(p.priceUnit||'course') : ''}</span></div>
+      ${p.duration ? `<div class="ed-detail-row"><span class="ed-detail-label">Duration</span><span class="ed-detail-val">${_esc(p.duration)}</span></div>` : ''}
+      ${p.schedule ? `<div class="ed-detail-row"><span class="ed-detail-label">Schedule</span><span class="ed-detail-val">${_esc(p.schedule)}</span></div>` : ''}
+      ${p.qualification ? `<div class="ed-detail-row"><span class="ed-detail-label">Qualification</span><span class="ed-detail-val">${_esc(p.qualification)}</span></div>` : ''}
+      <div class="ed-detail-row"><span class="ed-detail-label">About</span><span class="ed-detail-val">${_esc(p.description)}</span></div>
+      ${p.contact ? `<div class="ed-detail-row"><span class="ed-detail-label">Contact</span><span class="ed-detail-val">${_esc(p.contact)}</span></div>` : ''}
+      <button class="ed-enrol-btn" onclick="EDApp.enrol('${_esc(pid)}')">
+        ${actionLabel}
+      </button>`;
+    this.openModal('edDetailModal');
+  },
+  async enrol(pid) {
+    const p = _cache[pid];
+    if (!p) return;
+    if (p.whatsapp) {
+      window.open(`https://wa.me/${p.whatsapp.replace(/\D/g,'')}?text=Hi, I found you on SOKONI Education. I'd like to enquire about ${encodeURIComponent(p.name)}.`, '_blank');
+      return;
+    }
+    if (p.website) { window.open(p.website, '_blank'); return; }
+    window.location.href = `mailto:${p.contact||'support@mysokoni.co.ke'}?subject=Enquiry: ${encodeURIComponent(p.name)}&body=Hi, I found your institution on SOKONI and would like more information.`;
+  },
+  openRegister() {
+    if (typeof HubRegister !== 'undefined') {
+      HubRegister.open({ hub:'education', category:'school' });
+    } else {
+      window.location.href = 'onboarding-professional.html?hub=education';
+    }
+  },
+};
+
+document.getElementById('edSearch').addEventListener('keydown', e => { if(e.key==='Enter') EDApp.search(); });
+document.querySelectorAll('.ed-modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); });
+});
+
+_load();
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script defer src="hub-register.js"></script>
+<script defer src="kass-widget.js"></script>
+  <!-- Scale + Resilience stack -->
+  <script defer src="sokoni-scale.js"></script>
+  <script defer src="sokoni-cache.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

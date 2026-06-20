@@ -1,0 +1,1350 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Community — SOKONI</title>
+  <meta name="description" content="Join the SOKONI community — discover groups, discussions and local events in Kenya.">
+  <meta property="og:title" content="Community — SOKONI">
+  <meta property="og:description" content="Connect with buyers, sellers and service providers in the SOKONI Kenya community.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
+    a { text-decoration: none; }
+
+    .cm-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; background: rgba(10,10,10,0.96);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px);
+    }
+    .cm-nav-logo { height: 34px; }
+    .cm-nav-right { display: flex; gap: 8px; align-items: center; }
+    .cm-nav-btn {
+      padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.6);
+      background: transparent; cursor: pointer; font-family: inherit;
+      text-decoration: none; transition: all .2s;
+    }
+    .cm-nav-btn:hover { color: white; border-color: rgba(255,255,255,0.25); }
+    .cm-nav-btn.green { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.25); color: #71ff00; }
+
+    /* HERO */
+    .cm-hero {
+      background: linear-gradient(135deg, rgba(113,255,0,0.07), rgba(0,170,255,0.05));
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 44px 24px 36px; text-align: center;
+    }
+    .cm-hero h1 { font-size: clamp(24px,5vw,38px); font-weight: 900; margin-bottom: 8px; }
+    .cm-hero p  { color: rgba(255,255,255,0.45); font-size: 14px; margin-bottom: 20px; }
+    .cm-stats-row {
+      display: flex; justify-content: center; gap: 28px; flex-wrap: wrap;
+      font-size: 13px; color: rgba(255,255,255,0.4);
+    }
+    .cm-stat-item strong { color: white; }
+
+    /* LAYOUT */
+    .cm-body {
+      max-width: 1100px; margin: 0 auto;
+      display: grid; grid-template-columns: 260px 1fr;
+      gap: 24px; padding: 28px 24px 80px; align-items: start;
+    }
+    @media(max-width: 860px) { .cm-body { grid-template-columns: 1fr; } }
+    @media(max-width:600px){ .cm-nav-right { display:none !important; } }
+
+    /* SIDEBAR */
+    .cm-sidebar { position: sticky; top: 80px; }
+    .cm-sidebar-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; padding: 20px; margin-bottom: 14px;
+    }
+    .cm-sidebar-title { font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; }
+    .cm-type-btn {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      padding: 9px 12px; border-radius: 10px; border: none;
+      background: transparent; color: rgba(255,255,255,0.55); font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit; margin-bottom: 4px; transition: all .15s; text-align: left;
+    }
+    .cm-type-btn:hover { background: rgba(255,255,255,0.05); color: white; }
+    .cm-type-btn.active { background: rgba(113,255,0,0.08); color: #71ff00; border: 1px solid rgba(113,255,0,0.15); }
+    .cm-type-count { margin-left: auto; font-size: 11px; background: rgba(255,255,255,0.08); padding: 2px 7px; border-radius: 999px; }
+
+    /* POST FORM */
+    .cm-post-form {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; padding: 22px; margin-bottom: 20px;
+    }
+    .cm-form-title { font-size: 14px; font-weight: 800; color: white; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .cm-type-select {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .cm-type-chip {
+      padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5);
+      font-size: 12px; font-weight: 700; cursor: pointer; transition: all .15s;
+    }
+    .cm-type-chip.selected { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00; }
+    .cm-input, .cm-textarea {
+      width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: white;
+      font-size: 14px; outline: none; font-family: inherit; margin-bottom: 10px;
+    }
+    .cm-input::placeholder, .cm-textarea::placeholder { color: rgba(255,255,255,0.3); }
+    .cm-input:focus, .cm-textarea:focus { border-color: rgba(113,255,0,0.3); }
+    .cm-textarea { resize: vertical; }
+    .cm-post-btn {
+      padding: 12px 24px; background: linear-gradient(135deg,#71ff00,#4fc800);
+      color: black; font-weight: 800; font-size: 13px; border: none;
+      border-radius: 10px; cursor: pointer; font-family: inherit;
+    }
+
+    /* FILTER TABS */
+    .cm-filter-row { display: flex; gap: 6px; flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none; margin-bottom: 16px; }
+    .cm-filter-tab {
+      padding: 7px 14px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.5); font-size: 12px; font-weight: 700;
+      cursor: pointer; transition: all .15s;
+    }
+    .cm-filter-tab:hover { color: white; border-color: rgba(255,255,255,0.2); }
+    .cm-filter-tab.active { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.25); color: #71ff00; }
+
+    /* POST CARD */
+    .cm-post {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; padding: 18px 20px; margin-bottom: 14px;
+      transition: border-color .2s;
+    }
+    .cm-post:hover { border-color: rgba(255,255,255,0.14); }
+    .cm-post-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .cm-post-avatar {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 900; color: #71ff00;
+      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.2);
+    }
+    .cm-post-meta { flex: 1; }
+    .cm-post-author { font-size: 13px; font-weight: 800; color: white; }
+    .cm-post-date   { font-size: 11px; color: rgba(255,255,255,0.35); }
+    .cm-post-type-badge {
+      font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 999px;
+    }
+    .badge-question     { background: rgba(0,170,255,0.12); border: 1px solid rgba(0,170,255,0.2); color: #00aaff; }
+    .badge-recommendation { background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2); color: #71ff00; }
+    .badge-review       { background: rgba(255,193,7,0.1);  border: 1px solid rgba(255,193,7,0.2);  color: #ffc107; }
+    .badge-discussion   { background: rgba(160,128,255,0.1);border: 1px solid rgba(160,128,255,0.2);color: #a080ff; }
+    .badge-offer        { background: rgba(255,152,0,0.1);  border: 1px solid rgba(255,152,0,0.2);  color: #ff9800; }
+    .cm-post-title  { font-size: 15px; font-weight: 800; color: white; margin-bottom: 6px; }
+    .cm-post-body   { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 14px; }
+    .cm-post-actions {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .cm-action-btn {
+      display: flex; align-items: center; gap: 5px; padding: 6px 12px;
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+      background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.45);
+      font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    .cm-action-btn:hover { color: white; border-color: rgba(255,255,255,0.2); }
+    .cm-action-btn.liked { color: #ff4d6d; border-color: rgba(255,77,109,0.2); background: rgba(255,77,109,0.06); }
+    .cm-action-btn.helpful { color: #71ff00; border-color: rgba(113,255,0,0.2); background: rgba(113,255,0,0.06); }
+    .cm-product-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; background: rgba(0,170,255,0.08); border: 1px solid rgba(0,170,255,0.15);
+      color: #00aaff; padding: 3px 10px; border-radius: 6px; margin-bottom: 10px;
+    }
+    .cm-star-rating { color: #ffc107; font-size: 13px; margin-bottom: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* REPLIES */
+    .cm-replies { margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 14px; display: none; }
+    .cm-reply {
+      display: flex; gap: 10px; padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .cm-reply:last-child { border-bottom: none; }
+    .cm-reply-av {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(0,170,255,0.12); border: 1px solid rgba(0,170,255,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 900; color: #00aaff;
+    }
+    .cm-reply-body { font-size: 13px; color: rgba(255,255,255,0.6); }
+    .cm-reply-author { font-weight: 700; color: white; font-size: 12px; }
+    .cm-reply-input-row {
+      display: flex; gap: 8px; margin-top: 10px;
+    }
+    .cm-reply-input {
+      flex: 1; padding: 9px 12px; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white;
+      font-size: 13px; outline: none; font-family: inherit;
+    }
+    .cm-reply-input::placeholder { color: rgba(255,255,255,0.3); }
+    .cm-reply-send {
+      padding: 9px 16px; background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2);
+      color: #71ff00; font-weight: 700; font-size: 12px; border-radius: 10px; cursor: pointer; font-family: inherit;
+    }
+    .cm-empty { text-align: center; padding: 60px 0; color: rgba(255,255,255,0.25); }
+    .cm-empty-icon { font-size: 40px; margin-bottom: 10px; }
+
+    /* TRENDING */
+    .cm-trend-item {
+      display: flex; align-items: center; gap: 8px; padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;
+    }
+    .cm-trend-item:last-child { border-bottom: none; }
+    .cm-trend-num { font-size: 11px; font-weight: 900; color: rgba(255,255,255,0.25); width: 18px; flex-shrink: 0; }
+    .cm-trend-text { font-size: 12px; color: rgba(255,255,255,0.65); flex: 1; line-height: 1.4; }
+    .cm-trend-text:hover { color: white; }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="style.css"><script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="cm-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="cm-nav-logo" alt="Sokoni"></a>
+  <div class="cm-nav-right">
+    <a href="notifications.html" id="cmNotifBtn" title="Notifications" style="position:relative;background:none;border:none;cursor:pointer;padding:8px;color:rgba(255,255,255,0.5);font-size:18px;border-radius:10px;line-height:1;text-decoration:none;">🔔<span id="cmNotifBadge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:800;display:none;align-items:center;justify-content:center;"></span></a>
+    <a href="index.html" class="cm-nav-btn">🏠 Home</a>
+    <a href="requests.html" class="cm-nav-btn">📋 Requests</a>
+    <a href="seller.html" class="cm-nav-btn green">+ Post</a>
+  </div>
+</nav>
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('cmNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
+<div class="cm-hero">
+  <h1>👥 Sokoni Community</h1>
+  <p>Ask for recommendations · Discuss products · Share reviews · Connect with sellers</p>
+  <div class="cm-stats-row">
+    <span><strong id="cmPostCount">0</strong> posts</span>
+    <span><strong id="cmMemberCount">500+</strong> members</span>
+    <span><strong id="cmTodayCount">0</strong> today</span>
+  </div>
+</div>
+
+<div class="cm-body">
+
+  <!-- SIDEBAR -->
+  <aside class="cm-sidebar">
+    <div class="cm-sidebar-card">
+      <div class="cm-sidebar-title">Browse by Type</div>
+      <button type="button" class="cm-type-btn active" onclick="filterType('all',this)">📋 All Posts <span class="cm-type-count" id="cnt-all">0</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('question',this)">❓ Questions <span class="cm-type-count" id="cnt-question">0</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('recommendation',this)">👍 Recommendations <span class="cm-type-count" id="cnt-recommendation">0</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('review',this)">⭐ Reviews <span class="cm-type-count" id="cnt-review">0</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('discussion',this)">💬 Discussions <span class="cm-type-count" id="cnt-discussion">0</span></button>
+      <button type="button" class="cm-type-btn" onclick="filterType('offer',this)">🏷️ Offers <span class="cm-type-count" id="cnt-offer">0</span></button>
+    </div>
+
+    <div class="cm-sidebar-card">
+      <div class="cm-sidebar-title">Trending Topics</div>
+      <div id="cmTrending"></div>
+    </div>
+
+    <div class="cm-sidebar-card" style="background:rgba(113,255,0,0.04);border-color:rgba(113,255,0,0.12);">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:6px;">🏪 Sell on Sokoni</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:12px;">Join 500+ sellers. List products, offer services, and grow your business.</div>
+      <a href="seller.html" style="display:block;padding:10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;text-align:center;">Start Selling →</a>
+    </div>
+  </aside>
+
+  <!-- MAIN FEED -->
+  <main>
+
+    <!-- POST FORM -->
+    <div class="cm-post-form">
+      <div class="cm-form-title">✍️ Post to Community</div>
+      <div class="cm-type-select" id="typeSelect">
+        <span class="cm-type-chip selected" onclick="selectType('question',this)">❓ Question</span>
+        <span class="cm-type-chip" onclick="selectType('recommendation',this)">👍 Recommendation</span>
+        <span class="cm-type-chip" onclick="selectType('review',this)">⭐ Review</span>
+        <span class="cm-type-chip" onclick="selectType('discussion',this)">💬 Discussion</span>
+        <span class="cm-type-chip" onclick="selectType('offer',this)">🏷️ Offer / Deal</span>
+      </div>
+      <input class="cm-input" id="cmPostTitle" placeholder="Title — e.g. Best phone for KES 20,000?">
+      <textarea class="cm-textarea" id="cmPostBody" rows="3" placeholder="Share your thoughts, ask a question, or describe the product..."></textarea>
+      <input class="cm-input" id="cmPostProduct" placeholder="Product / category (optional) — e.g. Samsung A14">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button type="button" class="cm-post-btn" onclick="submitPost()">📤 Post</button>
+        <div id="cmStarInput" style="display:none;align-items:center;gap:6px;">
+          <span style="font-size:12px;color:rgba(255,255,255,0.4);">Rating:</span>
+          <div id="cmStarBtns"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILTER -->
+    <div class="cm-filter-row">
+      <button type="button" class="cm-filter-tab active" onclick="sortPosts('latest',this)">🕐 Latest</button>
+      <button type="button" class="cm-filter-tab" onclick="sortPosts('popular',this)">🔥 Popular</button>
+      <button type="button" class="cm-filter-tab" onclick="sortPosts('unanswered',this)">❓ Unanswered</button>
+    </div>
+
+    <!-- POSTS LIST -->
+    <div id="cmFeed"></div>
+
+  </main>
+</div>
+
+<script src="contact-guard.js"></script>
+<script>
+const FS_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const TYPE_META = {
+  question:       { badge:"badge-question",       label:"❓ Question",       emoji:"❓" },
+  recommendation: { badge:"badge-recommendation", label:"👍 Recommendation", emoji:"👍" },
+  review:         { badge:"badge-review",         label:"⭐ Review",         emoji:"⭐" },
+  discussion:     { badge:"badge-discussion",     label:"💬 Discussion",     emoji:"💬" },
+  offer:          { badge:"badge-offer",          label:"🏷️ Offer",          emoji:"🏷️" },
+};
+
+let posts = [];
+let _db = null, _unsubPosts = null;
+const user = (() => { try{ return JSON.parse(localStorage.getItem("sokoniUser")); }catch(e){return null;} })();
+let activeType = "all", activeSort = "latest", selectedPostType = "question", postStar = 0;
+
+function _cmToast(msg, type){
+  let t = document.getElementById('_cmToastEl');
+  if(!t){
+    t = document.createElement('div');
+    t.id = '_cmToastEl';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#111;border:1px solid rgba(113,255,0,.3);color:#71ff00;font-size:13px;font-weight:700;padding:11px 22px;border-radius:50px;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center';
+    document.body.appendChild(t);
+  }
+  if(type==='error') { t.style.borderColor='rgba(255,80,80,.4)'; t.style.color='#ff8080'; }
+  else               { t.style.borderColor='rgba(113,255,0,.3)';  t.style.color='#71ff00'; }
+  t.textContent = msg;
+  t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(t._tm);
+  t._tm = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(10px)'; }, 3200);
+}
+
+/* ── FIRESTORE INIT ── */
+function _initFS(){
+  function _connect(db){ _db = db; _subscribeFS(); }
+  if(window.firebaseDB){ _connect(window.firebaseDB); return; }
+  document.addEventListener('sokoniAuthReady', function(){
+    if(window.firebaseDB) _connect(window.firebaseDB);
+  }, { once: true });
+  let tries = 0;
+  const iv = setInterval(function(){
+    if(window.firebaseDB){ clearInterval(iv); _connect(window.firebaseDB); }
+    else if(++tries > 40) { clearInterval(iv); _showOffline(); }
+  }, 200);
+}
+
+async function _subscribeFS(){
+  try{
+    const { collection, query, orderBy, onSnapshot } = await import(FS_URL);
+    const q = query(collection(_db,'communityPosts'), orderBy('timestamp','desc'));
+    _unsubPosts = onSnapshot(q, snap => {
+      if(snap.empty){ _seedFirestore(); return; }
+      posts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderFeed();
+    }, err => { console.warn('[Community]', err.message); _showOffline(); });
+  }catch(e){ console.warn('[Community]', e); _showOffline(); }
+}
+
+async function _seedFirestore(){
+  try{
+    const { collection, addDoc } = await import(FS_URL);
+    const seeds = [
+      { type:"question",       title:"Best phone under KES 15,000?",         body:"I'm looking for a budget Android phone with a good camera. Any recommendations from people who've bought from Sokoni?", author:"Wanjiku M.", authorUid:"seed", date:"28 May", product:"Phones & Electronics", likes:12, helpful:0, replies:[], timestamp:Date.now()-86400000*2 },
+      { type:"recommendation", title:"Kaspa Prints is amazing for branding!", body:"Ordered custom branded hoodies and they came out perfect. Super fast delivery to Nairobi. Highly recommend!", author:"Kevin O.", authorUid:"seed", date:"27 May", product:"Printing & Branding", likes:8, helpful:5, replies:[{author:"Kaspa Prints",text:"Thank you so much! We appreciate your kind words ❤️",time:"27 May"}], timestamp:Date.now()-86400000*3 },
+      { type:"review",         title:"Samsung A34 from Sokoni — 5 Stars!",    body:"Bought this from Sokoni last week. Arrived in 2 days, brand new sealed, genuine Samsung. The seller was very responsive. 100% would buy again.", author:"Brian K.", authorUid:"seed", date:"26 May", product:"Samsung A34", likes:15, helpful:7, stars:5, replies:[], timestamp:Date.now()-86400000*4 },
+      { type:"discussion",     title:"What payment methods do sellers prefer?",body:"I've noticed some sellers only want M-PESA while others accept card. Is there a way to negotiate or does Sokoni handle all payments?", author:"Amina F.", authorUid:"seed", date:"25 May", product:"", likes:4, helpful:0, replies:[], timestamp:Date.now()-86400000*5 },
+    ];
+    for(const s of seeds){ try{ await addDoc(collection(_db,'communityPosts'),s); }catch(e){} }
+  }catch(e){ console.warn('[Community seed]', e); }
+}
+
+function _showOffline(){
+  const feed = document.getElementById('cmFeed');
+  if(feed) feed.innerHTML = `<div class="cm-empty"><div class="cm-empty-icon">📶</div><p style="color:rgba(255,255,255,0.4);">Community needs a connection to load.<br>Check your internet and refresh.</p></div>`;
+}
+
+/* ── STAR BUTTONS ── */
+function buildStarBtns(){
+  const el = document.getElementById("cmStarBtns");
+  if(!el) return;
+  el.innerHTML = [1,2,3,4,5].map(n =>
+    `<button type="button" onclick="setPostStar(${n})" id="ps-${n}" style="background:none;border:none;font-size:20px;cursor:pointer;color:rgba(255,255,255,0.2);padding:0;transition:.12s;">★</button>`
+  ).join("");
+}
+
+function setPostStar(n){
+  postStar = n;
+  [1,2,3,4,5].forEach(i => {
+    const b = document.getElementById("ps-"+i);
+    if(b) b.style.color = i <= n ? "#ffc107" : "rgba(255,255,255,0.2)";
+  });
+}
+
+function selectType(type, el){
+  selectedPostType = type;
+  document.querySelectorAll(".cm-type-chip").forEach(c => c.classList.remove("selected"));
+  el.classList.add("selected");
+  const starRow = document.getElementById("cmStarInput");
+  if(starRow) starRow.style.display = type==="review" ? "flex" : "none";
+}
+
+/* ── SUBMIT POST → Firestore ── */
+async function submitPost(){
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('community_post', 5, 60000)){
+    _cmToast('Posting too fast. Please wait a moment.','error'); return;
+  }
+  const title   = document.getElementById("cmPostTitle")?.value.trim();
+  const rawBody = document.getElementById("cmPostBody")?.value.trim();
+  const product = document.getElementById("cmPostProduct")?.value.trim();
+  if(!title||!rawBody){ _cmToast('Please add a title and description.','error'); return; }
+  if(!_db){ _cmToast('Still connecting — please try again in a moment.','error'); return; }
+
+  const result = ContactGuard.process(rawBody);
+
+  async function _doPost(bodyText, wasGuarded){
+    const { collection, addDoc } = await import(FS_URL);
+    const post = {
+      type:        selectedPostType,
+      title,
+      body:        bodyText,
+      bodyGuarded: wasGuarded,
+      product:     product || "",
+      author:      user?.name || "Anonymous",
+      authorUid:   user?.uid  || "",
+      date:        new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short"}),
+      likes:       0, helpful: 0,
+      stars:       selectedPostType==="review" ? (postStar||0) : null,
+      replies:     [],
+      timestamp:   Date.now()
+    };
+    try{
+      await addDoc(collection(_db,'communityPosts'), post);
+      document.getElementById("cmPostTitle").value   = "";
+      document.getElementById("cmPostBody").value    = "";
+      document.getElementById("cmPostProduct").value = "";
+      postStar = 0; buildStarBtns();
+    }catch(e){ _cmToast('Failed to post. Please check your connection.','error'); }
+  }
+
+  if(result.wasBlocked){
+    ContactGuard.showWarning(rawBody, result.text, result.findings,
+      maskedBody => _doPost(maskedBody, true),
+      () => document.getElementById("cmPostBody").focus()
+    );
+  } else {
+    _doPost(result.text, false);
+  }
+}
+
+function filterType(type, btn){
+  activeType = type;
+  document.querySelectorAll(".cm-type-btn").forEach(b => b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  renderFeed();
+}
+
+function sortPosts(sort, btn){
+  activeSort = sort;
+  document.querySelectorAll(".cm-filter-tab").forEach(b => b.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  renderFeed();
+}
+
+function likePost(id)    { toggleReaction(id,"likes"); }
+function markHelpful(id) { toggleReaction(id,"helpful"); }
+
+/* ── REACTIONS → Firestore increment (atomic) ── */
+async function toggleReaction(id, field){
+  if(!_db) return;
+  const key  = "cmReacted_"+id+"_"+field;
+  const done = localStorage.getItem(key);
+  if(done) localStorage.removeItem(key); else localStorage.setItem(key,"1");
+  try{
+    const { doc, updateDoc, increment } = await import(FS_URL);
+    await updateDoc(doc(_db,'communityPosts',id), { [field]: increment(done ? -1 : 1) });
+  }catch(e){ console.warn('[Community reaction]', e); }
+}
+
+function toggleReplies(id){
+  const el = document.getElementById("replies-"+id);
+  if(el) el.style.display = el.style.display==="none"||!el.style.display ? "block" : "none";
+}
+
+/* ── REPLIES → Firestore arrayUnion ── */
+async function submitReply(id){
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('community_reply', 10, 60000)){
+    _cmToast('Replying too fast. Please wait a moment.','error'); return;
+  }
+  const input = document.getElementById("reply-input-"+id);
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  if(!_db){ _cmToast('Still connecting — please try again.','error'); return; }
+  try{
+    const { doc, updateDoc, arrayUnion } = await import(FS_URL);
+    const reply = { author: user?.name||"Anonymous", text, time: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short"}) };
+    await updateDoc(doc(_db,'communityPosts',id), { replies: arrayUnion(reply) });
+    input.value = "";
+    const el = document.getElementById("replies-"+id);
+    if(el) el.style.display = "block";
+  }catch(e){ console.warn('[Community reply]', e); }
+}
+
+/* ── DELETE → Firestore deleteDoc ── */
+async function deletePost(id, _c){
+  if(!_c){ _skConfirm("Delete this post?", ()=>deletePost(id,true)); return; }
+  if(!_db) return;
+  try{
+    const { doc, deleteDoc } = await import(FS_URL);
+    await deleteDoc(doc(_db,'communityPosts',id));
+  }catch(e){ _cmToast('Could not delete. Please check your connection.','error'); }
+}
+
+function renderFeed(){
+  let filtered = posts;
+  if(activeType !== "all") filtered = filtered.filter(p=>p.type===activeType);
+  if(activeSort === "popular")    filtered = [...filtered].sort((a,b)=>(b.likes+b.helpful)-(a.likes+a.helpful));
+  if(activeSort === "unanswered") filtered = filtered.filter(p=>!p.replies||!p.replies.length);
+
+  /* Update counts */
+  const all = posts.length;
+  document.getElementById("cmPostCount").textContent = all;
+  document.getElementById("cmTodayCount").textContent = posts.filter(p=>Date.now()-p.timestamp<86400000).length;
+  ["question","recommendation","review","discussion","offer"].forEach(t=>{
+    const el = document.getElementById("cnt-"+t);
+    if(el) el.textContent = posts.filter(p=>p.type===t).length;
+  });
+  const allEl = document.getElementById("cnt-all");
+  if(allEl) allEl.textContent = all;
+
+  /* Trending */
+  const trendEl = document.getElementById("cmTrending");
+  if(trendEl){
+    const top = [...posts].sort((a,b)=>(b.likes+b.helpful)-(a.likes+a.helpful)).slice(0,5);
+    trendEl.innerHTML = top.map((p,i)=>`
+      <div class="cm-trend-item" onclick="scrollToPost('${p.id}')">
+        <span class="cm-trend-num">${i+1}</span>
+        <span class="cm-trend-text">${p.title}</span>
+      </div>`).join("") || `<div style="font-size:12px;color:rgba(255,255,255,0.25);">No posts yet</div>`;
+  }
+
+  const feed = document.getElementById("cmFeed");
+  if(!filtered.length){
+    feed.innerHTML = `<div class="cm-empty"><div class="cm-empty-icon">📭</div><p>No posts here yet — be the first!</p></div>`;
+    return;
+  }
+
+  feed.innerHTML = filtered.map(p => {
+    const meta   = TYPE_META[p.type] || TYPE_META.discussion;
+    const stars  = p.stars ? "★".repeat(p.stars)+"☆".repeat(5-p.stars) : "";
+    const isOwn  = user?.uid && p.authorUid && user.uid === p.authorUid;
+    const likedKey   = localStorage.getItem("cmReacted_"+p.id+"_likes");
+    const helpfulKey = localStorage.getItem("cmReacted_"+p.id+"_helpful");
+    const replies    = p.replies || [];
+    return `
+    <div class="cm-post" id="post-${p.id}">
+      <div class="cm-post-header">
+        <div class="cm-post-avatar">${(p.author||"?")[0].toUpperCase()}</div>
+        <div class="cm-post-meta">
+          <div class="cm-post-author">${p.author||"Anonymous"}</div>
+          <div class="cm-post-date">${p.date||""}</div>
+        </div>
+        <span class="cm-post-type-badge ${meta.badge}">${meta.label}</span>
+        ${isOwn ? `<button type="button" onclick="deletePost('${p.id}')" style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:13px;margin-left:auto;">✕</button>` : ""}
+      </div>
+      ${p.product ? `<div class="cm-product-tag">🏷️ ${p.product}</div>` : ""}
+      ${stars ? `<div class="cm-star-rating">${stars}</div>` : ""}
+      <div class="cm-post-title">${p.title||""}</div>
+      <div class="cm-post-body">${ContactGuard.sanitiseForDisplay(p.body||"")}</div>
+      ${p.bodyGuarded ? `<div style="font-size:10px;color:rgba(255,100,100,0.6);margin:4px 0 8px;display:flex;align-items:center;gap:5px;">🛡️ Contact info was hidden by Sokoni Guard · <a href="marketing.html" style="color:#fb923c;font-weight:700;text-decoration:none;">Boost to share contacts</a></div>` : ""}
+      <div class="cm-post-actions">
+        <button type="button" class="cm-action-btn ${likedKey?"liked":""}" onclick="likePost('${p.id}')">
+          ❤️ ${p.likes||0}
+        </button>
+        <button type="button" class="cm-action-btn ${helpfulKey?"helpful":""}" onclick="markHelpful('${p.id}')">
+          👍 Helpful ${p.helpful||0}
+        </button>
+        <button type="button" class="cm-action-btn" onclick="toggleReplies('${p.id}')">
+          💬 ${replies.length} repl${replies.length===1?"y":"ies"}
+        </button>
+        <button type="button" class="cm-action-btn" onclick="shareToWhatsApp('${encodeURIComponent(p.title||"")}')">
+          <i class="fab fa-whatsapp" style="color:#25d366;"></i> Share
+        </button>
+        ${!isOwn && p.authorUid ? `<button type="button" class="cm-action-btn" onclick="toggleFollowUser('${p.authorUid}','${(p.author||'User').replace(/'/g,"\\'")}')">👤 Follow</button>` : ''}
+        <button type="button" class="cm-action-btn" onclick="openReport('${p.id}','post')" title="Report post" style="color:rgba(255,100,100,0.4);">🚩</button>
+      </div>
+      <div class="cm-replies" id="replies-${p.id}">
+        ${replies.map(r=>`
+          <div class="cm-reply">
+            <div class="cm-reply-av">${(r.author||"?")[0].toUpperCase()}</div>
+            <div>
+              <div class="cm-reply-author">${r.author||"Anonymous"} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">· ${r.time||""}</span></div>
+              <div class="cm-reply-body">${ContactGuard.sanitiseForDisplay(r.text||"")}</div>
+            </div>
+          </div>
+        `).join("")}
+        <div class="cm-reply-input-row">
+          <input class="cm-reply-input" id="reply-input-${p.id}" placeholder="Write a reply..." onkeydown="if(event.key==='Enter')submitReply('${p.id}')">
+          <button type="button" class="cm-reply-send" onclick="submitReply('${p.id}')">Send</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function scrollToPost(id){
+  const el = document.getElementById("post-"+id);
+  if(el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
+function shareToWhatsApp(title){
+  const url = encodeURIComponent("https://mysokoni.co.ke/community.html");
+  window.open(`https://wa.me/?text=${title}%20-%20Sokoni%20Community%20${url}`, "_blank");
+}
+
+window.filterType    = filterType;
+window.sortPosts     = sortPosts;
+window.selectType    = selectType;
+window.submitPost    = submitPost;
+window.likePost      = likePost;
+window.markHelpful   = markHelpful;
+window.toggleReplies = toggleReplies;
+window.submitReply   = submitReply;
+window.deletePost    = deletePost;
+window.setPostStar   = setPostStar;
+
+/* ── BOOT ── */
+buildStarBtns();
+const _feedEl = document.getElementById('cmFeed');
+if(_feedEl) _feedEl.innerHTML = `<div class="cm-empty"><div class="cm-empty-icon" style="animation:spin 1.2s linear infinite">⟳</div><p style="color:rgba(255,255,255,0.3);">Loading community...</p></div>`;
+_initFS();
+</script>
+
+<!-- COMMUNITY COMMERCE GROUPS SECTION -->
+<style>
+.cc-groups-section{max-width:900px;margin:0 auto;padding:32px 18px 20px;}
+.cc-section-h{font-size:17px;font-weight:900;color:white;margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+.cc-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+.cc-groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:28px;}
+.cc-group-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:18px;cursor:pointer;transition:all .2s;}
+.cc-group-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,0.3);}
+.cc-group-emoji{font-size:36px;margin-bottom:10px;display:block;}
+.cc-group-name{font-size:14px;font-weight:900;color:white;margin-bottom:4px;}
+.cc-group-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.55;margin-bottom:10px;}
+.cc-group-meta{display:flex;align-items:center;justify-content:space-between;}
+.cc-group-members{font-size:11px;color:rgba(255,255,255,0.3);}
+.cc-join-btn{padding:6px 14px;border:none;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;}
+
+.cc-create-form{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:22px;margin-bottom:24px;}
+.cc-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;}
+.cc-input::placeholder{color:rgba(255,255,255,0.3);}
+.cc-input:focus{border-color:rgba(113,255,0,0.35);}
+.cc-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+</style>
+
+<section class="cc-groups-section">
+  <div class="cc-section-h">🏘️ Community Groups — Buy, Sell & Hire in Your Circle</div>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Trade within verified groups — your estate, campus, company, church or SACCO. People inside the group buy, sell, hire and trust each other.</p>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;" id="ccGroupFilter">
+    <button type="button" onclick="filterGroups('all',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(113,255,0,0.3);background:rgba(113,255,0,0.1);color:#71ff00;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">All Groups</button>
+    <button type="button" onclick="filterGroups('estate',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🏘️ Estates</button>
+    <button type="button" onclick="filterGroups('campus',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🎓 Campus</button>
+    <button type="button" onclick="filterGroups('company',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🏢 Companies</button>
+    <button type="button" onclick="filterGroups('church',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">⛪ Churches</button>
+    <button type="button" onclick="filterGroups('sacco',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🏦 SACCOs</button>
+    <button type="button" onclick="filterGroups('sports',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">⚽ Sports</button>
+    <button type="button" onclick="filterGroups('farming',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🌾 Farming</button>
+    <button type="button" onclick="filterGroups('cars',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🚗 Cars</button>
+    <button type="button" onclick="filterGroups('property',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🏠 Property</button>
+    <button type="button" onclick="filterGroups('technology',this)" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">💻 Tech</button>
+  </div>
+
+  <div class="cc-groups-grid" id="ccGroupsGrid"></div>
+
+  <!-- CREATE GROUP -->
+  <div class="cc-section-h" style="margin-top:12px;">➕ Start Your Own Group</div>
+  <div class="cc-create-form" id="ccCreateForm">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <label class="cc-label">Group Name *</label>
+        <input type="text" id="ccGName" class="cc-input" placeholder="e.g. Runda Estate Residents">
+        <label class="cc-label">Type</label>
+        <select id="ccGType" class="cc-input">
+          <option value="estate">🏘️ Estate / Neighbourhood</option>
+          <option value="campus">🎓 Campus / School</option>
+          <option value="company">🏢 Company / Workplace</option>
+          <option value="church">⛪ Church / Ministry</option>
+          <option value="sacco">🏦 SACCO / Chama</option>
+          <option value="sports">⚽ Sports & Fitness</option>
+          <option value="farming">🌾 Farming & Agriculture</option>
+          <option value="cars">🚗 Cars & Vehicles</option>
+          <option value="property">🏠 Property & Real Estate</option>
+          <option value="technology">💻 Technology & Innovation</option>
+          <option value="other">👥 Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="cc-label">Description</label>
+        <input type="text" id="ccGDesc" class="cc-input" placeholder="What your group buys, sells or shares">
+        <label class="cc-label">Your WhatsApp (to manage group)</label>
+        <input type="tel" id="ccGPhone" class="cc-input" placeholder="07XXXXXXXX">
+      </div>
+    </div>
+    <button type="button" onclick="createGroup()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#00d4ff);border:none;border-radius:11px;color:#0a0a0a;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🚀 Create Group</button>
+    <div id="ccGMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+  </div>
+</section>
+
+<script>
+const DEMO_GROUPS = [
+  { id:'G001', type:'estate', emoji:'🏘️', name:'Karen / Langata Residents', desc:'Buy, sell and hire within Karen, Langata & South C. Vetted neighbours only.', members:342, color:'#71ff00', joined:false },
+  { id:'G002', type:'campus', emoji:'🎓', name:'UoN Students Marketplace', desc:'Books, laptops, rooms, food & services for University of Nairobi students.', members:1240, color:'#00d4ff', joined:false },
+  { id:'G003', type:'company', emoji:'🏢', name:'Nairobi CBD Business Network', desc:'CBD traders, shop owners & service providers. Bulk deals & B2B referrals.', members:215, color:'#a855f7', joined:false },
+  { id:'G004', type:'church', emoji:'⛪', name:'PCEA Nairobi Congregation', desc:'Church members buying, selling, hiring services and supporting one another.', members:480, color:'#fbbf24', joined:false },
+  { id:'G005', type:'sacco', emoji:'🏦', name:'Mwalimu SACCO Members', desc:'Teachers buying electronics, furniture, food & services with member discounts.', members:890, color:'#f97316', joined:false },
+  { id:'G006', type:'estate', emoji:'🏘️', name:'Westlands / Parklands Hub', desc:'Residential & commercial — food, services, repairs, household items.', members:567, color:'#10b981', joined:false },
+  { id:'G007', type:'campus', emoji:'🎓', name:'KU Marketplace', desc:'Kenyatta University — room swaps, textbooks, food vendors, part-time services.', members:780, color:'#00d4ff', joined:false },
+  { id:'G008', type:'sacco', emoji:'🏦', name:'M-Changa Investment Chama', desc:'Investment group members — shared resources, group buying power, assets.', members:120, color:'#f97316', joined:false },
+  { id:'G009', type:'sports', emoji:'⚽', name:'Nairobi Sunday Football League', desc:'Weekend matches, fitness challenges and tournaments across Nairobi parks.', members:634, color:'#22c55e', joined:false },
+  { id:'G010', type:'farming', emoji:'🌾', name:'Kenya Smallholder Farmers Hub', desc:'Share farming tips, sell produce, buy inputs and connect with buyers directly.', members:1120, color:'#86efac', joined:false },
+  { id:'G011', type:'cars', emoji:'🚗', name:'Nairobi Car Enthusiasts', desc:'Car reviews, service centre recommendations, buy/sell vehicles and spare parts.', members:445, color:'#f97316', joined:false },
+  { id:'G012', type:'property', emoji:'🏠', name:'Nairobi Property Investors', desc:'Listings, investment tips, rental agreements and construction insights.', members:876, color:'#a855f7', joined:false },
+  { id:'G013', type:'technology', emoji:'💻', name:'Kenya Tech & Innovation Hub', desc:'Startups, coding, digital products and Kenya tech ecosystem news & jobs.', members:2100, color:'#00aaff', joined:false },
+];
+
+let _ccFilter = 'all';
+let _myGroups = [];
+
+try { _myGroups = JSON.parse(localStorage.getItem('ccMyGroups')||'[]'); } catch(e){}
+
+function filterGroups(type, btn) {
+  _ccFilter = type;
+  document.querySelectorAll('#ccGroupFilter button').forEach(b => {
+    b.style.background='transparent';b.style.borderColor='rgba(255,255,255,0.1)';b.style.color='rgba(255,255,255,0.5)';
+  });
+  if (btn) { btn.style.background='rgba(113,255,0,0.1)';btn.style.borderColor='rgba(113,255,0,0.3)';btn.style.color='#71ff00'; }
+  renderCCGroups();
+}
+window.filterGroups = filterGroups;
+
+function renderCCGroups() {
+  const grid = document.getElementById('ccGroupsGrid'); if (!grid) return;
+  let local = []; try { local = JSON.parse(localStorage.getItem('ccGroups')||'[]'); } catch(e){}
+  let list = [...local, ...DEMO_GROUPS.filter(d => !local.some(l=>l.id===d.id))];
+  if (_ccFilter !== 'all') list = list.filter(g => g.type === _ccFilter);
+  grid.innerHTML = list.map(g => {
+    const isJoined = _myGroups.includes(g.id);
+    return `<div class="cc-group-card" style="border-color:rgba(255,255,255,0.08);" onmouseover="this.style.borderColor='rgba(113,255,0,0.2)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+      <span class="cc-group-emoji">${g.emoji}</span>
+      <div class="cc-group-name">${g.name}</div>
+      <div class="cc-group-desc">${g.desc}</div>
+      <div class="cc-group-meta">
+        <span class="cc-group-members">👥 ${Number(g.members+(isJoined?0:0)).toLocaleString()} members</span>
+        <button type="button" class="cc-join-btn" onclick="joinGroup('${g.id}')"
+          style="background:${isJoined?'rgba(34,197,94,0.1)':'rgba(113,255,0,0.1)'};border:1px solid ${isJoined?'rgba(34,197,94,0.25)':'rgba(113,255,0,0.25)'};color:${isJoined?'#4ade80':'#71ff00'};">
+          ${isJoined?'✓ Joined':'+ Join'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function joinGroup(id) {
+  if (!_myGroups.includes(id)) _myGroups.push(id);
+  else _myGroups = _myGroups.filter(x=>x!==id);
+  localStorage.setItem('ccMyGroups', JSON.stringify(_myGroups));
+  renderCCGroups();
+}
+window.joinGroup = joinGroup;
+
+function createGroup() {
+  const name  = (document.getElementById('ccGName')?.value||'').trim();
+  const phone = (document.getElementById('ccGPhone')?.value||'').trim();
+  const desc  = document.getElementById('ccGDesc')?.value||'';
+  const type  = document.getElementById('ccGType')?.value||'other';
+  const msgEl = document.getElementById('ccGMsg');
+  if (!name) { if(msgEl){msgEl.textContent='Please enter a group name';msgEl.style.color='#f97316';} return; }
+  const typeEmojis = {estate:'🏘️',campus:'🎓',company:'🏢',church:'⛪',sacco:'🏦',sports:'⚽',farming:'🌾',cars:'🚗',property:'🏠',technology:'💻',other:'👥'};
+  const g = { id:'G'+Date.now(), type, emoji:typeEmojis[type]||'👥', name, desc, members:1, color:'#71ff00', joined:true };
+  let local = []; try { local = JSON.parse(localStorage.getItem('ccGroups')||'[]'); } catch(e){}
+  local.unshift(g); localStorage.setItem('ccGroups', JSON.stringify(local.slice(0,20)));
+  _myGroups.push(g.id); localStorage.setItem('ccMyGroups', JSON.stringify(_myGroups));
+  if(msgEl){msgEl.innerHTML='✅ Group created! Share on WhatsApp to invite members.';msgEl.style.color='#71ff00';}
+  document.getElementById('ccGName').value='';document.getElementById('ccGDesc').value='';document.getElementById('ccGPhone').value='';
+  renderCCGroups();
+  if (phone) { const msg=`👥 Join my SOKONI Community Group: *${name}*\n\n${desc}\n\nJoin here: https://mysokoni.co.ke/community.html`; window.open(`https://wa.me/254${phone.replace(/^0/,'')}?text=${encodeURIComponent(msg)}`,'_blank'); }
+  /* Persist to Firestore so groups are discoverable across devices */
+  (function(){
+    const FS_URL='https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import(FS_URL).then(function(m){
+      const db=window.firebaseDB; if(!db) return;
+      const u=window.sokoniUser||(function(){try{return JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){return null;}}());
+      m.setDoc(m.doc(db,'communityGroups',g.id), Object.assign({},g,{
+        createdBy: u ? u.uid||u.email : null,
+        contactPhone: phone||null,
+        createdAt: m.serverTimestamp()
+      }));
+    }).catch(function(){});
+  })();
+}
+window.createGroup = createGroup;
+
+renderCCGroups();
+</script>
+<!-- ══════════════════════════════════════════════════════
+     EVENTS SECTION
+══════════════════════════════════════════════════════ -->
+<section class="cc-groups-section">
+  <div class="cc-section-h">📅 Community Events</div>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Discover events near you — markets, meetups, workshops, sports and more. Create your own and invite the community.</p>
+
+  <!-- Event filter -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center;" id="evFilterRow">
+    <button type="button" onclick="filterEvents('upcoming',this)" style="padding:7px 14px;border-radius:999px;border:1px solid rgba(113,255,0,0.3);background:rgba(113,255,0,0.1);color:#71ff00;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📅 Upcoming</button>
+    <button type="button" onclick="filterEvents('today',this)" style="padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">⚡ Today</button>
+    <button type="button" onclick="filterEvents('this_week',this)" style="padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">📆 This Week</button>
+    <button type="button" onclick="toggleEvForm()" style="margin-left:auto;padding:9px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-size:12px;font-weight:700;border-radius:10px;cursor:pointer;font-family:inherit;">➕ Create Event</button>
+  </div>
+
+  <!-- Create Event Form -->
+  <div id="ccEvForm" style="display:none;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px;margin-bottom:22px;">
+    <div style="font-size:14px;font-weight:800;color:white;margin-bottom:16px;">📅 New Event</div>
+    <label class="cc-label">Event Title *</label>
+    <input type="text" id="evTitle" class="cc-input" placeholder="e.g. Westlands Community Market">
+    <label class="cc-label">Description</label>
+    <textarea id="evDesc" class="cc-input" rows="2" placeholder="What will happen at this event?"></textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div><label class="cc-label">Date *</label><input type="date" id="evDate" class="cc-input"></div>
+      <div><label class="cc-label">Time</label><input type="time" id="evTime" class="cc-input"></div>
+      <div><label class="cc-label">Category</label>
+        <select id="evCat" class="cc-input">
+          <option value="market">🛍️ Market</option>
+          <option value="meetup">👥 Meetup</option>
+          <option value="training">📚 Training</option>
+          <option value="sports">⚽ Sports</option>
+          <option value="entertainment">🎵 Entertainment</option>
+          <option value="cleanup">🌿 Cleanup</option>
+          <option value="other">📋 Other</option>
+        </select>
+      </div>
+    </div>
+    <label class="cc-label">Location</label>
+    <input type="text" id="evLocation" class="cc-input" placeholder="e.g. Westlands Square, Nairobi">
+    <div style="display:flex;gap:10px;">
+      <button type="button" onclick="submitEvent()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;border-radius:10px;color:#0a0a0a;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">📅 Create Event</button>
+      <button type="button" onclick="toggleEvForm()" style="padding:12px 20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.4);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
+    </div>
+    <div id="evMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+  </div>
+
+  <div id="ccEventsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     ASK THE COMMUNITY
+══════════════════════════════════════════════════════ -->
+<section class="cc-groups-section">
+  <div class="cc-section-h">🙋 Ask the Community</div>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Looking for the best mechanic in Westlands? A trusted dentist near Karen? Ask the community — verified members respond.</p>
+
+  <div class="cc-create-form" style="margin-bottom:24px;">
+    <textarea id="askQuestion" class="cc-input" rows="2" placeholder="e.g. Best mechanic near Westlands? Budget KES 5,000…" style="margin-bottom:10px;"></textarea>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <select id="askCat" class="cc-input" style="flex:1;min-width:140px;margin-bottom:0;">
+        <option value="services">🔧 Services</option>
+        <option value="business">🏪 Business</option>
+        <option value="healthcare">🏥 Healthcare</option>
+        <option value="food">🍽️ Food & Restaurants</option>
+        <option value="legal">⚖️ Legal</option>
+        <option value="education">📚 Education</option>
+        <option value="property">🏠 Property</option>
+        <option value="general">💬 General</option>
+      </select>
+      <button type="button" onclick="submitAsk()" style="padding:11px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;border-radius:10px;color:#0a0a0a;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;">🙋 Ask Community</button>
+    </div>
+    <div id="askMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+  </div>
+
+  <div id="ccAskList"></div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     BUSINESS PAGES
+══════════════════════════════════════════════════════ -->
+<section class="cc-groups-section">
+  <div class="cc-section-h">🏪 Business Pages</div>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.7;">Follow verified Sokoni businesses to receive their latest deals, announcements and community posts in your feed.</p>
+
+  <div id="ccBizGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px;"></div>
+
+  <div style="text-align:center;">
+    <a href="seller.html" style="padding:13px 28px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:inline-block;">🏪 Register Your Business →</a>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     REPORT MODAL
+══════════════════════════════════════════════════════ -->
+<div id="cmReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:300;align-items:flex-end;justify-content:center;">
+  <div style="background:#0d0d0d;border:1px solid #222;border-radius:20px 20px 0 0;width:100%;max-width:500px;padding:24px;">
+    <div style="font-size:16px;font-weight:900;color:white;margin-bottom:6px;">🚩 Report Content</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Our moderation team reviews reports within 24 hours.</div>
+    <select id="cmReportReason" style="width:100%;background:#111;border:1px solid #222;border-radius:12px;padding:12px 14px;color:white;font-size:14px;font-family:inherit;margin-bottom:16px;outline:none;">
+      <option value="spam">Spam or misleading information</option>
+      <option value="inappropriate">Inappropriate or offensive content</option>
+      <option value="harassment">Harassment or bullying</option>
+      <option value="fake">Fake or impersonation</option>
+      <option value="contact_sharing">Unauthorized contact / payment sharing</option>
+      <option value="other">Other violation</option>
+    </select>
+    <div style="display:flex;gap:10px;">
+      <button type="button" onclick="submitReport()" style="flex:1;padding:13px;border-radius:12px;background:#ef4444;border:none;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">Submit Report</button>
+      <button type="button" onclick="closeReport()" style="flex:1;padding:13px;border-radius:12px;background:#1a1a1a;border:none;color:#888;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     NOTIFICATIONS PANEL
+══════════════════════════════════════════════════════ -->
+<div id="cmNotifPanel" style="display:none;position:fixed;top:60px;right:12px;z-index:200;background:#0d0d0d;border:1px solid #222;border-radius:16px;width:min(340px,calc(100vw - 24px));box-shadow:0 12px 40px rgba(0,0,0,0.8);">
+  <div style="padding:16px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;justify-content:space-between;">
+    <span style="font-size:15px;font-weight:800;color:white;">🔔 Notifications</span>
+    <button type="button" onclick="closeNotifications()" style="background:none;border:none;color:#666;cursor:pointer;font-size:18px;padding:2px;">×</button>
+  </div>
+  <div id="cmNotifList" style="max-height:360px;overflow-y:auto;padding:8px;"></div>
+</div>
+
+<script src="scroll-top.js" defer></script>
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="community.html" class="bnav-item active-bnav"><span class="bnav-emoji">💬</span><span>Community</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   EVENTS
+═══════════════════════════════════════════════════════ */
+const DEMO_EVENTS = [
+  { id:'EV001', title:'Westlands Community Market', category:'market', description:'Monthly market — fresh produce, handmade crafts, clothing and services.', eventDate:'2026-07-05', eventTime:'08:00', location:'Westlands Square, Nairobi', organizerName:'Westlands Community', rsvpCount:47 },
+  { id:'EV002', title:'Nairobi Tech Startup Meetup', category:'meetup', description:'Entrepreneurs, developers and investors connect. Pitch, network, learn.', eventDate:'2026-07-12', eventTime:'14:00', location:'Nairobi Garage, Ngong Road', organizerName:'Tech Nairobi', rsvpCount:123 },
+  { id:'EV003', title:'Farmer Training — Drip Irrigation', category:'training', description:'Learn modern irrigation. Free for Sokoni farming group members.', eventDate:'2026-07-19', eventTime:'09:00', location:'Thika Road Agricultural Centre', organizerName:'Sokoni Farming Hub', rsvpCount:34 },
+  { id:'EV004', title:'Karen Estate Football League Opener', category:'sports', description:'Season opener — 8 teams across 4 pitches. Open to Karen residents.', eventDate:'2026-07-26', eventTime:'07:00', location:'Karen Club Grounds', organizerName:'Karen Sports', rsvpCount:89 },
+];
+const EV_CAT_EMO = { market:'🛍️', meetup:'👥', training:'📚', sports:'⚽', entertainment:'🎵', cleanup:'🌿', other:'📋' };
+let _evFilter = 'upcoming';
+let _evRsvps = {}; try { _evRsvps = JSON.parse(localStorage.getItem('ccEvRsvps')||'{}'); } catch(e){}
+let _evLocal = []; try { _evLocal = JSON.parse(localStorage.getItem('ccEvLocal')||'[]'); } catch(e){}
+
+window.toggleEvForm = function() {
+  const f = document.getElementById('ccEvForm');
+  if(f) f.style.display = f.style.display==='none' ? 'block' : 'none';
+};
+
+window.filterEvents = function(f, btn) {
+  _evFilter = f;
+  document.querySelectorAll('#evFilterRow button:not([onclick*="toggleEvForm"])').forEach(b => {
+    b.style.background='transparent'; b.style.borderColor='rgba(255,255,255,0.1)'; b.style.color='rgba(255,255,255,0.5)';
+  });
+  if(btn && !btn.getAttribute('onclick').includes('toggle')) { btn.style.background='rgba(113,255,0,0.1)'; btn.style.borderColor='rgba(113,255,0,0.3)'; btn.style.color='#71ff00'; }
+  renderEvents();
+};
+
+function renderEvents() {
+  const grid = document.getElementById('ccEventsGrid'); if(!grid) return;
+  let list = [..._evLocal, ...DEMO_EVENTS.filter(d => !_evLocal.some(l=>l.id===d.id))];
+  const today = new Date().toISOString().slice(0,10);
+  const weekEnd = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  if(_evFilter==='today') list = list.filter(e=>e.eventDate===today);
+  else if(_evFilter==='this_week') list = list.filter(e=>e.eventDate>=today&&e.eventDate<=weekEnd);
+  else list = list.filter(e=>e.eventDate>=today);
+  list.sort((a,b)=>a.eventDate.localeCompare(b.eventDate));
+  if(!list.length){ grid.innerHTML=`<div class="cm-empty" style="grid-column:1/-1"><div class="cm-empty-icon">📅</div><p>No events — be the first to create one!</p></div>`; return; }
+  grid.innerHTML = list.map(ev => {
+    const d = new Date(ev.eventDate+'T12:00:00');
+    const mon = d.toLocaleDateString('en-KE',{month:'short'}).toUpperCase();
+    const day = d.getDate();
+    const myR = _evRsvps[ev.id];
+    const emo = EV_CAT_EMO[ev.category]||'📋';
+    return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.18)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
+      <div style="display:flex;gap:14px;margin-bottom:12px;align-items:flex-start;">
+        <div style="text-align:center;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.15);border-radius:10px;padding:8px 12px;flex-shrink:0;">
+          <div style="font-size:9px;font-weight:900;color:#71ff00;text-transform:uppercase;">${mon}</div>
+          <div style="font-size:24px;font-weight:900;color:white;line-height:1;">${day}</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:3px;">${emo} ${(ev.category||'event').replace('_',' ')}</div>
+          <div style="font-size:15px;font-weight:800;color:white;margin-bottom:4px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ev.title}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">📍 ${ev.location||'Nairobi'} · 🕐 ${ev.eventTime||'TBD'}</div>
+        </div>
+      </div>
+      ${ev.description?`<p style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${ev.description}</p>`:''}
+      <div style="font-size:11px;color:rgba(255,255,255,0.28);margin-bottom:14px;">By ${ev.organizerName||'Community'} · 👥 ${Number(ev.rsvpCount||0)+(myR==='going'?1:0)} going</div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" onclick="rsvpEvent('${ev.id}','going')" style="flex:1;padding:9px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;border:1px solid ${myR==='going'?'rgba(113,255,0,0.4)':'rgba(255,255,255,0.1)'};background:${myR==='going'?'rgba(113,255,0,0.12)':'transparent'};color:${myR==='going'?'#71ff00':'rgba(255,255,255,0.5)'};">✅ Going</button>
+        <button type="button" onclick="rsvpEvent('${ev.id}','interested')" style="flex:1;padding:9px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s;border:1px solid ${myR==='interested'?'rgba(0,170,255,0.4)':'rgba(255,255,255,0.1)'};background:${myR==='interested'?'rgba(0,170,255,0.08)':'transparent'};color:${myR==='interested'?'#00aaff':'rgba(255,255,255,0.5)'};">⭐ Interested</button>
+        <button type="button" onclick="shareEvWA('${encodeURIComponent(ev.title)}','${ev.eventDate}')" style="padding:9px 14px;border-radius:10px;font-size:14px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#25d366;" title="Share on WhatsApp">💬</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.rsvpEvent = function(id, status) {
+  _evRsvps[id] = _evRsvps[id]===status ? null : status;
+  localStorage.setItem('ccEvRsvps', JSON.stringify(_evRsvps));
+  if(window.firebaseDB && status) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+      if(!u?.uid) return;
+      const upd = {}; upd['rsvps.'+u.uid] = _evRsvps[id]||null;
+      m.updateDoc(m.doc(window.firebaseDB,'communityEvents',id), upd).catch(()=>{});
+    }).catch(()=>{});
+  }
+  _addNotif('🎉 RSVP saved!', status==='going'?'You\'re going to this event.':'You\'re interested in this event.');
+  renderEvents();
+};
+
+window.shareEvWA = function(titleEnc, date) {
+  const t = decodeURIComponent(titleEnc);
+  window.open(`https://wa.me/?text=${encodeURIComponent(`📅 ${t} (${date}) — SOKONI Community\nhttps://mysokoni.co.ke/community.html`)}`, '_blank');
+};
+
+window.submitEvent = async function() {
+  const title = (document.getElementById('evTitle')?.value||'').trim();
+  const date  = document.getElementById('evDate')?.value;
+  const msgEl = document.getElementById('evMsg');
+  if(!title||!date){ if(msgEl){ msgEl.textContent='Title and date are required'; msgEl.style.color='#f97316'; } return; }
+  const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+  const ev = {
+    id: 'EV'+Date.now(),
+    title,
+    description: document.getElementById('evDesc')?.value||'',
+    eventDate:   date,
+    eventTime:   document.getElementById('evTime')?.value||'',
+    location:    (document.getElementById('evLocation')?.value||'').trim(),
+    category:    document.getElementById('evCat')?.value||'other',
+    organizerName: u?.name||'Community Member',
+    rsvpCount: 0,
+  };
+  _evLocal.unshift(ev);
+  localStorage.setItem('ccEvLocal', JSON.stringify(_evLocal.slice(0,10)));
+  if(window.firebaseDB) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      m.addDoc(m.collection(window.firebaseDB,'communityEvents'), Object.assign({},ev,{ organizerUid:u?.uid||null, status:'active', createdAt:m.serverTimestamp() })).catch(()=>{});
+    }).catch(()=>{});
+  }
+  if(msgEl){ msgEl.innerHTML='✅ Event created! Invite your community via WhatsApp.'; msgEl.style.color='#71ff00'; }
+  ['evTitle','evDesc','evDate','evTime','evLocation'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  setTimeout(()=>{ const f=document.getElementById('ccEvForm'); if(f) f.style.display='none'; },2000);
+  renderEvents();
+};
+
+renderEvents();
+
+/* ═══════════════════════════════════════════════════════
+   ASK THE COMMUNITY / RECOMMENDATIONS
+═══════════════════════════════════════════════════════ */
+const DEMO_ASKS = [
+  { id:'ASK001', question:'Best pediatrician in Karen? My 4-year-old needs a routine check-up.', category:'healthcare', askerName:'Karen Parent', responses:[{author:'Mama Pendo',text:'Dr. Kamau at Karen Hospital is excellent — very patient with kids.'},{author:'James M.',text:'Aga Khan outpatient in Parklands — took my daughter twice, top quality.'}], ts:Date.now()-7200000 },
+  { id:'ASK002', question:'Looking for a reliable electrician for home wiring in Kilimani. Any recommendations?', category:'services', askerName:'Kilimani Resident', responses:[{author:'Moses W.',text:'Bright Sparks on Ngong Rd — licensed, affordable, prompt.'},{author:'Aisha K.',text:'James Electric — very professional, reasonable prices.'}], ts:Date.now()-28800000 },
+  { id:'ASK003', question:'Best nyama choma spot near South B for a family outing this weekend?', category:'food', askerName:'South B Family', responses:[{author:'Njoroge M.',text:'Mash Poa in South B itself is unbeatable for value!'},{author:'Patricia N.',text:'Carnivore is the classic — great for family groups.'}], ts:Date.now()-72000000 },
+];
+let _askLocal = []; try { _askLocal = JSON.parse(localStorage.getItem('ccAskLocal')||'[]'); } catch(e){}
+
+function _timeAgo(ts) {
+  const diff = (Date.now()-(ts||Date.now()))/1000;
+  if(diff<60) return 'just now';
+  if(diff<3600) return Math.floor(diff/60)+'m ago';
+  if(diff<86400) return Math.floor(diff/3600)+'h ago';
+  return Math.floor(diff/86400)+'d ago';
+}
+
+function renderAsks() {
+  const el = document.getElementById('ccAskList'); if(!el) return;
+  let list = [..._askLocal, ...DEMO_ASKS.filter(d => !_askLocal.some(l=>l.id===d.id))];
+  if(!list.length){ el.innerHTML=`<div class="cm-empty"><div class="cm-empty-icon">🙋</div><p>No questions yet — ask the community!</p></div>`; return; }
+  el.innerHTML = list.map(ask => `
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px;margin-bottom:14px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.15)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#00aaff;flex-shrink:0;">${(ask.askerName||'?')[0].toUpperCase()}</div>
+        <span style="font-size:13px;font-weight:700;color:white;">${ask.askerName||'Community Member'}</span>
+        <span style="font-size:10px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.15);color:#00aaff;padding:2px 8px;border-radius:6px;">${(ask.category||'general')}</span>
+        <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.28);">${_timeAgo(ask.ts||ask.timestamp)}</span>
+      </div>
+      <div style="font-size:15px;font-weight:700;color:white;margin-bottom:10px;line-height:1.5;">🙋 ${ask.question}</div>
+      <div style="margin-bottom:10px;">
+        ${(ask.responses||[]).slice(0,3).map(r=>`
+          <div style="background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.08);border-radius:10px;padding:10px 12px;margin-bottom:7px;">
+            <div style="font-size:11px;font-weight:700;color:#71ff00;margin-bottom:3px;">✅ ${r.author}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5;">${r.text}</div>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input id="resp-${ask.id}" placeholder="Your recommendation…" style="flex:1;padding:9px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')submitResponse('${ask.id}')">
+        <button type="button" onclick="submitResponse('${ask.id}')" style="padding:9px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Reply</button>
+      </div>
+    </div>`).join('');
+}
+
+window.submitAsk = function() {
+  const question = (document.getElementById('askQuestion')?.value||'').trim();
+  const category = document.getElementById('askCat')?.value;
+  const msgEl    = document.getElementById('askMsg');
+  if(!question){ if(msgEl){ msgEl.textContent='Please write your question'; msgEl.style.color='#f97316'; } return; }
+  const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+  const ask = { id:'ASK'+Date.now(), question, category, askerName:u?.name||'Community Member', responses:[], ts:Date.now() };
+  _askLocal.unshift(ask);
+  localStorage.setItem('ccAskLocal', JSON.stringify(_askLocal.slice(0,10)));
+  if(window.firebaseDB) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      m.addDoc(m.collection(window.firebaseDB,'communityRecommendations'), Object.assign({},ask,{ askerUid:u?.uid||null, status:'active', createdAt:m.serverTimestamp() })).catch(()=>{});
+    }).catch(()=>{});
+  }
+  if(msgEl){ msgEl.innerHTML='✅ Question posted! Community members will respond soon.'; msgEl.style.color='#71ff00'; }
+  const q = document.getElementById('askQuestion'); if(q) q.value='';
+  renderAsks();
+};
+
+window.submitResponse = function(askId) {
+  const inp = document.getElementById('resp-'+askId); if(!inp) return;
+  const text = inp.value.trim(); if(!text) return;
+  const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+  const author = u?.name||'Community Member';
+  const local = _askLocal.find(a=>a.id===askId) || DEMO_ASKS.find(a=>a.id===askId);
+  if(local) (local.responses = local.responses||[]).push({author,text});
+  if(window.firebaseDB) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      m.addDoc(m.collection(window.firebaseDB,'communityRecResponses'), { recId:askId, authorUid:u?.uid||null, authorName:author, content:text, createdAt:m.serverTimestamp() }).catch(()=>{});
+      m.updateDoc(m.doc(window.firebaseDB,'communityRecommendations',askId), { responseCount:m.increment(1) }).catch(()=>{});
+    }).catch(()=>{});
+  }
+  inp.value='';
+  renderAsks();
+};
+
+renderAsks();
+
+/* ═══════════════════════════════════════════════════════
+   BUSINESS PAGES
+═══════════════════════════════════════════════════════ */
+const DEMO_BIZ = [
+  { id:'B001', name:'Mama Pendo Foods', category:'Food & Catering',     verified:true,  followers:1240, desc:'Authentic Kenyan cuisine — catering, meal prep, home delivery across Nairobi.', emoji:'🍽️' },
+  { id:'B002', name:'TechFix Kenya',    category:'Electronics & Repair', verified:true,  followers:890,  desc:'Laptops, phones, TVs repaired same-day. Certified engineers, warranty on all repairs.', emoji:'💻' },
+  { id:'B003', name:'Nairobi Properties Ltd', category:'Real Estate',   verified:true,  followers:567,  desc:'Affordable homes, rentals and commercial spaces across Greater Nairobi.', emoji:'🏠' },
+  { id:'B004', name:'Green Farm Organics', category:'Farming & Agriculture', verified:true, followers:445, desc:'Fresh farm produce delivered weekly. Subscription boxes, bulk orders for restaurants.', emoji:'🌿' },
+  { id:'B005', name:'Swift Auto Garage', category:'Automotive',         verified:false, followers:312,  desc:'Full service garage — oil changes, engine repair, tyres, body work. Westlands.', emoji:'🔧' },
+  { id:'B006', name:'Sokoni Legal Advisory', category:'Legal Services', verified:true,  followers:278,  desc:'Affordable legal consultations, contracts and property conveyancing. Licensed advocates.', emoji:'⚖️' },
+];
+let _bizFollows = {}; try { _bizFollows = JSON.parse(localStorage.getItem('ccBizFollows')||'{}'); } catch(e){}
+
+function renderBiz() {
+  const grid = document.getElementById('ccBizGrid'); if(!grid) return;
+  grid.innerHTML = DEMO_BIZ.map(b => {
+    const isF = _bizFollows[b.id];
+    return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.15)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
+      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
+        <div style="width:48px;height:48px;border-radius:12px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${b.emoji}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:14px;font-weight:800;color:white;">${b.name}</span>
+            ${b.verified?`<span style="font-size:10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;padding:2px 7px;border-radius:6px;font-weight:800;">✓ Verified</span>`:''}
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">${b.category}</div>
+        </div>
+      </div>
+      <p style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${b.desc}</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <span style="font-size:11px;color:rgba(255,255,255,0.28);">👥 ${(b.followers+(isF?1:0)).toLocaleString()} followers</span>
+        <button type="button" onclick="followBiz('${b.id}')" style="padding:7px 18px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid ${isF?'rgba(113,255,0,0.3)':'rgba(255,255,255,0.1)'};background:${isF?'rgba(113,255,0,0.08)':'transparent'};color:${isF?'#71ff00':'rgba(255,255,255,0.5)'};">${isF?'✓ Following':'+ Follow'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.followBiz = function(id) {
+  _bizFollows[id] = !_bizFollows[id];
+  localStorage.setItem('ccBizFollows', JSON.stringify(_bizFollows));
+  const biz = DEMO_BIZ.find(b=>b.id===id);
+  if(window.firebaseDB) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+      if(!u?.uid) return;
+      const followId = u.uid+'--biz--'+id;
+      if(_bizFollows[id]) {
+        m.setDoc(m.doc(window.firebaseDB,'follows',followId),{ followerId:u.uid, followingId:id, type:'business', createdAt:m.serverTimestamp() }).catch(()=>{});
+      } else {
+        m.deleteDoc(m.doc(window.firebaseDB,'follows',followId)).catch(()=>{});
+      }
+    }).catch(()=>{});
+  }
+  if(biz) _addNotif(_bizFollows[id]?`✅ Following ${biz.name}`:`Unfollowed ${biz.name}`, _bizFollows[id]?'You\'ll see their updates in your feed.':'');
+  renderBiz();
+};
+
+renderBiz();
+
+/* ═══════════════════════════════════════════════════════
+   FOLLOW USERS
+═══════════════════════════════════════════════════════ */
+let _followedUsers = {}; try { _followedUsers = JSON.parse(localStorage.getItem('cmFollowedUsers')||'{}'); } catch(e){}
+
+window.toggleFollowUser = function(uid, name) {
+  if(!uid) return;
+  _followedUsers[uid] = !_followedUsers[uid];
+  localStorage.setItem('cmFollowedUsers', JSON.stringify(_followedUsers));
+  if(window.firebaseDB) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      const me = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+      if(!me?.uid || me.uid===uid) return;
+      const fid = me.uid+'--'+uid;
+      if(_followedUsers[uid]) {
+        m.setDoc(m.doc(window.firebaseDB,'follows',fid),{ followerId:me.uid, followingId:uid, createdAt:m.serverTimestamp() }).catch(()=>{});
+      } else {
+        m.deleteDoc(m.doc(window.firebaseDB,'follows',fid)).catch(()=>{});
+      }
+    }).catch(()=>{});
+  }
+  _addNotif(_followedUsers[uid]?`👤 Following ${name}`:`Unfollowed ${name}`, _followedUsers[uid]?'You\'ll see their community posts.':'');
+};
+
+/* ═══════════════════════════════════════════════════════
+   REPORT / MODERATION
+═══════════════════════════════════════════════════════ */
+let _reportTarget = null, _reportType = null;
+
+window.openReport = function(id, type) {
+  _reportTarget = id; _reportType = type;
+  const m = document.getElementById('cmReportModal');
+  if(m){ m.style.display='flex'; document.body.style.overflow='hidden'; }
+};
+
+window.closeReport = function() {
+  const m = document.getElementById('cmReportModal');
+  if(m){ m.style.display='none'; document.body.style.overflow=''; }
+  _reportTarget = null; _reportType = null;
+};
+
+window.submitReport = function() {
+  const reason = document.getElementById('cmReportReason')?.value;
+  if(_reportTarget && window.firebaseDB) {
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+      const u = (() => { try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; }})();
+      m.addDoc(m.collection(window.firebaseDB,'communityReports'),{ targetId:_reportTarget, targetType:_reportType||'post', reason, reportedBy:u?.uid||'guest', status:'pending', createdAt:m.serverTimestamp() }).catch(()=>{});
+    }).catch(()=>{});
+  }
+  closeReport();
+  _addNotif('🚩 Report submitted','Our moderation team will review within 24 hours.');
+};
+
+/* ═══════════════════════════════════════════════════════
+   NOTIFICATIONS
+═══════════════════════════════════════════════════════ */
+const _notifs = [];
+
+function _addNotif(title, body) {
+  _notifs.unshift({ title, body, ts: Date.now() });
+  if(_notifs.length > 20) _notifs.pop();
+  const badge = document.getElementById('cmNotifBadge');
+  if(badge){ const cnt = _notifs.filter(n=>n.ts>(_lastNotifSeen||0)).length; badge.textContent=cnt||''; badge.style.display=cnt?'flex':'none'; }
+}
+
+let _lastNotifSeen = parseInt(localStorage.getItem('cmLastNotifSeen')||'0');
+
+window.openNotifications = function() {
+  const p = document.getElementById('cmNotifPanel');
+  if(!p) return;
+  const isOpen = p.style.display==='block';
+  p.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen) {
+    _lastNotifSeen = Date.now();
+    localStorage.setItem('cmLastNotifSeen', _lastNotifSeen);
+    const badge = document.getElementById('cmNotifBadge');
+    if(badge){ badge.style.display='none'; }
+    const list = document.getElementById('cmNotifList');
+    if(list) {
+      list.innerHTML = _notifs.length
+        ? _notifs.map(n=>`<div style="padding:12px;border-radius:10px;margin-bottom:4px;background:#111;"><div style="font-size:13px;font-weight:700;color:white;margin-bottom:2px;">${n.title}</div>${n.body?`<div style="font-size:12px;color:rgba(255,255,255,0.4);">${n.body}</div>`:''}<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px;">${_timeAgo(n.ts)}</div></div>`).join('')
+        : `<div style="padding:20px;text-align:center;color:rgba(255,255,255,0.3);font-size:13px;">No notifications yet</div>`;
+    }
+  }
+};
+
+window.closeNotifications = function() {
+  const p = document.getElementById('cmNotifPanel'); if(p) p.style.display='none';
+};
+
+/* Close notifications panel on outside click */
+document.addEventListener('click', function(e) {
+  const panel = document.getElementById('cmNotifPanel');
+  const btn   = document.getElementById('cmNotifBtn');
+  if(panel && panel.style.display==='block' && !panel.contains(e.target) && e.target!==btn && !btn?.contains(e.target)) {
+    panel.style.display='none';
+  }
+});
+
+/* Close report modal on overlay click */
+document.getElementById('cmReportModal')?.addEventListener('click', function(e){ if(e.target===this) closeReport(); });
+</script>
+<script src="sokoni-inbox.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'other', category:'other'})" style="padding:12px 28px;background:#39ff14;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

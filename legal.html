@@ -1,0 +1,558 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Legal — Terms, Privacy & Data Protection | SOKONI</title>
+  <meta name="description" content="SOKONI's Terms of Service, Privacy Policy and Data Protection statement. Governed by the laws of Kenya including the Data Protection Act 2019.">
+  <meta property="og:title" content="Legal — Terms, Privacy & Data Protection | SOKONI">
+  <meta property="og:description" content="Read SOKONI's Terms of Service and Privacy Policy. Governed by Kenyan law.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#0a0a0a;color:white;min-height:100vh;}
+
+    /* NAV */
+    .legal-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+    .legal-nav-logo{height:32px;}
+    .legal-nav-right{display:flex;gap:10px;}
+    .legal-nav-link{padding:8px 16px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.6);text-decoration:none;font-size:13px;font-weight:600;transition:all .2s;}
+    .legal-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+
+    /* HERO */
+    .legal-hero{padding:48px 24px 40px;text-align:center;border-bottom:1px solid rgba(113,255,0,0.1);background:linear-gradient(135deg,rgba(113,255,0,0.06),rgba(0,170,255,0.04),transparent);position:relative;overflow:hidden;}
+    .legal-hero::before{content:'⚖️📜🏛️';position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:100px;opacity:0.03;white-space:nowrap;pointer-events:none;letter-spacing:-4px;}
+    .legal-hero h1{font-size:clamp(26px,5vw,42px);font-weight:900;margin-bottom:10px;background:linear-gradient(135deg,#71ff00,#00aaff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .legal-hero p{color:rgba(255,255,255,0.45);font-size:14px;max-width:520px;margin:0 auto;line-height:1.7;}
+    .legal-badge{display:inline-block;padding:5px 14px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:20px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:16px;text-transform:uppercase;letter-spacing:1px;}
+
+    /* TABS */
+    .legal-tabs{display:flex;gap:6px;padding:20px 24px 0;border-bottom:1px solid rgba(255,255,255,0.06);overflow-x:auto;scrollbar-width:none;}
+    .legal-tab{padding:10px 22px;border-radius:12px 12px 0 0;border:1px solid rgba(255,255,255,0.08);border-bottom:none;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.5);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;}
+    .legal-tab.active{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.2);color:#71ff00;}
+
+    /* CONTENT */
+    .legal-body{max-width:860px;margin:0 auto;padding:40px 24px 100px;}
+    .legal-pane{display:none;}
+    .legal-pane.active{display:block;}
+
+    h2{font-size:20px;font-weight:900;color:white;margin:32px 0 10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);}
+    h2:first-child{border-top:none;margin-top:0;}
+    h3{font-size:15px;font-weight:800;color:rgba(255,255,255,0.85);margin:20px 0 8px;}
+    p{font-size:13px;color:rgba(255,255,255,0.6);line-height:1.9;margin-bottom:12px;}
+    ul,ol{padding-left:22px;margin-bottom:12px;}
+    li{font-size:13px;color:rgba(255,255,255,0.6);line-height:1.9;margin-bottom:4px;}
+    strong{color:rgba(255,255,255,0.85);}
+    a{color:#71ff00;}
+    a:hover{color:#4fc800;}
+
+    .legal-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:18px 20px;margin:16px 0;}
+    .legal-highlight{background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:14px;padding:16px 20px;margin:16px 0;}
+    .legal-warning{background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.18);border-radius:14px;padding:16px 20px;margin:16px 0;}
+
+    .update-date{font-size:11px;color:rgba(255,255,255,0.25);margin-bottom:28px;display:flex;align-items:center;gap:6px;}
+    .update-date::before{content:"📅";font-size:13px;}
+
+    /* Bottom nav */
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:999;background:rgba(10,10,10,0.96);backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-around;padding:8px 0 max(8px,env(safe-area-inset-bottom));}
+    .bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 12px;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;transition:color .2s;}
+    .bnav-item i{font-size:18px;}
+    .bnav-item:hover{color:white;}
+
+    @media(max-width:600px){
+      .legal-body{padding:28px 16px 100px;}
+    }
+  </style>
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="style.css"><script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="legal-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="legal-nav-logo" alt="Sokoni"></a>
+  <div class="legal-nav-right">
+    <a href="index.html" class="legal-nav-link">← Home</a>
+    <a href="legal-hub.html" class="legal-nav-link" style="color:#71ff00;border-color:rgba(113,255,0,0.25);">⚖️ Find a Lawyer</a>
+  </div>
+</nav>
+
+<div class="legal-hero">
+  <div class="legal-badge">Legal Documents</div>
+  <h1>⚖️ Legal &amp; Compliance Centre</h1>
+  <p>SOKONI is committed to transparency, fairness and legal compliance. All documents below are governed by the laws of Kenya.</p>
+</div>
+
+<!-- TABS -->
+<div class="legal-tabs">
+  <button type="button" class="legal-tab active" onclick="showLegalTab('terms',this)">📋 Terms of Service</button>
+  <button type="button" class="legal-tab" onclick="showLegalTab('privacy',this)">🔒 Privacy Policy</button>
+  <button type="button" class="legal-tab" onclick="showLegalTab('data',this)">🛡️ Data Protection</button>
+  <button type="button" class="legal-tab" onclick="showLegalTab('sellers',this)">🏪 Seller Agreement</button>
+  <button type="button" class="legal-tab" onclick="showLegalTab('cookies',this)">🍪 Cookie Policy</button>
+</div>
+
+<div class="legal-body">
+
+  <!-- ═══════════ TERMS OF SERVICE ═══════════ -->
+  <div id="pane-terms" class="legal-pane active">
+    <div class="update-date">Last updated: 29 May 2026 · Effective immediately</div>
+
+    <div class="legal-highlight">
+      <strong>Summary:</strong> By using SOKONI you agree to these terms. SOKONI is a marketplace platform — we connect buyers and sellers but are not a party to transactions. Read in full below.
+    </div>
+
+    <h2>1. Introduction &amp; Acceptance</h2>
+    <p>Welcome to SOKONI ("the Platform", "we", "us"). By accessing or using mysokoni.co.ke or the SOKONI mobile app, you agree to be bound by these Terms of Service ("Terms"). If you do not agree, do not use the Platform.</p>
+    <p>SOKONI is operated by <strong>Sokoni Technologies Ltd</strong>, a company registered in Kenya. These Terms constitute a legally binding agreement between you and SOKONI governed by the laws of Kenya.</p>
+
+    <h2>2. Platform Description</h2>
+    <p>SOKONI is a <strong>two-sided marketplace</strong> that connects Kenyan buyers with sellers, service providers, landlords, BnB hosts, entertainment professionals, healthcare providers and other service categories. SOKONI is not a seller, landlord, employer or agent — we facilitate connections and transactions between independent parties.</p>
+
+    <h2>3. Eligibility</h2>
+    <ul>
+      <li>You must be at least <strong>18 years old</strong> to create an account or transact on the Platform</li>
+      <li>Users under 18 may browse with parental/guardian supervision</li>
+      <li>Age-restricted products (alcohol, tobacco, vape) require ID verification as per the Alcoholic Drinks Control Act 2010 and Tobacco Control Act 2007</li>
+      <li>You must be a resident of or transact within the <strong>Republic of Kenya</strong> or an accepted jurisdiction</li>
+    </ul>
+
+    <h2>4. Account Registration</h2>
+    <p>To sell, book services, or access full Platform features, you must create an account. You agree to:</p>
+    <ul>
+      <li>Provide <strong>accurate, current and complete</strong> information during registration</li>
+      <li>Keep your account credentials <strong>confidential</strong></li>
+      <li>Notify SOKONI immediately at <a href="mailto:info@sokoni.co.ke">info@sokoni.co.ke</a> of any unauthorised account access</li>
+      <li>Be responsible for all activities that occur under your account</li>
+    </ul>
+
+    <h2>5. Buyer Terms</h2>
+    <h3>5.1 Purchases</h3>
+    <p>When you place an order on SOKONI, you enter into a contract directly with the seller — not with SOKONI. SOKONI facilitates payment processing but is not liable for product quality, delivery delays, or seller misrepresentation unless specifically stated.</p>
+    <h3>5.2 Payments</h3>
+    <p>Payments are processed via M-Pesa, Visa, Mastercard and PayPal. All prices are displayed in Kenyan Shillings (KES) and are inclusive of VAT where applicable. SOKONI charges a <strong>1% M-Pesa processing fee</strong> where applicable.</p>
+    <h3>5.3 Returns &amp; Refunds</h3>
+    <p>SOKONI operates a <strong>7-day return policy</strong> for physical goods. Items must be:</p>
+    <ul>
+      <li>Returned in original condition, unused and in original packaging</li>
+      <li>Accompanied by proof of purchase (order ID)</li>
+      <li>Reported within 7 days of delivery</li>
+    </ul>
+    <p>Digital products, perishable goods and personalised items are <strong>non-refundable</strong> unless defective.</p>
+
+    <h2>6. Seller Terms</h2>
+    <p>See the <strong>Seller Agreement</strong> tab for full seller-specific terms. Key points:</p>
+    <ul>
+      <li>SOKONI charges a <strong>12% platform fee</strong> on all completed sales — you keep 88%</li>
+      <li>Sellers are solely responsible for product descriptions, legality, safety, and KRA tax compliance</li>
+      <li>Prohibited items include counterfeit goods, stolen goods, weapons, illegal substances, and items prohibited under Kenyan law</li>
+      <li>SOKONI reserves the right to remove listings or suspend accounts that violate these Terms</li>
+    </ul>
+
+    <h2>7. Service Providers</h2>
+    <p>Professionals listing services on SOKONI (including lawyers, doctors, plumbers, cleaners, event professionals etc.) represent that they:</p>
+    <ul>
+      <li>Hold all required <strong>professional licences and certifications</strong> required under Kenyan law</li>
+      <li>Are legally authorised to offer the stated services</li>
+      <li>Maintain appropriate <strong>professional indemnity insurance</strong> where required</li>
+      <li>Will not misrepresent qualifications or experience</li>
+    </ul>
+    <div class="legal-warning">
+      <strong>⚠️ Lawyer Disclaimer:</strong> Lawyers and advocates listed on SOKONI must be duly admitted to the Roll of Advocates in Kenya under the Advocates Act (Cap 16). SOKONI facilitates connection but does not verify individual licences. Clients are advised to confirm advocate credentials with the <strong>Law Society of Kenya</strong> at lsk.or.ke before retaining legal services.
+    </div>
+
+    <h2>8. Prohibited Conduct</h2>
+    <p>You must not use SOKONI to:</p>
+    <ul>
+      <li>List, sell or purchase <strong>counterfeit, stolen, or illegal goods</strong></li>
+      <li>Commit <strong>fraud, impersonation, or identity theft</strong></li>
+      <li>Engage in <strong>price manipulation or market interference</strong></li>
+      <li>Share private contact information to circumvent SOKONI's contact guard (unless you have an active paid boost)</li>
+      <li>Post <strong>false, misleading, or defamatory</strong> content</li>
+      <li>Violate any applicable Kenyan law including the Computer Misuse and Cybercrimes Act 2018</li>
+      <li>Harass, threaten, or discriminate against any user</li>
+    </ul>
+
+    <h2>9. Intellectual Property</h2>
+    <p>The SOKONI name, logo, and platform design are proprietary to Sokoni Technologies Ltd and protected under Kenyan intellectual property law. Users may not reproduce, copy, or commercialise SOKONI branding without written permission.</p>
+    <p>By uploading content (product photos, descriptions, store banners), you grant SOKONI a <strong>non-exclusive, royalty-free licence</strong> to display and promote that content on the Platform and associated marketing channels.</p>
+
+    <h2>10. Limitation of Liability</h2>
+    <p>SOKONI provides the Platform on an "as-is" basis. To the maximum extent permitted by law, SOKONI shall not be liable for:</p>
+    <ul>
+      <li>Loss or damage arising from seller/service provider conduct</li>
+      <li>Platform downtime or data loss</li>
+      <li>Indirect, incidental or consequential damages arising from Platform use</li>
+    </ul>
+    <p>SOKONI's total liability to any user shall not exceed the amount paid by that user to SOKONI in the preceding 3 months.</p>
+
+    <h2>11. Dispute Resolution</h2>
+    <p>In the event of a dispute:</p>
+    <ol>
+      <li>Raise the issue with the seller/provider directly via SOKONI Messages within <strong>7 days</strong></li>
+      <li>If unresolved, file a dispute at <a href="dispute.html">SOKONI Dispute Centre</a> — SOKONI will investigate within <strong>5 business days</strong></li>
+      <li>Unresolved disputes may be referred to <strong>alternative dispute resolution (ADR)</strong> under the Civil Procedure Act (Cap 21)</li>
+      <li>Litigation (if required) shall be before the courts of the <strong>Republic of Kenya</strong></li>
+    </ol>
+
+    <h2>12. Governing Law</h2>
+    <p>These Terms are governed by and construed in accordance with the laws of the <strong>Republic of Kenya</strong>, including but not limited to: the Consumer Protection Act 2012, the Computer Misuse and Cybercrimes Act 2018, the Data Protection Act 2019, and the Proceeds of Crime and Anti-Money Laundering Act.</p>
+
+    <h2>13. Changes to Terms</h2>
+    <p>SOKONI reserves the right to modify these Terms at any time. Continued use of the Platform after changes constitutes acceptance. Material changes will be notified via email or Platform notification.</p>
+
+    <div class="legal-card">
+      <strong>Contact:</strong> Sokoni Technologies Ltd · Nairobi, Kenya<br>
+      📧 <a href="mailto:legal@sokoni.co.ke">legal@sokoni.co.ke</a> &nbsp;·&nbsp;
+      📞 <a href="tel:+254705726803">+254 705 726 803</a><br>
+      <a href="https://wa.me/254705726803" target="_blank">💬 WhatsApp Legal Enquiries</a>
+    </div>
+  </div>
+
+  <!-- ═══════════ PRIVACY POLICY ═══════════ -->
+  <div id="pane-privacy" class="legal-pane">
+    <div class="update-date">Last updated: 29 May 2026</div>
+
+    <div class="legal-highlight">
+      <strong>Plain English summary:</strong> We collect data needed to run the marketplace. We never sell your personal data to third parties. You can request deletion at any time.
+    </div>
+
+    <h2>1. Who We Are</h2>
+    <p>SOKONI ("we", "us") is operated by Sokoni Technologies Ltd, Nairobi, Kenya. We are the <strong>Data Controller</strong> for your personal data as defined under Kenya's Data Protection Act 2019.</p>
+    <p>Contact our Data Protection Officer: <a href="mailto:privacy@sokoni.co.ke">privacy@sokoni.co.ke</a></p>
+
+    <h2>2. Data We Collect</h2>
+    <h3>2.1 Information You Provide</h3>
+    <ul>
+      <li><strong>Account data:</strong> Name, email address, phone number</li>
+      <li><strong>Transaction data:</strong> Order history, payment method (not full card details — processed by M-Pesa/IntaSend), delivery address</li>
+      <li><strong>Seller data:</strong> KRA PIN (for tax reporting), product listings, pricing</li>
+      <li><strong>Verification data:</strong> National ID number (for age/identity verification — stored locally on your device only, not transmitted)</li>
+      <li><strong>Communications:</strong> Messages sent via the Platform, dispute submissions</li>
+    </ul>
+    <h3>2.2 Data Collected Automatically</h3>
+    <ul>
+      <li><strong>Analytics:</strong> Page views, product views, search queries, purchase events via Google Analytics 4 (anonymised IP)</li>
+      <li><strong>Device data:</strong> Browser type, operating system, device type (mobile/desktop)</li>
+      <li><strong>Location:</strong> City-level geolocation (if you grant permission — used to show nearby sellers)</li>
+    </ul>
+    <h3>2.3 What We Do NOT Collect</h3>
+    <ul>
+      <li>Full credit/debit card numbers (handled by payment processors)</li>
+      <li>M-Pesa PINs</li>
+      <li>National ID scans (only the number, verified locally)</li>
+    </ul>
+
+    <h2>3. How We Use Your Data</h2>
+    <ul>
+      <li><strong>Order fulfilment:</strong> Process and deliver your orders</li>
+      <li><strong>Account management:</strong> Maintain your profile, loyalty points, messages</li>
+      <li><strong>Legal compliance:</strong> KRA tax reporting, age verification under Kenyan law</li>
+      <li><strong>Marketing (opt-in):</strong> Flash sale alerts, new product notifications — you can opt out any time</li>
+      <li><strong>Platform improvement:</strong> Analytics to understand user behaviour and improve SOKONI</li>
+      <li><strong>Safety &amp; fraud prevention:</strong> Detecting and preventing fraudulent transactions</li>
+    </ul>
+
+    <h2>4. Data Sharing</h2>
+    <p>We <strong>do not sell your personal data</strong>. We share data only with:</p>
+    <ul>
+      <li><strong>Sellers:</strong> Your name, address and order details to fulfil your purchase</li>
+      <li><strong>Payment processors:</strong> M-Pesa (Safaricom), IntaSend, PayPal — governed by their own privacy policies</li>
+      <li><strong>Google Analytics:</strong> Anonymised usage data for analytics (see Cookie Policy)</li>
+      <li><strong>Firebase (Google):</strong> Backend database hosting under Google's privacy terms</li>
+      <li><strong>Law enforcement:</strong> When legally compelled by a valid Kenyan court order</li>
+    </ul>
+
+    <h2>5. Your Rights (Data Protection Act 2019)</h2>
+    <p>As a data subject under Kenya's Data Protection Act 2019, you have the right to:</p>
+    <ul>
+      <li><strong>Access</strong> your personal data we hold</li>
+      <li><strong>Rectify</strong> inaccurate personal data</li>
+      <li><strong>Erasure ("right to be forgotten")</strong> — request deletion of your data</li>
+      <li><strong>Restriction</strong> of processing</li>
+      <li><strong>Data portability</strong> — receive your data in a machine-readable format</li>
+      <li><strong>Object</strong> to processing for direct marketing</li>
+      <li><strong>Withdraw consent</strong> at any time without affecting prior lawful processing</li>
+    </ul>
+    <p>To exercise any right, email <a href="mailto:privacy@sokoni.co.ke">privacy@sokoni.co.ke</a>. We will respond within <strong>21 days</strong> as required by the Act.</p>
+
+    <h2>6. Data Retention</h2>
+    <ul>
+      <li><strong>Account data:</strong> Retained while your account is active and up to 7 years after closure for legal/tax compliance</li>
+      <li><strong>Transaction data:</strong> 7 years for KRA compliance</li>
+      <li><strong>Analytics data:</strong> 26 months (Google Analytics default)</li>
+      <li><strong>Communications:</strong> 2 years</li>
+    </ul>
+
+    <h2>7. Data Security</h2>
+    <p>We implement appropriate technical and organisational measures including:</p>
+    <ul>
+      <li>HTTPS encryption on all data in transit</li>
+      <li>Firebase security rules on stored data</li>
+      <li>Local device encryption for sensitive verification data</li>
+      <li>Regular security reviews and access controls</li>
+    </ul>
+
+    <h2>8. Children's Privacy</h2>
+    <p>SOKONI is not directed at children under 18. We do not knowingly collect personal data from minors. If you believe we have inadvertently collected a child's data, contact us immediately for deletion.</p>
+
+    <h2>9. Cross-Border Transfers</h2>
+    <p>Your data may be processed by Google (Firebase, Google Analytics) whose servers may be located outside Kenya. These transfers are subject to Google's Standard Contractual Clauses which provide adequate protection under the Data Protection Act.</p>
+
+    <h2>10. Complaints</h2>
+    <p>You may lodge a complaint with Kenya's <strong>Office of the Data Protection Commissioner</strong> at <a href="https://www.odpc.go.ke" target="_blank">odpc.go.ke</a>.</p>
+  </div>
+
+  <!-- ═══════════ DATA PROTECTION ═══════════ -->
+  <div id="pane-data" class="legal-pane">
+    <div class="update-date">Compliance statement — Kenya Data Protection Act 2019</div>
+
+    <div class="legal-highlight">
+      SOKONI is fully committed to compliance with Kenya's <strong>Data Protection Act 2019</strong> (Act No. 24 of 2019) and the Data Protection (General) Regulations 2021.
+    </div>
+
+    <h2>🏛️ Data Controller Details</h2>
+    <div class="legal-card">
+      <strong>Organisation:</strong> Sokoni Technologies Ltd<br>
+      <strong>Address:</strong> Nairobi, Kenya<br>
+      <strong>DPO Contact:</strong> <a href="mailto:privacy@sokoni.co.ke">privacy@sokoni.co.ke</a><br>
+      <strong>Phone:</strong> <a href="tel:+254705726803">+254 705 726 803</a>
+    </div>
+
+    <h2>📋 Lawful Basis for Processing</h2>
+    <p>We process personal data on the following legal bases under Section 30 of the Data Protection Act:</p>
+    <ul>
+      <li><strong>Contract performance:</strong> Processing necessary to fulfil orders and provide platform services</li>
+      <li><strong>Legal obligation:</strong> KRA tax compliance, age verification under applicable laws</li>
+      <li><strong>Legitimate interest:</strong> Fraud prevention, platform security, analytics</li>
+      <li><strong>Consent:</strong> Marketing communications, push notifications, location access</li>
+    </ul>
+
+    <h2>🔒 Security Measures (Section 41 DPA)</h2>
+    <ul>
+      <li>✅ All data transmitted over HTTPS/TLS</li>
+      <li>✅ Firebase Firestore with row-level security rules</li>
+      <li>✅ Payment data handled by PCI-DSS compliant processors</li>
+      <li>✅ National ID numbers verified locally on device only — never transmitted</li>
+      <li>✅ Admin access protected by PIN + access logging</li>
+      <li>✅ Regular security audits</li>
+    </ul>
+
+    <h2>🚨 Data Breach Procedure (Section 43 DPA)</h2>
+    <p>In the event of a personal data breach:</p>
+    <ol>
+      <li>SOKONI will notify the <strong>Office of the Data Protection Commissioner</strong> within <strong>72 hours</strong> of becoming aware</li>
+      <li>Affected users will be notified without undue delay where the breach is likely to result in high risk</li>
+      <li>A breach log is maintained internally</li>
+    </ol>
+
+    <h2>🤝 Third-Party Processors</h2>
+    <div class="legal-card">
+      <p><strong>Google Firebase</strong> — Database, authentication, cloud storage<br><em>Terms: firebase.google.com/terms</em></p>
+      <p style="margin-top:10px;"><strong>Google Analytics 4</strong> — Usage analytics (anonymised)<br><em>Terms: policies.google.com/privacy</em></p>
+      <p style="margin-top:10px;"><strong>Safaricom M-Pesa</strong> — Payment processing<br><em>Terms: safaricom.co.ke/terms</em></p>
+      <p style="margin-top:10px;"><strong>IntaSend</strong> — Payment gateway<br><em>Terms: intasend.com/privacy</em></p>
+    </div>
+
+    <h2>✅ Data Subject Rights — How to Exercise</h2>
+    <p>Email <a href="mailto:privacy@sokoni.co.ke">privacy@sokoni.co.ke</a> with subject line <strong>"Data Subject Request"</strong> stating your name, email, and the right you wish to exercise. We respond within 21 days.</p>
+    <p>For complaints: <a href="https://www.odpc.go.ke" target="_blank">odpc.go.ke</a> — Office of the Data Protection Commissioner</p>
+  </div>
+
+  <!-- ═══════════ SELLER AGREEMENT ═══════════ -->
+  <div id="pane-sellers" class="legal-pane">
+    <div class="update-date">Last updated: 29 May 2026</div>
+
+    <div class="legal-highlight">
+      By listing a product or service on SOKONI, you (the "Seller") agree to this Seller Agreement in addition to the general Terms of Service.
+    </div>
+
+    <h2>1. Platform Fee</h2>
+    <p>SOKONI charges a <strong>12% commission</strong> on every completed sale. This is deducted from the buyer's payment before payout. You receive <strong>88% of every sale</strong>.</p>
+
+    <div class="legal-card">
+      <strong>Example:</strong> You sell a product for KES 1,000.<br>
+      SOKONI fee (12%): KES 120<br>
+      <strong>Your payout: KES 880</strong> ✅
+    </div>
+
+    <h2>2. Seller Obligations</h2>
+    <ul>
+      <li>List only goods/services you legally own and are authorised to sell</li>
+      <li>Product descriptions and photos must be <strong>accurate and not misleading</strong></li>
+      <li>Fulfil orders within the time stated in your listing</li>
+      <li>Respond to buyer enquiries within <strong>24 hours</strong></li>
+      <li>Maintain accurate stock counts to avoid overselling</li>
+      <li>Comply with all applicable Kenyan product safety and consumer protection laws</li>
+    </ul>
+
+    <h2>3. KRA Tax Compliance</h2>
+    <p>Sellers are solely responsible for their own tax obligations. SOKONI provides a tax summary tool (Seller Dashboard → Tax) as a convenience — this is an estimate only and not official tax advice.</p>
+    <ul>
+      <li>You must declare Sokoni income as business income on your <strong>iTax self-assessment</strong></li>
+      <li>If your annual turnover exceeds <strong>KES 5,000,000</strong>, you must register for VAT</li>
+      <li>Sokoni commission (12%) is a deductible business expense</li>
+    </ul>
+
+    <h2>4. Prohibited Listings</h2>
+    <p>The following are strictly prohibited on SOKONI:</p>
+    <ul>
+      <li>Counterfeit, pirated, or trademark-infringing goods</li>
+      <li>Stolen goods or goods of unknown/suspicious origin</li>
+      <li>Weapons, ammunition, and explosives</li>
+      <li>Controlled substances and illegal drugs</li>
+      <li>Human trafficking or exploitation-related services</li>
+      <li>Financial fraud instruments (fake currency, cheques)</li>
+      <li>Wildlife and endangered species</li>
+      <li>Pornographic or sexually explicit material</li>
+      <li>Any item or service prohibited under the laws of Kenya</li>
+    </ul>
+
+    <h2>5. Ownership Verification</h2>
+    <p>For high-risk categories (vehicles, electronics, luxury goods), SOKONI requires ownership proof before listing. SOKONI's anti-theft system requests a serial number and supporting documentation. <strong>Listing stolen goods is a criminal offence</strong> under the Penal Code of Kenya.</p>
+
+    <h2>6. Suspension &amp; Removal</h2>
+    <p>SOKONI may suspend or permanently remove a seller account for:</p>
+    <ul>
+      <li>Repeated or serious violations of these Terms</li>
+      <li>Sustained poor ratings below 2.5 stars</li>
+      <li>Fraudulent activity</li>
+      <li>Listing prohibited items</li>
+      <li>Failure to fulfil confirmed orders without notice</li>
+    </ul>
+
+    <h2>7. Payouts</h2>
+    <p>Seller payouts are processed to your registered M-Pesa number within <strong>24-48 hours</strong> of order delivery confirmation. Disputed transactions are held pending resolution.</p>
+  </div>
+
+  <!-- ═══════════ COOKIE POLICY ═══════════ -->
+  <div id="pane-cookies" class="legal-pane">
+    <div class="update-date">Last updated: 29 May 2026</div>
+
+    <h2>🍪 What Are Cookies?</h2>
+    <p>Cookies are small text files stored on your device when you visit a website. SOKONI uses cookies and similar technologies (such as localStorage and sessionStorage) to make the Platform work and to understand how you use it.</p>
+
+    <h2>🍪 Types of Cookies We Use</h2>
+
+    <div class="legal-card">
+      <h3>🔧 Essential Cookies (Always On)</h3>
+      <p>Required for the Platform to function. These cannot be disabled.</p>
+      <ul>
+        <li><strong>sokoniUser</strong> — stores your login session</li>
+        <li><strong>cart</strong> — stores your shopping cart</li>
+        <li><strong>wishlist</strong> — stores saved items</li>
+        <li><strong>sokoniAgeVerified</strong> — stores age verification result (session only)</li>
+        <li><strong>sokoniDemoSeeded</strong> — records that demo data has been loaded</li>
+      </ul>
+    </div>
+
+    <div class="legal-card">
+      <h3>📊 Analytics Cookies (Opt-In)</h3>
+      <p>Used to understand Platform usage via Google Analytics 4.</p>
+      <ul>
+        <li><strong>_ga, _gid, _gat</strong> — Google Analytics session tracking (anonymised IP)</li>
+        <li><strong>sokoniAnalytics</strong> — local analytics data stored on your device only</li>
+      </ul>
+      <p>Google Analytics data is anonymised and processed under Google's data processing terms.</p>
+    </div>
+
+    <div class="legal-card">
+      <h3>🔔 Notification Cookies</h3>
+      <ul>
+        <li><strong>sokoni_fcm_token</strong> — stores your push notification token</li>
+        <li><strong>sokoniNotifDismissed</strong> — records if you dismissed the notification prompt</li>
+      </ul>
+    </div>
+
+    <h2>⚙️ Managing Cookies</h2>
+    <p>You can clear all SOKONI cookies at any time:</p>
+    <ul>
+      <li><strong>Browser settings:</strong> Clear site data for mysokoni.co.ke</li>
+      <li><strong>Mobile (Android/iOS):</strong> Browser Settings → Privacy → Clear browsing data</li>
+      <li><strong>PWA installed:</strong> App Settings → Clear data</li>
+    </ul>
+    <p>Clearing essential cookies will log you out and clear your cart.</p>
+
+    <div class="legal-warning">
+      <strong>Note on localStorage:</strong> SOKONI stores most data in browser localStorage rather than traditional cookies. This data stays on your device and is not transmitted to our servers unless you are logged in and syncing to Firebase.
+    </div>
+  </div>
+
+</div><!-- end legal-body -->
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="legal-hub.html" class="bnav-item active-bnav"><span class="bnav-emoji">⚖️</span><span>Legal</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+function showLegalTab(name, btn){
+  document.querySelectorAll(".legal-pane").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".legal-tab").forEach(b=>b.classList.remove("active"));
+  const pane = document.getElementById("pane-"+name);
+  if(pane) pane.classList.add("active");
+  if(btn) btn.classList.add("active");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+window.showLegalTab = showLegalTab;
+
+/* Handle URL hash */
+const hash = window.location.hash.replace("#","");
+if(hash){
+  const btn = document.querySelector(`.legal-tab[onclick*="'${hash}'"]`);
+  if(btn) showLegalTab(hash, btn);
+}
+</script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script><script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-verifications.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-mpesa.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+

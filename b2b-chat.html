@@ -1,0 +1,452 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Business Messaging — SOKONI B2B</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00aaff">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;}
+/* LAYOUT: sidebar + chat panel on desktop, stacked on mobile */
+.bc-wrap{display:flex;height:100vh;overflow:hidden;}
+
+/* SIDEBAR */
+.bc-sidebar{width:320px;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;background:#080808;}
+.bc-sidebar-hd{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:10px;}
+.bc-search{flex:1;padding:9px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;font-family:inherit;}
+.bc-search:focus{outline:none;border-color:rgba(0,170,255,0.4);}
+.bc-thread-list{flex:1;overflow-y:auto;}
+.bc-thread-list::-webkit-scrollbar{width:4px;}
+.bc-thread-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px;}
+.bc-thread{display:flex;align-items:center;gap:11px;padding:13px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);transition:background .2s;}
+.bc-thread:hover,.bc-thread.active{background:rgba(0,170,255,0.06);}
+.bc-thread.active{border-left:3px solid #00aaff;}
+.bc-thread-icon{width:42px;height:42px;border-radius:11px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.bc-thread-name{font-size:13px;font-weight:800;color:white;margin-bottom:2px;}
+.bc-thread-last{font-size:11px;color:rgba(255,255,255,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;}
+.bc-thread-ts{font-size:10px;color:rgba(255,255,255,0.25);}
+.bc-unread{min-width:18px;height:18px;background:#00aaff;border-radius:9px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 4px;}
+
+/* CHAT PANEL */
+.bc-chat{flex:1;display:flex;flex-direction:column;background:#080808;}
+.bc-chat-hd{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:12px;background:rgba(8,8,8,0.97);backdrop-filter:blur(16px);}
+.bc-chat-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;flex-shrink:0;display:none;}
+.bc-chat-icon{width:38px;height:38px;border-radius:10px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.bc-chat-name{font-size:15px;font-weight:900;color:white;}
+.bc-chat-sub{font-size:11px;color:rgba(255,255,255,0.35);}
+.bc-chat-actions{margin-left:auto;display:flex;gap:8px;}
+.bc-hd-btn{padding:7px 13px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;border:none;font-family:inherit;}
+.bc-hd-btn.blue{background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;}
+.bc-hd-btn.grey{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);}
+
+.bc-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.bc-msgs::-webkit-scrollbar{width:4px;}
+.bc-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:4px;}
+
+.bc-msg{display:flex;gap:10px;align-items:flex-end;max-width:78%;}
+.bc-msg.me{align-self:flex-end;flex-direction:row-reverse;}
+.bc-msg.other{align-self:flex-start;}
+.bc-msg-avatar{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.bc-msg-bubble{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:14px 14px 14px 4px;padding:10px 13px;}
+.bc-msg.me .bc-msg-bubble{background:rgba(0,170,255,0.12);border-color:rgba(0,170,255,0.2);border-radius:14px 14px 4px 14px;}
+.bc-msg-text{font-size:13px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.bc-msg-ts{font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px;}
+.bc-msg.me .bc-msg-ts{text-align:right;}
+
+/* File attachment bubble */
+.bc-file-bubble{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:8px 12px;margin-top:4px;cursor:pointer;}
+.bc-file-bubble:hover{background:rgba(255,255,255,0.08);}
+.bc-file-name{font-size:12px;font-weight:700;color:white;}
+.bc-file-size{font-size:10px;color:rgba(255,255,255,0.35);}
+
+/* Date separator */
+.bc-date-sep{text-align:center;font-size:11px;color:rgba(255,255,255,0.25);padding:8px 0;position:relative;}
+.bc-date-sep::before,.bc-date-sep::after{content:'';position:absolute;top:50%;width:calc(50% - 60px);height:1px;background:rgba(255,255,255,0.06);}
+.bc-date-sep::before{left:0;}
+.bc-date-sep::after{right:0;}
+
+/* COMPOSE */
+.bc-compose{padding:12px 16px;border-top:1px solid rgba(255,255,255,0.07);background:rgba(8,8,8,0.97);}
+.bc-compose-row{display:flex;gap:10px;align-items:flex-end;}
+.bc-compose-input{flex:1;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:14px;font-family:inherit;resize:none;max-height:120px;min-height:42px;}
+.bc-compose-input:focus{outline:none;border-color:rgba(0,170,255,0.4);}
+.bc-attach-btn{width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;}
+.bc-attach-btn:hover{background:rgba(255,255,255,0.08);}
+.bc-send-btn{width:42px;height:42px;border-radius:12px;background:rgba(0,170,255,0.15);border:1px solid rgba(0,170,255,0.3);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;transition:all .2s;}
+.bc-send-btn:hover{background:rgba(0,170,255,0.3);}
+
+/* EMPTY / PLACEHOLDER */
+.bc-no-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,0.25);}
+.bc-no-chat-icon{font-size:64px;margin-bottom:16px;}
+.bc-no-chat-title{font-size:18px;font-weight:800;color:rgba(255,255,255,0.4);}
+.bc-no-chat-sub{font-size:13px;margin-top:8px;}
+
+/* QUICK REPLY TEMPLATES */
+.bc-quick-replies{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:8px 0;}
+.bc-quick-replies::-webkit-scrollbar{display:none;}
+.bc-qr{padding:6px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);white-space:nowrap;transition:all .2s;}
+.bc-qr:hover{background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.25);color:#00aaff;}
+
+/* MOBILE RESPONSIVE */
+@media(max-width:640px){
+  .bc-sidebar{width:100%;border-right:none;}
+  .bc-sidebar.hidden{display:none;}
+  .bc-chat{position:fixed;inset:0;z-index:50;}
+  .bc-chat.hidden{display:none;}
+  .bc-chat-back{display:flex!important;}
+}
+
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:40;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#00aaff;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-b2b.js"></script>
+
+<div class="bc-wrap">
+
+  <!-- SIDEBAR -->
+  <div class="bc-sidebar" id="bcSidebar">
+    <div class="bc-sidebar-hd">
+      <a href="b2b.html" style="color:rgba(255,255,255,0.5);font-size:18px;text-decoration:none;flex-shrink:0;">←</a>
+      <span style="font-size:15px;font-weight:900;">💬 Messages</span>
+      <button onclick="openNewChat()" style="margin-left:auto;padding:6px 12px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);border-radius:8px;color:#00aaff;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">+ New</button>
+    </div>
+    <input class="bc-search" placeholder="Search conversations..." id="threadSearch" oninput="renderThreads()">
+    <div class="bc-thread-list" id="threadList"></div>
+  </div>
+
+  <!-- CHAT PANEL -->
+  <div class="bc-chat hidden" id="bcChat">
+    <div class="bc-chat-hd">
+      <div class="bc-chat-back" id="chatBack" onclick="goBack()">←</div>
+      <div class="bc-chat-icon" id="chatIcon">💬</div>
+      <div>
+        <div class="bc-chat-name" id="chatName">Select a conversation</div>
+        <div class="bc-chat-sub" id="chatSub">Business Messaging</div>
+      </div>
+      <div class="bc-chat-actions">
+        <button class="bc-hd-btn grey" onclick="shareFiles()" title="Attach document">📎</button>
+        <button class="bc-hd-btn blue" onclick="createRFQFromChat()">+ RFQ</button>
+      </div>
+    </div>
+
+    <div class="bc-msgs" id="chatMsgs"></div>
+
+    <div class="bc-compose">
+      <div class="bc-quick-replies" id="quickReplies"></div>
+      <div class="bc-compose-row">
+        <input type="file" id="fileInput" style="display:none;" onchange="handleFile(event)">
+        <div class="bc-attach-btn" onclick="document.getElementById('fileInput').click()">📎</div>
+        <textarea class="bc-compose-input" id="composeInput" placeholder="Type a business message..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <div class="bc-send-btn" onclick="sendMsg()">➤</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NO CHAT PLACEHOLDER (desktop) -->
+  <div class="bc-no-chat" id="noChatPlaceholder">
+    <div class="bc-no-chat-icon">💼</div>
+    <div class="bc-no-chat-title">SOKONI B2B Messaging</div>
+    <div class="bc-no-chat-sub">Select a conversation or start a new one</div>
+  </div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="b2b.html" class="bnav-item"><i class="fas fa-handshake"></i><span>B2B</span></a>
+  <a href="b2b-chat.html" class="bnav-item active"><i class="fas fa-comment-dots"></i><span>Chat</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script>
+const B = window.SokoniB2B;
+let _activeThread = null;
+let _threads = [];
+let _pollTimer = null;
+const ME = JSON.parse(localStorage.getItem('sokoniUser')||'{"name":"You","uid":"me"}');
+
+const QUICK_REPLIES = [
+  'What is the MOQ?',
+  'Can you share a price list?',
+  'What are your payment terms?',
+  'How long is lead time?',
+  'Do you offer samples?',
+  'Can you deliver to Nairobi?',
+  'Please send your catalog.',
+  'We accept your quote.',
+];
+
+function init() {
+  renderThreads();
+  const p = new URLSearchParams(window.location.search);
+  const thread = p.get('thread');
+  const name = p.get('name');
+  if (thread) {
+    openThread(thread, name || thread, '💬');
+  } else {
+    /* On mobile hide chat panel initially */
+    if (window.innerWidth<=640) { showSidebar(); }
+  }
+  /* Poll for new messages every 20s */
+  _pollTimer = setInterval(()=>{ renderThreads(); if(_activeThread) renderMessages(); }, 20000);
+}
+
+function renderThreads() {
+  const q = (document.getElementById('threadSearch').value||'').toLowerCase();
+  _threads = B.getThreads();
+
+  /* Seed sample threads if none */
+  if (!_threads.length) {
+    seedSampleThreads();
+    _threads = B.getThreads();
+  }
+
+  const filtered = _threads.filter(t=>!q || t.name.toLowerCase().includes(q) || (t.lastMsg?.text||'').toLowerCase().includes(q));
+  const list = document.getElementById('threadList');
+  if (!filtered.length) {
+    list.innerHTML = `<div style="text-align:center;padding:32px 16px;color:rgba(255,255,255,0.25);font-size:13px;">${q?'No results':'No conversations yet'}</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(t=>{
+    const icon = threadIcon(t.id);
+    const unread = Math.floor(Math.random()*3);
+    return `
+    <div class="bc-thread${_activeThread===t.id?' active':''}" onclick="openThread('${t.id}','${escStr(t.name)}','${icon}')">
+      <div class="bc-thread-icon">${icon}</div>
+      <div style="flex:1;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="bc-thread-name">${t.name}</div>
+          <div class="bc-thread-ts">${t.lastMsg?.ts?B.timeSince(t.lastMsg.ts):''}</div>
+        </div>
+        <div class="bc-thread-last">${t.lastMsg?.text||'No messages yet'}</div>
+      </div>
+      ${unread>0?`<div class="bc-unread">${unread}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function threadIcon(threadId) {
+  if (threadId.startsWith('rfq_')) return '📋';
+  if (threadId.startsWith('order_')) return '📦';
+  if (threadId.startsWith('supplier_')) return '🏭';
+  return '💬';
+}
+
+function escStr(s) { return (s||'').replace(/'/g,"\\'"); }
+
+function openThread(threadId, name, icon) {
+  _activeThread = threadId;
+  document.getElementById('chatName').textContent = name || threadId;
+  document.getElementById('chatSub').textContent = threadLabel(threadId);
+  document.getElementById('chatIcon').textContent = icon || threadIcon(threadId);
+  renderMessages();
+  renderQuickReplies();
+  /* Mobile: show chat */
+  if (window.innerWidth<=640) showChat();
+  /* Update sidebar active state */
+  document.querySelectorAll('.bc-thread').forEach(t=>t.classList.remove('active'));
+  renderThreads();
+}
+window.openThread = openThread;
+
+function threadLabel(id) {
+  if (id.startsWith('rfq_')) return 'RFQ Discussion · ' + id.replace('rfq_','#');
+  if (id.startsWith('order_')) return 'Order Discussion · ' + id.replace('order_','');
+  return 'Business Messaging';
+}
+
+function renderMessages() {
+  if (!_activeThread) return;
+  const msgs = B.getMessages(_activeThread);
+  const box = document.getElementById('chatMsgs');
+  if (!msgs.length) {
+    box.innerHTML = `<div style="text-align:center;padding:32px 16px;color:rgba(255,255,255,0.3);">
+      <div style="font-size:48px;margin-bottom:12px;">${threadIcon(_activeThread)}</div>
+      <p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.4);">Start the conversation</p>
+      <p style="font-size:12px;margin-top:6px;">Send a message to begin your business discussion.</p></div>`;
+    return;
+  }
+  let lastDate = '';
+  box.innerHTML = msgs.map(m=>{
+    const isMe = m.senderId===ME.uid || m.senderId==='me';
+    const d = m.ts ? new Date(m.ts).toDateString() : '';
+    let sep = '';
+    if (d !== lastDate) { sep=`<div class="bc-date-sep">${d||'Today'}</div>`; lastDate=d; }
+    return sep + `
+    <div class="bc-msg ${isMe?'me':'other'}">
+      ${!isMe?`<div class="bc-msg-avatar">${m.senderIcon||'🏭'}</div>`:''}
+      <div>
+        ${!isMe?`<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-bottom:3px;padding-left:2px;">${m.senderName||'Supplier'}</div>`:''}
+        <div class="bc-msg-bubble">
+          <div class="bc-msg-text">${escapeHtml(m.text||'')}</div>
+          ${m.file?`<div class="bc-file-bubble"><span>📄</span><div><div class="bc-file-name">${m.file.name}</div><div class="bc-file-size">${m.file.size||''}</div></div></div>`:''}
+        </div>
+        <div class="bc-msg-ts">${m.ts?formatTime(m.ts):''}</div>
+      </div>
+      ${isMe?`<div class="bc-msg-avatar" style="background:rgba(0,170,255,0.1);">👤</div>`:''}
+    </div>`;
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderQuickReplies() {
+  document.getElementById('quickReplies').innerHTML = QUICK_REPLIES.map(r=>`
+    <div class="bc-qr" onclick="useQuickReply(${JSON.stringify(r)})">${r}</div>`).join('');
+}
+
+function useQuickReply(text) {
+  document.getElementById('composeInput').value = text;
+  document.getElementById('composeInput').focus();
+}
+window.useQuickReply = useQuickReply;
+
+function sendMsg() {
+  if (!_activeThread) return;
+  const input = document.getElementById('composeInput');
+  const text = input.value.trim();
+  if (!text) return;
+  B.sendMessage({
+    threadId: _activeThread,
+    text,
+    senderId: ME.uid || 'me',
+    senderName: ME.name || 'You',
+    senderIcon: '👤',
+  });
+  input.value = '';
+  input.style.height = '';
+  renderMessages();
+  renderThreads();
+}
+window.sendMsg = sendMsg;
+
+function handleKey(e) {
+  if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+}
+window.handleKey = handleKey;
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+window.autoResize = autoResize;
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file || !_activeThread) return;
+  B.sendMessage({
+    threadId: _activeThread,
+    text: '',
+    file: { name: file.name, size: formatFileSize(file.size) },
+    senderId: ME.uid || 'me',
+    senderName: ME.name || 'You',
+    senderIcon: '👤',
+  });
+  renderMessages();
+  e.target.value = '';
+}
+window.handleFile = handleFile;
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function openNewChat() {
+  const name = prompt('Enter supplier name or thread name:');
+  if (!name) return;
+  const threadId = 'supplier_' + Date.now();
+  B.sendMessage({ threadId, text: 'Hello! I would like to discuss a business inquiry.', senderId: ME.uid||'me', senderName: ME.name||'You', senderIcon:'👤' });
+  openThread(threadId, name, '🏭');
+}
+window.openNewChat = openNewChat;
+
+function shareFiles() { document.getElementById('fileInput').click(); }
+window.shareFiles = shareFiles;
+
+function createRFQFromChat() {
+  window.location.href = 'b2b.html?tab=rfq-create';
+}
+window.createRFQFromChat = createRFQFromChat;
+
+function goBack() { showSidebar(); _activeThread=null; renderThreads(); }
+window.goBack = goBack;
+
+function showSidebar() {
+  document.getElementById('bcSidebar').classList.remove('hidden');
+  document.getElementById('bcChat').classList.add('hidden');
+  document.getElementById('noChatPlaceholder').style.display='flex';
+}
+function showChat() {
+  document.getElementById('bcSidebar').classList.add('hidden');
+  document.getElementById('bcChat').classList.remove('hidden');
+  document.getElementById('noChatPlaceholder').style.display='none';
+}
+
+function seedSampleThreads() {
+  const samples = [
+    { id:'supplier_'+B.SUPPLIERS[0]?.id, name: B.SUPPLIERS[0]?.name||'Top Supplier', msgs: [
+      {text:'Hello! We are interested in your bulk electronics catalog.', from:'me'},
+      {text:'Welcome! We have a wide range of products. What quantities are you looking for?', from:'them', icon:'🏭', name:'Sales Team'},
+    ]},
+    { id:'rfq_sample1', name: 'RFQ: Office Furniture (100 units)', msgs: [
+      {text:'We have submitted our quotation. Please review the attached catalog.', from:'them', icon:'🏭', name:'Furniture Supplier'},
+    ]},
+  ];
+  samples.forEach(s=>{
+    s.msgs.forEach(m=>{
+      B.sendMessage({ threadId: s.id, text: m.text, senderId: m.from==='me'?(ME.uid||'me'):'supplier', senderName: m.from==='me'?(ME.name||'You'):(m.name||'Supplier'), senderIcon: m.from==='me'?'👤':(m.icon||'🏭') });
+    });
+  });
+}
+
+/* Desktop: show placeholder until thread selected */
+if (window.innerWidth > 640) {
+  document.getElementById('noChatPlaceholder').style.display = 'flex';
+  document.getElementById('bcChat').classList.remove('hidden');
+  document.getElementById('bcChat').style.display = 'none';
+}
+
+init();
+
+/* When thread clicked on desktop show right panel */
+const origOpen = openThread;
+window.openThread = function(threadId, name, icon) {
+  origOpen(threadId, name, icon);
+  if (window.innerWidth > 640) {
+    document.getElementById('noChatPlaceholder').style.display = 'none';
+    document.getElementById('bcChat').style.display = 'flex';
+    document.getElementById('bcChat').style.flexDirection = 'column';
+    document.getElementById('bcChat').classList.remove('hidden');
+  }
+};
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

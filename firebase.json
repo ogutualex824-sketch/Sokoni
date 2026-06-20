@@ -1,0 +1,135 @@
+{
+  "functions": {
+    "source":          "functions",
+    "runtime":         "nodejs22",
+    "concurrency":     80,
+    "minInstances":    1,
+    "maxInstances":    1000,
+    "memory":          "512MiB",
+    "timeoutSeconds":  60
+  },
+  "hosting": {
+    "site": "sokoni-aeb26",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "skills-lock.json",
+      "**/*.md",
+      "bs-config.js",
+      "package.json",
+      "package-lock.json",
+      "Temp/**",
+      "firestore.rules",
+      "firestore.indexes.json",
+      "storage.rules",
+      "**/*.sh"
+    ],
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "404": "/offline.html",
+    "headers": [
+
+      {
+        "source": "service-worker.js",
+        "headers": [
+          { "key": "Cache-Control",        "value": "no-cache, no-store, must-revalidate" },
+          { "key": "Service-Worker-Allowed","value": "/" }
+        ]
+      },
+      {
+        "source": "firebase-messaging-sw.js",
+        "headers": [
+          { "key": "Cache-Control",        "value": "no-cache, no-store, must-revalidate" },
+          { "key": "Service-Worker-Allowed","value": "/" }
+        ]
+      },
+      {
+        "source": "manifest.json",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=86400, must-revalidate" },
+          { "key": "Content-Type",  "value": "application/manifest+json" }
+        ]
+      },
+
+      {
+        "source": "**/*.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+        ]
+      },
+      {
+        "source": "**/*.@(jpg|jpeg|gif|png|svg|ico|webp|woff2|woff|ttf)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=2592000" }
+        ]
+      },
+
+      {
+        "source": "**",
+        "headers": [
+
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net https://cdn.intasend.com https://www.gstatic.com https://apis.google.com https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://images.unsplash.com https://*.googleusercontent.com https://mysokoni.co.ke https://maps.googleapis.com https://maps.gstatic.com https://*.ggpht.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://server.arcgisonline.com https://*.arcgisonline.com https://*.opentopomap.org https://opentopomap.org https://www.google.com https://www.gstatic.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseappcheck.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com https://api.intasend.com https://sandbox.intasend.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://www.google.com https://etims-api.kra.go.ke https://etims-sbx.kra.go.ke https://us-central1-sokoni-aeb26.cloudfunctions.net https://*.algolia.net https://*.algolianet.com https://*.typesense.net; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://firebasestorage.googleapis.com https://storage.googleapis.com; frame-src https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+          },
+
+          {
+            "key": "Strict-Transport-Security",
+            "value": "max-age=63072000; includeSubDomains; preload"
+          },
+
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+
+          {
+            "key": "X-XSS-Protection",
+            "value": "0"
+          },
+
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+
+          {
+            "key": "Permissions-Policy",
+            "value": "geolocation=(self), camera=(self), microphone=(self), notifications=(self), payment=(self), fullscreen=(self), autoplay=(self), clipboard-write=(self), gyroscope=(), magnetometer=(), accelerometer=()"
+          },
+
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin-allow-popups"
+          },
+
+          {
+            "key": "Cross-Origin-Resource-Policy",
+            "value": "same-site"
+          }
+
+        ]
+      }
+    ]
+  },
+  "firestore": {
+    "rules":   "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

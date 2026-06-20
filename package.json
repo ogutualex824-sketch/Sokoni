@@ -1,0 +1,16 @@
+{
+  "name": "sokoni",
+  "version": "1.0.0",
+  "description": "SOKONI — Kenya's Premier Marketplace",
+  "private": true,
+  "scripts": {
+    "dev": "http-server . -p 3000 -o --cors -c-1",
+    "dev:bs": "browser-sync start --config bs-config.js",
+    "deploy": "npx -y firebase-tools@latest deploy --only hosting"
+  },
+  "devDependencies": {
+    "browser-sync": "^3.0.4",
+    "http-server": "^14.1.1",
+    "playwright": "^1.60.0"
+  }
+}

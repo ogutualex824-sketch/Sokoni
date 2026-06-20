@@ -1,0 +1,356 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+
+<head>
+
+<meta charset="UTF-8">
+  <script src="security.js"></script>
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<title>SOKONI — Product</title>
+<meta name="description" content="View product details, photos, price and reviews on SOKONI Kenya's marketplace.">
+<meta property="og:title" content="SOKONI — Product">
+<meta property="og:description" content="Buy this product on SOKONI — fast delivery, secure payment, verified seller.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:type" content="product">
+<meta property="og:site_name" content="SOKONI">
+<meta name="twitter:card" content="summary_large_image">
+<script id="productJsonLd" type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"SOKONI Product","offers":{"@type":"Offer","priceCurrency":"KES","availability":"https://schema.org/InStock","seller":{"@type":"Organization","name":"SOKONI"}}}</script>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="product.css">
+
+<!-- FONT AWESOME -->
+
+<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
+
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+
+<body>
+<script src="splash.js"></script>
+
+
+<!-- PREMIUM PRODUCT NAVBAR -->
+<nav class="product-nav-premium">
+  <div class="pnp-left">
+    <a href="index.html" class="pnp-back" title="Back to marketplace">
+      ←
+    </a>
+    <a href="index.html" class="pnp-logo-link">
+      <img loading="lazy" src="assets/Sokonilogo2.png" alt="SOKONI" class="pnp-logo">
+    </a>
+  </div>
+  <div class="pnp-center">
+    <span class="pnp-title">Product Details</span>
+  </div>
+  <div class="pnp-right">
+    <a href="wishlist.html" class="pnp-icon-btn" title="Wishlist">
+      ❤️
+    </a>
+    <a href="cart.html" class="pnp-icon-btn pnp-cart" title="Cart">
+      🛒
+      <span class="pnp-cart-badge" id="cartCount">0</span>
+    </a>
+    <div id="authButtons">
+      <a href="login.html" class="pnp-login-btn">Login</a>
+    </div>
+    <a href="profile.html" class="pnp-avatar" id="pnpProfileAvatar" title="My Profile" style="display:none;">
+      <span id="pnpProfileInitial">👤</span>
+    </a>
+  </div>
+</nav>
+<script>
+(function(){
+  var user=null;
+  try{user=JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){}
+  if(user&&(user.name||user.email||user.phone)){
+    var ab=document.getElementById('authButtons');
+    var av=document.getElementById('pnpProfileAvatar');
+    var init=document.getElementById('pnpProfileInitial');
+    var label=user.name||user.email||user.phone||'';
+    if(ab) ab.style.setProperty('display','none','important');
+    if(av) av.style.display='flex';
+    if(init) init.textContent=label?label[0].toUpperCase():'👤';
+  }
+})();
+</script>
+
+<style>
+.product-nav-premium {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 60px;
+  background: rgba(5,5,5,0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(113,255,0,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  z-index: 1000;
+}
+.pnp-left { display: flex; align-items: center; gap: 12px; }
+.pnp-back {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  font-size: 14px;
+  transition: all .15s;
+}
+.pnp-back:hover { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00; }
+.pnp-logo { height: 28px; display: block; }
+.pnp-logo-link { display: flex; align-items: center; }
+.pnp-center { position: absolute; left: 50%; transform: translateX(-50%); }
+.pnp-title { font-size: 13px; font-weight: 800; color: rgba(255,255,255,0.55); letter-spacing: .04em; text-transform: uppercase; }
+.pnp-right { display: flex; align-items: center; gap: 8px; }
+.pnp-icon-btn {
+  position: relative;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.65);
+  text-decoration: none;
+  font-size: 14px;
+  transition: all .15s;
+}
+.pnp-icon-btn:hover { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00; }
+.pnp-cart-badge {
+  position: absolute;
+  top: -5px; right: -5px;
+  min-width: 17px; height: 17px;
+  background: #71ff00;
+  color: #070707;
+  font-size: 9px;
+  font-weight: 900;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+}
+.pnp-login-btn {
+  padding: 7px 16px;
+  background: rgba(113,255,0,0.1);
+  border: 1px solid rgba(113,255,0,0.25);
+  border-radius: 10px;
+  color: #71ff00;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: all .15s;
+}
+.pnp-login-btn:hover { background: rgba(113,255,0,0.2); }
+.pnp-avatar {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(113,255,0,0.1);
+  border: 1px solid rgba(113,255,0,0.3);
+  border-radius: 50%;
+  color: #71ff00;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  transition: background .15s;
+}
+.pnp-avatar:active { background: rgba(113,255,0,0.22); }
+/* Push content below fixed nav */
+.product-page { padding-top: 72px; }
+/* Mobile tweaks */
+@media (max-width: 600px) {
+  .product-nav-premium { height: 56px; padding: 0 12px; }
+  .pnp-logo { height: 34px; filter: drop-shadow(0 0 10px rgba(113,255,0,0.3)) brightness(1.08); }
+  .pnp-title { font-size: 11px; }
+  .pnp-back { width: 44px; height: 44px; min-width: 44px; font-size: 13px; }
+  .pnp-icon-btn { width: 44px; height: 44px; min-width: 44px; font-size: 14px; }
+  .pnp-login-btn { padding: 6px 12px; font-size: 11px; }
+  .pnp-right { gap: 5px; }
+  .pnp-left { gap: 8px; }
+  .product-page { padding-top: 64px; }
+}
+</style>
+
+<!-- PRODUCT PAGE -->
+
+<section class="product-page">
+
+    <div class="product-page-container" id="productPageContainer">
+      <!-- Skeleton shown while JS loads -->
+      <div id="productSkeleton" style="display:flex;flex-direction:column;gap:16px;padding:16px;animation:skPulse 1.4s ease-in-out infinite;">
+        <style>@keyframes skPulse{0%,100%{opacity:.5}50%{opacity:1}}</style>
+        <div style="width:100%;aspect-ratio:1/1;border-radius:18px;background:rgba(255,255,255,0.06);"></div>
+        <div style="height:22px;width:70%;border-radius:8px;background:rgba(255,255,255,0.06);"></div>
+        <div style="height:32px;width:40%;border-radius:8px;background:rgba(113,255,0,0.08);"></div>
+        <div style="height:14px;width:90%;border-radius:6px;background:rgba(255,255,255,0.04);"></div>
+        <div style="height:14px;width:75%;border-radius:6px;background:rgba(255,255,255,0.04);"></div>
+        <div style="height:52px;width:100%;border-radius:14px;background:rgba(113,255,0,0.1);margin-top:8px;"></div>
+      </div>
+    </div>
+
+</section>
+
+
+
+
+
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">🛍️</span><span>Categories</span></a>
+  <a href="flashsale.html" class="bnav-item bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+
+
+<!-- PRODUCT JS -->
+
+<script src="product.js"></script>
+
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sokoni-trust.js" defer></script>
+<script src="sokoni-verifications.js" defer></script>
+<script>
+/* Poll until product.js sets window._productSellerUid, then badge the seller name */
+(function() {
+  var _tries = 0;
+  var _t = setInterval(function() {
+    _tries++;
+    if (!window.SokoniVerifications || !window._productSellerUid) {
+      if (_tries >= 30) clearInterval(_t);
+      return;
+    }
+    clearInterval(_t);
+    var nameEl = document.getElementById('sellerName') || document.querySelector('.product-seller-name');
+    if (nameEl) SokoniVerifications.badge(window._productSellerUid, nameEl, { size: 'sm' });
+    SokoniVerifications.wireAll({ size: 'sm' });
+  }, 400);
+})();
+</script>
+<script src="sokoni-offers.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-share.js" defer></script>
+<script src="sokoni-qr.js" defer></script>
+<script>
+/* QR button — injected after product ID is resolved */
+document.addEventListener('DOMContentLoaded', () => {
+  const _injectQR = () => {
+    const id = new URLSearchParams(location.search).get('id') || window._currentProductId;
+    if (!id || document.getElementById('_prd_qr_btn')) return;
+    const wishBtn = document.querySelector('a[href="wishlist.html"]');
+    if (!wishBtn) return;
+    const btn = document.createElement('button');
+    btn.id = '_prd_qr_btn';
+    btn.title = 'Show QR Code';
+    btn.textContent = '📱';
+    btn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:20px;padding:4px 6px;';
+    btn.onclick = () => window.SokoniQR?.showModal('product', id, document.title.split('—')[0].trim());
+    wishBtn.parentNode.insertBefore(btn, wishBtn);
+  };
+  setTimeout(_injectQR, 600);
+  window.addEventListener('productLoaded', _injectQR);
+});
+</script>
+  <script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="demo-seed.js"></script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<!-- ── Report Listing ── -->
+<div id="reportListingBar" style="text-align:center;padding:8px 16px 4px;display:none;">
+  <button onclick="openReportListing()" style="background:none;border:none;color:rgba(255,255,255,0.3);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;">⚑ Report this listing</button>
+</div>
+<div id="reportModal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#111;border:1px solid rgba(113,255,0,0.2);border-radius:20px;padding:24px;width:100%;max-width:400px;">
+    <h3 style="margin:0 0 16px;color:white;font-size:16px;">⚑ Report Listing</h3>
+    <select id="reportListingReason" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;margin-bottom:12px;font-family:inherit;">
+      <option value="">Select a reason...</option>
+      <option>Counterfeit / fake item</option>
+      <option>Misleading description</option>
+      <option>Prohibited item</option>
+      <option>Wrong price / scam</option>
+      <option>Duplicate listing</option>
+      <option>Other</option>
+    </select>
+    <textarea id="reportListingDetails" placeholder="Additional details (optional)" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:16px;resize:vertical;min-height:80px;font-family:inherit;margin-bottom:12px;"></textarea>
+    <div style="display:flex;gap:10px;">
+      <button onclick="submitListingReport()" style="flex:1;padding:12px;background:#71ff00;border:none;border-radius:10px;color:#000;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">Submit Report</button>
+      <button onclick="document.getElementById('reportModal').style.display='none'" style="padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;cursor:pointer;font-family:inherit;">Cancel</button>
+    </div>
+  </div>
+</div>
+<script>
+function openReportListing(){
+  var u = window.firebaseAuth && window.firebaseAuth.currentUser;
+  if(!u){ (window._skToast||alert)('Please sign in to report a listing.'); window.location.href='login.html?next='+encodeURIComponent(location.pathname+location.search); return; }
+  document.getElementById('reportModal').style.display='flex';
+}
+function submitListingReport(){
+  var reason=document.getElementById('reportListingReason').value;
+  var details=document.getElementById('reportListingDetails').value;
+  if(!reason){(window._skToast||alert)('Please select a reason.');return;}
+  var pid=new URLSearchParams(location.search).get('id')||'unknown';
+  if(window.SokoniReport){
+    SokoniReport.submit('listing',pid,reason,details).then(function(){
+      document.getElementById('reportModal').style.display='none';
+      document.getElementById('reportListingReason').value='';
+      document.getElementById('reportListingDetails').value='';
+    });
+  } else {
+    document.getElementById('reportModal').style.display='none';
+    (window._skToast||alert)('Report submitted. Thank you.');
+  }
+}
+// Show report bar after page loads
+window.addEventListener('DOMContentLoaded',function(){
+  var bar=document.getElementById('reportListingBar');
+  if(bar)bar.style.display='block';
+});
+</script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+
+</html>
+
+
+
+
+
+

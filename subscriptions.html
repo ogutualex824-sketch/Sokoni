@@ -1,0 +1,456 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Pricing & Subscriptions — List, Sell & Earn More</title>
+  <meta name="description" content="Choose a SOKONI plan that fits your business. Free to start, upgrade for more leads, lower commission and premium features.">
+  <meta property="og:title" content="SOKONI Pricing & Subscriptions — List, Sell & Earn More">
+  <meta property="og:description" content="Choose a SOKONI plan — free to start, upgrade for premium features, lower commission and more leads.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <script src="sokoni-pay.js" defer></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:white;min-height:100vh;padding-bottom:80px;}
+
+    .sub-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(113,255,0,0.1);position:sticky;top:0;z-index:200;backdrop-filter:blur(14px);}
+    .sub-nav-logo{height:34px;}
+    .sub-nav-right{display:flex;gap:8px;}
+    .sub-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;font-weight:700;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;}
+
+    /* Hero */
+    .sub-hero{padding:60px 24px 50px;text-align:center;background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,170,255,0.04),transparent);border-bottom:1px solid rgba(113,255,0,0.08);}
+    .sub-badge{display:inline-block;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:999px;padding:6px 16px;font-size:12px;font-weight:800;color:#71ff00;margin-bottom:14px;text-transform:uppercase;letter-spacing:.07em;}
+    .sub-hero h1{font-size:clamp(28px,5vw,44px);font-weight:900;margin-bottom:10px;}
+    .sub-hero h1 span{background:linear-gradient(135deg,#71ff00,#4fc800);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .sub-hero p{color:rgba(255,255,255,0.5);font-size:15px;max-width:540px;margin:0 auto;}
+
+    /* Plan toggle */
+    .sub-toggle-row{display:flex;align-items:center;justify-content:center;gap:12px;padding:24px 0 0;font-size:13px;font-weight:700;}
+    .sub-toggle-pill{display:flex;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:999px;overflow:hidden;}
+    .sub-toggle-btn{padding:8px 22px;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,0.5);font-size:13px;font-weight:700;font-family:inherit;transition:all .2s;}
+    .sub-toggle-btn.active{background:rgba(113,255,0,0.15);color:#71ff00;}
+    .sub-save-badge{background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.25);color:#71ff00;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:800;}
+
+    /* Plans grid */
+    .sub-body{max-width:1100px;margin:0 auto;padding:40px 24px 60px;}
+    .plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;margin-bottom:60px;}
+    .plan-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:22px;padding:28px;display:flex;flex-direction:column;position:relative;transition:transform .2s,border-color .2s;}
+    .plan-card:hover{transform:translateY(-4px);}
+    .plan-card.popular{border-color:rgba(113,255,0,0.35);box-shadow:0 0 32px rgba(113,255,0,0.08);}
+    .popular-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-size:10px;font-weight:900;padding:4px 14px;border-radius:999px;white-space:nowrap;text-transform:uppercase;letter-spacing:.06em;}
+    .plan-name{font-size:13px;font-weight:800;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+    .plan-price{font-size:36px;font-weight:900;color:white;margin-bottom:2px;}
+    .plan-price sup{font-size:16px;font-weight:700;color:rgba(255,255,255,0.6);}
+    .plan-period{font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:18px;}
+    .plan-features{list-style:none;flex:1;margin-bottom:22px;}
+    .plan-features li{font-size:12px;color:rgba(255,255,255,0.65);padding:6px 0;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid rgba(255,255,255,0.05);}
+    .plan-features li:last-child{border-bottom:none;}
+    .plan-features li .fi{color:#71ff00;font-weight:900;flex-shrink:0;font-size:11px;}
+    .plan-features li .fx{color:rgba(255,255,255,0.2);}
+    .plan-cta{width:100%;padding:13px;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;}
+    .plan-cta-free{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);}
+    .plan-cta-free:hover{background:rgba(255,255,255,0.1);color:white;}
+    .plan-cta-paid{background:linear-gradient(135deg,#71ff00,#4fc800);color:black;}
+    .plan-cta-paid:hover{filter:brightness(1.08);}
+    .plan-commission{font-size:22px;font-weight:900;color:#71ff00;margin-bottom:4px;}
+    .plan-commission-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:12px;}
+    .plan-divider{height:1px;background:rgba(255,255,255,0.06);margin:14px 0;}
+
+    /* Commission table */
+    .comm-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:40px;}
+    .comm-table th{padding:10px 14px;background:rgba(113,255,0,0.07);color:#71ff00;font-weight:800;text-align:left;border-bottom:1px solid rgba(113,255,0,0.15);}
+    .comm-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.7);}
+    .comm-table tr:hover td{background:rgba(255,255,255,0.02);}
+    .comm-rate{font-weight:800;color:#71ff00;}
+    .comm-deposit{font-weight:700;color:#00aaff;}
+
+    /* How it works */
+    .hiw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:48px;}
+    .hiw-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:20px;}
+    .hiw-num{width:32px;height:32px;background:linear-gradient(135deg,#71ff00,#4fc800);border-radius:50%;color:black;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+    .hiw-title{font-size:13px;font-weight:800;color:white;margin-bottom:5px;}
+    .hiw-desc{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;}
+
+    /* Boost section */
+    .boost-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:40px;}
+    .boost-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:18px;transition:all .2s;cursor:pointer;}
+    .boost-card:hover{border-color:rgba(113,255,0,0.3);transform:translateY(-2px);}
+    .boost-icon{font-size:28px;margin-bottom:8px;}
+    .boost-name{font-size:13px;font-weight:800;color:white;margin-bottom:3px;}
+    .boost-desc{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;line-height:1.5;}
+    .boost-price{font-size:16px;font-weight:900;color:#71ff00;}
+    .boost-duration{font-size:10px;color:rgba(255,255,255,0.3);}
+
+    /* Section heading */
+    .sub-sec-h{font-size:15px;font-weight:800;color:white;margin:40px 0 16px;display:flex;align-items:center;gap:8px;}
+    .sub-sec-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+    .sub-sec-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;margin-top:-10px;}
+
+    /* FAQ */
+    .faq-item{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px 18px;margin-bottom:8px;cursor:pointer;}
+    .faq-q{font-size:13px;font-weight:700;color:white;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .faq-a{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.7;margin-top:10px;display:none;}
+    .faq-item.open .faq-a{display:block;}
+    .faq-item.open .faq-arrow{transform:rotate(180deg);}
+    .faq-arrow{transition:transform .2s;color:rgba(255,255,255,0.3);flex-shrink:0;}
+
+    @media(max-width:600px){.plans-grid{grid-template-columns:1fr;}}
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="sub-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="sub-nav-logo" alt="Sokoni"></a>
+  <div class="sub-nav-right">
+    <a href="seller.html" class="sub-nav-link">🏪 Seller Dashboard</a>
+    <a href="index.html" class="sub-nav-link">🏠 Home</a>
+  </div>
+</nav>
+
+<div class="sub-hero">
+  <div class="sub-badge">💰 SOKONI Monetisation & Pricing</div>
+  <h1>Earn More.<br><span>Pay Less Commission.</span></h1>
+  <p>List free, upgrade for higher visibility and lower platform commission. Every booking on SOKONI earns you more.</p>
+  <div class="sub-toggle-row">
+    <span style="color:rgba(255,255,255,0.5);">Billing:</span>
+    <div class="sub-toggle-pill">
+      <button type="button" class="sub-toggle-btn active" id="toggleMonthly" onclick="setBilling('monthly',this)">Monthly</button>
+      <button type="button" class="sub-toggle-btn" id="toggleAnnual" onclick="setBilling('annual',this)">Annual</button>
+    </div>
+    <span class="sub-save-badge" id="saveBadge">Save 20% annually</span>
+  </div>
+</div>
+
+<div class="sub-body">
+
+  <!-- PLANS -->
+  <div class="plans-grid" id="plansGrid"></div>
+
+  <!-- HOW SOKONI EARNS -->
+  <div class="sub-sec-h">💡 How SOKONI's Commission Works</div>
+  <div class="sub-sec-sub">Whether payment happens on-platform or off, SOKONI captures its share. Here's how:</div>
+  <div class="hiw-grid">
+    <div class="hiw-card"><div class="hiw-num">1</div><div class="hiw-title">Booking Deposit</div><div class="hiw-desc">Every booking — even via WhatsApp — requires a small SOKONI booking deposit paid upfront via M-PESA. This is SOKONI's guaranteed cut.</div></div>
+    <div class="hiw-card"><div class="hiw-num">2</div><div class="hiw-title">Booking Reference</div><div class="hiw-desc">After deposit, the client receives a unique booking reference sent with their WhatsApp/enquiry message. The provider sees it and knows SOKONI is tracking.</div></div>
+    <div class="hiw-card"><div class="hiw-num">3</div><div class="hiw-title">Service Completion</div><div class="hiw-desc">After the job is done, SOKONI auto-sends the provider a commission invoice via WhatsApp for their % of the total service fee.</div></div>
+    <div class="hiw-card"><div class="hiw-num">4</div><div class="hiw-title">Commission Settlement</div><div class="hiw-desc">Provider pays commission via M-PESA Paybill 522522, Account: their booking ref. Outstanding unpaid commissions suspend the listing.</div></div>
+    <div class="hiw-card"><div class="hiw-num">5</div><div class="hiw-title">Subscription Benefits</div><div class="hiw-desc">Pro and Business subscribers pay lower commission %. The subscription fee pre-covers part of the platform's earnings.</div></div>
+    <div class="hiw-card"><div class="hiw-num">6</div><div class="hiw-title">Boost & Promote</div><div class="hiw-desc">Sellers can boost listings to appear at the top of search results, as featured cards, or on the SOKONI homepage.</div></div>
+  </div>
+
+  <!-- MONEY FLOW MODELS -->
+  <div class="sub-sec-h">💡 3 Ways SOKONI Earns — Even Without Handling Full Payment</div>
+  <div class="sub-sec-sub">Whether the money goes through the platform or directly to the provider, SOKONI always captures its share.</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:36px;">
+    <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;">
+      <div style="font-size:28px;margin-bottom:10px;">💳</div>
+      <div style="font-size:13px;font-weight:900;color:white;margin-bottom:6px;">Model 1 — Full Platform Payment</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">Money passes through SOKONI checkout (M-Pesa STK push). SOKONI takes its cut before releasing funds to the provider.</div>
+      <div style="font-size:11px;color:#71ff00;font-weight:700;">Used by: Products, Food, Car Rental, Digital Goods</div>
+    </div>
+    <div style="background:rgba(0,170,255,0.05);border:1px solid rgba(0,170,255,0.18);border-radius:16px;padding:20px;">
+      <div style="font-size:28px;margin-bottom:10px;">💬</div>
+      <div style="font-size:13px;font-weight:900;color:white;margin-bottom:6px;">Model 2 — WhatsApp Booking Gate</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">Client pays a non-refundable booking deposit to SOKONI first. Only after payment does the WhatsApp connect open. A completion commission invoice is sent after the job.</div>
+      <div style="font-size:11px;color:#00aaff;font-weight:700;">Used by: Legal, Healthcare, Mechanics, Entertainment, Beauty, Sports</div>
+    </div>
+    <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.18);border-radius:16px;padding:20px;">
+      <div style="font-size:28px;margin-bottom:10px;">📊</div>
+      <div style="font-size:13px;font-weight:900;color:white;margin-bottom:6px;">Model 3 — Lead / Referral Fee</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">For government/regulated services (NTSA, insurance) and B2B deals, SOKONI charges a lead fee for the connection. The insurer or provider pays SOKONI a referral commission.</div>
+      <div style="font-size:11px;color:#c084fc;font-weight:700;">Used by: NTSA, Insurance, B2B Wholesale, Property</div>
+    </div>
+    <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);border-radius:16px;padding:20px;">
+      <div style="font-size:28px;margin-bottom:10px;">👑</div>
+      <div style="font-size:13px;font-weight:900;color:white;margin-bottom:6px;">Model 4 — Provider Subscriptions</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">Providers pay a monthly subscription for lower commission rates, more leads and premium features. Starter KES 499/mo → Business KES 4,999/mo.</div>
+      <div style="font-size:11px;color:#f59e0b;font-weight:700;">Applies to: All providers across all hubs</div>
+    </div>
+    <div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.18);border-radius:16px;padding:20px;">
+      <div style="font-size:28px;margin-bottom:10px;">🚀</div>
+      <div style="font-size:13px;font-weight:900;color:white;margin-bottom:6px;">Model 5 — Listing Boosts</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">One-time payments for promotions: top of category (KES 200), featured card (KES 500), homepage slot (KES 2,000), urgent badge (KES 100).</div>
+      <div style="font-size:11px;color:#ef4444;font-weight:700;">Available to: All sellers and service providers</div>
+    </div>
+    <div style="background:rgba(0,200,120,0.05);border:1px solid rgba(0,200,120,0.18);border-radius:16px;padding:20px;">
+      <div style="font-size:28px;margin-bottom:10px;">🧾</div>
+      <div style="font-size:13px;font-weight:900;color:white;margin-bottom:6px;">Model 6 — Deferred Commission Invoice</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:10px;">For legal cases, construction projects and large deals where final fees come weeks later — the provider logs completion, SOKONI auto-sends a WhatsApp invoice for the % owed.</div>
+      <div style="font-size:11px;color:#00c878;font-weight:700;">Used by: Legal Hub (Log Case tab), Construction, B2B</div>
+    </div>
+  </div>
+
+  <!-- COMMISSION RATES TABLE -->
+  <div class="sub-sec-h">📊 Booking Deposits & Commission Rates by Service</div>
+  <div class="sub-sec-sub">What SOKONI earns per transaction — booking deposit is paid upfront, completion commission is invoiced after service.</div>
+  <div style="overflow-x:auto;border-radius:14px;border:1px solid rgba(255,255,255,0.07);margin-bottom:32px;">
+    <table class="comm-table">
+      <thead>
+        <tr><th>Service Category</th><th>Booking Deposit</th><th>Completion Commission</th><th>Notes</th></tr>
+      </thead>
+      <tbody id="commRatesTable"></tbody>
+    </table>
+  </div>
+
+  <!-- BOOST YOUR LISTING -->
+  <div class="sub-sec-h">🚀 Boost Your Listing</div>
+  <div class="sub-sec-sub">Stand out and get more bookings. One-time boost payments — no subscription required.</div>
+  <div class="boost-grid" id="boostGrid"></div>
+
+  <!-- FAQ -->
+  <div class="sub-sec-h">❓ Frequently Asked Questions</div>
+  <div id="faqList"></div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="seller.html" class="bnav-item"><span class="bnav-emoji">🏪</span><span>Sell</span></a>
+  <a href="subscriptions.html" class="bnav-item active-bnav">👑<span>Plans</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+let _billing = "monthly";
+function setBilling(b, btn){
+  _billing=b;
+  document.querySelectorAll(".sub-toggle-btn").forEach(x=>x.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+  renderPlans();
+}
+
+const PLANS_DATA = [
+  { key:"free",     name:"Free",     monthly:0,    annual:0,    commission:15, listings:3,   leads:5,   badge:false, featured:false,
+    features:["3 active listings","5 booking leads/month","15% platform commission","Basic listing card","M-PESA payments"],
+    missing:["Verified badge","Featured placement","Priority support","Commission discount","Analytics dashboard"] },
+  { key:"starter",  name:"Starter",  monthly:499,  annual:399,  commission:10, listings:20,  leads:30,  badge:true,  featured:false,
+    features:["20 active listings","30 booking leads/month","10% platform commission","✅ Verified badge","M-PESA + card payments","Basic analytics"],
+    missing:["Homepage featured","Priority support","Bulk messaging"] },
+  { key:"pro",      name:"Pro",      monthly:1499, annual:1199, commission:7,  listings:999, leads:999, badge:true,  featured:true, popular:true,
+    features:["Unlimited listings","Unlimited leads","7% platform commission","✅ Verified badge","🌟 Featured in category","Priority support 24/7","Full analytics dashboard","Customer reviews module","Boost credits: KES 500/mo"] },
+  { key:"business", name:"Business", monthly:4999, annual:3999, commission:4,  listings:999, leads:999, badge:true,  featured:true,
+    features:["Everything in Pro","4% platform commission","🏠 Homepage feature slot","Dedicated account manager","Custom WhatsApp catalogue","Bulk broadcast to your clients","API access for integrations","Monthly performance report","Boost credits: KES 2,000/mo"] },
+];
+
+function renderPlans(){
+  document.getElementById("plansGrid").innerHTML = PLANS_DATA.map(p=>{
+    const price = _billing==="annual" ? p.annual : p.monthly;
+    const isCurrentPlan = false; // could check subscription
+    return `
+    <div class="plan-card${p.popular?" popular":""}">
+      ${p.popular?`<div class="popular-badge">⭐ Most Popular</div>`:""}
+      <div class="plan-name">${p.name}</div>
+      <div class="plan-price"><sup>KES</sup>${price===0?"0":(price).toLocaleString()}</div>
+      <div class="plan-period">${price===0?"Free forever":_billing==="annual"?"/month (billed annually)":"/month"}</div>
+      <div class="plan-commission">${p.commission}%</div>
+      <div class="plan-commission-lbl">Platform commission on sales</div>
+      <div class="plan-divider"></div>
+      <ul class="plan-features">
+        ${p.features.map(f=>`<li><span class="fi">✓</span> ${f}</li>`).join("")}
+        ${(p.missing||[]).map(f=>`<li><span class="fx">✗</span> <span style="color:rgba(255,255,255,0.25);">${f}</span></li>`).join("")}
+      </ul>
+      <button type="button" class="plan-cta ${price===0?"plan-cta-free":"plan-cta-paid"}" onclick="subscribePlan('${p.key}',${price})">
+        ${price===0?"Get Started Free":"Upgrade to "+p.name+" →"}
+      </button>
+    </div>`;
+  }).join("");
+}
+
+function subscribePlan(planKey, price){
+  if(price===0){ (window._skToast||alert)("✅ Free plan — you're already on it! Start listing now."); window.location.href="seller.html"; return; }
+  if(typeof SokoniPay!=="undefined"){
+    SokoniPay.gateway({
+      providerName: "SOKONI "+PLANS_DATA.find(p=>p.key===planKey)?.name+" Plan",
+      category: "subscription",
+      serviceDesc: "Monthly subscription — lower commission, more leads, premium features",
+      depositAmount: price,
+      onSuccess: function(ref){
+        const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+        const id = user?.phone||user?.email||"anonymous";
+        SokoniPay.savePlanSubscription(id, planKey);
+        /* Persist plan so analytics pages can read it */
+        try {
+          localStorage.setItem('sokoniSubscription', JSON.stringify({
+            plan: planKey, price: price, ref: ref,
+            startDate: new Date().toISOString().slice(0,10)
+          }));
+        } catch(e){}
+        /* Award loyalty points for subscribing */
+        try { if(typeof window.onSokoniPurchase==='function') window.onSokoniPurchase(price); } catch(e){}
+        (function(msg){var b=document.createElement('div');b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#71ff00;color:black;padding:16px 20px;font-weight:900;font-size:14px;text-align:center;';b.textContent=msg;document.body.prepend(b);setTimeout(function(){b.remove();},4000);}("🎉 Subscribed to "+planKey+"! Ref: "+ref+" · Commission rate active now."));
+      }
+    });
+  } else {
+    (function(msg){var b=document.createElement('div');b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(30,30,30,0.97);color:white;padding:14px 20px;font-weight:700;font-size:13px;text-align:center;border-bottom:2px solid #71ff00;';b.textContent=msg;document.body.prepend(b);setTimeout(function(){b.remove();},3000);}("⏳ M-PESA STK push — KES "+price.toLocaleString()+"/mo. Enter your PIN to complete."));
+  }
+}
+
+const COMM_RATES = [
+  /* ── DIRECT PLATFORM PAYMENT (checkout) ── */
+  ["🛒 Products / General Shop","—","5–10%","Commission deducted at checkout"],
+  ["🍽️ Food Delivery (Sokoni Eats)","—","15%","Included in menu pricing"],
+  ["💻 Digital Goods (eBooks, courses)","—","10%","Instant download — platform keeps %"],
+  ["🚗 Car Rental","KES 1,500","12%","Deposit + completion commission"],
+  /* ── WHATSAPP BOOKING WITH DEPOSIT ── */
+  ["⚖️ Legal Consultation","KES 500","5%","WhatsApp booking — lower % on large fees"],
+  ["🏥 Healthcare / Doctor","KES 200","5%","WhatsApp/on-site — NHIF providers exempt"],
+  ["🎧 Entertainment (DJs, Bands, MCs)","KES 500","10%","WhatsApp booking for events"],
+  ["🔧 Mechanics & Garages","KES 200","10%","WhatsApp booking — pay deposit first"],
+  ["🧹 Cleaning & Laundry","KES 200","10%","Per booking interaction"],
+  ["💇 Hair & Beauty (barbers, salons)","KES 200","10%","Per booking"],
+  ["📸 Photography & Videography","KES 300","10%","Per project booking"],
+  ["🏋️ Fitness & Personal Training","KES 150","10%","Per session"],
+  ["🍳 Catering & Chefs","KES 300","8%","Per event"],
+  ["📚 Tutoring & Coaching","KES 150","10%","Per session"],
+  ["⚡ Electrical / Plumbing / IT Repair","KES 200","10%","Per booking"],
+  ["⚽ Sports Facilities & Turf","KES 150","8%","Per slot booking"],
+  ["🧱 Construction Materials","KES 300","3%","High-value bulk — lower %"],
+  /* ── LEAD / REFERRAL FEE (B2B & Gov) ── */
+  ["🤝 B2B Wholesale Inquiry","KES 500","3%","Lead fee + % on completed order"],
+  ["🏛️ NTSA / Government Services","KES 200","—","Facilitation/referral fee only"],
+  ["🛡️ Car Insurance","KES 200","Referral","Referral bonus from insurer"],
+  /* ── PROPERTY & ACCOMMODATION ── */
+  ["🏠 Property Rental","KES 500","2%","Connection fee + % of 1st month rent"],
+  ["🏡 BnB / Short-stay","KES 300","8%","Per confirmed stay"],
+  /* ── PLATFORM FEES ── */
+  ["👑 Subscription Plans","—","Fixed monthly fee","Replaces per-transaction commission"],
+  ["🚀 Listing Boost","KES 100–2,000","—","One-time promotional fee"],
+];
+
+const COMM_SECTION_HEADERS = {
+  0: "💳 Direct Platform Payment — money passes through checkout",
+  4: "💬 WhatsApp Booking Gate — deposit paid first, then provider contacted",
+  18: "📊 Lead & Referral — SOKONI earns a connection/referral fee",
+  21: "🏠 Property & Accommodation",
+  23: "⚙️ Platform Fees",
+};
+function renderCommTable(){
+  document.getElementById("commRatesTable").innerHTML = COMM_RATES.map((r,i)=>{
+    const header = COMM_SECTION_HEADERS[i]
+      ? `<tr><td colspan="4" style="background:rgba(113,255,0,0.04);color:rgba(113,255,0,0.7);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;padding:8px 14px 6px;border-bottom:1px solid rgba(113,255,0,0.1);">${COMM_SECTION_HEADERS[i]}</td></tr>`
+      : "";
+    return header+`<tr>
+      <td>${r[0]}</td>
+      <td class="comm-deposit">${r[1]}</td>
+      <td class="comm-rate">${r[2]}</td>
+      <td style="color:rgba(255,255,255,0.4);">${r[3]}</td>
+    </tr>`;
+  }).join("");
+}
+
+const BOOST_DATA = [
+  { icon:"⬆️", name:"Basic Boost", price:"KES 200", duration:"7 days", desc:"Move listing to top of its category results", key:"basic" },
+  { icon:"🌟", name:"Premium Featured", price:"KES 500", duration:"7 days", desc:"Featured card with glow + 'FEATURED' badge", key:"premium" },
+  { icon:"🏠", name:"Homepage Feature", price:"KES 2,000", duration:"7 days", desc:"Appear in the SOKONI homepage featured section", key:"homepage" },
+  { icon:"⚡", name:"Urgent Badge", price:"KES 100", duration:"3 days", desc:"'Urgent' badge — attracts quick-decision buyers", key:"urgent" },
+];
+
+function renderBoosts(){
+  document.getElementById("boostGrid").innerHTML = BOOST_DATA.map(b=>`
+    <div class="boost-card" onclick="buyBoost('${b.key}','${b.name}')">
+      <div class="boost-icon">${b.icon}</div>
+      <div class="boost-name">${b.name}</div>
+      <div class="boost-desc">${b.desc}</div>
+      <div class="boost-price">${b.price}</div>
+      <div class="boost-duration">Valid for ${b.duration}</div>
+    </div>`).join("");
+}
+
+function buyBoost(key, name){
+  const prices={basic:200,premium:500,homepage:2000,urgent:100};
+  if(typeof SokoniPay!=="undefined"){
+    SokoniPay.gateway({
+      providerName:"Boost — "+name,
+      category:"boost",
+      serviceDesc:name+" for 7 days on SOKONI",
+      depositAmount:prices[key]||200,
+      onSuccess:function(ref){(window._skToast||alert)("✅ "+name+" activated! Ref: "+ref+"\nYour listing will be boosted within 5 minutes.");}
+    });
+  }
+}
+
+const FAQS = [
+  ["What is the booking deposit and who pays it?","The client pays a small booking deposit directly to SOKONI via M-PESA before being connected to any provider. This covers SOKONI's platform fee for that transaction — whether payment for the actual service happens on-platform or directly between client and provider."],
+  ["What if a client pays the provider directly without going through SOKONI?","Every booking starts with a SOKONI booking deposit that the client pays first. The provider also owes a completion commission on their final fee. If a provider bypasses SOKONI consistently, their listing can be suspended pending commission payment."],
+  ["How is completion commission invoiced?","After the job is marked complete, SOKONI automatically sends a WhatsApp commission invoice to the provider for their % of the final service fee. They pay via M-PESA Paybill 522522, Account: their booking reference number."],
+  ["Can I reduce my commission rate?","Yes — upgrade to a higher subscription plan. Pro plan reduces commission to 7%, Business to 4%. The subscription fee offsets the platform's earnings while giving you unlimited leads and premium features."],
+  ["What happens if I don't pay the commission?","Outstanding unpaid commissions will temporarily restrict your listing from receiving new booking leads. Once settled, your listing is reinstated immediately."],
+  ["Do I need a subscription to be listed?","No — the Free plan allows 3 listings and 5 leads per month with a 15% completion commission. Upgrade only when you need more listings or lower commission rates."],
+  ["Is legal / healthcare commission the same?","No — legal and healthcare commissions are lower (5%) because service fees are typically higher. The booking deposit is also calibrated accordingly."],
+  ["How do I track my bookings and commissions?","All bookings, deposits paid, and commission obligations are tracked in your Seller Dashboard on SOKONI. Admin can also view the full platform commission report."],
+];
+
+function renderFaqs(){
+  document.getElementById("faqList").innerHTML = FAQS.map(([q,a],i)=>`
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">${q} <span class="faq-arrow">▾</span></div>
+      <div class="faq-a">${a}</div>
+    </div>`).join("");
+}
+
+renderPlans();
+renderCommTable();
+renderBoosts();
+renderFaqs();
+window.setBilling=setBilling; window.subscribePlan=subscribePlan; window.buyBoost=buyBoost;
+</script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+  <script defer src="sokoni-subscriptions.js"></script>
+</body>
+</html>
+
+
+
+
+
+

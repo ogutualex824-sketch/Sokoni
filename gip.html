@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Geo Intelligence Platform</title>
+<meta name="description" content="SOKONI GIP — Real-time fleet command centre for drivers, deliveries, rides and field services.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#080808">
+
+<!-- Leaflet core -->
+<link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"
+       onerror="this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
+<!-- Marker cluster -->
+<link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.4.1/dist/MarkerCluster.css"
+       onerror="this.href='https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css'">
+<link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"
+       onerror="this.href='https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css'">
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"
+        onerror="var s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s);"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"
+        onerror="console.warn('[GIP] MarkerCluster CDN failed — markers will render individually');"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"
+        onerror="console.warn('[GIP] Leaflet.heat CDN failed — heatmap disabled');"></script>
+
+<style>
+/* ── Reset & base ─────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#080808;color:white;}
+
+/* ── CSS variables ─────────────────────────────────────────── */
+:root{
+  --green:#71ff00; --blue:#00aaff; --amber:#ffc107; --red:#ff4444;
+  --card:rgba(255,255,255,0.04); --border:rgba(255,255,255,0.08);
+  --sidebar:260px; --topbar:52px;
+}
+
+/* ── Layout ────────────────────────────────────────────────── */
+#gipShell{display:flex;flex-direction:column;height:100vh;height:100dvh;}
+
+/* ── Top bar ───────────────────────────────────────────────── */
+#gipTop{
+  height:var(--topbar);flex-shrink:0;
+  display:flex;align-items:center;gap:0;
+  background:rgba(8,8,8,0.96);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(20px);
+  z-index:800;position:relative;
+}
+.gip-logo{height:28px;margin:0 14px;}
+.gip-title{font-size:14px;font-weight:900;color:white;margin-right:16px;letter-spacing:-.01em;white-space:nowrap;}
+.gip-title span{color:var(--green);}
+
+/* Stat chips */
+.gip-stats{display:flex;gap:6px;flex:1;overflow-x:auto;scrollbar-width:none;padding:0 8px;}
+.gip-stats::-webkit-scrollbar{display:none;}
+.gip-stat{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:8px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.07);
+  font-size:11px;white-space:nowrap;flex-shrink:0;
+  cursor:default;transition:border-color .2s;
+}
+.gip-stat:hover{border-color:rgba(255,255,255,0.18);}
+.gip-stat-val{font-weight:900;font-size:13px;}
+.gip-stat-lbl{color:rgba(255,255,255,0.4);font-weight:600;}
+
+/* Alert bell */
+#gipAlertBtn{
+  position:relative;margin:0 8px;width:36px;height:36px;flex-shrink:0;
+  background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;
+  transition:background .2s;
+}
+#gipAlertBtn:hover{background:rgba(255,68,68,0.15);}
+#gipAlertBadge{
+  position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:50%;
+  background:#ff4444;font-size:9px;font-weight:900;color:white;
+  display:none;align-items:center;justify-content:center;
+}
+#gipAlertBadge.show{display:flex;}
+
+/* Region selector */
+#gipRegionSel{
+  background:rgba(255,255,255,0.06);border:1px solid var(--border);
+  border-radius:8px;color:white;font-size:11px;font-weight:700;
+  padding:5px 10px;cursor:pointer;margin-right:8px;outline:none;
+  font-family:inherit;
+}
+
+/* ── Body ──────────────────────────────────────────────────── */
+#gipBody{display:flex;flex:1;min-height:0;}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+#gipSidebar{
+  width:var(--sidebar);flex-shrink:0;
+  background:rgba(8,8,8,0.97);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  transition:width .25s;
+  z-index:700;
+}
+#gipSidebar.collapsed{width:52px;}
+
+/* Layer switcher */
+.gip-layer-row{
+  display:flex;gap:4px;padding:10px;
+  border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.gip-layer-btn{
+  flex:1;min-width:0;padding:6px 4px;text-align:center;
+  border-radius:7px;border:1px solid var(--border);
+  background:transparent;color:rgba(255,255,255,0.45);
+  font-size:10px;font-weight:700;cursor:pointer;
+  font-family:inherit;transition:all .15s;white-space:nowrap;
+}
+.gip-layer-btn.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.3);color:var(--green);}
+
+/* Module filters */
+.gip-module-row{
+  padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+  border-bottom:1px solid var(--border);
+}
+.gip-module-lbl{font-size:9px;font-weight:800;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:.08em;}
+.gip-modules{display:flex;flex-wrap:wrap;gap:4px;}
+.gip-module-chip{
+  padding:4px 9px;border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:rgba(255,255,255,0.4);
+  font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;
+  transition:all .15s;
+}
+.gip-module-chip.active{background:rgba(0,170,255,0.12);border-color:rgba(0,170,255,0.3);color:var(--blue);}
+
+/* View tabs */
+.gip-view-tabs{display:flex;border-bottom:1px solid var(--border);}
+.gip-view-tab{
+  flex:1;padding:8px 4px;text-align:center;
+  font-size:10px;font-weight:700;cursor:pointer;
+  color:rgba(255,255,255,0.35);border:none;background:transparent;
+  font-family:inherit;transition:color .2s;
+  border-bottom:2px solid transparent;
+}
+.gip-view-tab.active{color:var(--green);border-bottom-color:var(--green);}
+
+/* Asset list */
+#gipAssetList{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;}
+#gipAssetList::-webkit-scrollbar{width:4px;}
+#gipAssetList::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px;}
+
+.gip-asset-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  transition:background .15s;
+}
+.gip-asset-item:hover{background:rgba(255,255,255,0.04);}
+.gip-asset-avatar{
+  width:34px;height:34px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  border:2px solid var(--status-color, rgba(255,255,255,0.2));
+}
+.gip-asset-name{font-size:12px;font-weight:700;line-height:1.3;}
+.gip-asset-meta{font-size:10px;color:rgba(255,255,255,0.35);}
+.gip-asset-speed{font-size:10px;font-weight:700;color:var(--amber);margin-left:auto;flex-shrink:0;}
+
+/* Status dot */
+.gip-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.gip-dot.available{background:var(--green);}
+.gip-dot.busy,
+.gip-dot.en_route{background:var(--blue);}
+.gip-dot.offline{background:rgba(255,255,255,0.2);}
+.gip-dot.maintenance{background:var(--amber);}
+.gip-dot.emergency{background:var(--red);}
+
+/* ── Main map area ─────────────────────────────────────────── */
+#gipMain{flex:1;display:flex;flex-direction:column;position:relative;min-width:0;}
+#gipMap{flex:1;width:100%;height:100%;}
+
+/* Map overlay controls */
+#gipMapControls{
+  position:absolute;top:12px;left:12px;z-index:600;
+  display:flex;flex-direction:column;gap:8px;
+  pointer-events:none;
+}
+.gip-map-btn{
+  pointer-events:all;
+  padding:8px 14px;
+  background:rgba(8,8,8,0.9);border:1px solid rgba(255,255,255,0.12);
+  border-radius:10px;backdrop-filter:blur(12px);
+  color:white;font-size:11px;font-weight:700;cursor:pointer;
+  font-family:inherit;display:flex;align-items:center;gap:6px;
+  transition:all .2s;white-space:nowrap;
+}
+.gip-map-btn:hover{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);}
+.gip-map-btn.active{background:rgba(113,255,0,0.15);border-color:rgba(113,255,0,0.4);color:var(--green);}
+
+/* Leaflet popup theme */
+.leaflet-popup-content-wrapper{background:rgba(10,10,10,0.97)!important;border:1px solid rgba(255,255,255,0.12)!important;border-radius:16px!important;box-shadow:0 8px 40px rgba(0,0,0,0.8)!important;color:white!important;backdrop-filter:blur(16px)!important;}
+.leaflet-popup-tip{background:rgba(10,10,10,0.97)!important;}
+.leaflet-popup-content{margin:14px 16px!important;font-family:'Segoe UI',system-ui,sans-serif!important;}
+.leaflet-popup-close-button{color:rgba(255,255,255,0.4)!important;font-size:18px!important;}
+.leaflet-control-zoom a{background:rgba(14,14,14,0.92)!important;color:white!important;border-color:rgba(255,255,255,0.1)!important;width:40px!important;height:40px!important;line-height:40px!important;font-size:20px!important;}
+.leaflet-control-zoom a:hover{background:rgba(113,255,0,0.15)!important;}
+.leaflet-control-attribution{background:rgba(0,0,0,0.55)!important;color:rgba(255,255,255,0.3)!important;font-size:9px!important;}
+.leaflet-control-attribution a{color:rgba(113,255,0,0.5)!important;}
+.leaflet-container{touch-action:none!important;}
+
+/* ── Right panel ───────────────────────────────────────────── */
+#gipRight{
+  width:300px;flex-shrink:0;
+  background:rgba(8,8,8,0.97);
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.gip-panel-tabs{display:flex;border-bottom:1px solid var(--border);}
+.gip-panel-tab{
+  flex:1;padding:10px 4px;text-align:center;
+  font-size:10px;font-weight:700;cursor:pointer;
+  color:rgba(255,255,255,0.35);border:none;background:transparent;
+  font-family:inherit;transition:color .2s;
+  border-bottom:2px solid transparent;
+}
+.gip-panel-tab.active{color:var(--green);border-bottom-color:var(--green);}
+.gip-panel-body{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;}
+.gip-panel-body::-webkit-scrollbar{width:4px;}
+.gip-panel-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px;}
+
+/* Job card */
+.gip-job-card{padding:12px;border-bottom:1px solid rgba(255,255,255,0.05);}
+.gip-job-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.gip-job-id{font-size:10px;font-weight:800;color:var(--green);}
+.gip-job-status{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;}
+.gip-job-status.pending{background:rgba(255,193,7,0.15);color:var(--amber);}
+.gip-job-status.assigned{background:rgba(0,170,255,0.15);color:var(--blue);}
+.gip-job-status.accepted{background:rgba(113,255,0,0.12);color:var(--green);}
+.gip-job-status.picked_up{background:rgba(113,255,0,0.18);color:var(--green);}
+.gip-job-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:4px;font-size:11px;}
+.gip-job-icon{opacity:.4;flex-shrink:0;width:14px;}
+.gip-job-text{color:rgba(255,255,255,0.55);}
+
+/* Alert card */
+.gip-alert-card{padding:12px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;gap:10px;align-items:flex-start;}
+.gip-alert-icon{font-size:18px;flex-shrink:0;margin-top:1px;}
+.gip-alert-msg{font-size:11px;color:rgba(255,255,255,0.75);line-height:1.4;}
+.gip-alert-time{font-size:9px;color:rgba(255,255,255,0.3);margin-top:4px;}
+.gip-alert-card.critical .gip-alert-msg{color:#ff6b6b;}
+.gip-alert-card.high     .gip-alert-msg{color:#ff9800;}
+.gip-alert-resolve{
+  margin-left:auto;flex-shrink:0;
+  background:rgba(255,255,255,0.05);border:1px solid var(--border);
+  border-radius:6px;color:rgba(255,255,255,0.4);
+  font-size:10px;font-weight:700;cursor:pointer;padding:3px 8px;
+  font-family:inherit;transition:all .2s;
+}
+.gip-alert-resolve:hover{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.25);color:var(--green);}
+
+/* Dispatch control */
+#gipDispatchPanel{padding:12px;}
+.gip-dispatch-btn{
+  width:100%;padding:11px;border-radius:12px;
+  background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);
+  color:var(--green);font-size:12px;font-weight:800;cursor:pointer;
+  font-family:inherit;transition:all .2s;margin-bottom:8px;
+}
+.gip-dispatch-btn:hover{background:rgba(113,255,0,0.2);}
+.gip-dispatch-btn.danger{background:rgba(255,68,68,0.1);border-color:rgba(255,68,68,0.3);color:#ff4444;}
+
+/* Analytics panel */
+.gip-analytics-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;}
+.gip-anlt-card{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;}
+.gip-anlt-val{font-size:22px;font-weight:900;color:var(--green);}
+.gip-anlt-lbl{font-size:9px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;}
+
+/* ── Offline banner ────────────────────────────────────────── */
+#gipOfflineBanner{
+  position:fixed;bottom:0;left:0;right:0;z-index:2000;
+  background:rgba(255,193,7,0.95);color:#080808;
+  padding:10px 20px;text-align:center;
+  font-size:13px;font-weight:800;
+  display:none;
+  backdrop-filter:blur(8px);
+}
+#gipOfflineBanner.show{display:block;}
+
+/* ── Animations ────────────────────────────────────────────── */
+@keyframes gip-fade-in{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+.gip-fade-in{animation:gip-fade-in .3s ease forwards;}
+
+/* ── Mobile responsive ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  :root{ --sidebar: 0px; }
+  #gipSidebar{ position:absolute;left:0;top:var(--topbar);bottom:0;width:260px;display:none;z-index:900;}
+  #gipSidebar.mobile-open{display:flex;}
+  #gipRight{display:none;}
+  #gipMobileToggle{display:flex;}
+}
+@media (max-width: 600px) {
+  .gip-stats{ display:none; }
+}
+#gipMobileToggle{
+  display:none;
+  width:36px;height:36px;margin:0 4px;
+  background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;
+  align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0;
+}
+</style>
+</head>
+<body>
+
+<div id="gipShell">
+
+  <!-- ── Top Bar ────────────────────────────────────────────── -->
+  <header id="gipTop">
+    <img src="assets/logosokoni.png" class="gip-logo" alt="SOKONI" onerror="this.style.display='none'">
+    <div class="gip-title"><span>GIP</span> Command</div>
+
+    <div class="gip-stats">
+      <div class="gip-stat">
+        <div class="gip-dot available"></div>
+        <span class="gip-stat-val" id="statAvail">—</span>
+        <span class="gip-stat-lbl">Available</span>
+      </div>
+      <div class="gip-stat">
+        <div class="gip-dot en_route"></div>
+        <span class="gip-stat-val" id="statBusy">—</span>
+        <span class="gip-stat-lbl">On Job</span>
+      </div>
+      <div class="gip-stat">
+        <span class="gip-stat-val" id="statTotal">—</span>
+        <span class="gip-stat-lbl">Total Online</span>
+      </div>
+      <div class="gip-stat">
+        <span class="gip-stat-val" id="statJobs">—</span>
+        <span class="gip-stat-lbl">Active Jobs</span>
+      </div>
+      <div class="gip-stat">
+        <span class="gip-stat-val" id="statAlerts" style="color:#ff4444;">0</span>
+        <span class="gip-stat-lbl">Alerts</span>
+      </div>
+    </div>
+
+    <select id="gipRegionSel" onchange="gipSetRegion(this.value)">
+      <option value="nairobi">Nairobi</option>
+      <option value="mombasa">Mombasa</option>
+      <option value="kisumu">Kisumu</option>
+      <option value="nakuru">Nakuru</option>
+      <option value="eldoret">Eldoret</option>
+      <option value="thika">Thika</option>
+    </select>
+
+    <button id="gipAlertBtn" onclick="gipShowAlertsPanel()" title="Alerts">
+      🔔
+      <span id="gipAlertBadge"></span>
+    </button>
+
+    <button id="gipMobileToggle" onclick="gipToggleSidebar()">☰</button>
+  </header>
+
+  <!-- ── Body ───────────────────────────────────────────────── -->
+  <div id="gipBody">
+
+    <!-- ── Left Sidebar ───────────────────────────────────────── -->
+    <aside id="gipSidebar">
+      <!-- Tile layer switcher -->
+      <div class="gip-layer-row">
+        <button class="gip-layer-btn active" data-layer="dark"      onclick="gipSetLayer('dark',this)">Dark</button>
+        <button class="gip-layer-btn"        data-layer="standard"  onclick="gipSetLayer('standard',this)">OSM</button>
+        <button class="gip-layer-btn"        data-layer="satellite" onclick="gipSetLayer('satellite',this)">Sat</button>
+        <button class="gip-layer-btn"        data-layer="terrain"   onclick="gipSetLayer('terrain',this)">Terrain</button>
+        <button class="gip-layer-btn"        data-layer="light"     onclick="gipSetLayer('light',this)">Light</button>
+      </div>
+
+      <!-- Module filter -->
+      <div class="gip-module-row">
+        <div class="gip-module-lbl">Modules</div>
+        <div class="gip-modules">
+          <button class="gip-module-chip active" data-mod="delivery"   onclick="gipToggleModule('delivery',this)">📦 Delivery</button>
+          <button class="gip-module-chip active" data-mod="food"       onclick="gipToggleModule('food',this)">🍔 Food</button>
+          <button class="gip-module-chip active" data-mod="rides"      onclick="gipToggleModule('rides',this)">🚗 Rides</button>
+          <button class="gip-module-chip active" data-mod="mechanics"  onclick="gipToggleModule('mechanics',this)">🔧 Mechanics</button>
+          <button class="gip-module-chip active" data-mod="healthcare" onclick="gipToggleModule('healthcare',this)">🏥 Health</button>
+          <button class="gip-module-chip"        data-mod="emergency"  onclick="gipToggleModule('emergency',this)">🚨 Emergency</button>
+        </div>
+      </div>
+
+      <!-- View tabs -->
+      <div class="gip-view-tabs">
+        <button class="gip-view-tab active" onclick="gipSetView('fleet',this)">Fleet</button>
+        <button class="gip-view-tab"        onclick="gipSetView('heat',this)">Heat</button>
+        <button class="gip-view-tab"        onclick="gipSetView('search',this)">Search</button>
+      </div>
+
+      <!-- Asset list / heat controls / search (swapped by view) -->
+      <div id="gipAssetList"></div>
+    </aside>
+
+    <!-- ── Map ────────────────────────────────────────────────── -->
+    <main id="gipMain">
+      <div id="gipMap"></div>
+
+      <!-- Map overlay buttons -->
+      <div id="gipMapControls">
+        <button class="gip-map-btn" id="btnHeatmap" onclick="gipToggleHeatmap()">🔥 Heatmap</button>
+        <button class="gip-map-btn" id="btnCluster" onclick="gipToggleCluster()">📍 Cluster</button>
+        <button class="gip-map-btn" onclick="gipLocateMe()">📍 Locate Me</button>
+        <button class="gip-map-btn" onclick="gipFitAll()">⊡ Fit All</button>
+      </div>
+    </main>
+
+    <!-- ── Right Panel ──────────────────────────────────────── -->
+    <aside id="gipRight">
+      <div class="gip-panel-tabs">
+        <button class="gip-panel-tab active" onclick="gipRightTab('jobs',this)">Jobs</button>
+        <button class="gip-panel-tab"        onclick="gipRightTab('alerts',this)">Alerts</button>
+        <button class="gip-panel-tab"        onclick="gipRightTab('dispatch',this)">Dispatch</button>
+        <button class="gip-panel-tab"        onclick="gipRightTab('analytics',this)">Analytics</button>
+      </div>
+      <div class="gip-panel-body" id="gipRightBody">
+        <!-- Populated dynamically -->
+        <div style="padding:20px;color:rgba(255,255,255,0.25);font-size:12px;text-align:center;">Loading jobs…</div>
+      </div>
+    </aside>
+
+  </div><!-- /#gipBody -->
+</div><!-- /#gipShell -->
+
+<!-- Offline banner -->
+<div id="gipOfflineBanner">⚠️ You're offline — GIP is operating in read-only cached mode. Data may be stale.</div>
+
+<!-- ── Firebase & GIP modules ─────────────────────────────── -->
+<script type="module">
+import { getFirestore, collection, doc, onSnapshot, query, where, orderBy, limit }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+/* ── Use firebase.js which is already initialised on every SOKONI page ── */
+await import('./firebase.js');
+const db   = getFirestore(window.firebaseApp);
+const auth = getAuth(window.firebaseApp);
+
+/* expose for GIP modules */
+window._db   = db;
+window._auth = auth;
+
+/* ── Import GIP modules ── */
+const [
+  { default: GIPEngine },
+  { default: DispatchEngine },
+  { default: GIPAnalytics },
+] = await Promise.all([
+  import('./sokoni-gip.js'),
+  import('./sokoni-gip-dispatch.js'),
+  import('./sokoni-gip-analytics.js'),
+]);
+
+/* ── State ── */
+const gip        = new GIPEngine();
+const dispatch   = new DispatchEngine(gip);
+const analytics  = new GIPAnalytics({ region: 'nairobi' });
+let   activeModules = new Set(['delivery','food','rides','mechanics','healthcare']);
+let   heatVisible   = false;
+let   rightTab      = 'jobs';
+let   unresolvedAlerts = 0;
+
+/* ── Init map ── */
+await gip.init({
+  containerId: 'gipMap',
+  region:      'nairobi',
+  layer:       'dark',
+  modules:     [...activeModules],
+  cluster:     true,
+});
+
+/* Expose to window for onclick handlers */
+window._gip      = gip;
+window._dispatch = dispatch;
+window._analytics = analytics;
+
+/* ── Real-time asset updates → sidebar list ── */
+gip.on('gip:tick', ({ count }) => _updateStats());
+gip.on('asset:updated', asset => _updateAssetCard(asset));
+gip.on('asset:removed', ({ assetId }) => {
+  document.getElementById('assetCard-' + assetId)?.remove();
+});
+
+gip.on('gip:offline', () => {
+  document.getElementById('gipOfflineBanner').classList.add('show');
+});
+gip.on('gip:online', () => {
+  document.getElementById('gipOfflineBanner').classList.remove('show');
+});
+
+gip.on('gip:alert', alert => {
+  unresolvedAlerts++;
+  _updateAlertBadge();
+  if (rightTab === 'alerts') _renderAlerts();
+});
+
+/* ── Active jobs subscription ── */
+const _unsubJobs = dispatch.watchActiveJobs('nairobi', jobs => {
+  document.getElementById('statJobs').textContent = jobs.length;
+  if (rightTab === 'jobs') _renderJobs(jobs);
+});
+
+/* ── Unresolved alerts subscription ── */
+const _unsubAlerts = onSnapshot(
+  query(collection(db, 'gipAlerts'), where('resolved','==',false), orderBy('createdAt','desc'), limit(50)),
+  snap => {
+    unresolvedAlerts = snap.size;
+    _updateAlertBadge();
+    if (rightTab === 'alerts') _renderAlerts(snap.docs.map(d=>d.data()));
+  }
+);
+
+/* ──────────────────────────────────────────────────────────
+   RENDER HELPERS
+────────────────────────────────────────────────────────── */
+
+function _updateStats() {
+  const s = gip.getStats();
+  document.getElementById('statAvail').textContent = s.available;
+  document.getElementById('statBusy').textContent  = s.busy + s.en_route;
+  document.getElementById('statTotal').textContent = s.total;
+}
+
+function _updateAlertBadge() {
+  const badge = document.getElementById('gipAlertBadge');
+  badge.textContent = unresolvedAlerts > 9 ? '9+' : unresolvedAlerts;
+  badge.classList.toggle('show', unresolvedAlerts > 0);
+  document.getElementById('statAlerts').textContent = unresolvedAlerts;
+}
+
+const STATUS_COLOR = { available:'#71ff00', busy:'#00aaff', en_route:'#ffc107', offline:'rgba(255,255,255,0.2)', maintenance:'#ff9800', emergency:'#ff4444' };
+const MODULE_EMOJI = { delivery:'📦', food:'🍔', rides:'🚗', mechanics:'🔧', healthcare:'🏥', emergency:'🚨', unknown:'📍' };
+
+function _updateAssetCard(asset) {
+  const list = document.getElementById('gipAssetList');
+  const existing = document.getElementById('assetCard-' + asset.assetId);
+  const color = STATUS_COLOR[asset.status] ?? 'rgba(255,255,255,0.2)';
+  const emoji = MODULE_EMOJI[asset.module] ?? '📍';
+  const html = `
+    <div class="gip-asset-item gip-fade-in" id="assetCard-${asset.assetId}"
+         onclick="window._gip.focusAsset('${asset.assetId}')">
+      <div class="gip-asset-avatar" style="--status-color:${color};">${emoji}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="gip-asset-name">${asset.name ?? asset.assetId}</div>
+        <div class="gip-asset-meta">${asset.module ?? '—'} · ${(asset.status ?? '').replace(/_/g,' ')}</div>
+      </div>
+      <div class="gip-dot ${asset.status ?? 'offline'}"></div>
+      ${asset.speed ? `<div class="gip-asset-speed">${asset.speed}km/h</div>` : ''}
+    </div>`;
+  if (existing) { existing.outerHTML = html; }
+  else { list.insertAdjacentHTML('beforeend', html); }
+}
+
+function _renderJobs(jobs) {
+  const body = document.getElementById('gipRightBody');
+  if (!jobs.length) {
+    body.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.2);font-size:12px;text-align:center;">No active jobs.</div>';
+    return;
+  }
+  body.innerHTML = jobs.map(j => `
+    <div class="gip-job-card">
+      <div class="gip-job-header">
+        <span class="gip-job-id">${j.id}</span>
+        <span class="gip-job-status ${j.status}">${j.status.replace(/_/g,' ')}</span>
+      </div>
+      <div class="gip-job-row"><span class="gip-job-icon">📦</span><span class="gip-job-text">${j.module ?? '—'}</span></div>
+      <div class="gip-job-row"><span class="gip-job-icon">📍</span><span class="gip-job-text">${j.pickupAddress || '—'}</span></div>
+      <div class="gip-job-row"><span class="gip-job-icon">🏁</span><span class="gip-job-text">${j.dropoffAddress || '—'}</span></div>
+      ${j.estimatedETAMin ? `<div class="gip-job-row"><span class="gip-job-icon">⏱</span><span class="gip-job-text">ETA ~${j.estimatedETAMin} min · ${j.distanceKm ?? '—'} km</span></div>` : ''}
+      ${j.assignedAssetId ? `<div class="gip-job-row"><span class="gip-job-icon">🚗</span><span class="gip-job-text">${j.assignedAssetId}</span></div>` : ''}
+    </div>`).join('');
+}
+
+function _renderAlerts(alertsArr = null) {
+  const body = document.getElementById('gipRightBody');
+  if (!alertsArr) { body.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.2);font-size:12px;text-align:center;">Loading…</div>'; return; }
+  if (!alertsArr.length) { body.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.2);font-size:12px;text-align:center;">No active alerts. ✅</div>'; return; }
+  const ALERT_ICON = { speeding:'⚡', geofence_breach:'🚧', offline:'📴', low_battery:'🔋', breakdown:'🔧', sos:'🆘' };
+  body.innerHTML = alertsArr.map(a => `
+    <div class="gip-alert-card ${a.severity ?? ''}">
+      <div class="gip-alert-icon">${ALERT_ICON[a.type] ?? '⚠️'}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="gip-alert-msg">${a.message ?? a.type}</div>
+        <div class="gip-alert-time">${a.assetId} · ${a.severity ?? '—'}</div>
+      </div>
+      <button class="gip-alert-resolve" onclick="gipResolveAlert('${a.id}')">Resolve</button>
+    </div>`).join('');
+}
+
+function _renderDispatch() {
+  document.getElementById('gipRightBody').innerHTML = `
+    <div id="gipDispatchPanel">
+      <p style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;line-height:1.5;">
+        Manually trigger a dispatch or cancel a pending job.
+      </p>
+      <button class="gip-dispatch-btn" onclick="gipManualDispatch()">➕ New Test Dispatch</button>
+      <button class="gip-dispatch-btn danger" onclick="gipCancelPending()">✕ Cancel Oldest Pending</button>
+      <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,0.2);">
+        Smart dispatch runs automatically. Manual controls are for overrides and testing only.
+      </div>
+    </div>`;
+}
+
+async function _renderAnalytics() {
+  document.getElementById('gipRightBody').innerHTML = '<div style="padding:16px;font-size:11px;color:rgba(255,255,255,0.3);">Computing…</div>';
+  const summary = await analytics.getFleetSummary('nairobi').catch(() => null);
+  if (!summary) { document.getElementById('gipRightBody').innerHTML = '<div style="padding:16px;font-size:11px;color:rgba(255,255,255,0.3);">Could not load analytics.</div>'; return; }
+  document.getElementById('gipRightBody').innerHTML = `
+    <div class="gip-analytics-row">
+      <div class="gip-anlt-card"><div class="gip-anlt-val">${summary.total}</div><div class="gip-anlt-lbl">Online</div></div>
+      <div class="gip-anlt-card"><div class="gip-anlt-val" style="color:#71ff00;">${summary.available}</div><div class="gip-anlt-lbl">Available</div></div>
+      <div class="gip-anlt-card"><div class="gip-anlt-val" style="color:#00aaff;">${summary.busy}</div><div class="gip-anlt-lbl">Busy</div></div>
+      <div class="gip-anlt-card"><div class="gip-anlt-val" style="color:#ffc107;">${summary.en_route}</div><div class="gip-anlt-lbl">En Route</div></div>
+    </div>
+    <div style="padding:0 12px 12px;">
+      <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">By Module</div>
+      ${Object.entries(summary.byModule ?? {}).map(([m,c]) =>
+        `<div style="display:flex;justify-content:space-between;font-size:11px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <span>${MODULE_EMOJI[m]??'📍'} ${m}</span>
+          <span style="font-weight:700;color:#71ff00;">${c}</span>
+        </div>`
+      ).join('')}
+    </div>`;
+}
+
+/* ──────────────────────────────────────────────────────────
+   WINDOW-LEVEL HANDLERS (called by onclick attributes)
+────────────────────────────────────────────────────────── */
+
+window.gipSetLayer = (layer, btn) => {
+  gip.setLayer(layer);
+  document.querySelectorAll('.gip-layer-btn').forEach(b => b.classList.remove('active'));
+  btn?.classList.add('active');
+};
+
+window.gipSetRegion = (region) => {
+  gip.setRegion(region);
+  analytics._region = region;
+};
+
+window.gipToggleModule = (mod, btn) => {
+  btn?.classList.toggle('active');
+  if (activeModules.has(mod)) activeModules.delete(mod);
+  else activeModules.add(mod);
+  gip.setModules([...activeModules]);
+};
+
+window.gipSetView = (view, btn) => {
+  document.querySelectorAll('.gip-view-tab').forEach(b => b.classList.remove('active'));
+  btn?.classList.add('active');
+  const list = document.getElementById('gipAssetList');
+  if (view === 'heat') {
+    list.innerHTML = `<div style="padding:12px;">
+      <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:8px;">HEAT MODULE</div>
+      ${['delivery','food','rides','mechanics','healthcare'].map(m=>
+        `<button onclick="gipHeatModule('${m}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.7);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px;">
+          ${MODULE_EMOJI[m]??'📍'} ${m.charAt(0).toUpperCase()+m.slice(1)}
+        </button>`
+      ).join('')}
+      <button onclick="gip.hideHeatmap();document.getElementById('btnHeatmap').classList.remove('active');" style="display:block;width:100%;text-align:left;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,68,68,0.2);background:rgba(255,68,68,0.05);color:#ff6b6b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;">
+        ✕ Clear heatmap
+      </button>
+    </div>`;
+  } else if (view === 'search') {
+    list.innerHTML = `<div style="padding:12px;">
+      <input id="gipSearch" placeholder="Search asset ID, name…"
+        oninput="gipSearch(this.value)"
+        style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:white;font-size:12px;font-family:inherit;outline:none;">
+      <div id="gipSearchResults" style="margin-top:8px;"></div>
+    </div>`;
+  } else {
+    list.innerHTML = '';
+    gip.getAssets().forEach(a => _updateAssetCard(a));
+  }
+};
+
+window.gipHeatModule = (module) => {
+  gip.showHeatmap(module);
+  document.getElementById('btnHeatmap').classList.add('active');
+};
+
+window.gipToggleHeatmap = () => {
+  const btn = document.getElementById('btnHeatmap');
+  if (heatVisible) { gip.hideHeatmap(); btn.classList.remove('active'); }
+  else { gip.showHeatmap(); btn.classList.add('active'); }
+  heatVisible = !heatVisible;
+};
+
+window.gipToggleCluster = () => {
+  document.getElementById('btnCluster').classList.toggle('active');
+};
+
+window.gipLocateMe = () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    gip.getMap()?.setView([pos.coords.latitude, pos.coords.longitude], 15, { animate: true });
+  }, () => {}, { enableHighAccuracy: true, timeout: 6000 });
+};
+
+window.gipFitAll = () => {
+  const assets = gip.getAssets();
+  if (!assets.length) return;
+  const lls = assets.map(a => [a.lat, a.lng]);
+  gip.getMap()?.fitBounds(L.latLngBounds(lls), { padding: [40, 40], maxZoom: 14, animate: true });
+};
+
+window.gipRightTab = (tab, btn) => {
+  rightTab = tab;
+  document.querySelectorAll('.gip-panel-tab').forEach(b => b.classList.remove('active'));
+  btn?.classList.add('active');
+  if (tab === 'jobs')      { /* jobs listener handles render */ }
+  else if (tab === 'alerts')   _renderAlerts();
+  else if (tab === 'dispatch') _renderDispatch();
+  else if (tab === 'analytics') _renderAnalytics();
+};
+
+window.gipShowAlertsPanel = () => {
+  document.querySelectorAll('.gip-panel-tab').forEach((b, i) => b.classList.toggle('active', i === 1));
+  rightTab = 'alerts';
+  _renderAlerts();
+  document.getElementById('gipRight').style.display = 'flex';
+};
+
+window.gipResolveAlert = async (alertId) => {
+  await gip.resolveAlert(alertId);
+};
+
+window.gipToggleSidebar = () => {
+  document.getElementById('gipSidebar').classList.toggle('mobile-open');
+};
+
+window.gipSearch = (term) => {
+  const results = document.getElementById('gipSearchResults');
+  if (!term.trim()) { results.innerHTML = ''; return; }
+  const matches = gip.getAssets().filter(a =>
+    (a.name ?? '').toLowerCase().includes(term.toLowerCase()) ||
+    (a.assetId ?? '').toLowerCase().includes(term.toLowerCase())
+  ).slice(0, 10);
+  if (!matches.length) { results.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.25);padding:8px 0;">No results.</div>'; return; }
+  results.innerHTML = matches.map(a => `
+    <div onclick="window._gip.focusAsset('${a.assetId}')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''">
+      <span style="font-size:16px;">${MODULE_EMOJI[a.module]??'📍'}</span>
+      <div><div style="font-size:11px;font-weight:700;">${a.name ?? a.assetId}</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">${a.module ?? '—'} · ${a.status ?? '—'}</div></div>
+    </div>`).join('');
+};
+
+window.gipManualDispatch = async () => {
+  const reg = document.getElementById('gipRegionSel').value;
+  const jobs = await dispatch.getActiveJobs(reg);
+  alert(`Dispatch engine is active. ${jobs.length} active jobs in ${reg}. Use the SOKONI seller/driver apps to create real dispatch requests.`);
+};
+
+window.gipCancelPending = async () => {
+  const jobs = await dispatch.getActiveJobs('nairobi');
+  const pending = jobs.find(j => j.status === 'pending');
+  if (!pending) { alert('No pending jobs to cancel.'); return; }
+  if (confirm(`Cancel job ${pending.id}?`)) {
+    await dispatch.cancelJob(pending.id, 'Admin cancelled from GIP command centre');
+  }
+};
+
+/* ── Cleanup on unload ── */
+window.addEventListener('beforeunload', () => {
+  _unsubJobs?.();
+  _unsubAlerts?.();
+  gip.destroy();
+  dispatch.destroy();
+  analytics.destroy();
+});
+
+/* ── Connectivity banner ── */
+window.addEventListener('offline', () => document.getElementById('gipOfflineBanner').classList.add('show'));
+window.addEventListener('online',  () => document.getElementById('gipOfflineBanner').classList.remove('show'));
+if (!navigator.onLine) document.getElementById('gipOfflineBanner').classList.add('show');
+
+</script>
+</body>
+</html>

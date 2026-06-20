@@ -1,0 +1,466 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tournament — SOKONI Sports Hub</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f59e0b">
+<script src="security.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.tn-nav{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.tn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
+.tn-nav-title{font-size:14px;font-weight:800;flex:1;}
+.tn-hero{padding:20px 16px 16px;background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(8,8,8,0));}
+.tn-sport-icon{font-size:48px;margin-bottom:10px;}
+.tn-name{font-size:22px;font-weight:900;line-height:1.2;margin-bottom:6px;}
+.tn-meta{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.8;}
+.tn-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.tn-badge{padding:4px 10px;border-radius:7px;font-size:10px;font-weight:900;}
+.tn-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.tn-stat{text-align:center;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 8px;}
+.tn-stat-num{font-size:20px;font-weight:900;color:#f59e0b;}
+.tn-stat-lbl{font-size:9px;color:rgba(255,255,255,0.35);margin-top:2px;}
+.tn-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.tn-tabs::-webkit-scrollbar{display:none;}
+.tn-tab{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;flex-shrink:0;transition:all .2s;}
+.tn-tab.active{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.35);color:#f59e0b;}
+.tn-body{padding:16px;}
+/* FIXTURE */
+.fix-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;}
+.fix-teams{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.fix-team{flex:1;text-align:center;}
+.fix-team-name{font-size:12px;font-weight:800;margin-bottom:3px;}
+.fix-team-icon{font-size:28px;margin-bottom:4px;}
+.fix-score{font-size:22px;font-weight:900;color:#f59e0b;text-align:center;min-width:60px;}
+.fix-score-dash{font-size:18px;color:rgba(255,255,255,0.2);margin:0 4px;}
+.fix-meta{text-align:center;margin-top:10px;font-size:10px;color:rgba(255,255,255,0.35);}
+.fix-status{display:inline-block;padding:3px 8px;border-radius:5px;font-size:9px;font-weight:900;margin-top:4px;}
+/* STANDINGS */
+.std-table{width:100%;border-collapse:collapse;}
+.std-table th{font-size:9px;color:rgba(255,255,255,0.3);font-weight:700;text-align:center;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.std-table th:first-child{text-align:left;padding-left:8px;}
+.std-table td{font-size:11px;padding:10px 4px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);}
+.std-table td:first-child{text-align:left;padding-left:8px;display:flex;align-items:center;gap:8px;}
+.std-pos{font-size:12px;font-weight:900;color:#f59e0b;min-width:16px;}
+.std-team-icon{font-size:16px;}
+.std-team-name{font-size:11px;font-weight:700;}
+.std-pts{font-size:13px;font-weight:900;color:#f59e0b;}
+/* TEAMS REGISTERED */
+.reg-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.reg-icon{font-size:28px;}
+.reg-name{font-size:12px;font-weight:800;}
+.reg-meta{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+/* AWARDS */
+.award-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:14px;}
+.award-icon{font-size:36px;flex-shrink:0;}
+.award-name{font-size:13px;font-weight:800;}
+.award-val{font-size:12px;color:#f59e0b;font-weight:700;margin-top:3px;}
+.award-desc{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
+/* REGISTER BUTTON */
+.tn-register-bar{position:sticky;bottom:65px;left:0;right:0;padding:10px 16px;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.07);z-index:40;}
+.tn-register-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;}
+.tn-register-btn:disabled{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.3);cursor:not-allowed;}
+/* MODAL */
+.tn-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:none;align-items:flex-end;justify-content:center;}
+.tn-modal-overlay.open{display:flex;}
+.tn-modal{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px 16px;width:100%;max-width:540px;max-height:85vh;overflow-y:auto;}
+.tn-modal-title{font-size:16px;font-weight:900;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+.tn-modal-close{background:rgba(255,255,255,0.07);border:none;border-radius:50%;width:30px;height:30px;color:white;font-size:16px;cursor:pointer;}
+.tn-field{margin-bottom:14px;}
+.tn-field label{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:5px;}
+.tn-field input,.tn-field select,.tn-field textarea{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;}
+.tn-field input:focus,.tn-field select:focus,.tn-field textarea:focus{outline:none;border-color:rgba(245,158,11,0.4);}
+.tn-field select option{background:#111;}
+.tn-submit-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+.empty{text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-sports.js"></script>
+
+<nav class="tn-nav">
+  <a href="sports-hub.html" class="tn-back">←</a>
+  <span class="tn-nav-title" id="pageTitle">Tournament</span>
+  <button onclick="openShareModal()" style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:white;">📤</button>
+</nav>
+
+<div id="mainContent"></div>
+
+<!-- REGISTER BAR (shown when open) -->
+<div class="tn-register-bar" id="registerBar" style="display:none;">
+  <button class="tn-register-btn" id="registerBtn" onclick="openRegisterModal()">🏆 Register Your Team</button>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav style="position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0;z-index:50;backdrop-filter:blur(16px);">
+  <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-home" style="font-size:18px;"></i><span>Home</span></a>
+  <a href="sports-hub.html" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:#f59e0b;text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-trophy" style="font-size:18px;"></i><span>Sports</span></a>
+  <a href="javascript:void(0)" role="button" onclick="openRegisterModal();" aria-label="Register for tournament" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-plus-circle" style="font-size:18px;" aria-hidden="true"></i><span>Register</span></a>
+  <a href="sports-hub.html#sCommunity" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-users" style="font-size:18px;"></i><span>Community</span></a>
+</nav>
+
+<!-- REGISTER MODAL -->
+<div class="tn-modal-overlay" id="registerModal">
+  <div class="tn-modal">
+    <div class="tn-modal-title">🏆 Register for Tournament<button class="tn-modal-close" onclick="closeModal('registerModal')">✕</button></div>
+    <div id="registerModalBody"></div>
+  </div>
+</div>
+
+<!-- RESULT MODAL (admin) -->
+<div class="tn-modal-overlay" id="resultModal">
+  <div class="tn-modal">
+    <div class="tn-modal-title">⚽ Post Match Result<button class="tn-modal-close" onclick="closeModal('resultModal')">✕</button></div>
+    <div id="resultModalBody"></div>
+  </div>
+</div>
+
+<script>
+const S = window.SokoniSports;
+const params = new URLSearchParams(location.search);
+const TN_ID = params.get('id') || 'tn001';
+let tn = null;
+let activeTab = 'overview';
+
+function init() {
+  tn = S.getTournamentById(TN_ID);
+  if (!tn) { document.getElementById('mainContent').innerHTML = '<div class="empty"><div style="font-size:48px;margin-bottom:12px;">🏆</div><p>Tournament not found.</p><a href="sports-hub.html" style="color:#f59e0b;">← Back to Sports Hub</a></div>'; return; }
+  document.title = tn.name + ' — SOKONI Sports';
+  document.getElementById('pageTitle').textContent = tn.name;
+  renderHero();
+  renderStats();
+  renderTabs();
+  renderContent('overview');
+  if (tn.status === 'registration' || tn.status === 'upcoming') {
+    document.getElementById('registerBar').style.display = 'block';
+  }
+}
+
+function renderHero() {
+  const sc = S.sportColor(tn.sport);
+  const sb = S.statusBadge(tn.status);
+  const el = document.getElementById('mainContent');
+  const heroDiv = document.createElement('div');
+  heroDiv.className = 'tn-hero';
+  heroDiv.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+  heroDiv.innerHTML = `
+    <div class="tn-sport-icon">${S.sportIcon(tn.sport)}</div>
+    <div class="tn-name">${tn.name}</div>
+    <div class="tn-meta">
+      📍 ${tn.location}<br>
+      🗓 ${tn.startDate}${tn.endDate?' → '+tn.endDate:''}<br>
+      🏅 ${tn.format||'League'} · Organized by ${tn.organizer||'SOKONI Sports'}
+    </div>
+    <div class="tn-badges">
+      <span class="tn-badge" style="background:${sb.c}15;border:1px solid ${sb.c}30;color:${sb.c};">${sb.l}</span>
+      <span class="tn-badge" style="background:${sc}15;border:1px solid ${sc}25;color:${sc};">${S.sportIcon(tn.sport)} ${tn.sport}</span>
+      ${tn.prize?`<span class="tn-badge" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#22c55e;">🏅 ${tn.prize}</span>`:''}
+      ${tn.entryFee?`<span class="tn-badge" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b;">Entry: KES ${S.fmt(tn.entryFee)}</span>`:'<span class="tn-badge" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#22c55e;">Free Entry</span>'}
+    </div>`;
+  el.appendChild(heroDiv);
+  /* stats + tabs containers */
+  const statsDiv = document.createElement('div'); statsDiv.id = 'tnStats'; el.appendChild(statsDiv);
+  const tabsDiv = document.createElement('div'); tabsDiv.id = 'tnTabs'; el.appendChild(tabsDiv);
+  const bodyDiv = document.createElement('div'); bodyDiv.className = 'tn-body'; bodyDiv.id = 'tnBody'; el.appendChild(bodyDiv);
+}
+
+function renderStats() {
+  document.getElementById('tnStats').innerHTML = `
+    <div class="tn-stats">
+      <div class="tn-stat"><div class="tn-stat-num">${tn.teamsRegistered||0}</div><div class="tn-stat-lbl">Teams Registered</div></div>
+      <div class="tn-stat"><div class="tn-stat-num">${tn.maxTeams}</div><div class="tn-stat-lbl">Max Teams</div></div>
+      <div class="tn-stat"><div class="tn-stat-num">${tn.prize||'TBD'}</div><div class="tn-stat-lbl">Prize</div></div>
+    </div>`;
+}
+
+const TAB_LIST = [
+  {id:'overview',  label:'📋 Overview'},
+  {id:'fixtures',  label:'📅 Fixtures'},
+  {id:'standings', label:'📊 Standings'},
+  {id:'teams',     label:'🤝 Teams'},
+  {id:'awards',    label:'🏅 Awards'},
+];
+
+function renderTabs() {
+  document.getElementById('tnTabs').innerHTML = `<div class="tn-tabs">${TAB_LIST.map(t=>
+    `<button class="tn-tab${t.id===activeTab?' active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`
+  ).join('')}</div>`;
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  renderTabs();
+  renderContent(tab);
+}
+
+function renderContent(tab) {
+  const el = document.getElementById('tnBody');
+  if (tab === 'overview') renderOverview(el);
+  else if (tab === 'fixtures') renderFixtures(el);
+  else if (tab === 'standings') renderStandings(el);
+  else if (tab === 'teams') renderTeams(el);
+  else if (tab === 'awards') renderAwards(el);
+}
+
+function renderOverview(el) {
+  const spotsLeft = tn.maxTeams - (tn.teamsRegistered||0);
+  el.innerHTML = `
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:8px;">About this Tournament</div>
+      <p style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.7;">${tn.description||'No description available.'}</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+      ${infoBox('🏆 Format', tn.format||'League')}
+      ${infoBox('📅 Start', tn.startDate)}
+      ${infoBox('📍 Venue', tn.location)}
+      ${infoBox('💰 Entry', tn.entryFee?'KES '+S.fmt(tn.entryFee):'Free')}
+      ${infoBox('🤝 Max Teams', tn.maxTeams)}
+      ${infoBox('🏅 Prize', tn.prize||'TBD')}
+    </div>
+    ${spotsLeft > 0 && (tn.status==='registration'||tn.status==='upcoming') ? `
+    <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:14px;text-align:center;margin-bottom:14px;">
+      <div style="font-size:14px;font-weight:900;color:#f59e0b;">${spotsLeft} spot${spotsLeft!==1?'s':''} remaining!</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Register your team before spots fill up.</div>
+      <button onclick="openRegisterModal()" style="margin-top:10px;padding:10px 24px;background:#f59e0b;border:none;border-radius:10px;color:#080808;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🏆 Register Now</button>
+    </div>` : tn.status==='ongoing' ? `
+    <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);border-radius:12px;padding:14px;text-align:center;margin-bottom:14px;">
+      <div style="font-size:14px;font-weight:900;color:#22c55e;">Tournament In Progress</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Check the Fixtures & Standings tabs for live updates.</div>
+    </div>` : ''}
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:10px;">Rules & Regulations</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.8;">
+        ${(tn.rules||defaultRules()).map(r=>`<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);">✓ ${r}</div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function defaultRules() {
+  return [
+    'All teams must register before the deadline',
+    'Players must be registered members of their respective teams',
+    'Matches will be played according to official sport rules',
+    'Tournament decisions by the organizer are final',
+    'Fair play and sportsmanship are mandatory',
+    'Any protests must be submitted within 24 hours of a match',
+  ];
+}
+
+function infoBox(label, value) {
+  return `<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px;">
+    <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:3px;">${label}</div>
+    <div style="font-size:12px;font-weight:800;">${value}</div>
+  </div>`;
+}
+
+function renderFixtures(el) {
+  const fixtures = S.getFixtures(TN_ID);
+  if (!fixtures.length) {
+    el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:10px;">📅</div><p style="font-weight:700;">No fixtures yet</p><p style="font-size:11px;margin-top:6px;">Fixtures will be posted once the tournament begins.</p></div>`;
+    return;
+  }
+  const grouped = {};
+  fixtures.forEach(f => { const r = f.round||'Round 1'; if(!grouped[r]) grouped[r]=[]; grouped[r].push(f); });
+  el.innerHTML = Object.entries(grouped).map(([round, matches]) => `
+    <div style="font-size:12px;font-weight:900;color:rgba(255,255,255,0.4);margin-bottom:8px;margin-top:${round==='Round 1'?0:16}px;">${round}</div>
+    ${matches.map(f => {
+      const played = f.status === 'played' || f.status === 'completed';
+      const live = f.status === 'live';
+      const sc = live ? '#22c55e' : played ? 'rgba(255,255,255,0.2)' : '#f59e0b';
+      const sl = live ? 'LIVE' : played ? 'FT' : f.date||'TBD';
+      return `<div class="fix-card">
+        <div class="fix-teams">
+          <div class="fix-team">
+            <div class="fix-team-icon">${S.sportIcon(f.sport||tn.sport)}</div>
+            <div class="fix-team-name">${f.homeTeam}</div>
+          </div>
+          <div style="text-align:center;">
+            ${played||live
+              ? `<div class="fix-score">${f.homeScore??'—'}<span class="fix-score-dash">:</span>${f.awayScore??'—'}</div>`
+              : `<div style="font-size:18px;color:rgba(255,255,255,0.2);font-weight:700;">VS</div>`}
+            <div class="fix-status" style="background:${sc}15;border:1px solid ${sc}25;color:${sc};">${sl}</div>
+          </div>
+          <div class="fix-team">
+            <div class="fix-team-icon">${S.sportIcon(f.sport||tn.sport)}</div>
+            <div class="fix-team-name">${f.awayTeam}</div>
+          </div>
+        </div>
+        <div class="fix-meta">📍 ${f.venue||tn.location} · 🗓 ${f.date||'TBD'} ${f.time?'@ '+f.time:''}</div>
+      </div>`;
+    }).join('')}`).join('');
+}
+
+function renderStandings(el) {
+  const standings = S.getStandings(TN_ID);
+  if (!standings.length) {
+    el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:10px;">📊</div><p style="font-weight:700;">No standings yet</p><p style="font-size:11px;margin-top:6px;">Standings will update as matches are played.</p></div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden;">
+      <table class="std-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding-left:12px;">#  Team</th>
+            <th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${standings.map((row, i) => `
+            <tr style="${i===0?'background:rgba(245,158,11,0.04)':''}">
+              <td>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="std-pos" style="color:${i===0?'#f59e0b':i===1?'rgba(255,255,255,0.6)':i===2?'#f97316':'rgba(255,255,255,0.3)'}">${i+1}</span>
+                  <span style="font-size:14px;">${S.sportIcon(tn.sport)}</span>
+                  <span class="std-team-name">${row.team}</span>
+                </div>
+              </td>
+              <td>${row.played||0}</td>
+              <td style="color:#22c55e;font-weight:700;">${row.won||0}</td>
+              <td>${row.drawn||0}</td>
+              <td style="color:#ef4444;font-weight:700;">${row.lost||0}</td>
+              <td style="color:${(row.gd||0)>=0?'#22c55e':'#ef4444'};">${(row.gd||0)>0?'+':''}${row.gd||0}</td>
+              <td class="std-pts">${row.points||0}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:10px;text-align:center;">P=Played · W=Won · D=Draw · L=Lost · GD=Goal Difference · Pts=Points</div>`;
+}
+
+function renderTeams(el) {
+  const registered = S.getFixtures(TN_ID).reduce((acc, f) => {
+    if (f.homeTeam) acc.add(f.homeTeam);
+    if (f.awayTeam) acc.add(f.awayTeam);
+    return acc;
+  }, new Set());
+  const standings = S.getStandings(TN_ID).map(s => s.team);
+  const allTeams = [...new Set([...registered, ...standings])];
+  const allKnown = S.getTeams();
+
+  if (!allTeams.length) {
+    el.innerHTML = `<div class="empty"><div style="font-size:40px;margin-bottom:10px;">🤝</div><p style="font-weight:700;">No teams registered yet</p><p style="font-size:11px;margin-top:6px;">Be the first to register your team!</p></div>
+      ${tn.status==='registration'?`<div style="text-align:center;margin-top:14px;"><button onclick="openRegisterModal()" style="padding:12px 28px;background:#f59e0b;border:none;border-radius:10px;color:#080808;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🏆 Register Your Team</button></div>`:''}`;
+    return;
+  }
+
+  el.innerHTML = allTeams.map(name => {
+    const t = allKnown.find(x => x.name === name);
+    return `<div class="reg-card">
+      <div class="reg-icon">${t?.icon||S.sportIcon(tn.sport)}</div>
+      <div>
+        <div class="reg-name">${name}</div>
+        <div class="reg-meta">${t?`📍 ${t.location} · ${t.wins}W ${t.losses}L`:'Registered team'}</div>
+      </div>
+      ${t?.openToPlayers?`<div style="margin-left:auto;padding:3px 8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-size:9px;font-weight:900;color:#22c55e;">Recruiting</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderAwards(el) {
+  const awards = tn.awards || defaultAwards();
+  el.innerHTML = `
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;line-height:1.6;">Awards and prizes will be distributed at the conclusion of the tournament.</div>
+    ${awards.map(a => `
+      <div class="award-card">
+        <div class="award-icon">${a.icon}</div>
+        <div>
+          <div class="award-name">${a.name}</div>
+          <div class="award-val">${a.value}</div>
+          <div class="award-desc">${a.desc}</div>
+        </div>
+      </div>`).join('')}`;
+}
+
+function defaultAwards() {
+  return [
+    {icon:'🥇', name:'Champions Trophy', value: tn.prize||'KES 50,000', desc:'Winners take the championship title and trophy'},
+    {icon:'🥈', name:'Runners-Up', value:'KES 25,000', desc:'Second place certificate and prize'},
+    {icon:'🥉', name:'Third Place', value:'KES 10,000', desc:'Third place award'},
+    {icon:'⭐', name:'Best Player Award', value:'Certificate + Gift', desc:'Player with the best overall tournament performance'},
+    {icon:'🥅', name:'Golden Boot', value:'Trophy', desc:'Top goal scorer of the tournament'},
+    {icon:'🧤', name:'Best Goalkeeper', value:'Trophy', desc:'Goalkeeper with the most clean sheets'},
+  ];
+}
+
+function openRegisterModal() {
+  if (!tn) return;
+  const spotsLeft = tn.maxTeams - (tn.teamsRegistered||0);
+  document.getElementById('registerModalBody').innerHTML = `
+    <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;margin-bottom:16px;text-align:center;">
+      <div style="font-size:13px;font-weight:900;color:#f59e0b;">${tn.name}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">${spotsLeft} spots remaining · ${tn.entryFee?'Entry: KES '+S.fmt(tn.entryFee):'Free Entry'}</div>
+    </div>
+    <div class="tn-field"><label>Team Name</label><input type="text" id="rg_team" placeholder="Your team name" style="font-size:16px;"></div>
+    <div class="tn-field"><label>Captain / Contact Name</label><input type="text" id="rg_captain" placeholder="Full name" style="font-size:16px;"></div>
+    <div class="tn-field"><label>Phone Number</label><input type="tel" id="rg_phone" placeholder="07xx xxx xxx" style="font-size:16px;"></div>
+    <div class="tn-field"><label>Email (optional)</label><input type="email" id="rg_email" placeholder="team@email.com" style="font-size:16px;"></div>
+    <div class="tn-field"><label>Number of Players</label><input type="number" id="rg_players" placeholder="11" min="1" max="50" style="font-size:16px;"></div>
+    <div class="tn-field"><label>County / Location</label><input type="text" id="rg_county" placeholder="Nairobi" style="font-size:16px;"></div>
+    <div class="tn-field"><label>Additional Notes</label><textarea id="rg_notes" placeholder="Anything we should know…" style="font-size:16px;"></textarea></div>
+    <button class="tn-submit-btn" onclick="submitRegistration()">🏆 Submit Registration</button>
+    ${tn.entryFee?`<div style="font-size:11px;color:rgba(255,255,255,0.35);text-align:center;margin-top:10px;">Entry fee of KES ${S.fmt(tn.entryFee)} is payable on confirmation.</div>`:''}`;
+  document.getElementById('registerModal').classList.add('open');
+}
+
+function submitRegistration() {
+  const team = document.getElementById('rg_team').value.trim();
+  const captain = document.getElementById('rg_captain').value.trim();
+  const phone = document.getElementById('rg_phone').value.trim();
+  if (!team || !captain || !phone) { (window._skToast||alert)('Please fill in team name, captain name and phone number.'); return; }
+  const result = S.registerForTournament({
+    tournamentId: TN_ID,
+    teamName: team,
+    captain,
+    phone,
+    email: document.getElementById('rg_email').value,
+    players: document.getElementById('rg_players').value,
+    county: document.getElementById('rg_county').value,
+    notes: document.getElementById('rg_notes').value,
+  });
+  S.addNotification({type:'tournament', title:'Registration Submitted!', body:`${team} registered for ${tn.name}. Ref: ${result.id}`});
+  closeModal('registerModal');
+  renderStats();
+  (window._skToast||alert)('✅ Registration submitted!\n' + team + ' has been registered for ' + tn.name + '.\nRef: ' + result.id + '\nThe organizer will contact you on ' + phone);
+}
+
+function openShareModal() {
+  const url = location.href;
+  const text = `Check out ${tn?.name} on SOKONI Sports Hub!`;
+  if (navigator.share) {
+    navigator.share({title: tn?.name||'SOKONI Sports', text, url}).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(url).then(()=>(window._skToast||alert)('Tournament link copied!')).catch(()=>{});
+  }
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.addEventListener('click', e => {
+  ['registerModal','resultModal'].forEach(id => {
+    const modal = document.getElementById(id);
+    if (e.target === modal) modal.classList.remove('open');
+  });
+});
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

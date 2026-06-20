@@ -1,0 +1,695 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Cleaning & Laundry Services Kenya</title>
+  <meta name="description" content="Book professional cleaning, deep clean, laundry, carpet steam and fumigation services across Kenya. Verified providers — book same day on SOKONI.">
+  <meta property="og:title" content="SOKONI — Cleaning & Laundry Hub">
+  <meta property="og:description" content="House cleaning, office cleaning, mamafua, carpet steam, fumigation and more. Book verified cleaners across Nairobi & Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#00d4ff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI Cleaning">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#060a0f;color:white;min-height:100vh;padding-bottom:80px;}
+
+    /* ── NAV ── */
+    .cl-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(6,10,15,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);}
+    .cl-logo{height:32px;}
+    .cl-nav-right{display:flex;gap:8px;align-items:center;}
+    .cl-nav-link{padding:7px 13px;border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.55);text-decoration:none;font-size:12px;font-weight:600;transition:all .15s;}
+    .cl-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .cl-nav-book{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#00d4ff;}
+    .cl-nav-book:hover{background:rgba(0,212,255,0.18)!important;color:#00d4ff!important;}
+
+    /* ── HERO ── */
+    .cl-hero{background:linear-gradient(135deg,rgba(0,212,255,0.09),rgba(0,140,180,0.05),transparent);border-bottom:1px solid rgba(255,255,255,0.07);padding:32px 20px 28px;position:relative;overflow:hidden;}
+    .cl-hero::before{content:'🧹🧴🪣🫧✨';position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:80px;opacity:0.035;letter-spacing:-6px;pointer-events:none;}
+    .cl-hero-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.25);border-radius:999px;font-size:10px;font-weight:800;color:#00d4ff;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;}
+    .cl-hero h1{font-size:clamp(22px,5vw,38px);font-weight:900;line-height:1.1;margin-bottom:8px;}
+    .cl-hero h1 span{color:#00d4ff;}
+    .cl-hero p{font-size:16px;color:rgba(255,255,255,0.45);line-height:1.55;max-width:520px;margin-bottom:20px;}
+
+    /* Search bar */
+    .cl-search{display:flex;gap:8px;max-width:540px;margin-bottom:18px;}
+    .cl-search input{flex:1;padding:12px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;}
+    .cl-search input:focus{border-color:rgba(0,212,255,0.4);background:rgba(0,212,255,0.04);}
+    .cl-search input::placeholder{color:rgba(255,255,255,0.28);}
+    .cl-search-btn{padding:12px 20px;background:linear-gradient(135deg,#00d4ff,#0099cc);border:none;border-radius:11px;color:#060a0f;font-weight:900;font-size:16px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:filter .2s;}
+    .cl-search-btn:hover{filter:brightness(1.1);}
+
+    .cl-hero-stats{display:flex;gap:20px;flex-wrap:wrap;}
+    .cl-stat{font-size:11px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:5px;}
+    .cl-stat strong{color:#00d4ff;font-size:14px;font-weight:900;}
+
+    /* ── SERVICE TYPES ── */
+    .cl-types{padding:24px 20px 8px;}
+    .cl-section-title{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+    .cl-section-title h2{font-size:16px;font-weight:900;}
+    .cl-section-title span{flex:1;height:1px;background:rgba(255,255,255,0.07);}
+    .cl-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;}
+    .cl-type-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;transition:all .2s;text-decoration:none;color:white;}
+    .cl-type-card:hover,.cl-type-card.active{background:rgba(0,212,255,0.08);border-color:rgba(0,212,255,0.3);color:#00d4ff;}
+    .cl-type-card span{font-size:28px;line-height:1;}
+    .cl-type-card p{font-size:11px;font-weight:700;text-align:center;line-height:1.3;}
+    .cl-type-badge{font-size:9px;padding:2px 6px;border-radius:999px;background:rgba(0,212,255,0.12);color:#00d4ff;border:1px solid rgba(0,212,255,0.25);font-weight:800;}
+
+    /* ── HOW IT WORKS ── */
+    .cl-how{padding:4px 20px 24px;}
+    .cl-steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+    .cl-step{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 14px;text-align:center;}
+    .cl-step-num{width:32px;height:32px;border-radius:50%;background:rgba(0,212,255,0.12);border:1px solid rgba(0,212,255,0.25);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#00d4ff;margin:0 auto 10px;}
+    .cl-step h3{font-size:12px;font-weight:800;color:white;margin-bottom:4px;}
+    .cl-step p{font-size:10px;color:rgba(255,255,255,0.38);line-height:1.5;}
+
+    /* ── PROVIDERS ── */
+    .cl-providers{padding:0 20px 24px;}
+    .cl-filter-row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:6px;margin-bottom:14px;}
+    .cl-filter-row::-webkit-scrollbar{display:none;}
+    .cl-filter-pill{flex-shrink:0;padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+    .cl-filter-pill:hover,.cl-filter-pill.active{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#00d4ff;}
+
+    .cl-provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+    .cl-provider-card{background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;transition:border-color .2s,transform .2s;}
+    .cl-provider-card:hover{border-color:rgba(0,212,255,0.28);transform:translateY(-2px);}
+    .cl-prov-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
+    .cl-prov-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(0,212,255,0.2),rgba(0,140,180,0.15));display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;border:1px solid rgba(0,212,255,0.2);}
+    .cl-prov-name{font-size:14px;font-weight:800;color:white;margin-bottom:2px;}
+    .cl-prov-loc{font-size:11px;color:rgba(255,255,255,0.38);display:flex;align-items:center;gap:4px;}
+    .cl-prov-rating{display:flex;align-items:center;gap:4px;margin-top:3px;}
+    .cl-prov-stars{color:#f59e0b;font-size:11px;}
+    .cl-prov-rnum{font-size:10px;color:rgba(255,255,255,0.4);}
+    .cl-prov-bio{font-size:11px;color:rgba(255,255,255,0.42);line-height:1.5;margin-bottom:10px;}
+    .cl-prov-skills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;}
+    .cl-prov-skill{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.15);color:rgba(0,212,255,0.8);}
+    .cl-prov-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+    .cl-prov-rate{font-size:15px;font-weight:900;color:#00d4ff;}
+    .cl-prov-rate small{font-size:10px;font-weight:400;color:rgba(255,255,255,0.35);}
+    .cl-book-btn{padding:8px 16px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#060a0f;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;transition:filter .2s;}
+    .cl-book-btn:hover{filter:brightness(1.1);}
+    .cl-wa-btn{padding:8px 12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:5px;transition:all .15s;}
+    .cl-wa-btn:hover{background:rgba(37,211,102,0.18);}
+    .cl-verified-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;color:#00d4ff;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);padding:2px 7px;border-radius:999px;}
+    .cl-avail-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.6);flex-shrink:0;}
+
+    /* ── PRICING GUIDE ── */
+    .cl-pricing{padding:0 20px 24px;}
+    .cl-price-table{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;}
+    .cl-price-row{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .cl-price-row:last-child{border-bottom:none;}
+    .cl-price-row:nth-child(even){background:rgba(255,255,255,0.015);}
+    .cl-price-service{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;}
+    .cl-price-emoji{font-size:18px;width:28px;text-align:center;}
+    .cl-price-range{font-size:16px;font-weight:900;color:#00d4ff;white-space:nowrap;}
+
+    /* ── BOOKING MODAL ── */
+    .cl-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99998;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px);}
+    .cl-modal-overlay.open{display:flex;}
+    .cl-modal{background:#0d1117;border:1px solid rgba(0,212,255,0.2);border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;}
+    .cl-modal h2{font-size:17px;font-weight:900;margin-bottom:4px;}
+    .cl-modal-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;}
+    .cl-modal-close{float:right;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;line-height:1;}
+    .cl-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;}
+    .cl-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:12px;transition:border-color .15s;}
+    .cl-input:focus{border-color:rgba(0,212,255,0.4);}
+    .cl-input::placeholder{color:rgba(255,255,255,0.22);}
+    .cl-service-chips{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:6px;margin-bottom:14px;}
+    .cl-chip{padding:6px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;}
+    .cl-chip.sel{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#00d4ff;}
+    .cl-submit-btn{width:100%;padding:13px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#060a0f;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;transition:filter .2s;}
+    .cl-submit-btn:hover{filter:brightness(1.08);}
+    .cl-modal-msg{font-size:12px;min-height:16px;margin-top:10px;text-align:center;}
+
+    /* ── TESTIMONIALS ── */
+    .cl-reviews{padding:0 20px 24px;}
+    .cl-review-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
+    .cl-review-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;}
+    .cl-review-stars{color:#f59e0b;font-size:12px;margin-bottom:8px;}
+    .cl-review-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.55;margin-bottom:10px;font-style:italic;}
+    .cl-review-author{font-size:11px;font-weight:800;color:rgba(255,255,255,0.65);}
+
+    @media(max-width:600px){.cl-type-grid{grid-template-columns:repeat(3,1fr);}.cl-provider-grid{grid-template-columns:1fr;}}
+
+    /* Splash keyframes inline — prevents opacity:0 freeze if style.css parses late */
+    @keyframes splashLogoIn{from{opacity:0;transform:scale(0.72) translateY(20px);}to{opacity:1;transform:scale(1) translateY(0);}}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+
+    /* Bottom nav inline fallback */
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:stretch;background:rgba(8,8,8,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.1);padding-bottom:env(safe-area-inset-bottom,0px);min-height:62px;}
+    .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:rgba(255,255,255,0.85);text-decoration:none;font-size:10px;font-weight:700;padding:10px 4px;-webkit-tap-highlight-color:transparent;}
+    .bnav-item i{font-size:21px;color:white;}
+    .bnav-item.active,.bnav-item.active-bnav,.bnav-item.active i,.bnav-item.active-bnav i{color:#00d4ff;}
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="cl-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="cl-logo" alt="SOKONI"></a>
+  <div class="cl-nav-right">
+    <a href="index.html" class="cl-nav-link">🏠</a>
+    <a href="services.html" class="cl-nav-link">🛠️ All Services</a>
+    <button type="button" class="cl-nav-link cl-nav-book" onclick="openBooking()">📅 Book Now</button>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<div class="cl-hero">
+  <div class="cl-hero-badge">🧹 Cleaning & Laundry Hub</div>
+  <h1>Spotless Spaces,<br><span>Zero Hassle.</span></h1>
+  <p>Book verified house cleaners, office cleaning teams, mamafua specialists, carpet steam cleaners and fumigators across Kenya — same day or scheduled.</p>
+
+  <div class="cl-search">
+    <input type="text" id="clSearch" placeholder="🔍 Search cleaners, deep clean, laundry..." oninput="filterProviders()">
+    <button type="button" class="cl-search-btn" onclick="filterProviders()">Search</button>
+  </div>
+
+  <div class="cl-hero-stats">
+    <div class="cl-stat"><strong>30+</strong> Verified Cleaners</div>
+    <div class="cl-stat"><strong>4.8★</strong> Avg. Rating</div>
+    <div class="cl-stat"><strong>Same Day</strong> Bookings</div>
+    <div class="cl-stat"><strong>8 Cities</strong> Kenya-wide</div>
+  </div>
+</div>
+
+<!-- ── SERVICE TYPES ── -->
+<div class="cl-types">
+  <div class="cl-section-title"><h2>🧽 What Do You Need Cleaned?</h2><span></span></div>
+  <div class="cl-type-grid">
+    <a href="#providers" class="cl-type-card" onclick="filterByType('house',this)">
+      <span>🏠</span><p>House Cleaning</p>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('office',this)">
+      <span>🏢</span><p>Office Cleaning</p>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('deep',this)">
+      <span>🫧</span><p>Deep Clean</p><span class="cl-type-badge">Popular</span>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('laundry',this)">
+      <span>🧺</span><p>Laundry / Mamafua</p>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('carpet',this)">
+      <span>🛋️</span><p>Carpet & Sofa Steam</p>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('fumigation',this)">
+      <span>🪲</span><p>Fumigation & Pest</p>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('move',this)">
+      <span>📦</span><p>Move-in / Move-out</p>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('post',this)">
+      <span>🏗️</span><p>Post-Construction</p>
+    </a>
+    <a href="#providers" class="cl-type-card" onclick="filterByType('',this)">
+      <span>🌍</span><p>All Cleaners</p>
+    </a>
+  </div>
+</div>
+
+<!-- ── HOW IT WORKS ── -->
+<div class="cl-how">
+  <div class="cl-section-title"><h2>⚡ How It Works</h2><span></span></div>
+  <div class="cl-steps">
+    <div class="cl-step">
+      <div class="cl-step-num">1</div>
+      <h3>🧽 Choose Service</h3>
+      <p>Pick from house cleaning, laundry, deep clean, fumigation and more</p>
+    </div>
+    <div class="cl-step">
+      <div class="cl-step-num">2</div>
+      <h3>🔍 Pick a Provider</h3>
+      <p>Browse verified cleaners, read reviews, check their rates</p>
+    </div>
+    <div class="cl-step">
+      <div class="cl-step-num">3</div>
+      <h3>📅 Book & Pay</h3>
+      <p>Instant booking via M-Pesa or pay cash on completion</p>
+    </div>
+    <div class="cl-step">
+      <div class="cl-step-num">4</div>
+      <h3>✨ Sparkling Clean!</h3>
+      <p>Your cleaner arrives on time. Rate them after — builds trust</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── PROVIDERS ── -->
+<div class="cl-providers" id="providers">
+  <div class="cl-section-title"><h2>🧹 Verified Cleaners Near You</h2><span></span><span id="clProvCount" style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:600;white-space:nowrap;"></span></div>
+
+  <!-- Location filter pills -->
+  <div class="cl-filter-row">
+    <button type="button" class="cl-filter-pill active" onclick="filterByLoc('',this)">📍 All Kenya</button>
+    <button type="button" class="cl-filter-pill" onclick="filterByLoc('nairobi',this)">Nairobi</button>
+    <button type="button" class="cl-filter-pill" onclick="filterByLoc('mombasa',this)">Mombasa</button>
+    <button type="button" class="cl-filter-pill" onclick="filterByLoc('kisumu',this)">Kisumu</button>
+    <button type="button" class="cl-filter-pill" onclick="filterByLoc('nakuru',this)">Nakuru</button>
+    <button type="button" class="cl-filter-pill" onclick="filterByLoc('eldoret',this)">Eldoret</button>
+  </div>
+
+  <div class="cl-provider-grid" id="clProviderGrid"></div>
+</div>
+
+<!-- ── PRICING GUIDE ── -->
+<div class="cl-pricing">
+  <div class="cl-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Typical Nairobi rates</span></div>
+  <div class="cl-price-table">
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🏠</span>House Cleaning (1-bed)</div>
+      <div class="cl-price-range">KES 800 – 1,500</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🏠</span>House Cleaning (3-bed)</div>
+      <div class="cl-price-range">KES 2,000 – 4,000</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🏢</span>Office Cleaning (daily)</div>
+      <div class="cl-price-range">KES 3,000 – 12,000</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🫧</span>Deep Clean / Spring Clean</div>
+      <div class="cl-price-range">KES 3,500 – 8,000</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🛋️</span>Sofa / Carpet Steam Clean</div>
+      <div class="cl-price-range">KES 1,500 – 4,500</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🧺</span>Laundry (per kg)</div>
+      <div class="cl-price-range">KES 80 – 200/kg</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">👔</span>Ironing (per piece)</div>
+      <div class="cl-price-range">KES 30 – 80</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🪲</span>Fumigation (2-bed house)</div>
+      <div class="cl-price-range">KES 2,000 – 5,000</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">📦</span>Move-out / End-of-tenancy</div>
+      <div class="cl-price-range">KES 3,000 – 10,000</div>
+    </div>
+    <div class="cl-price-row">
+      <div class="cl-price-service"><span class="cl-price-emoji">🏗️</span>Post-Construction Clean</div>
+      <div class="cl-price-range">KES 5,000 – 20,000</div>
+    </div>
+  </div>
+  <p style="font-size:10px;color:rgba(255,255,255,0.22);margin-top:8px;padding:0 4px;">* Prices vary by property size, location and provider. Get exact quotes by booking below.</p>
+</div>
+
+<!-- ── REVIEWS ── -->
+<div class="cl-reviews">
+  <div class="cl-section-title"><h2>⭐ What Customers Say</h2><span></span></div>
+  <div class="cl-review-grid">
+    <div class="cl-review-card">
+      <div class="cl-review-stars">★★★★★</div>
+      <div class="cl-review-text">"ShineClean did an incredible job on our office — floors sparkled and they brought all their own equipment. Booked them on a monthly contract."</div>
+      <div class="cl-review-author">James M. — Westlands Office</div>
+    </div>
+    <div class="cl-review-card">
+      <div class="cl-review-stars">★★★★★</div>
+      <div class="cl-review-text">"Purity was punctual, thorough and used eco products which I loved. My apartment has never been this clean. Will re-book every 2 weeks!"</div>
+      <div class="cl-review-author">Grace W. — Kilimani</div>
+    </div>
+    <div class="cl-review-card">
+      <div class="cl-review-stars">★★★★★</div>
+      <div class="cl-review-text">"Mama Jane collected my laundry in the morning and returned everything ironed by 6pm. KES 300 for a full basket — best value in Nairobi."</div>
+      <div class="cl-review-author">Brian K. — South B</div>
+    </div>
+    <div class="cl-review-card">
+      <div class="cl-review-stars">★★★★☆</div>
+      <div class="cl-review-text">"Mombasa Clean Team handled our BnB turnover — 4 units done in 3 hours, hotel-standard finish. Guests were amazed. Highly recommended."</div>
+      <div class="cl-review-author">Mercy A. — Nyali BnB</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CTA STRIP ── -->
+<div style="padding:0 20px 24px;">
+  <div style="background:linear-gradient(135deg,rgba(0,212,255,0.1),rgba(0,140,180,0.07));border:1px solid rgba(0,212,255,0.22);border-radius:20px;padding:24px 20px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:10px;">🧹✨</div>
+    <h2 style="font-size:18px;font-weight:900;margin-bottom:6px;">🧹 Ready for a Spotless Space?</h2>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Join thousands of Kenyans who trust SOKONI cleaners every week</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button type="button" onclick="openBooking()" style="padding:12px 24px;background:linear-gradient(135deg,#00d4ff,#0099cc);color:#060a0f;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:16px;">📅 Book a Cleaner Now</button>
+      <a href="cleaning.html#providers" style="padding:12px 20px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.7);border-radius:12px;text-decoration:none;font-size:16px;font-weight:700;">All Cleaning Listings →</a>
+    </div>
+  </div>
+</div>
+
+<!-- ── ARE YOU A CLEANER? ── -->
+<div style="padding:0 20px 32px;">
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <span style="font-size:40px;flex-shrink:0;">🧑‍💼</span>
+    <div style="flex:1;">
+      <div style="font-size:15px;font-weight:900;margin-bottom:3px;">Are You a Professional Cleaner?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;">Join 30+ verified cleaners on SOKONI — get daily job requests, manage bookings and grow your cleaning business.</div>
+    </div>
+    <a href="provider.html" style="flex-shrink:0;padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;white-space:nowrap;">Join as Provider →</a>
+  </div>
+</div>
+
+<!-- ── BOOKING MODAL ── -->
+<div class="cl-modal-overlay" id="clModalOverlay" onclick="if(event.target===this)closeBooking()">
+  <div class="cl-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <h2>📅 Book a Cleaner</h2>
+      <button type="button" class="cl-modal-close" onclick="closeBooking()">✕</button>
+    </div>
+    <div class="cl-modal-sub" id="clModalSub">Fill in the details below and a verified cleaner will confirm within 30 minutes.</div>
+
+    <label class="cl-label">Service Type</label>
+    <div class="cl-service-chips" id="clServiceChips">
+      <span class="cl-chip sel" data-svc="House Cleaning" onclick="toggleChip(this)">🏠 House Clean</span>
+      <span class="cl-chip" data-svc="Office Cleaning" onclick="toggleChip(this)">🏢 Office</span>
+      <span class="cl-chip" data-svc="Deep Clean" onclick="toggleChip(this)">🫧 Deep Clean</span>
+      <span class="cl-chip" data-svc="Laundry" onclick="toggleChip(this)">🧺 Laundry</span>
+      <span class="cl-chip" data-svc="Carpet Steam" onclick="toggleChip(this)">🛋️ Carpet Steam</span>
+      <span class="cl-chip" data-svc="Fumigation" onclick="toggleChip(this)">🪲 Fumigation</span>
+      <span class="cl-chip" data-svc="Move-out Clean" onclick="toggleChip(this)">📦 Move-out</span>
+      <span class="cl-chip" data-svc="Post-Construction" onclick="toggleChip(this)">🏗️ Post-Build</span>
+    </div>
+
+    <label class="cl-label">Your Name</label>
+    <input class="cl-input" type="text" id="clName" placeholder="e.g. John Kamau">
+
+    <label class="cl-label">Phone Number</label>
+    <input class="cl-input" type="tel" id="clPhone" placeholder="07XXXXXXXX">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div>
+        <label class="cl-label">Date</label>
+        <input class="cl-input" type="date" id="clDate" style="margin-bottom:0;">
+      </div>
+      <div>
+        <label class="cl-label">Time</label>
+        <input class="cl-input" type="time" id="clTime" style="margin-bottom:0;margin-bottom:12px;">
+      </div>
+    </div>
+
+    <label class="cl-label">Your Location / Address</label>
+    <input class="cl-input" type="text" id="clAddress" placeholder="e.g. Westlands, Nairobi — Apt 4B">
+
+    <label class="cl-label">Additional Notes (optional)</label>
+    <textarea class="cl-input" id="clNotes" rows="2" placeholder="e.g. 3-bedroom house, have dog, need eco products..." style="resize:none;"></textarea>
+
+    <button type="button" class="cl-submit-btn" onclick="submitBooking()">
+      📅 Confirm Booking via WhatsApp →
+    </button>
+    <div class="cl-modal-msg" id="clModalMsg"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="cleaning.html" class="bnav-item active-bnav"><i class="fas fa-broom"></i><span>Cleaning</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+/* ── PROVIDER DATA ── */
+const PROVIDERS = [
+  { id:'CL01', name:'ShineClean Services', emoji:'✨', location:'nairobi', locationLabel:'Nairobi (All Areas)', rate:'KES 3,500', rateType:'per job', rating:4.9, jobs:600, phone:'0778901217', verified:true, available:true,
+    skills:['Deep Clean','Post-Construction','Office Cleaning','Steam Clean','Fumigation'],
+    bio:'Professional 5-person team — 7 yrs Nairobi. Own industrial equipment. Monthly corporate contracts available.', type:['deep','post','office'] },
+
+  { id:'CL02', name:'Angela Nyambura Clean', emoji:'🌸', location:'nairobi', locationLabel:'Nairobi West / Westlands', rate:'KES 1,500', rateType:'per job', rating:4.8, jobs:340, phone:'0789012318', verified:true, available:true,
+    skills:['House Cleaning','Carpet Steam','Move-in/out','Fumigation','Sofa Clean'],
+    bio:'Solo cleaning pro — 5 yrs Nairobi West. Thorough, honest, affordable. Eco-friendly products available.', type:['house','carpet','move','fumigation'] },
+
+  { id:'CL03', name:'CleanMasters Kenya', emoji:'🏆', location:'nairobi', locationLabel:'Nairobi CBD & Surrounding', rate:'KES 8,000', rateType:'daily', rating:4.7, jobs:180, phone:'0790123419', verified:true, available:true,
+    skills:['Office Cleaning','School Cleaning','ISO Standards','Daily Contract','Hospital Grade'],
+    bio:'Corporate cleaning company — 10-person team. Daily & weekly contracts. ISO cleaning standards. Nairobi.', type:['office','deep'] },
+
+  { id:'CL04', name:'Mombasa Clean Team', emoji:'🌊', location:'mombasa', locationLabel:'Mombasa & Coastal Region', rate:'KES 2,500', rateType:'per job', rating:4.8, jobs:220, phone:'0701234520', verified:true, available:true,
+    skills:['Beach House','Post-Event','Hotel Standard','Fumigation','Airbnb Turnover'],
+    bio:'Coastal property specialists — 6 yrs Mombasa. Airbnb & hotel turnover experts. Own transport.', type:['house','post','fumigation'] },
+
+  { id:'CL05', name:'Purity Kamau Cleaning', emoji:'🌿', location:'nairobi', locationLabel:'Kilimani / Westlands / Lavington', rate:'KES 1,200', rateType:'per job', rating:4.9, jobs:290, phone:'0712345621', verified:true, available:true,
+    skills:['Residential','Carpet Steam','Sofa Steam','Move-out','Eco Products'],
+    bio:'Reliable house cleaner — 4 yrs Westlands. Eco-friendly products only. Same-day bookings available.', type:['house','carpet','move'] },
+
+  { id:'CL06', name:'Mama Jane Laundry', emoji:'🧺', location:'nairobi', locationLabel:'Nairobi (Collect & Deliver)', rate:'KES 300', rateType:'per load', rating:4.9, jobs:1120, phone:'0711223344', verified:true, available:true,
+    skills:['Hand Wash','Machine Wash','Ironing','Dry Cleaning','Pickup & Delivery'],
+    bio:'Expert mamafua — 8 yrs Nairobi. Clothes collected & delivered same day. Gentle on all fabrics. Bulk orders welcome.', type:['laundry'] },
+
+  { id:'CL07', name:'FreshSpace Cleaning', emoji:'💫', location:'nairobi', locationLabel:'Nairobi (Eastlands & CBD)', rate:'KES 1,800', rateType:'per job', rating:4.7, jobs:155, phone:'0723456789', verified:true, available:true,
+    skills:['House Cleaning','Deep Clean','Kitchen Degreasing','Bathroom Scrub','Window Clean'],
+    bio:'Young professional team — 3 yrs. Specialize in thorough kitchen and bathroom deep cleans. Eastlands based, serve city-wide.', type:['house','deep'] },
+
+  { id:'CL08', name:'PestFree Kenya', emoji:'🛡️', location:'nairobi', locationLabel:'Nairobi & Kiambu', rate:'KES 2,500', rateType:'per job', rating:4.8, jobs:380, phone:'0734567890', verified:true, available:false,
+    skills:['Fumigation','Bedbugs','Cockroaches','Rats','Termites','Certification'],
+    bio:'Licensed pest control company — WHO-approved chemicals. Fumigation certificate provided. Serves homes, hotels & offices.', type:['fumigation'] },
+];
+
+/* ── STATE ── */
+let activeType  = '';
+let activeLoc   = '';
+let selectedProv = null;
+
+/* ── RENDER PROVIDERS ── */
+function renderProviders() {
+  const q = (document.getElementById('clSearch')?.value || '').toLowerCase();
+  let list = [...PROVIDERS];
+  if (activeType)  list = list.filter(p => !activeType || p.type.includes(activeType));
+  if (activeLoc)   list = list.filter(p => p.location === activeLoc);
+  if (q)           list = list.filter(p => p.name.toLowerCase().includes(q) || p.bio.toLowerCase().includes(q) || p.skills.some(s => s.toLowerCase().includes(q)));
+
+  const grid = document.getElementById('clProviderGrid');
+  const cnt  = document.getElementById('clProvCount');
+  if (cnt) cnt.textContent = list.length + ' providers found';
+
+  if (!list.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);">
+      <div style="font-size:40px;margin-bottom:10px;">🔍</div>
+      <div style="font-size:16px;">No cleaners found for this filter.<br><button type="button" onclick="clearFilters();" style="color:#00d4ff;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button></div>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(p => `
+    <div class="cl-provider-card" id="prov-${p.id}">
+      <div class="cl-prov-top">
+        <div class="cl-prov-avatar">${p.emoji}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
+            <div class="cl-prov-name">${p.name}</div>
+            ${p.verified ? '<span class="cl-verified-badge">✓ Verified</span>' : ''}
+          </div>
+          <div class="cl-prov-loc"><i class="fas fa-map-marker-alt" style="color:#00d4ff;font-size:9px;"></i> ${p.locationLabel}</div>
+          <div class="cl-prov-rating">
+            <span class="cl-prov-stars">${'★'.repeat(Math.floor(p.rating))}${'☆'.repeat(5-Math.floor(p.rating))}</span>
+            <span class="cl-prov-rnum">${p.rating} · ${p.jobs}+ jobs</span>
+            ${p.available ? `<span class="cl-avail-dot"></span><span style="font-size:9px;color:#22c55e;font-weight:700;">Available</span>` : `<span style="font-size:9px;color:rgba(255,255,255,0.3);">Unavailable</span>`}
+          </div>
+        </div>
+      </div>
+      <div class="cl-prov-bio">"${p.bio}"</div>
+      <div class="cl-prov-skills">${p.skills.map(s => `<span class="cl-prov-skill">${s}</span>`).join('')}</div>
+      <div class="cl-prov-foot">
+        <div class="cl-prov-rate">${p.rate} <small>${p.rateType}</small></div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <a href="https://wa.me/254${p.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I found you on SOKONI and would like to book a cleaning service. Please confirm your availability.')}" target="_blank" class="cl-wa-btn"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+          <button type="button" class="cl-book-btn" onclick="openBookingFor('${p.id}','${p.name}')">Book →</button>
+        </div>
+<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('cl_'+(p.id||p.name),p.name,this,'cleaner')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'cleaner_'+'cl_'+(p.id||p.name),name:p.name,category:'cleaner',tagline:'',type:'cleaner'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
+      </div>
+    </div>`).join('');
+}
+
+/* ── FILTER HELPERS ── */
+function filterByType(type, el) {
+  activeType = type;
+  document.querySelectorAll('.cl-type-card').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderProviders();
+}
+
+function filterByLoc(loc, btn) {
+  activeLoc = loc;
+  document.querySelectorAll('.cl-filter-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderProviders();
+}
+
+function filterProviders() { renderProviders(); }
+
+function clearFilters() {
+  activeType = ''; activeLoc = '';
+  document.querySelectorAll('.cl-type-card').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.cl-filter-pill').forEach(p => p.classList.remove('active'));
+  document.querySelector('.cl-filter-pill')?.classList.add('active');
+  document.getElementById('clSearch').value = '';
+  renderProviders();
+}
+
+/* ── BOOKING MODAL ── */
+function openBooking() {
+  selectedProv = null;
+  document.getElementById('clModalSub').textContent = 'Fill in the details and a verified cleaner will confirm within 30 minutes.';
+  document.getElementById('clModalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const d = document.getElementById('clDate');
+  if (d && !d.value) d.value = tomorrow.toISOString().slice(0,10);
+}
+
+function openBookingFor(id, name) {
+  selectedProv = PROVIDERS.find(p => p.id === id);
+  document.getElementById('clModalSub').textContent = `Booking with: ${selectedProv?.emoji || ''} ${name} — confirm your details below.`;
+  document.getElementById('clModalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const d = document.getElementById('clDate');
+  if (d && !d.value) d.value = tomorrow.toISOString().slice(0,10);
+}
+
+function closeBooking() {
+  document.getElementById('clModalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+  document.getElementById('clModalMsg').textContent = '';
+}
+
+function toggleChip(el) {
+  el.classList.toggle('sel');
+}
+
+function submitBooking() {
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('cleaning_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  const name    = document.getElementById('clName')?.value.trim();
+  const phone   = document.getElementById('clPhone')?.value.trim();
+  const date    = document.getElementById('clDate')?.value;
+  const time    = document.getElementById('clTime')?.value;
+  const address = document.getElementById('clAddress')?.value.trim();
+  const notes   = document.getElementById('clNotes')?.value.trim();
+  const msgEl   = document.getElementById('clModalMsg');
+  const services = [...document.querySelectorAll('#clServiceChips .cl-chip.sel')].map(c => c.dataset.svc).join(', ');
+
+  if (!name || !phone || !address) {
+    if (msgEl) { msgEl.textContent = '⚠️ Please fill name, phone and address.'; msgEl.style.color = '#ff6b6b'; }
+    return;
+  }
+
+  const booking = {
+    id: 'CLN' + Date.now().toString().slice(-7),
+    name, phone, date, time, address, notes, services,
+    provider: selectedProv?.name || 'Any Available Cleaner',
+    status: 'pending',
+    createdAt: Date.now()
+  };
+
+  /* Save locally */
+  let bookings = [];
+  try { bookings = JSON.parse(localStorage.getItem('sokoniCleaningBookings') || '[]'); } catch {}
+  bookings.unshift(booking);
+  localStorage.setItem('sokoniCleaningBookings', JSON.stringify(bookings));
+
+  /* Open WhatsApp to confirm */
+  const provPhone = selectedProv?.phone || '0705726803';
+  const msg = `Hi${selectedProv ? ' ' + selectedProv.name : ''}! I'd like to book a cleaning service via SOKONI.\n\n` +
+    `📋 Booking ID: ${booking.id}\n` +
+    `👤 Name: ${name}\n` +
+    `📞 Phone: ${phone}\n` +
+    `🧹 Service: ${services || 'General Cleaning'}\n` +
+    `📅 Date: ${date || 'TBD'} at ${time || 'TBD'}\n` +
+    `📍 Location: ${address}\n` +
+    (notes ? `📝 Notes: ${notes}\n` : '') +
+    `\nPlease confirm your availability. Thank you!`;
+
+  const _waNum = provPhone.replace(/^0/,'254').replace(/\D/g,'');
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
+    SokoniPay.waConnect(_waNum, msg, {providerName:booking.provider||'Cleaning Pro',category:'cleaning',serviceDesc:services||'Cleaning Service'});
+  } else {
+    window.open(`https://wa.me/${_waNum}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  if (msgEl) { msgEl.innerHTML = `✅ Booking <strong style="color:#00d4ff;">${booking.id}</strong> sent via WhatsApp! The cleaner will confirm shortly.`; msgEl.style.color = '#22c55e'; }
+
+  if(window.SokoniInvoice){
+    setTimeout(()=>{
+      SokoniInvoice.generate({
+        type:'service', buyerName:name, buyerPhone:phone,
+        items:[{name:services||'General Cleaning', category:'Cleaning Service', qty:1, price:0}],
+        subtotal:0, total:0, paymentMethod:'M-Pesa', paymentRef:booking.id,
+        sellerName:booking.provider, location:address,
+        notes:(notes||'')+' · Date: '+(date||'TBD')+' at '+(time||'TBD')
+      });
+    }, 500);
+  }
+
+  setTimeout(closeBooking, 3000);
+}
+
+window.openBooking       = openBooking;
+window.openBookingFor    = openBookingFor;
+window.closeBooking      = closeBooking;
+window.toggleChip        = toggleChip;
+window.submitBooking     = submitBooking;
+window.filterByType      = filterByType;
+window.filterByLoc       = filterByLoc;
+window.filterProviders   = filterProviders;
+window.clearFilters      = clearFilters;
+
+/* ── INIT ── */
+renderProviders();
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <!-- REGISTER CTA — auto-injected by hub-register system -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
+    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
+    <button onclick="HubRegister.open({hub:'home-services', category:'cleaning'})" style="padding:12px 28px;background:#39ff14;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

@@ -1,0 +1,332 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Support — Get Help</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#080808">
+<script src="security.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;padding-bottom:80px;}
+.sp-nav{display:flex;align-items:center;gap:12px;padding:13px 18px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:10;backdrop-filter:blur(16px);}
+.sp-hero{padding:32px 20px 24px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.06);}
+.sp-hero h1{font-size:clamp(20px,5vw,32px);font-weight:900;margin-bottom:8px;}
+.sp-hero h1 span{color:#71ff00;}
+.sp-hero p{font-size:14px;color:rgba(255,255,255,0.4);max-width:420px;margin:0 auto;}
+.sp-body{max-width:680px;margin:0 auto;padding:20px 16px;}
+.sp-tabs{display:flex;gap:6px;margin-bottom:18px;overflow-x:auto;scrollbar-width:none;}
+.sp-tabs::-webkit-scrollbar{display:none;}
+.sp-tab{padding:9px 18px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
+.sp-tab.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.sp-pane{display:none;}.sp-pane.active{display:block;}
+.sp-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:14px;}
+.sp-label{font-size:11px;font-weight:800;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;}
+.sp-input,.sp-textarea,.sp-select{width:100%;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:#fff;font-size:16px;font-family:inherit;outline:none;margin-bottom:14px;}
+.sp-textarea{min-height:90px;resize:vertical;}
+.sp-select option{background:#111;}
+.sp-input:focus,.sp-textarea:focus,.sp-select:focus{border-color:rgba(113,255,0,0.4);}
+.sp-chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+.sp-chip{padding:8px 14px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;}
+.sp-chip.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.sp-submit{width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#5ccc00);border:none;border-radius:12px;color:#080808;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;}
+.sp-submit:disabled{opacity:.4;cursor:default;}
+.sp-success{display:none;text-align:center;padding:24px;}
+.sp-success .sp-ok-icon{font-size:48px;margin-bottom:12px;}
+.sp-success h3{font-size:16px;font-weight:900;margin-bottom:8px;color:#71ff00;}
+.sp-success p{font-size:13px;color:rgba(255,255,255,0.4);line-height:1.6;}
+.sp-ticket-id{display:inline-block;margin:10px auto 0;padding:8px 16px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:10px;font-size:13px;font-weight:900;color:#71ff00;font-family:monospace;}
+.sp-contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.sp-contact-card{padding:16px;border-radius:14px;text-align:center;text-decoration:none;transition:all .2s;border:1px solid rgba(255,255,255,0.08);}
+.sp-contact-card:hover{transform:translateY(-2px);}
+.sp-contact-card.wa{background:rgba(37,211,102,0.08);border-color:rgba(37,211,102,0.25);}
+.sp-contact-card.email{background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.2);}
+.sp-contact-card.phone{background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.08);}
+.sp-contact-card.ticket{background:rgba(113,255,0,0.06);border-color:rgba(113,255,0,0.2);}
+.sp-contact-icon{font-size:30px;margin-bottom:8px;}
+.sp-contact-lbl{font-size:12px;font-weight:800;margin-bottom:3px;}
+.sp-contact-card.wa .sp-contact-lbl{color:#25d366;}
+.sp-contact-card.email .sp-contact-lbl{color:#3b82f6;}
+.sp-contact-card.ticket .sp-contact-lbl{color:#71ff00;}
+.sp-contact-sub{font-size:10px;color:rgba(255,255,255,0.3);}
+.sp-status{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;}
+.sp-status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.sp-status-dot.green{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.5);}
+.sp-status-dot.amber{background:#f59e0b;}
+.sp-status-dot.red{background:#ff4444;}
+.sp-faq-item{border-bottom:1px solid rgba(255,255,255,0.06);}
+.sp-faq-item:last-child{border-bottom:none;}
+.sp-faq-q{width:100%;background:none;border:none;color:#fff;text-align:left;padding:16px 0;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:inherit;line-height:1.4;}
+.sp-faq-q:hover{color:rgba(255,255,255,0.7);}
+.sp-faq-q .chev{font-size:14px;color:rgba(255,255,255,0.3);transition:transform .2s;flex-shrink:0;}
+.sp-faq-q.open{color:#71ff00;}.sp-faq-q.open .chev{transform:rotate(180deg);color:#71ff00;}
+.sp-faq-a{display:none;font-size:13px;color:rgba(255,255,255,0.5);line-height:1.7;padding-bottom:14px;}
+.sp-faq-a.open{display:block;}
+.sp-track-input{display:flex;gap:8px;}
+.sp-track-input input{flex:1;}
+.sp-track-btn{padding:12px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:11px;color:#71ff00;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.sp-track-result{margin-top:14px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;display:none;}
+</style>
+</head>
+<body>
+
+<nav class="sp-nav">
+  <a href="javascript:history.back()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:15px;flex-shrink:0;">←</a>
+  <span style="font-size:14px;font-weight:900;">Support</span>
+  <a href="help.html" style="margin-left:auto;font-size:12px;font-weight:800;color:rgba(255,255,255,0.4);text-decoration:none;">Help Center ↗</a>
+</nav>
+
+<div class="sp-hero">
+  <h1>We're here to <span>help</span></h1>
+  <p>Choose how you want to reach us. Most issues are resolved within 24 hours.</p>
+</div>
+
+<div class="sp-body">
+
+  <!-- PLATFORM STATUS -->
+  <div style="margin-bottom:16px;">
+    <div class="sp-status">
+      <div class="sp-status-dot green"></div>
+      <div>
+        <div style="font-size:13px;font-weight:800;">All Systems Operational</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);">Marketplace · Payments · Delivery · Rides</div>
+      </div>
+      <a href="monitor.html" style="margin-left:auto;font-size:11px;color:rgba(255,255,255,0.3);text-decoration:none;">Live Status ↗</a>
+    </div>
+  </div>
+
+  <div class="sp-tabs">
+    <button class="sp-tab active" onclick="showTab('contact',this)">📞 Contact Us</button>
+    <button class="sp-tab" onclick="showTab('ticket',this)">🎫 Submit Ticket</button>
+    <button class="sp-tab" onclick="showTab('track',this)">🔍 Track Ticket</button>
+    <button class="sp-tab" onclick="showTab('faq',this)">❓ FAQ</button>
+  </div>
+
+  <!-- CONTACT TAB -->
+  <div class="sp-pane active" id="spP-contact">
+    <div class="sp-contact-grid">
+      <a href="https://wa.me/254700000000?text=Hi+SOKONI+Support" target="_blank" class="sp-contact-card wa">
+        <div class="sp-contact-icon">💬</div>
+        <div class="sp-contact-lbl">WhatsApp</div>
+        <div class="sp-contact-sub">Fastest · usually within 1hr</div>
+      </a>
+      <a href="mailto:support@mysokoni.co.ke" class="sp-contact-card email">
+        <div class="sp-contact-icon">✉️</div>
+        <div class="sp-contact-lbl">Email Us</div>
+        <div class="sp-contact-sub">support@mysokoni.co.ke</div>
+      </a>
+      <a href="tel:+254700000000" class="sp-contact-card phone">
+        <div class="sp-contact-icon">📞</div>
+        <div class="sp-contact-lbl">Call Support</div>
+        <div class="sp-contact-sub">Mon–Sat 8am–8pm</div>
+      </a>
+      <button class="sp-contact-card ticket" onclick="showTab('ticket',document.querySelectorAll('.sp-tab')[1])">
+        <div class="sp-contact-icon">🎫</div>
+        <div class="sp-contact-lbl">Submit Ticket</div>
+        <div class="sp-contact-sub">Track your issue status</div>
+      </button>
+    </div>
+    <div class="sp-card" style="text-align:center;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:6px;">Response Times</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:12px;">
+        <div><div style="font-size:16px;font-weight:900;color:#22c55e;">~1hr</div><div style="font-size:10px;color:rgba(255,255,255,0.3);">WhatsApp</div></div>
+        <div><div style="font-size:16px;font-weight:900;color:#f59e0b;">24hr</div><div style="font-size:10px;color:rgba(255,255,255,0.3);">Email/Ticket</div></div>
+        <div><div style="font-size:16px;font-weight:900;color:#00aaff;">Instant</div><div style="font-size:10px;color:rgba(255,255,255,0.3);">AI Chat Soon</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUBMIT TICKET TAB -->
+  <div class="sp-pane" id="spP-ticket">
+    <div class="sp-card" id="spTicketForm">
+      <div class="sp-label">Category</div>
+      <div class="sp-chips" id="spCategory">
+        <button class="sp-chip active" data-v="payment">💳 Payment</button>
+        <button class="sp-chip" data-v="order">📦 Order</button>
+        <button class="sp-chip" data-v="delivery">🛵 Delivery</button>
+        <button class="sp-chip" data-v="account">👤 Account</button>
+        <button class="sp-chip" data-v="seller">🏪 Seller Issue</button>
+        <button class="sp-chip" data-v="ride">🚗 Ride</button>
+        <button class="sp-chip" data-v="other">❓ Other</button>
+      </div>
+      <div class="sp-label">Priority</div>
+      <select class="sp-select" id="spPriority">
+        <option value="low">Low — minor issue, not urgent</option>
+        <option value="medium" selected>Medium — affects my use of the app</option>
+        <option value="high">High — can't complete a transaction</option>
+        <option value="critical">Critical — lost money / account compromised</option>
+      </select>
+      <div class="sp-label">Your Name</div>
+      <input class="sp-input" id="spName" type="text" placeholder="Full name">
+      <div class="sp-label">Phone Number</div>
+      <input class="sp-input" id="spPhone" type="tel" placeholder="07XXXXXXXX">
+      <div class="sp-label">Describe the Issue</div>
+      <textarea class="sp-textarea" id="spDesc" placeholder="What happened? What were you trying to do? Include any order or transaction IDs."></textarea>
+      <div class="sp-label">Order / Transaction ID (optional)</div>
+      <input class="sp-input" id="spRef" type="text" placeholder="e.g. ORD-12345 or M-Pesa receipt number">
+      <button class="sp-submit" id="spSubmitBtn" onclick="submitTicket()">Submit Support Ticket</button>
+    </div>
+    <div class="sp-success" id="spTicketSuccess">
+      <div class="sp-ok-icon">🎫</div>
+      <h3>Ticket Submitted!</h3>
+      <p>We've received your issue and will respond within 24 hours.</p>
+      <div class="sp-ticket-id" id="spTicketIdDisplay"></div>
+      <p style="margin-top:14px;font-size:12px;">Save your ticket ID to track the status later.</p>
+      <a href="https://wa.me/254700000000" target="_blank" style="display:inline-block;margin-top:14px;padding:11px 22px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:10px;color:#25d366;font-size:13px;font-weight:800;text-decoration:none;">💬 Follow up on WhatsApp</a>
+    </div>
+  </div>
+
+  <!-- TRACK TICKET TAB -->
+  <div class="sp-pane" id="spP-track">
+    <div class="sp-card">
+      <div style="font-size:14px;font-weight:800;margin-bottom:14px;">Enter your Ticket ID</div>
+      <div class="sp-track-input">
+        <input class="sp-input" id="spTrackId" type="text" placeholder="e.g. TKT1ABC2DEF" style="margin-bottom:0;" oninput="this.value=this.value.toUpperCase()">
+        <button class="sp-track-btn" onclick="trackTicket()">Track</button>
+      </div>
+      <div class="sp-track-result" id="spTrackResult"></div>
+    </div>
+    <div class="sp-card" id="spLastTicket" style="display:none;">
+      <div style="font-size:13px;font-weight:800;margin-bottom:10px;color:rgba(255,255,255,0.5);">Your last ticket</div>
+      <div id="spLastTicketContent"></div>
+    </div>
+  </div>
+
+  <!-- FAQ TAB -->
+  <div class="sp-pane" id="spP-faq">
+    <div class="sp-card">
+      <div id="spFaq"></div>
+    </div>
+    <div style="text-align:center;margin-top:8px;">
+      <a href="help.html" style="font-size:13px;font-weight:800;color:#71ff00;text-decoration:none;">View full Help Center →</a>
+    </div>
+  </div>
+
+</div>
+
+<nav style="position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0;z-index:50;">
+  <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:rgba(255,255,255,0.4);font-size:10px;font-weight:600;padding:4px 12px;"><span style="font-size:20px;">🏠</span>Home</a>
+  <a href="messages.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:rgba(255,255,255,0.4);font-size:10px;font-weight:600;padding:4px 12px;"><span style="font-size:20px;">💬</span>Messages</a>
+  <a href="support.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:#71ff00;font-size:10px;font-weight:800;padding:4px 12px;"><span style="font-size:20px;">🎫</span>Support</a>
+  <a href="help.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:rgba(255,255,255,0.4);font-size:10px;font-weight:600;padding:4px 12px;"><span style="font-size:20px;">❓</span>Help</a>
+  <a href="profile.html" style="display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;color:rgba(255,255,255,0.4);font-size:10px;font-weight:600;padding:4px 12px;"><span style="font-size:20px;">👤</span>Profile</a>
+</nav>
+
+<script src="sokoni-launch.js"></script>
+<script>
+function showTab(name, btn) {
+  document.querySelectorAll('.sp-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.sp-pane').forEach(function(p){ p.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('spP-'+name).classList.add('active');
+}
+
+/* Chip toggle */
+document.querySelectorAll('#spCategory .sp-chip').forEach(function(c) {
+  c.addEventListener('click', function() {
+    document.querySelectorAll('#spCategory .sp-chip').forEach(function(x){ x.classList.remove('active'); });
+    c.classList.add('active');
+  });
+});
+
+function submitTicket() {
+  var name = (document.getElementById('spName').value||'').trim();
+  var phone = (document.getElementById('spPhone').value||'').trim();
+  var desc = (document.getElementById('spDesc').value||'').trim();
+  if (!name) { (window._skToast||alert)('Please enter your name.'); return; }
+  if (!phone) { (window._skToast||alert)('Please enter your phone number.'); return; }
+  if (!desc) { (window._skToast||alert)('Please describe the issue.'); return; }
+
+  var btn = document.getElementById('spSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  var category = (document.querySelector('#spCategory .active')||{}).dataset?.v || 'other';
+  var priority  = document.getElementById('spPriority').value;
+  var ref       = (document.getElementById('spRef').value||'').trim();
+
+  var id = window.SokoniLaunch ? SokoniLaunch.submitTicket({
+    name: name, phone: phone, category: category, priority: priority,
+    description: desc, ref: ref,
+  }) : ('TKT' + Date.now().toString(36).toUpperCase());
+
+  document.getElementById('spTicketForm').style.display = 'none';
+  var suc = document.getElementById('spTicketSuccess');
+  suc.style.display = 'block';
+  document.getElementById('spTicketIdDisplay').textContent = 'Ticket ID: ' + id;
+}
+
+function trackTicket() {
+  var id = (document.getElementById('spTrackId').value||'').trim().toUpperCase();
+  if (!id) { (window._skToast||alert)('Please enter a ticket ID.'); return; }
+  var result = document.getElementById('spTrackResult');
+  result.style.display = 'block';
+
+  /* Check localStorage for this ticket */
+  try {
+    var last = JSON.parse(localStorage.getItem('_sokoniLastTicket')||'{}');
+    if (last.id && last.id.toUpperCase() === id) {
+      var age = Math.round((Date.now()-last.ts)/3600000);
+      result.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:22px;">🎫</div><div><div style="font-size:13px;font-weight:800;color:#f59e0b;">Under Review</div><div style="font-size:11px;color:rgba(255,255,255,0.3);">Submitted '+age+'h ago · Response within 24h</div></div></div>';
+      return;
+    }
+  } catch {}
+  result.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.4);">Ticket not found locally. Please <a href="https://wa.me/254700000000?text=Ticket+' + id + '" target="_blank" style="color:#25d366;">follow up on WhatsApp</a> with your ticket ID.</div>';
+}
+
+/* Show last ticket if any */
+window.addEventListener('DOMContentLoaded', function() {
+  try {
+    var last = JSON.parse(localStorage.getItem('_sokoniLastTicket')||'{}');
+    if (last.id) {
+      var el = document.getElementById('spLastTicket');
+      var age = Math.round((Date.now()-last.ts)/3600000);
+      document.getElementById('spLastTicketContent').innerHTML = '<div style="font-size:12px;font-family:monospace;color:#71ff00;font-weight:800;">'+last.id+'</div><div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">Submitted '+age+'h ago · Status: <span style="color:#f59e0b;font-weight:800;">Under Review</span></div>';
+      el.style.display = 'block';
+    }
+  } catch {}
+  buildFAQ();
+});
+
+function buildFAQ() {
+  var faqs = [
+    ['My M-Pesa payment went through but my order wasn\'t confirmed.','Don\'t worry — this happens when there\'s a network delay. Check your M-Pesa messages for a confirmation. If the money was deducted and no order appears within 30 minutes, submit a support ticket with your M-Pesa receipt number.'],
+    ['How long does delivery take?','Standard SOKONI delivery within Nairobi takes 2–6 hours. Upcountry deliveries take 1–3 business days. You can track your delivery in real-time from the Track page.'],
+    ['I want to return a product / get a refund.','You can request a return within 48 hours of delivery. Go to your Order → tap "Report Issue" → select "Return / Refund". Our team will review within 24 hours.'],
+    ['How do I become a verified seller?','Go to Profile → Get Verified → fill in the form and upload your ID. Verification takes 24–48 hours. Verified sellers get a ✅ badge and rank higher in search.'],
+    ['My account is locked or I can\'t log in.','Try resetting your password via "Forgot Password" on the login page. If your account has been locked for security reasons, submit a ticket — include your phone number.'],
+    ['How does M-Pesa payment work?','Enter your M-Pesa number at checkout. You\'ll receive an STK Push prompt on your phone. Enter your M-Pesa PIN to confirm. Payment is held in escrow until you confirm delivery.'],
+    ['I\'m a driver and my payout is delayed.','Earnings are processed every Monday. If your payout is more than 7 days late, submit a ticket with your phone number and the delivery IDs you\'re owed for.'],
+    ['How do I cancel an order?','You can cancel an unpaid or just-placed order from Order → Cancel. Once the seller has confirmed, cancellation goes through dispute resolution.'],
+    ['Is my payment information safe?','Yes. SOKONI never stores your M-Pesa PIN — payment is processed directly by Safaricom via IntaSend. We use Firebase security and all data is encrypted.'],
+    ['How do I report a seller or buyer?','Open the user\'s profile → tap the ⋮ menu → Report. You can also submit a support ticket with the issue. All reports are reviewed within 24 hours.'],
+  ];
+  var el = document.getElementById('spFaq');
+  el.innerHTML = faqs.map(function(f, i) {
+    return '<div class="sp-faq-item">' +
+      '<button class="sp-faq-q" onclick="toggleFaq('+i+',this)">'+f[0]+'<span class="chev">▾</span></button>' +
+      '<div class="sp-faq-a" id="spFaqA'+i+'">'+f[1]+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+function toggleFaq(i, btn) {
+  var a = document.getElementById('spFaqA'+i);
+  var open = a.classList.contains('open');
+  document.querySelectorAll('.sp-faq-q').forEach(function(q){ q.classList.remove('open'); });
+  document.querySelectorAll('.sp-faq-a').forEach(function(a){ a.classList.remove('open'); });
+  if (!open) { btn.classList.add('open'); a.classList.add('open'); }
+}
+</script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

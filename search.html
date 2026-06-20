@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Universal Search</title>
+  <meta name="description" content="Search products, services, jobs, properties, vehicles, businesses and professionals on SOKONI Kenya marketplace.">
+  <meta property="og:title" content="SOKONI — Universal Search">
+  <meta property="og:description" content="Find anything on SOKONI — Kenya's premier marketplace.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+
+  <style>
+    /* ===== BASE ===== */
+    :root {
+      --accent: #71ff00;
+      --accent-dim: rgba(113,255,0,0.12);
+      --accent-border: rgba(113,255,0,0.22);
+      --bg: #0a0a0a;
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.07);
+      --border: rgba(255,255,255,0.08);
+      --text: rgba(255,255,255,0.92);
+      --text-muted: rgba(255,255,255,0.45);
+      --radius: 16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ===== SEARCH HERO ===== */
+    .search-hero {
+      padding: 28px 20px 20px;
+      background: linear-gradient(180deg, rgba(113,255,0,0.04) 0%, transparent 100%);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-hero-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      opacity: .8;
+    }
+
+    .search-box-wrap {
+      position: relative;
+      max-width: 720px;
+    }
+
+    .search-box-icon {
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 18px;
+      pointer-events: none;
+      opacity: .5;
+    }
+
+    #searchInput {
+      width: 100%;
+      padding: 16px 60px 16px 52px;
+      background: rgba(255,255,255,0.07);
+      border: 1.5px solid var(--border);
+      border-radius: 28px;
+      color: var(--text);
+      font-size: 16px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s, background .2s;
+    }
+
+    #searchInput:focus {
+      border-color: var(--accent-border);
+      background: rgba(255,255,255,0.1);
+      box-shadow: 0 0 0 4px rgba(113,255,0,0.08), 0 6px 28px rgba(0,0,0,0.4);
+    }
+
+    #searchInput::placeholder { color: var(--text-muted); }
+
+    .search-clear-btn {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: var(--text-muted);
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s, color .15s;
+    }
+    .search-clear-btn:hover { background: rgba(255,255,255,0.14); color: var(--text); }
+    .search-clear-btn.visible { display: flex; }
+
+    /* ===== TABS ===== */
+    .tab-bar-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 14px 20px 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: sticky;
+      top: 64px; /* shared header height */
+      z-index: 100;
+    }
+    @media (max-width: 600px) {
+      .tab-bar-wrap { top: 112px; } /* two-row header on mobile */
+    }
+    .tab-bar-wrap::-webkit-scrollbar { display: none; }
+
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      min-width: max-content;
+      padding-bottom: 0;
+    }
+
+    .tab-btn {
+      padding: 9px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      border-radius: 10px 10px 0 0;
+      white-space: nowrap;
+      transition: color .15s, background .15s;
+      border-bottom: 2.5px solid transparent;
+      position: relative;
+      bottom: -1px;
+    }
+
+    .tab-btn:hover { color: var(--text); background: var(--surface-hover); }
+
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(113,255,0,0.05);
+    }
+
+    .tab-count {
+      display: inline-block;
+      background: rgba(113,255,0,0.14);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 800;
+      border-radius: 20px;
+      padding: 1px 6px;
+      margin-left: 5px;
+      min-width: 18px;
+      text-align: center;
+      transition: opacity .2s;
+    }
+    .tab-count.hidden { opacity: 0; }
+
+    /* ===== RESULTS AREA ===== */
+    .results-area {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    .results-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding: 0 2px;
+    }
+    .results-meta strong { color: var(--accent); font-weight: 800; }
+    .results-meta-count { flex: 1; min-width: 0; }
+    .results-sort-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .sort-label { font-size: 11px; color: var(--text-muted); }
+    .sort-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      cursor: pointer;
+      outline: none;
+    }
+    .sort-select:focus { border-color: var(--accent-border); }
+
+    .price-filter-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .price-chip {
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .price-chip:hover, .price-chip--active {
+      border-color: var(--accent-border);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .recent-searches-wrap {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    .recent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 10px;
+    }
+    .recent-clear-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0;
+    }
+    .recent-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .recent-chip {
+      padding: 5px 13px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .recent-chip:hover {
+      border-color: var(--accent-border);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .vbadge { font-size: 12px; vertical-align: middle; margin-left: 4px; }
+
+    /* ===== SKELETON ===== */
+    .skeleton-wrap {
+      display: grid;
+      gap: 10px;
+    }
+
+    .skeleton-card {
+      height: 80px;
+      border-radius: var(--radius);
+      background: linear-gradient(
+        90deg,
+        rgba(255,255,255,0.04) 25%,
+        rgba(255,255,255,0.08) 50%,
+        rgba(255,255,255,0.04) 75%
+      );
+      background-size: 400% 100%;
+      animation: shimmer 1.4s ease infinite;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 100% 50%; }
+      100% { background-position: 0%   50%; }
+    }
+
+    /* ===== RESULT CARDS ===== */
+    .results-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .result-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: background .15s, border-color .15s, transform .12s;
+    }
+
+    .result-card:hover {
+      background: var(--surface-hover);
+      border-color: rgba(113,255,0,0.18);
+      transform: translateY(-1px);
+    }
+
+    .result-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .result-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+
+    mark {
+      background: transparent;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .result-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .result-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+
+    .result-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .result-tag {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.07);
+      color: var(--text-muted);
+    }
+
+    .result-location {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .result-price {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--accent);
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .result-view-btn {
+      flex-shrink: 0;
+      padding: 7px 14px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-border);
+      border-radius: 20px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .result-view-btn:hover { background: rgba(113,255,0,0.22); }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px 40px;
+    }
+
+    .empty-icon {
+      font-size: 56px;
+      margin-bottom: 16px;
+      display: block;
+      opacity: .6;
+    }
+
+    .empty-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .empty-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .suggestion-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .chip {
+      padding: 8px 16px;
+      border-radius: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s;
+      font-family: inherit;
+    }
+
+    .chip:hover {
+      background: var(--accent-dim);
+      border-color: var(--accent-border);
+      color: var(--accent);
+    }
+
+    /* ===== PROMPT STATE (no query yet) ===== */
+    .prompt-state {
+      text-align: center;
+      padding: 50px 20px 40px;
+    }
+    .prompt-state .big-icon { font-size: 64px; display: block; margin-bottom: 18px; opacity: .35; }
+    .prompt-state h2 { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .prompt-state p  { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+    .category-quick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-top: 28px;
+      text-align: left;
+    }
+
+    .quick-tile {
+      padding: 14px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-family: inherit;
+      color: inherit;
+      transition: background .15s, border-color .15s;
+    }
+    .quick-tile:hover { background: var(--surface-hover); border-color: var(--accent-border); }
+    .quick-tile .tile-icon { font-size: 24px; display: block; margin-bottom: 6px; }
+    .quick-tile .tile-label { font-size: 12px; font-weight: 700; color: var(--text); display: block; }
+    .quick-tile .tile-sub   { font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; }
+
+    /* ===== BOTTOM NAV ===== */
+    .bottom-nav {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(10,10,10,0.97);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      z-index: 500;
+      padding: 6px 0 max(6px, env(safe-area-inset-bottom, 6px));
+    }
+    @media (max-width: 768px) {
+      .bottom-nav { display: flex; justify-content: space-around; align-items: center; }
+    }
+    .bottom-nav a {
+      display: flex; flex-direction: column; align-items: center;
+      color: var(--text-muted); text-decoration: none;
+      font-size: 9px; font-weight: 600; gap: 3px; padding: 4px 10px;
+      border-radius: 10px; transition: color .15s;
+    }
+    .bottom-nav a.active, .bottom-nav a:hover { color: var(--accent); }
+    .bottom-nav a span:first-child { font-size: 20px; }
+
+    /* ===== DESKTOP: wider cards ===== */
+    @media (min-width: 640px) {
+      .results-area { padding: 24px 24px 60px; }
+      .result-card { padding: 16px 20px; }
+    }
+  </style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- Shared header (auto-injected) -->
+<script src="shared-header.js"></script>
+
+<!-- ===== SEARCH HERO ===== -->
+<div class="search-hero">
+  <div class="search-hero-label">Universal Search</div>
+  <div class="search-box-wrap">
+    <span class="search-box-icon">🔍</span>
+    <input
+      id="searchInput"
+      type="search"
+      placeholder="Search products, services, jobs, properties…"
+      autocomplete="off"
+      aria-label="Search SOKONI"
+      inputmode="search"
+    >
+    <button class="search-clear-btn" id="clearBtn" aria-label="Clear search" title="Clear">✕</button>
+  </div>
+</div>
+
+<!-- ===== TABS ===== -->
+<div class="tab-bar-wrap" role="tablist" aria-label="Filter results by type">
+  <div class="tab-bar" id="tabBar">
+    <!-- rendered by JS -->
+  </div>
+</div>
+
+<!-- ===== RESULTS ===== -->
+<div class="results-area" id="resultsArea">
+  <!-- prompt / skeleton / results rendered here -->
+</div>
+
+<!-- ===== RECOMMENDATIONS (shown when no query is active) ===== -->
+<div id="sk-recs-search" style="max-width:900px;margin:0 auto;"></div>
+
+<!-- ===== BOTTOM NAV ===== -->
+<nav class="bottom-nav" aria-label="Main navigation">
+  <a href="index.html"><span>🏠</span><span>Home</span></a>
+  <a href="category.html"><span>🛍️</span><span>Shop</span></a>
+  <a href="search.html" class="active"><span>🔍</span><span>Search</span></a>
+  <a href="cart.html"><span>🛒</span><span>Cart</span></a>
+  <a href="profile.html"><span>👤</span><span>Profile</span></a>
+</nav>
+
+<!-- ===== RECOMMENDATIONS ENGINE ===== -->
+<script src="sokoni-recommendations.js"></script>
+
+<!-- ===== FIREBASE + SEARCH LOGIC ===== -->
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, query, where, limit, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ── Firebase config ── */
+const FB = {
+  apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+  authDomain:        "sokoni-aeb26.firebaseapp.com",
+  projectId:         "sokoni-aeb26",
+  storageBucket:     "sokoni-aeb26.firebasestorage.app",
+  messagingSenderId: "24799054989",
+  appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4",
+};
+const app = initializeApp(FB, "search-page");
+const db  = getFirestore(app);
+
+/* ── Tab definitions ── */
+const TABS = [
+  { id: "all",           label: "All",           icon: "✨" },
+  { id: "products",      label: "Products",       icon: "🛍️" },
+  { id: "services",      label: "Services",       icon: "🔧" },
+  { id: "jobs",          label: "Jobs",           icon: "💼" },
+  { id: "properties",    label: "Properties",     icon: "🏠" },
+  { id: "vehicles",      label: "Vehicles",       icon: "🚗" },
+  { id: "events",        label: "Events",         icon: "🎉" },
+  { id: "businesses",    label: "Businesses",     icon: "🏪" },
+  { id: "professionals", label: "Professionals",  icon: "👷" },
+];
+
+/* ── Per-collection Firestore query modifiers.
+   Each returns a Firebase Query — limit(200) on all to prevent unbounded reads. ── */
+const _q = (col, ...constraints) => query(col, ...constraints, limit(200));
+
+/* ── Collection specs ── */
+const COLLECTIONS = [
+  {
+    name: "products",
+    tab: "products",
+    icon: "🛍️",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.title || d.name || "",
+    getSubtitle: d => d.category || d.sellerName || "",
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
+    getLink:     (d, id) => "product.html?id=" + id,
+  },
+  {
+    name: "services",
+    tab: "services",
+    icon: "🔧",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.name || d.title || "",
+    getSubtitle: d => d.category || d.providerName || "",
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
+    getLink:     (d, id) => "services.html?id=" + id,
+  },
+  {
+    name: "digitalJobs",
+    tab: "jobs",
+    icon: "💼",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.title || d.name || "",
+    getSubtitle: d => d.category || d.posterName || "",
+    getLocation: d => d.location || "",
+    getPrice:    d => d.budget != null ? "KES " + Number(d.budget).toLocaleString() : null,
+    getLink:     (d, id) => "opportunity.html?id=" + id,
+  },
+  {
+    name: "applications",
+    tab: "jobs",
+    icon: "📋",
+    buildQuery: col => _q(col, where("status", "==", "open")),
+    getTitle:    d => d.title || d.name || "",
+    getSubtitle: d => d.category || d.type || "Job",
+    getLocation: d => d.location || "",
+    getPrice:    d => d.salary != null ? "KES " + Number(d.salary).toLocaleString() : null,
+    getLink:     (d, id) => "opportunity.html?id=" + id,
+  },
+  {
+    name: "properties",
+    tab: "properties",
+    icon: "🏠",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.title || d.name || "",
+    getSubtitle: d => [d.type, d.bedrooms ? d.bedrooms + " bed" : null].filter(Boolean).join(" · "),
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
+    getLink:     (d, id) => "property.html?id=" + id,
+  },
+  {
+    name: "propertyListings",
+    tab: "properties",
+    icon: "🏡",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.title || d.name || "",
+    getSubtitle: d => [d.type, d.bedrooms ? d.bedrooms + " bed" : null, d.bathrooms ? d.bathrooms + " bath" : null].filter(Boolean).join(" · "),
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() + (d.period ? "/" + d.period : "") : null,
+    getLink:     (d, id) => "property.html?id=" + id,
+  },
+  {
+    name: "bnbListings",
+    tab: "properties",
+    icon: "🛏️",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.title || d.name || "",
+    getSubtitle: d => [d.type || "BnB", d.guests ? d.guests + " guests" : null].filter(Boolean).join(" · "),
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.pricePerNight != null ? "KES " + Number(d.pricePerNight).toLocaleString() + "/night" : null,
+    getLink:     (d, id) => "bnb.html?id=" + id,
+  },
+  {
+    name: "vehicles",
+    tab: "vehicles",
+    icon: "🚗",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.name || d.title || [d.make, d.model].filter(Boolean).join(" ") || "",
+    getSubtitle: d => [d.make, d.model, d.year].filter(Boolean).join(" · "),
+    getLocation: d => d.location || "",
+    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
+    getLink:     (d, id) => "car-hub.html?tab=browse&id=" + id,
+  },
+  {
+    name: "entEvents",
+    tab: "events",
+    icon: "🎉",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.title || d.name || "",
+    getSubtitle: d => [d.category || d.type, d.venue || d.location].filter(Boolean).join(" · "),
+    getLocation: d => d.location || d.venue || d.city || "",
+    getPrice:    d => d.ticketPrice != null ? "KES " + Number(d.ticketPrice).toLocaleString() : (d.free ? "Free" : null),
+    getLink:     (d, id) => "entertainment.html?event=" + id,
+  },
+  {
+    name: "mechanics",
+    tab: "businesses",
+    icon: "🔧",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.name || "",
+    getSubtitle: d => d.type || d.spec || "Auto Service",
+    getLocation: d => d.location || "",
+    getPrice:    null,
+    getLink:     (d, id) => "car-hub.html?tab=mechanics",
+  },
+  {
+    name: "entVenues",
+    tab: "businesses",
+    icon: "🎭",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.name || "",
+    getSubtitle: d => d.type || d.category || "Venue",
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.capacity ? "Capacity: " + d.capacity : null,
+    getLink:     (d, id) => "entertainment.html?venue=" + id,
+  },
+  {
+    name: "providers",
+    tab: "professionals",
+    icon: "👷",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.name || "",
+    getSubtitle: d => d.category || "Professional",
+    getLocation: d => d.location || "",
+    getPrice:    d => d.rate != null ? "KES " + Number(d.rate).toLocaleString() : null,
+    getLink:     (d, id) => "provider.html?id=" + id,
+  },
+  {
+    name: "healthProviders",
+    tab: "professionals",
+    icon: "🏥",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.name || d.title || "",
+    getSubtitle: d => d.specialty || d.category || "Healthcare",
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.consultationFee != null ? "KES " + Number(d.consultationFee).toLocaleString() : null,
+    getLink:     (d, id) => "healthcare.html?provider=" + id,
+  },
+  {
+    name: "lawyers",
+    tab: "professionals",
+    icon: "⚖️",
+    buildQuery: col => _q(col),
+    getTitle:    d => d.name || "",
+    getSubtitle: d => d.specialty || d.practice || "Legal Professional",
+    getLocation: d => d.location || d.city || "",
+    getPrice:    d => d.hourlyRate != null ? "KES " + Number(d.hourlyRate).toLocaleString() + "/hr" : null,
+    getLink:     (d, id) => "legal-hub.html?lawyer=" + id,
+  },
+];
+
+/* ── State ── */
+let allResults  = [];
+let counts      = {};
+let activeTab   = "all";
+let lastQuery   = "";
+let debounceTimer;
+let isLoading   = false;
+let activeSort  = "relevance";   /* relevance | price_asc | price_desc | newest */
+let priceFilter = null;          /* null | [min,max] */
+
+/* ── Recent Searches (localStorage) ── */
+const _RS_KEY = "sokoniRecentSearches";
+function _saveRecentSearch(q) {
+  if (!q || q.length < 2) return;
+  let list = _getRecentSearches();
+  list = [q, ...list.filter(s => s.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+  try { localStorage.setItem(_RS_KEY, JSON.stringify(list)); } catch(e) {}
+}
+function _getRecentSearches() {
+  try { return JSON.parse(localStorage.getItem(_RS_KEY)) || []; } catch(e) { return []; }
+}
+function _clearRecentSearches() {
+  try { localStorage.removeItem(_RS_KEY); } catch(e) {}
+  renderPrompt();
+}
+
+/* ── Sort helpers ── */
+function _sortResults(results) {
+  if (activeSort === "price_asc") {
+    return [...results].sort((a, b) => _parsePrice(a.price) - _parsePrice(b.price));
+  }
+  if (activeSort === "price_desc") {
+    return [...results].sort((a, b) => _parsePrice(b.price) - _parsePrice(a.price));
+  }
+  return results; /* relevance = original order */
+}
+function _parsePrice(str) {
+  if (!str) return Infinity;
+  return parseFloat(String(str).replace(/[^0-9.]/g, "")) || Infinity;
+}
+function _applyPriceFilter(results) {
+  if (!priceFilter) return results;
+  const [mn, mx] = priceFilter;
+  return results.filter(r => {
+    const p = _parsePrice(r.price);
+    return p >= mn && p <= mx;
+  });
+}
+
+/* ── DOM refs ── */
+const searchInput = document.getElementById("searchInput");
+const clearBtn    = document.getElementById("clearBtn");
+const tabBar      = document.getElementById("tabBar");
+const resultsArea = document.getElementById("resultsArea");
+
+/* ──────────────────────────────────────────
+   RENDER TABS
+────────────────────────────────────────── */
+function renderTabs() {
+  tabBar.innerHTML = TABS.map(t => {
+    const c = t.id === "all"
+      ? allResults.length
+      : (counts[t.id] || 0);
+    const hasQuery = lastQuery.length > 0;
+    return `<button
+      class="tab-btn${activeTab === t.id ? " active" : ""}"
+      data-tab="${t.id}"
+      role="tab"
+      aria-selected="${activeTab === t.id}"
+    >${t.icon} ${t.label}<span class="tab-count${!hasQuery ? " hidden" : ""}">${c}</span></button>`;
+  }).join("");
+
+  tabBar.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeTab = btn.dataset.tab;
+      renderTabs();
+      renderResults();
+    });
+  });
+}
+
+/* ──────────────────────────────────────────
+   RENDER SKELETON
+────────────────────────────────────────── */
+function renderSkeleton() {
+  resultsArea.innerHTML =
+    '<div class="skeleton-wrap">' +
+    Array.from({ length: 6 }, () =>
+      '<div class="skeleton-card"></div>'
+    ).join("") +
+    '</div>';
+}
+
+/* ──────────────────────────────────────────
+   RENDER PROMPT (no query)
+────────────────────────────────────────── */
+function renderPrompt() {
+  const quickItems = [
+    { icon: "📱", label: "Electronics", sub: "Phones & gadgets" },
+    { icon: "👗", label: "Fashion",     sub: "Clothing & accessories" },
+    { icon: "🏡", label: "Properties",  sub: "Rent & buy" },
+    { icon: "🚗", label: "Vehicles",    sub: "Cars & bikes" },
+    { icon: "🔧", label: "Services",    sub: "Skilled services" },
+    { icon: "💼", label: "Jobs",        sub: "Find work" },
+    { icon: "🏪", label: "Businesses",  sub: "Local shops" },
+    { icon: "👷", label: "Experts",     sub: "Professionals" },
+  ];
+
+  const recent = _getRecentSearches();
+  const recentHTML = recent.length
+    ? `<div class="recent-searches-wrap">
+        <div class="recent-header">
+          <span>🕐 Recent Searches</span>
+          <button id="clearRecentBtn" class="recent-clear-btn">Clear</button>
+        </div>
+        <div class="recent-chips">
+          ${recent.map(s => `<button class="recent-chip" data-q="${escHtml(s)}">${escHtml(s)}</button>`).join("")}
+        </div>
+       </div>`
+    : "";
+
+  resultsArea.innerHTML =
+    '<div class="prompt-state">' +
+      '<span class="big-icon">🔍</span>' +
+      '<h2>Search Everything on SOKONI</h2>' +
+      '<p>Products, services, jobs, properties, vehicles,<br>businesses and professionals — all in one place.</p>' +
+      recentHTML +
+      '<div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Popular Categories</div>' +
+      '<div class="category-quick-grid">' +
+        quickItems.map(q =>
+          `<button class="quick-tile" data-q="${escHtml(q.label)}">
+            <span class="tile-icon">${q.icon}</span>
+            <span class="tile-label">${escHtml(q.label)}</span>
+            <span class="tile-sub">${escHtml(q.sub)}</span>
+          </button>`
+        ).join("") +
+      '</div>' +
+    '</div>';
+
+  resultsArea.querySelectorAll(".quick-tile, .recent-chip").forEach(tile => {
+    tile.addEventListener("click", () => {
+      searchInput.value = tile.dataset.q;
+      triggerSearch(tile.dataset.q);
+    });
+  });
+
+  const clearRecentBtn = document.getElementById("clearRecentBtn");
+  if (clearRecentBtn) clearRecentBtn.addEventListener("click", _clearRecentSearches);
+
+  if (window.SokoniRecs) {
+    SokoniRecs.init().then(() => {
+      SokoniRecs.getForYou(8).then(items => {
+        SokoniRecs.renderWidget('sk-recs-search', items, 'Recommended For You');
+      });
+    });
+  }
+}
+
+/* Hide recommendations panel when a search is active */
+function _hideSearchRecs() {
+  const el = document.getElementById('sk-recs-search');
+  if (el) el.innerHTML = '';
+}
+
+/* ──────────────────────────────────────────
+   RENDER EMPTY STATE
+────────────────────────────────────────── */
+function renderEmpty(query) {
+  const suggestions = ["Laptop", "Plumber", "2BR apartment", "Toyota", "Catering", "Logo design"];
+  resultsArea.innerHTML =
+    '<div class="empty-state">' +
+      '<span class="empty-icon">😕</span>' +
+      `<div class="empty-title">No results for "${escHtml(query)}"</div>` +
+      '<div class="empty-sub">Try a different spelling, broader term, or one of these:</div>' +
+      '<div class="suggestion-chips">' +
+        suggestions.map(s =>
+          `<button class="chip" data-q="${escHtml(s)}">${escHtml(s)}</button>`
+        ).join("") +
+      '</div>' +
+    '</div>';
+
+  resultsArea.querySelectorAll(".chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      searchInput.value = chip.dataset.q;
+      triggerSearch(chip.dataset.q);
+    });
+  });
+}
+
+/* ──────────────────────────────────────────
+   RENDER RESULTS
+────────────────────────────────────────── */
+function renderResults() {
+  let filtered = activeTab === "all"
+    ? allResults.slice()
+    : allResults.filter(r => r.tab === activeTab);
+
+  filtered = _applyPriceFilter(filtered);
+  filtered = _sortResults(filtered);
+
+  if (filtered.length === 0) {
+    renderEmpty(lastQuery);
+    return;
+  }
+
+  const totalLabel = activeTab === "all"
+    ? `<strong>${filtered.length}</strong> results`
+    : `<strong>${filtered.length}</strong> in ${TABS.find(t => t.id === activeTab)?.label || activeTab}`;
+
+  const priceChips = [
+    { label: "All Prices", val: null },
+    { label: "Under KES 1K", val: [0, 1000] },
+    { label: "KES 1K–5K",   val: [1000, 5000] },
+    { label: "KES 5K–20K",  val: [5000, 20000] },
+    { label: "KES 20K+",    val: [20000, Infinity] },
+  ];
+
+  const pChipsHTML = priceChips.map(c => {
+    const active = priceFilter === c.val ||
+      (priceFilter && c.val && priceFilter[0] === c.val[0] && priceFilter[1] === c.val[1]);
+    return `<button class="price-chip${active ? " price-chip--active" : ""}" data-pmin="${c.val ? c.val[0] : ""}" data-pmax="${c.val ? c.val[1] : ""}">${escHtml(c.label)}</button>`;
+  }).join("");
+
+  resultsArea.innerHTML =
+    `<div class="results-meta">
+      <span class="results-meta-count">${totalLabel} for "<strong>${escHtml(lastQuery)}</strong>"</span>
+      <div class="results-sort-wrap">
+        <label class="sort-label">Sort:</label>
+        <select id="sortSelect" class="sort-select">
+          <option value="relevance"${activeSort==="relevance"?" selected":""}>Relevance</option>
+          <option value="price_asc"${activeSort==="price_asc"?" selected":""}>Price ↑</option>
+          <option value="price_desc"${activeSort==="price_desc"?" selected":""}>Price ↓</option>
+        </select>
+      </div>
+     </div>` +
+    `<div class="price-filter-row">${pChipsHTML}</div>` +
+    '<div class="results-grid" id="resultsGrid"></div>';
+
+  /* Sort select handler */
+  document.getElementById("sortSelect").addEventListener("change", e => {
+    activeSort = e.target.value;
+    renderResults();
+  });
+
+  /* Price chip handlers */
+  resultsArea.querySelectorAll(".price-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const min = btn.dataset.pmin;
+      const max = btn.dataset.pmax;
+      priceFilter = (min === "") ? null : [parseFloat(min), parseFloat(max)];
+      renderResults();
+    });
+  });
+
+  const grid = document.getElementById("resultsGrid");
+  grid.innerHTML = filtered.map((r, i) => `
+    <a class="result-card" href="${escHtml(r.link)}" aria-label="${escHtml(r.title)}"
+       data-objectid="${escHtml(r.id)}"
+       data-index="${escHtml(r._idx || 'sokoni_products')}"
+       data-queryid="${escHtml(r._queryID || '')}"
+       data-position="${i + 1}"
+       data-thumbnail="${escHtml(r.thumbnail || '')}">
+      ${r.thumbnail
+        ? `<img class="result-thumb" src="${escHtml(r.thumbnail)}" alt="" loading="lazy">`
+        : `<div class="result-icon">${r.icon}</div>`}
+      <div class="result-body">
+        <div class="result-title">${escHtml(r.title)}${r.verified ? ' <span class="vbadge" title="Verified Seller">✅</span>' : ""}</div>
+        <div class="result-meta-row">
+          <span class="result-tag">${escHtml(r.subtitle)}</span>
+          ${r.location ? `<span class="result-location">📍 ${escHtml(r.location)}</span>` : ""}
+        </div>
+      </div>
+      ${r.price ? `<span class="result-price">${escHtml(r.price)}</span>` : ""}
+      <span class="result-view-btn">View</span>
+    </a>
+  `).join("");
+}
+
+/* ──────────────────────────────────────────
+   INDEX → TAB mapping
+────────────────────────────────────────── */
+const _INDEX_TAB = {
+  sokoni_products:   "products",
+  sokoni_shops:      "businesses",
+  sokoni_services:   "services",
+  sokoni_jobs:       "jobs",
+  sokoni_properties: "properties",
+  sokoni_vehicles:   "vehicles",
+  sokoni_events:     "events",
+  sokoni_users:      "professionals",
+  sokoni_brands:     "businesses",
+  sokoni_categories: "products",
+  sokoni_collections:"products",
+};
+const _TAB_ICON = {
+  products: "🛍️", services: "🔧", jobs: "💼",
+  properties: "🏠", vehicles: "🚗", events: "🎉",
+  businesses: "🏪", professionals: "👷",
+};
+
+/* ──────────────────────────────────────────
+   SEARCH — enterprise engine → Firestore fallback
+────────────────────────────────────────── */
+async function doSearch(rawQuery) {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) { renderPrompt(); renderTabs(); return; }
+
+  _hideSearchRecs();
+  isLoading = true;
+  renderSkeleton();
+
+  /* ── Path A: sokoni-search-engine.js (enterprise Algolia + Firestore fallback) ── */
+  if (window.sokoniSearch) {
+    try {
+      const eng = window.sokoniSearch;
+      await eng.init();
+      const userToken = eng.getUserToken();
+      const activeFilter = activeTab !== "all" ? { hub: activeTab } : {};
+      const res = await eng.search(q, {
+        hitsPerPage: 60,
+        filters:     activeFilter,
+        userToken,
+      });
+      const allHits = Object.entries(res.results || {}).flatMap(([idx, r]) =>
+        (r.hits || []).map(h => ({ ...h, _idx: idx, _queryID: r.queryID }))
+      );
+      if (allHits.length > 0) {
+        allResults = allHits.map(h => {
+          const tab = _INDEX_TAB[h._idx] || h.tab || h.type || "products";
+          const title = h._highlightResult?.name?.value || h._highlightResult?.title?.value || h.name || h.title || "(Untitled)";
+          /* Track view for recently-viewed engine */
+          return {
+            id:       h.objectID || h.id || "",
+            tab,
+            icon:     _TAB_ICON[tab] || "🔍",
+            title:    title.replace(/<\/?mark>/g, ""),      // strip Algolia highlight tags
+            titleHtml: title,                               // keep for rendering with highlights
+            subtitle: h.category || h.subcategory || "",
+            location: h.location?.area || h.location?.city || h.city || "",
+            price:    h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
+            link:     h.link || h.url || "index.html",
+            thumbnail: h.thumbnail || h.image || null,
+            verified: Boolean(h.seller?.verified || h.verified),
+            _queryID: h._queryID,
+            _idx:     h._idx,
+          };
+        });
+        counts = {};
+        TABS.slice(1).forEach(t => { counts[t.id] = 0; });
+        allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
+        isLoading = false;
+        renderTabs();
+        renderResults();
+        /* Analytics: record search event */
+        const fn = typeof firebase !== "undefined" && firebase.functions().httpsCallable("recordSearchEvent");
+        if (fn) fn({ type: "search", query: q, resultCount: allHits.length }).catch(() => {});
+        return;
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") console.warn("[SOKONI Search] Engine error, falling back to Firestore:", e.message);
+    }
+  }
+
+  /* ── Path B: sokoni-typesense-engine.js (secondary enterprise engine) ── */
+  if (window.sokoniTypesenseSearch) {
+    try {
+      const tsEng   = window.sokoniTypesenseSearch;
+      await tsEng._ensureReady();
+      if (tsEng._ready) {
+        const tsFilter = tsEng.buildFilterBy(activeTab !== "all" ? { hub: activeTab, _skipStatusFilter: false } : {});
+        const tsRes   = await tsEng.search(q, {
+          collections: Object.values(_INDEX_TAB).filter((v, i, a) => a.indexOf(v) === i).map(
+            tab => Object.entries(_INDEX_TAB).find(([, t]) => t === tab)?.[0]
+          ).filter(Boolean).slice(0, 12),
+          filterBy: tsFilter,
+          perPage:  60,
+        });
+        const tsHits = Object.entries(tsRes.results || {}).flatMap(([col, r]) =>
+          (r.hits || []).map(h => ({ ...h.document, _highlights: h.highlights, _col: col }))
+        );
+        if (tsHits.length > 0) {
+          allResults = tsHits.map(h => {
+            const tab   = _INDEX_TAB[h._col] || "products";
+            const hlName = h._highlights?.find(hl => hl.field === "name" || hl.field === "title")?.snippet || "";
+            const title = h.name || h.title || "(Untitled)";
+            return {
+              id:        h.id || "",
+              tab,
+              icon:      _TAB_ICON[tab] || "🔍",
+              title:     title,
+              titleHtml: hlName || title,
+              subtitle:  h.category || h.subcategory || "",
+              location:  h.location_area || h.location_city || "",
+              price:     h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
+              link:      h.link || h.url || "index.html",
+              thumbnail: h.thumbnail || h.image || null,
+              verified:  Boolean(h.sellerVerified || h.verified),
+              _col:      h._col,
+              _source:   "typesense",
+            };
+          });
+          counts = {};
+          TABS.slice(1).forEach(t => { counts[t.id] = 0; });
+          allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
+          isLoading = false;
+          renderTabs();
+          renderResults();
+          /* Analytics: record Typesense search event */
+          tsEng._emitAnalyticsEvent("search", { query: q, hitCount: tsHits.length }).catch?.(() => {});
+          return;
+        }
+      }
+    } catch (tsErr) {
+      if (tsErr.name !== "AbortError") console.warn("[SOKONI Search] Typesense engine error:", tsErr.message);
+    }
+  }
+
+  /* ── Path C: Bounded Firestore client-side search (limit 200 per collection) ── */
+  const fetches = COLLECTIONS.map(async spec => {
+    try {
+      const colRef = collection(db, spec.name);
+      const fsQuery = spec.buildQuery ? spec.buildQuery(colRef) : query(colRef, limit(200));
+      const snap = await getDocs(fsQuery);
+      const rows = [];
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        const haystack = [
+          d.title, d.name, d.category, d.location, d.city,
+          d.description, d.type, d.spec, d.sellerName, d.providerName,
+          d.posterName, d.make, d.model, d.specialty, d.practice,
+          d.venue, d.tags ? d.tags.join(" ") : null,
+        ].filter(Boolean).join(" ").toLowerCase();
+
+        if (haystack.includes(q)) {
+          rows.push({
+            id:       docSnap.id,
+            tab:      spec.tab,
+            icon:     spec.icon,
+            title:    spec.getTitle(d) || "(Untitled)",
+            subtitle: spec.getSubtitle(d) || "",
+            location: spec.getLocation(d) || "",
+            price:    spec.getPrice ? spec.getPrice(d) : null,
+            link:     spec.getLink(d, docSnap.id),
+          });
+        }
+      });
+      return { tab: spec.tab, rows };
+    } catch (err) {
+      console.warn("[SOKONI Search] Collection", spec.name, "error:", err.message);
+      return { tab: spec.tab, rows: [] };
+    }
+  });
+
+  const results = await Promise.all(fetches);
+
+  allResults = [];
+  counts = {};
+  TABS.slice(1).forEach(t => { counts[t.id] = 0; });
+
+  results.forEach(({ tab, rows }) => {
+    allResults.push(...rows);
+    counts[tab] = (counts[tab] || 0) + rows.length;
+  });
+
+  isLoading = false;
+  renderTabs();
+  renderResults();
+}
+
+/* ──────────────────────────────────────────
+   INPUT HANDLING (debounced)
+────────────────────────────────────────── */
+function triggerSearch(val) {
+  lastQuery = val.trim();
+  updateClearBtn();
+  updateUrlParam(lastQuery);
+  if (lastQuery) {
+    _saveRecentSearch(lastQuery);
+    if (window.SokoniRecs) SokoniRecs.trackSearch(lastQuery);
+  }
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => doSearch(lastQuery), 350);
+}
+
+searchInput.addEventListener("input", () => triggerSearch(searchInput.value));
+
+searchInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    clearTimeout(debounceTimer);
+    lastQuery = searchInput.value.trim();
+    updateClearBtn();
+    updateUrlParam(lastQuery);
+    doSearch(lastQuery);
+  }
+});
+
+clearBtn.addEventListener("click", () => {
+  searchInput.value = "";
+  lastQuery = "";
+  allResults = [];
+  counts = {};
+  updateClearBtn();
+  updateUrlParam("");
+  renderTabs();
+  renderPrompt();
+  searchInput.focus();
+});
+
+function updateClearBtn() {
+  if (searchInput.value.length > 0) {
+    clearBtn.classList.add("visible");
+  } else {
+    clearBtn.classList.remove("visible");
+  }
+}
+
+/* ──────────────────────────────────────────
+   URL PARAM ?q=
+────────────────────────────────────────── */
+function updateUrlParam(q) {
+  const url = new URL(window.location.href);
+  if (q) {
+    url.searchParams.set("q", q);
+  } else {
+    url.searchParams.delete("q");
+  }
+  history.replaceState(null, "", url.toString());
+}
+
+/* ──────────────────────────────────────────
+   XSS-safe helper
+────────────────────────────────────────── */
+function escHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/* ──────────────────────────────────────────
+   INIT
+────────────────────────────────────────── */
+function init() {
+  renderTabs();
+
+  const urlQ = new URLSearchParams(window.location.search).get("q") || "";
+  if (urlQ) {
+    searchInput.value = urlQ;
+    lastQuery = urlQ;
+    updateClearBtn();
+    doSearch(urlQ);
+  } else {
+    renderPrompt();
+  }
+}
+
+init();
+</script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Scale + Search stack -->
+  <script defer src="sokoni-scale.js"></script>
+  <script defer src="sokoni-cache.js"></script>
+  <script defer src="sokoni-search.js"></script>
+  <!-- Enterprise v3.0: Algolia-backed search engine -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-search-pro.js"></script>
+  <script defer src="sokoni-search-engine.js"></script>
+  <!-- Typesense secondary engine (runs in parallel, acts as fallback when Algolia misses) -->
+  <script defer src="sokoni-typesense-engine.js"></script>
+
+  <script>
+    /* Unified click tracking — handles both Algolia and Typesense results */
+    document.addEventListener("click", function(e) {
+      const link = e.target.closest("a[data-objectid], a[data-tsid]");
+      if (!link) return;
+
+      const name      = link.querySelector(".result-title")?.textContent || "";
+      const thumbnail = link.dataset.thumbnail || null;
+      const url       = link.href;
+
+      /* Algolia click tracking */
+      if (link.dataset.objectid && window.sokoniSearch) {
+        const objectID  = link.dataset.objectid;
+        const indexName = link.dataset.index || "sokoni_products";
+        const queryID   = link.dataset.queryid || "";
+        const pos       = parseInt(link.dataset.position || "1", 10);
+        window.sokoniSearch.trackClick({ indexName, objectID, queryID, position: pos, userToken: window.sokoniSearch.getUserToken() });
+        window.sokoniSearch.trackView({ id: objectID, name, thumbnail, url });
+      }
+
+      /* Typesense click tracking */
+      if (window.sokoniTypesenseSearch) {
+        const docId     = link.dataset.tsid || link.dataset.objectid || "";
+        const col       = link.dataset.tscol || link.dataset.index || "sokoni_products";
+        const pos       = parseInt(link.dataset.position || "1", 10);
+        const query     = (typeof lastQuery !== "undefined" ? lastQuery : "") || "";
+        if (docId) window.sokoniTypesenseSearch.trackClick(docId, col, pos, query);
+        window.sokoniTypesenseSearch.trackView({ id: docId, name, thumbnail, url });
+      }
+    });
+  </script>
+
+<script src="sokoni-config.js"></script>
+<script src="auth-guard.js"></script>
+<script src="sokoni-cache.js" defer></script>
+<script src="sokoni-search-engine.js" defer></script>
+<script src="sokoni-typesense-engine.js" defer></script>
+<script src="sokoni-search-recommendations.js" defer></script>
+<script src="sokoni-search.js" defer></script>
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+
+</body>
+</html>

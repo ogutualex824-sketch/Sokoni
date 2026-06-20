@@ -1,0 +1,654 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Store — SOKONI</title>
+  <meta name="description" content="Browse SOKONI store — thousands of products from verified Kenyan sellers.">
+  <meta property="og:title" content="Store — SOKONI">
+  <meta property="og:description" content="Shop thousands of products from verified Kenyan sellers on SOKONI.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
+
+    /* NAV */
+    .st-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px;
+      background: rgba(10,10,10,0.96);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .st-nav-logo { height: 34px; }
+    .st-nav-back {
+      display: flex; align-items: center; gap: 8px;
+      color: rgba(255,255,255,0.55); text-decoration: none;
+      font-size: 13px; font-weight: 600;
+      padding: 8px 16px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      transition: all .2s;
+    }
+    .st-nav-back:hover { color: white; border-color: rgba(255,255,255,0.25); }
+
+    /* BANNER */
+    .st-banner {
+      width: 100%; height: 220px; position: relative; overflow: hidden;
+      background: linear-gradient(135deg, #0d1f0d, #0a0a1a, #1a0d1f);
+    }
+    .st-banner-img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      filter: brightness(0.65);
+    }
+    .st-banner-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 40%, rgba(10,10,10,0.85) 100%);
+    }
+    @media(max-width: 600px){ .st-banner { height: 150px; } }
+
+    /* HEADER */
+    .st-header {
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 24px 28px;
+      display: flex; gap: 20px; align-items: flex-end;
+      margin-top: -48px; position: relative; z-index: 2;
+      flex-wrap: wrap;
+    }
+    .st-logo-wrap {
+      width: 90px; height: 90px; border-radius: 50%;
+      border: 3px solid rgba(113,255,0,0.4);
+      overflow: hidden; flex-shrink: 0;
+      background: linear-gradient(135deg, #1a2a1a, #1a1a2a);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; font-weight: 900; color: #71ff00;
+    }
+    .st-logo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .st-header-info { flex: 1; min-width: 200px; }
+    .st-store-name {
+      font-size: 26px; font-weight: 900; color: white;
+      margin-bottom: 5px; line-height: 1.2;
+    }
+    .st-tagline { font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
+    .st-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .st-badge {
+      font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 20px;
+      background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.25); color: #71ff00;
+    }
+    .st-badge-blue { background: rgba(0,170,255,0.1); border-color: rgba(0,170,255,0.25); color: #00aaff; }
+    .st-badge-yellow { background: rgba(255,193,7,0.1); border-color: rgba(255,193,7,0.25); color: #ffc107; }
+
+    /* CONTACT BAR */
+    .st-contact-bar {
+      background: rgba(255,255,255,0.03);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 14px 24px;
+    }
+    .st-contact-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    .st-contact-btn {
+      display: flex; align-items: center; gap: 7px;
+      padding: 9px 16px; border-radius: 10px; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 700; font-family: inherit;
+      text-decoration: none; transition: filter .2s;
+    }
+    .st-contact-btn:hover { filter: brightness(1.12); }
+    .st-wa  { background: #25d366; color: black; }
+    .st-call{ background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); color: white; }
+    .st-mail{ background: rgba(0,170,255,0.1);  border: 1px solid rgba(0,170,255,0.2);   color: #00aaff; }
+    .st-ig  { background: linear-gradient(135deg,rgba(225,48,108,0.15),rgba(88,81,219,0.15));
+              border: 1px solid rgba(225,48,108,0.25); color: #e1306c; }
+    .st-dm  { background: rgba(113,255,0,0.09); border: 1px solid rgba(113,255,0,0.2);  color: #71ff00; }
+    .st-web { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); }
+
+    /* STATS */
+    .st-stats {
+      max-width: 1100px; margin: 20px auto 0;
+      padding: 0 24px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px;
+    }
+    .st-stat-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 16px 14px; text-align: center;
+    }
+    .st-stat-val { font-size: 20px; font-weight: 900; color: #71ff00; margin-bottom: 4px; }
+    .st-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ABOUT */
+    .st-about {
+      max-width: 1100px; margin: 20px auto 0; padding: 0 24px;
+    }
+    .st-about-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 20px 22px;
+    }
+    .st-section-h {
+      font-size: 14px; font-weight: 800; color: white; margin-bottom: 10px;
+    }
+    .st-about-text {
+      font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.7;
+    }
+
+    /* RATING STRIP */
+    .st-rating-strip {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;
+    }
+    .st-dim-chip {
+      background: rgba(255,193,7,0.08); border: 1px solid rgba(255,193,7,0.18);
+      border-radius: 10px; padding: 8px 14px; text-align: center; min-width: 110px;
+    }
+    .st-dim-val { font-size: 18px; font-weight: 900; color: #ffc107; }
+    .st-dim-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+    /* TABS */
+    .st-tabs {
+      max-width: 1100px; margin: 24px auto 0; padding: 0 24px;
+      display: flex; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .st-tab {
+      padding: 10px 20px; font-size: 13px; font-weight: 700;
+      border: none; cursor: pointer; font-family: inherit;
+      background: transparent; color: rgba(255,255,255,0.4);
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: all .2s;
+    }
+    .st-tab.active { color: #71ff00; border-bottom-color: #71ff00; }
+
+    /* PRODUCTS GRID */
+    .st-content { max-width: 1100px; margin: 0 auto; padding: 20px 24px 60px; }
+    .st-panel { display: none; }
+    .st-panel.active { display: block; }
+
+    .st-products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      gap: 16px;
+    }
+    .st-product-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; overflow: hidden; cursor: pointer; text-decoration: none;
+      transition: transform .2s, border-color .2s; display: block;
+    }
+    .st-product-card:hover { transform: translateY(-3px); border-color: rgba(113,255,0,0.25); }
+    .st-product-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: rgba(255,255,255,0.04); }
+    .st-product-info { padding: 11px 12px; }
+    .st-product-name { font-size: 13px; font-weight: 700; color: white; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .st-product-price { font-size: 14px; font-weight: 900; color: #71ff00; }
+    .st-wholesale-tag {
+      display: inline-block; font-size: 10px; font-weight: 800;
+      background: rgba(0,170,255,0.12); border: 1px solid rgba(0,170,255,0.2);
+      color: #00aaff; padding: 2px 7px; border-radius: 5px; margin-top: 4px;
+    }
+
+    /* REVIEWS */
+    .st-review-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    }
+    .st-review-top {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px; flex-wrap: wrap; gap: 6px;
+    }
+    .st-reviewer { display: flex; align-items: center; gap: 8px; }
+    .st-reviewer-av {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 900; color: #71ff00; flex-shrink: 0;
+    }
+    .st-reviewer-name { font-weight: 700; color: white; font-size: 13px; }
+    .st-reviewer-meta { font-size: 10px; color: rgba(255,255,255,0.35); }
+    .st-review-stars { color: #ffc107; font-size: 14px; }
+    .st-review-dims {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .st-dim-badge {
+      font-size: 11px; background: rgba(255,193,7,0.08); border: 1px solid rgba(255,193,7,0.15);
+      color: #ffc107; padding: 2px 8px; border-radius: 6px;
+    }
+    .st-review-comment { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.5; font-style: italic; }
+    .st-empty { color: rgba(255,255,255,0.25); font-size: 14px; padding: 32px 0; text-align: center; }
+
+    @media(max-width: 600px){
+      .st-stats { grid-template-columns: repeat(2,1fr); }
+      .st-header { margin-top: -36px; gap: 14px; }
+      .st-logo-wrap { width: 70px; height: 70px; font-size: 24px; }
+      .st-store-name { font-size: 20px; }
+    }
+
+    /* ── FOLLOW BUTTON ── */
+    .st-follow-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .25s;}
+    .st-follow-btn.not-following{background:#71ff00;color:black;box-shadow:0 4px 18px rgba(113,255,0,0.3);}
+    .st-follow-btn.not-following:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(113,255,0,0.4);}
+    .st-follow-btn.following{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;}
+    /* ── ACHIEVEMENT BADGE ── */
+    .st-ach-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:800;border:1px solid;}
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="compact-grid.css">
+
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="st-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" alt="Sokoni" class="st-nav-logo"></a>
+  <a href="javascript:history.back()" class="st-nav-back">← Back</a>
+</nav>
+
+<!-- BANNER -->
+<div class="st-banner">
+  <img loading="lazy" id="stBannerImg" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" class="st-banner-img" style="display:none;">
+  <div class="st-banner-overlay"></div>
+</div>
+
+<!-- HEADER -->
+<div class="st-header">
+  <div class="st-logo-wrap" id="stLogoWrap">🏪</div>
+  <div class="st-header-info">
+    <div class="st-store-name" id="stStoreName">Loading...</div>
+    <div class="st-tagline" id="stTagline"></div>
+    <div class="st-badges" id="stBadges"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap;">
+      <button type="button" id="stFollowBtn" onclick="stToggleFollow()" class="st-follow-btn not-following">
+        <i class="fas fa-user-plus" id="stFollowIcon"></i>
+        <span id="stFollowText">Follow Store</span>
+      </button>
+      <span id="stFollowerCount" style="font-size:12px;color:rgba(255,255,255,0.45);">— followers</span>
+    </div>
+  </div>
+</div>
+
+<!-- CONTACT BAR -->
+<div class="st-contact-bar" id="stContactBar" style="display:none;">
+  <div class="st-contact-inner" id="stContactInner"></div>
+</div>
+
+<!-- STATS -->
+<div class="st-stats" id="stStats"></div>
+
+<!-- ABOUT + RATINGS OVERVIEW -->
+<div class="st-about" id="stAboutWrap" style="display:none;">
+  <div class="st-about-card">
+    <div class="st-section-h">📋 About This Store</div>
+    <div class="st-about-text" id="stAboutText"></div>
+    <div class="st-rating-strip" id="stRatingStrip"></div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="st-tabs">
+  <button type="button" class="st-tab active" onclick="stSwitchTab('products',this)">🛍️ Products</button>
+  <button type="button" class="st-tab" onclick="stSwitchTab('reviews',this)">⭐ Reviews</button>
+</div>
+
+<!-- CONTENT -->
+<div class="st-content">
+  <div class="st-panel active" id="st-tab-products">
+    <div class="st-products-grid" id="stProductsGrid"></div>
+    <div class="st-empty" id="stProductsEmpty" style="display:none;">No products listed yet.</div>
+  </div>
+  <div class="st-panel" id="st-tab-reviews">
+    <div id="stReviewsContent"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const params    = new URLSearchParams(window.location.search);
+  const storeParm = params.get("store") || params.get("seller") || "";
+
+  /* Load store config */
+  let store = null;
+  try { store = JSON.parse(localStorage.getItem("sokoniMiniStore")); } catch(e){}
+
+  /* Fallback: find by sellerName in products */
+  let allProducts = [];
+  try { allProducts = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
+
+  /* Match store by name or seller name */
+  const products = allProducts.filter(p => {
+    const sn = p.sellerName || "Sokoni Seller";
+    return sn === storeParm || (store && (store.name === storeParm || sn === store.ownerName));
+  });
+
+  /* Resolve display store */
+  const displayName = store?.name || storeParm || "Sokoni Store";
+  document.title = displayName + " — SOKONI";
+
+  /* Banner */
+  if(store?.banner){
+    const img = document.getElementById("stBannerImg");
+    img.src = store.banner; img.style.display = "block";
+  }
+
+  /* Logo */
+  const logoWrap = document.getElementById("stLogoWrap");
+  if(store?.logo){
+    logoWrap.innerHTML = `<img loading="lazy" src="${store.logo}" alt="${displayName}">`;
+  } else {
+    logoWrap.textContent = displayName.substring(0,2).toUpperCase();
+  }
+
+  /* Store name + tagline */
+  document.getElementById("stStoreName").textContent = displayName;
+  const tagEl = document.getElementById("stTagline");
+  if(store?.tagline){ tagEl.textContent = store.tagline; } else { tagEl.style.display="none"; }
+
+  /* Badges */
+  const badgesEl = document.getElementById("stBadges");
+  let verifiedBadge = false;
+  try {
+    const v = JSON.parse(localStorage.getItem("sokoniSellerVerification")||"null");
+    if(v && v.status==="verified") verifiedBadge = true;
+  } catch(e){}
+  if(verifiedBadge) badgesEl.innerHTML += `<span class="st-badge">✅ Verified Seller</span>`;
+
+  const cityMap = { nairobi:"Nairobi", mombasa:"Mombasa", kisumu:"Kisumu", nakuru:"Nakuru", eldoret:"Eldoret", thika:"Thika" };
+  const loc = products[0]?.location;
+  if(loc && loc !== "worldwide") badgesEl.innerHTML += `<span class="st-badge st-badge-blue">📍 ${cityMap[loc]||loc}</span>`;
+  badgesEl.innerHTML += `<span class="st-badge st-badge-yellow">📦 ${products.length} listing${products.length!==1?"s":""}</span>`;
+
+  /* Contact */
+  const ctInner = document.getElementById("stContactInner");
+  const ctBar   = document.getElementById("stContactBar");
+  const contacts = [];
+  if(store?.phone){
+    contacts.push(`<a href="https://wa.me/${store.phone.replace(/\D/g,'')}" target="_blank" class="st-contact-btn st-wa"><i class="fab fa-whatsapp"></i> WhatsApp</a>`);
+    contacts.push(`<a href="tel:${store.phone}" class="st-contact-btn st-call">📞 Call</a>`);
+  }
+  if(store?.email)     contacts.push(`<a href="mailto:${store.email}" class="st-contact-btn st-mail">📧 Email</a>`);
+  if(store?.instagram) contacts.push(`<a href="https://instagram.com/${store.instagram.replace('@','')}" target="_blank" class="st-contact-btn st-ig"><i class="fab fa-instagram"></i> ${store.instagram}</a>`);
+  contacts.push(`<a href="messages.html" class="st-contact-btn st-dm">💬 Message Seller</a>`);
+  if(store?.website)   contacts.push(`<a href="${store.website}" target="_blank" class="st-contact-btn st-web"><i class="fas fa-globe"></i> Website</a>`);
+
+  if(contacts.length){ ctInner.innerHTML = contacts.join(""); ctBar.style.display = "block"; }
+
+  /* Ratings */
+  let allRatings = {};
+  try { allRatings = JSON.parse(localStorage.getItem("sokoniSellerRatings"))||{}; } catch(e){}
+  const ownerKey = store?.ownerName || storeParm;
+  const ratings  = allRatings[ownerKey] || [];
+  const avgRating = ratings.length ? (ratings.reduce((s,r)=>s+(r.avgScore||r.stars||0),0)/ratings.length) : 0;
+
+  /* Orders */
+  let allOrders = [];
+  try { allOrders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
+  const prodIds = new Set(products.map(p=>p.id));
+  const sellerOrders = allOrders.filter(o=>(o.items||[]).some(i=>prodIds.has(i.id)));
+  const deliveredCount = sellerOrders.filter(o=>o.status==="delivered").length;
+  const deliveryRate   = sellerOrders.length ? Math.round(deliveredCount/sellerOrders.length*100) : null;
+
+  /* Followers */
+  let stAllFollowers = {};
+  try { stAllFollowers = JSON.parse(localStorage.getItem("sokoniStoreFollowers"))||{}; } catch(e){}
+  const stSellerKey = store?.ownerName || storeParm;
+  const stFollowers = stAllFollowers[stSellerKey] || 0;
+
+  /* Stats */
+  const statsEl = document.getElementById("stStats");
+  statsEl.innerHTML = [
+    { val: products.length,                     label: "Products" },
+    { val: deliveredCount,                      label: "Completed Orders" },
+    { val: deliveryRate !== null ? deliveryRate+"%" : "—", label: "Delivery Rate" },
+    { val: avgRating ? "⭐ "+avgRating.toFixed(1) : "—", label: "Rating" },
+    { val: ratings.length,                      label: "Reviews" },
+    { val: stFollowers,                         label: "Followers" },
+  ].map(s=>`<div class="st-stat-card"><div class="st-stat-val">${s.val}</div><div class="st-stat-label">${s.label}</div></div>`).join("");
+
+  /* About */
+  if(store?.about){
+    document.getElementById("stAboutWrap").style.display = "block";
+    document.getElementById("stAboutText").textContent = store.about;
+  }
+
+  /* Rating dimensions */
+  const catAvg = (key) => {
+    const vals = ratings.map(r=>r[key]).filter(v=>v>0);
+    return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : null;
+  };
+  const dimData = [
+    { key:"delivery",     label:"🚚 Delivery" },
+    { key:"responseTime", label:"⚡ Response" },
+    { key:"returns",      label:"🔄 Returns"  },
+    { key:"satisfaction", label:"😊 Satisfaction" },
+  ];
+  const stripEl = document.getElementById("stRatingStrip");
+  const dimHtml = dimData.map(d=>{
+    const v = catAvg(d.key);
+    if(!v) return "";
+    return `<div class="st-dim-chip"><div class="st-dim-val">${v}</div><div class="st-dim-label">${d.label}</div></div>`;
+  }).join("");
+  if(dimHtml){ stripEl.innerHTML = dimHtml; } else { stripEl.style.display="none"; }
+  if(!store?.about && dimHtml){
+    document.getElementById("stAboutWrap").style.display = "block";
+    document.getElementById("stAboutText").style.display = "none";
+  }
+
+  /* Products tab */
+  const gridEl = document.getElementById("stProductsGrid");
+  if(!products.length){
+    document.getElementById("stProductsEmpty").style.display = "block";
+  } else {
+    gridEl.innerHTML = products.map(p=>{
+      const wsTag = p.wholesalePrice
+        ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${p.minWholesaleQty})</div>`
+        : "";
+      return `<a class="st-product-card" href="product.html?id=${p.id}">
+        <img src="${p.image||'assets/default-product.png'}" alt="${p.name}" loading="lazy">
+        <div class="st-product-info">
+          <div class="st-product-name">${p.name}</div>
+          <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
+          ${wsTag}
+        </div>
+      </a>`;
+    }).join("");
+  }
+
+  /* Reviews tab */
+  const revEl = document.getElementById("stReviewsContent");
+  if(!ratings.length){
+    revEl.innerHTML = `<div class="st-empty">No reviews yet — be the first to buy and rate!</div>`;
+  } else {
+    const ravg = avgRating;
+    const rstars = "★".repeat(Math.round(ravg)) + "☆".repeat(5-Math.round(ravg));
+    revEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+        <div style="text-align:center;">
+          <div style="font-size:48px;font-weight:900;color:#ffc107;">${ravg.toFixed(1)}</div>
+          <div style="color:#ffc107;font-size:18px;">${rstars}</div>
+          <div style="color:rgba(255,255,255,0.35);font-size:12px;margin-top:4px;">${ratings.length} review${ratings.length!==1?"s":""}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${dimData.map(d=>{ const v=catAvg(d.key); return v?`<div class="st-dim-chip"><div class="st-dim-val">${v}</div><div class="st-dim-label">${d.label}</div></div>`:""; }).join("")}
+        </div>
+      </div>
+      ${ratings.slice(0,20).map(r=>{
+        const rAvg = r.avgScore||r.stars||0;
+        const dims = [
+          r.delivery     ? `🚚 ${r.delivery}`     : "",
+          r.responseTime ? `⚡ ${r.responseTime}` : "",
+          r.returns      ? `🔄 ${r.returns}`      : "",
+          r.satisfaction ? `😊 ${r.satisfaction}` : "",
+        ].filter(Boolean);
+        return `<div class="st-review-card">
+          <div class="st-review-top">
+            <div class="st-reviewer">
+              <div class="st-reviewer-av">${(r.buyerName||"A")[0].toUpperCase()}</div>
+              <div>
+                <div class="st-reviewer-name">${r.buyerName||"Anonymous"}</div>
+                <div class="st-reviewer-meta">${r.date||""} · Order ${r.orderId||""}</div>
+              </div>
+            </div>
+            <div class="st-review-stars">${"★".repeat(Math.round(rAvg))}${"☆".repeat(5-Math.round(rAvg))} <span style="font-size:12px;color:rgba(255,255,255,0.4);">${rAvg}</span></div>
+          </div>
+          ${dims.length ? `<div class="st-review-dims">${dims.map(d=>`<span class="st-dim-badge">${d}</span>`).join("")}</div>` : ""}
+          ${r.comment ? `<div class="st-review-comment">"${r.comment}"</div>` : ""}
+        </div>`;
+      }).join("")}
+    `;
+  }
+
+  /* ═══════════════════════════════════════════
+     ACHIEVEMENT BADGE
+  ═══════════════════════════════════════════ */
+  (function(){
+    const s = deliveredCount >= 500 ? 4 : deliveredCount >= 100 ? 3 : deliveredCount >= 20 ? 2 : deliveredCount >= 5 ? 1 : 0;
+    const r = avgRating >= 4.8 ? 4 : avgRating >= 4.5 ? 3 : avgRating >= 4.0 ? 2 : avgRating >= 3.5 ? 1 : 0;
+    const d = (deliveryRate||0) >= 95 ? 4 : (deliveryRate||0) >= 85 ? 3 : (deliveryRate||0) >= 70 ? 2 : (deliveryRate||0) >= 50 ? 1 : 0;
+    const f = stFollowers >= 200 ? 4 : stFollowers >= 50 ? 3 : stFollowers >= 10 ? 2 : stFollowers >= 1 ? 1 : 0;
+    const score = s + r + d + f;
+    const TIERS = [
+      { min:14, tier:'Legend',  icon:'👑', color:'#ff8c00', border:'rgba(255,140,0,0.4)',  bg:'rgba(255,140,0,0.08)'  },
+      { min:10, tier:'Diamond', icon:'💎', color:'#00aaff', border:'rgba(0,170,255,0.4)',  bg:'rgba(0,170,255,0.08)'  },
+      { min:7,  tier:'Gold',    icon:'🥇', color:'#ffc107', border:'rgba(255,193,7,0.4)',  bg:'rgba(255,193,7,0.07)'  },
+      { min:4,  tier:'Silver',  icon:'🥈', color:'#c0c0c0', border:'rgba(192,192,192,0.35)',bg:'rgba(192,192,192,0.05)'},
+      { min:1,  tier:'Bronze',  icon:'🥉', color:'#cd7f32', border:'rgba(205,127,50,0.4)', bg:'rgba(205,127,50,0.08)' },
+      { min:0,  tier:'Newcomer',icon:'🌱', color:'rgba(255,255,255,0.45)', border:'rgba(255,255,255,0.12)', bg:'rgba(255,255,255,0.03)' },
+    ];
+    const ach = TIERS.find(t => score >= t.min) || TIERS[TIERS.length-1];
+    document.getElementById("stBadges").innerHTML += `<span class="st-ach-badge" style="background:${ach.bg};border-color:${ach.border};color:${ach.color};">${ach.icon} ${ach.tier}</span>`;
+  })();
+
+  /* ═══════════════════════════════════════════
+     FOLLOW STORE
+  ═══════════════════════════════════════════ */
+  (function(){
+    const followBtn  = document.getElementById("stFollowBtn");
+    const followIcon = document.getElementById("stFollowIcon");
+    const followText = document.getElementById("stFollowText");
+    const cntEl      = document.getElementById("stFollowerCount");
+
+    let myF = {};
+    try { myF = JSON.parse(localStorage.getItem("sokoniFollowing"))||{}; } catch(e){}
+    const isFollowing = !!myF[stSellerKey];
+
+    function setUI(f){
+      if(f){
+        followBtn.className="st-follow-btn following";
+        followIcon.className="fas fa-check";
+        followText.textContent="Following";
+      } else {
+        followBtn.className="st-follow-btn not-following";
+        followIcon.className="fas fa-user-plus";
+        followText.textContent="Follow Store";
+      }
+    }
+    setUI(isFollowing);
+
+    const cnt = stAllFollowers[stSellerKey] || 0;
+    if(cntEl) cntEl.textContent = cnt.toLocaleString() + " follower" + (cnt!==1?"s":"");
+
+    window.stToggleFollow = function(){
+      let mF={};  try{mF=JSON.parse(localStorage.getItem("sokoniFollowing"))||{};}catch(e){}
+      let aF={}; try{aF=JSON.parse(localStorage.getItem("sokoniStoreFollowers"))||{};}catch(e){}
+      const was = !!mF[stSellerKey];
+      if(was){
+        delete mF[stSellerKey];
+        aF[stSellerKey] = Math.max(0,(aF[stSellerKey]||1)-1);
+        setUI(false);
+      } else {
+        mF[stSellerKey] = { followedAt: Date.now() };
+        aF[stSellerKey] = (aF[stSellerKey]||0)+1;
+        setUI(true);
+      }
+      localStorage.setItem("sokoniFollowing", JSON.stringify(mF));
+      localStorage.setItem("sokoniStoreFollowers", JSON.stringify(aF));
+      const newCnt = aF[stSellerKey]||0;
+      if(cntEl) cntEl.textContent = newCnt.toLocaleString() + " follower"+(newCnt!==1?"s":"");
+      /* refresh followers stat card */
+      const statsEl2 = document.getElementById("stStats");
+      if(statsEl2){
+        const follCard = statsEl2.querySelector(".st-stat-card:last-child .st-stat-val");
+        if(follCard) follCard.textContent = newCnt;
+      }
+    };
+  })();
+
+  /* +20 pts for first visit to each unique store */
+  if(storeParm){
+    try{
+      var visited = JSON.parse(localStorage.getItem("sokoniVisitedStores")||"{}");
+      if(!visited[storeParm]){
+        visited[storeParm] = Date.now();
+        localStorage.setItem("sokoniVisitedStores", JSON.stringify(visited));
+        var pd = JSON.parse(localStorage.getItem("sokoniPoints")||'{"total":0,"history":[]}');
+        pd.total = (pd.total||0) + 20;
+        var vDate = new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"});
+        pd.history.unshift({points:20, orderId:"", date:vDate, description:"🏪 First visit to "+displayName});
+        localStorage.setItem("sokoniPoints", JSON.stringify(pd));
+      }
+    }catch(e){}
+  }
+
+})();
+
+function stSwitchTab(name, btn){
+  document.querySelectorAll(".st-tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".st-panel").forEach(p=>p.classList.remove("active"));
+  btn.classList.add("active");
+  const panel = document.getElementById("st-tab-"+name);
+  if(panel) panel.classList.add("active");
+}
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-share.js" defer></script>
+  <script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="demo-seed.js"></script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+

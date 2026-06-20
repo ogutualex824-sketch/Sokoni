@@ -1,0 +1,355 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Flash Sale</title>
+  <meta name="description" content="Limited-time flash sale deals on SOKONI — shop electronics, fashion, food and more at huge discounts in Kenya.">
+  <meta property="og:title" content="SOKONI — Flash Sale">
+  <meta property="og:description" content="Huge discounts for a limited time on SOKONI Kenya. Flash sales on electronics, fashion and more.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    /* ── Flash Sale Cards — standalone fs-* classes, zero conflicts ── */
+
+    /* Grid */
+    #fsGrid { display:grid !important; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)) !important; gap:14px !important; padding:0 16px 24px !important; }
+    @media(max-width:600px){ #fsGrid { grid-template-columns:repeat(2,1fr) !important; gap:10px !important; padding:0 12px 20px !important; } }
+
+    /* Card */
+    .fs-item { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:16px; overflow:hidden; display:flex; flex-direction:column; position:relative; cursor:pointer; transition:transform .16s,border-color .16s; }
+    .fs-item:hover { transform:translateY(-2px); border-color:rgba(113,255,0,.22); }
+    .fs-item:active { transform:scale(.97); }
+
+    /* Discount badge */
+    .fs-badge { position:absolute; top:10px; left:10px; z-index:2; background:linear-gradient(135deg,#ff4444,#ff0000); color:white; font-weight:900; font-size:12px; padding:3px 9px; border-radius:7px; letter-spacing:.02em; }
+
+    /* Image area */
+    .fs-img { width:100%; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0; }
+    .fs-img img { width:100%; height:100%; object-fit:cover; display:block; }
+    .fs-emoji { font-size:54px; line-height:1; }
+
+    /* Body */
+    .fs-body { padding:10px 10px 4px; display:flex; flex-direction:column; flex:1; }
+    .fs-seller { font-size:9px; color:rgba(255,255,255,.35); margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .fs-name { color:white; font-size:13px; font-weight:700; line-height:1.35; margin-bottom:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .fs-stars { display:flex; align-items:center; gap:3px; margin-bottom:5px; }
+    .fs-stars .fs-rtxt { font-size:9px; color:rgba(255,255,255,.4); }
+    .fs-prices { display:flex; align-items:baseline; gap:6px; margin-bottom:7px; flex-wrap:wrap; }
+    .fs-orig { color:#ff4444; font-size:11px; text-decoration:line-through; }
+    .fs-sp { color:#71ff00; font-size:17px; font-weight:900; }
+    .fs-stock { margin-bottom:6px; }
+    .fs-slabels { display:flex; justify-content:space-between; margin-bottom:3px; }
+    .fs-slabels span { font-size:9px; color:rgba(255,255,255,.35); }
+    .fs-slabels .fs-left { color:#ff9800; font-weight:700; }
+    .fs-bar { background:rgba(255,255,255,.08); border-radius:4px; height:4px; overflow:hidden; }
+    .fs-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,#71ff00,#ff6b00); transition:width .5s; }
+
+    /* Buttons — structural 2-row, no flex-wrap battles */
+    .fs-btns { padding:6px 8px 10px; margin-top:auto; display:flex; flex-direction:column; gap:5px; }
+    .fs-btn-row { display:flex; gap:5px; }
+    .fs-btn { flex:1; padding:9px 4px; font-size:11px; font-weight:700; border-radius:9px; border:none; cursor:pointer; font-family:inherit; white-space:nowrap; display:flex; align-items:center; justify-content:center; gap:3px; transition:opacity .15s; }
+    .fs-btn:active { opacity:.7; }
+    .fs-cart { background:rgba(113,255,0,.1); border:1px solid rgba(113,255,0,.28); color:#71ff00; }
+    .fs-wish { background:rgba(255,80,80,.1); border:1px solid rgba(255,80,80,.28); color:#ff6060; max-width:48px; flex:0 0 48px; }
+    .fs-buy  { background:linear-gradient(135deg,#71ff00,#4fc800); color:#050f05; font-weight:900; font-size:12px; padding:10px 4px; }
+
+    @media(max-width:600px){
+      .fs-img { aspect-ratio:1/1; }
+      .fs-emoji { font-size:40px; }
+      .fs-body { padding:8px 8px 2px; }
+      .fs-name { font-size:12px; }
+      .fs-sp { font-size:15px; }
+      .fs-btns { padding:5px 6px 8px; gap:4px; }
+      .fs-btn { font-size:10px; padding:8px 3px; border-radius:8px; }
+      .fs-buy { font-size:11px; padding:9px 3px; }
+      .fs-wish { max-width:40px; flex:0 0 40px; }
+    }
+    @media(max-width:360px){
+      .fs-emoji { font-size:32px; }
+      .fs-btn { font-size:9px; padding:7px 2px; }
+    }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="compact-grid.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SaleEvent","name":"SOKONI Flash Sales — Up to 70% Off Kenya","description":"Daily flash sales on electronics, fashion, beauty and more. Limited stock, huge discounts. Pay with M-Pesa instantly.","url":"https://mysokoni.co.ke/flashsale.html","organizer":{"@type":"Organization","name":"Sokoni Technologies Ltd"},"location":{"@type":"Country","name":"Kenya"},"eventAttendanceMode":"https://schema.org/OnlineEventAttendanceMode"}</script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<nav class="navbar">
+  <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
+  <div class="search-bar">
+    <input type="text" id="fsSearch" placeholder="Search flash deals..." oninput="searchFS()">
+  </div>
+  <div class="nav-actions">
+    <a href="wishlist.html" class="wishlist-nav-btn">❤️ Wishlist</a>
+    <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 Cart</a>
+  </div>
+</nav>
+
+<!-- FLASH HEADER -->
+<section class="fs-header">
+  <div class="fs-header-bg"></div>
+  <div class="fs-header-content">
+    <div class="fs-lightning">⚡</div>
+    <h1>⚡ Flash Sale</h1>
+    <p>Limited time deals — up to 50% off selected products</p>
+    <div class="fs-countdown-big">
+      <div class="fs-cd-block"><span id="fsH">00</span><small>HOURS</small></div>
+      <div class="fs-cd-sep">:</div>
+      <div class="fs-cd-block"><span id="fsM">00</span><small>MINS</small></div>
+      <div class="fs-cd-sep">:</div>
+      <div class="fs-cd-block"><span id="fsS">00</span><small>SECS</small></div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS STRIP -->
+<div style="display:flex;gap:0;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);overflow-x:auto;scrollbar-width:none;">
+  <div style="flex:1;min-width:130px;padding:14px 0;text-align:center;border-right:1px solid rgba(255,255,255,0.06);"><div style="font-size:18px;font-weight:900;color:#71ff00;">12</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">Flash Deals</div></div>
+  <div style="flex:1;min-width:130px;padding:14px 0;text-align:center;border-right:1px solid rgba(255,255,255,0.06);"><div style="font-size:18px;font-weight:900;color:#ff4444;">Up to 50%</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">Max Discount</div></div>
+  <div style="flex:1;min-width:130px;padding:14px 0;text-align:center;border-right:1px solid rgba(255,255,255,0.06);"><div style="font-size:18px;font-weight:900;color:#ffc107;">4.8 ★</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">Avg. Rating</div></div>
+  <div style="flex:1;min-width:130px;padding:14px 0;text-align:center;"><div style="font-size:18px;font-weight:900;color:#00aaff;">M-PESA</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">Pay on Delivery</div></div>
+</div>
+
+<!-- CATEGORY FILTER -->
+<div style="display:flex;gap:8px;padding:16px 20px 0;overflow-x:auto;scrollbar-width:none;">
+  <button type="button" onclick="filterFS('',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.15);background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;" id="fsf-all">⚡ All Deals</button>
+  <button type="button" onclick="filterFS('electronics',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">📱 Electronics</button>
+  <button type="button" onclick="filterFS('fashion',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">👗 Fashion</button>
+  <button type="button" onclick="filterFS('home',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">🏠 Home</button>
+  <button type="button" onclick="filterFS('beauty',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">💄 Beauty</button>
+  <button type="button" onclick="filterFS('accessories',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">👜 Accessories</button>
+</div>
+
+<!-- FLASH PRODUCTS -->
+<section style="padding:16px 20px 80px;">
+  <div id="fsGrid" class="products-grid"></div>
+</section>
+
+<div id="notificationContainer"></div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Categories</span></a>
+  <a href="flashsale.html" class="bnav-item active-bnav bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+  /* ── DEMO FLASH PRODUCTS — shown when no real flash sales are active ── */
+  const DEMO_FLASH = [
+    { id:"FS01", name:"Samsung Galaxy A55 5G — 128GB", category:"electronics", emoji:"📱", bg:"linear-gradient(135deg,#1a1a2e 0%,#16213e 100%)", price:52000, discount:22, rating:4.8, reviews:312, remaining:7, totalStock:50, seller:"Tech Hub Kenya", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS02", name:"Infinix Hot 40 Pro — 8GB RAM", category:"electronics", emoji:"📲", bg:"linear-gradient(135deg,#0f2027 0%,#203a43 100%)", price:28000, discount:30, rating:4.6, reviews:187, remaining:12, totalStock:60, seller:"Gadgets Palace", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS03", name:"JBL Flip 6 Bluetooth Speaker", category:"electronics", emoji:"🔊", bg:"linear-gradient(135deg,#1d1d1d 0%,#2c2c54 100%)", price:12500, discount:25, rating:4.9, reviews:544, remaining:5, totalStock:30, seller:"SoundMax Kenya", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS04", name:"Nike Air Max 270 — Unisex", category:"fashion", emoji:"👟", bg:"linear-gradient(135deg,#1a1a1a 0%,#2d1b69 100%)", price:11000, discount:35, rating:4.7, reviews:289, remaining:9, totalStock:40, seller:"SneakerCity KE", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS05", name:"Ladies Maxi Dress — Kitenge Print", category:"fashion", emoji:"👗", bg:"linear-gradient(135deg,#3b0a0a 0%,#1a0533 100%)", price:3500, discount:40, rating:4.8, reviews:156, remaining:18, totalStock:80, seller:"Wanjiku Fashions", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS06", name:"Instant Pot 6-Qt Pressure Cooker", category:"home", emoji:"🍲", bg:"linear-gradient(135deg,#0a1628 0%,#1a2c4a 100%)", price:18000, discount:20, rating:4.9, reviews:410, remaining:4, totalStock:25, seller:"Kitchen World KE", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS07", name:"Organic Shea Butter & Aloe Kit", category:"beauty", emoji:"🧴", bg:"linear-gradient(135deg,#0d2614 0%,#1a4a2a 100%)", price:2800, discount:45, rating:4.8, reviews:203, remaining:24, totalStock:100, seller:"Glow Beauty Kenya", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS08", name:"Leather Laptop Bag — 15.6 inch", category:"accessories", emoji:"💼", bg:"linear-gradient(135deg,#1a0d00 0%,#3d2200 100%)", price:4500, discount:30, rating:4.7, reviews:98, remaining:11, totalStock:35, seller:"BagCraft Kenya", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS09", name:"Airfryer 4.5L — Oil-Free Cooking", category:"home", emoji:"🍗", bg:"linear-gradient(135deg,#1a0a0a 0%,#3d1515 100%)", price:9500, discount:28, rating:4.8, reviews:327, remaining:6, totalStock:30, seller:"Homezone KE", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS10", name:"Montaz Oud Perfume 100ml", category:"beauty", emoji:"🌸", bg:"linear-gradient(135deg,#0d0a1a 0%,#2a1a3d 100%)", price:3200, discount:33, rating:4.9, reviews:445, remaining:15, totalStock:70, seller:"Fragrance Hub", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS11", name:"HP 15 Laptop — Core i5, 8GB", category:"electronics", emoji:"💻", bg:"linear-gradient(135deg,#001433 0%,#003366 100%)", price:68000, discount:15, rating:4.7, reviews:178, remaining:3, totalStock:20, seller:"CompuWorld KE", endsAt: Date.now()+1000*3600*9 },
+    { id:"FS12", name:"Ankara Throw Pillows Set of 4", category:"home", emoji:"🛋️", bg:"linear-gradient(135deg,#1a0a0a 0%,#4a2020 100%)", price:2400, discount:50, rating:4.6, reviews:67, remaining:20, totalStock:60, seller:"HomeDecor Nairobi", endsAt: Date.now()+1000*3600*9 },
+  ];
+
+  /* ── Merge real flash products with demo ── */
+  let allProducts = [];
+  try { allProducts = JSON.parse(localStorage.getItem("sellerProducts")) || []; } catch(e) {}
+  let flashSales = [];
+  try { flashSales = JSON.parse(localStorage.getItem("sokoniFlashSales")) || []; } catch(e) {}
+  flashSales = flashSales.filter(f => f.endsAt > Date.now());
+  const realFlashProducts = flashSales.map(f => {
+    const p = allProducts.find(p => p.id === f.productId);
+    if(!p) return null;
+    return { ...p, discount: f.discount, salePrice: Math.round(p.price * (1 - f.discount/100)), endsAt: f.endsAt, rating:4.7, reviews:0, remaining:10, totalStock:50, seller:p.sellerName||"Seller" };
+  }).filter(Boolean);
+
+  /* Compute demo sale prices */
+  const demoFlashProducts = DEMO_FLASH.map(p => ({ ...p, salePrice: Math.round(p.price * (1 - p.discount/100)) }));
+
+  /* Final list: real first, then demo */
+  const flashProducts = [...realFlashProducts, ...demoFlashProducts];
+
+  function starHtml(rating){
+    const full = Math.round(rating);
+    let s = "";
+    for(let i=1;i<=5;i++) s += '<span style="color:'+(i<=full?'#ffc107':'rgba(255,255,255,0.2)')+';font-size:11px;">★</span>';
+    return s;
+  }
+
+  function renderFS(list) {
+    const grid = document.getElementById("fsGrid");
+    if(!grid) return;
+    if(list.length === 0) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:80px 20px;color:white;">
+        <div style="font-size:64px;margin-bottom:16px;">⚡</div>
+        <h2 style="margin-bottom:10px;">⚡ No flash deals right now</h2>
+        <p style="color:rgba(255,255,255,0.4);margin-bottom:24px;">Check back soon or browse all products</p>
+        <a href="index.html" style="padding:14px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">Browse Products</a>
+      </div>`;
+      return;
+    }
+    grid.innerHTML = list.map((p,i) => {
+      const soldPct = Math.min(Math.round(((p.totalStock - p.remaining) / p.totalStock) * 100), 97);
+      const imgHtml = p.image && p.image.startsWith("data:")
+        ? `<div class="fs-img"><img loading="lazy" src="${p.image}" alt="${p.name}"></div>`
+        : `<div class="fs-img" style="background:${p.bg||'linear-gradient(135deg,#1a1a2e,#16213e)'}"><span class="fs-emoji">${p.emoji||"🛍️"}</span></div>`;
+      const stars = starHtml(p.rating||4.7);
+      return `<div class="fs-item" style="animation:cardFadeIn 0.${3+i%6}s ease">
+        <span class="fs-badge">-${p.discount}%</span>
+        ${imgHtml}
+        <div class="fs-body">
+          <div class="fs-seller">by ${p.seller||"Sokoni Seller"}</div>
+          <div class="fs-name">${p.name}</div>
+          <div class="fs-stars">${stars}<span class="fs-rtxt">${p.rating||"4.7"} (${p.reviews||0})</span></div>
+          <div class="fs-prices">
+            <span class="fs-orig">KES ${Number(p.price).toLocaleString()}</span>
+            <span class="fs-sp">KES ${Number(p.salePrice).toLocaleString()}</span>
+          </div>
+          <div class="fs-stock">
+            <div class="fs-slabels"><span>🔥 ${soldPct}% sold</span><span class="fs-left">Only ${p.remaining||5} left!</span></div>
+            <div class="fs-bar"><div class="fs-bar-fill" style="width:${soldPct}%"></div></div>
+          </div>
+        </div>
+        <div class="fs-btns">
+          <div class="fs-btn-row">
+            <button type="button" class="fs-btn fs-cart" onclick="event.stopPropagation();fsAddCart('${p.id}',${p.salePrice})">🛒 Cart</button>
+            <button type="button" class="fs-btn fs-wish" onclick="event.stopPropagation();fsAddWish('${p.id}')">❤️</button>
+          </div>
+          <button type="button" class="fs-btn fs-buy" onclick="event.stopPropagation();fsBuyNow('${p.id}',${p.salePrice})">⚡ Buy Now</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  renderFS(flashProducts);
+
+  let _fsCat = "";
+  function filterFS(cat, btn){
+    _fsCat = cat;
+    document.querySelectorAll("[id^='fsf-'], [onclick^='filterFS']").forEach(b=>{
+      b.style.background="transparent"; b.style.color="rgba(255,255,255,0.6)"; b.style.borderColor="rgba(255,255,255,0.1)";
+    });
+    if(btn){ btn.style.background="rgba(113,255,0,0.1)"; btn.style.color="#71ff00"; btn.style.borderColor="rgba(113,255,0,0.3)"; }
+    const q = (document.getElementById("fsSearch")?.value||"").toLowerCase();
+    let list = flashProducts;
+    if(cat) list = list.filter(p=>(p.category||"").toLowerCase()===cat);
+    if(q) list = list.filter(p=>p.name.toLowerCase().includes(q));
+    renderFS(list);
+  }
+
+  function searchFS() {
+    const val = document.getElementById("fsSearch").value.toLowerCase();
+    let list = flashProducts;
+    if(_fsCat) list = list.filter(p=>(p.category||"").toLowerCase()===_fsCat);
+    renderFS(list.filter(p => p.name.toLowerCase().includes(val) || (p.category||"").toLowerCase().includes(val)));
+  }
+
+  function showNotif(msg, type) {
+    const c = document.getElementById("notificationContainer");
+    if(!c) return;
+    const n = document.createElement("div");
+    n.className = `notification ${type}`;
+    n.textContent = msg;
+    c.appendChild(n);
+    setTimeout(() => n.remove(), 3000);
+  }
+
+  function _findProduct(id){
+    const real = allProducts.find(p=>p.id===id);
+    if(real) return real;
+    return DEMO_FLASH.find(p=>p.id===id)||null;
+  }
+
+  function fsAddCart(id, price) {
+    const product = _findProduct(id);
+    if(!product) return;
+    const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+    cart.push({ ...product, price });
+    localStorage.setItem("cart", JSON.stringify(cart));
+    showNotif("⚡ Flash deal added to cart 🛒", "success");
+  }
+
+  function fsAddWish(id) {
+    const product = _findProduct(id);
+    if(!product) return;
+    const wish = JSON.parse(localStorage.getItem("wishlist") || "[]");
+    if(!wish.find(p => p.id === id)) { wish.push(product); localStorage.setItem("wishlist", JSON.stringify(wish)); }
+    showNotif("Added to wishlist ❤️", "success");
+  }
+
+  function fsBuyNow(id, price) {
+    const product = _findProduct(id);
+    if(!product) return;
+    const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+    cart.push({ ...product, price });
+    localStorage.setItem("cart", JSON.stringify(cart));
+    window.location.href = "checkout.html";
+  }
+
+  /* Countdown — 9 hours from now for demo */
+  const nearestEnd = flashProducts.length > 0 ? Math.min(...flashProducts.map(f => f.endsAt||Date.now()+3600000*9)) : Date.now() + 3600000*9;
+
+  function updateFSCountdown() {
+    const diff = nearestEnd - Date.now();
+    if(diff <= 0) { document.getElementById("fsH").textContent = "00"; document.getElementById("fsM").textContent = "00"; document.getElementById("fsS").textContent = "00"; return; }
+    document.getElementById("fsH").textContent = String(Math.floor(diff/3600000)).padStart(2,"0");
+    document.getElementById("fsM").textContent = String(Math.floor((diff%3600000)/60000)).padStart(2,"0");
+    document.getElementById("fsS").textContent = String(Math.floor((diff%60000)/1000)).padStart(2,"0");
+  }
+  updateFSCountdown();
+  setInterval(updateFSCountdown, 1000);
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-share.js" defer></script>
+  <script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script src="demo-seed.js"></script><script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

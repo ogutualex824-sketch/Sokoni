@@ -1,0 +1,414 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<meta charset="UTF-8">
+<script src="security.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<title>What Are You Offering? — SOKONI</title>
+<meta name="description" content="Sell products or offer services on SOKONI — Kenya's #1 marketplace. Choose your path.">
+<meta property="og:title" content="What Are You Offering? — SOKONI">
+<meta property="og:description" content="Start selling products or offering services on SOKONI — Kenya's #1 marketplace today.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;overflow-x:hidden;padding-bottom:90px;}
+
+/* ── NAV ── */
+.of-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);}
+.of-nav-logo{height:28px;}
+.of-back{display:flex;align-items:center;gap:6px;color:rgba(255,255,255,0.5);font-size:13px;font-weight:700;text-decoration:none;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;}
+.of-back:hover{color:white;border-color:rgba(255,255,255,0.25);}
+
+/* ── SCREEN CONTROLLER ── */
+.of-screen{display:none;animation:screenIn .35s cubic-bezier(0.22,1,0.36,1);}
+.of-screen.active{display:block;}
+@keyframes screenIn{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── HERO ── */
+.of-hero{padding:40px 24px 28px;text-align:center;max-width:600px;margin:0 auto;}
+.of-badge{display:inline-block;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:999px;padding:5px 16px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:16px;text-transform:uppercase;letter-spacing:.06em;}
+.of-hero h1{font-size:clamp(26px,6vw,42px);font-weight:900;line-height:1.1;margin-bottom:10px;}
+.of-hero h1 span{background:linear-gradient(135deg,#71ff00,#4fc800);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.of-hero p{color:rgba(255,255,255,0.45);font-size:14px;line-height:1.7;max-width:420px;margin:0 auto;}
+
+/* ── GATE CARDS ── */
+.of-gate{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:560px;margin:28px auto;padding:0 20px;}
+.of-gate-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);border-radius:22px;padding:28px 18px 24px;text-align:center;cursor:pointer;transition:all .28s;position:relative;overflow:hidden;}
+.of-gate-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;border-radius:22px;}
+.of-gate-card:hover::before,.of-gate-card:active::before{opacity:1;}
+.of-gate-card.product::before{background:radial-gradient(ellipse at 50% 0%,rgba(113,255,0,0.1),transparent 70%);}
+.of-gate-card.service::before{background:radial-gradient(ellipse at 50% 0%,rgba(0,170,255,0.1),transparent 70%);}
+.of-gate-card:hover{transform:translateY(-5px);}
+.of-gate-card.product:hover{border-color:rgba(113,255,0,0.35);box-shadow:0 12px 40px rgba(113,255,0,0.1);}
+.of-gate-card.service:hover{border-color:rgba(0,170,255,0.35);box-shadow:0 12px 40px rgba(0,170,255,0.1);}
+.of-gate-icon{font-size:48px;margin-bottom:14px;display:block;}
+.of-gate-title{font-size:18px;font-weight:900;margin-bottom:6px;}
+.of-gate-card.product .of-gate-title{color:#71ff00;}
+.of-gate-card.service .of-gate-title{color:#00aaff;}
+.of-gate-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.6;}
+.of-gate-arrow{margin-top:16px;font-size:20px;opacity:.5;}
+
+/* ── SECTION HEADER ── */
+.of-sec-hd{max-width:600px;margin:0 auto 6px;padding:0 20px;}
+.of-sec-hd h2{font-size:18px;font-weight:900;color:white;margin-bottom:4px;}
+.of-sec-hd p{font-size:12px;color:rgba(255,255,255,0.38);}
+.of-sec-back{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,0.4);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:14px;background:none;border:none;font-family:inherit;padding:0;}
+.of-sec-back:hover{color:white;}
+
+/* ── PRODUCT TYPE GRID ── */
+.of-prod-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;max-width:560px;margin:0 auto;padding:0 20px 40px;}
+.of-prod-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:20px 14px;text-align:center;cursor:pointer;text-decoration:none;transition:all .25s;display:block;}
+.of-prod-card:hover{transform:translateY(-4px);}
+.of-prod-card.p1:hover{border-color:rgba(113,255,0,0.3);background:rgba(113,255,0,0.06);}
+.of-prod-card.p2:hover{border-color:rgba(168,85,247,0.3);background:rgba(168,85,247,0.06);}
+.of-prod-card.p3:hover{border-color:rgba(0,170,255,0.3);background:rgba(0,170,255,0.06);}
+.of-prod-icon{font-size:32px;margin-bottom:10px;}
+.of-prod-label{font-size:13px;font-weight:800;margin-bottom:4px;}
+.of-prod-card.p1 .of-prod-label{color:#71ff00;}
+.of-prod-card.p2 .of-prod-label{color:#a855f7;}
+.of-prod-card.p3 .of-prod-label{color:#00aaff;}
+.of-prod-sub{font-size:10px;color:rgba(255,255,255,0.35);line-height:1.5;}
+
+/* ── SERVICE CATEGORY GRID ── */
+.of-svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-width:680px;margin:0 auto;padding:0 20px 40px;}
+.of-svc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px 12px;text-align:center;cursor:pointer;text-decoration:none;transition:all .22s;display:block;}
+.of-svc-card:hover{transform:translateY(-3px);border-color:rgba(0,170,255,0.3);background:rgba(0,170,255,0.06);}
+.of-svc-icon{font-size:28px;margin-bottom:8px;}
+.of-svc-label{font-size:12px;font-weight:800;color:white;margin-bottom:2px;}
+.of-svc-sub{font-size:10px;color:rgba(255,255,255,0.32);line-height:1.4;}
+
+/* ── DIVIDER ── */
+.of-divider{text-align:center;font-size:10px;font-weight:700;color:rgba(255,255,255,0.2);text-transform:uppercase;letter-spacing:.08em;margin:0 20px 12px;display:flex;align-items:center;gap:10px;max-width:640px;margin-left:auto;margin-right:auto;}
+.of-divider::before,.of-divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+@media(max-width:480px){
+  .of-gate{grid-template-columns:1fr 1fr;gap:10px;padding:0 14px;}
+  .of-prod-grid{grid-template-columns:1fr 1fr 1fr;padding:0 14px 40px;}
+  .of-svc-grid{grid-template-columns:repeat(3,1fr);padding:0 14px 40px;}
+  .of-svc-card{padding:12px 8px;}
+}
+@media(max-width:360px){
+  .of-svc-grid{grid-template-columns:repeat(2,1fr);}
+  .of-prod-grid{grid-template-columns:1fr 1fr;}
+}
+</style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="of-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="of-nav-logo" alt="SOKONI"></a>
+  <a href="javascript:history.back()" class="of-back">← Back</a>
+</nav>
+
+<!-- ── SCREEN 0: GATE ── -->
+<div class="of-screen active" id="screen0">
+  <div class="of-hero">
+    <div class="of-badge">🚀 Start on SOKONI</div>
+    <h1>What Are You<br><span>Offering?</span></h1>
+    <p>Pick your path — we'll take you straight to the right dashboard to get you earning fast.</p>
+  </div>
+
+  <div class="of-gate">
+    <div class="of-gate-card product" onclick="showScreen('screen-product')">
+      <span class="of-gate-icon">🛒</span>
+      <div class="of-gate-title">A Product</div>
+      <div class="of-gate-desc">Physical goods, digital downloads, or wholesale bulk items</div>
+      <div class="of-gate-arrow">→</div>
+    </div>
+    <div class="of-gate-card service" onclick="showScreen('screen-service')">
+      <span class="of-gate-icon">⚙️</span>
+      <div class="of-gate-title">A Service</div>
+      <div class="of-gate-desc">Skills, expertise, repairs, bookings or professional work</div>
+      <div class="of-gate-arrow">→</div>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:0 20px 48px;font-size:12px;color:rgba(255,255,255,0.25);">
+    Already have a dashboard? <a href="seller.html" style="color:rgba(113,255,0,0.6);">Seller ↗</a> &nbsp;·&nbsp; <a href="provider.html" style="color:rgba(0,170,255,0.6);">Provider ↗</a>
+  </div>
+</div>
+
+<!-- ── SCREEN 1: PRODUCT TYPES ── -->
+<div class="of-screen" id="screen-product">
+  <div class="of-hero" style="padding-bottom:16px;">
+    <div class="of-badge">🛒 Selling a Product</div>
+    <h1>What <span>type</span> of<br>product?</h1>
+    <p>Choose the right channel for your product — each has its own tailored dashboard.</p>
+  </div>
+
+  <div class="of-sec-hd">
+    <button type="button" class="of-sec-back" onclick="showScreen('screen0')">← Back</button>
+  </div>
+
+  <div class="of-prod-grid">
+    <a href="seller.html" class="of-prod-card p1">
+      <div class="of-prod-icon">📦</div>
+      <div class="of-prod-label">Physical Products</div>
+      <div class="of-prod-sub">Clothes, electronics, groceries, hardware &amp; everything else</div>
+    </a>
+    <a href="tech-hub.html" class="of-prod-card p2">
+      <div class="of-prod-icon">💾</div>
+      <div class="of-prod-label">Digital Goods</div>
+      <div class="of-prod-sub">Templates, eBooks, music, software, codes &amp; downloads</div>
+    </a>
+    <a href="b2b.html" class="of-prod-card p3">
+      <div class="of-prod-icon">🤝</div>
+      <div class="of-prod-label">Wholesale / B2B</div>
+      <div class="of-prod-sub">Bulk stock, manufacturer deals, import &amp; export trade</div>
+    </a>
+  </div>
+
+  <div style="text-align:center;padding:0 20px 20px 20px;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.2);">Need to list building materials? <a href="construction.html" style="color:rgba(245,158,11,0.6);">Construction Hub ↗</a></div>
+  </div>
+</div>
+
+<!-- ── SCREEN 2: SERVICE CATEGORIES ── -->
+<div class="of-screen" id="screen-service">
+  <div class="of-hero" style="padding-bottom:16px;">
+    <div class="of-badge" style="background:rgba(0,170,255,0.1);border-color:rgba(0,170,255,0.3);color:#00aaff;">⚙️ Offering a Service</div>
+    <h1>What <span style="background:linear-gradient(135deg,#00aaff,#0080ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">type</span> of<br>service?</h1>
+    <p>Pick your category — you'll be taken to the right setup or booking hub.</p>
+  </div>
+
+  <div class="of-sec-hd">
+    <button type="button" class="of-sec-back" onclick="showScreen('screen0')">← Back</button>
+  </div>
+
+  <div class="of-divider">Home &amp; General</div>
+  <div class="of-svc-grid" style="margin-bottom:6px;">
+    <a href="provider.html?cat=cleaning" class="of-svc-card">
+      <div class="of-svc-icon">🧹</div>
+      <div class="of-svc-label">Cleaning &amp; Laundry</div>
+      <div class="of-svc-sub">House, office, laundry</div>
+    </a>
+    <a href="provider.html?cat=plumbing" class="of-svc-card">
+      <div class="of-svc-icon">🔧</div>
+      <div class="of-svc-label">Plumbing</div>
+      <div class="of-svc-sub">Pipes, repairs, installations</div>
+    </a>
+    <a href="provider.html?cat=electrical" class="of-svc-card">
+      <div class="of-svc-icon">⚡</div>
+      <div class="of-svc-label">Electrical</div>
+      <div class="of-svc-sub">Wiring, fittings, repairs</div>
+    </a>
+    <a href="provider.html?cat=home-repairs" class="of-svc-card">
+      <div class="of-svc-icon">🏠</div>
+      <div class="of-svc-label">Home Repairs</div>
+      <div class="of-svc-sub">Painting, tiling, fencing</div>
+    </a>
+  </div>
+
+  <div class="of-divider">Professional &amp; Digital</div>
+  <div class="of-svc-grid" style="margin-bottom:6px;">
+    <a href="provider.html?cat=phone-repair" class="of-svc-card">
+      <div class="of-svc-icon">📱</div>
+      <div class="of-svc-label">Phone Repair</div>
+      <div class="of-svc-sub">Screen, battery, data</div>
+    </a>
+    <a href="provider.html?cat=computer-repair" class="of-svc-card">
+      <div class="of-svc-icon">💻</div>
+      <div class="of-svc-label">IT &amp; Computer</div>
+      <div class="of-svc-sub">Repairs, networks, support</div>
+    </a>
+    <a href="provider.html?cat=graphic-design" class="of-svc-card">
+      <div class="of-svc-icon">🎨</div>
+      <div class="of-svc-label">Graphic Design</div>
+      <div class="of-svc-sub">Logos, branding, print</div>
+    </a>
+    <a href="provider.html?cat=photography" class="of-svc-card">
+      <div class="of-svc-icon">📸</div>
+      <div class="of-svc-label">Photography</div>
+      <div class="of-svc-sub">Events, portraits, products</div>
+    </a>
+    <a href="provider.html?cat=videography" class="of-svc-card">
+      <div class="of-svc-icon">🎬</div>
+      <div class="of-svc-label">Videography</div>
+      <div class="of-svc-sub">Video production &amp; editing</div>
+    </a>
+    <a href="provider.html?cat=marketing" class="of-svc-card">
+      <div class="of-svc-icon">📢</div>
+      <div class="of-svc-label">Marketing</div>
+      <div class="of-svc-sub">Social media, SEO, ads</div>
+    </a>
+    <a href="provider.html?cat=accounting" class="of-svc-card">
+      <div class="of-svc-icon">📋</div>
+      <div class="of-svc-label">Accounting</div>
+      <div class="of-svc-sub">Bookkeeping, tax, payroll</div>
+    </a>
+    <a href="provider.html?cat=tutoring" class="of-svc-card">
+      <div class="of-svc-icon">📚</div>
+      <div class="of-svc-label">Tutoring</div>
+      <div class="of-svc-sub">KCSE, CBC, university</div>
+    </a>
+  </div>
+
+  <div class="of-divider">Lifestyle &amp; Beauty</div>
+  <div class="of-svc-grid" style="margin-bottom:6px;">
+    <a href="provider.html?cat=hair-beauty" class="of-svc-card">
+      <div class="of-svc-icon">💇</div>
+      <div class="of-svc-label">Hair &amp; Beauty</div>
+      <div class="of-svc-sub">Salon, barber, spa, nails</div>
+    </a>
+    <a href="provider.html?cat=fitness" class="of-svc-card">
+      <div class="of-svc-icon">🏋️</div>
+      <div class="of-svc-label">Fitness &amp; Training</div>
+      <div class="of-svc-sub">Personal trainer, gym</div>
+    </a>
+    <a href="provider.html?cat=food" class="of-svc-card">
+      <div class="of-svc-icon">🍽️</div>
+      <div class="of-svc-label">Food &amp; Catering</div>
+      <div class="of-svc-sub">Restaurant, delivery, chef</div>
+    </a>
+  </div>
+
+  <div class="of-divider">Events &amp; Entertainment</div>
+  <div class="of-svc-grid" style="margin-bottom:6px;">
+    <a href="provider.html?cat=events" class="of-svc-card">
+      <div class="of-svc-icon">🎉</div>
+      <div class="of-svc-label">Event Planning</div>
+      <div class="of-svc-sub">Weddings, birthdays, corp.</div>
+    </a>
+    <a href="provider.html?cat=entertainment" class="of-svc-card">
+      <div class="of-svc-icon">🎵</div>
+      <div class="of-svc-label">DJ / Music</div>
+      <div class="of-svc-sub">DJ, musician, entertainer</div>
+    </a>
+    <a href="provider.html?cat=mc" class="of-svc-card">
+      <div class="of-svc-icon">🎤</div>
+      <div class="of-svc-label">MC / Host</div>
+      <div class="of-svc-sub">Events host, emcee</div>
+    </a>
+    <a href="provider.html?cat=sports" class="of-svc-card">
+      <div class="of-svc-icon">⚽</div>
+      <div class="of-svc-label">Sports</div>
+      <div class="of-svc-sub">Turf, coaching, training</div>
+    </a>
+  </div>
+
+  <div class="of-divider">Specialised Hubs</div>
+  <div class="of-svc-grid" style="margin-bottom:6px;">
+    <a href="provider.html?cat=healthcare" class="of-svc-card">
+      <div class="of-svc-icon">🏥</div>
+      <div class="of-svc-label">Healthcare</div>
+      <div class="of-svc-sub">Doctors, clinics, pharmacy</div>
+    </a>
+    <a href="provider.html?cat=legal" class="of-svc-card">
+      <div class="of-svc-icon">⚖️</div>
+      <div class="of-svc-label">Legal Services</div>
+      <div class="of-svc-sub">Advocate, notary, contracts</div>
+    </a>
+    <a href="provider.html?cat=construction" class="of-svc-card">
+      <div class="of-svc-icon">🏗️</div>
+      <div class="of-svc-label">Construction</div>
+      <div class="of-svc-sub">Contractor, supplier, labour</div>
+    </a>
+    <a href="banking.html" class="of-svc-card">
+      <div class="of-svc-icon">🏦</div>
+      <div class="of-svc-label">Finance &amp; Banking</div>
+      <div class="of-svc-sub">SACCO, loans, M-Pesa biz</div>
+    </a>
+  </div>
+
+  <div class="of-divider">Transport &amp; Property</div>
+  <div class="of-svc-grid" style="margin-bottom:40px;">
+    <a href="provider.html?cat=delivery" class="of-svc-card">
+      <div class="of-svc-icon">🛵</div>
+      <div class="of-svc-label">Delivery</div>
+      <div class="of-svc-sub">Courier, last-mile, errand</div>
+    </a>
+    <a href="provider.html?cat=ride" class="of-svc-card">
+      <div class="of-svc-icon">🚘</div>
+      <div class="of-svc-label">Ride Sharing</div>
+      <div class="of-svc-sub">Taxi, boda boda, tuk-tuk</div>
+    </a>
+    <a href="provider.html?cat=car-rental" class="of-svc-card">
+      <div class="of-svc-icon">🚗</div>
+      <div class="of-svc-label">Car Rental</div>
+      <div class="of-svc-sub">Self-drive &amp; chauffeur</div>
+    </a>
+    <a href="provider.html?cat=mechanic" class="of-svc-card">
+      <div class="of-svc-icon">🔩</div>
+      <div class="of-svc-label">Mechanics</div>
+      <div class="of-svc-sub">Garage, diagnostics, tyres</div>
+    </a>
+    <a href="provider.html?cat=bnb" class="of-svc-card">
+      <div class="of-svc-icon">🏠</div>
+      <div class="of-svc-label">BnB / Short Stay</div>
+      <div class="of-svc-sub">Airbnb-style listing</div>
+    </a>
+    <a href="provider.html?cat=landlord" class="of-svc-card">
+      <div class="of-svc-icon">🏘️</div>
+      <div class="of-svc-label">Property</div>
+      <div class="of-svc-sub">Rentals, sales, land</div>
+    </a>
+  </div>
+</div>
+
+<script>
+function showScreen(id) {
+  document.querySelectorAll('.of-screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('active'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+
+/* Pre-select category in provider.html if ?cat= param passed */
+document.querySelectorAll('a[href^="provider.html?cat="]').forEach(a => {
+  a.addEventListener('click', function() {
+    const cat = new URL(this.href, location.href).searchParams.get('cat');
+    if (cat) sessionStorage.setItem('offerCat', cat);
+  });
+});
+</script>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">📝</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+(function() {
+  try {
+    var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    var pl = document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if (pl && u && u.name) pl.textContent = u.name.split(' ')[0];
+  } catch(e) {}
+})();
+</script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

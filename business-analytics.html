@@ -1,0 +1,716 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<script type="module" src="firebase.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Business Analytics</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--accent:#71ff00;--bg:#080808;--card:#111;--card2:#161616;--border:rgba(113,255,0,0.12);--text:#e8e8e8;--sub:rgba(255,255,255,0.45);}
+html{scroll-behavior:smooth;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px;}
+input,select,textarea,button{font-size:16px;font-family:inherit;}
+
+/* ── TOP NAV ── */
+.top-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;
+  background:rgba(8,8,8,0.95);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);}
+.nav-logo img{height:28px;}
+.nav-logo span{font-weight:800;font-size:17px;color:var(--accent);}
+.nav-title{font-size:15px;font-weight:700;color:var(--text);}
+.nav-right{display:flex;gap:10px;align-items:center;}
+.nav-btn{background:transparent;border:1px solid var(--border);color:var(--sub);border-radius:10px;padding:7px 14px;cursor:pointer;font-size:13px;transition:.2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── PAGE LAYOUT ── */
+.page-wrap{max-width:1200px;margin:0 auto;padding:24px 16px;}
+.section-title{font-size:13px;font-weight:800;color:var(--sub);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.section-title::before{content:'';display:block;width:3px;height:14px;background:var(--accent);border-radius:2px;}
+.section-block{margin-bottom:36px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:768px){.two-col{grid-template-columns:1fr;}}
+
+/* ── HEALTH SCORE ── */
+.health-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px 24px;display:flex;align-items:center;gap:32px;flex-wrap:wrap;}
+.health-canvas-wrap{position:relative;flex-shrink:0;}
+.health-score-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.health-score-num{font-size:36px;font-weight:900;color:var(--accent);}
+.health-score-label{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;}
+.health-metrics{flex:1;min-width:220px;}
+.health-metric{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.health-metric:last-child{margin-bottom:0;}
+.hm-label{font-size:13px;color:var(--sub);}
+.hm-bar-wrap{flex:1;height:6px;background:rgba(255,255,255,0.07);border-radius:6px;margin:0 12px;overflow:hidden;}
+.hm-bar{height:100%;border-radius:6px;background:var(--accent);transition:width 1s ease;}
+.hm-val{font-size:12px;font-weight:700;color:var(--accent);min-width:32px;text-align:right;}
+
+/* ── CAC KPI ── */
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:600px){.kpi-row{grid-template-columns:1fr;}}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 16px;position:relative;overflow:hidden;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);}
+.kpi-label{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.kpi-value{font-size:24px;font-weight:900;color:var(--text);line-height:1;}
+.kpi-sub{font-size:11px;color:var(--accent);margin-top:6px;font-weight:600;}
+.trend-arrow{display:inline-block;margin-left:6px;}
+.trend-up{color:#71ff00;}
+.trend-down{color:#ff4646;}
+
+/* ── CHARTS ── */
+.chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;}
+.chart-wrap canvas{display:block;width:100%;height:auto;}
+
+/* ── TOP PRODUCTS GRID ── */
+.products-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:600px){.products-grid{grid-template-columns:repeat(2,1fr);}}
+.prod-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px 12px;position:relative;}
+.prod-rank{position:absolute;top:10px;right:10px;font-size:10px;font-weight:800;color:var(--accent);background:rgba(113,255,0,0.1);padding:2px 7px;border-radius:6px;}
+.prod-name{font-size:13px;font-weight:700;margin-bottom:6px;padding-right:30px;}
+.prod-stat{font-size:11px;color:var(--sub);}
+.prod-stat strong{color:var(--accent);}
+
+/* ── TABLE ── */
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);}
+.data-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04);color:var(--text);}
+.data-table tr:hover td{background:rgba(113,255,0,0.03);}
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+.badge-green{background:rgba(113,255,0,0.15);color:var(--accent);}
+.badge-amber{background:rgba(255,180,0,0.15);color:#ffb400;}
+
+/* ── GROWTH LEVERS ── */
+.lever-row{display:flex;gap:12px;flex-wrap:wrap;}
+.lever-btn{padding:12px 20px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;border:none;transition:.2s;display:flex;align-items:center;gap:8px;text-decoration:none;}
+.lever-primary{background:var(--accent);color:#000;}
+.lever-primary:hover{background:#8fff1a;transform:translateY(-1px);}
+.lever-secondary{background:transparent;border:1px solid var(--border);color:var(--text);}
+.lever-secondary:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── SUB CARD ── */
+.sub-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.sub-info{flex:1;}
+.sub-plan{font-size:20px;font-weight:900;color:var(--accent);}
+.sub-plan-sub{font-size:12px;color:var(--sub);margin-top:4px;}
+.sub-cta{padding:10px 20px;background:var(--accent);color:#000;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:.2s;text-decoration:none;display:inline-block;}
+.sub-cta:hover{background:#8fff1a;}
+
+/* ── LEGEND ── */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.legend-sq{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.97);border-top:1px solid var(--border);display:flex;z-index:200;padding-bottom:env(safe-area-inset-bottom);}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;text-decoration:none;color:var(--sub);font-size:10px;font-weight:600;gap:4px;transition:.2s;}
+.bnav-item.active{color:var(--accent);}
+.bnav-item i{font-size:18px;}
+@media(min-width:769px){.bottom-nav{display:none;}}
+
+/* ── TOAST / LOADING ── */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.3s;z-index:999;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:var(--accent);color:var(--accent);}
+.loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;}
+.loading-spinner{width:40px;height:40px;border:3px solid rgba(113,255,0,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <span style="font-size:13px;color:var(--sub);">Loading business analytics…</span>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- TOP NAV -->
+<nav class="top-nav">
+  <a class="nav-logo" href="index.html">
+    <img src="assets/logosokoni.png" alt="Sokoni">
+    <span>SOKONI</span>
+  </a>
+  <span class="nav-title">📊 Business Analytics</span>
+  <div class="nav-right">
+    <a href="seller.html" class="nav-btn"><i class="fa fa-store"></i> Dashboard</a>
+    <a href="profile.html" class="nav-btn">👤</a>
+  </div>
+</nav>
+
+<div class="page-wrap" id="mainContent" style="display:none;">
+
+  <!-- 1. HEALTH SCORE -->
+  <div class="section-block">
+    <div class="section-title">Business Health Score</div>
+    <div class="health-wrap">
+      <div class="health-canvas-wrap">
+        <canvas id="healthGauge" width="160" height="160" style="width:160px;height:160px;"></canvas>
+        <div class="health-score-center">
+          <div class="health-score-num" id="healthNum">0</div>
+          <div class="health-score-label">/ 100</div>
+        </div>
+      </div>
+      <div class="health-metrics">
+        <div class="health-metric">
+          <span class="hm-label">Order Fulfillment</span>
+          <div class="hm-bar-wrap"><div class="hm-bar" id="hmBar0" style="width:0"></div></div>
+          <span class="hm-val" id="hmVal0">0%</span>
+        </div>
+        <div class="health-metric">
+          <span class="hm-label">Review Score</span>
+          <div class="hm-bar-wrap"><div class="hm-bar" id="hmBar1" style="width:0;background:#00ccff"></div></div>
+          <span class="hm-val" id="hmVal1" style="color:#00ccff">0%</span>
+        </div>
+        <div class="health-metric">
+          <span class="hm-label">Response Time</span>
+          <div class="hm-bar-wrap"><div class="hm-bar" id="hmBar2" style="width:0;background:#ffb400"></div></div>
+          <span class="hm-val" id="hmVal2" style="color:#ffb400">0%</span>
+        </div>
+        <div class="health-metric">
+          <span class="hm-label">Repeat Customers</span>
+          <div class="hm-bar-wrap"><div class="hm-bar" id="hmBar3" style="width:0;background:#c084fc"></div></div>
+          <span class="hm-val" id="hmVal3" style="color:#c084fc">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. MONTHLY REVENUE VS TARGET -->
+  <div class="section-block">
+    <div class="section-title">Monthly Revenue vs Target</div>
+    <div class="chart-wrap">
+      <canvas id="revenueChart" height="220"></canvas>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-sq" style="background:#71ff00;"></div>Actual Revenue</div>
+        <div class="legend-item"><div class="legend-sq" style="background:rgba(113,255,0,0.2);border:1px solid rgba(113,255,0,0.5);"></div>Target</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. CAC KPI ROW -->
+  <div class="section-block">
+    <div class="section-title">Acquisition & Growth KPIs</div>
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Customer Acquisition Cost</div>
+        <div class="kpi-value">KES <span id="cacVal">—</span></div>
+        <div class="kpi-sub"><span id="cacTrend" class="trend-arrow">—</span> vs last month</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">New Customers (Month)</div>
+        <div class="kpi-value" id="newCustVal">—</div>
+        <div class="kpi-sub">Total marketing spend: KES <span id="mktSpend">—</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Repeat Purchase Rate</div>
+        <div class="kpi-value" id="repeatRate">—<span style="font-size:14px;color:var(--sub);">%</span></div>
+        <div class="kpi-sub">Customers who ordered 2+</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. TOP PRODUCTS GRID -->
+  <div class="section-block">
+    <div class="section-title">Top Products</div>
+    <div class="products-grid" id="topProductsGrid">
+    </div>
+  </div>
+
+  <!-- 5. B2B vs B2C + Staff Table -->
+  <div class="section-block two-col">
+    <div>
+      <div class="section-title">B2B vs B2C Split</div>
+      <div class="chart-wrap" style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+        <canvas id="b2bChart" width="180" height="180" style="width:180px;height:180px;"></canvas>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#71ff00;"></div>B2C <span id="b2cPct" style="color:var(--text);font-weight:700;margin-left:4px;">72%</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:#00ccff;"></div>B2B <span id="b2bPct" style="color:var(--text);font-weight:700;margin-left:4px;">28%</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Staff Performance</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Orders</th>
+              <th>Rating</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="staffTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. SUBSCRIPTION STATUS -->
+  <div class="section-block">
+    <div class="section-title">Subscription Status</div>
+    <div class="sub-card">
+      <div class="sub-info">
+        <div class="sub-plan" id="subPlan">Free Plan</div>
+        <div class="sub-plan-sub" id="subPlanSub">Upgrade to unlock unlimited products, analytics exports, and priority support.</div>
+      </div>
+      <a href="subscriptions.html" class="sub-cta">Upgrade to Pro</a>
+    </div>
+  </div>
+
+  <!-- 7. GROWTH LEVERS -->
+  <div class="section-block">
+    <div class="section-title">Growth Levers</div>
+    <div class="lever-row">
+      <button class="lever-btn lever-primary" onclick="handleRunPromotion()">
+        <i class="fa fa-bullhorn"></i> Run Promotion
+      </button>
+      <a href="subscriptions.html" class="lever-btn lever-secondary">
+        <i class="fa fa-crown"></i> Subscribe to Pro
+      </a>
+      <a href="verification.html" class="lever-btn lever-secondary">
+        <i class="fa fa-badge-check fa-shield-alt"></i> Get Verified
+      </a>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="business-analytics.html" class="bnav-item active"><i class="fa fa-chart-bar"></i>Business</a>
+  <a href="seller.html" class="bnav-item"><i class="fa fa-store"></i>Seller</a>
+  <a href="seller-revenue.html" class="bnav-item"><i class="fa fa-coins"></i>Revenue</a>
+  <a href="marketing.html" class="bnav-item"><i class="fa fa-bullseye"></i>Marketing</a>
+  <a href="subscriptions.html" class="bnav-item"><i class="fa fa-box"></i>Subscriptions</a>
+</nav>
+
+<script src="sokoni-pay.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="analytics.js" defer></script>
+
+<script>
+(function(){
+  'use strict';
+
+  function escapeHTML(str){
+    if(str == null) return '';
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  /* ── AUTH GATE — Firebase Auth + Firestore role check ── */
+  function checkAuth(){ return false; } /* disabled — use _verifySellerAccess() */
+
+  function _verifySellerAccess(onGranted){
+    if(localStorage.getItem('loggedIn') !== 'true'){
+      window.location.replace('login.html'); return;
+    }
+    function _deny(){ window.location.replace('login.html'); }
+    function _checkRole(user){
+      if(!window.firebaseDB){ _lsFallback(); return; }
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
+        return fs.getDoc(fs.doc(window.firebaseDB, 'users', user.uid));
+      }).then(function(snap){
+        var role = (snap.exists() ? (snap.data().role||'') : '').toLowerCase();
+        if(role === 'seller' || role === 'admin'){ onGranted(user); }
+        else {
+          user.getIdTokenResult(true).then(function(r){
+            if(r.claims && r.claims.admin){ onGranted(user); } else { _deny(); }
+          }).catch(_deny);
+        }
+      }).catch(function(){
+        _lsFallback();
+      });
+      function _lsFallback(){
+        var r = localStorage.getItem('userRole')||'';
+        if(r === 'seller' || r === 'admin'){ onGranted(user); } else { _deny(); }
+      }
+    }
+    function _poll(n){
+      if(!window.firebaseAuth){
+        if(n > 30){ _deny(); return; }
+        setTimeout(function(){ _poll(n+1); }, 150); return;
+      }
+      window.firebaseAuth.onAuthStateChanged(function(user){
+        if(!user){ _deny(); return; }
+        _checkRole(user);
+      });
+    }
+    _poll(0);
+  }
+
+  /* ── TOAST ── */
+  function showToast(msg, type){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (type ? ' '+type : '');
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show'); }, 3000);
+  }
+
+  /* ── SEEDED RANDOM ── */
+  function sr(seed){
+    var x = Math.sin(seed + 1) * 10000;
+    return x - Math.floor(x);
+  }
+
+  /* ── HEALTH GAUGE (Canvas circular) ── */
+  var healthTarget = 0;
+  var healthCurrent = 0;
+
+  function drawGauge(score){
+    var canvas = document.getElementById('healthGauge');
+    var size = 160;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = size+'px';
+    canvas.style.height = size+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var cx = size/2, cy = size/2, r = 66, lw = 12;
+    var startAngle = Math.PI * 0.75;
+    var fullArc = Math.PI * 1.5;
+
+    /* background arc */
+    ctx.clearRect(0,0,size,size);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startAngle, startAngle + fullArc);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = lw;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    /* score arc */
+    var scoreAngle = (score / 100) * fullArc;
+    var color = score >= 75 ? '#71ff00' : score >= 50 ? '#ffb400' : '#ff4646';
+    var grad = ctx.createLinearGradient(cx-r, cy, cx+r, cy);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, '#fff');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startAngle, startAngle + scoreAngle);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  function animateGauge(target){
+    healthCurrent = 0;
+    function step(){
+      healthCurrent += 2;
+      if(healthCurrent > target) healthCurrent = target;
+      drawGauge(healthCurrent);
+      document.getElementById('healthNum').textContent = healthCurrent;
+      if(healthCurrent < target) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function renderHealthMetrics(){
+    var metrics = [
+      { id:0, val:92 },
+      { id:1, val:88 },
+      { id:2, val:74 },
+      { id:3, val:61 },
+    ];
+    var sum = metrics.reduce(function(a,m){return a+m.val;},0);
+    var score = Math.round(sum / metrics.length);
+
+    metrics.forEach(function(m){
+      var bar = document.getElementById('hmBar'+m.id);
+      var lbl = document.getElementById('hmVal'+m.id);
+      setTimeout(function(){
+        bar.style.width = m.val+'%';
+        lbl.textContent = m.val+'%';
+      }, 300);
+    });
+
+    setTimeout(function(){ animateGauge(score); }, 100);
+  }
+
+  /* ── GROUPED BAR CHART (Revenue vs Target) ── */
+  function drawRevenueChart(){
+    var canvas = document.getElementById('revenueChart');
+    var dpr = window.devicePixelRatio || 1;
+    var W = canvas.parentElement.clientWidth - 40;
+    var H = 220;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W+'px';
+    canvas.style.height = H+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var months = ['Jan','Feb','Mar','Apr','May','Jun'];
+    var actuals = [148000, 162000, 135000, 178000, 191000, 205000];
+    var targets  = [150000, 160000, 165000, 175000, 190000, 200000];
+    var max = Math.max.apply(null, actuals.concat(targets)) * 1.15;
+
+    var padL = 56, padR = 16, padT = 20, padB = 36;
+    var cW = W - padL - padR;
+    var cH = H - padT - padB;
+    var groupW = cW / months.length;
+    var barW = Math.min(groupW * 0.35, 30);
+    var gap = 4;
+
+    /* grid */
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    for(var g = 0; g <= 4; g++){
+      var y = padT + (cH/4)*g;
+      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+      var val = Math.round(max - (max/4)*g);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = '10px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(val >= 1000 ? (val/1000).toFixed(0)+'K' : val, padL-6, y+4);
+    }
+
+    months.forEach(function(m, i){
+      var cx = padL + groupW * i + groupW/2;
+      var aH = (actuals[i]/max) * cH;
+      var tH = (targets[i]/max) * cH;
+
+      /* target bar */
+      ctx.fillStyle = 'rgba(113,255,0,0.15)';
+      ctx.strokeStyle = 'rgba(113,255,0,0.5)';
+      ctx.lineWidth = 1;
+      var tx = cx - barW - gap/2;
+      var ty = padT + cH - tH;
+      ctx.fillRect(tx, ty, barW, tH);
+      ctx.strokeRect(tx, ty, barW, tH);
+
+      /* actual bar */
+      ctx.fillStyle = actuals[i] >= targets[i] ? '#71ff00' : '#ff4646';
+      var ax = cx + gap/2;
+      var ay = padT + cH - aH;
+      ctx.fillRect(ax, ay, barW, aH);
+
+      /* month label */
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '11px Segoe UI,system-ui,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(m, cx, H-8);
+    });
+  }
+
+  /* ── CAC KPIS ── */
+  function renderCACKPIs(){
+    var newCust = 47;
+    var spend = 18800;
+    var cac = Math.round(spend / newCust);
+    document.getElementById('cacVal').textContent = cac.toLocaleString('en-KE');
+    document.getElementById('newCustVal').textContent = newCust;
+    document.getElementById('mktSpend').textContent = spend.toLocaleString('en-KE');
+    document.getElementById('repeatRate').innerHTML = '34<span style="font-size:14px;color:var(--sub);">%</span>';
+    document.getElementById('cacTrend').innerHTML = '<span class="trend-down">↓ 12%</span>';
+  }
+
+  /* ── TOP PRODUCTS ── */
+  function renderTopProducts(){
+    var products = [];
+    try{ var r=localStorage.getItem('sellerProducts'); if(r) products=JSON.parse(r); }catch(e){}
+    if(!products.length){
+      products = [
+        {name:'Wireless Earbuds Pro'},{name:'Leather Handbag'},
+        {name:'Running Shoes X2'},{name:'Smart Watch'},
+        {name:'Cotton Dress Set'},{name:'Phone Case Bundle'},
+      ];
+    }
+    var html = '';
+    products.slice(0,6).forEach(function(p,i){
+      var sales = Math.round(sr(i*7+3)*200)+20;
+      var rev = sales * (Math.round(sr(i*3+1)*4000)+300);
+      html += '<div class="prod-card">' +
+        '<div class="prod-rank">#'+(i+1)+'</div>' +
+        '<div class="prod-name">'+escapeHTML(p.name || p.title || 'Product')+'</div>' +
+        '<div class="prod-stat">Sales: <strong>'+sales+'</strong></div>' +
+        '<div class="prod-stat">Revenue: <strong>KES '+rev.toLocaleString('en-KE')+'</strong></div>' +
+        '</div>';
+    });
+    document.getElementById('topProductsGrid').innerHTML = html;
+  }
+
+  /* ── B2B PIE ── */
+  function drawB2BChart(){
+    var canvas = document.getElementById('b2bChart');
+    var size = 180;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    canvas.style.width = size+'px';
+    canvas.style.height = size+'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var b2c = 72, b2b = 28;
+    var cx = size/2, cy = size/2, r = 76;
+    var start = -Math.PI/2;
+
+    /* B2C slice */
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,start,start+(b2c/100)*2*Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = '#71ff00';
+    ctx.fill();
+
+    /* B2B slice */
+    var b2bStart = start + (b2c/100)*2*Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,b2bStart,b2bStart+(b2b/100)*2*Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = '#00ccff';
+    ctx.fill();
+
+    /* inner cutout */
+    ctx.beginPath();
+    ctx.arc(cx,cy,48,0,2*Math.PI);
+    ctx.fillStyle = '#111';
+    ctx.fill();
+
+    /* label */
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '11px Segoe UI,system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Customer', cx, cy-7);
+    ctx.fillText('Split', cx, cy+9);
+  }
+
+  /* ── STAFF TABLE ── */
+  function renderStaffTable(){
+    var staff = [
+      { name:'Amara Njoroge', orders:142, rating:4.8, status:'Active' },
+      { name:'Brian Omondi', orders:97,  rating:4.5, status:'Active' },
+      { name:'Ciku Waweru',  orders:64,  rating:4.2, status:'Away'   },
+    ];
+    var html = '';
+    staff.forEach(function(s){
+      var badgeClass = s.status === 'Active' ? 'badge-green' : 'badge-amber';
+      html += '<tr>'+
+        '<td>'+escapeHTML(s.name)+'</td>'+
+        '<td>'+s.orders+'</td>'+
+        '<td>⭐ '+s.rating+'</td>'+
+        '<td><span class="badge '+badgeClass+'">'+escapeHTML(s.status)+'</span></td>'+
+        '</tr>';
+    });
+    document.getElementById('staffTableBody').innerHTML = html;
+  }
+
+  /* ── SUBSCRIPTION STATUS ── */
+  function renderSubStatus(plan){
+    var sub = (plan || 'free').toLowerCase();
+    var planMap = { free:'Free Plan', basic:'Basic Plan', pro:'Pro Plan', business:'Business Plan' };
+    var label = planMap[sub] || escapeHTML(sub);
+    document.getElementById('subPlan').textContent = label;
+    if(sub === 'pro' || sub === 'business'){
+      document.getElementById('subPlanSub').textContent = 'You are on ' + label + ' — enjoy unlimited access and priority support.';
+      var ctaEl = document.querySelector('.sub-cta');
+      if(ctaEl) ctaEl.textContent = 'Manage Plan';
+    }
+  }
+
+  function loadSubStatusFromFirestore(uid){
+    function _lsFallback(){
+      var stored = 'free';
+      try{ var o=JSON.parse(localStorage.getItem('sokoniSubscription')||'{}'); stored=o.plan||'free'; }catch(e){}
+      renderSubStatus(stored);
+    }
+    if(!window.firebaseDB || !uid){ _lsFallback(); return; }
+    /* v9 modular Firestore — dynamic import avoids SDK version mismatch */
+    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
+      return fs.getDoc(fs.doc(window.firebaseDB, 'planSubscriptions', uid));
+    }).then(function(snap){
+      var plan = snap.exists() ? (snap.data().plan || 'free') : 'free';
+      /* Cache verified value for offline use */
+      try { localStorage.setItem('sokoniSubscription', JSON.stringify({plan:plan})); } catch(e){}
+      renderSubStatus(plan);
+    }).catch(_lsFallback);
+  }
+
+  /* ── GROWTH LEVERS ── */
+  window.handleRunPromotion = function(){
+    if(window.SokoniPay && typeof SokoniPay.bookNow === 'function'){
+      SokoniPay.bookNow({
+        providerName: 'SOKONI Marketing',
+        category: 'advertising',
+        serviceDesc: 'Marketing Campaign'
+      }, function(){
+        showToast('Campaign started! Your products will be promoted.', 'success');
+      });
+    } else {
+      showToast('Payment module loading — please try again.', '');
+    }
+  };
+
+  /* ── INIT ── */
+  function initCharts(user){
+    renderHealthMetrics();
+    drawRevenueChart();
+    renderCACKPIs();
+    renderTopProducts();
+    drawB2BChart();
+    renderStaffTable();
+    loadSubStatusFromFirestore(user ? user.uid : null);
+  }
+
+  function init(){
+    _verifySellerAccess(function(user){
+      document.getElementById('mainContent').style.display = '';
+      document.getElementById('loadingOverlay').style.display = 'none';
+      initCharts(user);
+    });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  var resizeTimer;
+  window.addEventListener('resize', function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      drawRevenueChart();
+      drawB2BChart();
+    }, 200);
+  });
+
+})();
+</script>
+<script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

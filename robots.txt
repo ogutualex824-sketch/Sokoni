@@ -1,0 +1,45 @@
+# SOKONI — robots.txt
+# mysokoni.co.ke
+
+User-agent: *
+Allow: /
+
+# Private / admin / dashboard pages — do not index
+Disallow: /monitor.html
+Disallow: /admin.html
+Disallow: /verification-admin.html
+Disallow: /profile.html
+Disallow: /checkout.html
+Disallow: /success.html
+Disallow: /seller.html
+Disallow: /pos.html
+Disallow: /driver.html
+Disallow: /invoice.html
+Disallow: /bnb-manage.html
+Disallow: /landlord.html
+Disallow: /messages.html
+Disallow: /cart.html
+Disallow: /wishlist.html
+Disallow: /notifications.html
+Disallow: /referral.html
+Disallow: /subscriptions.html
+Disallow: /loyalty.html
+Disallow: /seller-analytics.html
+Disallow: /seller-revenue.html
+Disallow: /growth-dashboard.html
+Disallow: /business-analytics.html
+Disallow: /customer-analytics.html
+
+# Block query strings with session/tracking params
+Disallow: /*?fbclid=
+Disallow: /*?gclid=
+Disallow: /*?ref=
+Disallow: /*?source=pwa
+Disallow: /*?employee=
+
+# Allow Googlebot image crawling for product images
+User-agent: Googlebot-Image
+Allow: /assets/
+Allow: /uploads/
+
+Sitemap: https://mysokoni.co.ke/sitemap.xml

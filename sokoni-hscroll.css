@@ -1,0 +1,289 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SOKONI — Premium Horizontal Scroll System  v1.0
+   Mobile-only (≤768px). Desktop layout is untouched.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media (max-width: 768px) {
+
+/* ── Strip base: no scrollbar, smooth momentum ── */
+.categories-premium,
+.hubs-hscroll-wrap,
+.services-icon-grid,
+.b2b-strip,
+.new-arrivals-grid,
+.seller-container,
+.qlinks-row {
+  display: flex !important;
+  flex-direction: row !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  align-items: flex-start;
+}
+.categories-premium::-webkit-scrollbar,
+.hubs-hscroll-wrap::-webkit-scrollbar,
+.services-icon-grid::-webkit-scrollbar,
+.b2b-strip::-webkit-scrollbar,
+.new-arrivals-grid::-webkit-scrollbar,
+.seller-container::-webkit-scrollbar,
+.qlinks-row::-webkit-scrollbar { display: none; }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   1. CATEGORY CARDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.categories-premium {
+  gap: 10px;
+  padding: 8px 20px 18px;
+  align-items: stretch;
+}
+.cat-card-premium {
+  flex: 0 0 158px !important;
+  min-width: 158px !important;
+  max-width: 158px;
+  scroll-snap-align: start;
+  padding: 14px !important;
+  border-radius: 16px !important;
+}
+.ccp-icon { font-size: 22px !important; width: 44px !important; height: 44px !important; min-width: unset !important; }
+.ccp-info h3 { font-size: 12px !important; margin-bottom: 2px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ccp-info p  { font-size: 10px !important; line-height: 1.35 !important; }
+.ccp-arrow   { display: none !important; }
+
+/* Right fade — peek affordance */
+.categories-section::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--bg-base, #0a0a0a));
+  z-index: 2;
+}
+.categories-section { position: relative; overflow: hidden; }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   2. HUBS SECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.hubs-hscroll-wrap {
+  gap: 11px;
+  padding: 4px 20px 18px;
+  align-items: stretch;
+}
+.hubs-hscroll-wrap > a {
+  flex: 0 0 280px !important;
+  min-width: 280px !important;
+  max-width: 280px;
+  scroll-snap-align: start;
+  /* override grid-column spans — irrelevant in flex */
+}
+/* Featured full-width cards get slightly more room */
+.hubs-hscroll-wrap > a:first-child {
+  flex: 0 0 300px !important;
+  min-width: 300px !important;
+  max-width: 300px;
+}
+/* Button rows inside hub cards: wrap so they don't overflow card width */
+.hubs-hscroll-wrap > a > div[style*="display:flex"] {
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+}
+/* Outer section wrapper — fade right edge */
+.hubs-hscroll-section {
+  position: relative;
+  overflow: hidden;
+}
+.hubs-hscroll-section::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, #0a0a0a);
+  z-index: 2;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   3. QUICK LINKS STRIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.qlinks-row {
+  flex-wrap: nowrap !important;
+  gap: 7px !important;
+  padding-bottom: 8px;
+  align-items: center;
+  /* fade right edge via mask */
+  -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  mask-image: linear-gradient(to right, black 80%, transparent 100%);
+}
+.qlink {
+  scroll-snap-align: start;
+  flex-shrink: 0 !important;
+  white-space: nowrap;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   4. SERVICES ICON GRID
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.services-icon-grid {
+  gap: 9px;
+  padding: 4px 20px 18px;
+}
+.svc-icon-card {
+  flex: 0 0 88px !important;
+  min-width: 88px !important;
+  max-width: 88px;
+  scroll-snap-align: start;
+  min-height: 82px;
+  padding: 12px 8px !important;
+}
+/* Featured card gets wider to fit horizontal layout */
+.svc-icon-card.svc-featured {
+  flex: 0 0 210px !important;
+  min-width: 210px !important;
+  max-width: 210px;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 14px !important;
+}
+/* Outer section — fade right */
+#servicesHomeSection {
+  position: relative;
+  overflow: hidden;
+}
+#servicesHomeSection::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 60px; /* below heading */
+  bottom: 0;
+  width: 36px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, #0a0a0a);
+  z-index: 2;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   5. B2B STRIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.b2b-strip {
+  gap: 10px;
+  padding: 4px 20px 18px;
+  align-items: stretch;
+}
+.b2b-strip-card {
+  flex: 0 0 220px !important;
+  min-width: 220px !important;
+  max-width: 220px;
+  scroll-snap-align: start;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   6. NEW ARRIVALS / PRODUCT GRIDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.new-arrivals-grid {
+  gap: 10px !important;
+  padding: 4px 20px 18px !important;
+  align-items: stretch;
+}
+/* Product cards inside */
+.new-arrivals-grid > * {
+  flex: 0 0 158px !important;
+  min-width: 158px !important;
+  max-width: 158px;
+  scroll-snap-align: start;
+}
+/* Section — fade right edge */
+.new-arrivals-section {
+  position: relative;
+  overflow: hidden;
+}
+.new-arrivals-section::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 70px;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, #0a0a0a);
+  z-index: 2;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   7. SELLER CONTAINER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.seller-container {
+  flex-wrap: nowrap !important;
+  gap: 12px !important;
+  padding: 4px 20px 18px !important;
+  align-items: stretch;
+}
+.seller-container > * {
+  scroll-snap-align: start;
+  flex-shrink: 0 !important;
+  flex: 0 0 160px !important;
+  min-width: 160px !important;
+  max-width: 160px;
+}
+/* Outer section */
+.seller-section {
+  position: relative;
+  overflow: hidden;
+}
+.seller-section::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 70px;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, #0a0a0a);
+  z-index: 2;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   8. SECTION HEADERS — tighten horizontal padding
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.new-arrivals-title-row {
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+}
+.categories-section .section-title {
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+}
+/* Remove "See All Categories" button — redundant when strip is scrollable */
+.categories-section > div:last-child[style*="text-align:center"] {
+  display: none !important;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   9. HUBS OUTER SECTION PADDING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+section.hubs-hscroll-section {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+section.hubs-hscroll-section > div:first-child {
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+}
+
+} /* end @media (max-width: 768px) */

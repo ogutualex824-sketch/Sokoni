@@ -1,0 +1,719 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Refer &amp; Earn — SOKONI</title>
+  <meta name="description" content="Refer friends to SOKONI and earn rewards. Kenya's best marketplace referral program.">
+  <meta property="og:title" content="Refer &amp; Earn — SOKONI">
+  <meta property="og:description" content="Invite friends to SOKONI and earn loyalty points and cash rewards with every referral.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
+
+    .rf-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; background: rgba(10,10,10,0.96);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px);
+    }
+    .rf-nav-logo { height: 34px; }
+    .rf-nav-back {
+      color: rgba(255,255,255,0.5); text-decoration: none; font-size: 13px; font-weight: 600;
+      padding: 8px 16px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    }
+
+    /* HERO */
+    .rf-hero {
+      background: linear-gradient(135deg, rgba(255,193,7,0.1), rgba(113,255,0,0.06));
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      padding: 44px 24px 36px; text-align: center;
+    }
+    .rf-hero h1 { font-size: clamp(24px,5vw,40px); font-weight: 900; margin-bottom: 10px; }
+    .rf-hero p  { color: rgba(255,255,255,0.45); font-size: 15px; max-width: 500px; margin: 0 auto 24px; }
+
+    /* CODE DISPLAY */
+    .rf-code-wrap {
+      max-width: 480px; margin: 0 auto 20px;
+      background: rgba(113,255,0,0.05); border: 1px solid rgba(113,255,0,0.2); border-radius: 16px; padding: 20px;
+    }
+    .rf-code-label { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .rf-code-display { font-size: 28px; font-weight: 900; color: #71ff00; letter-spacing: 4px; margin-bottom: 10px; font-family: 'Courier New', monospace; }
+
+    /* LINK BOX */
+    .rf-link-box {
+      max-width: 520px; margin: 0 auto;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px; margin-bottom: 20px;
+    }
+    .rf-link-label { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .rf-link-row { display: flex; gap: 8px; align-items: center; }
+    .rf-link-input {
+      flex: 1; padding: 12px 14px; background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      color: #71ff00; font-size: 16px; font-weight: 700; outline: none; font-family: 'Courier New', monospace;
+    }
+    .rf-copy-btn {
+      padding: 12px 18px; background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.25);
+      color: #71ff00; font-weight: 800; font-size: 13px; border-radius: 10px; cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .rf-copy-btn:active { background: rgba(113,255,0,0.25); }
+
+    /* SHARE BUTTONS */
+    .rf-share-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .rf-share-btn {
+      display: flex; align-items: center; gap: 6px; padding: 9px 14px;
+      border-radius: 10px; border: none; cursor: pointer; font-size: 12px; font-weight: 700;
+      font-family: inherit; flex: 1; min-width: 100px; justify-content: center;
+    }
+    .rf-wa  { background: rgba(37,211,102,0.12); border: 1px solid rgba(37,211,102,0.25) !important; color: #25d366; }
+    .rf-sms { background: rgba(160,128,255,0.12); border: 1px solid rgba(160,128,255,0.25) !important; color: #a080ff; }
+    .rf-cp  { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12) !important; color: rgba(255,255,255,0.7); }
+
+    /* KPI GRID */
+    .rf-kpi-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr));
+      gap: 10px; max-width: 600px; margin: 0 auto;
+    }
+    .rf-kpi-card { border-radius: 14px; padding: 14px; text-align: center; }
+    .rf-kpi-label { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+    .rf-kpi-val   { font-size: 22px; font-weight: 900; }
+
+    /* BODY */
+    .rf-body { max-width: 900px; margin: 0 auto; padding: 32px 24px 100px; }
+
+    /* HOW IT WORKS */
+    .rf-steps { display: grid; grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); gap: 14px; margin-bottom: 36px; }
+    .rf-step { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; text-align: center; }
+    .rf-step-num { width: 36px; height: 36px; border-radius: 50%; background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.2); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; color: #71ff00; margin: 0 auto 12px; }
+    .rf-step-icon { font-size: 28px; margin-bottom: 8px; }
+    .rf-step h4 { font-size: 13px; font-weight: 800; color: white; margin-bottom: 4px; }
+    .rf-step p  { font-size: 11px; color: rgba(255,255,255,0.4); line-height: 1.5; }
+
+    /* STATS */
+    .rf-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+    .rf-stat-card { flex: 1; min-width: 110px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; text-align: center; }
+    .rf-stat-val   { font-size: 22px; font-weight: 900; color: #71ff00; }
+    .rf-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+
+    /* TABLE */
+    .rf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .rf-table th { text-align: left; padding: 8px 12px; font-size: 11px; color: rgba(255,255,255,0.35); text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .rf-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); color: rgba(255,255,255,0.7); }
+    .rf-table tr:last-child td { border-bottom: none; }
+    .rf-table-wrap { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; overflow: hidden; }
+
+    /* LEADERBOARD */
+    .rf-lb-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .rf-lb-rank { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; flex-shrink: 0; }
+    .rf-lb-info { flex: 1; }
+    .rf-lb-name { font-size: 13px; font-weight: 700; color: white; }
+    .rf-lb-sub  { font-size: 11px; color: rgba(255,255,255,0.35); }
+    .rf-lb-pts  { font-size: 14px; font-weight: 900; color: #ffc107; }
+
+    /* SECTION */
+    .rf-section-h { font-size: 14px; font-weight: 800; color: white; margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
+    .rf-section-h::after { content:''; flex:1; height:1px; background: rgba(255,255,255,0.07); }
+
+    .rf-empty { color: rgba(255,255,255,0.25); font-size: 13px; padding: 24px 0; text-align: center; }
+    .status-pill { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 800; }
+    .pill-pending  { background: rgba(255,152,0,0.12); color: #ff9800; }
+    .pill-complete { background: rgba(113,255,0,0.12); color: #71ff00; }
+
+    .rf-notif { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; margin-top: 8px; }
+    .rf-notif-ok  { background: rgba(113,255,0,0.08); border: 1px solid rgba(113,255,0,0.2); color: rgba(255,255,255,0.85); }
+    .rf-notif-err { background: rgba(255,60,60,0.1);  border: 1px solid rgba(255,60,60,0.25); color: #ff6464; }
+
+    /* Withdraw btn */
+    .rf-withdraw-btn {
+      padding: 13px 28px; background: linear-gradient(135deg,#71ff00,#4fc800);
+      color: black; font-weight: 800; font-size: 14px; border: none; border-radius: 12px;
+      cursor: pointer; font-family: inherit; margin-top: 16px; transition: opacity .2s;
+    }
+    .rf-withdraw-btn:hover { opacity: 0.88; }
+    .rf-withdraw-btn:disabled { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.25); cursor: not-allowed; }
+
+    /* INVITE FORM */
+    .rf-invite-form { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; margin-bottom: 28px; }
+    .rf-invite-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    input { font-size: 16px; }
+    .rf-input {
+      flex: 1; min-width: 140px; padding: 11px 13px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      color: white; font-size: 16px; outline: none; font-family: inherit;
+    }
+    .rf-input::placeholder { color: rgba(255,255,255,0.3); }
+    .rf-invite-btn {
+      padding: 11px 20px; background: linear-gradient(135deg,#71ff00,#4fc800);
+      color: black; font-weight: 800; border: none; border-radius: 10px;
+      cursor: pointer; font-size: 13px; font-family: inherit;
+    }
+
+    @media(max-width:600px) {
+      .rf-kpi-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="rf-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="rf-nav-logo" alt="Sokoni"></a>
+  <a href="index.html" class="rf-nav-back">← Home</a>
+</nav>
+
+<div class="rf-hero">
+  <h1>💸 Share &amp; Earn</h1>
+  <p>Refer friends to SOKONI. Earn <strong style="color:#71ff00;">KES 50 cash</strong> + <strong style="color:#ffc107;">100 loyalty points</strong> for every successful referral.</p>
+
+  <!-- UNIQUE CODE -->
+  <div class="rf-code-wrap">
+    <div class="rf-code-label">Your Referral Code</div>
+    <div class="rf-code-display" id="rfCodeDisplay">...</div>
+    <button type="button" class="rf-copy-btn" onclick="rfCopyCode()" style="display:block;width:100%;margin:0 auto;">📋 Copy Code</button>
+  </div>
+
+  <!-- REFERRAL LINK -->
+  <div class="rf-link-box">
+    <div class="rf-link-label">Your Referral Link — share this everywhere</div>
+    <div class="rf-link-row">
+      <input class="rf-link-input" id="rfLinkInput" readonly value="Loading...">
+      <button type="button" class="rf-copy-btn" onclick="rfCopyLink()">📋 Copy</button>
+    </div>
+    <div class="rf-share-row">
+      <button type="button" class="rf-share-btn rf-wa" id="rfBtnWA"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+      <button type="button" class="rf-share-btn rf-sms" id="rfBtnSMS">💬 SMS</button>
+      <button type="button" class="rf-share-btn rf-cp" id="rfBtnCopy">🔗 Copy Link</button>
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="rf-kpi-grid">
+    <div class="rf-kpi-card" style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);">
+      <div class="rf-kpi-label">Total Earned</div>
+      <div class="rf-kpi-val" id="kpiTotalEarned" style="color:#71ff00;">KES 0</div>
+    </div>
+    <div class="rf-kpi-card" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.18);">
+      <div class="rf-kpi-label">Pending</div>
+      <div class="rf-kpi-val" id="kpiPending" style="color:#fbbf24;">KES 0</div>
+    </div>
+    <div class="rf-kpi-card" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);">
+      <div class="rf-kpi-label">Completed</div>
+      <div class="rf-kpi-val" id="kpiCompleted" style="color:white;">0</div>
+    </div>
+    <div class="rf-kpi-card" style="background:rgba(192,132,252,0.06);border:1px solid rgba(192,132,252,0.18);">
+      <div class="rf-kpi-label">Points Earned</div>
+      <div class="rf-kpi-val" id="kpiPoints" style="color:#c084fc;">0</div>
+    </div>
+  </div>
+
+  <!-- WITHDRAW -->
+  <div style="text-align:center;">
+    <button type="button" class="rf-withdraw-btn" id="rfWithdrawBtn" onclick="rfWithdraw()">💰 Withdraw Earnings</button>
+    <div id="rfWithdrawMsg" style="margin-top:8px;font-size:12px;"></div>
+  </div>
+</div>
+
+<div class="rf-body">
+
+  <!-- STATS -->
+  <div class="rf-section-h">My Referral Stats</div>
+  <div class="rf-stats">
+    <div class="rf-stat-card"><div class="rf-stat-val" id="statInvited">0</div><div class="rf-stat-label">Total Invited</div></div>
+    <div class="rf-stat-card"><div class="rf-stat-val" id="statPending">0</div><div class="rf-stat-label">Pending</div></div>
+    <div class="rf-stat-card"><div class="rf-stat-val" id="statDone" style="color:#ffc107;">0</div><div class="rf-stat-label">Completed</div></div>
+    <div class="rf-stat-card"><div class="rf-stat-val" id="statKes">KES 0</div><div class="rf-stat-label">Cash Earned</div></div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="rf-section-h">How It Works</div>
+  <div class="rf-steps">
+    <div class="rf-step">
+      <div class="rf-step-num">1</div>
+      <div class="rf-step-icon">🔗</div>
+      <h4>Share Your Link</h4>
+      <p>Copy your unique referral link and send it to friends via WhatsApp, SMS or social media.</p>
+    </div>
+    <div class="rf-step">
+      <div class="rf-step-num">2</div>
+      <div class="rf-step-icon">👤</div>
+      <h4>Friend Signs Up</h4>
+      <p>Your friend clicks your link, creates a SOKONI account — your code is auto-saved.</p>
+    </div>
+    <div class="rf-step">
+      <div class="rf-step-num">3</div>
+      <div class="rf-step-icon">🎉</div>
+      <h4>Both Earn</h4>
+      <p>When they make their first purchase, you get KES 50 + 100 loyalty points. They get 10% off!</p>
+    </div>
+  </div>
+
+  <!-- INVITE FORM -->
+  <div class="rf-section-h">Invite a Friend</div>
+  <div class="rf-invite-form">
+    <div class="rf-invite-row">
+      <input type="text" id="rfFriendName" placeholder="Friend's name" class="rf-input" autocomplete="off">
+      <input type="text" id="rfFriendPhone" placeholder="Phone number e.g. 0712345678" class="rf-input" autocomplete="off">
+      <button type="button" class="rf-invite-btn" onclick="rfInvite()">📨 Invite</button>
+    </div>
+    <div id="rfInviteMsg" style="margin-top:8px;font-size:12px;"></div>
+  </div>
+
+  <!-- REFERRAL HISTORY TABLE -->
+  <div class="rf-section-h">Referred Users</div>
+  <div class="rf-table-wrap" style="margin-bottom:28px;">
+    <table class="rf-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Status</th>
+          <th>Points</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="rfHistoryTbody"></tbody>
+    </table>
+    <div id="rfHistoryEmpty" class="rf-empty" style="display:none;">No referrals yet. Share your link to start earning!</div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div class="rf-section-h">Top Referrers 🏆</div>
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden;margin-bottom:28px;">
+    <div id="rfLeaderboard"></div>
+  </div>
+
+  <!-- REWARD VALUES -->
+  <div class="rf-section-h">Referral Reward Breakdown</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:32px;">
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:8px;">💰</div>
+      <div style="font-size:18px;font-weight:900;color:#71ff00;margin-bottom:4px;">KES 50</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);">Cash per referral</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:8px;">⭐</div>
+      <div style="font-size:18px;font-weight:900;color:#ffc107;margin-bottom:4px;">+100 pts</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);">Loyalty points</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:8px;">🎁</div>
+      <div style="font-size:18px;font-weight:900;color:#c084fc;margin-bottom:4px;">10% OFF</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);">Friend's first order</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:8px;">🏆</div>
+      <div style="font-size:18px;font-weight:900;color:#ffd700;margin-bottom:4px;">+500 pts</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);">10 referrals milestone</div>
+    </div>
+  </div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+  <a href="loyalty.html" class="bnav-item"><span class="bnav-emoji">🎁</span><span>Loyalty</span></a>
+  <a href="referral.html" class="bnav-item active-bnav"><span class="bnav-emoji">🔗</span><span>Referral</span></a>
+  <a href="subscriptions.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Subscriptions</span></a>
+</nav>
+
+<script src="sokoni-pay.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* =====================================================
+   SOKONI REFERRAL ENGINE
+   localStorage keys:
+     sokoniReferralCode  — "SKN7890ABC"
+     sokoniReferrals     — [{refereePhone, refereeName, status, earnedAt, pointsAwarded, id}]
+     sokoniReferredBy    — "SKN1234XYZ"  (set when user arrives via ?ref=CODE)
+   ===================================================== */
+
+/* ---------- helpers ---------- */
+function escapeHTML(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function randAlnum(n) {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var out = '';
+  for (var i = 0; i < n; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+/* ---------- generate / load referral code ---------- */
+function getOrCreateCode() {
+  var stored = localStorage.getItem('sokoniReferralCode');
+  if (stored && /^SKN[A-Z0-9]{7}$/.test(stored)) return stored;
+
+  /* build from user phone */
+  var suffix = '';
+  try {
+    var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+    var phone = (u.phone || u.phoneNumber || '').replace(/\D/g, '');
+    if (phone.length >= 4) suffix = phone.slice(-4);
+  } catch(e) {}
+  if (!suffix) suffix = randAlnum(4);
+
+  var code = 'SKN' + suffix + randAlnum(3);
+  localStorage.setItem('sokoniReferralCode', code);
+  return code;
+}
+
+/* ---------- load referrals ---------- */
+function loadReferrals() {
+  try { return JSON.parse(localStorage.getItem('sokoniReferrals')) || []; } catch(e) { return []; }
+}
+function saveReferrals(arr) { localStorage.setItem('sokoniReferrals', JSON.stringify(arr)); }
+
+/* ---------- stats ---------- */
+function calcStats(refs) {
+  var total    = refs.length;
+  var pending  = refs.filter(function(r){ return r.status === 'pending'; }).length;
+  var done     = refs.filter(function(r){ return r.status === 'completed'; }).length;
+  var kes      = done * 50;
+  var pts      = refs.reduce(function(acc, r){ return acc + (r.pointsAwarded || 0); }, 0);
+  return { total: total, pending: pending, done: done, kes: kes, pts: pts };
+}
+
+/* ---------- init page ---------- */
+var rfCode = getOrCreateCode();
+var rfLink = 'https://mysokoni.co.ke?ref=' + rfCode;
+
+document.getElementById('rfCodeDisplay').textContent = rfCode;
+document.getElementById('rfLinkInput').value = rfLink;
+
+/* KPI render */
+function renderKPIs() {
+  var refs  = loadReferrals();
+  var stats = calcStats(refs);
+  document.getElementById('kpiTotalEarned').textContent = 'KES ' + (stats.kes);
+  document.getElementById('kpiPending').textContent     = 'KES ' + (stats.pending * 50);
+  document.getElementById('kpiCompleted').textContent   = stats.done;
+  document.getElementById('kpiPoints').textContent      = stats.pts;
+  document.getElementById('statInvited').textContent    = stats.total;
+  document.getElementById('statPending').textContent    = stats.pending;
+  document.getElementById('statDone').textContent       = stats.done;
+  document.getElementById('statKes').textContent        = 'KES ' + stats.kes;
+
+  var wBtn = document.getElementById('rfWithdrawBtn');
+  if (stats.kes < 50) {
+    wBtn.disabled = true;
+    wBtn.textContent = '💰 Need KES 50+ to withdraw';
+  } else {
+    wBtn.disabled = false;
+    wBtn.textContent = '💰 Withdraw KES ' + stats.kes;
+  }
+}
+renderKPIs();
+
+/* ---------- history table ---------- */
+function renderHistory() {
+  var refs  = loadReferrals();
+  var tbody = document.getElementById('rfHistoryTbody');
+  var empty = document.getElementById('rfHistoryEmpty');
+  if (!refs.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = refs.map(function(r, i) {
+    var pill = r.status === 'completed'
+      ? '<span class="status-pill pill-complete">✓ Completed</span>'
+      : '<span class="status-pill pill-pending">⏳ Pending</span>';
+    return '<tr>'
+      + '<td>' + (i + 1) + '</td>'
+      + '<td>' + escapeHTML(r.refereeName || '—') + '</td>'
+      + '<td>' + escapeHTML(maskPhone(r.refereePhone || '')) + '</td>'
+      + '<td>' + pill + '</td>'
+      + '<td style="color:#ffc107;">' + (r.pointsAwarded || 0) + ' pts</td>'
+      + '<td>' + escapeHTML(r.earnedAt || '—') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+renderHistory();
+
+function maskPhone(phone) {
+  if (!phone || phone.length < 4) return phone;
+  return phone.slice(0, 3) + '****' + phone.slice(-3);
+}
+
+/* ---------- leaderboard ---------- */
+function renderLeaderboard() {
+  var refs     = loadReferrals();
+  var myDone   = refs.filter(function(r){ return r.status === 'completed'; }).length;
+  var myName   = '';
+  try { myName = (JSON.parse(localStorage.getItem('sokoniUser') || '{}').name || 'You').split(' ')[0]; } catch(e) {}
+
+  /* build list: self + 4 mock placeholders */
+  var leaders = [
+    { name: myName || 'You',         count: Math.max(myDone, 0), isSelf: true },
+    { name: 'N***i W.',              count: 23,   isSelf: false },
+    { name: 'A***u K.',              count: 17,   isSelf: false },
+    { name: 'F***h M.',              count: 11,   isSelf: false },
+    { name: 'L***a J.',              count: 8,    isSelf: false },
+  ];
+  /* sort descending */
+  leaders.sort(function(a,b){ return b.count - a.count; });
+  /* cap at 5 */
+  leaders = leaders.slice(0, 5);
+
+  var medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+  var colors  = ['#ffd700','#c0c0c0','#cd7f32','rgba(255,255,255,0.5)','rgba(255,255,255,0.3)'];
+
+  var el = document.getElementById('rfLeaderboard');
+  el.innerHTML = leaders.map(function(l, i) {
+    return '<div class="rf-lb-row" style="' + (l.isSelf ? 'background:rgba(113,255,0,0.04);' : '') + '">'
+      + '<div class="rf-lb-rank" style="background:' + (l.isSelf ? 'rgba(113,255,0,0.15)' : 'rgba(255,255,255,0.06)') + ';color:' + colors[i] + ';">' + medals[i] + '</div>'
+      + '<div class="rf-lb-info">'
+      + '<div class="rf-lb-name">' + escapeHTML(l.name) + (l.isSelf ? ' <span style="font-size:10px;color:#71ff00;">(You)</span>' : '') + '</div>'
+      + '<div class="rf-lb-sub">' + l.count + ' successful referral' + (l.count !== 1 ? 's' : '') + '</div>'
+      + '</div>'
+      + '<div class="rf-lb-pts">KES ' + (l.count * 50) + '</div>'
+      + '</div>';
+  }).join('');
+}
+renderLeaderboard();
+
+/* ---------- share actions ---------- */
+function rfCopyCode() {
+  navigator.clipboard.writeText(rfCode).then(function() {
+    showToast('Code copied!');
+  }).catch(function() {
+    prompt('Copy your referral code:', rfCode);
+  });
+}
+
+function rfCopyLink() {
+  navigator.clipboard.writeText(rfLink).then(function() {
+    showToast('Link copied!');
+  }).catch(function() {
+    prompt('Copy your referral link:', rfLink);
+  });
+}
+
+function showToast(msg) {
+  var t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.3);color:#71ff00;padding:10px 22px;border-radius:999px;font-size:13px;font-weight:800;z-index:9999;pointer-events:none;';
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2000);
+}
+
+document.getElementById('rfBtnWA').addEventListener('click', function() {
+  var text = encodeURIComponent('Join me on SOKONI — Kenya\'s best marketplace! Use my referral link: ' + rfLink + ' — you\'ll get 10% off your first order! 🛍️');
+  window.open('https://wa.me/?text=' + text, '_blank', 'noopener');
+});
+
+document.getElementById('rfBtnSMS').addEventListener('click', function() {
+  var text = encodeURIComponent('Join SOKONI: ' + rfLink + ' — get 10% off your first order!');
+  window.open('sms:?body=' + text, '_blank');
+});
+
+document.getElementById('rfBtnCopy').addEventListener('click', rfCopyLink);
+
+/* ---------- invite form ---------- */
+function rfInvite() {
+  var nameEl  = document.getElementById('rfFriendName');
+  var phoneEl = document.getElementById('rfFriendPhone');
+  var msgEl   = document.getElementById('rfInviteMsg');
+
+  var name  = (nameEl.value  || '').trim();
+  var phone = (phoneEl.value || '').trim().replace(/\s+/g, '');
+
+  if (!name) { rfMsg(msgEl, 'err', 'Please enter your friend\'s name.'); nameEl.focus(); return; }
+  if (!phone || phone.length < 9) { rfMsg(msgEl, 'err', 'Please enter a valid phone number.'); phoneEl.focus(); return; }
+
+  var refs = loadReferrals();
+  var exists = refs.find(function(r){ return r.refereePhone === phone; });
+  if (exists) { rfMsg(msgEl, 'err', 'You\'ve already invited this number.'); return; }
+
+  var entry = {
+    id: 'RF' + Date.now(),
+    refereeName: name,
+    refereePhone: phone,
+    referrerCode: rfCode,
+    status: 'pending',
+    pointsAwarded: 0,
+    earnedAt: new Date().toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' })
+  };
+  refs.unshift(entry);
+  saveReferrals(refs);
+
+  nameEl.value  = '';
+  phoneEl.value = '';
+  rfMsg(msgEl, 'ok', '📨 Invite recorded! Share your link with ' + escapeHTML(name) + ' so they can sign up.');
+
+  renderHistory();
+  renderKPIs();
+  renderLeaderboard();
+
+  /* send WhatsApp invite automatically */
+  var waText = encodeURIComponent('Hey ' + name + '! Join me on SOKONI — Kenya\'s best marketplace! Use my link: ' + rfLink + ' — you get 10% off your first order! 🛍️');
+  window.open('https://wa.me/' + rfNormalizePhone(phone) + '?text=' + waText, '_blank', 'noopener');
+}
+
+function rfNormalizePhone(p) {
+  p = p.replace(/\D/g,'');
+  if (p.startsWith('0')) p = '254' + p.slice(1);
+  return p;
+}
+
+function rfMsg(el, type, msg) {
+  el.innerHTML = '<div class="rf-notif rf-notif-' + (type === 'ok' ? 'ok' : 'err') + '">' + escapeHTML(msg) + '</div>';
+}
+
+/* ---------- withdraw earnings ---------- */
+function rfWithdraw() {
+  var refs  = loadReferrals();
+  var stats = calcStats(refs);
+  if (stats.kes < 50) { (window._skToast||alert)('You need at least KES 50 to withdraw.'); return; }
+
+  if (typeof SokoniPay === 'undefined') {
+    (window._skToast||alert)('SokoniPay is loading. Please try again.');
+    return;
+  }
+
+  SokoniPay.bookNow({
+    providerName: 'SOKONI Referral',
+    category: 'referral',
+    serviceDesc: 'Referral reward KES ' + stats.kes
+  }, function() {
+    /* mark all completed refs as paid */
+    var updated = refs.map(function(r){
+      if (r.status === 'completed') return Object.assign({}, r, { status: 'paid' });
+      return r;
+    });
+    saveReferrals(updated);
+    renderHistory();
+    renderKPIs();
+    renderLeaderboard();
+    var msgEl = document.getElementById('rfWithdrawMsg');
+    msgEl.innerHTML = '<div class="rf-notif rf-notif-ok">✅ KES ' + stats.kes + ' sent to your M-Pesa!</div>';
+  });
+}
+
+/* ---------- incoming ?ref=CODE ---------- */
+(function() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var inboundCode = params.get('ref');
+    if (inboundCode && /^SKN[A-Z0-9]{7}$/.test(inboundCode)) {
+      var ownCode = localStorage.getItem('sokoniReferralCode') || '';
+      /* anti-self-referral + no double-credit */
+      if (inboundCode !== ownCode && !localStorage.getItem('sokoniReferredBy')) {
+        localStorage.setItem('sokoniReferredBy', inboundCode);
+      }
+    }
+  } catch(e) {}
+})();
+
+/* ---------- first purchase hook (referral.html version is a no-op — sokoni-loyalty.js handles this) ---------- */
+/* NOTE: window.onSokoniFirstPurchase is defined in sokoni-loyalty.js which is loaded on checkout.html.
+   This file (referral.html) does not load sokoni-loyalty.js — if it did, the IIFE guard would skip because
+   loyalty.html defines the function first. So we leave the window function to sokoni-loyalty.js. */
+
+/* ---------- expose inviteFriend globally for legacy compat ---------- */
+window.inviteFriend = rfInvite;
+</script>
+
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script>
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script type="module">
+import SokoniDB from './sokoni-db.js';
+
+/* Wrap rfInvite to persist new referral to Firestore */
+var _origInvite = window.inviteFriend;
+window.inviteFriend = function() {
+  _origInvite.apply(this, arguments);
+  try {
+    var refs = JSON.parse(localStorage.getItem('sokoniReferrals') || '[]');
+    var latest = refs[0];
+    if (latest && window.SokoniDB) {
+      var user = {};
+      try { user = JSON.parse(localStorage.getItem('sokoniUser') || '{}'); } catch(e2) {}
+      SokoniDB.saveReferral({
+        id: latest.id,
+        friendName: latest.refereeName,
+        contact: latest.refereePhone,
+        referrerCode: latest.referrerCode,
+        referrerUid: user.uid || null,
+        status: latest.status || 'pending',
+        date: latest.earnedAt,
+      }).catch(function(e3){ console.warn('[SOKONI] referral save:', e3.message); });
+    }
+  } catch(e4) {}
+};
+
+/* Merge Firestore referrals into localStorage */
+SokoniDB.listenMyReferrals(function(fsRefs) {
+  if (!fsRefs.length) return;
+  var RKEY = 'sokoniReferrals';
+  var local = [];
+  try { local = JSON.parse(localStorage.getItem(RKEY) || '[]'); } catch(e) {}
+  var localIds = new Set(local.map(function(r){ return r.id; }));
+  var newItems = fsRefs.filter(function(r){ return !localIds.has(r.id); });
+  if (!newItems.length) return;
+  var merged = newItems.map(function(r){
+    return {
+      id: r.id, refereeName: r.friendName, refereePhone: r.contact,
+      referrerCode: r.referrerCode, earnedAt: r.date || '', status: r.status || 'pending',
+      pointsAwarded: r.status === 'completed' ? 100 : 0
+    };
+  }).concat(local);
+  localStorage.setItem(RKEY, JSON.stringify(merged));
+});
+</script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: payment stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-payment-engine.js"></script>
+  <script defer src="sokoni-fraud-engine.js"></script>
+</body>
+</html>
+
+
+
+

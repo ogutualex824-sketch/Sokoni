@@ -1,0 +1,516 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rider Dashboard â€” SOKONI Food</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css'">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+
+/* â”€â”€ STATUS BAR â”€â”€ */
+.fr-status-bar{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;background:rgba(34,197,94,0.04);}
+.fr-online-dot{width:10px;height:10px;border-radius:50%;background:#22c55e;animation:pulse 1.5s ease-in-out infinite;margin-right:6px;}
+.fr-offline-dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.2);margin-right:6px;}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px rgba(34,197,94,0.5);}50%{box-shadow:0 0 14px rgba(34,197,94,0.8);}}
+.fr-toggle-btn{padding:6px 18px;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;border:none;font-family:inherit;transition:all .2s;}
+.fr-toggle-btn.online{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;}
+.fr-toggle-btn.offline{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;}
+
+/* â”€â”€ TABS â”€â”€ */
+.fr-tabs{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);}
+.fr-tab{flex:1;padding:7px;text-align:center;border-radius:10px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);transition:all .2s;}
+.fr-tab.active{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.4);color:#22c55e;}
+
+.fr-body{max-width:700px;margin:0 auto;padding:14px 16px;}
+.fr-pane{display:none;}
+.fr-pane.active{display:block;}
+
+/* â”€â”€ EARNINGS â”€â”€ */
+.fr-earnings-card{background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(34,197,94,0.04));border:1px solid rgba(34,197,94,0.25);border-radius:20px;padding:20px;margin-bottom:14px;text-align:center;}
+.fr-earn-main{font-size:36px;font-weight:900;color:#22c55e;}
+.fr-earn-label{font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;}
+.fr-earn-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px;}
+.fr-earn-mini{background:rgba(0,0,0,0.3);border-radius:12px;padding:10px;text-align:center;}
+.fr-earn-mini-val{font-size:16px;font-weight:900;color:white;}
+.fr-earn-mini-lbl{font-size:9px;color:rgba(255,255,255,0.35);margin-top:3px;}
+
+/* â”€â”€ ORDER CARDS â”€â”€ */
+.fr-order-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;margin-bottom:12px;}
+.fr-oc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+.fr-oc-restaurant{font-size:14px;font-weight:800;color:white;}
+.fr-oc-orderId{font-size:10px;color:rgba(255,255,255,0.35);font-family:monospace;margin-top:2px;}
+.fr-oc-badge{font-size:10px;font-weight:800;padding:4px 10px;border-radius:8px;}
+.fr-oc-detail{display:flex;gap:16px;margin-bottom:12px;font-size:12px;}
+.fr-oc-detail-item{display:flex;flex-direction:column;gap:2px;}
+.fr-oc-detail-lbl{font-size:9px;color:rgba(255,255,255,0.35);}
+.fr-oc-detail-val{font-weight:800;color:white;}
+.fr-oc-detail-val.green{color:#22c55e;}
+.fr-oc-detail-val.amber{color:#f59e0b;}
+.fr-oc-address{font-size:11px;color:rgba(255,255,255,0.45);background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;margin-bottom:10px;}
+.fr-oc-actions{display:flex;gap:8px;}
+.fr-oc-btn{flex:1;padding:10px;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;border:1px solid;font-family:inherit;text-align:center;}
+.fr-btn-accept{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#22c55e;}
+.fr-btn-pickup{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+.fr-btn-deliver{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#22c55e;}
+.fr-btn-nav{background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.3);color:#3b82f6;text-decoration:none;display:flex;align-items:center;justify-content:center;}
+.fr-btn-call{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);}
+.fr-btn-wa{background:rgba(37,211,102,0.08);border-color:rgba(37,211,102,0.25);color:#25d366;}
+
+/* â”€â”€ MAP â”€â”€ */
+.fr-map-section{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;overflow:visible;clip-path:inset(0 round 16px);margin-bottom:14px;-webkit-transform:translateZ(0);transform:translateZ(0);}
+.fr-map-hdr{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;}
+#riderMap{height:260px;}
+
+/* â”€â”€ HISTORY â”€â”€ */
+.fr-hist-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.fr-hist-row:last-child{border-bottom:none;}
+.fr-hist-left{flex:1;}
+.fr-hist-rest{font-size:12px;font-weight:700;color:white;}
+.fr-hist-time{font-size:10px;color:rgba(255,255,255,0.35);}
+.fr-hist-earn{font-size:13px;font-weight:900;color:#22c55e;}
+
+/* â”€â”€ PROFILE â”€â”€ */
+.fr-profile-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;text-align:center;margin-bottom:14px;}
+.fr-avatar{width:72px;height:72px;border-radius:50%;background:rgba(34,197,94,0.1);border:3px solid rgba(34,197,94,0.3);display:flex;align-items:center;justify-content:center;font-size:36px;margin:0 auto 12px;}
+.fr-rating-stars{color:#f59e0b;font-size:18px;margin-bottom:4px;}
+
+/* â”€â”€ SECTION HEADER â”€â”€ */
+.fr-sh{font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);margin:14px 0 8px;text-transform:uppercase;letter-spacing:0.5px;}
+
+/* â”€â”€ EMPTY â”€â”€ */
+.fr-empty{text-align:center;padding:40px 16px;color:rgba(255,255,255,0.3);}
+.fr-empty .big{font-size:48px;margin-bottom:12px;}
+
+/* â”€â”€ BOTTOM NAV â”€â”€ */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#22c55e;}
+
+.fr-stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.fr-stat-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;}
+.fr-stat-val{font-size:20px;font-weight:900;color:white;}
+.fr-stat-val.green{color:#22c55e;}
+.fr-stat-val.amber{color:#f59e0b;}
+.fr-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-food.js"></script>
+
+<nav class="fn">
+  <a href="index.html" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;">â†</a>
+  <span style="font-size:15px;font-weight:800;flex:1;">ðŸ›µ Rider Dashboard</span>
+  <span id="navEarnings" style="font-size:11px;font-weight:900;color:#22c55e;"></span>
+</nav>
+
+<div class="fr-status-bar">
+  <div style="display:flex;align-items:center;">
+    <div class="fr-online-dot" id="statusDot"></div>
+    <span style="font-size:13px;font-weight:700;" id="statusLabel">Online â€” Accepting Deliveries</span>
+  </div>
+  <button class="fr-toggle-btn online" id="toggleOnline" onclick="toggleOnline()">Go Offline</button>
+</div>
+
+<div class="fr-tabs">
+  <div class="fr-tab active" onclick="switchTab('available', this)">ðŸ“ Available</div>
+  <div class="fr-tab" onclick="switchTab('active', this)">ðŸ›µ Active</div>
+  <div class="fr-tab" onclick="switchTab('history', this)">ðŸ“‹ History</div>
+  <div class="fr-tab" onclick="switchTab('profile', this)">ðŸ‘¤ Profile</div>
+</div>
+
+<div class="fr-body">
+
+  <!-- AVAILABLE ORDERS -->
+  <div class="fr-pane active" id="pane-available">
+    <div class="fr-stat-row" id="availStats"></div>
+    <div class="fr-sh">ðŸ“¦ New Delivery Requests</div>
+    <div id="availableOrdersList"></div>
+  </div>
+
+  <!-- ACTIVE DELIVERY -->
+  <div class="fr-pane" id="pane-active">
+    <div id="activeDeliveryView"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="fr-pane" id="pane-history">
+    <div class="fr-earnings-card">
+      <div class="fr-earn-main" id="histTotalEarns">KES 0</div>
+      <div class="fr-earn-label">Total Earnings â€” All Time</div>
+      <div class="fr-earn-grid">
+        <div class="fr-earn-mini"><div class="fr-earn-mini-val" id="histTodayEarns">KES 0</div><div class="fr-earn-mini-lbl">Today</div></div>
+        <div class="fr-earn-mini"><div class="fr-earn-mini-val" id="histWeekEarns">KES 0</div><div class="fr-earn-mini-lbl">This Week</div></div>
+        <div class="fr-earn-mini"><div class="fr-earn-mini-val" id="histDeliveries">0</div><div class="fr-earn-mini-lbl">Deliveries</div></div>
+      </div>
+    </div>
+    <div class="fr-sh">Delivery History</div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;">
+      <div id="deliveryHistoryList"></div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="fr-pane" id="pane-profile">
+    <div class="fr-profile-card">
+      <div class="fr-avatar">ðŸ›µ</div>
+      <div style="font-size:18px;font-weight:900;color:white;margin-bottom:2px;" id="riderName">James Mwangi</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:8px;">Verified Rider Â· Nairobi</div>
+      <div class="fr-rating-stars">â­â­â­â­â­</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);">4.8 Â· 230 deliveries</div>
+    </div>
+    <div class="fr-stat-row">
+      <div class="fr-stat-card"><div class="fr-stat-val green">4.8</div><div class="fr-stat-lbl">Avg Rating</div></div>
+      <div class="fr-stat-card"><div class="fr-stat-val amber">97%</div><div class="fr-stat-lbl">Completion Rate</div></div>
+      <div class="fr-stat-card"><div class="fr-stat-val">230</div><div class="fr-stat-lbl">Total Deliveries</div></div>
+      <div class="fr-stat-card"><div class="fr-stat-val green">KES 52,000</div><div class="fr-stat-lbl">Total Earned</div></div>
+    </div>
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-top:4px;">
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">Vehicle & Documents</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);display:flex;flex-direction:column;gap:8px;">
+        <div>ðŸï¸ Honda CB100 Â· KBA 123A</div>
+        <div>ðŸ“‹ DL Valid until Dec 2027</div>
+        <div>ðŸ›¡ï¸ Insurance valid until June 2027</div>
+        <div style="color:#22c55e;font-weight:700;">âœ… All documents verified</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;text-align:center;">
+      <a href="profile.html" style="display:inline-block;padding:12px 24px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.6);font-size:13px;font-weight:700;text-decoration:none;">Edit Profile â†’</a>
+    </div>
+  </div>
+
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="food.html" class="bnav-item"><i class="fas fa-utensils"></i><span>Food</span></a>
+  <a href="food-rider.html" class="bnav-item active"><i class="fas fa-motorcycle"></i><span>Rider</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s);"></script>
+<script>
+let _isOnline = true;
+let _activeOrder = null;
+let _currentLat = -1.2921;
+let _currentLng = 36.8219;
+let _map = null;
+let _myMarker = null;
+let _destMarker = null;
+let _routeLine = null;
+let _destLat = -1.2921, _destLng = 36.8219;
+let _gpsWatchId = null;
+let _gpsUpdateCount = 0;
+let _riderHistory = JSON.parse(localStorage.getItem('rider_history') || '[]');
+let _todayEarnings = parseInt(localStorage.getItem('rider_today_earn_' + today()) || '0');
+let _weekEarnings = parseInt(localStorage.getItem('rider_week_earn') || '0');
+
+function today() { return new Date().toISOString().split('T')[0]; }
+
+function toggleOnline() {
+  _isOnline = !_isOnline;
+  const dot = document.getElementById('statusDot');
+  const lbl = document.getElementById('statusLabel');
+  const btn = document.getElementById('toggleOnline');
+  if (_isOnline) {
+    dot.className = 'fr-online-dot';
+    lbl.textContent = 'Online â€” Accepting Deliveries';
+    btn.textContent = 'Go Offline';
+    btn.className = 'fr-toggle-btn online';
+    startGPS();
+  } else {
+    dot.className = 'fr-offline-dot';
+    lbl.textContent = 'Offline';
+    btn.textContent = 'Go Online';
+    btn.className = 'fr-toggle-btn offline';
+    stopGPS();
+  }
+  renderAvailable();
+}
+
+function startGPS() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => { _currentLat = pos.coords.latitude; _currentLng = pos.coords.longitude; }, () => {}, { maximumAge: 30000, timeout: 8000 });
+  _gpsWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      _currentLat = pos.coords.latitude;
+      _currentLng = pos.coords.longitude;
+      if (_activeOrder) SokoniFood.updateRiderLocation(_activeOrder.id, _currentLat, _currentLng);
+      if (_myMarker) _myMarker.setLatLng([_currentLat, _currentLng]);
+      if (_map) _map.setView([_currentLat, _currentLng], _map.getZoom());
+      _gpsUpdateCount++;
+      if (_gpsUpdateCount % 8 === 0) _fetchNavRoute();
+    },
+    () => { simulateLoc(); },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+}
+
+function simulateLoc() {
+  setInterval(() => {
+    if (!_isOnline) return;
+    _currentLat += (Math.random() - 0.5) * 0.0005;
+    _currentLng += (Math.random() - 0.5) * 0.0005;
+    if (_activeOrder) SokoniFood.updateRiderLocation(_activeOrder.id, _currentLat, _currentLng);
+    if (_myMarker) _myMarker.setLatLng([_currentLat, _currentLng]);
+  }, 4000);
+}
+
+function stopGPS() {
+  if (_gpsWatchId !== null) { navigator.geolocation.clearWatch(_gpsWatchId); _gpsWatchId = null; }
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.fr-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.fr-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'active') renderActiveDelivery();
+  if (name === 'history') renderHistory();
+}
+
+/* â”€â”€ AVAILABLE â”€â”€ */
+function renderAvailable() {
+  const todayEarn = _todayEarnings;
+  document.getElementById('availStats').innerHTML = `
+    <div class="fr-stat-card"><div class="fr-stat-val green">KES ${SokoniFood.fmt(todayEarn)}</div><div class="fr-stat-lbl">Today's Earnings</div></div>
+    <div class="fr-stat-card"><div class="fr-stat-val amber">${_riderHistory.length}</div><div class="fr-stat-lbl">Deliveries Today</div></div>`;
+
+  document.getElementById('navEarnings').textContent = 'KES ' + SokoniFood.fmt(todayEarn);
+
+  const allOrds = SokoniFood.getAvailableOrders().filter(o => o.status === 'ready');
+  const container = document.getElementById('availableOrdersList');
+  if (!_isOnline) { container.innerHTML = `<div class="fr-empty"><div class="big">ðŸ’¤</div><p>You're offline.<br>Go online to receive deliveries.</p></div>`; return; }
+  if (_activeOrder) { container.innerHTML = `<div style="text-align:center;padding:24px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:14px;"><div style="font-size:32px;margin-bottom:8px;">ðŸ›µ</div><div style="font-size:13px;font-weight:800;color:#22c55e;">You have an active delivery</div><button style="margin-top:12px;padding:10px 20px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;color:#22c55e;font-weight:800;cursor:pointer;font-family:inherit;" onclick="switchTab('active',document.querySelectorAll('.fr-tab')[1])">View Active Delivery â†’</button></div>`; return; }
+
+  if (!allOrds.length) {
+    container.innerHTML = `<div class="fr-empty"><div class="big">ðŸ“</div><p>No deliveries nearby right now.<br>Stay online â€” orders are loading.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = allOrds.slice(0, 5).map(o => {
+    const pickupDist = (Math.random() * 2 + 0.3).toFixed(1);
+    const dropDist = (Math.random() * 5 + 1).toFixed(1);
+    const fee = Math.round((parseFloat(dropDist) * 20 + 30));
+    const vend = (o.vendors||[])[0];
+    return `
+    <div class="fr-order-card">
+      <div class="fr-oc-header">
+        <div>
+          <div class="fr-oc-restaurant">${vend ? (vend.restaurantEmoji||'ðŸ½ï¸') + ' ' + vend.restaurantName : 'Restaurant'}</div>
+          <div class="fr-oc-orderId">#${o.id.slice(-8)}</div>
+        </div>
+        <span class="fr-oc-badge" style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;">ðŸ”” Ready</span>
+      </div>
+      <div class="fr-oc-detail">
+        <div class="fr-oc-detail-item"><div class="fr-oc-detail-lbl">Pickup</div><div class="fr-oc-detail-val">${pickupDist} km away</div></div>
+        <div class="fr-oc-detail-item"><div class="fr-oc-detail-lbl">Drop</div><div class="fr-oc-detail-val">${dropDist} km</div></div>
+        <div class="fr-oc-detail-item"><div class="fr-oc-detail-lbl">Earnings</div><div class="fr-oc-detail-val green">KES ${SokoniFood.fmt(fee)}</div></div>
+      </div>
+      <div class="fr-oc-address">ðŸ“ Deliver to: ${o.deliveryAddress || 'Customer location'}</div>
+      <div class="fr-oc-actions">
+        <button class="fr-oc-btn fr-btn-accept" onclick="acceptOrder('${o.id}', ${fee})">âœ… Accept Delivery</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function acceptOrder(orderId, fee) {
+  const allOrds = SokoniFood.getAvailableOrders();
+  _activeOrder = allOrds.find(o => o.id === orderId);
+  if (!_activeOrder) return;
+  _activeOrder._riderFee = fee;
+  SokoniFood.updateOrderStatus(orderId, 'confirmed');
+  renderAvailable();
+  renderActiveDelivery();
+  /* Switch to active tab */
+  document.querySelectorAll('.fr-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.fr-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-active').classList.add('active');
+  document.querySelectorAll('.fr-tab')[1].classList.add('active');
+}
+
+/* â”€â”€ ACTIVE DELIVERY â”€â”€ */
+function renderActiveDelivery() {
+  const container = document.getElementById('activeDeliveryView');
+  if (!_activeOrder) {
+    container.innerHTML = `<div class="fr-empty"><div class="big">ðŸ›µ</div><p>No active delivery.<br>Accept one from the Available tab!</p></div>`;
+    return;
+  }
+  const o = _activeOrder;
+  const vend = (o.vendors||[])[0];
+  const status = o.status || 'confirmed';
+  const isPickup = status === 'confirmed' || status === 'preparing';
+  const isPicked = status === 'picked_up' || status === 'delivering';
+
+  container.innerHTML = `
+  <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.18);border-radius:16px;padding:16px;margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-size:14px;font-weight:900;color:white;">${isPickup ? 'ðŸ“ Go pick up order' : 'ðŸ  Deliver to customer'}</div>
+      <span style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;">#${o.id.slice(-8)}</span>
+    </div>
+    <div style="font-size:13px;font-weight:800;color:rgba(255,255,255,0.7);margin-bottom:4px;">${vend ? (vend.restaurantEmoji||'ðŸ½ï¸') + ' ' + vend.restaurantName : 'Restaurant'}</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);">ðŸ“ ${isPickup ? (vend?.restaurantAddress || 'Restaurant address') : (o.deliveryAddress || 'Customer address')}</div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:16px;font-weight:900;color:#22c55e;">KES ${SokoniFood.fmt(o._riderFee||0)}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);">Your Earnings</div>
+      </div>
+      <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:16px;font-weight:900;color:white;">${(Math.random()*4+1).toFixed(1)} km</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);">Distance</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="fr-map-section" style="margin-bottom:14px;">
+    <div class="fr-map-hdr">ðŸ—ºï¸ Navigation Map</div>
+    <div id="riderMap" style="height:240px;"></div>
+  </div>
+
+  <!-- CONTACT -->
+  <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:12px;">
+    <div style="font-size:12px;font-weight:800;color:white;margin-bottom:10px;">Contact</div>
+    <div style="display:flex;gap:8px;">
+      <a href="tel:0700123456" class="fr-oc-btn fr-btn-call" style="flex:1;padding:10px;text-align:center;text-decoration:none;border-radius:10px;font-size:12px;font-weight:900;">ðŸ“ž Call Customer</a>
+      <a href="https://wa.me/254700123456" class="fr-oc-btn fr-btn-wa" style="flex:1;padding:10px;text-align:center;text-decoration:none;border-radius:10px;font-size:12px;font-weight:900;" target="_blank">ðŸ’¬ WhatsApp</a>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    ${isPickup ? `<button class="fr-oc-btn fr-btn-pickup" style="padding:14px;" onclick="markPickedUp()">ðŸ›µ I've Picked Up the Order</button>` : ''}
+    ${isPicked ? `<button class="fr-oc-btn fr-btn-deliver" style="padding:14px;" onclick="markDelivered()">âœ… Mark as Delivered</button>` : ''}
+    <button style="padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#ef4444;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;" onclick="cancelActive()">âœ— Cancel Delivery</button>
+  </div>`;
+
+  setTimeout(() => initNavMap(), 150);
+}
+
+function initNavMap() {
+  const el = document.getElementById('riderMap'); if (!el) return;
+  if (_map) { _map.remove(); _map = null; _routeLine = null; }
+  _destLat = _activeOrder?.deliveryLat  || -1.2921;
+  _destLng = _activeOrder?.deliveryLng || 36.8219;
+  _map = L.map('riderMap', { zoomControl:false, fadeAnimation:false, zoomAnimation:false }).setView([_currentLat, _currentLng], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, detectRetina:false }).addTo(_map);
+  [100,300,700,1400,2600].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));
+  window.addEventListener('orientationchange',()=>setTimeout(()=>_map?.invalidateSize(true),350));
+  try{screen.orientation.addEventListener('change',()=>setTimeout(()=>_map?.invalidateSize(true),350));}catch{}
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')[0,100,400].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));});
+  const myIcon = L.divIcon({ html: '<div style="font-size:28px;">ðŸ›µ</div>', iconSize:[36,36], iconAnchor:[18,18], className:'' });
+  _myMarker = L.marker([_currentLat, _currentLng], { icon: myIcon }).addTo(_map).bindPopup('You are here');
+  const destIcon = L.divIcon({ html: '<div style="font-size:28px;">ðŸ“</div>', iconSize:[36,36], iconAnchor:[18,36], className:'' });
+  _destMarker = L.marker([_destLat, _destLng], { icon: destIcon }).addTo(_map).bindPopup('Delivery destination');
+  _fetchNavRoute();
+}
+
+function _fetchNavRoute() {
+  if (!_map) return;
+  fetch(`https://router.project-osrm.org/route/v1/driving/${_currentLng},${_currentLat};${_destLng},${_destLat}?geometries=geojson&overview=simplified`)
+    .then(r=>r.json()).then(d=>{
+      const coords=(d.routes?.[0]?.geometry?.coordinates||[]).map(([lng,lat])=>[lat,lng]);
+      if(_routeLine){ _map?.removeLayer(_routeLine); _routeLine=null; }
+      if(coords.length>1 && _map){ _routeLine=L.polyline(coords,{color:'#71ff00',weight:4,opacity:0.7,dashArray:'8 4'}).addTo(_map); _map.fitBounds(_routeLine.getBounds(),{padding:[30,30]}); }
+    }).catch(()=>{});
+}
+
+function markPickedUp() {
+  if (!_activeOrder) return;
+  SokoniFood.updateOrderStatus(_activeOrder.id, 'picked_up');
+  _activeOrder.status = 'picked_up';
+  renderActiveDelivery();
+}
+
+function markDelivered() {
+  if (!_activeOrder) return;
+  SokoniFood.updateOrderStatus(_activeOrder.id, 'delivered');
+  /* Record earnings */
+  const fee = _activeOrder._riderFee || 0;
+  _todayEarnings += fee;
+  _weekEarnings += fee;
+  localStorage.setItem('rider_today_earn_' + today(), _todayEarnings.toString());
+  localStorage.setItem('rider_week_earn', _weekEarnings.toString());
+  /* Record history */
+  const vend = (_activeOrder.vendors||[])[0];
+  _riderHistory.unshift({ orderId: _activeOrder.id, restaurant: vend?.restaurantName || 'Restaurant', fee, ts: Date.now() });
+  if (_riderHistory.length > 50) _riderHistory.pop();
+  localStorage.setItem('rider_history', JSON.stringify(_riderHistory));
+  _activeOrder = null;
+  if (_map) { _map.remove(); _map = null; }
+  renderAvailable();
+  renderHistory();
+  /* Switch to available */
+  document.querySelectorAll('.fr-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.fr-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-available').classList.add('active');
+  document.querySelectorAll('.fr-tab')[0].classList.add('active');
+  (window._skToast||alert)('ðŸŽ‰ Delivery completed! KES ' + SokoniFood.fmt(fee) + ' added to your earnings.');
+}
+
+function cancelActive(_c) {
+  if (!_c) { _skConfirm('Cancel this delivery? This may affect your completion rate.', ()=>cancelActive(true)); return; }
+  if (_activeOrder) { SokoniFood.updateOrderStatus(_activeOrder.id, 'ready'); }
+  _activeOrder = null;
+  if (_map) { _map.remove(); _map = null; }
+  renderActiveDelivery();
+  renderAvailable();
+}
+
+/* â”€â”€ HISTORY â”€â”€ */
+function renderHistory() {
+  const allTime = parseInt(localStorage.getItem('rider_alltime_earn') || '0') + _todayEarnings;
+  document.getElementById('histTotalEarns').textContent = 'KES ' + SokoniFood.fmt(allTime);
+  document.getElementById('histTodayEarns').textContent = 'KES ' + SokoniFood.fmt(_todayEarnings);
+  document.getElementById('histWeekEarns').textContent = 'KES ' + SokoniFood.fmt(_weekEarnings);
+  document.getElementById('histDeliveries').textContent = _riderHistory.length;
+
+  const container = document.getElementById('deliveryHistoryList');
+  if (!_riderHistory.length) { container.innerHTML = `<div class="fr-empty"><div class="big">ðŸ“‹</div><p>No deliveries yet.</p></div>`; return; }
+  container.innerHTML = _riderHistory.slice(0, 20).map(h => `
+    <div class="fr-hist-row">
+      <div class="fr-hist-left">
+        <div class="fr-hist-rest">${h.restaurant}</div>
+        <div class="fr-hist-time">#${h.orderId?.slice(-8)} Â· ${h.ts ? new Date(h.ts).toLocaleString([], {dateStyle:'short',timeStyle:'short'}) : ''}</div>
+      </div>
+      <div class="fr-hist-earn">KES ${SokoniFood.fmt(h.fee)}</div>
+    </div>`).join('');
+}
+
+/* â”€â”€ INIT â”€â”€ */
+startGPS();
+renderAvailable();
+
+/* Auto-refresh available orders every 30s */
+setInterval(() => { if (document.getElementById('pane-available').classList.contains('active')) renderAvailable(); }, 30000);
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+
+
+
+
+
+

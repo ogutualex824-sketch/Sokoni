@@ -1,0 +1,1211 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI Tech Hub — Buy Devices, Book Repairs & Hire Technicians</title>
+<meta name="description" content="Buy phones, laptops & gadgets, book screen repairs, compare phones and hire certified technicians on SOKONI Tech Hub Kenya.">
+<meta property="og:title" content="SOKONI Tech Hub — Devices, Repairs & Technicians">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00d4ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a0f;color:white;min-height:100vh;padding-bottom:90px;}
+:root{--tc:#00d4ff;--tc2:#0ea5e9;}
+
+.th-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(5,10,15,0.97);border-bottom:1px solid rgba(0,212,255,0.12);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.th-nav-logo{height:30px;}
+.th-nav-tabs{display:flex;gap:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:4px;overflow-x:auto;scrollbar-width:none;}
+.th-nav-tabs::-webkit-scrollbar{display:none;}
+.th-nav-tab{padding:7px 14px;border-radius:9px;border:none;background:transparent;color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.th-nav-tab.active{background:rgba(0,212,255,0.12);color:#00d4ff;border:1px solid rgba(0,212,255,0.25);}
+.th-nav-right{display:flex;gap:8px;}
+.th-nav-btn{padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.55);font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;background:none;transition:all .2s;font-family:inherit;}
+.th-nav-btn.cyan{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.28);color:#00d4ff;}
+
+.th-panel{display:none;}
+.th-panel.active{display:block;}
+
+.th-hero{padding:44px 24px 32px;background:linear-gradient(135deg,rgba(0,212,255,0.08),rgba(14,165,233,0.04),rgba(0,0,0,0));border-bottom:1px solid rgba(0,212,255,0.1);position:relative;overflow:hidden;}
+.th-hero::before{content:'📱';position:absolute;right:4%;top:50%;transform:translateY(-50%);font-size:160px;opacity:0.05;}
+.th-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);border-radius:999px;font-size:11px;font-weight:800;color:#00d4ff;margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;}
+.th-hero h1{font-size:clamp(24px,5vw,40px);font-weight:900;line-height:1.2;margin-bottom:10px;}
+.th-hero h1 span{background:linear-gradient(135deg,#00d4ff,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.th-hero p{color:rgba(255,255,255,0.5);font-size:14px;max-width:520px;line-height:1.7;margin-bottom:20px;}
+.th-search-row{display:flex;gap:8px;flex-wrap:wrap;max-width:600px;}
+.th-search-row input,.th-search-row select{flex:1;min-width:140px;padding:12px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+.th-search-row input::placeholder{color:rgba(255,255,255,0.3);}
+.th-search-btn{padding:12px 20px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);border:none;border-radius:12px;color:#050a0f;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;}
+
+.th-stats{display:flex;gap:22px;margin-top:16px;flex-wrap:wrap;}
+.th-stat{font-size:12px;color:rgba(255,255,255,0.4);}
+.th-stat strong{color:#00d4ff;font-size:15px;display:block;}
+
+.th-filter-bar{display:flex;gap:8px;padding:14px 20px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid rgba(255,255,255,0.05);}
+.th-filter-bar::-webkit-scrollbar{display:none;}
+.th-pill{padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.55);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;flex-shrink:0;}
+.th-pill:hover,.th-pill.active{background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#00d4ff;}
+
+.th-body{max-width:1200px;margin:0 auto;padding:24px 18px 60px;}
+.th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
+.th-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:18px;transition:all .2s;cursor:pointer;}
+.th-card:hover{transform:translateY(-3px);border-color:rgba(0,212,255,0.3);box-shadow:0 8px 28px rgba(0,212,255,0.08);}
+.th-card-emoji{font-size:40px;margin-bottom:12px;display:block;}
+.th-card-name{font-size:15px;font-weight:900;color:white;margin-bottom:4px;}
+.th-card-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+.th-card-price{font-size:18px;font-weight:900;color:#00d4ff;margin-bottom:12px;}
+.th-card-price span{font-size:10px;color:rgba(255,255,255,0.35);font-weight:400;}
+.th-book-btn{width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);color:#050a0f;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;}
+.th-wa-btn{width:100%;padding:10px;border:1px solid rgba(37,211,102,0.3);border-radius:10px;background:rgba(37,211,102,0.07);color:#25d366;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center;margin-top:6px;}
+
+.th-input{width:100%;padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+.th-input:focus{border-color:rgba(0,212,255,0.4);}
+.th-input::placeholder{color:rgba(255,255,255,0.3);}
+.th-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
+.th-section-h{font-size:15px;font-weight:800;color:white;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.th-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:16px;}
+.compare-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:18px;cursor:pointer;transition:all .2s;}
+.compare-card.selected{border-color:#00d4ff;background:rgba(0,212,255,0.06);}
+.compare-card:hover{border-color:rgba(0,212,255,0.25);}
+.compare-table{width:100%;border-collapse:collapse;margin-top:20px;}
+.compare-table th{text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.07);}
+.compare-table td{padding:10px 14px;font-size:12px;color:rgba(255,255,255,0.7);border-bottom:1px solid rgba(255,255,255,0.04);}
+.compare-table tr:hover td{background:rgba(0,212,255,0.03);}
+.compare-win{color:#00d4ff;font-weight:700;}
+
+@media(max-width:600px){
+  .th-nav-tabs{max-width:calc(100vw - 130px);}
+  .compare-grid{grid-template-columns:1fr 1fr;}
+}
+</style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="th-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="th-nav-logo" alt="SOKONI"></a>
+  <div class="th-nav-tabs">
+    <button type="button" class="th-nav-tab active" onclick="goThPanel('devices',this)">📱 Devices</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('repairs',this)">🔧 Repair</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('itservices',this)">🖥️ IT Services</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('freelancers',this)">👨‍💼 Freelancers</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('startups',this)">🚀 Startups</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('learning',this)">📚 Learn</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('jobs',this)">💼 Jobs</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('aitools',this)">🤖 AI Tools</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('compare',this)">⚖️ Compare</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('technicians',this)">👨‍💻 Techs</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('askhub',this)">💬 Ask</button>
+    <button type="button" class="th-nav-tab" onclick="goThPanel('sell',this)">➕ Sell</button>
+  </div>
+  <div class="th-nav-right">
+    <a href="index.html" class="th-nav-btn">🏠</a>
+    <a href="notifications.html" class="th-nav-btn" title="Notifications" style="position:relative;">🔔<span id="thNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
+    <button type="button" class="th-nav-btn cyan" onclick="goThPanel('sell',null)">+ Sell</button>
+  </div>
+</nav>
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('thNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
+<!-- DEVICES PANEL -->
+<div id="thpanel-devices" class="th-panel active">
+  <div class="th-hero">
+    <div class="th-badge">📱 SOKONI Tech Hub</div>
+    <h1>Buy & Sell<br><span>Phones, Laptops & Gadgets</span></h1>
+    <p>New, used and refurbished devices from verified sellers. Pay via M-Pesa. Delivery across Kenya.</p>
+    <div class="th-search-row">
+      <input type="text" id="devSearch" placeholder="Search iPhone 15, Samsung S24, MacBook…" oninput="filterDevices()">
+      <select id="devCondition" onchange="filterDevices()">
+        <option value="">All Conditions</option>
+        <option value="new">Brand New</option>
+        <option value="used">Used</option>
+        <option value="refurb">Refurbished</option>
+      </select>
+      <select id="devCategory" onchange="filterDevices()">
+        <option value="">All Categories</option>
+        <option value="phone">Phones</option>
+        <option value="laptop">Laptops</option>
+        <option value="tablet">Tablets</option>
+        <option value="accessory">Accessories</option>
+        <option value="console">Gaming</option>
+      </select>
+    </div>
+    <div class="th-stats">
+      <div class="th-stat"><strong id="statDevices">200+</strong> Devices Listed</div>
+      <div class="th-stat"><strong>M-Pesa</strong> Accepted</div>
+      <div class="th-stat"><strong>Nairobi</strong> Same-Day Delivery</div>
+    </div>
+  </div>
+  <div class="th-filter-bar">
+    <button type="button" class="th-pill active" onclick="filterByBrand('all',this)">All Brands</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('samsung',this)">Samsung</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('apple',this)">Apple</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('tecno',this)">Tecno</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('infinix',this)">Infinix</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('xiaomi',this)">Xiaomi</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('hp',this)">HP</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('dell',this)">Dell</button>
+    <button type="button" class="th-pill" onclick="filterByBrand('lenovo',this)">Lenovo</button>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">📱 Available Devices <span id="devCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div class="th-grid" id="devicesGrid"></div>
+  </div>
+</div>
+
+<!-- BOOK REPAIR PANEL -->
+<div id="thpanel-repairs" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(249,115,22,0.08),rgba(234,88,12,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(249,115,22,0.1);border-color:rgba(249,115,22,0.3);color:#f97316;">🔧 Device Repair</div>
+    <h1>Fast, Affordable<br><span style="background:linear-gradient(135deg,#f97316,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Device Repair</span></h1>
+    <p>Screen cracks, battery issues, water damage, software faults — book a certified repair in minutes.</p>
+  </div>
+  <div class="th-body">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:28px;">
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Screen Repair')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">📱<br>Screen Repair</button>
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Battery Replacement')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">🔋<br>Battery</button>
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Water Damage')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">💧<br>Water Damage</button>
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Software / Unlocking')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">💻<br>Software</button>
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Charging Port')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">🔌<br>Charging Port</button>
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Camera Repair')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">📸<br>Camera</button>
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Laptop Repair')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">💼<br>Laptop</button>
+      <button type="button" class="repair-type-btn" onclick="selectRepairType(this,'Other / Diagnose')" style="padding:16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">🔍<br>Diagnose</button>
+    </div>
+    <div style="background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:20px;padding:24px;">
+      <div style="font-size:14px;font-weight:800;color:white;margin-bottom:18px;">📋 Book a Repair</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="repairFormGrid">
+        <div>
+          <label class="th-label">Your Name *</label>
+          <input type="text" id="repName" class="th-input" placeholder="Full name">
+          <label class="th-label">Phone (WhatsApp) *</label>
+          <input type="tel" id="repPhone" class="th-input" placeholder="07XXXXXXXX">
+          <label class="th-label">Device Brand & Model *</label>
+          <input type="text" id="repDevice" class="th-input" placeholder="e.g. Samsung S21, iPhone 13">
+        </div>
+        <div>
+          <label class="th-label">Repair Type</label>
+          <input type="text" id="repType" class="th-input" placeholder="Selected repair type" readonly>
+          <label class="th-label">Your Location</label>
+          <select id="repLoc" class="th-input">
+            <option value="nairobi">Nairobi</option><option value="mombasa">Mombasa</option>
+            <option value="kisumu">Kisumu</option><option value="nakuru">Nakuru</option>
+            <option value="eldoret">Eldoret</option><option value="pickup">Pick-up & Deliver</option>
+          </select>
+          <label class="th-label">Preferred Date</label>
+          <input type="date" id="repDate" class="th-input">
+        </div>
+      </div>
+      <label class="th-label">Describe the Problem</label>
+      <textarea id="repDesc" class="th-input" style="min-height:70px;resize:vertical;" placeholder="e.g. Screen cracked after drop, touch still works but display has lines..."></textarea>
+      <button type="button" onclick="bookRepair()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);border:none;border-radius:12px;color:#050a0f;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🔧 Book Repair via WhatsApp</button>
+      <div id="repMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+    <div style="margin-top:28px;">
+      <div class="th-section-h">💰 Repair Price Guide</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+        <div style="padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;"><div style="font-size:12px;font-weight:800;color:white;margin-bottom:4px;">📱 Screen Repair</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">iPhone: KES 3,000–8,000<br>Samsung: KES 2,500–6,000<br>Tecno/Infinix: KES 1,200–3,000</div></div>
+        <div style="padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;"><div style="font-size:12px;font-weight:800;color:white;margin-bottom:4px;">🔋 Battery</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">iPhone: KES 2,500–5,000<br>Samsung: KES 1,500–4,000<br>Laptops: KES 3,500–8,000</div></div>
+        <div style="padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;"><div style="font-size:12px;font-weight:800;color:white;margin-bottom:4px;">💻 Laptop Repair</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Screen: KES 6,000–18,000<br>Keyboard: KES 2,500–7,000<br>Diagnosis: KES 500–1,500</div></div>
+        <div style="padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;"><div style="font-size:12px;font-weight:800;color:white;margin-bottom:4px;">🔍 Diagnosis</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Walk-in check: KES 500<br>Software issues: KES 800–2,000<br>Water damage: KES 1,500+</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPARE PHONES PANEL -->
+<div id="thpanel-compare" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(168,85,247,0.08),rgba(59,130,246,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(168,85,247,0.1);border-color:rgba(168,85,247,0.3);color:#c084fc;">⚖️ Phone Comparison</div>
+    <h1>Compare Phones<br><span style="background:linear-gradient(135deg,#c084fc,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Side by Side</span></h1>
+    <p>Select up to 3 phones to compare specs, cameras, battery life and prices.</p>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">Select phones to compare <span id="compareCount" style="font-size:11px;font-weight:400;color:rgba(0,212,255,0.7);">(0/3 selected)</span></div>
+    <div class="compare-grid" id="compareSelectGrid"></div>
+    <div id="compareTableWrap" style="display:none;margin-top:24px;">
+      <div class="th-section-h">📊 Comparison</div>
+      <div style="overflow-x:auto;">
+        <table class="compare-table" id="compareTable"></table>
+      </div>
+      <div style="text-align:center;margin-top:16px;">
+        <button type="button" onclick="clearCompare()" style="padding:10px 22px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.5);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Clear Selection</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TECHNICIANS PANEL -->
+<div id="thpanel-technicians" class="th-panel">
+  <div class="th-hero">
+    <div class="th-badge">👨‍💻 Hire a Technician</div>
+    <h1>Certified IT &<br><span>Tech Professionals</span></h1>
+    <p>IT support, network setup, CCTV installation, software development & more across Kenya.</p>
+    <div class="th-search-row">
+      <input type="text" id="techSearch" placeholder="Search skill or name..." oninput="filterTechs()">
+      <select id="techSpeciality" onchange="filterTechs()">
+        <option value="">All Specialities</option>
+        <option value="repair">Phone/Laptop Repair</option>
+        <option value="network">Networking & WiFi</option>
+        <option value="cctv">CCTV & Security</option>
+        <option value="software">Software Dev</option>
+        <option value="support">IT Support</option>
+        <option value="web">Web Design</option>
+      </select>
+    </div>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">👨‍💻 Available Technicians</div>
+    <div class="th-grid" id="techsGrid"></div>
+  </div>
+</div>
+
+<!-- ASK THE HUB PANEL -->
+<div id="thpanel-askhub" class="th-panel">
+  <div class="th-body" style="max-width:860px;">
+    <div style="text-align:center;margin-bottom:28px;padding-top:16px;">
+      <div style="font-size:40px;margin-bottom:12px;">💬</div>
+      <h2 style="font-size:22px;font-weight:900;margin-bottom:6px;">Ask the Tech Hub</h2>
+      <p style="font-size:13px;color:rgba(255,255,255,0.45);">Post your tech question — repair shops, sellers & technicians respond</p>
+    </div>
+    <div style="background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:20px;padding:24px;margin-bottom:24px;">
+      <textarea id="techAskText" placeholder="e.g. My Samsung S22 screen is cracked. Looking for a genuine replacement in Nairobi under KES 5,000..." style="width:100%;padding:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;min-height:90px;resize:vertical;outline:none;font-family:inherit;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <select id="techAskCategory" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+          <option value="">📱 Category</option>
+          <option>Repair Help</option><option>Buying Advice</option><option>Software Issue</option>
+          <option>Price Check</option><option>Tech Support</option><option>Other</option>
+        </select>
+        <input type="tel" id="techAskPhone" placeholder="Your phone (07...)" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        <button type="button" onclick="postTechRequest()" style="padding:10px 20px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);border:none;border-radius:10px;color:#050a0f;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">📢 Post Request</button>
+      </div>
+    </div>
+    <div id="techAskFeed" style="display:flex;flex-direction:column;gap:12px;"></div>
+  </div>
+</div>
+
+<!-- SELL DEVICE PANEL -->
+<div id="thpanel-sell" class="th-panel">
+  <div class="th-body" style="max-width:700px;">
+    <div style="padding-top:16px;margin-bottom:24px;">
+      <div style="font-size:22px;font-weight:900;color:white;margin-bottom:6px;">➕ Sell Your Device</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.45);">List your phone, laptop or accessory and get buyers via WhatsApp</div>
+    </div>
+    <div style="background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.15);border-radius:20px;padding:24px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="th-label">Device Name *</label>
+          <input type="text" id="sellDevName" class="th-input" placeholder="e.g. Samsung Galaxy S21">
+          <label class="th-label">Brand</label>
+          <select id="sellDevBrand" class="th-input">
+            <option>Samsung</option><option>Apple</option><option>Tecno</option><option>Infinix</option>
+            <option>Xiaomi</option><option>Nokia</option><option>HP</option><option>Dell</option>
+            <option>Lenovo</option><option>Huawei</option><option>Other</option>
+          </select>
+          <label class="th-label">Category</label>
+          <select id="sellDevCat" class="th-input">
+            <option value="phone">Phone</option><option value="laptop">Laptop</option>
+            <option value="tablet">Tablet</option><option value="accessory">Accessory</option><option value="console">Gaming</option>
+          </select>
+        </div>
+        <div>
+          <label class="th-label">Price (KES) *</label>
+          <input type="number" id="sellDevPrice" class="th-input" placeholder="e.g. 35000">
+          <label class="th-label">Condition *</label>
+          <select id="sellDevCond" class="th-input">
+            <option value="new">Brand New</option><option value="used">Used</option><option value="refurb">Refurbished</option>
+          </select>
+          <label class="th-label">Your Phone (WhatsApp) *</label>
+          <input type="tel" id="sellDevPhone" class="th-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <label class="th-label">Location</label>
+      <select id="sellDevLoc" class="th-input" style="margin-bottom:10px;">
+        <option value="nairobi">Nairobi</option><option value="mombasa">Mombasa</option>
+        <option value="kisumu">Kisumu</option><option value="nakuru">Nakuru</option><option value="eldoret">Eldoret</option>
+      </select>
+      <label class="th-label">Description (specs, storage, color, accessories included…)</label>
+      <textarea id="sellDevDesc" class="th-input" style="min-height:80px;resize:vertical;" placeholder="e.g. 128GB, 8GB RAM, original charger included, no cracks, 87% battery health..."></textarea>
+      <button type="button" onclick="listDevice()" style="width:100%;padding:14px;background:linear-gradient(135deg,#00d4ff,#0ea5e9);border:none;border-radius:12px;color:#050a0f;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px;">📱 List Device for Sale</button>
+      <div id="sellDevMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- IT SERVICES PANEL -->
+<div id="thpanel-itservices" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(99,102,241,0.09),rgba(59,130,246,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.3);color:#818cf8;">🖥️ IT Services</div>
+    <h1>Expert IT &<br><span style="background:linear-gradient(135deg,#818cf8,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Tech Solutions</span></h1>
+    <p>Web development, mobile apps, cloud services, cybersecurity and IT consulting — matched to Kenyan businesses.</p>
+  </div>
+  <div class="th-filter-bar">
+    <button type="button" class="th-pill active" onclick="filterITServices('all',this)">All Services</button>
+    <button type="button" class="th-pill" onclick="filterITServices('web',this)">🌐 Web Dev</button>
+    <button type="button" class="th-pill" onclick="filterITServices('app',this)">📱 App Dev</button>
+    <button type="button" class="th-pill" onclick="filterITServices('software',this)">💻 Software</button>
+    <button type="button" class="th-pill" onclick="filterITServices('cloud',this)">☁️ Cloud</button>
+    <button type="button" class="th-pill" onclick="filterITServices('cyber',this)">🛡️ Cybersecurity</button>
+    <button type="button" class="th-pill" onclick="filterITServices('consulting',this)">🎯 Consulting</button>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">🖥️ IT Service Providers <span id="itsCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div class="th-grid" id="itsGrid"></div>
+    <!-- Quick enquiry -->
+    <div style="margin-top:32px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:20px;padding:24px;">
+      <div class="th-section-h" style="margin-bottom:16px;">📋 Request IT Services</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="th-label">Your Name *</label>
+          <input type="text" id="itsName" class="th-input" placeholder="Full name">
+          <label class="th-label">Phone / WhatsApp *</label>
+          <input type="tel" id="itsPhone" class="th-input" placeholder="07XXXXXXXX">
+          <label class="th-label">Service Needed *</label>
+          <select id="itsService" class="th-input">
+            <option value="">Select service</option>
+            <option>Website Development</option><option>Mobile App Development</option>
+            <option>Software Development</option><option>Cloud Services</option>
+            <option>Cybersecurity Audit</option><option>IT Consulting</option>
+          </select>
+        </div>
+        <div>
+          <label class="th-label">Company / Business</label>
+          <input type="text" id="itsCompany" class="th-input" placeholder="Your business name">
+          <label class="th-label">Budget Range</label>
+          <select id="itsBudget" class="th-input">
+            <option value="">Select budget</option>
+            <option>Under KES 30,000</option><option>KES 30,000–100,000</option>
+            <option>KES 100,000–500,000</option><option>KES 500,000+</option>
+          </select>
+          <label class="th-label">Timeline</label>
+          <select id="itsTimeline" class="th-input">
+            <option>ASAP</option><option>1–2 weeks</option><option>1 month</option><option>3+ months</option>
+          </select>
+        </div>
+      </div>
+      <label class="th-label">Project Description</label>
+      <textarea id="itsDesc" class="th-input" style="min-height:70px;resize:vertical;" placeholder="Describe your project — what you need built, key features, integrations required..."></textarea>
+      <button type="button" onclick="submitITRequest()" style="width:100%;padding:13px;background:linear-gradient(135deg,#818cf8,#6366f1);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🖥️ Submit IT Request</button>
+      <div id="itsMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- FREELANCERS PANEL -->
+<div id="thpanel-freelancers" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(20,184,166,0.09),rgba(6,182,212,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(20,184,166,0.1);border-color:rgba(20,184,166,0.3);color:#2dd4bf;">👨‍💼 Freelancers</div>
+    <h1>Hire Top<br><span style="background:linear-gradient(135deg,#2dd4bf,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Tech Freelancers</span></h1>
+    <p>Vetted developers, designers, digital marketers, IT support specialists and system administrators across Kenya.</p>
+    <div class="th-search-row">
+      <input type="text" id="flSearch" placeholder="Search name, skill or tool..." oninput="filterFreelancers()">
+      <select id="flSkill" onchange="filterFreelancers()">
+        <option value="">All Skills</option>
+        <option value="developer">Developer</option><option value="designer">Designer</option>
+        <option value="marketer">Digital Marketer</option><option value="support">IT Support</option>
+        <option value="sysadmin">System Admin</option>
+      </select>
+    </div>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">👨‍💼 Available Freelancers <span id="flCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div class="th-grid" id="flGrid"></div>
+    <div style="margin-top:28px;background:rgba(20,184,166,0.04);border:1px solid rgba(20,184,166,0.15);border-radius:20px;padding:22px;text-align:center;">
+      <div style="font-size:22px;margin-bottom:8px;">💼</div>
+      <div style="font-size:16px;font-weight:900;margin-bottom:6px;">Are you a freelancer?</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your skills and get hired by Kenyan businesses — free to join</div>
+      <button type="button" onclick="goThPanel('sell',null)" style="padding:10px 24px;background:linear-gradient(135deg,#2dd4bf,#0ea5e9);border:none;border-radius:10px;color:#050a0f;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">Join as Freelancer →</button>
+    </div>
+  </div>
+</div>
+
+<!-- STARTUP ZONE PANEL -->
+<div id="thpanel-startups" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(251,146,60,0.09),rgba(249,115,22,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(251,146,60,0.1);border-color:rgba(251,146,60,0.3);color:#fb923c;">🚀 Startup Zone</div>
+    <h1>Kenya's Tech<br><span style="background:linear-gradient(135deg,#fb923c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Startup Ecosystem</span></h1>
+    <p>Discover startups, find investors, access funding opportunities and grow your network in Kenya's tech scene.</p>
+  </div>
+  <div class="th-filter-bar">
+    <button type="button" class="th-pill active" onclick="filterStartups('all',this)">All Startups</button>
+    <button type="button" class="th-pill" onclick="filterStartups('AgriTech',this)">🌾 AgriTech</button>
+    <button type="button" class="th-pill" onclick="filterStartups('FinTech',this)">💳 FinTech</button>
+    <button type="button" class="th-pill" onclick="filterStartups('HealthTech',this)">💊 HealthTech</button>
+    <button type="button" class="th-pill" onclick="filterStartups('EdTech',this)">🎓 EdTech</button>
+    <button type="button" class="th-pill" onclick="filterStartups('Logistics',this)">🚚 Logistics</button>
+    <button type="button" class="th-pill" onclick="filterStartups('CleanTech',this)">☀️ CleanTech</button>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">🚀 Featured Startups <span id="stCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div class="th-grid" id="stGrid"></div>
+    <!-- Pitch / Register -->
+    <div style="margin-top:32px;background:rgba(251,146,60,0.04);border:1px solid rgba(251,146,60,0.15);border-radius:20px;padding:24px;">
+      <div class="th-section-h" style="margin-bottom:16px;">🚀 Register Your Startup</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="th-label">Startup Name *</label>
+          <input type="text" id="stName" class="th-input" placeholder="Your startup name">
+          <label class="th-label">Founder Name *</label>
+          <input type="text" id="stFounder" class="th-input" placeholder="Your name">
+          <label class="th-label">Phone / WhatsApp *</label>
+          <input type="tel" id="stPhone" class="th-input" placeholder="07XXXXXXXX">
+        </div>
+        <div>
+          <label class="th-label">Sector</label>
+          <select id="stSector" class="th-input">
+            <option>AgriTech</option><option>FinTech</option><option>HealthTech</option>
+            <option>EdTech</option><option>Logistics</option><option>CleanTech</option><option>Other</option>
+          </select>
+          <label class="th-label">Stage</label>
+          <select id="stStage" class="th-input">
+            <option>Idea</option><option>MVP</option><option>Pre-Seed</option>
+            <option>Seed</option><option>Series A</option><option>Growth</option>
+          </select>
+          <label class="th-label">Funding Goal</label>
+          <input type="text" id="stFunding" class="th-input" placeholder="e.g. KES 5M or Grants">
+        </div>
+      </div>
+      <label class="th-label">One-Line Pitch</label>
+      <textarea id="stPitch" class="th-input" style="min-height:60px;resize:vertical;" placeholder="Describe your startup in 2-3 sentences. What problem do you solve? Who are your users?"></textarea>
+      <button type="button" onclick="registerStartup()" style="width:100%;padding:13px;background:linear-gradient(135deg,#fb923c,#f59e0b);border:none;border-radius:12px;color:#050a0f;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🚀 Submit Startup Profile</button>
+      <div id="stMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LEARNING PANEL -->
+<div id="thpanel-learning" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(34,197,94,0.09),rgba(16,185,129,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:#4ade80;">📚 Tech Learning</div>
+    <h1>Learn, Upskill<br><span style="background:linear-gradient(135deg,#4ade80,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">& Get Certified</span></h1>
+    <p>Bootcamps, online courses, certifications, workshops and 1-on-1 mentorship programs for Kenya's tech workforce.</p>
+    <div class="th-search-row">
+      <input type="text" id="lrnSearch" placeholder="Search course or skill..." oninput="filterCourses()">
+      <select id="lrnType" onchange="filterCourses()">
+        <option value="">All Types</option>
+        <option value="bootcamp">Bootcamp</option><option value="course">Online Course</option>
+        <option value="certification">Certification</option><option value="workshop">Workshop</option>
+        <option value="mentorship">Mentorship</option>
+      </select>
+    </div>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">📚 Courses & Programs <span id="lrnCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div class="th-grid" id="lrnGrid"></div>
+  </div>
+</div>
+
+<!-- JOBS PANEL -->
+<div id="thpanel-jobs" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(244,63,94,0.09),rgba(236,72,153,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(244,63,94,0.1);border-color:rgba(244,63,94,0.3);color:#fb7185;">💼 Tech Jobs</div>
+    <h1>Find Your Next<br><span style="background:linear-gradient(135deg,#fb7185,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Tech Role</span></h1>
+    <p>Full-time, remote, internship and freelance tech opportunities across Kenya's top companies and startups.</p>
+    <div class="th-search-row">
+      <input type="text" id="jobSearch" placeholder="Search job title or company..." oninput="filterJobs()">
+      <select id="jobType" onchange="filterJobs()">
+        <option value="">All Types</option>
+        <option value="fulltime">Full-Time</option><option value="remote">Remote</option>
+        <option value="internship">Internship</option><option value="freelance">Freelance</option>
+      </select>
+    </div>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">💼 Open Positions <span id="jobCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div id="jobsList" style="display:flex;flex-direction:column;gap:12px;"></div>
+    <!-- Post a Job -->
+    <div style="margin-top:32px;background:rgba(244,63,94,0.04);border:1px solid rgba(244,63,94,0.15);border-radius:20px;padding:24px;">
+      <div class="th-section-h" style="margin-bottom:16px;">📢 Post a Tech Job</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <label class="th-label">Job Title *</label>
+          <input type="text" id="jobTitle" class="th-input" placeholder="e.g. Senior React Developer">
+          <label class="th-label">Company *</label>
+          <input type="text" id="jobCompany" class="th-input" placeholder="Your company name">
+          <label class="th-label">Phone / WhatsApp *</label>
+          <input type="tel" id="jobPhone" class="th-input" placeholder="07XXXXXXXX">
+        </div>
+        <div>
+          <label class="th-label">Job Type</label>
+          <select id="jobPostType" class="th-input">
+            <option value="fulltime">Full-Time</option><option value="remote">Remote</option>
+            <option value="internship">Internship</option><option value="freelance">Freelance</option>
+          </select>
+          <label class="th-label">Salary Range</label>
+          <input type="text" id="jobSalary" class="th-input" placeholder="e.g. KES 80,000–120,000/mo">
+          <label class="th-label">Location</label>
+          <input type="text" id="jobLocation" class="th-input" placeholder="e.g. Nairobi / Remote">
+        </div>
+      </div>
+      <label class="th-label">Job Description & Requirements</label>
+      <textarea id="jobDesc" class="th-input" style="min-height:70px;resize:vertical;" placeholder="Describe the role, key responsibilities, required skills and how to apply..."></textarea>
+      <button type="button" onclick="postJob()" style="width:100%;padding:13px;background:linear-gradient(135deg,#fb7185,#c084fc);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">📢 Post Job</button>
+      <div id="jobPostMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- AI & DIGITAL TOOLS PANEL -->
+<div id="thpanel-aitools" class="th-panel">
+  <div class="th-hero" style="background:linear-gradient(135deg,rgba(168,85,247,0.09),rgba(139,92,246,0.04),rgba(0,0,0,0));">
+    <div class="th-badge" style="background:rgba(168,85,247,0.1);border-color:rgba(168,85,247,0.3);color:#c084fc;">🤖 AI & Digital Tools</div>
+    <h1>AI, Automation<br><span style="background:linear-gradient(135deg,#c084fc,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">& SaaS Solutions</span></h1>
+    <p>AI-powered tools, business automation, SaaS platforms and digital solutions built for Kenyan businesses.</p>
+  </div>
+  <div class="th-filter-bar">
+    <button type="button" class="th-pill active" onclick="filterAITools('all',this)">All Tools</button>
+    <button type="button" class="th-pill" onclick="filterAITools('ai',this)">🤖 AI Services</button>
+    <button type="button" class="th-pill" onclick="filterAITools('automation',this)">⚡ Automation</button>
+    <button type="button" class="th-pill" onclick="filterAITools('saas',this)">☁️ SaaS</button>
+  </div>
+  <div class="th-body">
+    <div class="th-section-h">🤖 Available Tools & Services <span id="aiCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.3);"></span></div>
+    <div class="th-grid" id="aiGrid"></div>
+    <div style="margin-top:28px;background:rgba(168,85,247,0.04);border:1px solid rgba(168,85,247,0.15);border-radius:20px;padding:22px;text-align:center;">
+      <div style="font-size:22px;margin-bottom:8px;">⚙️</div>
+      <div style="font-size:15px;font-weight:900;margin-bottom:6px;">Have an AI or SaaS product?</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your tool and reach thousands of Kenyan businesses</div>
+      <a href="https://wa.me/254705726803?text=Hi%21%20I%20want%20to%20list%20my%20AI%2FSaaS%20tool%20on%20SOKONI%20Tech%20Hub." target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#c084fc,#818cf8);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;text-decoration:none;">List Your Tool →</a>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="tech-hub.html" class="bnav-item active-bnav"><span class="bnav-emoji">📱</span><span>Tech</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script src="sokoni-pay.js" defer></script>
+<script>
+/* ── PANEL SWITCHING ── */
+function showThPanel(name, btn) {
+  document.querySelectorAll('.th-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.th-nav-tab').forEach(t => t.classList.remove('active'));
+  const panel = document.getElementById('thpanel-'+name);
+  if (panel) panel.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+window.showThPanel = showThPanel;
+
+/* ── DATA ── */
+const DEMO_DEVICES = [
+  { id:'DEV001', name:'Samsung Galaxy S24', brand:'samsung', cat:'phone', price:89000, cond:'new', loc:'nairobi', phone:'0712500001', emoji:'📱', ram:'8GB', storage:'256GB', battery:'4000mAh', screen:'6.2"', camera:'50MP', os:'Android 14' },
+  { id:'DEV002', name:'iPhone 15 Pro', brand:'apple', cat:'phone', price:185000, cond:'new', loc:'nairobi', phone:'0723500002', emoji:'📱', ram:'8GB', storage:'256GB', battery:'3274mAh', screen:'6.1"', camera:'48MP', os:'iOS 17' },
+  { id:'DEV003', name:'Tecno Spark 20 Pro', brand:'tecno', cat:'phone', price:18500, cond:'new', loc:'nairobi', phone:'0734500003', emoji:'📱', ram:'8GB', storage:'128GB', battery:'5000mAh', screen:'6.78"', camera:'108MP', os:'Android 13' },
+  { id:'DEV004', name:'HP Pavilion 15 Laptop', brand:'hp', cat:'laptop', price:65000, cond:'new', loc:'nairobi', phone:'0745500004', emoji:'💻', ram:'8GB', storage:'512GB SSD', battery:'41Wh', screen:'15.6"', camera:'720p', os:'Windows 11' },
+  { id:'DEV005', name:'MacBook Air M2', brand:'apple', cat:'laptop', price:165000, cond:'used', loc:'nairobi', phone:'0756500005', emoji:'💻', ram:'8GB', storage:'256GB', battery:'52.6Wh', screen:'13.6"', camera:'1080p', os:'macOS Sonoma' },
+  { id:'DEV006', name:'Infinix Hot 40i', brand:'infinix', cat:'phone', price:14000, cond:'new', loc:'mombasa', phone:'0767500006', emoji:'📱', ram:'4GB', storage:'128GB', battery:'5000mAh', screen:'6.56"', camera:'50MP', os:'Android 13' },
+  { id:'DEV007', name:'Xiaomi Redmi Note 13', brand:'xiaomi', cat:'phone', price:22000, cond:'new', loc:'nairobi', phone:'0700500007', emoji:'📱', ram:'6GB', storage:'128GB', battery:'5000mAh', screen:'6.67"', camera:'108MP', os:'Android 13' },
+  { id:'DEV008', name:'Dell Inspiron 15', brand:'dell', cat:'laptop', price:72000, cond:'refurb', loc:'kisumu', phone:'0711500008', emoji:'💻', ram:'16GB', storage:'1TB SSD', battery:'54Wh', screen:'15.6"', camera:'720p', os:'Windows 11' },
+  { id:'DEV009', name:'iPad 10th Gen', brand:'apple', cat:'tablet', price:78000, cond:'new', loc:'nairobi', phone:'0722500009', emoji:'📟', ram:'4GB', storage:'64GB', battery:'28.65Wh', screen:'10.9"', camera:'12MP', os:'iPadOS 17' },
+  { id:'DEV010', name:'Samsung Galaxy Tab A8', brand:'samsung', cat:'tablet', price:28000, cond:'used', loc:'nairobi', phone:'0733500010', emoji:'📟', ram:'3GB', storage:'32GB', battery:'7040mAh', screen:'10.5"', camera:'8MP', os:'Android 11' },
+  { id:'DEV011', name:'Lenovo ThinkPad E15', brand:'lenovo', cat:'laptop', price:85000, cond:'refurb', loc:'nairobi', phone:'0744500011', emoji:'💻', ram:'16GB', storage:'512GB SSD', battery:'57Wh', screen:'15.6"', camera:'720p', os:'Windows 11' },
+  { id:'DEV012', name:'PS4 Slim + 2 Controllers', brand:'sony', cat:'console', price:32000, cond:'used', loc:'nairobi', phone:'0755500012', emoji:'🎮', ram:'8GB', storage:'1TB', battery:'N/A', screen:'N/A', camera:'N/A', os:'PS4 OS' },
+];
+
+const DEMO_TECHS = [
+  { id:'T001', name:'Brian Mwangi', spec:'repair', skills:['iPhone Screen','Samsung Screen','Battery Replacement','Water Damage'], loc:'Nairobi / CBD', phone:'0712600001', rate:800, exp:6, rating:4.9, jobs:312, emoji:'🔧', certified:true },
+  { id:'T002', name:'Mercy Wanjiku', spec:'software', skills:['Web Dev','App Dev','UI/UX','WordPress'], loc:'Nairobi / Westlands', phone:'0723600002', rate:3000, exp:4, rating:4.8, jobs:87, emoji:'💻', certified:true },
+  { id:'T003', name:'James Oduya', spec:'network', skills:['WiFi Setup','LAN/WAN','Mikrotik','Fiber'], loc:'Nairobi / Industrial', phone:'0734600003', rate:2500, exp:8, rating:4.7, jobs:156, emoji:'🌐', certified:true },
+  { id:'T004', name:'Sarah Njeri', spec:'cctv', skills:['CCTV Install','Access Control','Alarm Systems','DVR Setup'], loc:'Nairobi / Kilimani', phone:'0745600004', rate:3500, exp:10, rating:5.0, jobs:203, emoji:'📹', certified:true },
+  { id:'T005', name:'Peter Kamau', spec:'repair', skills:['Laptop Repair','Screen Replacement','Motherboard','Data Recovery'], loc:'Mombasa / CBD', phone:'0756600005', rate:1500, exp:9, rating:4.8, jobs:445, emoji:'🔧', certified:true },
+  { id:'T006', name:'Grace Achieng', spec:'support', skills:['IT Support','Printer Setup','Office 365','Remote Support'], loc:'Nairobi / Karen', phone:'0767600006', rate:2000, exp:5, rating:4.6, jobs:134, emoji:'🖥️', certified:false },
+];
+
+const PHONE_COMPARE_DATA = DEMO_DEVICES.filter(d => d.cat === 'phone' || d.cat === 'laptop');
+let _selectedCompare = [];
+let _activeBrand = 'all';
+
+/* ── DEVICES ── */
+function filterDevices() {
+  const q    = (document.getElementById('devSearch')?.value||'').toLowerCase();
+  const cond = document.getElementById('devCondition')?.value||'';
+  const cat  = document.getElementById('devCategory')?.value||'';
+  let local  = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
+  let list   = [...local, ...DEMO_DEVICES.filter(d => !local.some(l => l.id === d.id))];
+  if (_activeBrand !== 'all') list = list.filter(d => d.brand === _activeBrand);
+  if (cond)  list = list.filter(d => d.cond === cond);
+  if (cat)   list = list.filter(d => d.cat === cat);
+  if (q)     list = list.filter(d => (d.name+d.brand+d.os).toLowerCase().includes(q));
+  const cnt = document.getElementById('devCount'); if(cnt) cnt.textContent = list.length+' found';
+  renderDevicesGrid(list);
+}
+
+function filterByBrand(brand, btn) {
+  _activeBrand = brand;
+  document.querySelectorAll('.th-filter-bar .th-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  filterDevices();
+  setTimeout(function(){var g=document.getElementById('devicesGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+}
+window.filterByBrand = filterByBrand;
+
+function renderDevicesGrid(list) {
+  const grid = document.getElementById('devicesGrid'); if (!grid) return;
+  if (!list.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3);">No devices found</div>'; return; }
+  const condLabel = { new:'Brand New', used:'Used', refurb:'Refurbished' };
+  const condColor = { new:'rgba(34,197,94,0.12)', used:'rgba(249,115,22,0.1)', refurb:'rgba(59,130,246,0.1)' };
+  grid.innerHTML = list.map(d => `
+    <div class="th-card">
+      <span class="th-card-emoji">${d.emoji||'📱'}</span>
+      <div class="th-card-name">${d.name}</div>
+      <div class="th-card-meta">${d.ram||''} · ${d.storage||''} · ${d.os||''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:${condColor[d.cond]||'rgba(255,255,255,0.06)'};color:rgba(255,255,255,0.7);font-weight:700;">${condLabel[d.cond]||d.cond}</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);">📍 ${d.loc.charAt(0).toUpperCase()+d.loc.slice(1)}</span>
+      </div>
+      <div class="th-card-price">KES ${Number(d.price).toLocaleString()}</div>
+      <a href="https://wa.me/254${(d.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your '+d.name+' ('+condLabel[d.cond]+') on SOKONI Tech Hub for KES '+Number(d.price).toLocaleString()+'. Is it still available?')}" target="_blank" rel="noopener" class="th-wa-btn">💬 WhatsApp Seller</a>
+    </div>`).join('');
+}
+
+/* ── REPAIR BOOKING ── */
+let _repairType = '';
+function selectRepairType(btn, type) {
+  _repairType = type;
+  document.querySelectorAll('.repair-type-btn').forEach(b => {
+    b.style.background = 'rgba(255,255,255,0.04)';
+    b.style.borderColor = 'rgba(255,255,255,0.1)';
+    b.style.color = 'rgba(255,255,255,0.7)';
+  });
+  btn.style.background = 'rgba(0,212,255,0.1)';
+  btn.style.borderColor = 'rgba(0,212,255,0.35)';
+  btn.style.color = '#00d4ff';
+  const repTypeEl = document.getElementById('repType');
+  if (repTypeEl) repTypeEl.value = type;
+}
+window.selectRepairType = selectRepairType;
+
+function bookRepair() {
+  const name   = (document.getElementById('repName')?.value||'').trim();
+  const phone  = (document.getElementById('repPhone')?.value||'').trim();
+  const device = (document.getElementById('repDevice')?.value||'').trim();
+  const type   = document.getElementById('repType')?.value || _repairType || 'Repair';
+  const desc   = document.getElementById('repDesc')?.value || '';
+  const date   = document.getElementById('repDate')?.value || 'ASAP';
+  const loc    = document.getElementById('repLoc')?.value || 'Nairobi';
+  const msgEl  = document.getElementById('repMsg');
+  if (!name || !phone || !device) { if(msgEl) { msgEl.textContent='Fill your name, phone and device'; msgEl.style.color='#ff9800'; } return; }
+  const ref = 'REP'+Date.now().toString().slice(-6);
+  const msg = `🔧 *SOKONI Tech Hub — Repair Booking*\n\nRef: ${ref}\n👤 Name: ${name}\n📞 Phone: ${phone}\n📱 Device: ${device}\n🔧 Repair: ${type}\n📅 Date: ${date}\n📍 Location: ${loc}\n${desc?'\n📝 '+desc:''}\n\nPlease confirm this booking. Thank you!`;
+  let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniRepairs'))||[]; } catch(e) {}
+  bks.unshift({ ref, name, phone, device, type, date, loc, status:'sent', createdAt:Date.now() });
+  localStorage.setItem('sokoniRepairs', JSON.stringify(bks.slice(0,20)));
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
+    SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Tech Hub',category:'default',serviceDesc:type||'Device Repair'});
+  } else {
+    window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+  if(msgEl) { msgEl.innerHTML=`✅ Booking sent! Ref: <strong>${ref}</strong>`; msgEl.style.color='#00d4ff'; }
+}
+window.bookRepair = bookRepair;
+
+/* ── PHONE COMPARE ── */
+function renderCompareSelect() {
+  const grid = document.getElementById('compareSelectGrid'); if (!grid) return;
+  grid.innerHTML = PHONE_COMPARE_DATA.map(d => `
+    <div class="compare-card ${_selectedCompare.includes(d.id)?'selected':''}" onclick="toggleCompare('${d.id}')">
+      <div style="font-size:28px;margin-bottom:8px;">${d.emoji||'📱'}</div>
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${d.name}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);">${d.ram} · ${d.storage}</div>
+      <div style="font-size:13px;font-weight:900;color:#00d4ff;margin-top:6px;">KES ${Number(d.price).toLocaleString()}</div>
+    </div>`).join('');
+  const cnt = document.getElementById('compareCount');
+  if (cnt) cnt.textContent = `(${_selectedCompare.length}/3 selected)`;
+}
+
+function toggleCompare(id) {
+  if (_selectedCompare.includes(id)) {
+    _selectedCompare = _selectedCompare.filter(x => x !== id);
+  } else {
+    if (_selectedCompare.length >= 3) { showTechToast('Max 3 phones to compare'); return; }
+    _selectedCompare.push(id);
+  }
+  renderCompareSelect();
+  renderCompareTable();
+}
+window.toggleCompare = toggleCompare;
+
+function renderCompareTable() {
+  const wrap = document.getElementById('compareTableWrap');
+  const table = document.getElementById('compareTable');
+  if (!wrap || !table) return;
+  if (_selectedCompare.length < 2) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  const phones = _selectedCompare.map(id => PHONE_COMPARE_DATA.find(d => d.id === id)).filter(Boolean);
+  const rows = [
+    { label:'Price', key:'price', fmt: v => 'KES '+Number(v).toLocaleString(), higher:'lower' },
+    { label:'RAM', key:'ram', higher:'higher' },
+    { label:'Storage', key:'storage', higher:'higher' },
+    { label:'Battery', key:'battery', higher:'higher' },
+    { label:'Screen', key:'screen', higher:'higher' },
+    { label:'Camera', key:'camera', higher:'higher' },
+    { label:'OS', key:'os', higher:'none' },
+  ];
+  table.innerHTML = `<thead><tr><th>Spec</th>${phones.map(p=>`<th>${p.name}</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(r => {
+      const vals = phones.map(p => p[r.key]||'—');
+      return `<tr><td style="font-weight:700;color:rgba(255,255,255,0.5);">${r.label}</td>${vals.map((v,i)=>`<td>${r.fmt?r.fmt(v):v}</td>`).join('')}</tr>`;
+    }).join('') + '</tbody>';
+}
+
+function clearCompare() {
+  _selectedCompare = [];
+  renderCompareSelect();
+  const wrap = document.getElementById('compareTableWrap');
+  if (wrap) wrap.style.display = 'none';
+}
+window.clearCompare = clearCompare;
+
+/* ── TECHNICIANS ── */
+function filterTechs() {
+  const q    = (document.getElementById('techSearch')?.value||'').toLowerCase();
+  const spec = document.getElementById('techSpeciality')?.value||'';
+  let list   = [...DEMO_TECHS];
+  if (spec) list = list.filter(t => t.spec === spec);
+  if (q)    list = list.filter(t => (t.name+t.skills.join(' ')+t.loc).toLowerCase().includes(q));
+  renderTechsGrid(list);
+  setTimeout(function(){var g=document.getElementById('techsGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
+}
+
+function renderTechsGrid(list) {
+  const grid = document.getElementById('techsGrid'); if (!grid) return;
+  if (!list.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.3);">No technicians found</div>'; return; }
+  grid.innerHTML = list.map(t => `
+    <div class="th-card">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <div style="width:48px;height:48px;border-radius:12px;background:rgba(0,212,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${t.emoji}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="th-card-name" style="font-size:14px;">${t.name} ${t.certified?'<span style="font-size:8px;background:rgba(0,212,255,0.1);color:#00d4ff;padding:1px 5px;border-radius:3px;border:1px solid rgba(0,212,255,0.2);">✓ Certified</span>':''}</div>
+          <div style="font-size:11px;color:#00d4ff;font-weight:700;margin-bottom:2px;">${{repair:'Repair Technician',software:'Software Developer',network:'Network Engineer',cctv:'CCTV Installer',support:'IT Support',web:'Web Designer'}[t.spec]||t.spec}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${t.loc}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${t.skills.slice(0,3).map(s=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(0,212,255,0.07);border:1px solid rgba(0,212,255,0.15);color:#38bdf8;">${s}</span>`).join('')}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="th-card-price" style="font-size:15px;">KES ${Number(t.rate).toLocaleString()}<span>/hr</span></div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.4);">⭐ ${t.rating} · ${t.jobs} jobs</span>
+      </div>
+      <a href="https://wa.me/254${t.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+t.name+', I found you on SOKONI Tech Hub. I need help with: ')}" target="_blank" rel="noopener" class="th-wa-btn">💬 Hire via WhatsApp</a>
+    </div>`).join('');
+}
+
+/* ── ASK THE TECH HUB ── */
+function postTechRequest() {
+  const text  = (document.getElementById('techAskText')?.value||'').trim();
+  const cat   = document.getElementById('techAskCategory')?.value||'';
+  const phone = (document.getElementById('techAskPhone')?.value||'').trim();
+  if (!text) { showTechToast('Please describe your issue'); return; }
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_tech'))||[]; } catch(e) {}
+  reqs.unshift({ id:'TREQ'+Date.now(), text, cat: cat||'General', phone, ts: Date.now() });
+  localStorage.setItem('askHub_tech', JSON.stringify(reqs.slice(0,30)));
+  document.getElementById('techAskText').value = '';
+  document.getElementById('techAskPhone').value = '';
+  renderTechAskFeed();
+  showTechToast('Request posted to Tech Hub!');
+}
+window.postTechRequest = postTechRequest;
+
+function renderTechAskFeed() {
+  const feed = document.getElementById('techAskFeed'); if (!feed) return;
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_tech'))||[]; } catch(e) {}
+  if (!reqs.length) { feed.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);font-size:13px;">No requests yet. Be the first to ask!</div>'; return; }
+  const ago = ts => { const s=Math.floor((Date.now()-ts)/1000); return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago'; };
+  feed.innerHTML = reqs.slice(0,8).map(r => `
+    <div style="padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);color:#38bdf8;font-weight:700;">${r.cat}</span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
+        <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
+      </div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      ${r.phone ? `<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your Tech Hub question: '+r.text+'\n\nI can help!')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
+    </div>`).join('');
+}
+
+/* ── SELL DEVICE ── */
+function listDevice() {
+  const name  = (document.getElementById('sellDevName')?.value||'').trim();
+  const price = Number(document.getElementById('sellDevPrice')?.value||0);
+  const phone = (document.getElementById('sellDevPhone')?.value||'').trim();
+  const msgEl = document.getElementById('sellDevMsg');
+  if (!name || !price || !phone) { if(msgEl) { msgEl.textContent='Fill device name, price and phone'; msgEl.style.color='#ff9800'; } return; }
+  const dev = {
+    id:'DEV'+Date.now(), name, price, phone,
+    brand: (document.getElementById('sellDevBrand')?.value||'other').toLowerCase(),
+    cat: document.getElementById('sellDevCat')?.value||'phone',
+    cond: document.getElementById('sellDevCond')?.value||'used',
+    loc: document.getElementById('sellDevLoc')?.value||'nairobi',
+    desc: document.getElementById('sellDevDesc')?.value||'',
+    emoji: {phone:'📱',laptop:'💻',tablet:'📟',accessory:'🎧',console:'🎮'}[document.getElementById('sellDevCat')?.value||'phone']||'📱',
+    os:'', ram:'', storage:'', battery:'', screen:'', camera:''
+  };
+  let local = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
+  local.unshift(dev); localStorage.setItem('sokoniDevices', JSON.stringify(local.slice(0,50)));
+  if(msgEl) { msgEl.innerHTML='✅ Device listed! <a href="javascript:void(0)" onclick="goThPanel(\'devices\',null)" style="color:#00d4ff;font-weight:700;">View Listings →</a>'; msgEl.style.color='#00d4ff'; }
+  ['sellDevName','sellDevPrice','sellDevPhone','sellDevDesc'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
+}
+window.listDevice = listDevice;
+
+/* ── TOAST ── */
+function showTechToast(msg) {
+  if(typeof window._sokoniToast==='function'){window._sokoniToast(msg,'info',2800);return;}
+  /* fallback if script.js not yet loaded */
+  var t=document.getElementById('techToast');
+  if(t)t.remove();
+  t=document.createElement('div');t.id='techToast';
+  t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#00d4ff;color:#050a0f;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:700;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2800);
+}
+
+/* ── PANEL SWITCHING (goThPanel replaces showThPanel) ── */
+function goThPanel(name, btn) {
+  document.querySelectorAll('.th-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.th-nav-tab').forEach(t => t.classList.remove('active'));
+  const panel = document.getElementById('thpanel-'+name);
+  if (panel) panel.classList.add('active');
+  if (btn) btn.classList.add('active');
+  else {
+    const tabMap = {devices:0,repairs:1,itservices:2,freelancers:3,startups:4,learning:5,jobs:6,aitools:7,compare:8,technicians:9,askhub:10,sell:11};
+    const tabs = document.querySelectorAll('.th-nav-tab');
+    const idx = tabMap[name]; if(idx!=null&&tabs[idx]) tabs[idx].classList.add('active');
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+window.goThPanel = goThPanel;
+
+/* ── FIRESTORE WRITE (fire-and-forget) ── */
+async function _thFireWrite(coll, data) {
+  try {
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyBmPL3mFJXFN3LXY_gPuH2HSJY8oWmyOJ4",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.appspot.com",messagingSenderId:"448791489749",appId:"1:448791489749:web:a1b2c3d4e5f6g7h8"};
+    const _a=getApps().find(a=>a.name==="th-write")||initializeApp(_cfg,"th-write");
+    await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
+  } catch(e){}
+}
+
+/* ── IT SERVICES DATA ── */
+const DEMO_IT = [
+  {id:'IT001',name:'Kubwa Digital',cat:'web',title:'Web Development Agency',skills:['React','WordPress','E-Commerce','SEO'],loc:'Nairobi',phone:'0712700001',rate:'From KES 25,000',rating:4.9,jobs:143,emoji:'🌐',verified:true},
+  {id:'IT002',name:'AppFoundry Kenya',cat:'app',title:'Mobile App Developer',skills:['React Native','Flutter','iOS','Android'],loc:'Nairobi',phone:'0723700002',rate:'From KES 50,000',rating:4.8,jobs:67,emoji:'📱',verified:true},
+  {id:'IT003',name:'SkyCloud Africa',cat:'cloud',title:'Cloud Services Provider',skills:['AWS','Azure','Google Cloud','DevOps'],loc:'Nairobi',phone:'0734700003',rate:'From KES 30,000',rating:4.7,jobs:89,emoji:'☁️',verified:true},
+  {id:'IT004',name:'SecureShield IT',cat:'cyber',title:'Cybersecurity Specialists',skills:['Penetration Testing','SIEM','Firewall','Compliance'],loc:'Nairobi',phone:'0745700004',rate:'From KES 60,000',rating:5.0,jobs:34,emoji:'🛡️',verified:true},
+  {id:'IT005',name:'CodeCraft Studios',cat:'software',title:'Software Development',skills:['Python','Java','Node.js','Microservices'],loc:'Nairobi',phone:'0756700005',rate:'From KES 45,000',rating:4.8,jobs:112,emoji:'💻',verified:true},
+  {id:'IT006',name:'TechMentor Consulting',cat:'consulting',title:'IT Consulting & Strategy',skills:['Digital Transformation','IT Audit','ERP','Project Mgmt'],loc:'Nairobi',phone:'0767700006',rate:'From KES 15,000',rating:4.9,jobs:58,emoji:'🎯',verified:false},
+];
+
+function filterITServices(cat, btn) {
+  document.querySelectorAll('#thpanel-itservices .th-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  let list = cat==='all' ? [...DEMO_IT] : DEMO_IT.filter(s=>s.cat===cat);
+  const cnt=document.getElementById('itsCount'); if(cnt) cnt.textContent=list.length+' providers';
+  const grid=document.getElementById('itsGrid'); if(!grid) return;
+  grid.innerHTML=list.map(s=>`
+    <div class="th-card">
+      <span class="th-card-emoji">${s.emoji}</span>
+      <div class="th-card-name">${s.name} ${s.verified?'<span style="font-size:8px;background:rgba(0,212,255,0.1);color:#00d4ff;padding:1px 5px;border-radius:3px;border:1px solid rgba(0,212,255,0.2);">✓</span>':''}</div>
+      <div class="th-card-meta">${s.title}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${s.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#818cf8;">${k}</span>`).join('')}</div>
+      <div class="th-card-price">${s.rate}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">⭐ ${s.rating} · ${s.jobs} projects · 📍 ${s.loc}</div>
+      <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.name+', I found you on SOKONI Tech Hub. I need IT services: ')}" target="_blank" rel="noopener" class="th-wa-btn">💬 WhatsApp</a>
+    </div>`).join('');
+}
+window.filterITServices = filterITServices;
+
+function submitITRequest() {
+  const name=(document.getElementById('itsName')?.value||'').trim();
+  const phone=(document.getElementById('itsPhone')?.value||'').trim();
+  const svc=document.getElementById('itsService')?.value||'';
+  const msgEl=document.getElementById('itsMsg');
+  if(!name||!phone||!svc){if(msgEl){msgEl.textContent='Fill name, phone and service';msgEl.style.color='#ff9800';}return;}
+  const ref='ITS'+Date.now().toString().slice(-6);
+  const company=document.getElementById('itsCompany')?.value||'';
+  const budget=document.getElementById('itsBudget')?.value||'';
+  const timeline=document.getElementById('itsTimeline')?.value||'';
+  const desc=document.getElementById('itsDesc')?.value||'';
+  _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'});
+  const msg=`🖥️ *SOKONI Tech Hub — IT Service Request*\n\nRef: ${ref}\n👤 ${name}${company?' ('+company+')':''}\n📞 ${phone}\n🛠️ Service: ${svc}\n💰 Budget: ${budget}\n⏱️ Timeline: ${timeline}\n${desc?'\n📝 '+desc:''}\n\nPlease get back to me. Thank you!`;
+  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
+  if(msgEl){msgEl.innerHTML=`✅ Request sent! Ref: <strong>${ref}</strong>`;msgEl.style.color='#818cf8';}
+}
+window.submitITRequest = submitITRequest;
+
+/* ── FREELANCERS DATA ── */
+const DEMO_FL = [
+  {id:'FL001',name:'Alex Kariuki',role:'developer',title:'Full-Stack Developer',skills:['React','Node.js','MongoDB','TypeScript'],loc:'Nairobi',phone:'0712800001',rate:'KES 2,500/hr',rating:4.9,jobs:89,emoji:'👨‍💻',available:true},
+  {id:'FL002',name:'Diana Waweru',role:'designer',title:'UI/UX Designer',skills:['Figma','Adobe XD','Branding','Motion'],loc:'Nairobi',phone:'0723800002',rate:'KES 2,000/hr',rating:4.8,jobs:134,emoji:'🎨',available:true},
+  {id:'FL003',name:'Kevin Otieno',role:'marketer',title:'Digital Marketing Specialist',skills:['SEO','Google Ads','Social Media','Analytics'],loc:'Nairobi',phone:'0734800003',rate:'KES 1,800/hr',rating:4.7,jobs:67,emoji:'📣',available:true},
+  {id:'FL004',name:'Joy Mutua',role:'support',title:'IT Support Specialist',skills:['Windows','Mac OS','Networking','Office 365'],loc:'Mombasa',phone:'0745800004',rate:'KES 1,200/hr',rating:4.6,jobs:212,emoji:'🖥️',available:false},
+  {id:'FL005',name:'Brian Ndung\'u',role:'sysadmin',title:'System Administrator',skills:['Linux','AWS','Docker','CI/CD'],loc:'Nairobi',phone:'0756800005',rate:'KES 3,000/hr',rating:4.9,jobs:45,emoji:'⚙️',available:true},
+  {id:'FL006',name:'Cynthia Auma',role:'developer',title:'Mobile App Developer',skills:['Flutter','Dart','Firebase','REST APIs'],loc:'Kisumu',phone:'0767800006',rate:'KES 2,200/hr',rating:4.8,jobs:38,emoji:'📱',available:true},
+];
+let _flFilter = {q:'',role:''};
+
+function filterFreelancers() {
+  _flFilter.q=(document.getElementById('flSearch')?.value||'').toLowerCase();
+  _flFilter.role=document.getElementById('flSkill')?.value||'';
+  let list=[..._flFilter.role?DEMO_FL.filter(f=>f.role===_flFilter.role):DEMO_FL];
+  if(_flFilter.q) list=list.filter(f=>(f.name+f.title+f.skills.join(' ')).toLowerCase().includes(_flFilter.q));
+  const cnt=document.getElementById('flCount'); if(cnt) cnt.textContent=list.length+' available';
+  const grid=document.getElementById('flGrid'); if(!grid) return;
+  grid.innerHTML=list.map(f=>`
+    <div class="th-card">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(20,184,166,0.2),rgba(6,182,212,0.1));display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${f.emoji}</div>
+        <div>
+          <div class="th-card-name" style="font-size:14px;">${f.name} <span style="font-size:9px;padding:1px 6px;border-radius:5px;background:${f.available?'rgba(34,197,94,0.1)':'rgba(255,255,255,0.05)'};color:${f.available?'#4ade80':'rgba(255,255,255,0.3)'};font-weight:700;">${f.available?'● Available':'Busy'}</span></div>
+          <div style="font-size:11px;color:#2dd4bf;font-weight:700;">${f.title}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${f.loc}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${f.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);color:#2dd4bf;">${k}</span>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="th-card-price" style="color:#2dd4bf;">${f.rate}</div>
+        <span style="font-size:11px;color:rgba(255,255,255,0.4);">⭐ ${f.rating} · ${f.jobs} jobs</span>
+      </div>
+      <a href="https://wa.me/254${f.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+f.name+', I found your profile on SOKONI Tech Hub. I need help with: ')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(20,184,166,0.07);border-color:rgba(20,184,166,0.25);color:#2dd4bf;">💬 Hire via WhatsApp</a>
+    </div>`).join('');
+}
+window.filterFreelancers = filterFreelancers;
+
+/* ── STARTUPS DATA ── */
+const DEMO_STARTUPS = [
+  {id:'ST001',name:'FarmConnect Kenya',sector:'AgriTech',stage:'Seed',founder:'Samuel Waweru',loc:'Nairobi',phone:'0712900001',pitch:'Connecting smallholder farmers directly to urban markets, cutting out middlemen and increasing farmer income by 40%.',funding:'KES 5M',team:4,emoji:'🌾'},
+  {id:'ST002',name:'PesaFlow',sector:'FinTech',stage:'Pre-Seed',founder:'Joyce Akinyi',loc:'Nairobi',phone:'0723900002',pitch:'AI-powered SACCO management platform helping 500+ Kenyan SACCOs automate loans, savings and member services.',funding:'KES 3M',team:3,emoji:'💳'},
+  {id:'ST003',name:'HealthTrack Africa',sector:'HealthTech',stage:'MVP',founder:'Dr. Peter Njoroge',loc:'Nairobi',phone:'0734900003',pitch:'Community health worker app for tracking maternal health outcomes in rural Kenya. Deployed in 12 counties.',funding:'Grants',team:6,emoji:'💊'},
+  {id:'ST004',name:'LearnHub KE',sector:'EdTech',stage:'Seed',founder:'Faith Wambui',loc:'Nairobi',phone:'0745900004',pitch:'Localized online learning platform for Kenyan secondary schools with CBC-aligned content and offline mode.',funding:'KES 8M',team:8,emoji:'🎓'},
+  {id:'ST005',name:'SwiftLogix',sector:'Logistics',stage:'Series A',founder:'Daniel Oloo',loc:'Nairobi',phone:'0756900005',pitch:'Last-mile delivery optimization for e-commerce in East Africa. 3,000+ deliveries per day across 6 cities.',funding:'KES 25M',team:22,emoji:'🚚'},
+  {id:'ST006',name:'SolarMoja',sector:'CleanTech',stage:'Seed',founder:'Amina Hassan',loc:'Mombasa',phone:'0767900006',pitch:'Pay-as-you-go solar home systems for off-grid households in coastal Kenya. Serving 1,200 families.',funding:'KES 12M',team:11,emoji:'☀️'},
+];
+let _stFilter = 'all';
+
+function filterStartups(sector, btn) {
+  _stFilter=sector;
+  document.querySelectorAll('#thpanel-startups .th-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  let list=sector==='all'?[...DEMO_STARTUPS]:DEMO_STARTUPS.filter(s=>s.sector===sector);
+  const cnt=document.getElementById('stCount'); if(cnt) cnt.textContent=list.length+' startups';
+  const grid=document.getElementById('stGrid'); if(!grid) return;
+  const stageColor={Idea:'rgba(156,163,175,0.1)',MVP:'rgba(59,130,246,0.1)','Pre-Seed':'rgba(249,115,22,0.1)',Seed:'rgba(34,197,94,0.1)','Series A':'rgba(168,85,247,0.1)',Growth:'rgba(251,191,36,0.1)'};
+  grid.innerHTML=list.map(s=>`
+    <div class="th-card">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:12px;background:rgba(251,146,60,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${s.emoji}</div>
+        <div>
+          <div class="th-card-name" style="font-size:14px;">${s.name}</div>
+          <div style="font-size:11px;color:#fb923c;font-weight:700;">${s.sector}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">👤 ${s.founder} · 📍 ${s.loc}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;"><span style="font-size:10px;padding:2px 8px;border-radius:5px;background:${stageColor[s.stage]||'rgba(255,255,255,0.05)'};color:rgba(255,255,255,0.7);font-weight:700;">${s.stage}</span> <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);">👥 ${s.team} team</span></div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.6);line-height:1.5;margin-bottom:10px;">${s.pitch}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">🎯 Seeking: ${s.funding}</div>
+      <a href="https://wa.me/254${s.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi '+s.founder+', I saw '+s.name+' on SOKONI Startup Zone. I\'d love to connect!')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.25);color:#fb923c;">💬 Connect</a>
+    </div>`).join('');
+}
+window.filterStartups = filterStartups;
+
+function registerStartup() {
+  const name=(document.getElementById('stName')?.value||'').trim();
+  const founder=(document.getElementById('stFounder')?.value||'').trim();
+  const phone=(document.getElementById('stPhone')?.value||'').trim();
+  const msgEl=document.getElementById('stMsg');
+  if(!name||!founder||!phone){if(msgEl){msgEl.textContent='Fill startup name, founder and phone';msgEl.style.color='#ff9800';}return;}
+  const ref='STR'+Date.now().toString().slice(-6);
+  const sector=document.getElementById('stSector')?.value||'';
+  const stage=document.getElementById('stStage')?.value||'';
+  const funding=document.getElementById('stFunding')?.value||'';
+  const pitch=document.getElementById('stPitch')?.value||'';
+  _thFireWrite('techStartups',{ref,name,founder,phone,sector,stage,funding,pitch,hub:'tech-hub'});
+  const msg=`🚀 *SOKONI Startup Zone — Registration*\n\nRef: ${ref}\n🏢 ${name}\n👤 ${founder}\n📞 ${phone}\n📂 Sector: ${sector}\n📈 Stage: ${stage}\n💰 Funding: ${funding}\n${pitch?'\n📝 '+pitch:''}\n\nPlease list us on SOKONI Tech Hub. Thank you!`;
+  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
+  if(msgEl){msgEl.innerHTML=`✅ Submitted! Ref: <strong>${ref}</strong>`;msgEl.style.color='#fb923c';}
+}
+window.registerStartup = registerStartup;
+
+/* ── LEARNING DATA ── */
+const DEMO_COURSES = [
+  {id:'LRN001',name:'Full-Stack Web Dev Bootcamp',type:'bootcamp',provider:'Moringa School',duration:'4 months',price:'KES 60,000',skills:['HTML/CSS','JavaScript','React','Node.js','MongoDB'],loc:'Nairobi',phone:'0712100001',rating:4.9,emoji:'🌐'},
+  {id:'LRN002',name:'AWS Cloud Practitioner Cert',type:'certification',provider:'AWS Academy Kenya',duration:'6 weeks',price:'KES 15,000',skills:['AWS','Cloud','IAM','S3'],loc:'Online',phone:'0723100002',rating:4.8,emoji:'☁️'},
+  {id:'LRN003',name:'Android App Development',type:'course',provider:'Andela Learning',duration:'3 months',price:'KES 25,000',skills:['Kotlin','Android Studio','Firebase','APIs'],loc:'Nairobi',phone:'0734100003',rating:4.7,emoji:'📱'},
+  {id:'LRN004',name:'Cybersecurity Fundamentals',type:'workshop',provider:'iCog Labs Kenya',duration:'2 days',price:'KES 8,000',skills:['Network Security','Ethical Hacking','OWASP','Firewalls'],loc:'Nairobi',phone:'0745100004',rating:4.9,emoji:'🛡️'},
+  {id:'LRN005',name:'UI/UX Design Mentorship',type:'mentorship',provider:'Design Kenya',duration:'2 months',price:'KES 20,000',skills:['Figma','User Research','Prototyping','Design Systems'],loc:'Nairobi',phone:'0756100005',rating:5.0,emoji:'🎨'},
+  {id:'LRN006',name:'Data Science with Python',type:'course',provider:'DataCamp Kenya',duration:'3 months',price:'KES 30,000',skills:['Python','Pandas','Scikit-learn','Tableau'],loc:'Online',phone:'0767100006',rating:4.8,emoji:'📊'},
+];
+let _lrnFilter = {q:'',type:''};
+
+function filterCourses() {
+  _lrnFilter.q=(document.getElementById('lrnSearch')?.value||'').toLowerCase();
+  _lrnFilter.type=document.getElementById('lrnType')?.value||'';
+  let list=[..._lrnFilter.type?DEMO_COURSES.filter(c=>c.type===_lrnFilter.type):DEMO_COURSES];
+  if(_lrnFilter.q) list=list.filter(c=>(c.name+c.provider+c.skills.join(' ')).toLowerCase().includes(_lrnFilter.q));
+  const cnt=document.getElementById('lrnCount'); if(cnt) cnt.textContent=list.length+' programs';
+  const grid=document.getElementById('lrnGrid'); if(!grid) return;
+  const typeColor={bootcamp:'rgba(34,197,94,0.1)',course:'rgba(59,130,246,0.1)',certification:'rgba(168,85,247,0.1)',workshop:'rgba(249,115,22,0.1)',mentorship:'rgba(251,191,36,0.1)'};
+  const typeLabel={bootcamp:'Bootcamp',course:'Online Course',certification:'Certification',workshop:'Workshop',mentorship:'Mentorship'};
+  grid.innerHTML=list.map(c=>`
+    <div class="th-card">
+      <span class="th-card-emoji">${c.emoji}</span>
+      <div class="th-card-name">${c.name}</div>
+      <div style="font-size:11px;color:#4ade80;font-weight:700;margin-bottom:4px;">${c.provider}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:${typeColor[c.type]||'rgba(255,255,255,0.05)'};color:rgba(255,255,255,0.7);font-weight:700;">${typeLabel[c.type]||c.type}</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);">⏱ ${c.duration}</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);">📍 ${c.loc}</span>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${c.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);color:#4ade80;">${k}</span>`).join('')}</div>
+      <div class="th-card-price" style="color:#4ade80;">${c.price}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:10px;">⭐ ${c.rating}</div>
+      <a href="https://wa.me/254${c.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I found '+c.name+' on SOKONI Tech Hub. Please share enrollment details.')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(34,197,94,0.07);border-color:rgba(34,197,94,0.25);color:#4ade80;">💬 Enroll via WhatsApp</a>
+    </div>`).join('');
+}
+window.filterCourses = filterCourses;
+
+/* ── JOBS DATA ── */
+const DEMO_JOBS = [
+  {id:'JOB001',title:'Senior React Developer',company:'Safaricom',type:'fulltime',salary:'KES 180,000–240,000/mo',loc:'Nairobi',skills:['React','TypeScript','REST APIs'],posted:'2 days ago',phone:'0712200001',emoji:'🌐'},
+  {id:'JOB002',title:'DevOps Engineer (Remote)',company:'Andela',type:'remote',salary:'KES 250,000/mo',loc:'Remote',skills:['AWS','Docker','CI/CD','Terraform'],posted:'1 day ago',phone:'0723200002',emoji:'⚙️'},
+  {id:'JOB003',title:'Product Designer Intern',company:'M-Kopa',type:'internship',salary:'KES 30,000/mo',loc:'Nairobi',skills:['Figma','User Research','Prototyping'],posted:'3 days ago',phone:'0734200003',emoji:'🎨'},
+  {id:'JOB004',title:'Mobile Developer (Flutter)',company:'NCBA Bank',type:'fulltime',salary:'KES 150,000–200,000/mo',loc:'Nairobi',skills:['Flutter','Dart','Firebase'],posted:'Today',phone:'0745200004',emoji:'📱'},
+  {id:'JOB005',title:'Freelance WordPress Developer',company:'ContentHive',type:'freelance',salary:'KES 15,000/site',loc:'Remote',skills:['WordPress','PHP','WooCommerce','SEO'],posted:'5 hours ago',phone:'0756200005',emoji:'🌍'},
+  {id:'JOB006',title:'IT Support Analyst',company:'KCB Group',type:'fulltime',salary:'KES 80,000–110,000/mo',loc:'Nairobi',skills:['Networking','Windows Server','Active Directory'],posted:'4 days ago',phone:'0767200006',emoji:'🖥️'},
+];
+let _jobFilter = {q:'',type:''};
+
+function filterJobs() {
+  _jobFilter.q=(document.getElementById('jobSearch')?.value||'').toLowerCase();
+  _jobFilter.type=document.getElementById('jobType')?.value||'';
+  let list=[..._jobFilter.type?DEMO_JOBS.filter(j=>j.type===_jobFilter.type):DEMO_JOBS];
+  if(_jobFilter.q) list=list.filter(j=>(j.title+j.company+j.skills.join(' ')).toLowerCase().includes(_jobFilter.q));
+  const cnt=document.getElementById('jobCount'); if(cnt) cnt.textContent=list.length+' jobs';
+  const el=document.getElementById('jobsList'); if(!el) return;
+  const typeColor={fulltime:'rgba(34,197,94,0.1)',remote:'rgba(59,130,246,0.1)',internship:'rgba(249,115,22,0.1)',freelance:'rgba(168,85,247,0.1)'};
+  el.innerHTML=list.map(j=>`
+    <div style="padding:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;">
+        <div style="width:44px;height:44px;border-radius:12px;background:rgba(244,63,94,0.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${j.emoji}</div>
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:900;color:white;margin-bottom:2px;">${j.title}</div>
+          <div style="font-size:12px;color:#fb7185;font-weight:700;">${j.company}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${j.loc} · ${j.posted}</div>
+        </div>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:${typeColor[j.type]||'rgba(255,255,255,0.05)'};color:rgba(255,255,255,0.7);font-weight:700;white-space:nowrap;">${j.type}</span>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;">${j.skills.slice(0,3).map(k=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(244,63,94,0.07);border:1px solid rgba(244,63,94,0.2);color:#fb7185;">${k}</span>`).join('')}</div>
+      <div style="font-size:13px;font-weight:800;color:#fb7185;margin-bottom:10px;">${j.salary}</div>
+      <a href="https://wa.me/254${j.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw the '+j.title+' position at '+j.company+' on SOKONI Tech Hub. I\'d like to apply.')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(244,63,94,0.07);border-color:rgba(244,63,94,0.25);color:#fb7185;">💬 Apply via WhatsApp</a>
+    </div>`).join('');
+}
+window.filterJobs = filterJobs;
+
+function postJob() {
+  const title=(document.getElementById('jobTitle')?.value||'').trim();
+  const company=(document.getElementById('jobCompany')?.value||'').trim();
+  const phone=(document.getElementById('jobPhone')?.value||'').trim();
+  const msgEl=document.getElementById('jobPostMsg');
+  if(!title||!company||!phone){if(msgEl){msgEl.textContent='Fill job title, company and phone';msgEl.style.color='#ff9800';}return;}
+  const ref='JOB'+Date.now().toString().slice(-6);
+  const type=document.getElementById('jobPostType')?.value||'fulltime';
+  const salary=document.getElementById('jobSalary')?.value||'';
+  const loc=document.getElementById('jobLocation')?.value||'Nairobi';
+  const desc=document.getElementById('jobDesc')?.value||'';
+  _thFireWrite('techJobs',{ref,title,company,phone,type,salary,loc,desc,hub:'tech-hub'});
+  const msg=`💼 *SOKONI Tech Hub — Job Posting*\n\nRef: ${ref}\n📌 ${title}\n🏢 ${company}\n📞 ${phone}\n🏷️ Type: ${type}\n💰 ${salary}\n📍 ${loc}\n${desc?'\n📝 '+desc:''}\n\nPlease list this job on SOKONI Tech Hub. Thank you!`;
+  window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
+  if(msgEl){msgEl.innerHTML=`✅ Job posted! Ref: <strong>${ref}</strong>`;msgEl.style.color='#fb7185';}
+}
+window.postJob = postJob;
+
+/* ── AI TOOLS DATA ── */
+const DEMO_AI = [
+  {id:'AI001',name:'SnapBooks AI',cat:'ai',tagline:'AI-powered bookkeeping for Kenyan SMEs',desc:'Auto-categorizes M-Pesa transactions, generates invoices and VAT reports automatically.',price:'KES 2,500/mo',phone:'0712300001',emoji:'📊',verified:true},
+  {id:'AI002',name:'ChatSoko',cat:'ai',tagline:'AI chatbot for WhatsApp commerce',desc:'Automates customer support, product inquiries and order tracking on WhatsApp Business.',price:'KES 3,000/mo',phone:'0723300002',emoji:'🤖',verified:true},
+  {id:'AI003',name:'FlowBot KE',cat:'automation',tagline:'Business process automation',desc:'Connects M-Pesa, Google Sheets, WhatsApp and email — no code needed. 50+ triggers.',price:'KES 1,500/mo',phone:'0734300003',emoji:'⚡',verified:true},
+  {id:'AI004',name:'IQ Inventory',cat:'saas',tagline:'Smart stock management for retailers',desc:'Real-time inventory tracking, low-stock alerts, supplier orders and sales analytics.',price:'KES 1,800/mo',phone:'0745300004',emoji:'📦',verified:false},
+  {id:'AI005',name:'Arova Analytics',cat:'ai',tagline:'Business intelligence for SMEs',desc:'Turn your sales data into insights — dashboards, forecasts and customer segmentation.',price:'KES 4,500/mo',phone:'0756300005',emoji:'📈',verified:true},
+  {id:'AI006',name:'AutoHR Kenya',cat:'automation',tagline:'HR & payroll automation',desc:'Payslips, leave management, NHIF/NSSF/KRA deductions automated for Kenyan businesses.',price:'KES 2,200/mo',phone:'0767300006',emoji:'👥',verified:false},
+];
+let _aiFilter = 'all';
+
+function filterAITools(cat, btn) {
+  _aiFilter=cat;
+  document.querySelectorAll('#thpanel-aitools .th-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  let list=cat==='all'?[...DEMO_AI]:DEMO_AI.filter(t=>t.cat===cat);
+  const cnt=document.getElementById('aiCount'); if(cnt) cnt.textContent=list.length+' tools';
+  const grid=document.getElementById('aiGrid'); if(!grid) return;
+  grid.innerHTML=list.map(t=>`
+    <div class="th-card">
+      <span class="th-card-emoji">${t.emoji}</span>
+      <div class="th-card-name">${t.name} ${t.verified?'<span style="font-size:8px;background:rgba(168,85,247,0.1);color:#c084fc;padding:1px 5px;border-radius:3px;border:1px solid rgba(168,85,247,0.2);">✓ Verified</span>':''}</div>
+      <div style="font-size:11px;color:#c084fc;font-weight:700;margin-bottom:6px;">${t.tagline}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5;margin-bottom:10px;">${t.desc}</div>
+      <div class="th-card-price" style="color:#c084fc;">${t.price}</div>
+      <a href="https://wa.me/254${t.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I found '+t.name+' on SOKONI Tech Hub. Tell me more about how it works.')}" target="_blank" rel="noopener" class="th-wa-btn" style="background:rgba(168,85,247,0.07);border-color:rgba(168,85,247,0.25);color:#c084fc;">💬 Learn More</a>
+    </div>`).join('');
+}
+window.filterAITools = filterAITools;
+
+/* ── INIT ── */
+filterDevices();
+filterTechs();
+renderCompareSelect();
+renderTechAskFeed();
+filterITServices('all', null);
+filterFreelancers();
+filterStartups('all', null);
+filterCourses();
+filterJobs();
+filterAITools('all', null);
+
+/* ── URL HASH DEEP-LINK ── */
+(function(){
+  var h=location.hash.replace('#','');
+  if(h&&document.getElementById('thpanel-'+h))goThPanel(h,null);
+})();
+</script>
+<script src="seo.js" defer></script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+  <!-- REGISTER CTA — universal fallback for other business types -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
+    <button onclick="HubRegister.open({hub:'tech', category:'software'})" style="padding:10px 24px;background:#22d3ee;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>

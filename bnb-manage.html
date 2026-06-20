@@ -1,0 +1,507 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — BnB Host Dashboard</title>
+  <meta name="description" content="Manage your SOKONI BnB listings, bookings and earnings as a host.">
+  <meta property="og:title" content="SOKONI — BnB Host Dashboard">
+  <meta property="og:description" content="List and manage your BnB, hotel or apartment on SOKONI Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="landlord.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body class="landlord-body">
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="splash.js"></script>
+
+<!-- TOPNAV -->
+<nav class="ll-topnav">
+  <img loading="lazy" src="assets/Sokonilogo2.png" class="ll-logo" alt="SOKONI">
+  <div class="ll-nav-title">🏨 BnB Host Dashboard</div>
+  <div class="ll-nav-actions">
+    <a href="bnb-hub.html" class="ll-nav-link">View Listings</a>
+    <a href="index.html" class="ll-nav-link">← Sokoni Home</a>
+  </div>
+</nav>
+
+<div class="ll-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="ll-sidebar">
+    <button type="button" class="ll-sidebar-btn active-ll-btn" onclick="showSection('listings',this)">📋 My Listings</button>
+    <button type="button" class="ll-sidebar-btn" onclick="showSection('bookings',this)">📅 Bookings <span id="pendingBadge" class="ll-badge" style="display:none"></span></button>
+    <button type="button" class="ll-sidebar-btn" onclick="showSection('add',this)">➕ Add Listing</button>
+    <button type="button" class="ll-sidebar-btn" onclick="showSection('earnings',this)"><i class="fas fa-coins"></i> Earnings</button>
+    <a href="bnb.html" class="ll-sidebar-btn" style="text-decoration:none;color:inherit;">👁️ Preview Live</a>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="ll-main">
+
+    <!-- STATS -->
+    <div class="ll-stats-row">
+      <div class="ll-stat-card"><div class="ll-stat-icon">🏠</div><div id="statListings">0</div><p>My Listings</p></div>
+      <div class="ll-stat-card"><div class="ll-stat-icon">📅</div><div id="statBookings">0</div><p>Total Bookings</p></div>
+      <div class="ll-stat-card"><div class="ll-stat-icon">⏳</div><div id="statPending">0</div><p>Pending</p></div>
+      <div class="ll-stat-card ll-stat-green"><div class="ll-stat-icon">💰</div><div id="statEarnings">KES 0</div><p>Total Earnings</p></div>
+    </div>
+
+    <!-- MY LISTINGS -->
+    <section id="sec-listings" class="ll-section">
+      <div class="ll-section-header">
+        <h2>🏠 My Listings</h2>
+        <button type="button" class="ll-add-btn" onclick="showSection('add',null)">+ Add New</button>
+      </div>
+      <div id="myListingsGrid" class="ll-listings-grid"></div>
+    </section>
+
+    <!-- BOOKINGS -->
+    <section id="sec-bookings" class="ll-section" style="display:none;">
+      <div class="ll-section-header"><h2>📅 Bookings</h2></div>
+      <div id="bookingsList" class="ll-bookings-list"></div>
+    </section>
+
+    <!-- ADD LISTING -->
+    <section id="sec-add" class="ll-section" style="display:none;">
+      <div class="ll-section-header"><h2>➕ Add New BnB Listing</h2></div>
+      <div class="ll-form-grid">
+        <div class="ll-form-group ll-span2">
+          <label>Property Name</label>
+          <input type="text" id="bnbName" placeholder="e.g. Cozy Apartment in Kilimani" class="ll-input">
+        </div>
+        <div class="ll-form-group">
+          <label>Type</label>
+          <select id="bnbType" class="ll-input">
+            <option value="bnb">🏡 BnB</option>
+            <option value="hotel">🏨 Hotel Room</option>
+            <option value="apartment">🏢 Apartment</option>
+            <option value="villa">🏰 Villa</option>
+            <option value="studio">🛋️ Studio</option>
+          </select>
+        </div>
+        <div class="ll-form-group">
+          <label>Location</label>
+          <input type="text" id="bnbLocation" placeholder="e.g. Kilimani, Nairobi" class="ll-input">
+        </div>
+        <div class="ll-form-group">
+          <label>Price Per Night (KES)</label>
+          <input type="number" id="bnbPrice" placeholder="e.g. 3500" class="ll-input">
+        </div>
+        <div class="ll-form-group">
+          <label>Max Guests</label>
+          <input type="number" id="bnbMaxGuests" placeholder="e.g. 4" min="1" class="ll-input">
+        </div>
+        <div class="ll-form-group">
+          <label>Bedrooms</label>
+          <input type="number" id="bnbBedrooms" placeholder="e.g. 2" min="0" class="ll-input">
+        </div>
+        <div class="ll-form-group">
+          <label>Bathrooms</label>
+          <input type="number" id="bnbBathrooms" placeholder="e.g. 1" min="1" class="ll-input">
+        </div>
+        <div class="ll-form-group ll-span2">
+          <label>Description</label>
+          <textarea id="bnbDesc" placeholder="Describe your property..." class="ll-textarea"></textarea>
+        </div>
+        <div class="ll-form-group ll-span2">
+          <label>Amenities (check all that apply)</label>
+          <div class="amenity-checkboxes">
+            <label class="amenity-check"><input type="checkbox" value="WiFi"> WiFi</label>
+            <label class="amenity-check"><input type="checkbox" value="Parking"> Parking</label>
+            <label class="amenity-check"><input type="checkbox" value="Pool"> Pool</label>
+            <label class="amenity-check"><input type="checkbox" value="Kitchen"> Kitchen</label>
+            <label class="amenity-check"><input type="checkbox" value="AC"> Air Conditioning</label>
+            <label class="amenity-check"><input type="checkbox" value="Security"> Security</label>
+            <label class="amenity-check"><input type="checkbox" value="Gym"> Gym</label>
+            <label class="amenity-check"><input type="checkbox" value="Breakfast"> Breakfast</label>
+            <label class="amenity-check"><input type="checkbox" value="24hr Water"> 24hr Water</label>
+            <label class="amenity-check"><input type="checkbox" value="Backup Power"> Backup Power</label>
+          </div>
+        </div>
+        <div class="ll-form-group ll-span2">
+          <label>Property Photos <span style="color:rgba(255,255,255,0.35);font-weight:400;">(up to 8 images — first photo is the cover)</span></label>
+          <div style="border:2px dashed rgba(113,255,0,0.25);border-radius:14px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;background:rgba(255,255,255,0.02);" onclick="document.getElementById('bnbPhotos').click()" id="bnbPhotoDrop">
+            <div style="font-size:32px;margin-bottom:8px;">📸</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.5);font-weight:600;">Tap to add photos</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">JPG, PNG, WEBP · max 5MB each</div>
+          </div>
+          <input type="file" id="bnbPhotos" accept="image/*" multiple style="display:none;" onchange="previewBnBPhotos(event)">
+          <div id="bnbPhotoGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:10px;"></div>
+        </div>
+        <div class="ll-form-group ll-span2">
+          <label>Property Video Tour <span style="color:rgba(255,255,255,0.35);font-weight:400;">(optional — MP4/MOV up to 50MB)</span></label>
+          <div style="border:2px dashed rgba(0,170,255,0.2);border-radius:14px;padding:16px;text-align:center;cursor:pointer;background:rgba(255,255,255,0.02);" onclick="document.getElementById('bnbVideo').click()" id="bnbVideoDrop">
+            <div style="font-size:28px;margin-bottom:6px;">🎥</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.4);font-weight:600;">Tap to add a video tour</div>
+          </div>
+          <input type="file" id="bnbVideo" accept="video/*" style="display:none;" onchange="previewBnBVideo(event)">
+          <div id="bnbVideoPreview" style="margin-top:10px;display:none;">
+            <video id="bnbVideoEl" controls style="width:100%;max-height:200px;border-radius:12px;background:#000;"></video>
+            <button type="button" onclick="clearBnBVideo()" style="margin-top:6px;padding:5px 12px;background:rgba(255,60,60,0.1);border:1px solid rgba(255,60,60,0.25);color:#ff6b6b;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">✕ Remove Video</button>
+          </div>
+        </div>
+        <div class="ll-form-group ll-span2">
+          <label>Your Phone Number</label>
+          <input type="tel" id="bnbPhone" placeholder="0712 345 678" class="ll-input">
+        </div>
+      </div>
+      <button type="button" class="ll-submit-btn" onclick="addBnBListing()">⬆️ Publish Listing</button>
+    </section>
+
+    <!-- EARNINGS -->
+    <section id="sec-earnings" class="ll-section" style="display:none;">
+      <div class="ll-section-header"><h2>💰 Earnings Summary</h2></div>
+      <div id="earningsSummary" class="ll-earnings-wrap"></div>
+    </section>
+
+  </main>
+</div>
+
+<div id="notificationContainer"></div>
+
+<script>
+  function showSection(name, btn){
+    document.querySelectorAll(".ll-section").forEach(s => s.style.display = "none");
+    document.querySelectorAll(".ll-sidebar-btn").forEach(b => b.classList.remove("active-ll-btn"));
+    const sec = document.getElementById(`sec-${name}`);
+    if(sec) sec.style.display = "block";
+    if(btn) btn.classList.add("active-ll-btn");
+    if(name === "listings")  loadMyListings();
+    if(name === "bookings")  loadBookings();
+    if(name === "earnings")  loadEarnings();
+  }
+
+  function getBnBs(){ try{ return JSON.parse(localStorage.getItem("sokoniBnBs")) || []; }catch(e){ return []; } }
+  function saveBnBs(d){ localStorage.setItem("sokoniBnBs", JSON.stringify(d)); }
+  function getBookings(){ try{ return JSON.parse(localStorage.getItem("sokoniBnBBookings")) || []; }catch(e){ return []; } }
+  function saveBookings(d){ localStorage.setItem("sokoniBnBBookings", JSON.stringify(d)); }
+
+  function loadStats(){
+    const bnbs = getBnBs();
+    const bks  = getBookings();
+    const pending = bks.filter(b => b.status === "pending").length;
+    const earnings = bks.filter(b => b.status === "confirmed").reduce((s,b) => s + Number(b.total||0), 0);
+    document.getElementById("statListings").textContent  = bnbs.length;
+    document.getElementById("statBookings").textContent  = bks.length;
+    document.getElementById("statPending").textContent   = pending;
+    document.getElementById("statEarnings").textContent  = `KES ${earnings.toLocaleString()}`;
+    const badge = document.getElementById("pendingBadge");
+    if(badge){ badge.textContent = pending; badge.style.display = pending > 0 ? "inline" : "none"; }
+  }
+
+  function loadMyListings(){
+    const bnbs = getBnBs();
+    const grid = document.getElementById("myListingsGrid");
+    if(!grid) return;
+    if(bnbs.length === 0){
+      grid.innerHTML = `<div class="ll-empty">🏠<p>No listings yet. <button type="button" onclick="showSection('add',null)" style="color:#71ff00;background:none;border:none;cursor:pointer;">Add your first →</button></p></div>`;
+      return;
+    }
+    grid.innerHTML = bnbs.map(b => `
+      <div class="ll-listing-card">
+        <div style="position:relative;">
+          <img loading="lazy" src="${b.image||'assets/backG1.jpeg'}" class="ll-listing-img">
+          <span style="position:absolute;top:8px;right:8px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;${b.available!==false?'background:rgba(113,255,0,0.9);color:black;':'background:rgba(255,80,80,0.9);color:white;'}">${b.available!==false?'LIVE':'PAUSED'}</span>
+        </div>
+        <div class="ll-listing-body">
+          <h3>${b.name}</h3>
+          <p>📍 ${b.location}</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;color:rgba(255,255,255,0.45);">
+            <span>🛏 ${b.bedrooms||1} bed</span>
+            <span>🛁 ${b.bathrooms||1} bath</span>
+            <span>👥 ${b.maxGuests||2} guests</span>
+          </div>
+          <p style="font-size:14px;font-weight:900;color:#71ff00;">KES ${Number(b.pricePerNight||0).toLocaleString()}<span style="font-size:10px;color:rgba(255,255,255,0.35);font-weight:400;">/night</span></p>
+          <div class="ll-listing-actions" style="margin-top:10px;display:flex;flex-direction:column;gap:7px;">
+            <div style="display:flex;gap:7px;">
+              <button type="button" class="ll-action-btn ll-edit-btn" style="flex:1;" onclick="toggleBnBStatus('${b.id}')">
+                ${b.available!==false?"⏸ Pause":"▶ Go Live"}
+              </button>
+              <button type="button" class="ll-action-btn" style="flex:1;background:rgba(0,170,255,0.08);border-color:rgba(0,170,255,0.25);color:#00aaff;" onclick="shareBnBListing('${b.id}')">
+                🔗 Share
+              </button>
+            </div>
+            <div style="display:flex;gap:7px;">
+              <button type="button" class="ll-action-btn" style="flex:1;background:rgba(249,115,22,0.08);border-color:rgba(249,115,22,0.25);color:#fb923c;" onclick="boostBnBListing('${b.id}','${b.name}')">
+                🚀 Boost
+              </button>
+              <button type="button" class="ll-action-btn ll-del-btn" style="flex:1;" onclick="deleteBnBListing('${b.id}')">
+                🗑️ Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function loadBookings(){
+    const bks = getBookings();
+    const list = document.getElementById("bookingsList");
+    if(!list) return;
+    if(bks.length === 0){ list.innerHTML = `<div class="ll-empty">📅<p>No bookings yet</p></div>`; return; }
+    list.innerHTML = bks.map(b => `
+      <div class="ll-booking-row">
+        <div class="ll-bk-left">
+          <div class="ll-bk-property">${b.bnbName}</div>
+          <div class="ll-bk-guest">👤 ${b.name} · ${b.phone}</div>
+          <div class="ll-bk-dates">📅 ${b.checkIn} → ${b.checkOut} (${b.nights} nights)</div>
+        </div>
+        <div class="ll-bk-right">
+          <div class="ll-bk-total">KES ${Number(b.total||0).toLocaleString()}</div>
+          <div class="ll-bk-status bk-status-${b.status}">${b.status.toUpperCase()}</div>
+          <div class="ll-bk-actions">
+            ${b.status === "pending" ? `<button type="button" class="ll-action-btn ll-edit-btn" onclick="updateBookingStatus('${b.id}','confirmed')">✅ Confirm</button><button type="button" class="ll-action-btn ll-del-btn" onclick="updateBookingStatus('${b.id}','cancelled')">❌ Decline</button>` : ""}
+            ${b.status === "confirmed" ? `<button type="button" class="ll-action-btn" onclick="updateBookingStatus('${b.id}','completed')">📦 Mark Completed</button>` : ""}
+          </div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function updateBookingStatus(id, status){
+    const bks = getBookings();
+    const bk = bks.find(b => b.id === id);
+    if(bk) bk.status = status;
+    saveBookings(bks);
+    loadBookings();
+    loadStats();
+    showNotif(`Booking ${status}`, "success");
+  }
+
+  function loadEarnings(){
+    const bks = getBookings();
+    const confirmed = bks.filter(b => b.status === "confirmed" || b.status === "completed");
+    const total = confirmed.reduce((s,b) => s + Number(b.total||0), 0);
+    const commission = Math.round(total * 0.05);
+    const net = total - commission;
+    const container = document.getElementById("earningsSummary");
+    if(!container) return;
+    container.innerHTML = `
+      <div class="ll-earning-card"><div class="ll-ec-label">Gross Earnings</div><div class="ll-ec-value">KES ${total.toLocaleString()}</div></div>
+      <div class="ll-earning-card"><div class="ll-ec-label">Sokoni Commission (5%)</div><div class="ll-ec-value" style="color:#ff8800;">KES ${commission.toLocaleString()}</div></div>
+      <div class="ll-earning-card ll-ec-net"><div class="ll-ec-label">Your Net Earnings</div><div class="ll-ec-value" style="color:#71ff00;">KES ${net.toLocaleString()}</div></div>
+      <div class="ll-earning-card"><div class="ll-ec-label">Confirmed Bookings</div><div class="ll-ec-value">${confirmed.length}</div></div>
+    `;
+  }
+
+  let _bnbPhotoDataURLs = [];
+  let _bnbVideoDataURL  = "";   /* download URL after upload, or blob URL for preview */
+  let _bnbVideoFile     = null; /* raw File object — uploaded to Storage on submit */
+
+  function previewBnBPhotos(e){
+    const files = Array.from(e.target.files).slice(0, 8);
+    if(!files.length) return;
+    const grid = document.getElementById("bnbPhotoGrid");
+    const drop = document.getElementById("bnbPhotoDrop");
+
+    Promise.all(files.map(f => new Promise(res => {
+      const r = new FileReader();
+      r.onload = ev => res(ev.target.result);
+      r.readAsDataURL(f);
+    }))).then(dataURLs => {
+      _bnbPhotoDataURLs = [..._bnbPhotoDataURLs, ...dataURLs].slice(0, 8);
+      renderBnBPhotoGrid();
+      drop.style.borderColor = "rgba(113,255,0,0.5)";
+    });
+  }
+  window.previewBnBPhotos = previewBnBPhotos;
+
+  function renderBnBPhotoGrid(){
+    const grid = document.getElementById("bnbPhotoGrid");
+    grid.innerHTML = _bnbPhotoDataURLs.map((url, i) => `
+      <div style="position:relative;">
+        <img loading="lazy" src="${url}" style="width:100%;height:90px;object-fit:cover;border-radius:10px;border:${i===0?'2px solid #71ff00':'1px solid rgba(255,255,255,0.1)'};">
+        ${i===0?`<span style="position:absolute;top:4px;left:4px;background:#71ff00;color:black;font-size:9px;font-weight:900;padding:2px 5px;border-radius:4px;">COVER</span>`:""}
+        <button type="button" onclick="removeBnBPhoto(${i})" style="position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,0.7);border:none;color:white;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+      </div>
+    `).join("") + (_bnbPhotoDataURLs.length < 8 ? `
+      <div style="border:2px dashed rgba(255,255,255,0.1);border-radius:10px;height:90px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:rgba(255,255,255,0.2);" onclick="document.getElementById('bnbPhotos').click()">+</div>
+    ` : "");
+  }
+
+  function removeBnBPhoto(i){
+    _bnbPhotoDataURLs.splice(i, 1);
+    renderBnBPhotoGrid();
+  }
+  window.removeBnBPhoto = removeBnBPhoto;
+
+  function previewBnBVideo(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    if(file.size > 500*1024*1024){ showNotif("Video must be under 500 MB","error"); return; }
+    /* createObjectURL — instant preview, zero memory overhead on mobile */
+    const el = document.getElementById("bnbVideoEl");
+    if(_bnbVideoDataURL && _bnbVideoDataURL.startsWith('blob:')) URL.revokeObjectURL(_bnbVideoDataURL);
+    _bnbVideoFile    = file;
+    _bnbVideoDataURL = URL.createObjectURL(file);
+    el.src = _bnbVideoDataURL;
+    el.load();
+    document.getElementById("bnbVideoPreview").style.display = "block";
+    document.getElementById("bnbVideoDrop").style.borderColor = "rgba(0,170,255,0.5)";
+    showNotif("Video ready — will upload when you save the listing","info");
+  }
+  window.previewBnBVideo = previewBnBVideo;
+
+  function clearBnBVideo(){
+    _bnbVideoDataURL = "";
+    document.getElementById("bnbVideo").value = "";
+    document.getElementById("bnbVideoEl").src = "";
+    document.getElementById("bnbVideoPreview").style.display = "none";
+    document.getElementById("bnbVideoDrop").style.borderColor = "rgba(0,170,255,0.2)";
+  }
+  window.clearBnBVideo = clearBnBVideo;
+
+  async function addBnBListing(){
+    const name = document.getElementById("bnbName").value.trim();
+    const type = document.getElementById("bnbType").value;
+    const location = document.getElementById("bnbLocation").value.trim();
+    const price = Number(document.getElementById("bnbPrice").value);
+    const desc = document.getElementById("bnbDesc").value.trim();
+    const phone = document.getElementById("bnbPhone").value.trim();
+    if(!name || !location || !price){ showNotif("Fill Name, Location and Price","error"); return; }
+    if(_bnbPhotoDataURLs.length === 0){ showNotif("Add at least one photo","error"); return; }
+    const amenities = [...document.querySelectorAll(".amenity-check input:checked")].map(c => c.value);
+
+    /* Upload video to Firebase Storage if one was selected */
+    let finalVideoURL = "";
+    if(_bnbVideoFile && window.SokoniUpload){
+      showNotif("Uploading video… please wait","info");
+      const drop = document.getElementById("bnbVideoDrop");
+      try {
+        finalVideoURL = await window.SokoniUpload.uploadToStorage(
+          _bnbVideoFile,
+          `bnb-videos/${Date.now()}_${_bnbVideoFile.name}`,
+          pct => drop && window.SokoniUpload.showUploadProgress(drop, pct)
+        );
+        showNotif("Video uploaded!","success");
+      } catch(err) {
+        console.warn("[BnB] Video upload failed:", err);
+        showNotif("Video upload failed — listing saved without video","warn");
+      }
+    }
+
+    const bnbs = getBnBs();
+    bnbs.unshift({
+      id: "bnb_" + Date.now(),
+      name, type, location, price, pricePerNight: price, desc, description: desc, phone,
+      amenities,
+      image:   _bnbPhotoDataURLs[0],
+      images:  _bnbPhotoDataURLs,
+      video:   finalVideoURL,
+      available: true,
+      maxGuests: Number(document.getElementById("bnbMaxGuests").value)||2,
+      bedrooms:  Number(document.getElementById("bnbBedrooms").value)||1,
+      bathrooms: Number(document.getElementById("bnbBathrooms").value)||1,
+      createdAt: Date.now()
+    });
+    saveBnBs(bnbs);
+    /* reset */
+    _bnbPhotoDataURLs = []; _bnbVideoDataURL = ""; _bnbVideoFile = null;
+    document.getElementById("bnbPhotos").value = "";
+    document.getElementById("bnbPhotoGrid").innerHTML = "";
+    document.getElementById("bnbPhotoDrop").style.borderColor = "rgba(113,255,0,0.25)";
+    clearBnBVideo();
+    showNotif("🏨 Listing published!", "success");
+    loadStats();
+    showSection("listings", document.querySelector(".ll-sidebar-btn"));
+  }
+
+  function toggleBnBStatus(id){
+    const bnbs = getBnBs();
+    const b = bnbs.find(b => b.id === id);
+    if(b) b.available = !b.available;
+    saveBnBs(bnbs);
+    loadMyListings();
+  }
+
+  function deleteBnBListing(id){
+    if(!_c){_skConfirm('Remove this listing? This cannot be undone.',()=>_doRmListing(_lid,true));return;}
+    const bnbs = getBnBs().filter(b => b.id !== id);
+    saveBnBs(bnbs);
+    showNotif("Listing removed","error");
+    loadMyListings();
+    loadStats();
+  }
+
+  function shareBnBListing(id){
+    const b = getBnBs().find(x=>x.id===id);
+    if(!b) return;
+    const msg = encodeURIComponent(`🏨 *${b.name}*\n\n📍 ${b.location}\n💰 KES ${Number(b.pricePerNight||0).toLocaleString()}/night\n🛏 ${b.bedrooms||1} bed · 🛁 ${b.bathrooms||1} bath · 👥 ${b.maxGuests||2} guests\n\nBook now on SOKONI: bnb.html`);
+    window.open('https://wa.me/?text='+msg,'_blank');
+    showNotif("✅ Share link opened in WhatsApp","success");
+  }
+
+  function boostBnBListing(id, name){
+    const msg = encodeURIComponent(`🚀 *Boost My BnB Listing*\n\nListing: ${name}\nI want to boost this property on SOKONI Marketing Hub.\nPlease activate a Pro or VIP boost for maximum visibility.`);
+    window.open('marketing.html','_blank');
+    showNotif("✅ Opening Marketing Hub to boost your listing","success");
+  }
+
+  function showNotif(msg, type){
+    const c = document.getElementById("notificationContainer");
+    if(!c) return;
+    const n = document.createElement("div");
+    n.className = `notification ${type}`;
+    n.textContent = msg;
+    c.appendChild(n);
+    setTimeout(()=>n.remove(),3500);
+  }
+
+  loadStats();
+  loadMyListings();
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script type="module" src="sokoni-upload.js"></script>
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+

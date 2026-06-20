@@ -1,0 +1,571 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Verified Providers — SOKONI</title>
+  <meta name="description" content="Book verified service providers on SOKONI — plumbers, doctors, lawyers, cleaners, electricians and more across Kenya.">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mysokoni.co.ke/providers.html">
+  <meta property="og:title" content="Verified Providers — SOKONI">
+  <meta property="og:description" content="Book verified service providers on SOKONI — plumbers, doctors, lawyers, cleaners, electricians and more across Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:site_name" content="SOKONI">
+  <meta property="og:locale" content="en_KE">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <script src="security.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
+
+    /* ── NAV ── */
+    .pv-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; background: rgba(10,10,10,0.96);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px);
+      gap: 12px; flex-wrap: wrap;
+    }
+    .pv-nav-logo { height: 34px; }
+    .pv-nav-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .pv-nav-link {
+      color: rgba(255,255,255,0.6); text-decoration: none; font-size: 13px; font-weight: 600;
+      padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; transition: all .2s;
+    }
+    .pv-nav-link:hover { border-color: #71ff00; color: #71ff00; }
+    .pv-nav-link.primary { background: #71ff00; color: #000; border-color: #71ff00; font-weight: 800; }
+
+    /* ── HERO ── */
+    .pv-hero {
+      background: linear-gradient(135deg, rgba(113,255,0,0.06) 0%, rgba(0,0,0,0) 60%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 52px 24px 40px; text-align: center;
+    }
+    .pv-hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.3);
+      color: #71ff00; font-size: 12px; font-weight: 800; padding: 5px 14px;
+      border-radius: 20px; margin-bottom: 18px; letter-spacing: .04em;
+    }
+    .pv-hero h1 { font-size: clamp(26px,5vw,44px); font-weight: 900; line-height: 1.15; margin-bottom: 12px; }
+    .pv-hero h1 span { color: #71ff00; }
+    .pv-hero-sub { font-size: 15px; color: rgba(255,255,255,0.5); max-width: 500px; margin: 0 auto 28px; line-height: 1.5; }
+
+    /* ── SEARCH + FILTER ── */
+    .pv-controls {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      justify-content: center; max-width: 800px; margin: 0 auto;
+    }
+    .pv-search {
+      flex: 1; min-width: 220px; max-width: 380px;
+      padding: 12px 16px; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
+      color: white; font-size: 14px; outline: none; font-family: inherit;
+    }
+    .pv-search:focus { border-color: rgba(113,255,0,0.4); }
+    .pv-search::placeholder { color: rgba(255,255,255,0.3); }
+    .pv-cat-btn {
+      padding: 10px 16px; border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.65);
+      border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+      font-family: inherit; transition: all .18s; white-space: nowrap;
+    }
+    .pv-cat-btn:hover, .pv-cat-btn.active {
+      background: rgba(113,255,0,0.14); border-color: rgba(113,255,0,0.35); color: #71ff00;
+    }
+
+    /* ── STATS BAR ── */
+    .pv-stats {
+      display: flex; align-items: center; justify-content: center; gap: 28px;
+      flex-wrap: wrap; padding: 18px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .pv-stat { text-align: center; }
+    .pv-stat-num { font-size: 22px; font-weight: 900; color: #71ff00; }
+    .pv-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 600; margin-top: 2px; }
+
+    /* ── MAIN CONTENT ── */
+    .pv-main { max-width: 1280px; margin: 0 auto; padding: 32px 20px 80px; }
+
+    /* ── PROVIDER GRID ── */
+    .pv-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px;
+    }
+
+    /* ── PROVIDER CARD ── */
+    .pv-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; overflow: hidden; transition: all .22s; cursor: pointer;
+      position: relative;
+    }
+    .pv-card:hover { border-color: rgba(113,255,0,0.25); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+    .pv-card-banner {
+      height: 80px; background: linear-gradient(135deg,#1a2a0a,#0d1a05);
+      position: relative; overflow: hidden;
+    }
+    .pv-card-banner-img { width: 100%; height: 100%; object-fit: cover; opacity: 0.6; }
+    .pv-verified-badge {
+      position: absolute; top: 10px; right: 10px;
+      background: linear-gradient(135deg,#71ff00,#00cc44); color: #000;
+      font-size: 10px; font-weight: 900; padding: 3px 10px; border-radius: 20px;
+      letter-spacing: .04em;
+    }
+    .pv-card-body { padding: 16px; }
+    .pv-avatar-row { display: flex; align-items: flex-end; gap: 12px; margin-top: -32px; margin-bottom: 10px; }
+    .pv-avatar {
+      width: 58px; height: 58px; border-radius: 50%;
+      border: 3px solid #0a0a0a;
+      background: linear-gradient(135deg,#71ff00,#00cc44);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0; font-weight: 900; color: #000;
+    }
+    .pv-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .pv-name { font-size: 15px; font-weight: 800; color: white; margin-bottom: 2px; line-height: 1.2; }
+    .pv-role { font-size: 12px; color: #71ff00; font-weight: 700; }
+    .pv-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 12px; }
+    .pv-meta-chip {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 600;
+    }
+    .pv-rating { color: #ffcc00; font-weight: 800; font-size: 13px; }
+    .pv-desc { font-size: 12px; color: rgba(255,255,255,0.45); line-height: 1.5; margin-bottom: 14px; min-height: 36px; }
+    .pv-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .pv-tag {
+      font-size: 10px; font-weight: 700; padding: 3px 10px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 6px; color: rgba(255,255,255,0.5);
+    }
+    .pv-actions { display: flex; gap: 8px; align-items: center; }
+    .pv-btn-follow {
+      width: 38px; height: 38px; border-radius: 10px; border: 1px solid rgba(113,255,0,0.3);
+      background: rgba(113,255,0,0.07); color: #71ff00; font-size: 14px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all .2s; flex-shrink: 0;
+    }
+    .pv-btn-follow:hover { background: rgba(113,255,0,0.15); }
+    .pv-btn-follow.following { background: rgba(113,255,0,0.18); border-color: #71ff00; }
+    .pv-follower-count { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 4px; }
+    .pv-btn-book {
+      flex: 1; padding: 10px 0; background: linear-gradient(135deg,#71ff00,#00cc44);
+      color: #000; font-weight: 800; font-size: 13px; border: none;
+      border-radius: 12px; cursor: pointer; font-family: inherit; transition: opacity .18s;
+    }
+    .pv-btn-book:hover { opacity: 0.88; }
+    .pv-btn-wa {
+      padding: 10px 14px; background: #25D366; color: white; font-weight: 800;
+      font-size: 13px; border: none; border-radius: 12px; cursor: pointer;
+      font-family: inherit; text-decoration: none; display: flex; align-items: center;
+    }
+    .pv-price-tag {
+      position: absolute; bottom: 10px; right: 10px; font-size: 10px;
+      background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.6);
+      padding: 3px 8px; border-radius: 6px; font-weight: 700;
+    }
+
+    /* ── APPLY BANNER ── */
+    .pv-apply-banner {
+      background: linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,204,68,0.05));
+      border: 1px solid rgba(113,255,0,0.2); border-radius: 18px;
+      padding: 28px 32px; text-align: center; margin-bottom: 32px;
+    }
+    .pv-apply-banner h2 { font-size: 20px; font-weight: 900; color: white; margin-bottom: 8px; }
+    .pv-apply-banner p { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 18px; }
+    .pv-apply-btn {
+      display: inline-block; padding: 12px 28px;
+      background: linear-gradient(135deg,#71ff00,#00cc44); color: #000;
+      font-weight: 900; font-size: 14px; border-radius: 14px; text-decoration: none;
+      transition: opacity .18s;
+    }
+    .pv-apply-btn:hover { opacity: 0.88; }
+
+    /* ── BOOK MODAL ── */
+    .pv-modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+      z-index: 9999; align-items: center; justify-content: center; padding: 16px;
+    }
+    .pv-modal-overlay.open { display: flex; }
+    .pv-modal {
+      background: #111; border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+      padding: 28px; width: 100%; max-width: 440px; position: relative;
+    }
+    .pv-modal h3 { font-size: 18px; font-weight: 900; color: white; margin-bottom: 6px; }
+    .pv-modal-sub { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 22px; }
+    .pv-modal label { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.55); display: block; margin-bottom: 6px; }
+    .pv-modal input, .pv-modal select, .pv-modal textarea {
+      width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+      color: white; font-size: 14px; outline: none; font-family: inherit;
+      margin-bottom: 14px;
+    }
+    .pv-modal textarea { resize: vertical; min-height: 80px; }
+    .pv-modal select option { background: #1a1a1a; }
+    .pv-modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+    .pv-modal-confirm {
+      flex: 1; padding: 13px; background: linear-gradient(135deg,#71ff00,#00cc44);
+      color: #000; font-weight: 800; font-size: 14px; border: none;
+      border-radius: 12px; cursor: pointer; font-family: inherit;
+    }
+    .pv-modal-cancel {
+      padding: 13px 18px; background: rgba(255,255,255,0.07);
+      color: white; border: none; border-radius: 12px; cursor: pointer;
+      font-family: inherit; font-size: 14px;
+    }
+    .pv-close-btn {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; color: rgba(255,255,255,0.4);
+      font-size: 20px; cursor: pointer; line-height: 1;
+    }
+
+    /* ── EMPTY STATE ── */
+    .pv-empty { text-align: center; padding: 60px 24px; color: rgba(255,255,255,0.3); }
+    .pv-empty-icon { font-size: 48px; margin-bottom: 14px; }
+    .pv-empty h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: rgba(255,255,255,0.5); }
+
+    @media (max-width: 600px) {
+      .pv-hero { padding: 36px 16px 28px; }
+      .pv-main { padding: 20px 14px 60px; }
+      .pv-grid { grid-template-columns: 1fr; gap: 14px; }
+      .pv-apply-banner { padding: 20px 18px; }
+      .pv-stats { gap: 18px; padding: 14px 16px; }
+    }
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="pv-nav">
+  <a href="index.html"><img src="assets/Sokonilogo2.png" alt="SOKONI" class="pv-nav-logo"></a>
+  <div class="pv-nav-right">
+    <a href="services.html" class="pv-nav-link">All Services</a>
+    <a href="category.html?cat=all" class="pv-nav-link">Shop</a>
+    <a href="seller.html" class="pv-nav-link primary">Become a Provider</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="pv-hero">
+  <div class="pv-hero-badge">✅ Verified Providers</div>
+  <h1>Trusted Professionals,<br><span>Ready to Serve You</span></h1>
+  <p class="pv-hero-sub">Every provider on this page has been ID-verified, background-checked and rated by real SOKONI customers.</p>
+  <div class="pv-controls">
+    <input type="text" class="pv-search" id="pvSearch" placeholder="🔍 Search providers or services…" oninput="filterProviders()">
+    <button type="button" class="pv-cat-btn active" onclick="setCat('all',this)">All</button>
+    <button type="button" class="pv-cat-btn" onclick="setCat('health',this)">🏥 Health</button>
+    <button type="button" class="pv-cat-btn" onclick="setCat('home',this)">🔧 Home</button>
+    <button type="button" class="pv-cat-btn" onclick="setCat('legal',this)">⚖️ Legal</button>
+    <button type="button" class="pv-cat-btn" onclick="setCat('beauty',this)">💄 Beauty</button>
+    <button type="button" class="pv-cat-btn" onclick="setCat('tech',this)">💻 Tech</button>
+    <button type="button" class="pv-cat-btn" onclick="setCat('transport',this)">🚗 Transport</button>
+  </div>
+</section>
+
+<!-- STATS BAR -->
+<div class="pv-stats">
+  <div class="pv-stat"><div class="pv-stat-num" id="pvTotalCount">0</div><div class="pv-stat-label">Verified Providers</div></div>
+  <div class="pv-stat"><div class="pv-stat-num">4.8★</div><div class="pv-stat-label">Avg Rating</div></div>
+  <div class="pv-stat"><div class="pv-stat-num">Same Day</div><div class="pv-stat-label">Response Time</div></div>
+  <div class="pv-stat"><div class="pv-stat-num">47</div><div class="pv-stat-label">Counties Covered</div></div>
+</div>
+
+<!-- MAIN -->
+<main class="pv-main">
+
+  <!-- Apply Banner -->
+  <div class="pv-apply-banner">
+    <h2>🏆 Get Verified on SOKONI</h2>
+    <p>Join Kenya's top marketplace as a verified service provider — reach thousands of customers, get bookings directly and grow your business.</p>
+    <a href="seller.html" class="pv-apply-btn">Apply for Verification →</a>
+  </div>
+
+  <!-- Grid -->
+  <div class="pv-grid" id="pvGrid"></div>
+
+</main>
+
+<!-- BOOK MODAL -->
+<div class="pv-modal-overlay" id="pvBookModal">
+  <div class="pv-modal">
+    <button type="button" class="pv-close-btn" onclick="closeBookModal()">✕</button>
+    <h3 id="pvModalTitle">Book Service</h3>
+    <p class="pv-modal-sub" id="pvModalSub">Fill in your details and we'll confirm within the hour</p>
+    <label>Your Name</label>
+    <input type="text" id="pvBookName" placeholder="Full name">
+    <label>Phone Number</label>
+    <input type="tel" id="pvBookPhone" placeholder="07XXXXXXXX">
+    <label>Date &amp; Time</label>
+    <input type="datetime-local" id="pvBookDate">
+    <label>Location / Area</label>
+    <input type="text" id="pvBookLocation" placeholder="e.g. Westlands, Nairobi">
+    <label>Additional Notes</label>
+    <textarea id="pvBookNotes" placeholder="Describe what you need…"></textarea>
+    <div class="pv-modal-actions">
+      <button type="button" class="pv-modal-confirm" onclick="confirmBooking()">Confirm Booking</button>
+      <button type="button" class="pv-modal-cancel" onclick="closeBookModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+var PROVIDERS = [
+  /* ── HEALTH ── */
+  {id:1, name:'Dr. Amina Hassan', role:'General Practitioner', cat:'health', location:'Westlands, Nairobi', rating:4.9, reviews:142, price:'KES 1,500/visit', desc:'KMPDB-registered GP with 12 years experience. Home visits available. Speaks English, Swahili & Somali.', tags:['Home Visits','Lab Tests','Prescriptions'], icon:'👩‍⚕️', initials:'AH'},
+  {id:2, name:'PhysioKe Clinic',   role:'Physiotherapist',      cat:'health', location:'CBD, Nairobi',      rating:4.8, reviews:87,  price:'KES 2,000/session', desc:'Sports injury rehabilitation, back pain & stroke recovery. KPT certified. Mobile sessions available.', tags:['Sports','Rehab','Stroke'], icon:'🏥', initials:'PK'},
+  {id:3, name:'Nurse Joy Wanjiku', role:'Home Nurse',           cat:'health', location:'Kiambu County',     rating:5.0, reviews:63,  price:'KES 800/day',      desc:'Registered nurse offering post-surgery care, IV drips, wound dressing and elderly care at home.', tags:['Post-Surgery','IV Drips','Elderly'], icon:'👩‍⚕️', initials:'JW'},
+  /* ── HOME ── */
+  {id:4, name:'Benson Plumbing',   role:'Master Plumber',       cat:'home',   location:'Nairobi & Kiambu',  rating:4.7, reviews:210, price:'KES 500/hr',       desc:'Licensed plumber. Pipe repairs, bathroom fitting, water tanks, borehole connections. Same-day available.', tags:['Pipes','Boreholes','Bathrooms'], icon:'🔧', initials:'BP'},
+  {id:5, name:'Wired Kenya',       role:'Certified Electrician',cat:'home',   location:'Nairobi County',    rating:4.9, reviews:178, price:'KES 700/hr',       desc:'ERC-licensed electrical contractor. Solar installation, wiring, fault finding, KPLC connections.', tags:['Solar','Wiring','KPLC'], icon:'⚡', initials:'WK'},
+  {id:6, name:'CleanPro Services', role:'Cleaning Specialist',  cat:'home',   location:'All Nairobi',       rating:4.8, reviews:325, price:'KES 2,500/clean',  desc:'Deep cleaning, carpet & sofa cleaning, fumigation and office cleaning. Eco-friendly products.', tags:['Deep Clean','Fumigation','Office'], icon:'🧹', initials:'CP'},
+  {id:7, name:'Fix It Fast KE',    role:'Handyman',             cat:'home',   location:'Nairobi / Thika',   rating:4.6, reviews:94,  price:'KES 400/hr',       desc:'General repairs: doors, locks, furniture assembly, painting, tiling, TV wall mounting and more.', tags:['Repairs','Painting','Tiling'], icon:'🔨', initials:'FF'},
+  /* ── LEGAL ── */
+  {id:8, name:'Adv. Peter Kamau',  role:'Advocate',             cat:'legal',  location:'Upper Hill, Nairobi',rating:4.9, reviews:56, price:'KES 5,000/consult','desc':'LSK member with 15 years experience. Land, family, employment and business law. Virtual consultations available.', tags:['Land','Family','Business'], icon:'⚖️', initials:'PK'},
+  {id:9, name:'SwiftNotary KE',    role:'Commissioner for Oaths',cat:'legal', location:'CBD Nairobi',       rating:4.8, reviews:198, price:'KES 300/doc',      desc:'Fast document notarization, affidavits, statutory declarations. Open 7 days. Walk-ins welcome.', tags:['Notary','Affidavits','Declarations'], icon:'📜', initials:'SN'},
+  /* ── BEAUTY ── */
+  {id:10,name:'Glam By Ciku',      role:'Hair & Makeup Artist', cat:'beauty', location:'Kilimani, Nairobi', rating:5.0, reviews:412, price:'KES 1,500+',       desc:'Bridal makeup, everyday glam, loc maintenance and natural hair care. Home visits available.', tags:['Bridal','Natural Hair','Locs'], icon:'💄', initials:'GC'},
+  {id:11,name:'NailsByAisha',      role:'Nail Technician',      cat:'beauty', location:'Thika Road',        rating:4.9, reviews:267, price:'KES 800+',         desc:'Gel, acrylic, polygel, nail art. CIBTAC certified. Hygiene guaranteed. Home visits in Nairobi & environs.', tags:['Gel','Acrylic','Nail Art'], icon:'💅', initials:'NA'},
+  {id:12,name:'Barber Code KE',    role:'Barber',               cat:'beauty', location:'Westlands / Ruiru', rating:4.8, reviews:509, price:'KES 400+',         desc:'Premium haircuts, beard sculpting, hot towel shaves. Home visits and studio bookings.', tags:['Haircuts','Beards','Shaves'], icon:'✂️', initials:'BC'},
+  /* ── TECH ── */
+  {id:13,name:'TechFixit Kenya',   role:'Device Repair Tech',   cat:'tech',   location:'CBD, Nairobi',      rating:4.7, reviews:341, price:'KES 500+',         desc:'Phone, laptop and tablet repairs. Screen replacement, battery, motherboard. 90-day warranty.', tags:['Phone Repair','Laptop','Warranty'], icon:'💻', initials:'TF'},
+  {id:14,name:'DevWeb KE',         role:'Web Developer',        cat:'tech',   location:'Remote / Nairobi',  rating:4.9, reviews:78,  price:'KES 15,000+',      desc:'Full-stack web development, e-commerce shops, mobile apps. React, Node, Firebase. Fast turnaround.', tags:['React','E-commerce','Apps'], icon:'👨‍💻', initials:'DW'},
+  {id:15,name:'CCTV Pro Kenya',    role:'Security Systems',     cat:'tech',   location:'Nairobi & Machakos',rating:4.8, reviews:156, price:'KES 8,000+',       desc:'CCTV installation, access control, electric fence. NCA-registered. 24/7 support.', tags:['CCTV','Access Control','Fence'], icon:'📷', initials:'CP'},
+  /* ── TRANSPORT ── */
+  {id:16,name:'QuickMove KE',      role:'Moving Services',      cat:'transport',location:'All Kenya',       rating:4.8, reviews:423, price:'KES 3,000+',       desc:'Household & office moving. Fully insured. Truck available Mon–Sun. Packing materials provided.', tags:['Movers','Insured','Packing'], icon:'🚚', initials:'QM'},
+  {id:17,name:'Driver On Demand',  role:'Professional Driver',  cat:'transport',location:'Nairobi Metro',   rating:4.9, reviews:218, price:'KES 800/hr',       desc:'Licensed chauffeur for airport transfers, events, executive travel. Clean car, punctual, discreet.', tags:['Airport','Executive','Events'], icon:'🚗', initials:'DD'},
+];
+
+var _activeCat = 'all';
+
+function setCat(cat, btn) {
+  _activeCat = cat;
+  document.querySelectorAll('.pv-cat-btn').forEach(function(b) {
+    b.classList.remove('active');
+  });
+  if (btn) btn.classList.add('active');
+  filterProviders();
+}
+
+function filterProviders() {
+  var q = (document.getElementById('pvSearch').value || '').toLowerCase();
+  var list = PROVIDERS.filter(function(p) {
+    if (_activeCat !== 'all' && p.cat !== _activeCat) return false;
+    if (!q) return true;
+    return (p.name + p.role + p.location + p.tags.join(' ') + p.desc).toLowerCase().includes(q);
+  });
+  renderGrid(list);
+}
+
+function renderGrid(list) {
+  var grid = document.getElementById('pvGrid');
+  var countEl = document.getElementById('pvTotalCount');
+  if (countEl) countEl.textContent = PROVIDERS.length;
+
+  if (!list.length) {
+    grid.innerHTML = '<div class="pv-empty" style="grid-column:1/-1;"><div class="pv-empty-icon">🔍</div><h3>No providers found</h3><p>Try a different search or category</p></div>';
+    return;
+  }
+
+  grid.innerHTML = list.map(function(p) {
+    var stars = '★'.repeat(Math.floor(p.rating)) + (p.rating % 1 >= 0.5 ? '½' : '');
+    var waNum = (p.whatsapp||p.phone||'').replace(/\D/g,'').replace(/^0/,'254');
+    var waMsg = encodeURIComponent('Hi '+p.name+', I found you on SOKONI and would like to book your service.');
+    return '<div class="pv-card" id="pv-card-'+p.id+'">'
+      + '<div class="pv-card-banner" style="background:linear-gradient(135deg,#0d1a05,#1a2a0a);">'
+      + '<div class="pv-verified-badge">✅ Verified</div>'
+      + '<div class="pv-price-tag">'+p.price+'</div>'
+      + '</div>'
+      + '<div class="pv-card-body">'
+      + '<div class="pv-avatar-row">'
+      + '<div class="pv-avatar" style="font-size:26px;">'+p.icon+'</div>'
+      + '</div>'
+      + '<div class="pv-name">'+p.name+'</div>'
+      + '<div class="pv-role">'+p.role+'</div>'
+      + '<div class="pv-meta">'
+      + '<div class="pv-meta-chip"><span class="pv-rating">'+p.rating+'★</span><span style="color:rgba(255,255,255,0.3);margin-left:2px;">('+p.reviews+')</span></div>'
+      + '<div class="pv-meta-chip">📍 '+p.location+'</div>'
+      + '</div>'
+      + '<div class="pv-desc">'+p.desc+'</div>'
+      + '<div class="pv-tags">'+p.tags.map(function(t){ return '<span class="pv-tag">'+t+'</span>'; }).join('')+'</div>'
+      + '<div class="pv-actions">'
+      + '<button type="button" class="pv-btn-book" onclick="openBookModal('+p.id+')">Book Now</button>'
+      + (waNum ? '<a href="https://wa.me/'+waNum+'?text='+waMsg+'" target="_blank" class="pv-btn-wa" title="WhatsApp">💬 WA</a>' : '')
+      + '<button type="button" class="pv-btn-wa" style="text-decoration:none;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:\''+(p.uid||p.id)+'\',otherName:\''+p.name.replace(/'/g,"\\'") +'\',type:\'customer-provider\',context:\''+p.role.replace(/'/g,"\\'")+'\'}):location.href=\'messages.html\'" title="Message in-app">✉️</button>'
+      + '<button type="button" class="pv-btn-follow" id="pvFollow-'+p.id+'" onclick="pvToggleFollow('+p.id+',\''+p.name+'\')" title="Follow provider">'
+      + '<i class="fas fa-user-plus"></i></button>'
+      + '</div>'
+      + '<div class="pv-follower-count" id="pvFollowers-'+p.id+'"></div>'
+      + '</div></div>';
+  }).join('');
+}
+
+var _bookingProviderId = null;
+
+function openBookModal(pid) {
+  var p = PROVIDERS.find(function(x) { return x.id === pid; });
+  if (!p) return;
+  _bookingProviderId = pid;
+  var modal = document.getElementById('pvBookModal');
+  var title = document.getElementById('pvModalTitle');
+  var sub = document.getElementById('pvModalSub');
+  if (title) title.textContent = 'Book — '+p.name;
+  if (sub) sub.textContent = p.role+' · '+p.location;
+  /* Pre-fill date with tomorrow */
+  var tmr = new Date(); tmr.setDate(tmr.getDate()+1); tmr.setHours(9,0,0,0);
+  var dtInput = document.getElementById('pvBookDate');
+  if (dtInput) dtInput.value = tmr.toISOString().slice(0,16);
+  if (modal) modal.classList.add('open');
+}
+
+function closeBookModal() {
+  var modal = document.getElementById('pvBookModal');
+  if (modal) modal.classList.remove('open');
+}
+
+/* ── Provider Follow ── */
+var _pvFollowState = {};
+(function initPvFollows(){
+  try { _pvFollowState = JSON.parse(localStorage.getItem('sokoniFollowing')||'{}'); } catch(e){}
+  PROVIDERS.forEach(function(p){
+    var btn = document.getElementById('pvFollow-'+p.id);
+    var cntEl = document.getElementById('pvFollowers-'+p.id);
+    if(!btn) return;
+    var key = 'provider--'+p.id;
+    var isF = !!_pvFollowState[key];
+    btn.classList.toggle('following', isF);
+    btn.title = isF ? 'Unfollow' : 'Follow';
+    if(window.SokoniDB){
+      SokoniDB.isFollowing('provider', String(p.id)).then(function(f){
+        btn.classList.toggle('following', f);
+      });
+      SokoniDB.getFollowerCount('provider', String(p.id)).then(function(cnt){
+        if(cntEl && cnt > 0) cntEl.textContent = cnt + ' follower' + (cnt!==1?'s':'');
+      });
+    }
+  });
+})();
+
+function pvToggleFollow(pid, pname) {
+  var btn = document.getElementById('pvFollow-'+pid);
+  if(!btn || btn.disabled) return;
+  btn.disabled = true;
+  var key = 'provider--'+pid;
+  var isNow = btn.classList.contains('following');
+  var cntEl = document.getElementById('pvFollowers-'+pid);
+  if(window.SokoniDB){
+    var p = isNow ? SokoniDB.unfollow('provider', String(pid)) : SokoniDB.follow('provider', String(pid), pname);
+    p.then(function(){
+      btn.classList.toggle('following', !isNow);
+      btn.title = !isNow ? 'Unfollow' : 'Follow';
+      if(cntEl) SokoniDB.getFollowerCount('provider', String(pid)).then(function(cnt){
+        cntEl.textContent = cnt > 0 ? cnt+' follower'+(cnt!==1?'s':'') : '';
+      });
+      btn.disabled = false;
+    }).catch(function(){ btn.disabled = false; });
+  } else {
+    var my = {};
+    try { my = JSON.parse(localStorage.getItem('sokoniFollowing')||'{}'); } catch(e){}
+    if(isNow){ delete my[key]; btn.classList.remove('following'); }
+    else { my[key]={type:'provider',entityId:String(pid),entityName:pname,followedAt:Date.now()}; btn.classList.add('following'); }
+    localStorage.setItem('sokoniFollowing', JSON.stringify(my));
+    btn.disabled = false;
+  }
+}
+
+function confirmBooking() {
+  var name  = (document.getElementById('pvBookName') || {}).value || '';
+  var phone = (document.getElementById('pvBookPhone') || {}).value || '';
+  var date  = (document.getElementById('pvBookDate') || {}).value || '';
+  var loc   = (document.getElementById('pvBookLocation') || {}).value || '';
+
+  if (!name.trim()) { (window._skToast||alert)('Please enter your name'); return; }
+  if (!phone.match(/^0[17]\d{8}$/)) { (window._skToast||alert)('Enter a valid phone number (07... or 01...)'); return; }
+  if (!date) { (window._skToast||alert)('Please select a date and time'); return; }
+
+  var p = PROVIDERS.find(function(x) { return x.id === _bookingProviderId; });
+  var notes = (document.getElementById('pvBookNotes') || {}).value || '';
+
+  var booking = {
+    id: 'BKG-'+Date.now(),
+    providerId: _bookingProviderId,
+    providerName: p ? p.name : 'Provider',
+    providerRole: p ? p.role : '',
+    customerName: name,
+    customerPhone: phone,
+    date: date,
+    location: loc,
+    notes: notes,
+    status: 'Confirmed',
+    createdAt: new Date().toISOString()
+  };
+
+  /* Save to localStorage */
+  var bookings = [];
+  try { bookings = JSON.parse(localStorage.getItem('sokoniProviderBookings') || '[]'); } catch(e) {}
+  bookings.push(booking);
+  localStorage.setItem('sokoniProviderBookings', JSON.stringify(bookings));
+
+  /* Save to Firestore if available */
+  if (window.SokoniDB && SokoniDB.saveDoc) {
+    SokoniDB.saveDoc('providerBookings', booking).catch(function(){});
+  }
+
+  closeBookModal();
+  (window._skToast||alert)('✅ Booking confirmed!\n\n'+( p ? p.name : 'Provider')+' will contact you at '+phone+' to confirm your appointment.');
+}
+
+/* Close modal on backdrop click */
+document.getElementById('pvBookModal').addEventListener('click', function(e) {
+  if (e.target === this) closeBookModal();
+});
+
+/* Init */
+document.addEventListener('DOMContentLoaded', function() {
+  renderGrid(PROVIDERS);
+});
+</script>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="providers.html" class="bnav-item active-bnav"><span class="bnav-emoji">👷</span><span>Providers</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script type="module" src="sokoni-init.js"></script>
+<script src="scroll-top.js" defer></script>
+<script type="module" src="sokoni-db.js"></script>
+<script src="nav-active.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-verifications.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="analytics.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

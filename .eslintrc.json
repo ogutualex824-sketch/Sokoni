@@ -1,0 +1,60 @@
+{
+  "env": {
+    "browser":  true,
+    "es2022":   true,
+    "node":     true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType":  "module"
+  },
+  "globals": {
+    "firebase":           "readonly",
+    "SokoniSecurity":     "readonly",
+    "SokoniDB":           "readonly",
+    "SokoniPay":          "readonly",
+    "SokoniPermissions":  "readonly",
+    "SokoniScale":        "readonly",
+    "SokoniQueue":        "readonly",
+    "SokoniCache":        "readonly",
+    "SokoniMonitor":      "readonly",
+    "SokoniRouting":      "readonly",
+    "SokoniInvoice":      "readonly",
+    "SokoniOffers":       "readonly",
+    "SokoniUpload":       "readonly",
+    "SPos":               "readonly",
+    "SOKONI_ENV":         "readonly",
+    "SOKONI_CONFIG":      "readonly",
+    "SOKONI_SCALE":       "readonly",
+    "_skConfirm":         "readonly",
+    "_skToast":           "readonly",
+    "gtag":               "readonly",
+    "IntaSendPay":        "readonly"
+  },
+  "rules": {
+    "no-undef":              "error",
+    "no-unused-vars":        ["warn", { "vars": "all", "args": "after-used", "ignoreRestSiblings": true }],
+    "no-redeclare":          "error",
+    "no-duplicate-case":     "error",
+    "no-unreachable":        "error",
+    "no-constant-condition": "warn",
+    "no-debugger":           "error",
+    "no-alert":              "warn",
+    "eqeqeq":                ["error", "always", { "null": "ignore" }],
+    "no-eval":               "error",
+    "no-implied-eval":       "error",
+    "no-new-func":           "error",
+    "no-script-url":         "error",
+    "no-prototype-builtins": "warn",
+    "no-fallthrough":        "warn",
+    "semi":                  ["warn", "always"],
+    "no-extra-semi":         "warn",
+    "no-console":            ["warn", { "allow": ["warn", "error", "info"] }]
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "functions/node_modules/",
+    "Temp/",
+    "*.min.js"
+  ]
+}

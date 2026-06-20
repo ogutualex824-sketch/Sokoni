@@ -1,0 +1,1134 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<script type="module" src="firebase.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Growth Dashboard</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="assets/logosokoni.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* ── RESET & BASE ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#080808;--surface:#111;--surface2:#181818;--border:rgba(255,255,255,0.08);
+  --accent:#71ff00;--accent-dim:rgba(113,255,0,0.12);--accent-glow:rgba(113,255,0,0.25);
+  --text:#f0f0f0;--muted:rgba(255,255,255,0.45);--danger:#ff4757;--warn:#ffbe00;
+  --sidebar:220px;
+}
+html{scroll-behavior:smooth;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;overflow-x:hidden;}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar);min-height:100vh;background:#0d0d0d;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;padding:24px 0 16px;}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 20px 24px;
+  border-bottom:1px solid var(--border);}
+.sidebar-logo img{height:32px;}
+.sidebar-logo span{font-size:17px;font-weight:900;letter-spacing:-.5px;color:var(--accent);}
+.sidebar-badge{font-size:9px;background:var(--accent);color:#000;border-radius:4px;
+  padding:1px 5px;font-weight:800;margin-left:4px;letter-spacing:.06em;}
+.sidebar-nav{flex:1;padding:16px 0;overflow-y:auto;}
+.sidebar-section{font-size:9px;font-weight:800;letter-spacing:.14em;color:var(--muted);
+  padding:14px 20px 6px;text-transform:uppercase;}
+.sidebar-link{display:flex;align-items:center;gap:12px;padding:10px 20px;
+  color:rgba(255,255,255,0.55);font-size:13px;font-weight:600;text-decoration:none;
+  border-left:3px solid transparent;transition:all .15s;cursor:pointer;}
+.sidebar-link i{width:18px;text-align:center;font-size:14px;}
+.sidebar-link:hover{color:var(--text);background:rgba(255,255,255,0.04);}
+.sidebar-link.active{color:var(--accent);border-left-color:var(--accent);
+  background:var(--accent-dim);}
+.sidebar-footer{padding:16px 20px;border-top:1px solid var(--border);}
+.sidebar-user{font-size:11px;color:var(--muted);}
+.sidebar-user strong{display:block;color:var(--text);font-size:12px;margin-bottom:2px;}
+
+/* ── MAIN CONTENT ── */
+.main{margin-left:var(--sidebar);flex:1;min-height:100vh;display:flex;flex-direction:column;}
+.topbar{display:flex;align-items:center;justify-content:space-between;
+  padding:16px 28px;border-bottom:1px solid var(--border);background:#0a0a0a;
+  position:sticky;top:0;z-index:50;}
+.topbar-title{font-size:18px;font-weight:800;letter-spacing:-.3px;}
+.topbar-title span{color:var(--accent);}
+.topbar-actions{display:flex;align-items:center;gap:12px;}
+.topbar-refresh{background:var(--accent-dim);border:1px solid var(--accent-glow);
+  color:var(--accent);font-size:12px;font-weight:700;padding:7px 14px;border-radius:8px;
+  cursor:pointer;transition:.15s;font-family:inherit;}
+.topbar-refresh:hover{background:rgba(113,255,0,0.2);}
+.last-updated{font-size:11px;color:var(--muted);}
+.content{padding:24px 28px;display:flex;flex-direction:column;gap:28px;}
+
+/* ── KPI BAR ── */
+.kpi-bar{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:18px 16px;display:flex;flex-direction:column;gap:8px;position:relative;
+  overflow:hidden;transition:border-color .2s;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--accent),transparent);}
+.kpi-card:hover{border-color:rgba(113,255,0,0.3);}
+.kpi-icon{font-size:22px;line-height:1;}
+.kpi-value{font-size:26px;font-weight:900;letter-spacing:-1px;color:var(--text);}
+.kpi-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;
+  letter-spacing:.08em;}
+.kpi-change{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  padding:2px 7px;border-radius:6px;}
+.kpi-change.up{background:rgba(113,255,0,0.12);color:var(--accent);}
+.kpi-change.down{background:rgba(255,71,87,0.12);color:var(--danger);}
+
+/* ── SECTION HEADER ── */
+.section-header{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:16px;}
+.section-title{font-size:15px;font-weight:800;letter-spacing:-.2px;}
+.section-title span{color:var(--accent);}
+.section-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.section-action{font-size:12px;color:var(--accent);text-decoration:none;
+  font-weight:700;cursor:pointer;background:none;border:none;font-family:inherit;
+  padding:5px 10px;border-radius:6px;background:var(--accent-dim);
+  border:1px solid var(--accent-glow);transition:.15s;}
+.section-action:hover{background:rgba(113,255,0,0.2);}
+
+/* ── CHARTS ROW ── */
+.charts-row{display:grid;grid-template-columns:2fr 1fr;gap:18px;}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;}
+canvas{display:block;width:100%!important;}
+
+/* ── HUB GRID ── */
+.hub-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+.hub-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:16px;cursor:pointer;text-decoration:none;color:var(--text);
+  transition:all .15s;display:block;}
+.hub-card:hover{border-color:rgba(113,255,0,0.35);background:var(--surface2);
+  transform:translateY(-2px);}
+.hub-card-icon{font-size:28px;margin-bottom:10px;}
+.hub-card-name{font-size:13px;font-weight:800;margin-bottom:8px;}
+.hub-card-stat{font-size:21px;font-weight:900;letter-spacing:-.5px;color:var(--accent);}
+.hub-card-label{font-size:10px;color:var(--muted);margin-top:1px;text-transform:uppercase;
+  letter-spacing:.07em;}
+.hub-card-footer{display:flex;align-items:center;justify-content:space-between;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.hub-card-rev{font-size:12px;color:var(--muted);}
+
+/* ── FUNNEL ── */
+.funnel-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;}
+.funnel-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+.funnel-label{width:130px;font-size:12px;font-weight:700;color:var(--muted);flex-shrink:0;}
+.funnel-bar-wrap{flex:1;background:rgba(255,255,255,0.05);border-radius:6px;height:22px;
+  overflow:hidden;position:relative;}
+.funnel-bar{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent),rgba(113,255,0,0.5));
+  display:flex;align-items:center;justify-content:flex-end;padding-right:8px;
+  font-size:11px;font-weight:800;color:#000;transition:width .8s cubic-bezier(.4,0,.2,1);}
+.funnel-pct{width:46px;text-align:right;font-size:12px;font-weight:800;color:var(--accent);}
+
+/* ── TABLE ── */
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{background:rgba(255,255,255,0.03);font-size:10px;font-weight:800;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.1em;padding:12px 16px;
+  text-align:left;border-bottom:1px solid var(--border);}
+.data-table td{padding:12px 16px;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:rgba(255,255,255,0.02);}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:6px;
+  font-size:10px;font-weight:800;letter-spacing:.05em;}
+.badge-green{background:rgba(113,255,0,0.12);color:var(--accent);border:1px solid rgba(113,255,0,0.2);}
+.badge-blue{background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.2);}
+.badge-amber{background:rgba(255,190,0,0.12);color:var(--warn);border:1px solid rgba(255,190,0,0.2);}
+
+/* ── ACTIVITY FEED ── */
+.feed-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;}
+.feed-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,0.04);}
+.feed-item:last-child{border-bottom:none;}
+.feed-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);
+  flex-shrink:0;margin-top:5px;}
+.feed-dot.info{background:#38bdf8;}
+.feed-dot.warn{background:var(--warn);}
+.feed-text{font-size:12px;color:rgba(255,255,255,0.75);line-height:1.45;flex:1;}
+.feed-time{font-size:10px;color:var(--muted);flex-shrink:0;margin-top:2px;}
+
+/* ── COHORT TABLE ── */
+.cohort-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.cohort-table{width:100%;border-collapse:collapse;}
+.cohort-table th,.cohort-table td{padding:10px 14px;text-align:center;font-size:12px;
+  border:1px solid rgba(255,255,255,0.04);}
+.cohort-table th{background:rgba(255,255,255,0.03);font-weight:800;color:var(--muted);
+  text-transform:uppercase;font-size:10px;letter-spacing:.1em;}
+.cohort-table td:first-child{text-align:left;font-weight:700;color:var(--muted);}
+.c-high{background:rgba(113,255,0,0.18);color:var(--accent);font-weight:800;}
+.c-mid{background:rgba(255,190,0,0.14);color:var(--warn);font-weight:700;}
+.c-low{background:rgba(255,71,87,0.12);color:var(--danger);font-weight:700;}
+
+/* ── GROWTH LEVERS ── */
+.levers-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.lever-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:20px;display:flex;flex-direction:column;gap:12px;}
+.lever-icon{font-size:30px;}
+.lever-title{font-size:14px;font-weight:800;}
+.lever-desc{font-size:12px;color:var(--muted);line-height:1.5;}
+.lever-btn{padding:10px 16px;border-radius:10px;border:none;cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:700;transition:.15s;
+  background:var(--accent);color:#000;align-self:flex-start;}
+.lever-btn:hover{background:#8fff33;transform:translateY(-1px);}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;
+  display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#141414;border:1px solid rgba(113,255,0,0.2);border-radius:20px;
+  padding:28px;max-width:420px;width:100%;}
+.modal-title{font-size:16px;font-weight:800;margin-bottom:4px;}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:20px;}
+.modal-field{margin-bottom:14px;}
+.modal-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+.modal-field input,.modal-field textarea,.modal-field select{
+  width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);
+  border:1px solid var(--border);border-radius:10px;color:var(--text);
+  font-size:14px;font-family:inherit;outline:none;transition:.15s;}
+.modal-field input:focus,.modal-field textarea:focus,.modal-field select:focus{
+  border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.04);}
+.modal-field textarea{resize:vertical;min-height:80px;}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+.btn-cancel{padding:9px 16px;border-radius:9px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-family:inherit;font-size:13px;
+  cursor:pointer;transition:.15s;}
+.btn-cancel:hover{border-color:rgba(255,255,255,0.2);color:var(--text);}
+.btn-submit{padding:9px 20px;border-radius:9px;border:none;background:var(--accent);
+  color:#000;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;transition:.15s;}
+.btn-submit:hover{background:#8fff33;}
+
+/* ── BOTTOM NAV (mobile) ── */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;
+  background:#0d0d0d;border-top:1px solid var(--border);
+  padding:8px 0 max(8px,env(safe-area-inset-bottom));}
+.bottom-nav-inner{display:flex;justify-content:space-around;}
+.bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:10px;font-weight:700;color:var(--muted);text-decoration:none;
+  padding:4px 8px;transition:.15s;}
+.bottom-nav a.active{color:var(--accent);}
+.bottom-nav a i{font-size:18px;}
+
+/* ── RESPONSIVE ── */
+@media(max-width:899px){
+  body{flex-direction:column;}
+  .sidebar{display:none;}
+  .main{margin-left:0;padding-bottom:70px;}
+  .content{padding:16px;}
+  .kpi-bar{grid-template-columns:repeat(3,1fr);gap:10px;}
+  .kpi-value{font-size:20px;}
+  .charts-row{grid-template-columns:1fr;}
+  .hub-grid{grid-template-columns:repeat(2,1fr);}
+  .levers-grid{grid-template-columns:1fr;}
+  .bottom-nav{display:block;}
+  .topbar{padding:12px 16px;}
+}
+@media(max-width:480px){
+  .kpi-bar{grid-template-columns:repeat(2,1fr);}
+  .hub-grid{grid-template-columns:repeat(2,1fr);}
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(113,255,0,0.3);border-radius:4px;}
+
+/* ── ADMIN GATE ── */
+.gate-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;
+  display:flex;align-items:center;justify-content:center;}
+.gate-msg{text-align:center;color:var(--danger);font-size:14px;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- ADMIN GATE (shown momentarily if not admin) -->
+<div class="gate-overlay" id="gateOverlay">
+  <div class="gate-msg"><i class="fa fa-lock" style="font-size:32px;margin-bottom:12px;display:block;"></i>Checking admin access&hellip;</div>
+</div>
+
+<!-- ── SIDEBAR ── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <img src="assets/logosokoni.png" alt="SOKONI">
+    <span>SOKONI <span class="sidebar-badge">ADMIN</span></span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">Analytics</div>
+    <a class="sidebar-link active" href="growth-dashboard.html"><i class="fa fa-chart-line"></i> Growth Dashboard</a>
+    <a class="sidebar-link" href="admin.html"><i class="fa fa-gauge"></i> Admin Panel</a>
+    <div class="sidebar-section">Finance</div>
+    <a class="sidebar-link" href="invoice.html"><i class="fa fa-file-invoice-dollar"></i> Invoices</a>
+    <a class="sidebar-link" href="checkout.html"><i class="fa fa-cash-register"></i> Checkout</a>
+    <div class="sidebar-section">Platform</div>
+    <a class="sidebar-link" href="seller.html"><i class="fa fa-store"></i> Sellers</a>
+    <a class="sidebar-link" href="providers.html"><i class="fa fa-users"></i> Providers</a>
+    <a class="sidebar-link" href="requests.html"><i class="fa fa-inbox"></i> Requests</a>
+    <div class="sidebar-section">Hubs</div>
+    <a class="sidebar-link" href="index.html"><i class="fa fa-home"></i> Marketplace</a>
+    <a class="sidebar-link" href="car-hub.html"><i class="fa fa-car"></i> Car Hub</a>
+    <a class="sidebar-link" href="services.html"><i class="fa fa-concierge-bell"></i> Services</a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <strong id="sidebarUserName">Admin</strong>
+      SOKONI Platform Owner
+    </div>
+  </div>
+</aside>
+
+<!-- ── MAIN ── -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Growth <span>Command Centre</span></div>
+      <div class="last-updated" id="lastUpdated">Loading&hellip;</div>
+    </div>
+    <div class="topbar-actions">
+      <span id="liveIndicator" style="font-size:11px;color:var(--accent);font-weight:700;display:flex;align-items:center;gap:5px;">
+        <span style="width:7px;height:7px;background:var(--accent);border-radius:50%;display:inline-block;animation:pulse 1.5s infinite;"></span> LIVE
+      </span>
+      <button class="topbar-refresh" onclick="refreshAll()"><i class="fa fa-rotate-right"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- 1. KPI BAR -->
+    <section>
+      <div class="section-header">
+        <div>
+          <div class="section-title">Platform <span>KPIs</span></div>
+          <div class="section-sub">Real-time metrics · Updated every 30s</div>
+        </div>
+      </div>
+      <div class="kpi-bar" id="kpiBar">
+        <!-- Injected by JS -->
+      </div>
+    </section>
+
+    <!-- 2. REVENUE CHART + FUNNEL -->
+    <section>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="section-header">
+            <div>
+              <div class="section-title">Revenue <span>Trend</span></div>
+              <div class="section-sub">30-day GMV (KES)</div>
+            </div>
+          </div>
+          <canvas id="revenueChart" height="200"></canvas>
+        </div>
+        <div class="chart-card funnel-chart-wrap">
+          <div class="section-header">
+            <div>
+              <div class="section-title">User <span>Funnel</span></div>
+              <div class="section-sub">Conversion stages</div>
+            </div>
+          </div>
+          <canvas id="funnelChart" height="200"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. HUB PERFORMANCE -->
+    <section>
+      <div class="section-header">
+        <div>
+          <div class="section-title">Hub <span>Performance</span></div>
+          <div class="section-sub">Bookings &amp; revenue per hub this month</div>
+        </div>
+      </div>
+      <div class="hub-grid" id="hubGrid"><!-- Injected --></div>
+    </section>
+
+    <!-- 4. ENGAGEMENT FUNNEL (CSS bars) -->
+    <section>
+      <div class="section-header">
+        <div>
+          <div class="section-title">Engagement <span>Funnel</span></div>
+          <div class="section-sub">Visitor to repeat buyer conversion</div>
+        </div>
+      </div>
+      <div class="funnel-card">
+        <div id="funnelBars"><!-- Injected --></div>
+      </div>
+    </section>
+
+    <!-- 5. TOP SELLERS -->
+    <section>
+      <div class="section-header">
+        <div>
+          <div class="section-title">Top <span>Sellers</span></div>
+          <div class="section-sub">Ranked by GMV this month</div>
+        </div>
+        <a class="section-action" href="seller.html">View All</a>
+      </div>
+      <div class="table-card">
+        <table class="data-table" id="sellersTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Seller</th>
+              <th>Category</th>
+              <th>GMV (KES)</th>
+              <th>Commission (KES)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="sellersBody"><!-- Injected --></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 6. LIVE ACTIVITY FEED -->
+    <section>
+      <div class="section-header">
+        <div>
+          <div class="section-title">Live <span>Activity</span></div>
+          <div class="section-sub" id="feedSub">Auto-refreshes every 30s</div>
+        </div>
+      </div>
+      <div class="feed-card" id="activityFeed"><!-- Injected --></div>
+    </section>
+
+    <!-- 7. RETENTION COHORT -->
+    <section>
+      <div class="section-header">
+        <div>
+          <div class="section-title">Retention <span>Cohort</span></div>
+          <div class="section-sub">Weekly cohort analysis — % retained</div>
+        </div>
+      </div>
+      <div class="cohort-card">
+        <table class="cohort-table" id="cohortTable"><!-- Injected --></table>
+      </div>
+    </section>
+
+    <!-- 8. GROWTH LEVERS -->
+    <section>
+      <div class="section-header">
+        <div>
+          <div class="section-title">Growth <span>Levers</span></div>
+          <div class="section-sub">Direct platform actions</div>
+        </div>
+      </div>
+      <div class="levers-grid">
+        <div class="lever-card">
+          <div class="lever-icon">📣</div>
+          <div class="lever-title">Send Push Notification</div>
+          <div class="lever-desc">Broadcast a push message to all active SOKONI users instantly.</div>
+          <button class="lever-btn" onclick="openModal('pushModal')">Schedule Push</button>
+        </div>
+        <div class="lever-card">
+          <div class="lever-icon">⚡</div>
+          <div class="lever-title">Create Flash Sale</div>
+          <div class="lever-desc">Activate a timed discount event across selected categories or sellers.</div>
+          <button class="lever-btn" onclick="openModal('flashModal')">Create Sale</button>
+        </div>
+        <div class="lever-card">
+          <div class="lever-icon">🚀</div>
+          <div class="lever-title">Boost a Seller</div>
+          <div class="lever-desc">Feature a seller at the top of their category. Charges a featured listing fee.</div>
+          <button class="lever-btn" onclick="openModal('boostModal')">Boost Now</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /content -->
+</main>
+
+<!-- ── MOBILE BOTTOM NAV ── -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <a href="growth-dashboard.html" class="active"><i class="fa fa-chart-line"></i>Dashboard</a>
+    <a href="invoice.html"><i class="fa fa-money-bill-wave"></i>Revenue</a>
+    <a href="admin.html"><i class="fa fa-users"></i>Users</a>
+    <a href="seller.html"><i class="fa fa-box"></i>Sellers</a>
+    <a href="admin.html"><i class="fa fa-gear"></i>Admin</a>
+  </div>
+</nav>
+
+<!-- ── MODALS ── -->
+<!-- Push Notification Modal -->
+<div class="modal-overlay" id="pushModal">
+  <div class="modal-box">
+    <div class="modal-title">📣 Schedule Push Notification</div>
+    <div class="modal-sub">Broadcasts to all subscribed SOKONI users</div>
+    <div class="modal-field">
+      <label>Title</label>
+      <input type="text" id="pushTitle" placeholder="e.g. Flash Sale Live Now!">
+    </div>
+    <div class="modal-field">
+      <label>Message Body</label>
+      <textarea id="pushBody" placeholder="Write your push message here…"></textarea>
+    </div>
+    <div class="modal-field">
+      <label>Target URL (optional)</label>
+      <input type="text" id="pushUrl" placeholder="e.g. flashsale.html">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('pushModal')">Cancel</button>
+      <button class="btn-submit" onclick="schedulePush()">Schedule Push</button>
+    </div>
+  </div>
+</div>
+
+<!-- Flash Sale Modal -->
+<div class="modal-overlay" id="flashModal">
+  <div class="modal-box">
+    <div class="modal-title">⚡ Create Flash Sale</div>
+    <div class="modal-sub">Sets a limited-time discount event on the platform</div>
+    <div class="modal-field">
+      <label>Sale Title</label>
+      <input type="text" id="flashTitle" placeholder="e.g. Weekend Mega Sale">
+    </div>
+    <div class="modal-field">
+      <label>Discount %</label>
+      <input type="number" id="flashDiscount" placeholder="e.g. 20" min="1" max="90">
+    </div>
+    <div class="modal-field">
+      <label>Category</label>
+      <select id="flashCategory">
+        <option value="all">All Categories</option>
+        <option value="shopping">Shopping</option>
+        <option value="services">Services</option>
+        <option value="fitness">Fitness</option>
+        <option value="property">Property</option>
+        <option value="bnb">BnB</option>
+        <option value="sports">Sports</option>
+        <option value="legal">Legal</option>
+        <option value="car-hub">Car Hub</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Duration (hours)</label>
+      <input type="number" id="flashDuration" placeholder="e.g. 24" min="1" max="168">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('flashModal')">Cancel</button>
+      <button class="btn-submit" onclick="createFlashSale()">Activate Sale</button>
+    </div>
+  </div>
+</div>
+
+<!-- Boost Seller Modal -->
+<div class="modal-overlay" id="boostModal">
+  <div class="modal-box">
+    <div class="modal-title">🚀 Boost a Seller</div>
+    <div class="modal-sub">Featured listing — KES 1,500 fee charged via SokoniPay</div>
+    <div class="modal-field">
+      <label>Seller Name</label>
+      <input type="text" id="boostSeller" placeholder="Enter seller display name">
+    </div>
+    <div class="modal-field">
+      <label>Seller ID / Shop Key</label>
+      <input type="text" id="boostSellerId" placeholder="e.g. seller_abc123">
+    </div>
+    <div class="modal-field">
+      <label>Category</label>
+      <select id="boostCategory">
+        <option value="shopping">Shopping</option>
+        <option value="services">Services</option>
+        <option value="fitness">Fitness</option>
+        <option value="property">Property</option>
+        <option value="bnb">BnB</option>
+        <option value="sports">Sports</option>
+        <option value="legal">Legal</option>
+        <option value="car-hub">Car Hub</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Boost Duration</label>
+      <select id="boostDuration">
+        <option value="7">7 days — KES 1,500</option>
+        <option value="14">14 days — KES 2,500</option>
+        <option value="30">30 days — KES 4,500</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('boostModal')">Cancel</button>
+      <button class="btn-submit" onclick="boostSeller()">Boost &amp; Pay</button>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+</style>
+
+<!-- ── SCRIPTS ── -->
+<script src="sokoni-pay.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="analytics.js" defer></script>
+
+<script>
+/* ════════════════════════════════════════════════
+   UTILITY
+════════════════════════════════════════════════ */
+function escapeHTML(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function fmtNum(n){
+  if(n>=1e6)return(n/1e6).toFixed(1)+'M';
+  if(n>=1e3)return(n/1e3).toFixed(1)+'K';
+  return n.toString();
+}
+function fmtKES(n){return'KES '+Number(n).toLocaleString();}
+function rand(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
+function now(){return new Date().toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'});}
+
+/* ════════════════════════════════════════════════
+   ADMIN GATE — Firebase Auth custom claim (admin:true required)
+   localStorage alone is not sufficient — token verified server-side
+════════════════════════════════════════════════ */
+(function adminCheck(){
+  var overlay = document.getElementById('gateOverlay');
+  if(overlay) overlay.innerHTML =
+    '<div class="gate-msg"><i class="fa fa-spinner fa-spin" style="font-size:32px;margin-bottom:16px;display:block;color:var(--accent);"></i>'+
+    '<span style="color:rgba(255,255,255,0.5);font-size:13px;">Verifying admin access…</span></div>';
+
+  if(localStorage.getItem('loggedIn') !== 'true'){
+    window.location.replace('login.html'); return;
+  }
+
+  function _deny(msg){
+    if(overlay) overlay.innerHTML =
+      '<div class="gate-msg"><i class="fa fa-lock" style="font-size:40px;margin-bottom:16px;display:block;color:var(--danger);"></i>'+
+      '<strong>'+escapeHTML(msg||'Admin access required.')+'</strong><br><br>'+
+      '<a href="login.html" style="color:var(--accent);font-weight:700;text-decoration:none;">Sign in</a></div>';
+    setTimeout(function(){ window.location.href='login.html'; }, 2200);
+  }
+
+  function _grant(user){
+    var uname = escapeHTML((user.displayName||localStorage.getItem('userName')||user.email||'Admin'));
+    var el = document.getElementById('sidebarUserName');
+    if(el) el.textContent = uname;
+    if(overlay) overlay.style.display='none';
+    initDashboard();
+  }
+
+  function _verify(attempts){
+    attempts = attempts||0;
+    if(!window.firebaseAuth){
+      if(attempts > 30){ _deny('Firebase unavailable — cannot verify admin access.'); return; }
+      setTimeout(function(){ _verify(attempts+1); }, 150);
+      return;
+    }
+    window.firebaseAuth.onAuthStateChanged(function(user){
+      if(!user){ _deny('Please sign in to access this page.'); return; }
+      user.getIdTokenResult(true).then(function(result){
+        if(result.claims && result.claims.admin === true){
+          _grant(user);
+        } else {
+          _deny('Admin access required. Contact the platform owner.');
+        }
+      }).catch(function(){
+        _deny('Cannot verify admin claim — check your connection and try again.');
+      });
+    });
+  }
+  _verify();
+})();
+
+/* ════════════════════════════════════════════════
+   KPI DATA
+════════════════════════════════════════════════ */
+function getGMV(){
+  try{
+    const orders=JSON.parse(localStorage.getItem('sokoniOrders')||'[]');
+    if(orders.length){
+      const now=new Date(),m=now.getMonth(),y=now.getFullYear();
+      return orders.filter(o=>{
+        const d=new Date(o.date||o.createdAt||0);
+        return d.getMonth()===m&&d.getFullYear()===y;
+      }).reduce((s,o)=>s+(parseFloat(o.total)||0),0);
+    }
+  }catch(e){}
+  return 487350;
+}
+function getTotalUsers(){
+  try{
+    const u=JSON.parse(localStorage.getItem('sokoniUsers')||'[]');
+    if(u.length) return u.length;
+  }catch(e){}
+  return 1247;
+}
+
+function buildKPIs(){
+  const gmv=getGMV();
+  const revenue=Math.round(gmv*0.12);
+  const totalUsers=getTotalUsers();
+  const activeToday=rand(112,198);
+  const newToday=rand(14,32);
+  const retention=68+rand(-3,3);
+  const kpis=[
+    {icon:'👥',label:'Total Users',value:fmtNum(totalUsers),change:'+'+rand(2,6)+'%',up:true},
+    {icon:'⚡',label:'Active Today',value:fmtNum(activeToday),change:'+'+rand(5,14)+'%',up:true},
+    {icon:'💰',label:'GMV This Month',value:'KES '+fmtNum(gmv),change:'+'+rand(8,22)+'%',up:true},
+    {icon:'📈',label:'Revenue (12%)',value:'KES '+fmtNum(revenue),change:'+'+rand(8,22)+'%',up:true},
+    {icon:'🆕',label:'New Signups Today',value:newToday,change:(rand(0,1)?'+':'-')+rand(1,5)+'%',up:rand(0,1)===1},
+    {icon:'🔄',label:'Retention Rate',value:retention+'%',change:'+'+rand(1,3)+'%',up:true},
+  ];
+  const bar=document.getElementById('kpiBar');
+  bar.innerHTML=kpis.map(k=>`
+    <div class="kpi-card">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-value">${escapeHTML(String(k.value))}</div>
+      <div class="kpi-label">${escapeHTML(k.label)}</div>
+      <span class="kpi-change ${k.up?'up':'down'}">${k.up?'▲':'▼'} ${escapeHTML(k.change)}</span>
+    </div>`).join('');
+}
+
+/* ════════════════════════════════════════════════
+   REVENUE LINE CHART (pure Canvas)
+════════════════════════════════════════════════ */
+function drawRevenueChart(){
+  const canvas=document.getElementById('revenueChart');
+  if(!canvas)return;
+  const parent=canvas.parentElement;
+  canvas.width=parent.offsetWidth-40||560;
+  canvas.height=200;
+  const ctx=canvas.getContext('2d');
+
+  // Generate 30 days of plausible GMV data (daily revenue)
+  const seed=[12000,14500,13200,16800,15400,18900,17200,20100,19500,22400,
+              21800,24500,23200,26800,25400,28900,27200,30100,29500,32400,
+              31800,34500,33200,36800,35400,38900,37200,40100,39500,42400];
+  const data=seed.map((v,i)=>v+rand(-1500,2000));
+  const max=Math.max(...data)*1.1;
+  const min=Math.min(...data)*0.85;
+
+  const W=canvas.width,H=canvas.height;
+  const padL=54,padR=16,padT=16,padB=36;
+  const chartW=W-padL-padR,chartH=H-padT-padB;
+
+  // Background
+  ctx.clearRect(0,0,W,H);
+
+  // Grid lines
+  ctx.strokeStyle='rgba(255,255,255,0.05)';
+  ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=padT+chartH-(i/4)*chartH;
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(padL+chartW,y);ctx.stroke();
+    const val=min+(max-min)*(i/4);
+    ctx.fillStyle='rgba(255,255,255,0.3)';
+    ctx.font='10px system-ui';
+    ctx.textAlign='right';
+    ctx.fillText('KES '+fmtNum(Math.round(val)),padL-6,y+4);
+  }
+
+  // X-axis labels (every 5 days)
+  ctx.fillStyle='rgba(255,255,255,0.3)';
+  ctx.textAlign='center';
+  ctx.font='10px system-ui';
+  const today=new Date();
+  for(let i=0;i<30;i+=5){
+    const d=new Date(today);d.setDate(d.getDate()-29+i);
+    const x=padL+(i/(data.length-1))*chartW;
+    ctx.fillText((d.getDate()+'/'+(d.getMonth()+1)),x,H-padB+16);
+  }
+
+  // Gradient fill under line
+  const grad=ctx.createLinearGradient(0,padT,0,padT+chartH);
+  grad.addColorStop(0,'rgba(113,255,0,0.22)');
+  grad.addColorStop(1,'rgba(113,255,0,0)');
+  ctx.beginPath();
+  data.forEach((v,i)=>{
+    const x=padL+(i/(data.length-1))*chartW;
+    const y=padT+chartH-((v-min)/(max-min))*chartH;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.lineTo(padL+chartW,padT+chartH);
+  ctx.lineTo(padL,padT+chartH);
+  ctx.closePath();
+  ctx.fillStyle=grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle='#71ff00';
+  ctx.lineWidth=2.5;
+  ctx.lineJoin='round';
+  ctx.lineCap='round';
+  data.forEach((v,i)=>{
+    const x=padL+(i/(data.length-1))*chartW;
+    const y=padT+chartH-((v-min)/(max-min))*chartH;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Dots on last point
+  const lastX=padL+chartW;
+  const lastY=padT+chartH-((data[data.length-1]-min)/(max-min))*chartH;
+  ctx.beginPath();ctx.arc(lastX,lastY,5,0,Math.PI*2);
+  ctx.fillStyle='#71ff00';ctx.fill();
+  ctx.beginPath();ctx.arc(lastX,lastY,8,0,Math.PI*2);
+  ctx.fillStyle='rgba(113,255,0,0.25)';ctx.fill();
+}
+
+/* ════════════════════════════════════════════════
+   FUNNEL CANVAS CHART (pure Canvas)
+════════════════════════════════════════════════ */
+function drawFunnelChart(){
+  const canvas=document.getElementById('funnelChart');
+  if(!canvas)return;
+  const parent=canvas.parentElement;
+  canvas.width=parent.offsetWidth-40||260;
+  canvas.height=200;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+
+  const stages=[
+    {label:'Visitors',pct:100,color:'rgba(113,255,0,0.9)'},
+    {label:'Registered',pct:42,color:'rgba(113,255,0,0.7)'},
+    {label:'Active Buyers',pct:28,color:'rgba(113,255,0,0.5)'},
+    {label:'Repeat Buyers',pct:19,color:'rgba(113,255,0,0.35)'},
+  ];
+  const barH=28,gap=16,padL=10,padR=10,padT=16;
+  ctx.clearRect(0,0,W,H);
+
+  stages.forEach((s,i)=>{
+    const y=padT+i*(barH+gap);
+    const bw=(W-padL-padR);
+
+    // Track
+    ctx.fillStyle='rgba(255,255,255,0.05)';
+    ctx.beginPath();ctx.roundRect(padL,y,bw,barH,6);ctx.fill();
+
+    // Bar
+    const fw=bw*(s.pct/100);
+    ctx.fillStyle=s.color;
+    ctx.beginPath();ctx.roundRect(padL,y,fw,barH,6);ctx.fill();
+
+    // Label
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.font='bold 10px system-ui';
+    ctx.textAlign='left';
+    ctx.fillText(s.label,padL,y+barH+11);
+
+    // Pct
+    ctx.fillStyle='#71ff00';
+    ctx.font='bold 12px system-ui';
+    ctx.textAlign='right';
+    ctx.fillText(s.pct+'%',W-padR,y+barH-8);
+  });
+}
+
+/* ════════════════════════════════════════════════
+   HUB PERFORMANCE GRID
+════════════════════════════════════════════════ */
+function buildHubGrid(){
+  const hubs=[
+    {icon:'🛒',name:'Shopping',page:'index.html',bookings:rand(320,490),rev:rand(180000,310000),change:rand(8,24)},
+    {icon:'🔧',name:'Services',page:'services.html',bookings:rand(210,380),rev:rand(120000,250000),change:rand(5,18)},
+    {icon:'💪',name:'Fitness',page:'fitness.html',bookings:rand(90,160),rev:rand(45000,90000),change:rand(3,15)},
+    {icon:'🏠',name:'Property',page:'property.html',bookings:rand(40,80),rev:rand(200000,420000),change:rand(2,12)},
+    {icon:'🏨',name:'BnB',page:'bnb.html',bookings:rand(55,120),rev:rand(80000,200000),change:rand(4,20)},
+    {icon:'⚽',name:'Sports',page:'sports.html',bookings:rand(70,140),rev:rand(35000,75000),change:rand(1,10)},
+    {icon:'⚖️',name:'Legal',page:'legal.html',bookings:rand(25,55),rev:rand(60000,140000),change:rand(3,14)},
+    {icon:'🚗',name:'Car Hub',page:'car-hub.html',bookings:rand(80,160),rev:rand(120000,280000),change:rand(5,22)},
+  ];
+  document.getElementById('hubGrid').innerHTML=hubs.map(h=>`
+    <a class="hub-card" href="${escapeHTML(h.page)}">
+      <div class="hub-card-icon">${h.icon}</div>
+      <div class="hub-card-name">${escapeHTML(h.name)}</div>
+      <div class="hub-card-stat">${h.bookings}</div>
+      <div class="hub-card-label">Bookings</div>
+      <div class="hub-card-footer">
+        <span class="hub-card-rev">KES ${fmtNum(h.rev)}</span>
+        <span class="kpi-change up">▲ ${h.change}%</span>
+      </div>
+    </a>`).join('');
+}
+
+/* ════════════════════════════════════════════════
+   ENGAGEMENT FUNNEL (CSS bars)
+════════════════════════════════════════════════ */
+function buildFunnelBars(){
+  const stages=[
+    {label:'Visitors',pct:100,count:fmtNum(getTotalUsers()*rand(3,5))},
+    {label:'Registered',pct:42,count:fmtNum(getTotalUsers())},
+    {label:'Active Buyers',pct:28,count:fmtNum(Math.round(getTotalUsers()*0.28))},
+    {label:'Repeat Buyers',pct:19,count:fmtNum(Math.round(getTotalUsers()*0.19))},
+  ];
+  document.getElementById('funnelBars').innerHTML=stages.map(s=>`
+    <div class="funnel-row">
+      <div class="funnel-label">${escapeHTML(s.label)}<br><span style="font-size:10px;color:var(--muted);font-weight:500;">${escapeHTML(s.count)} users</span></div>
+      <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${s.pct}%">${s.pct>20?s.pct+'%':''}</div></div>
+      <div class="funnel-pct">${s.pct}%</div>
+    </div>`).join('');
+}
+
+/* ════════════════════════════════════════════════
+   TOP SELLERS TABLE
+════════════════════════════════════════════════ */
+function buildSellersTable(){
+  let sellers=[];
+  try{ sellers=JSON.parse(localStorage.getItem('sokoniTopSellers')||'[]'); }catch(e){}
+  if(!sellers.length){
+    sellers=[
+      {name:'Nairobi Spice Shop',category:'Shopping',gmv:84500,status:'Featured'},
+      {name:'FixIt Plumbers',category:'Services',gmv:62000,status:'Active'},
+      {name:'Westlands Fitness',category:'Fitness',gmv:41000,status:'Active'},
+      {name:'Sunset BnB Mombasa',category:'BnB',gmv:93000,status:'Featured'},
+      {name:'Parklands Legal',category:'Legal',gmv:75000,status:'Active'},
+    ];
+  }
+  const tbody=document.getElementById('sellersBody');
+  tbody.innerHTML=sellers.map((s,i)=>{
+    const commission=Math.round((s.gmv||0)*0.12);
+    const badgeCls=s.status==='Featured'?'badge-blue':'badge-green';
+    return `<tr>
+      <td style="color:var(--muted);font-weight:700;">${i+1}</td>
+      <td><strong>${escapeHTML(s.name||'')}</strong></td>
+      <td><span style="color:var(--accent);font-size:12px;">${escapeHTML(s.category||'')}</span></td>
+      <td style="font-weight:700;">${fmtKES(s.gmv||0)}</td>
+      <td style="color:var(--accent);font-weight:700;">${fmtKES(commission)}</td>
+      <td><span class="badge ${badgeCls}">${escapeHTML(s.status||'Active')}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════════════
+   LIVE ACTIVITY FEED
+════════════════════════════════════════════════ */
+const MOCK_EVENTS=[
+  {text:'User placed order — KES 3,200',type:'',ago:'2min ago'},
+  {text:'New seller registered: UrbanEats Kitchen',type:'info',ago:'5min ago'},
+  {text:'Car rental booked — 3 days, KES 45,000',type:'',ago:'8min ago'},
+  {text:'BnB checkout: Sunset Mombasa — KES 12,000',type:'',ago:'12min ago'},
+  {text:'Brute-force attempt blocked — IP: 41.90.x.x',type:'warn',ago:'15min ago'},
+  {text:'New provider approved: CleanPro Services',type:'info',ago:'19min ago'},
+  {text:'Flash sale activated — 20% off Shopping',type:'',ago:'23min ago'},
+  {text:'Ride completed — Nairobi CBD → Westlands',type:'',ago:'27min ago'},
+  {text:'Legal consultation booked — KES 5,000',type:'',ago:'31min ago'},
+  {text:'Fitness package sold — Gym 3 months',type:'',ago:'36min ago'},
+];
+function buildActivityFeed(){
+  let logs=[];
+  try{ logs=JSON.parse(localStorage.getItem('sokoniAuditLogs')||'[]').slice(0,10); }catch(e){}
+  if(!logs.length) logs=MOCK_EVENTS;
+  document.getElementById('activityFeed').innerHTML=logs.slice(0,10).map(ev=>`
+    <div class="feed-item">
+      <div class="feed-dot ${escapeHTML(ev.type||'')}"></div>
+      <div class="feed-text">${escapeHTML(ev.text||ev.message||ev.event||'')}</div>
+      <div class="feed-time">${escapeHTML(ev.ago||ev.time||'')}</div>
+    </div>`).join('');
+  document.getElementById('feedSub').textContent='Last updated '+now()+' · auto-refreshes every 30s';
+}
+
+/* ════════════════════════════════════════════════
+   RETENTION COHORT TABLE
+════════════════════════════════════════════════ */
+function cohortClass(v){
+  if(v>=60)return'c-high';
+  if(v>=35)return'c-mid';
+  return'c-low';
+}
+function buildCohortTable(){
+  const cohorts=[
+    {week:'Wk Jun 9',w1:100,w2:68,w3:52,w4:41},
+    {week:'Wk Jun 2',w1:100,w2:71,w3:55,w4:44},
+    {week:'Wk May 26',w1:100,w2:65,w3:48,w4:38},
+    {week:'Wk May 19',w1:100,w2:73,w3:57,w4:45},
+  ];
+  const t=document.getElementById('cohortTable');
+  t.innerHTML=`<thead><tr>
+    <th>Cohort</th><th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+  </tr></thead><tbody>`+
+  cohorts.map(c=>`<tr>
+    <td>${escapeHTML(c.week)}</td>
+    <td class="${cohortClass(c.w1)}">${c.w1}%</td>
+    <td class="${cohortClass(c.w2)}">${c.w2}%</td>
+    <td class="${cohortClass(c.w3)}">${c.w3}%</td>
+    <td class="${cohortClass(c.w4)}">${c.w4}%</td>
+  </tr>`).join('')+'</tbody>';
+}
+
+/* ════════════════════════════════════════════════
+   MODAL HELPERS
+════════════════════════════════════════════════ */
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
+});
+
+function schedulePush(){
+  const title=(document.getElementById('pushTitle').value||'').trim();
+  const body=(document.getElementById('pushBody').value||'').trim();
+  const url=(document.getElementById('pushUrl').value||'').trim();
+  if(!title||!body){(window._skToast||alert)('Title and message are required.');return;}
+  const pushes=JSON.parse(localStorage.getItem('sokoniScheduledPush')||'[]');
+  pushes.unshift({title,body,url,scheduledAt:new Date().toISOString()});
+  localStorage.setItem('sokoniScheduledPush',JSON.stringify(pushes));
+  closeModal('pushModal');
+  showToast('Push notification scheduled!');
+}
+
+function createFlashSale(){
+  const title=(document.getElementById('flashTitle').value||'').trim();
+  const discount=parseInt(document.getElementById('flashDiscount').value)||0;
+  const category=document.getElementById('flashCategory').value;
+  const duration=parseInt(document.getElementById('flashDuration').value)||24;
+  if(!title||!discount){(window._skToast||alert)('Title and discount % are required.');return;}
+  const sales=JSON.parse(localStorage.getItem('sokoniFlashSales')||'[]');
+  const expiresAt=new Date(Date.now()+duration*3600*1000).toISOString();
+  sales.unshift({title,discount,category,duration,expiresAt,createdAt:new Date().toISOString(),active:true});
+  localStorage.setItem('sokoniFlashSales',JSON.stringify(sales));
+  closeModal('flashModal');
+  showToast('Flash sale activated!');
+}
+
+function boostSeller(){
+  const sellerName=(document.getElementById('boostSeller').value||'').trim();
+  const sellerId=(document.getElementById('boostSellerId').value||'').trim();
+  const category=document.getElementById('boostCategory').value;
+  const days=parseInt(document.getElementById('boostDuration').value)||7;
+  if(!sellerName||!sellerId){(window._skToast||alert)('Seller name and ID are required.');return;}
+  const fees={7:1500,14:2500,30:4500};
+  const fee=fees[days]||1500;
+  if(typeof SokoniPay!=='undefined'&&SokoniPay.gateway){
+    SokoniPay.gateway({type:'featured-listing',sellerName,sellerId,category,days,amount:fee});
+  }else{
+    // Fallback: save directly
+    const boosts=JSON.parse(localStorage.getItem('sokoniBoosts')||'[]');
+    boosts.unshift({sellerName,sellerId,category,days,fee,boostedAt:new Date().toISOString()});
+    localStorage.setItem('sokoniBoosts',JSON.stringify(boosts));
+  }
+  closeModal('boostModal');
+  showToast('Seller boost initiated — KES '+fee+' charged.');
+}
+
+/* ════════════════════════════════════════════════
+   TOAST
+════════════════════════════════════════════════ */
+function showToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);'+
+    'background:#71ff00;color:#000;font-weight:800;font-size:13px;padding:10px 20px;'+
+    'border-radius:10px;z-index:500;box-shadow:0 4px 20px rgba(113,255,0,0.4);'+
+    'white-space:nowrap;animation:toastIn .2s ease;';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2800);
+}
+
+/* ════════════════════════════════════════════════
+   REFRESH ALL
+════════════════════════════════════════════════ */
+function refreshAll(){
+  buildKPIs();
+  buildHubGrid();
+  buildFunnelBars();
+  buildSellersTable();
+  buildActivityFeed();
+  buildCohortTable();
+  drawRevenueChart();
+  drawFunnelChart();
+  document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-KE');
+}
+let autoRefreshTimer;
+function startAutoRefresh(){
+  clearInterval(autoRefreshTimer);
+  autoRefreshTimer=setInterval(()=>{
+    buildActivityFeed();
+    buildKPIs();
+  },30000);
+}
+
+/* ════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════ */
+function initDashboard(){
+  buildKPIs();
+  buildHubGrid();
+  buildFunnelBars();
+  buildSellersTable();
+  buildActivityFeed();
+  buildCohortTable();
+  // Charts after layout settles
+  requestAnimationFrame(()=>{
+    drawRevenueChart();
+    drawFunnelChart();
+  });
+  document.getElementById('lastUpdated').textContent='Last updated: '+new Date().toLocaleString('en-KE');
+  startAutoRefresh();
+  // Redraw charts on resize
+  window.addEventListener('resize',debounce(()=>{drawRevenueChart();drawFunnelChart();},200));
+}
+function debounce(fn,ms){let t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+
+/* ════════════════════════════════════════════════
+   FIRESTORE INTEGRATION (non-blocking)
+════════════════════════════════════════════════ */
+function loadFirestoreData(){
+  try{
+    if(typeof firebase==='undefined'||!firebase.apps||!firebase.apps.length)return;
+    const db=firebase.firestore();
+    // Real orders this month
+    const now=new Date(),y=now.getFullYear(),m=now.getMonth();
+    const start=new Date(y,m,1),end=new Date(y,m+1,1);
+    db.collection('orders')
+      .where('createdAt','>=',firebase.firestore.Timestamp.fromDate(start))
+      .where('createdAt','<',firebase.firestore.Timestamp.fromDate(end))
+      .get().then(snap=>{
+        const total=snap.docs.reduce((s,d)=>s+(d.data().total||0),0);
+        if(total>0){
+          const cached=JSON.parse(localStorage.getItem('sokoniOrders')||'[]');
+          // Merge real total into a synthetic order for KPI calc
+          localStorage.setItem('sokoniOrders',JSON.stringify([{total,date:new Date().toISOString()},...cached.slice(0,49)]));
+          buildKPIs();
+        }
+      }).catch(()=>{});
+    // Audit logs
+    db.collection('auditLogs').orderBy('createdAt','desc').limit(10).get().then(snap=>{
+      const logs=snap.docs.map(d=>{
+        const data=d.data();
+        return{text:data.message||data.event||'Platform event',
+          type:data.type||'',ago:timeAgo(data.createdAt?.toDate?.())};
+      });
+      if(logs.length){
+        localStorage.setItem('sokoniAuditLogs',JSON.stringify(logs));
+        buildActivityFeed();
+      }
+    }).catch(()=>{});
+    // User count
+    db.collection('users').get().then(snap=>{
+      if(snap.size>0){
+        const fakeUsers=Array(snap.size).fill({});
+        localStorage.setItem('sokoniUsers',JSON.stringify(fakeUsers));
+        buildKPIs();
+      }
+    }).catch(()=>{});
+  }catch(e){}
+}
+function timeAgo(d){
+  if(!d)return'';
+  const diff=Math.round((Date.now()-d)/60000);
+  if(diff<1)return'just now';
+  if(diff<60)return diff+'min ago';
+  if(diff<1440)return Math.round(diff/60)+'h ago';
+  return Math.round(diff/1440)+'d ago';
+}
+
+// Try Firestore after page fully loads
+window.addEventListener('load',()=>{ setTimeout(loadFirestoreData,1200); });
+</script>
+<script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+
+

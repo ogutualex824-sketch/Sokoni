@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+
+  <!-- ══ HOMEPAGE ══ -->
+  <url>
+    <loc>https://mysokoni.co.ke/</loc>
+    <lastmod>2026-06-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://mysokoni.co.ke/assets/Sokonilogo2.png</image:loc>
+      <image:title>SOKONI — Kenya's All-in-One Marketplace</image:title>
+    </image:image>
+  </url>
+
+  <!-- ══ SHOPPING ══ -->
+  <url><loc>https://mysokoni.co.ke/search.html</loc>              <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.95</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.90</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html?cat=fashion</loc><lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html?cat=electronics</loc><lastmod>2026-06-16</lastmod><changefreq>daily</changefreq><priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html?cat=beauty</loc> <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html?cat=food</loc>   <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html?cat=furniture</loc><lastmod>2026-06-16</lastmod><changefreq>daily</changefreq><priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html?cat=health</loc> <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/category.html?cat=agriculture</loc><lastmod>2026-06-16</lastmod><changefreq>daily</changefreq><priority>0.75</priority></url>
+  <url><loc>https://mysokoni.co.ke/flashsale.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.90</priority></url>
+  <url><loc>https://mysokoni.co.ke/offer.html</loc>               <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/product.html</loc>             <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/store.html</loc>               <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/ministore.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/seller-public.html</loc>       <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/unboxing.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/businesses.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/reviews.html</loc>             <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.75</priority></url>
+  <url><loc>https://mysokoni.co.ke/track.html</loc>               <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.80</priority></url>
+
+  <!-- ══ SERVICES ══ -->
+  <url><loc>https://mysokoni.co.ke/services.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.95</priority></url>
+  <url><loc>https://mysokoni.co.ke/providers.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/provider.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.75</priority></url>
+  <url><loc>https://mysokoni.co.ke/requests.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/delivery.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/home-services.html</loc>       <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.82</priority></url>
+  <url><loc>https://mysokoni.co.ke/plumbing.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/electrical.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/cleaning.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/mechanics.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/phone-repair.html</loc>        <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.78</priority></url>
+  <url><loc>https://mysokoni.co.ke/construction.html</loc>        <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.78</priority></url>
+  <url><loc>https://mysokoni.co.ke/marketing.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.75</priority></url>
+
+  <!-- ══ HUBS ══ -->
+  <url><loc>https://mysokoni.co.ke/food.html</loc>                <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.88</priority></url>
+  <url><loc>https://mysokoni.co.ke/food-menu.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/car-hub.html</loc>             <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/car-rental.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.80</priority></url>
+  <url><loc>https://mysokoni.co.ke/healthcare.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.88</priority></url>
+  <url><loc>https://mysokoni.co.ke/legal-hub.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/legal.html</loc>               <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.78</priority></url>
+  <url><loc>https://mysokoni.co.ke/sports-hub.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.82</priority></url>
+  <url><loc>https://mysokoni.co.ke/sports-tournament.html</loc>   <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.75</priority></url>
+  <url><loc>https://mysokoni.co.ke/sports-venue.html</loc>        <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.75</priority></url>
+  <url><loc>https://mysokoni.co.ke/tech-hub.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/digital.html</loc>             <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.78</priority></url>
+  <url><loc>https://mysokoni.co.ke/marketing-hub.html</loc>       <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.82</priority></url>
+  <url><loc>https://mysokoni.co.ke/fitness-hub.html</loc>         <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.82</priority></url>
+  <url><loc>https://mysokoni.co.ke/bnb-hub.html</loc>             <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/bnb.html</loc>                 <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.88</priority></url>
+  <url><loc>https://mysokoni.co.ke/property-hub.html</loc>        <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/property.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.88</priority></url>
+  <url><loc>https://mysokoni.co.ke/property-listing.html</loc>    <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.78</priority></url>
+  <url><loc>https://mysokoni.co.ke/property-agent.html</loc>      <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.72</priority></url>
+  <url><loc>https://mysokoni.co.ke/entertainment.html</loc>       <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.85</priority></url>
+  <url><loc>https://mysokoni.co.ke/community.html</loc>           <lastmod>2026-06-16</lastmod><changefreq>daily</changefreq>  <priority>0.80</priority></url>
+
+  <!-- ══ BUSINESS ══ -->
+  <url><loc>https://mysokoni.co.ke/business.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.82</priority></url>
+  <url><loc>https://mysokoni.co.ke/business-os.html</loc>         <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.78</priority></url>
+  <url><loc>https://mysokoni.co.ke/b2b.html</loc>                 <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.82</priority></url>
+  <url><loc>https://mysokoni.co.ke/b2b-supplier.html</loc>        <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.72</priority></url>
+  <url><loc>https://mysokoni.co.ke/banking.html</loc>             <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.75</priority></url>
+  <url><loc>https://mysokoni.co.ke/opportunity.html</loc>         <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.75</priority></url>
+  <url><loc>https://mysokoni.co.ke/life-events.html</loc>         <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.70</priority></url>
+
+  <!-- ══ ONBOARDING / REGISTRATION ══ -->
+  <url><loc>https://mysokoni.co.ke/signup.html</loc>              <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/login.html</loc>               <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+  <url><loc>https://mysokoni.co.ke/register.html</loc>            <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.68</priority></url>
+  <url><loc>https://mysokoni.co.ke/onboarding.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.72</priority></url>
+  <url><loc>https://mysokoni.co.ke/onboarding-seller.html</loc>   <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.72</priority></url>
+  <url><loc>https://mysokoni.co.ke/onboarding-driver.html</loc>   <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.72</priority></url>
+  <url><loc>https://mysokoni.co.ke/onboarding-professional.html</loc><lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.72</priority></url>
+  <url><loc>https://mysokoni.co.ke/verification.html</loc>        <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+
+  <!-- ══ TRUST / INFO / SUPPORT ══ -->
+  <url><loc>https://mysokoni.co.ke/help.html</loc>                <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+  <url><loc>https://mysokoni.co.ke/trust.html</loc>               <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.60</priority></url>
+  <url><loc>https://mysokoni.co.ke/foundation.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.55</priority></url>
+  <url><loc>https://mysokoni.co.ke/wallet.html</loc>              <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.70</priority></url>
+
+</urlset>

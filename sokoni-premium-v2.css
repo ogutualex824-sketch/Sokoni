@@ -1,0 +1,1506 @@
+/* ================================================================
+   SOKONI — Premium Phone Design System v2  (sokoni-premium-v2.css)
+   Loaded after style.css, premium.css, and mobile.css.
+   Targets: phones ≤ 600px (primary), phablets ≤ 768px (secondary).
+   Design language: Dark glass morphism · SOKONI green accents · fluid micro-animations
+================================================================ */
+
+/* ══════════════════════════════════════════════════
+   0.  CSS CUSTOM PROPERTIES (design tokens)
+══════════════════════════════════════════════════ */
+:root {
+  --sk-green: #71ff00;
+  --sk-green-dim: rgba(113,255,0,0.18);
+  --sk-green-glow: rgba(113,255,0,0.35);
+  --sk-glass-bg: rgba(255,255,255,0.05);
+  --sk-glass-border: rgba(255,255,255,0.09);
+  --sk-glass-blur: blur(24px) saturate(180%);
+  --sk-card-radius: 20px;
+  --sk-pill-radius: 999px;
+  --sk-shadow-soft: 0 4px 24px rgba(0,0,0,0.28);
+  --sk-shadow-card: 0 2px 12px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+  --sk-transition: 0.18s cubic-bezier(0.4,0,0.2,1);
+  --sk-spring: 0.24s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+/* ══════════════════════════════════════════════════
+   1.  KEYFRAME ANIMATIONS
+══════════════════════════════════════════════════ */
+@keyframes sk-page-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sk-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sk-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sk-scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes sk-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes sk-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--sk-green-glow); }
+  50%       { box-shadow: 0 0 0 8px transparent; }
+}
+@keyframes sk-icon-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40%       { transform: translateY(-4px) scale(1.15); }
+  70%       { transform: translateY(1px) scale(0.95); }
+}
+@keyframes sk-dot-pop {
+  0%   { transform: translateX(-50%) scale(0); opacity: 0; }
+  60%  { transform: translateX(-50%) scale(1.3); opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   2.  PAGE ENTRANCE — every page fades in
+══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support) {
+    animation: sk-page-in 0.28s ease both;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   3.  PREMIUM BOTTOM NAV GLASS UPGRADE
+══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .bottom-nav {
+    background: rgba(4,4,4,0.96) !important;
+    backdrop-filter: blur(48px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(48px) saturate(200%) !important;
+    border-top: 1px solid rgba(255,255,255,0.07) !important;
+    box-shadow: 0 -8px 48px rgba(0,0,0,0.55), 0 -1px 0 rgba(113,255,0,0.04) !important;
+  }
+
+  /* Active tab: animated dot pop */
+  .active-bnav::after {
+    animation: sk-dot-pop 0.32s var(--sk-spring) both !important;
+  }
+
+  /* Active icon: spring bounce */
+  .active-bnav i,
+  .active-bnav .bnav-emoji {
+    animation: sk-icon-bounce 0.38s var(--sk-spring) both !important;
+  }
+
+  /* Tab press: quick scale */
+  .bnav-item:active {
+    transform: scale(0.82) !important;
+    transition: transform 0.1s ease !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   4.  PREMIUM NAVBAR — TWO-ROW PHONE LAYOUT
+   Row 1: logo · location · nav icons
+   Row 2: full-width search bar
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+  /* Two-row flex container */
+  .navbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0 8px !important;
+    padding: 5px 12px 5px !important;
+    min-height: unset !important;
+    /* glass */
+    backdrop-filter: blur(32px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(200%) !important;
+    background: rgba(6,6,6,0.96) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.45) !important;
+  }
+
+  /* ── ROW 1 · Theme toggle — compact circle button ── */
+  .navbar .theme-toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    order: 5 !important;
+    flex-shrink: 0 !important;
+    font-size: 17px !important;
+    padding: 0 !important;
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 50% !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent !important;
+    transition: background 0.15s, transform 0.12s !important;
+  }
+  .navbar .theme-toggle:active {
+    background: rgba(255,255,255,0.14) !important;
+    transform: scale(0.92) !important;
+  }
+
+  .navbar .logo-section {
+    order: 2 !important;
+    flex: 1 !important;          /* eats remaining row-1 space */
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  .navbar .main-logo {
+    height: 54px !important;
+    width: auto !important;
+    filter: drop-shadow(0 0 14px rgba(113,255,0,0.4)) brightness(1.1) !important;
+  }
+
+  /* Location pill — compact, shows city + icon only */
+  .navbar .nav-location {
+    order: 3 !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 20px !important;
+    padding: 5px 8px !important;
+    margin-left: 6px !important;
+    font-size: 11px !important;
+    color: rgba(255,255,255,0.8) !important;
+    cursor: pointer !important;
+    max-width: 88px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* Nav actions cluster */
+  .navbar .nav-actions {
+    order: 6 !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+
+  /* Hide desktop-only items in nav actions */
+  .navbar .wishlist-nav-btn,
+  .navbar .nav-points-btn { display: none !important; }
+
+  /* Messages, cart, login buttons — compact */
+  .navbar .nav-messages-btn {
+    position: relative !important;
+    font-size: 18px !important;
+    padding: 6px 8px !important;
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.09) !important;
+    border-radius: 10px !important;
+    text-decoration: none !important;
+    line-height: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  .navbar .cart-btn {
+    position: relative !important;
+    font-size: 18px !important;
+    padding: 6px 8px !important;
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.09) !important;
+    border-radius: 10px !important;
+    text-decoration: none !important;
+    line-height: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 2px !important;
+  }
+  .navbar #cartCount {
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    color: var(--sk-green) !important;
+  }
+  .navbar .login-btn {
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    border-radius: 10px !important;
+    font-weight: 800 !important;
+  }
+  .navbar .nav-profile-avatar {
+    font-size: 18px !important;
+    padding: 4px 6px !important;
+    text-decoration: none !important;
+  }
+  /* no !important — JS must be able to hide this when user is logged in */
+  #authButtons { display: flex; }
+
+  /* ── ROW 2 — search bar full width ── */
+  .navbar .search-bar {
+    order: 99 !important;          /* always last */
+    flex: 0 0 100% !important;     /* full width, wraps to new line */
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: 8px !important;
+    position: relative !important;
+  }
+  .navbar .search-bar input {
+    width: 100% !important;
+    background: rgba(255,255,255,0.07) !important;
+    border: 1px solid rgba(255,255,255,0.11) !important;
+    border-radius: 12px !important;
+    color: #fff !important;
+    padding: 10px 14px 10px 36px !important;
+    font-size: 16px !important;    /* 16px minimum prevents iOS auto-zoom */
+    transition: var(--sk-transition) !important;
+    box-sizing: border-box !important;
+  }
+  .navbar .search-bar input:focus {
+    border-color: rgba(113,255,0,0.4) !important;
+    background: rgba(255,255,255,0.1) !important;
+    box-shadow: 0 0 0 3px rgba(113,255,0,0.09) !important;
+    outline: none !important;
+  }
+  .navbar .search-bar input::placeholder { color: rgba(255,255,255,0.35) !important; }
+
+  /* Search icon inside input */
+  .navbar .search-bar::before {
+    content: '🔍' !important;
+    position: absolute !important;
+    left: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 13px !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+  }
+
+  /* Search suggestions dropdown */
+  .search-suggestions {
+    top: calc(100% + 4px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    border-radius: 12px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   5.  GLASS CARD SYSTEM — cards, panels, sections
+══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Universal glass panel */
+  .glass-card,
+  .sk-glass {
+    background: var(--sk-glass-bg) !important;
+    backdrop-filter: var(--sk-glass-blur) !important;
+    -webkit-backdrop-filter: var(--sk-glass-blur) !important;
+    border: 1px solid var(--sk-glass-border) !important;
+    border-radius: var(--sk-card-radius) !important;
+    box-shadow: var(--sk-shadow-card) !important;
+  }
+
+  /* Product cards */
+  .product-card {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 14px !important;
+    transition: transform var(--sk-transition), opacity var(--sk-transition) !important;
+    overflow: hidden !important;
+  }
+  .product-card:active {
+    transform: scale(0.96) !important;
+    opacity: 0.85 !important;
+  }
+
+  /* Service / provider cards */
+  .sv-card, .pv-card, .hc-card, .bk-card,
+  .driver-stat, .delivery-card, .job-card,
+  .bonus-card, .perk-item, .tier-chip {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 18px !important;
+    box-shadow: var(--sk-shadow-card) !important;
+    transition: transform var(--sk-transition) !important;
+  }
+  .sv-card:active, .pv-card:active, .delivery-card:active {
+    transform: scale(0.97) !important;
+  }
+
+  /* Hub / feature cards */
+  .hub-card, .feat-card, .cat-card-premium,
+  .law-card, .lawyer-card, .doc-card {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 18px !important;
+    transition: transform var(--sk-transition) !important;
+  }
+  .hub-card:active, .feat-card:active, .cat-card-premium:active {
+    transform: scale(0.96) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   6.  STAGGER ANIMATION — grid items reveal
+══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .products-grid .product-card:nth-child(1)  { animation: sk-slide-up 0.25s ease 0.02s both; }
+  .products-grid .product-card:nth-child(2)  { animation: sk-slide-up 0.25s ease 0.05s both; }
+  .products-grid .product-card:nth-child(3)  { animation: sk-slide-up 0.25s ease 0.08s both; }
+  .products-grid .product-card:nth-child(4)  { animation: sk-slide-up 0.25s ease 0.11s both; }
+  .products-grid .product-card:nth-child(5)  { animation: sk-slide-up 0.25s ease 0.14s both; }
+  .products-grid .product-card:nth-child(6)  { animation: sk-slide-up 0.25s ease 0.17s both; }
+
+  .sv-grid .sv-card:nth-child(1)  { animation: sk-slide-up 0.25s ease 0.04s both; }
+  .sv-grid .sv-card:nth-child(2)  { animation: sk-slide-up 0.25s ease 0.08s both; }
+  .sv-grid .sv-card:nth-child(3)  { animation: sk-slide-up 0.25s ease 0.12s both; }
+  .sv-grid .sv-card:nth-child(4)  { animation: sk-slide-up 0.25s ease 0.16s both; }
+}
+
+/* ══════════════════════════════════════════════════
+   7.  PREMIUM HERO SECTIONS
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+  /* Glass hero (homepage) */
+  .glass-hero {
+    position: relative !important;
+    overflow: hidden !important;
+    border-radius: 0 0 28px 28px !important;
+    margin-bottom: 8px !important;
+  }
+  .glass-hero::before {
+    content: '' !important;
+    position: absolute !important;
+    top: -40% !important; left: -20% !important;
+    width: 70% !important; height: 200% !important;
+    background: radial-gradient(ellipse, rgba(113,255,0,0.1) 0%, transparent 65%) !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+  }
+  .glass-hero-card {
+    position: relative !important;
+    z-index: 1 !important;
+    padding: 22px 18px 18px !important;
+    border-radius: 22px !important;
+    animation: sk-scale-in 0.35s var(--sk-spring) both !important;
+  }
+  .glass-hero-card h1 {
+    font-size: clamp(22px, 7vw, 30px) !important;
+    line-height: 1.1 !important;
+    letter-spacing: -0.025em !important;
+    margin-bottom: 8px !important;
+  }
+  .glass-hero-card h1 span {
+    color: var(--sk-green) !important;
+    -webkit-font-smoothing: antialiased !important;
+  }
+  .glass-hero-sub {
+    font-size: 13px !important;
+    opacity: 0.7 !important;
+    line-height: 1.5 !important;
+    margin-bottom: 16px !important;
+  }
+  .glass-hero-badge {
+    background: var(--sk-green-dim) !important;
+    border: 1px solid rgba(113,255,0,0.25) !important;
+    border-radius: var(--sk-pill-radius) !important;
+    color: var(--sk-green) !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    padding: 4px 12px !important;
+    letter-spacing: 0.3px !important;
+    margin-bottom: 10px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+  }
+
+  /* Hub hero sections */
+  .bk-hero, .fd-hero, .sv-hero, .hc-hero,
+  .law-hero, .ent-hero, .sp-hero, .car-hero,
+  .prop-hero, .bnb-hero, .b2b-hero, .dig-hero,
+  .comm-hero, .del-hero, .ride-hero {
+    position: relative !important;
+    overflow: hidden !important;
+    border-radius: 0 0 24px 24px !important;
+  }
+  .bk-hero::after, .fd-hero::after, .sv-hero::after,
+  .hc-hero::after, .law-hero::after {
+    content: '' !important;
+    position: absolute !important;
+    top: -30% !important; right: -10% !important;
+    width: 55% !important; height: 180% !important;
+    background: radial-gradient(ellipse, rgba(113,255,0,0.07) 0%, transparent 65%) !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   8.  SECTION HEADERS — premium treatment
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .section-title,
+  .bk-section-h, .fd-section-h, .sv-section-h, .hc-section-h,
+  .home-section-title, .new-arrivals-title-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 14px 16px 8px !important;
+    margin: 0 !important;
+  }
+
+  .section-title h2,
+  .bk-section-h, .fd-section-h, .sv-section-h, .hc-section-h {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    color: #fff !important;
+    position: relative !important;
+  }
+  .section-title h2::after,
+  .section-title h2::before { display: none !important; }
+
+  /* "See all" links next to headers */
+  .section-title a,
+  .see-all-link {
+    font-size: 11px !important;
+    color: var(--sk-green) !important;
+    font-weight: 700 !important;
+    text-decoration: none !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   9.  PREMIUM PILLS & CHIPS
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Filter pills */
+  .cat-pill, .bk-tab, .fd-cuisine-pill, .sv-cat-pill,
+  .rd-chip, .hc-cat-pill, .pg-chip, .rq-chip,
+  .cm-filter-chip, .sp-tag, .turf-tag {
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: var(--sk-pill-radius) !important;
+    padding: 7px 14px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: rgba(255,255,255,0.75) !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    transition: background var(--sk-transition), color var(--sk-transition) !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  /* Active pill */
+  .cat-pill.active, .cat-pill-active,
+  .bk-tab.active-tab, .bk-tab[aria-selected="true"],
+  .rd-chip.active, .pg-chip.active,
+  .cm-filter-chip.active, .sp-tag.active {
+    background: var(--sk-green-dim) !important;
+    border-color: rgba(113,255,0,0.35) !important;
+    color: var(--sk-green) !important;
+  }
+
+  .cat-pill:active, .bk-tab:active, .rd-chip:active,
+  .pg-chip:active, .cm-filter-chip:active {
+    transform: scale(0.94) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   10.  PREMIUM BUTTONS
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+  /* Primary green CTA */
+  .auth-btn,
+  .sk-btn-primary,
+  button[style*="background:linear-gradient(135deg,#71ff00"],
+  button[style*="background:#71ff00"],
+  .dc-accept-btn,
+  .sv-book-btn,
+  .pv-book-btn,
+  .hc-book-btn,
+  .lc-book-btn,
+  .sv-cta-btn {
+    background: linear-gradient(135deg, #71ff00, #4fc800) !important;
+    color: #000 !important;
+    font-weight: 800 !important;
+    border: none !important;
+    border-radius: 14px !important;
+    padding: 13px 20px !important;
+    font-size: 14px !important;
+    box-shadow: 0 6px 20px rgba(113,255,0,0.28) !important;
+    transition: transform var(--sk-spring), box-shadow var(--sk-transition) !important;
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation !important;
+  }
+  .auth-btn:active,
+  .dc-accept-btn:active,
+  .sv-book-btn:active,
+  .pv-book-btn:active,
+  .lc-book-btn:active {
+    transform: scale(0.94) !important;
+    box-shadow: 0 2px 10px rgba(113,255,0,0.2) !important;
+  }
+
+  /* Secondary ghost button */
+  .sk-btn-ghost,
+  .sv-cta-secondary,
+  button[style*="border:1px solid rgba(113,255,0"] {
+    background: rgba(113,255,0,0.06) !important;
+    border: 1px solid rgba(113,255,0,0.25) !important;
+    color: var(--sk-green) !important;
+    border-radius: 14px !important;
+    padding: 12px 18px !important;
+    font-weight: 700 !important;
+    transition: background var(--sk-transition) !important;
+  }
+  .sk-btn-ghost:active {
+    background: rgba(113,255,0,0.12) !important;
+    transform: scale(0.96) !important;
+  }
+
+  /* Floating action buttons */
+  .float-cart,
+  .float-chat-btn {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(113,255,0,0.15) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   11.  PREMIUM FORM INPUTS
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]),
+  select,
+  textarea {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 14px !important;
+    color: #fff !important;
+    font-size: 16px !important; /* 16px minimum prevents iOS auto-zoom */
+    padding: 12px 16px !important;
+    transition: border-color var(--sk-transition), box-shadow var(--sk-transition) !important;
+    -webkit-appearance: none !important;
+    font-family: inherit !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+  select:focus,
+  textarea:focus {
+    border-color: rgba(113,255,0,0.45) !important;
+    background: rgba(255,255,255,0.08) !important;
+    box-shadow: 0 0 0 3px rgba(113,255,0,0.1) !important;
+    outline: none !important;
+  }
+  input::placeholder, textarea::placeholder {
+    color: rgba(255,255,255,0.3) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   12.  SKELETON LOADING SHIMMER
+══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .sk-skeleton,
+  .product-img-wrap:empty,
+  img[src=""],
+  img:not([src]) {
+    background: linear-gradient(
+      90deg,
+      rgba(255,255,255,0.04) 0px,
+      rgba(255,255,255,0.09) 80px,
+      rgba(255,255,255,0.04) 160px
+    ) !important;
+    background-size: 400px 100% !important;
+    animation: sk-shimmer 1.4s linear infinite !important;
+    border-radius: 8px !important;
+    min-height: 40px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   13.  PREMIUM MODALS — bottom sheet feel
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .modal-overlay,
+  .rest-modal-overlay,
+  .quick-view-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-box,
+  .quick-view-box {
+    border-radius: 24px 24px 0 0 !important;
+    max-height: 90vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 20px 18px !important;
+    background: rgba(12,12,12,0.97) !important;
+    backdrop-filter: blur(48px) !important;
+    -webkit-backdrop-filter: blur(48px) !important;
+    border-top: 1px solid rgba(255,255,255,0.09) !important;
+    animation: sk-slide-up 0.3s var(--sk-spring) both !important;
+  }
+  /* Drag handle pill */
+  .modal-box::before,
+  .quick-view-box::before {
+    content: '' !important;
+    display: block !important;
+    width: 36px !important;
+    height: 4px !important;
+    background: rgba(255,255,255,0.2) !important;
+    border-radius: 2px !important;
+    margin: 0 auto 16px !important;
+  }
+  .rest-modal {
+    border-radius: 24px 24px 0 0 !important;
+    max-height: 94vh !important;
+    background: rgba(10,10,10,0.98) !important;
+    backdrop-filter: blur(48px) !important;
+    -webkit-backdrop-filter: blur(48px) !important;
+    animation: sk-slide-up 0.3s var(--sk-spring) both !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   14.  CATEGORY GRID — premium icons
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .categories {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 8px !important;
+    padding: 0 12px 8px !important;
+  }
+  .cat-card-premium {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 16px !important;
+    padding: 12px 6px !important;
+    min-height: 80px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    transition: transform var(--sk-spring), background var(--sk-transition) !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  .cat-card-premium:active {
+    transform: scale(0.93) !important;
+    background: rgba(113,255,0,0.07) !important;
+  }
+  .ccp-icon {
+    font-size: 24px !important;
+    width: 46px !important;
+    height: 46px !important;
+    line-height: 1 !important;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)) !important;
+  }
+  .ccp-info h3 {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+    line-height: 1.25 !important;
+    color: rgba(255,255,255,0.9) !important;
+  }
+  .ccp-info p { display: none !important; }
+}
+
+/* ══════════════════════════════════════════════════
+   15.  QUICK LINKS / TOOLS STRIP
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .qlinks-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 4px 14px 8px !important;
+    scrollbar-width: none !important;
+  }
+  .qlinks-row::-webkit-scrollbar { display: none !important; }
+
+  .qlink {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 5px !important;
+    min-width: 64px !important;
+    flex-shrink: 0 !important;
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 14px !important;
+    padding: 10px 8px !important;
+    text-decoration: none !important;
+    transition: transform var(--sk-spring), background var(--sk-transition) !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  .qlink:active {
+    transform: scale(0.92) !important;
+    background: rgba(113,255,0,0.07) !important;
+  }
+  .qlink-icon { font-size: 20px !important; line-height: 1 !important; }
+  .qlink-label {
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    color: rgba(255,255,255,0.7) !important;
+    text-align: center !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   16.  HOMEPAGE SPECIFIC FIXES
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+  /* Hero hero-btns */
+  .hero-btns {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    margin-top: 16px !important;
+  }
+  .hero-btns a,
+  .hero-btns button {
+    width: 100% !important;
+    text-align: center !important;
+    padding: 13px !important;
+    border-radius: 14px !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+  }
+
+  /* Hub feature strip */
+  .hub-strip {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 6px 14px 10px !important;
+    scrollbar-width: none !important;
+  }
+  .hub-strip::-webkit-scrollbar { display: none !important; }
+  .hub-strip-item {
+    flex-shrink: 0 !important;
+    min-width: 90px !important;
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 14px !important;
+    padding: 10px 8px !important;
+    text-align: center !important;
+    text-decoration: none !important;
+    transition: transform var(--sk-spring) !important;
+  }
+  .hub-strip-item:active { transform: scale(0.92) !important; }
+
+  /* Flash sale compact on homepage */
+  .flash-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    padding: 0 12px 8px !important;
+  }
+
+  /* Review / rating rows */
+  .review-card {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 16px !important;
+    padding: 14px !important;
+  }
+
+  /* Promo banner */
+  .promo-banner,
+  .alert-banner {
+    border-radius: 16px !important;
+    padding: 14px 16px !important;
+    margin: 8px 14px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   17.  PROFILE / SELLER / MESSAGES
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+
+  /* Profile avatar ring */
+  .profile-avatar,
+  .seller-avatar-large {
+    border: 2px solid rgba(113,255,0,0.35) !important;
+    box-shadow: 0 0 0 4px rgba(113,255,0,0.1) !important;
+  }
+
+  /* Profile stat cards */
+  .profile-stat-card,
+  .seller-stat {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 16px !important;
+    padding: 14px !important;
+  }
+
+  /* Message list */
+  .message-thread {
+    border-radius: 16px !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+  }
+  .message-bubble-in {
+    background: rgba(113,255,0,0.12) !important;
+    border-radius: 18px 18px 18px 4px !important;
+  }
+  .message-bubble-out {
+    background: rgba(255,255,255,0.09) !important;
+    border-radius: 18px 18px 4px 18px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   18.  CART / CHECKOUT
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .cart-item {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 16px !important;
+    padding: 12px 14px !important;
+    margin-bottom: 8px !important;
+  }
+  .cart-item img {
+    border-radius: 10px !important;
+    width: 66px !important;
+    height: 66px !important;
+    object-fit: cover !important;
+  }
+
+  /* Checkout steps */
+  .checkout-step-indicator {
+    display: flex !important;
+    gap: 6px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 10px 0 !important;
+  }
+  .checkout-step-dot {
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 50% !important;
+    background: rgba(255,255,255,0.18) !important;
+  }
+  .checkout-step-dot.active {
+    background: var(--sk-green) !important;
+    box-shadow: 0 0 8px var(--sk-green-glow) !important;
+    animation: sk-pulse-glow 1.8s ease infinite !important;
+  }
+
+  /* Order summary */
+  .order-summary-box {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 18px !important;
+    padding: 16px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   19.  TRACKING PAGE
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .track-step {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 14px !important;
+    padding: 12px 14px !important;
+    margin-bottom: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+  .track-step.completed { border-color: rgba(113,255,0,0.22) !important; }
+  .track-step-icon {
+    width: 36px !important; height: 36px !important;
+    border-radius: 50% !important;
+    background: var(--sk-green-dim) !important;
+    display: flex !important; align-items: center !important;
+    justify-content: center !important;
+    font-size: 16px !important;
+    flex-shrink: 0 !important;
+  }
+  /* Leaflet map: full-width on phone */
+  #trackMap, .leaflet-container {
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    margin: 8px 0 !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   20.  DRIVER / RIDE PAGE
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .rd-pane, .driver-pane {
+    padding: 16px 14px 80px !important;
+    animation: sk-slide-up 0.28s ease both !important;
+  }
+  .rd-match-card {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.09) !important;
+    border-radius: 20px !important;
+    padding: 18px 16px !important;
+    box-shadow: var(--sk-shadow-soft) !important;
+  }
+  .rd-fare-box {
+    background: var(--sk-green-dim) !important;
+    border: 1px solid rgba(113,255,0,0.2) !important;
+    border-radius: 14px !important;
+    padding: 12px 16px !important;
+  }
+  .rd-fare-amt {
+    font-size: 28px !important;
+    font-weight: 900 !important;
+    color: var(--sk-green) !important;
+    letter-spacing: -0.03em !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   21.  COMMUNITY PAGE
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .cm-post-card {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 18px !important;
+    padding: 14px 16px !important;
+    margin-bottom: 10px !important;
+  }
+  .cm-post-actions {
+    display: flex !important;
+    gap: 12px !important;
+    padding-top: 10px !important;
+    border-top: 1px solid rgba(255,255,255,0.06) !important;
+    margin-top: 10px !important;
+  }
+  .cm-action-btn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    font-size: 12px !important;
+    color: rgba(255,255,255,0.55) !important;
+    background: none !important;
+    border: none !important;
+    padding: 6px 8px !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    transition: background var(--sk-transition) !important;
+  }
+  .cm-action-btn:active {
+    background: rgba(255,255,255,0.06) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   22.  PROVIDER / ADMIN CARDS
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .pv-card {
+    display: flex !important;
+    gap: 12px !important;
+    padding: 14px !important;
+    border-radius: 18px !important;
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    margin-bottom: 8px !important;
+  }
+  .pv-avatar {
+    width: 48px !important; height: 48px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    background: var(--sk-green-dim) !important;
+    display: flex !important; align-items: center !important;
+    justify-content: center !important;
+    font-size: 20px !important;
+    border: 1.5px solid rgba(113,255,0,0.25) !important;
+  }
+  .pv-status-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    padding: 3px 9px !important;
+    border-radius: var(--sk-pill-radius) !important;
+    background: var(--sk-green-dim) !important;
+    color: var(--sk-green) !important;
+    border: 1px solid rgba(113,255,0,0.22) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   23.  TOAST / NOTIFICATION
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  #networkToast {
+    background: rgba(10,10,10,0.96) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 14px !important;
+    box-shadow: var(--sk-shadow-soft) !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    padding: 11px 18px !important;
+  }
+  #pullRefreshIndicator {
+    background: rgba(10,10,10,0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(113,255,0,0.2) !important;
+    border-radius: var(--sk-pill-radius) !important;
+    color: var(--sk-green) !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    padding: 8px 18px !important;
+    top: 14px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   24.  CHAT UNREAD PIP — attached to chat-toggle-wrap corner
+══════════════════════════════════════════════════ */
+.chat-unread-pip {
+  position: absolute !important;
+  top: -10px !important;
+  right: -10px !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: 9997 !important;
+  background: #ff2d55 !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  min-width: 22px !important;
+  height: 22px !important;
+  border-radius: 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 5px !important;
+  box-shadow: 0 2px 12px rgba(255,45,85,0.55) !important;
+  animation: sk-pulse-glow 2s ease infinite !important;
+  pointer-events: none !important;
+}
+
+/* ══════════════════════════════════════════════════
+   25.  TYPOGRAPHY — premium phone text
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  h1 {
+    font-size: clamp(22px, 7vw, 30px) !important;
+    letter-spacing: -0.025em !important;
+    line-height: 1.1 !important;
+    -webkit-font-smoothing: antialiased !important;
+  }
+  h2 {
+    font-size: clamp(17px, 5vw, 22px) !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.15 !important;
+  }
+  h3 {
+    font-size: clamp(14px, 4vw, 18px) !important;
+    letter-spacing: -0.01em !important;
+  }
+  /* Green numbers / highlights */
+  .sk-green-val,
+  .ds-val, .dc-fee, .cr-val, .leader-earn,
+  .rd-fare-amt, .bk-stat-num {
+    color: var(--sk-green) !important;
+    -webkit-font-smoothing: antialiased !important;
+    font-variant-numeric: tabular-nums !important;
+  }
+  /* Body text */
+  p, li, .desc-text, .sub-text {
+    line-height: 1.55 !important;
+    font-size: 13px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   26.  STATUS BADGES
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .status-badge,
+  .job-status,
+  .pv-status-badge,
+  .app-status {
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    padding: 3px 9px !important;
+    border-radius: var(--sk-pill-radius) !important;
+    letter-spacing: 0.2px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+  .status-active, .status-online, .status-approved {
+    background: rgba(113,255,0,0.12) !important;
+    color: var(--sk-green) !important;
+    border: 1px solid rgba(113,255,0,0.25) !important;
+  }
+  .status-pending, .status-waiting {
+    background: rgba(245,158,11,0.12) !important;
+    color: #f59e0b !important;
+    border: 1px solid rgba(245,158,11,0.25) !important;
+  }
+  .status-rejected, .status-offline, .status-error {
+    background: rgba(255,61,61,0.1) !important;
+    color: #ff6b6b !important;
+    border: 1px solid rgba(255,61,61,0.2) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   27.  SAFE AREA BOTTOM PADDING — universal
+══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: max(80px, calc(66px + env(safe-area-inset-bottom, 8px))) !important;
+  }
+  /* Hub page bodies */
+  .bk-body, .fd-body, .sv-body, .hc-body,
+  .law-body, .driver-page, .seller-page, .profile-page,
+  .track-page, .banking-page, .legal-page,
+  .entertainment-page, .sports-hub-page, .car-hub-page,
+  .landlord-body, .bnb-body, .property-body,
+  .community-page, .digital-body, .b2b-body {
+    padding-bottom: max(90px, calc(72px + env(safe-area-inset-bottom, 8px))) !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   28.  LANDSCAPE PHONE — minor tweaks
+══════════════════════════════════════════════════ */
+@media (max-width: 900px) and (orientation: landscape) {
+  .bottom-nav { min-height: 52px !important; }
+  .bnav-item  { min-height: 52px !important; padding: 4px 4px 6px !important; }
+  .bnav-item span { display: none !important; }
+  .glass-hero-card { padding: 14px 18px !important; }
+}
+
+/* ══════════════════════════════════════════════════
+   29.  HOMEPAGE — categories-premium on phone
+══════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* 3-column vertical-stack layout — shows more categories */
+  .categories-premium {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+    padding: 6px 12px 16px !important;
+  }
+
+  /* Vertical stack: icon top, text below */
+  .cat-card-premium {
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 12px 8px !important;
+    text-align: center !important;
+    border-radius: 16px !important;
+    min-height: 86px !important;
+    transition: transform var(--sk-spring), background var(--sk-transition) !important;
+  }
+  .cat-card-premium:active {
+    transform: scale(0.92) !important;
+    background: rgba(113,255,0,0.07) !important;
+  }
+  /* Hide arrow on vertical layout */
+  .ccp-arrow { display: none !important; }
+  .ccp-icon {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 12px !important;
+    font-size: 22px !important;
+  }
+  .ccp-info h3 {
+    font-size: 9px !important;
+    line-height: 1.3 !important;
+    white-space: normal !important;
+    overflow: hidden !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+  }
+  .ccp-info p { display: none !important; }
+  .ccp-glow { width: 50px !important; height: 50px !important; }
+
+  /* Glass hero buttons — full width stack on phone */
+  .glass-hero-btns {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .glass-btn-green {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 13px !important;
+    font-size: 13px !important;
+    border-radius: 14px !important;
+  }
+
+  /* 2-col goods/services split in hero */
+  .glass-hero-card > div[style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+  .glass-hero-card > div[style*="grid-template-columns:1fr 1fr"] a {
+    padding: 10px 10px !important;
+    border-radius: 12px !important;
+    gap: 7px !important;
+  }
+  .glass-hero-card > div[style*="grid-template-columns:1fr 1fr"] a span {
+    font-size: 18px !important;
+  }
+  .glass-hero-card > div[style*="grid-template-columns:1fr 1fr"] a > div > div:first-child {
+    font-size: 11px !important;
+  }
+  .glass-hero-card > div[style*="grid-template-columns:1fr 1fr"] a > div > div:last-child {
+    display: none !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   30.  LIGHT MODE OVERRIDES
+══════════════════════════════════════════════════ */
+body.light-mode .glass-hero-card,
+body.light-mode .modal-box,
+body.light-mode .cat-card-premium {
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+}
+body.light-mode .product-card {
+  background: rgba(255,255,255,0.9) !important;
+  border-color: rgba(0,0,0,0.07) !important;
+}
+body.light-mode input:not([type="checkbox"]):not([type="radio"]) {
+  background: rgba(0,0,0,0.04) !important;
+  border-color: rgba(0,0,0,0.12) !important;
+  color: #111 !important;
+}
+body.light-mode .qlink,
+body.light-mode .hub-strip-item {
+  background: rgba(0,0,0,0.04) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+/* ── iOS zoom prevention: inputs must be ≥ 16px ── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+select,
+textarea {
+  font-size: max(16px, 1em) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SOKONI PREMIUM v3 — GLOBAL PAGE POLISH
+   Applies to ALL pages: buttons, modals, navbars, footers, forms
+═══════════════════════════════════════════════════════════════ */
+
+/* ── NAVBAR — glass blur premium ── */
+.navbar{
+    background:rgba(6,6,6,0.88) !important;
+    backdrop-filter:blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter:blur(20px) saturate(180%) !important;
+    border-bottom:1px solid rgba(255,255,255,0.07) !important;
+    box-shadow:0 4px 24px rgba(0,0,0,0.3) !important;
+}
+
+/* ── BOTTOM NAV — glass + guaranteed visibility on mobile ── */
+@media (max-width: 768px) {
+  .bottom-nav {
+    display: flex !important;
+  }
+}
+.bottom-nav,.bnav{
+    background:rgba(6,6,6,0.92) !important;
+    backdrop-filter:blur(20px) !important;
+    -webkit-backdrop-filter:blur(20px) !important;
+    border-top:1px solid rgba(255,255,255,0.06) !important;
+}
+
+/* ── BUTTONS — premium defaults ── */
+button,
+.btn,
+[class*="-btn"]:not(.n-bell-btn):not(.theme-toggle):not(.menu-toggle){
+    font-family:inherit;
+}
+.btn-primary,
+.primary-btn{
+    background:linear-gradient(135deg,#71ff00,#4fc800) !important;
+    color:black !important;
+    font-weight:900 !important;
+    border:none !important;
+    border-radius:14px !important;
+    box-shadow:0 4px 16px rgba(113,255,0,0.3) !important;
+    transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s !important;
+}
+.btn-primary:hover,
+.primary-btn:hover{
+    transform:translateY(-2px) !important;
+    box-shadow:0 8px 28px rgba(113,255,0,0.45) !important;
+}
+
+/* ── MODALS / DRAWERS ── */
+.modal,
+.modal-content,
+.drawer,
+.product-modal-inner{
+    background:linear-gradient(145deg,rgba(18,18,18,0.98),rgba(12,12,12,0.98)) !important;
+    border:1px solid rgba(255,255,255,0.08) !important;
+    border-radius:28px !important;
+    backdrop-filter:blur(24px) !important;
+    -webkit-backdrop-filter:blur(24px) !important;
+}
+
+/* ── CARDS — universal premium base ── */
+.card,
+[class*="-card"]:not(.seller-card):not(.product-card):not(.flash-sale-bar){
+    border-radius:20px;
+}
+
+/* ── SCROLLBAR ── globally hidden on touch, subtle on desktop ── */
+@media(min-width:769px){
+    ::-webkit-scrollbar{width:6px;height:6px;}
+    ::-webkit-scrollbar-track{background:rgba(255,255,255,0.03);border-radius:4px;}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:4px;}
+    ::-webkit-scrollbar-thumb:hover{background:rgba(113,255,0,0.3);}
+}
+@media(max-width:768px){
+    ::-webkit-scrollbar{display:none;}
+    *{scrollbar-width:none;}
+}
+
+/* ── FOOTER — premium ── */
+footer,.site-footer{
+    background:rgba(6,6,6,0.95) !important;
+    border-top:1px solid rgba(255,255,255,0.06) !important;
+}
+
+/* ── SEARCH BAR ── */
+.search-bar input{
+    background:rgba(255,255,255,0.06) !important;
+    border:1px solid rgba(255,255,255,0.1) !important;
+    border-radius:14px !important;
+    color:white !important;
+    transition:border-color .25s,box-shadow .25s !important;
+}
+.search-bar input:focus{
+    border-color:rgba(113,255,0,0.4) !important;
+    box-shadow:0 0 0 3px rgba(113,255,0,0.08) !important;
+    outline:none !important;
+}
+
+/* ── NOTIFICATION PANEL ── */
+.n-panel{
+    background:rgba(10,10,10,0.97) !important;
+    border:1px solid rgba(255,255,255,0.08) !important;
+    border-radius:22px !important;
+    backdrop-filter:blur(20px) !important;
+    -webkit-backdrop-filter:blur(20px) !important;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5) !important;
+}
+.n-opt{
+    border-radius:14px !important;
+    transition:background .2s !important;
+}
+.n-opt:hover{
+    background:rgba(255,255,255,0.06) !important;
+}
+
+/* ── HUB / CATEGORY CARDS ── */
+.hub-card,.cat-card,.category-card{
+    background:linear-gradient(145deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01));
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:20px;
+    transition:transform .3s cubic-bezier(.34,1.56,.64,1),border-color .3s,box-shadow .3s;
+    overflow:hidden;
+}
+.hub-card:hover,.cat-card:hover,.category-card:hover{
+    transform:translateY(-5px) scale(1.03);
+    border-color:rgba(113,255,0,0.2);
+    box-shadow:0 12px 30px rgba(0,0,0,0.35),0 0 0 1px rgba(113,255,0,0.08);
+}
+
+/* ── TESTIMONIAL / REVIEW CARDS ── */
+.review-card,.testimonial-card,.rating-card{
+    background:linear-gradient(145deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01));
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:20px;
+    padding:18px;
+    transition:transform .3s,border-color .3s;
+}
+.review-card:hover,.testimonial-card:hover{
+    transform:translateY(-3px);
+    border-color:rgba(113,255,0,0.15);
+}
+
+/* ── BADGES — premium finish ── */
+.badge,.pill{
+    border-radius:999px;
+    font-weight:800;
+    font-size:10px;
+    letter-spacing:.03em;
+    padding:3px 9px;
+}
+
+/* ── SECTION SEPARATOR ── */
+section + section{
+    border-top:1px solid rgba(255,255,255,0.04);
+}
+
+/* ── LIGHT MODE GLOBAL ── */
+body.light-mode .navbar{
+    background:rgba(255,255,255,0.95) !important;
+    border-bottom-color:rgba(0,0,0,0.08) !important;
+    box-shadow:0 2px 16px rgba(0,0,0,0.06) !important;
+}
+body.light-mode .bottom-nav,
+body.light-mode .bnav{
+    background:rgba(255,255,255,0.96) !important;
+    border-top-color:rgba(0,0,0,0.08) !important;
+}
+body.light-mode .n-panel{
+    background:rgba(255,255,255,0.98) !important;
+    border-color:rgba(0,0,0,0.08) !important;
+}
+body.light-mode .hub-card,
+body.light-mode .cat-card,
+body.light-mode .category-card{
+    background:#fff;
+    border-color:rgba(0,0,0,0.07);
+}
+body.light-mode .review-card,
+body.light-mode .testimonial-card{
+    background:#f8f8f8;
+    border-color:rgba(0,0,0,0.07);
+}
+/* END PREMIUM v3 GLOBAL */

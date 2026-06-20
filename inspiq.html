@@ -1,0 +1,206 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>InspIQ — Your Personalised Feed | SOKONI</title>
+  <meta name="description" content="Browse your infinite personalised feed of deals, services and products curated just for you on SOKONI InspIQ.">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mysokoni.co.ke/inspiq.html">
+  <meta property="og:title" content="InspIQ — Your Personalised Feed | SOKONI">
+  <meta property="og:description" content="Browse your infinite personalised feed of deals, services and products curated just for you on SOKONI InspIQ.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:site_name" content="SOKONI">
+  <meta property="og:locale" content="en_KE">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:white;min-height:100vh;padding-bottom:90px;}
+
+    /* Nav */
+    .iq-nav{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(113,255,0,0.1);position:sticky;top:0;z-index:200;backdrop-filter:blur(20px);}
+    .iq-nav-logo{height:30px;}
+    .iq-nav-right{display:flex;gap:8px;align-items:center;}
+    .iq-nav-link{color:rgba(255,255,255,0.7);text-decoration:none;font-size:12px;font-weight:700;padding:8px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:10px;transition:all .2s;background:rgba(255,255,255,0.04);cursor:pointer;font-family:inherit;}
+    .iq-nav-link:hover{color:#71ff00;border-color:rgba(113,255,0,0.3);background:rgba(113,255,0,0.07);}
+    .iq-nav-link:first-child{color:#71ff00;border-color:rgba(113,255,0,0.28);background:rgba(113,255,0,0.08);}
+
+    /* Hero */
+    .iq-hero{padding:28px 20px 20px;background:linear-gradient(135deg,rgba(113,255,0,0.05),rgba(0,170,255,0.03));border-bottom:1px solid rgba(113,255,0,0.08);}
+    .iq-hero-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+    .iq-hero-badge{font-size:9px;font-weight:800;padding:3px 10px;border-radius:999px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);color:#71ff00;text-transform:uppercase;letter-spacing:.06em;}
+    .iq-dot{width:7px;height:7px;border-radius:50%;background:#71ff00;box-shadow:0 0 6px #71ff00;animation:iq-pulse 2s ease-in-out infinite;flex-shrink:0;}
+    @keyframes iq-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.8);}}
+    .iq-hero h1{font-size:clamp(20px,5vw,28px);font-weight:900;color:white;line-height:1.15;}
+    .iq-hero h1 span{background:linear-gradient(135deg,#71ff00,#00aaff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .iq-hero p{font-size:12px;color:rgba(255,255,255,0.4);margin-top:5px;line-height:1.5;}
+
+    /* Filter bar */
+    .iq-filters{display:flex;gap:8px;overflow-x:auto;padding:14px 16px 6px;scrollbar-width:none;}
+    .iq-filters::-webkit-scrollbar{display:none;}
+    .iq-filter-pill{flex-shrink:0;padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.55);font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:inherit;}
+    .iq-filter-pill.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00;}
+
+    /* Stats */
+    .iq-stats{display:flex;gap:0;background:rgba(113,255,0,0.03);border-bottom:1px solid rgba(113,255,0,0.07);}
+    .iq-stat{flex:1;text-align:center;padding:10px 4px;border-right:1px solid rgba(113,255,0,0.06);}
+    .iq-stat:last-child{border-right:none;}
+    .iq-stat-val{font-size:16px;font-weight:900;color:#71ff00;}
+    .iq-stat-lbl{font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px;}
+
+    /* Feed wrapper */
+    .iq-body{max-width:1200px;margin:0 auto;padding:4px 0 20px;}
+
+    /* Persona bar */
+    #iqPersonaBar{padding:12px 20px;display:none;}
+    .iq-persona-chip{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(113,255,0,0.2);border-radius:12px;font-size:12px;font-weight:700;color:white;}
+
+    /* Loading spinner */
+    #iqLoader{text-align:center;padding:20px;display:none;}
+    .iq-spinner{width:32px;height:32px;border:3px solid rgba(113,255,0,0.1);border-top-color:#71ff00;border-radius:50%;animation:iq-spin .8s linear infinite;margin:0 auto;}
+    @keyframes iq-spin{to{transform:rotate(360deg);}}
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- Nav -->
+<nav class="iq-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="iq-nav-logo" alt="SOKONI"></a>
+  <div class="iq-nav-right">
+    <button type="button" onclick="(function(){var p=document.getElementById('inspiqPicker');var open=p.style.display===''||p.style.display==='none';if(open){p.style.display='block';InspIQ&&InspIQ.renderPickerEdit('inspiqPicker');}else{p.style.display='none';}})()" class="iq-nav-link">✨ Edit Interests</button>
+    <a href="index.html" class="iq-nav-link">🏠 Home</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div class="iq-hero">
+  <div class="iq-hero-top">
+    <span class="iq-hero-badge">InspIQ</span>
+    <span class="iq-dot"></span>
+  </div>
+  <h1>Your <span>Infinite Feed</span></h1>
+  <p>Deals, products &amp; services personalised to your interests — updated continuously</p>
+</div>
+
+<!-- Stats -->
+<div class="iq-stats">
+  <div class="iq-stat"><div class="iq-stat-val">500+</div><div class="iq-stat-lbl">Curated Picks</div></div>
+  <div class="iq-stat"><div class="iq-stat-val">18</div><div class="iq-stat-lbl">Categories</div></div>
+  <div class="iq-stat"><div class="iq-stat-val">∞</div><div class="iq-stat-lbl">Infinite Scroll</div></div>
+  <div class="iq-stat"><div class="iq-stat-val">AI</div><div class="iq-stat-lbl">Powered</div></div>
+</div>
+
+<!-- Category filter pills -->
+<div class="iq-filters" id="iqFilters"></div>
+
+<!-- Interest picker (for new users) -->
+<div id="inspiqPicker" style="padding:0 16px 8px;display:none;"></div>
+
+<!-- Persona chip -->
+<div id="iqPersonaBar"></div>
+
+<div class="iq-body">
+  <!-- Full infinite scroll feed -->
+  <div id="inspiqFeed"></div>
+  <div id="iqLoader"><div class="iq-spinner"></div></div>
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="inspiq.html" class="bnav-item active-bnav"><span class="bnav-emoji">⭐</span><span>InspIQ</span></a>
+  <a href="community.html" class="bnav-item"><span class="bnav-emoji">👥</span><span>Community</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script src="inspiq.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.InspIQ) return;
+
+  /* Category filter pills */
+  const CATS_ORDER = [
+    ['','🌟 All'],['food','🍎 Food'],['electronics','📱 Tech'],['fashion','👗 Fashion'],
+    ['beauty','💄 Beauty'],['furniture','🏠 Home'],['sports','⚽ Sports'],
+    ['automotive','🚗 Auto'],['healthcare','🏥 Health'],['entertainment','🎬 Events'],
+    ['luxury','💎 Luxury'],['books','📚 Learn'],['agriculture','🌾 Agri'],
+    ['construction','🏗️ Build'],['property','🏘️ Property'],['travel','✈️ Travel'],
+    ['baby','🍼 Baby'],['pets','🐾 Pets'],['finance','💰 Finance'],
+  ];
+
+  const filterEl = document.getElementById('iqFilters');
+  let activeCat = '';
+  if (filterEl) {
+    filterEl.innerHTML = CATS_ORDER.map(([key, label]) =>
+      `<button type="button" class="iq-filter-pill${key===''?' active':''}" data-cat="${key}"
+         onclick="applyFilter('${key}', this)">${label}</button>`
+    ).join('');
+  }
+
+  window.applyFilter = function (cat, btn) {
+    activeCat = cat;
+    document.querySelectorAll('.iq-filter-pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    /* Re-score so selected category gets a big boost and re-render */
+    if (cat) InspIQ.track(cat, 10);
+    const feed = document.getElementById('inspiqFeed');
+    if (feed) { feed.innerHTML = ''; InspIQ.renderForYou('inspiqFeed'); }
+  };
+
+  /* Persona chip */
+  const persona = InspIQ.getPersona();
+  const bar = document.getElementById('iqPersonaBar');
+  if (persona && bar) {
+    bar.style.display = 'block';
+    bar.innerHTML = `<div class="iq-persona-chip">${persona.emoji} ${persona.name} <span style="color:rgba(255,255,255,0.4);font-weight:400;font-size:11px;">— ${persona.tip}</span></div>`;
+  }
+});
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+

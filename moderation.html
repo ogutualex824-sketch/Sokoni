@@ -1,0 +1,793 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Moderation Dashboard — SOKONI Admin</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding-bottom:80px;}
+
+    /* ── Access denied ── */
+    #accessDenied{display:none;min-height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:32px;}
+    #accessDenied.show{display:flex;}
+    .access-icon{font-size:64px;}
+    .access-title{font-size:24px;font-weight:900;color:#ff6b6b;}
+    .access-sub{color:rgba(255,255,255,0.45);font-size:14px;max-width:320px;}
+    .access-btn{padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4dcc00);border:none;border-radius:14px;color:#0a0a0a;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;margin-top:8px;}
+
+    /* ── Full dashboard (hidden until auth check) ── */
+    #dashboard{display:none;}
+    #dashboard.show{display:block;}
+
+    /* ── Top nav ── */
+    .mod-nav{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 20px;background:#111;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px);}
+    .mod-nav-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
+    .mod-nav-logo{height:28px;}
+    .mod-nav-title{font-size:14px;font-weight:900;white-space:nowrap;}
+    .mod-nav-badge{background:rgba(255,60,60,0.15);border:1px solid rgba(255,60,60,0.3);color:#ff6b6b;font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;white-space:nowrap;}
+    .mod-nav-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .mod-nav-email{font-size:12px;color:rgba(255,255,255,0.4);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .mod-clock{font-size:12px;color:rgba(255,255,255,0.3);font-variant-numeric:tabular-nums;white-space:nowrap;}
+    .mod-refresh-btn{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;}
+    .mod-refresh-btn:hover{background:rgba(255,255,255,0.1);color:#fff;}
+
+    /* ── Stats bar ── */
+    .mod-stats{display:flex;gap:10px;padding:14px 18px;overflow-x:auto;flex-wrap:nowrap;}
+    .mod-stat{background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:12px 18px;min-width:130px;flex-shrink:0;position:relative;}
+    .mod-stat-label{font-size:11px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+    .mod-stat-val{font-size:24px;font-weight:900;}
+    .mod-stat-val.red{color:#ff6b6b;}
+    .mod-stat-val.yellow{color:#ffcc00;}
+    .mod-stat-val.green{color:#71ff00;}
+    .mod-stat-val.blue{color:#00aaff;}
+    .mod-stat-dot{width:8px;height:8px;border-radius:50%;background:#71ff00;position:absolute;top:12px;right:12px;animation:pulse 2s infinite;}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(0.8)}}
+
+    /* ── Tabs ── */
+    .mod-tabs{display:flex;gap:4px;padding:14px 18px 0;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,0.07);}
+    .mod-tab{padding:10px 18px;border:none;border-bottom:2px solid transparent;background:none;color:rgba(255,255,255,0.45);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:color .2s,border-color .2s;display:flex;align-items:center;gap:6px;}
+    .mod-tab:hover{color:rgba(255,255,255,0.8);}
+    .mod-tab.active{color:#71ff00;border-bottom-color:#71ff00;}
+    .mod-tab-count{background:rgba(255,255,255,0.1);border-radius:8px;padding:2px 7px;font-size:11px;font-weight:900;}
+    .mod-tab.active .mod-tab-count{background:rgba(113,255,0,0.15);color:#71ff00;}
+
+    /* ── Tab panes ── */
+    .mod-pane{display:none;padding:18px;}
+    .mod-pane.active{display:block;}
+
+    /* ── Filter bar ── */
+    .mod-filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+    .mod-filter-btn{padding:7px 14px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);cursor:pointer;font-family:inherit;transition:all .15s;}
+    .mod-filter-btn:hover{background:rgba(255,255,255,0.08);color:#fff;}
+    .mod-filter-btn.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+
+    /* ── Data table ── */
+    .mod-table-wrap{overflow-x:auto;border-radius:16px;border:1px solid rgba(255,255,255,0.07);}
+    .mod-table{width:100%;border-collapse:collapse;min-width:600px;}
+    .mod-table thead tr{background:#111;border-bottom:1px solid rgba(255,255,255,0.08);}
+    .mod-table th{padding:12px 14px;font-size:11px;font-weight:800;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.5px;text-align:left;white-space:nowrap;}
+    .mod-table tbody tr{border-bottom:1px solid rgba(255,255,255,0.04);transition:background .15s;}
+    .mod-table tbody tr:last-child{border-bottom:none;}
+    .mod-table tbody tr:hover{background:rgba(255,255,255,0.03);}
+    .mod-table td{padding:12px 14px;font-size:13px;vertical-align:middle;}
+    .mod-table-empty{padding:40px;text-align:center;color:rgba(255,255,255,0.25);font-size:14px;}
+
+    /* ── Action buttons in table ── */
+    .mod-action-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .mod-action-btn{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:800;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;transition:filter .15s;}
+    .mod-action-btn:hover{filter:brightness(1.15);}
+    .btn-dismiss{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);}
+    .btn-warn{background:rgba(255,200,0,0.12);color:#ffcc00;border:1px solid rgba(255,200,0,0.25);}
+    .btn-remove{background:rgba(255,100,0,0.12);color:#ff8040;border:1px solid rgba(255,100,0,0.25);}
+    .btn-ban{background:rgba(255,60,60,0.12);color:#ff6b6b;border:1px solid rgba(255,60,60,0.25);}
+    .btn-approve{background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);}
+    .btn-reject{background:rgba(255,60,60,0.1);color:#ff6b6b;border:1px solid rgba(255,60,60,0.2);}
+    .btn-mediate{background:rgba(0,170,255,0.1);color:#00aaff;border:1px solid rgba(0,170,255,0.2);}
+    .btn-refund{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.2);}
+    .btn-view{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);}
+    .btn-escalate{background:rgba(255,200,0,0.1);color:#ffcc00;}
+    .btn-clear{background:rgba(113,255,0,0.1);color:#71ff00;}
+    .btn-investigate{background:rgba(0,170,255,0.1);color:#00aaff;}
+    .btn-police{background:rgba(255,60,60,0.15);color:#ff6b6b;border:1px solid rgba(255,60,60,0.3);}
+
+    /* ── Status / type badges ── */
+    .badge{display:inline-block;font-size:10px;font-weight:800;padding:3px 8px;border-radius:7px;text-transform:uppercase;letter-spacing:0.3px;}
+    .badge-pending{background:rgba(255,200,0,0.12);color:#ffcc00;border:1px solid rgba(255,200,0,0.25);}
+    .badge-open{background:rgba(255,100,0,0.12);color:#ff8040;border:1px solid rgba(255,100,0,0.2);}
+    .badge-resolved{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.2);}
+    .badge-escalated{background:rgba(255,60,60,0.12);color:#ff6b6b;border:1px solid rgba(255,60,60,0.2);}
+    .badge-high{background:rgba(255,60,60,0.15);color:#ff6b6b;}
+    .badge-medium{background:rgba(255,200,0,0.12);color:#ffcc00;}
+    .badge-low{background:rgba(113,255,0,0.1);color:#71ff00;}
+    .badge-user{background:rgba(0,170,255,0.1);color:#00aaff;}
+    .badge-listing{background:rgba(113,255,0,0.1);color:#71ff00;}
+    .badge-business{background:rgba(255,150,0,0.1);color:#ff9900;}
+    .badge-message{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);}
+
+    /* ── Bulk actions ── */
+    .mod-bulk-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.15);border-radius:12px;margin-bottom:12px;flex-wrap:wrap;}
+    .mod-bulk-label{font-size:12px;font-weight:700;color:#71ff00;flex:1;}
+    .mod-bulk-btn{padding:7px 14px;border-radius:9px;font-size:12px;font-weight:800;border:none;cursor:pointer;font-family:inherit;transition:filter .15s;}
+    .mod-bulk-btn:hover{filter:brightness(1.1);}
+
+    /* ── Dispute detail panel ── */
+    .mod-detail-panel{display:none;background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px;margin-top:16px;}
+    .mod-detail-panel.open{display:block;}
+    .mod-detail-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+    .mod-detail-title{font-size:16px;font-weight:900;}
+    .mod-detail-close{background:none;border:none;color:rgba(255,255,255,0.4);font-size:22px;cursor:pointer;font-family:inherit;line-height:1;padding:4px;}
+    .mod-timeline{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}
+    .mod-timeline-item{display:flex;gap:12px;font-size:13px;color:rgba(255,255,255,0.6);}
+    .tl-dot{width:10px;height:10px;border-radius:50%;background:#71ff00;flex-shrink:0;margin-top:4px;}
+    .mod-msg-list{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+    .mod-msg{background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px;}
+    .mod-msg-sender{font-size:11px;font-weight:800;color:#71ff00;margin-bottom:4px;}
+    .mod-msg-text{font-size:13px;color:rgba(255,255,255,0.65);}
+    .mod-detail-actions{display:flex;gap:8px;flex-wrap:wrap;}
+
+    /* ── Loading spinner ── */
+    .mod-spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(113,255,0,0.2);border-top-color:#71ff00;border-radius:50%;animation:spin .6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Toast ── */
+    #modToast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(113,255,0,0.95);color:#0a0a0a;padding:12px 22px;border-radius:14px;font-size:14px;font-weight:800;z-index:9999;display:none;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+  </style>
+</head>
+<body>
+
+  <!-- Access denied screen -->
+  <div id="accessDenied">
+    <div class="access-icon">🚫</div>
+    <div class="access-title">Access Denied</div>
+    <div class="access-sub">This page is restricted to SOKONI moderators and administrators only.</div>
+    <a href="index.html" class="access-btn">← Go to Home</a>
+  </div>
+
+  <!-- Full dashboard (shown after auth check) -->
+  <div id="dashboard">
+
+    <!-- Top nav -->
+    <nav class="mod-nav" aria-label="Moderation navigation">
+      <div class="mod-nav-left">
+        <img src="assets/logosokoni.png" alt="SOKONI" class="mod-nav-logo">
+        <span class="mod-nav-title">Moderation Dashboard</span>
+        <span class="mod-nav-badge" id="adminRoleBadge">🔴 ADMIN</span>
+      </div>
+      <div class="mod-nav-right">
+        <span class="mod-nav-email" id="adminEmail"></span>
+        <span class="mod-clock" id="modClock"></span>
+        <button class="mod-refresh-btn" onclick="refreshAll()">↻ Refresh</button>
+      </div>
+    </nav>
+
+    <!-- Stats bar -->
+    <div class="mod-stats">
+      <div class="mod-stat">
+        <div class="mod-stat-label">Pending Reports</div>
+        <div class="mod-stat-val red" id="statReports">—</div>
+        <div class="mod-stat-dot"></div>
+      </div>
+      <div class="mod-stat">
+        <div class="mod-stat-label">Verifications</div>
+        <div class="mod-stat-val yellow" id="statVerifications">—</div>
+        <div class="mod-stat-dot" style="background:#ffcc00;"></div>
+      </div>
+      <div class="mod-stat">
+        <div class="mod-stat-label">Open Disputes</div>
+        <div class="mod-stat-val blue" id="statDisputes">—</div>
+        <div class="mod-stat-dot" style="background:#00aaff;"></div>
+      </div>
+      <div class="mod-stat">
+        <div class="mod-stat-label">Fraud Alerts</div>
+        <div class="mod-stat-val red" id="statFraud">—</div>
+        <div class="mod-stat-dot"></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="mod-tabs" role="tablist">
+      <button class="mod-tab active" role="tab" aria-selected="true"  onclick="switchTab('reports',this)"       id="tabReports">🚩 Reports       <span class="mod-tab-count" id="tcReports">0</span></button>
+      <button class="mod-tab"        role="tab" aria-selected="false" onclick="switchTab('verifications',this)" id="tabVerifications">✅ Verifications <span class="mod-tab-count" id="tcVerifications">0</span></button>
+      <button class="mod-tab"        role="tab" aria-selected="false" onclick="switchTab('disputes',this)"      id="tabDisputes">⚖️ Disputes      <span class="mod-tab-count" id="tcDisputes">0</span></button>
+      <button class="mod-tab"        role="tab" aria-selected="false" onclick="switchTab('fraud',this)"         id="tabFraud">🔴 Fraud Alerts   <span class="mod-tab-count" id="tcFraud">0</span></button>
+    </div>
+
+    <!-- ══════ TAB: Reports ══════ -->
+    <div class="mod-pane active" id="paneReports" role="tabpanel">
+      <div class="mod-filter-bar" id="reportFilters">
+        <button class="mod-filter-btn active" onclick="setReportFilter('all',this)">All</button>
+        <button class="mod-filter-btn" onclick="setReportFilter('user',this)">👤 User</button>
+        <button class="mod-filter-btn" onclick="setReportFilter('listing',this)">📦 Listing</button>
+        <button class="mod-filter-btn" onclick="setReportFilter('business',this)">🏢 Business</button>
+        <button class="mod-filter-btn" onclick="setReportFilter('message',this)">💬 Message</button>
+      </div>
+      <div class="mod-bulk-bar" id="reportBulkBar" style="display:none;">
+        <label class="mod-bulk-label"><input type="checkbox" id="selectAllReports" onchange="toggleSelectAll('reportTable')"> Select all visible</label>
+        <button class="mod-bulk-btn" style="background:rgba(255,255,255,0.08);color:#fff;" onclick="bulkAction('dismiss')">Dismiss Selected</button>
+        <button class="mod-bulk-btn" style="background:rgba(255,60,60,0.12);color:#ff6b6b;" onclick="bulkAction('escalate')">Escalate Selected</button>
+      </div>
+      <div class="mod-table-wrap">
+        <table class="mod-table" id="reportTable">
+          <thead>
+            <tr>
+              <th><input type="checkbox" onchange="toggleSelectAll('reportTable')" style="accent-color:#71ff00;"></th>
+              <th>Type</th><th>Target ID</th><th>Reason</th><th>Reporter</th><th>Date</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="reportBody">
+            <tr><td colspan="7" class="mod-table-empty"><span class="mod-spinner"></span> Loading reports...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════ TAB: Verifications ══════ -->
+    <div class="mod-pane" id="paneVerifications" role="tabpanel">
+      <div class="mod-table-wrap">
+        <table class="mod-table" id="verifTable">
+          <thead>
+            <tr>
+              <th>Type</th><th>Name</th><th>Professional Type</th><th>Submitted</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="verifBody">
+            <tr><td colspan="5" class="mod-table-empty"><span class="mod-spinner"></span> Loading verification queue...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════ TAB: Disputes ══════ -->
+    <div class="mod-pane" id="paneDisputes" role="tabpanel">
+      <div class="mod-table-wrap">
+        <table class="mod-table" id="disputeTable">
+          <thead>
+            <tr>
+              <th>ID</th><th>Order ID</th><th>Type</th><th>Buyer</th><th>Seller</th><th>Amount</th><th>Date</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="disputeBody">
+            <tr><td colspan="9" class="mod-table-empty"><span class="mod-spinner"></span> Loading disputes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mod-detail-panel" id="disputeDetailPanel">
+        <div class="mod-detail-header">
+          <span class="mod-detail-title" id="detailTitle">Dispute Detail</span>
+          <button class="mod-detail-close" onclick="closeDisputeDetail()" aria-label="Close detail">&#x2715;</button>
+        </div>
+        <div class="mod-timeline" id="detailTimeline"></div>
+        <div class="mod-msg-list" id="detailMessages"></div>
+        <div class="mod-detail-actions" id="detailActions"></div>
+      </div>
+    </div>
+
+    <!-- ══════ TAB: Fraud ══════ -->
+    <div class="mod-pane" id="paneFraud" role="tabpanel">
+      <div class="mod-table-wrap">
+        <table class="mod-table" id="fraudTable">
+          <thead>
+            <tr>
+              <th>Target</th><th>Type</th><th>Reason</th><th>Flagged By</th><th>Date</th><th>Risk</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fraudBody">
+            <tr><td colspan="7" class="mod-table-empty"><span class="mod-spinner"></span> Loading fraud alerts...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /dashboard -->
+
+  <div id="modToast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="firebase.js"></script>
+  <script src="sokoni-trust.js" defer></script>
+  <script src="scroll-top.js" defer></script>
+  <script>
+    /* ================================================================
+       MODERATION DASHBOARD — JS
+    ================================================================ */
+
+    /* ── Security: escape all user data ── */
+    function esc(s){
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function shortId(id){ return esc(String(id||'').slice(0,10)+'…'); }
+
+    function fmtDate(iso){
+      try{ return new Date(iso).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+      catch(e){ return esc(iso); }
+    }
+
+    /* ── Toast ── */
+    function showToast(msg,isErr){
+      var t = document.getElementById('modToast');
+      t.textContent = msg;
+      t.style.background = isErr ? 'rgba(255,60,60,0.95)' : 'rgba(113,255,0,0.95)';
+      t.style.color      = isErr ? '#fff' : '#0a0a0a';
+      t.style.display    = 'block';
+      setTimeout(function(){ t.style.display='none'; }, 3200);
+    }
+
+    /* ── Clock ── */
+    function startClock(){
+      var el = document.getElementById('modClock');
+      function tick(){ if(el) el.textContent = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+      tick();
+      setInterval(tick, 1000);
+    }
+
+    /* ── Tab switching ── */
+    var currentTab = 'reports';
+    function switchTab(tab, btn){
+      currentTab = tab;
+      document.querySelectorAll('.mod-tab').forEach(function(b){
+        b.classList.remove('active');
+        b.setAttribute('aria-selected','false');
+      });
+      document.querySelectorAll('.mod-pane').forEach(function(p){ p.classList.remove('active'); });
+      if(btn){ btn.classList.add('active'); btn.setAttribute('aria-selected','true'); }
+      var pane = document.getElementById('pane'+tab.charAt(0).toUpperCase()+tab.slice(1));
+      if(pane) pane.classList.add('active');
+    }
+
+    /* ── Report filter ── */
+    var reportFilter = 'all';
+    var allReports   = [];
+    function setReportFilter(type, btn){
+      reportFilter = type;
+      document.querySelectorAll('#reportFilters .mod-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+      if(btn) btn.classList.add('active');
+      renderReports(allReports);
+    }
+
+    /* ── Select all ── */
+    function toggleSelectAll(tableId){
+      var table = document.getElementById(tableId);
+      if(!table) return;
+      var master = table.querySelector('thead input[type=checkbox]');
+      var boxes  = table.querySelectorAll('tbody input[type=checkbox]');
+      var checked = master ? master.checked : false;
+      boxes.forEach(function(b){ b.checked = checked; });
+      document.getElementById('reportBulkBar').style.display = boxes.length ? 'flex' : 'none';
+    }
+
+    function bulkAction(action){
+      var table = document.getElementById('reportTable');
+      var checked = table ? table.querySelectorAll('tbody input[type=checkbox]:checked') : [];
+      if(!checked.length){ showToast('No items selected.'); return; }
+      showToast(checked.length+' item(s) '+action+'d.');
+    }
+
+    /* ── Firestore helpers ── */
+    var db, fs;
+
+    async function getFS(){
+      if(!fs){
+        fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        db  = window.firebaseDB;
+      }
+      return fs;
+    }
+
+    async function updateDoc(collection, docId, data){
+      var f = await getFS();
+      var ref = f.doc(db, collection, docId);
+      await f.updateDoc(ref, data);
+    }
+
+    /* ── Render helpers ── */
+    function typeBadge(type){
+      var cls = { user:'badge-user', listing:'badge-listing', business:'badge-business', message:'badge-message' };
+      return '<span class="badge '+(cls[type]||'')+'">'+esc(type)+'</span>';
+    }
+
+    function statusBadge(status){
+      var cls = { pending:'badge-pending', open:'badge-open', resolved:'badge-resolved', escalated:'badge-escalated' };
+      return '<span class="badge '+(cls[status]||'badge-pending')+'">'+esc(status)+'</span>';
+    }
+
+    function riskBadge(severity){
+      var cls = { high:'badge-high', medium:'badge-medium', low:'badge-low' };
+      return '<span class="badge '+(cls[severity]||'badge-medium')+'">'+esc(severity||'medium')+'</span>';
+    }
+
+    /* ================================================================
+       REPORTS
+    ================================================================ */
+    var unsubReports;
+    async function listenReports(){
+      var f = await getFS();
+      if(!db){ renderReports([]); return; }
+      try {
+        var q = f.query(
+          f.collection(db,'flags'),
+          f.where('status','==','pending'),
+          f.orderBy('createdAt','desc'),
+          f.limit(200)
+        );
+        unsubReports = f.onSnapshot(q, function(snap){
+          allReports = [];
+          snap.forEach(function(d){ allReports.push(Object.assign({id:d.id},d.data())); });
+          document.getElementById('statReports').textContent   = allReports.length;
+          document.getElementById('tcReports').textContent     = allReports.length;
+          renderReports(allReports);
+        }, function(err){
+          console.warn('[Moderation reports]',err);
+          renderReports([]);
+        });
+      } catch(e){ console.error(e); renderReports([]); }
+    }
+
+    function renderReports(data){
+      var filtered = reportFilter === 'all' ? data : data.filter(function(r){ return r.type===reportFilter; });
+      var tbody = document.getElementById('reportBody');
+      if(!tbody) return;
+      if(!filtered.length){
+        tbody.innerHTML = '<tr><td colspan="7" class="mod-table-empty">No pending '+esc(reportFilter)+' reports.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = filtered.map(function(r){
+        return '<tr>'
+          +'<td><input type="checkbox" style="accent-color:#71ff00;" data-id="'+esc(r.id)+'"></td>'
+          +'<td>'+typeBadge(r.type)+'</td>'
+          +'<td style="font-family:monospace;font-size:11px;">'+esc((r.targetId||'').slice(0,16))+'</td>'
+          +'<td>'+esc(r.reason)+'</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.45);">'+esc((r.reporterUid||'').slice(0,12))+'…</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(r.createdAt)+'</td>'
+          +'<td><div class="mod-action-row">'
+          +'<button class="mod-action-btn btn-dismiss" onclick="reportAction(\'dismiss\',\''+esc(r.id)+'\')">Dismiss</button>'
+          +'<button class="mod-action-btn btn-warn" onclick="reportAction(\'warn\',\''+esc(r.id)+'\')">Warn</button>'
+          +'<button class="mod-action-btn btn-remove" onclick="reportAction(\'remove\',\''+esc(r.id)+'\')">Remove Content</button>'
+          +'<button class="mod-action-btn btn-ban" onclick="reportAction(\'ban\',\''+esc(r.id)+'\',\''+esc(r.targetId)+'\')">Ban User</button>'
+          +'</div></td>'
+          +'</tr>';
+      }).join('');
+    }
+
+    async function reportAction(action, flagId, targetId){
+      try {
+        await updateDoc('flags', flagId, { status: action==='dismiss'?'dismissed':'actioned', action:action, actedAt:new Date().toISOString() });
+        if(action==='ban' && targetId){
+          await updateDoc('users', targetId, { suspended:true, suspendedAt:new Date().toISOString() });
+        }
+        showToast('Report '+action+'d.');
+      } catch(e){ showToast('Action failed: '+e.message, true); }
+    }
+
+    /* ================================================================
+       VERIFICATIONS
+    ================================================================ */
+    var unsubVerif;
+    async function listenVerifications(){
+      var f = await getFS();
+      if(!db){ verifBody.innerHTML='<tr><td colspan="5" class="mod-table-empty">Database not available.</td></tr>'; return; }
+      try {
+        var q = f.query(
+          f.collection(db,'applications'),
+          f.where('status','in',['pending','pending_verification']),
+          f.orderBy('submittedAt','desc'),
+          f.limit(100)
+        );
+        unsubVerif = f.onSnapshot(q, function(snap){
+          var items = [];
+          snap.forEach(function(d){ items.push(Object.assign({id:d.id},d.data())); });
+          document.getElementById('statVerifications').textContent = items.length;
+          document.getElementById('tcVerifications').textContent   = items.length;
+          renderVerifications(items);
+        }, function(err){ console.warn('[Moderation verif]',err); });
+      } catch(e){ console.error(e); }
+    }
+
+    function renderVerifications(data){
+      var tbody = document.getElementById('verifBody');
+      if(!tbody) return;
+      if(!data.length){
+        tbody.innerHTML = '<tr><td colspan="5" class="mod-table-empty">No pending verifications.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.map(function(a){
+        return '<tr>'
+          +'<td>'+typeBadge(a.type||'professional')+'</td>'
+          +'<td><strong>'+esc(a.fullName||a.name||'—')+'</strong></td>'
+          +'<td>'+esc(a.professionalType||'—')+'</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(a.submittedAt)+'</td>'
+          +'<td><div class="mod-action-row">'
+          +'<button class="mod-action-btn btn-approve" onclick="verifAction(\'approve\',\''+esc(a.id)+'\',\''+esc(a.uid||'')+'\')">Approve</button>'
+          +'<button class="mod-action-btn btn-reject" onclick="verifAction(\'reject\',\''+esc(a.id)+'\')">Reject</button>'
+          +'<button class="mod-action-btn btn-view" onclick="verifAction(\'info\',\''+esc(a.id)+'\')">Request Info</button>'
+          +'</div></td>'
+          +'</tr>';
+      }).join('');
+    }
+
+    async function verifAction(action, appId, uid){
+      try {
+        if(action==='approve'){
+          await updateDoc('applications', appId, { status:'approved', approvedAt:new Date().toISOString() });
+          if(uid){
+            var f = await getFS();
+            /* Try to update provider doc if it exists */
+            var q = f.query(f.collection(db,'providers'), f.where('uid','==',uid), f.limit(1));
+            var snap = await f.getDocs(q);
+            snap.forEach(async function(d){ await f.updateDoc(d.ref,{verified:true,status:'active',approvedAt:new Date().toISOString()}); });
+          }
+          showToast('Application approved and provider verified.');
+        } else if(action==='reject'){
+          await updateDoc('applications', appId, { status:'rejected', rejectedAt:new Date().toISOString() });
+          showToast('Application rejected.');
+        } else {
+          await updateDoc('applications', appId, { status:'info_requested', infoRequestedAt:new Date().toISOString() });
+          showToast('More info requested from applicant.');
+        }
+      } catch(e){ showToast('Action failed: '+e.message, true); }
+    }
+
+    /* ================================================================
+       DISPUTES
+    ================================================================ */
+    var unsubDisputes;
+    var allDisputes = [];
+    async function listenDisputes(){
+      var f = await getFS();
+      if(!db) return;
+      try {
+        var q = f.query(
+          f.collection(db,'disputes'),
+          f.where('status','in',['open','escalated']),
+          f.orderBy('createdAt','desc'),
+          f.limit(100)
+        );
+        unsubDisputes = f.onSnapshot(q, function(snap){
+          allDisputes = [];
+          snap.forEach(function(d){ allDisputes.push(Object.assign({id:d.id},d.data())); });
+          document.getElementById('statDisputes').textContent = allDisputes.length;
+          document.getElementById('tcDisputes').textContent   = allDisputes.length;
+          renderDisputes(allDisputes);
+        }, function(err){ console.warn('[Moderation disputes]',err); });
+      } catch(e){ console.error(e); }
+    }
+
+    function renderDisputes(data){
+      var tbody = document.getElementById('disputeBody');
+      if(!tbody) return;
+      if(!data.length){
+        tbody.innerHTML = '<tr><td colspan="9" class="mod-table-empty">No open disputes.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.map(function(d){
+        return '<tr>'
+          +'<td style="font-family:monospace;font-size:11px;">'+esc(d.id.slice(0,8).toUpperCase())+'</td>'
+          +'<td style="font-size:11px;">'+esc(d.orderId||'—')+'</td>'
+          +'<td>'+esc(d.type||'—')+'</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.5);">'+esc((d.buyerUid||'').slice(0,12))+'…</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.5);">'+esc((d.sellerUid||'').slice(0,12))+'…</td>'
+          +'<td>KES '+esc(d.amount||'0')+'</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(d.createdAt)+'</td>'
+          +'<td>'+statusBadge(d.status)+'</td>'
+          +'<td><div class="mod-action-row">'
+          +'<button class="mod-action-btn btn-view" onclick="viewDispute(\''+esc(d.id)+'\')">View</button>'
+          +'<button class="mod-action-btn btn-mediate" onclick="disputeAction(\'mediate\',\''+esc(d.id)+'\')">Mediate</button>'
+          +'<button class="mod-action-btn btn-refund" onclick="disputeAction(\'refund\',\''+esc(d.id)+'\')">Approve Refund</button>'
+          +'<button class="mod-action-btn btn-dismiss" onclick="disputeAction(\'close\',\''+esc(d.id)+'\')">Close</button>'
+          +'</div></td>'
+          +'</tr>';
+      }).join('');
+    }
+
+    function viewDispute(id){
+      var d = allDisputes.find(function(x){ return x.id===id; });
+      if(!d) return;
+      document.getElementById('detailTitle').textContent = 'Dispute '+id.slice(0,8).toUpperCase();
+      var tl = document.getElementById('detailTimeline');
+      tl.innerHTML = [
+        {label:'Opened', time:d.createdAt},
+        {label:'Reason', time:d.reason||'—'},
+        {label:'Status', time:d.status}
+      ].map(function(item){
+        return '<div class="mod-timeline-item"><div class="tl-dot"></div><div><strong>'+esc(item.label)+':</strong> '+esc(item.time)+'</div></div>';
+      }).join('');
+
+      var msgs = Array.isArray(d.messages) ? d.messages : [];
+      var ml = document.getElementById('detailMessages');
+      ml.innerHTML = msgs.length ? msgs.map(function(m){
+        return '<div class="mod-msg"><div class="mod-msg-sender">'+esc(m.senderName||'User')+'</div><div class="mod-msg-text">'+esc(m.message)+'</div></div>';
+      }).join('') : '<div style="color:rgba(255,255,255,0.3);font-size:13px;">No messages yet.</div>';
+
+      document.getElementById('detailActions').innerHTML =
+        '<button class="mod-action-btn btn-refund" onclick="disputeAction(\'refund\',\''+esc(id)+'\')">Approve Refund</button>'
+        +'<button class="mod-action-btn btn-mediate" onclick="disputeAction(\'mediate\',\''+esc(id)+'\')">Mediate</button>'
+        +'<button class="mod-action-btn btn-dismiss" onclick="disputeAction(\'close\',\''+esc(id)+'\',\'Closed by moderator\')">Close Dispute</button>';
+
+      document.getElementById('disputeDetailPanel').classList.add('open');
+      document.getElementById('disputeDetailPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+    }
+
+    function closeDisputeDetail(){
+      document.getElementById('disputeDetailPanel').classList.remove('open');
+    }
+
+    async function disputeAction(action, disputeId, resolution){
+      try {
+        var updates = {};
+        if(action==='refund')  { updates.status='refund_approved'; updates.refundApprovedAt=new Date().toISOString(); }
+        if(action==='mediate') { updates.status='mediation'; updates.mediationStartedAt=new Date().toISOString(); }
+        if(action==='close')   { updates.status='resolved'; updates.resolution=resolution||'Resolved by moderator'; updates.resolvedAt=new Date().toISOString(); }
+        await updateDoc('disputes', disputeId, updates);
+        showToast('Dispute updated: '+action+'.');
+        closeDisputeDetail();
+      } catch(e){ showToast('Action failed: '+e.message, true); }
+    }
+
+    /* ================================================================
+       FRAUD ALERTS
+    ================================================================ */
+    var unsubFraud;
+    async function listenFraud(){
+      if(window.SokoniFraud){
+        SokoniFraud.getAlerts(function(items){
+          document.getElementById('statFraud').textContent = items.length;
+          document.getElementById('tcFraud').textContent   = items.length;
+          renderFraud(items);
+        });
+      } else {
+        /* Fallback direct listener */
+        var f = await getFS();
+        if(!db) return;
+        try {
+          var q = f.query(
+            f.collection(db,'fraudAlerts'),
+            f.where('status','==','pending'),
+            f.orderBy('flaggedAt','desc'),
+            f.limit(100)
+          );
+          unsubFraud = f.onSnapshot(q, function(snap){
+            var items = [];
+            snap.forEach(function(d){ items.push(Object.assign({id:d.id},d.data())); });
+            document.getElementById('statFraud').textContent = items.length;
+            document.getElementById('tcFraud').textContent   = items.length;
+            renderFraud(items);
+          }, function(err){ console.warn('[Moderation fraud]',err); });
+        } catch(e){ console.error(e); }
+      }
+    }
+
+    function renderFraud(data){
+      var tbody = document.getElementById('fraudBody');
+      if(!tbody) return;
+      if(!data.length){
+        tbody.innerHTML = '<tr><td colspan="7" class="mod-table-empty">No pending fraud alerts.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.map(function(a){
+        return '<tr>'
+          +'<td style="font-family:monospace;font-size:11px;">'+esc((a.targetId||'').slice(0,16))+'</td>'
+          +'<td>'+typeBadge(a.targetType||'user')+'</td>'
+          +'<td>'+esc(a.reason||'—')+'</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.4);">'+esc((a.flaggedBy||'').slice(0,12))+'…</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(a.flaggedAt)+'</td>'
+          +'<td>'+riskBadge(a.severity)+'</td>'
+          +'<td><div class="mod-action-row">'
+          +'<button class="mod-action-btn btn-investigate" onclick="fraudAction(\'investigate\',\''+esc(a.id)+'\')">Investigate</button>'
+          +'<button class="mod-action-btn btn-clear" onclick="fraudAction(\'clear\',\''+esc(a.id)+'\')">Clear</button>'
+          +'<button class="mod-action-btn btn-ban" onclick="fraudAction(\'ban\',\''+esc(a.id)+'\',\''+esc(a.targetId||'')+'\')">Ban</button>'
+          +'<button class="mod-action-btn btn-police" onclick="fraudAction(\'police\',\''+esc(a.id)+'\')">Escalate Police</button>'
+          +'</div></td>'
+          +'</tr>';
+      }).join('');
+    }
+
+    async function fraudAction(action, alertId, targetId){
+      try {
+        var updates = { status: action==='clear'?'cleared':action, updatedAt:new Date().toISOString() };
+        await updateDoc('fraudAlerts', alertId, updates);
+        if(action==='ban' && targetId){
+          await updateDoc('users', targetId, { suspended:true, suspendedAt:new Date().toISOString(), suspendReason:'fraud' });
+        }
+        showToast('Alert '+action+'d.');
+      } catch(e){ showToast('Action failed: '+e.message, true); }
+    }
+
+    /* ── Refresh all ── */
+    function refreshAll(){
+      showToast('Refreshed.');
+    }
+
+    /* ================================================================
+       AUTH GATE
+    ================================================================ */
+    var authCheckInterval;
+    var authChecked = false;
+
+    function waitForAuth(){
+      var auth = window.firebaseAuth;
+      if(!auth){
+        if(!authChecked) authCheckInterval = setTimeout(waitForAuth, 400);
+        return;
+      }
+      auth.onAuthStateChanged(async function(user){
+        authChecked = true;
+        if(!user){
+          showAccessDenied();
+          return;
+        }
+        /* Check custom claims */
+        try {
+          var tokenResult = await user.getIdTokenResult();
+          var claims = tokenResult.claims || {};
+          var isAdmin = claims.admin || claims.moderator || claims.isAdmin || claims.isModerator;
+          if(!isAdmin){ showAccessDenied(); return; }
+
+          /* Show dashboard */
+          document.getElementById('accessDenied').classList.remove('show');
+          document.getElementById('dashboard').classList.add('show');
+
+          /* Set email & badge */
+          var emailEl = document.getElementById('adminEmail');
+          if(emailEl) emailEl.textContent = user.email || '';
+          var badge = document.getElementById('adminRoleBadge');
+          var claims2 = tokenResult.claims || {};
+          if(badge){
+            if(claims2.admin || claims2.isAdmin) badge.textContent = '🔴 ADMIN';
+            else badge.textContent = '🟡 MODERATOR';
+          }
+
+          /* Start listeners */
+          startClock();
+          listenReports();
+          listenVerifications();
+          listenDisputes();
+          listenFraud();
+
+        } catch(err){
+          console.error('[Auth gate]', err);
+          showAccessDenied();
+        }
+      });
+    }
+
+    function showAccessDenied(){
+      document.getElementById('accessDenied').classList.add('show');
+      document.getElementById('dashboard').classList.remove('show');
+    }
+
+    /* ── Wait for firebase.js to expose globals ── */
+    window.addEventListener('load', function(){
+      if(window.firebaseAuth){
+        waitForAuth();
+      } else {
+        /* Give firebase module a moment to init */
+        var attempts = 0;
+        var iv = setInterval(function(){
+          attempts++;
+          if(window.firebaseAuth || attempts > 20){
+            clearInterval(iv);
+            waitForAuth();
+          }
+        }, 300);
+      }
+    });
+  </script>
+<script src="kass-widget.js" defer></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

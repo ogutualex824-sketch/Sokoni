@@ -1,0 +1,978 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Product Request Marketplace</title>
+  <meta name="description" content="Request any product on SOKONI and let sellers compete to deliver what you need in Kenya.">
+  <meta property="og:title" content="SOKONI — Product Request Marketplace">
+  <meta property="og:description" content="Can't find what you need? Post a request on SOKONI and let sellers find it for you.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#070707;color:white;min-height:100vh;padding-bottom:80px;}
+
+    .rq-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(7,7,7,0.97);border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);}
+    .rq-logo{height:30px;}
+    .rq-nav-right{display:flex;gap:8px;align-items:center;}
+    .rq-nav-link{padding:7px 12px;border:1px solid rgba(255,255,255,0.08);border-radius:9px;color:rgba(255,255,255,0.55);text-decoration:none;font-size:12px;font-weight:600;transition:all .15s;}
+    .rq-nav-link:hover{color:white;border-color:rgba(255,255,255,0.2);}
+
+    .rq-hero{background:linear-gradient(135deg,rgba(113,255,0,0.08),rgba(0,170,255,0.05),transparent);border-bottom:1px solid rgba(255,255,255,0.06);padding:28px 20px 20px;position:relative;overflow:hidden;}
+    .rq-hero::before{content:'📋📦🛒💬🤝';position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:70px;opacity:0.04;letter-spacing:-4px;white-space:nowrap;pointer-events:none;}
+    .rq-hero-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:999px;font-size:10px;font-weight:800;color:#71ff00;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;}
+    .rq-hero h1{font-size:clamp(20px,4.5vw,34px);font-weight:900;line-height:1.12;margin-bottom:6px;}
+    .rq-hero h1 span{color:#71ff00;}
+    .rq-hero p{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;max-width:480px;margin-bottom:16px;}
+    .rq-stats{display:flex;gap:16px;flex-wrap:wrap;}
+    .rq-stat{font-size:11px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:5px;}
+    .rq-stat strong{color:#71ff00;font-size:13px;}
+
+    .rq-body{max-width:1200px;margin:0 auto;padding:16px 20px 70px;display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start;}
+
+    .rq-post-panel{position:sticky;top:106px;background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.15);border-radius:18px;overflow:hidden;}
+    .rq-post-header{padding:16px 18px 0;background:linear-gradient(180deg,rgba(113,255,0,0.06),transparent);}
+    .rq-post-header h2{font-size:14px;font-weight:900;color:white;margin-bottom:2px;}
+    .rq-post-header p{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:14px;}
+    .rq-post-body{padding:0 18px 18px;}
+
+    .rq-input{width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:9px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:8px;transition:border-color .15s;}
+    .rq-input:focus{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.03);}
+    .rq-input::placeholder{color:rgba(255,255,255,0.25);}
+    .rq-label{font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px;}
+
+    .rq-chip-row{display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:10px;}
+    .rq-chip{padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;white-space:nowrap;}
+    .rq-chip:hover,.rq-chip.selected{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+
+    .rq-urgency-row{display:flex;gap:6px;margin-bottom:10px;}
+    .rq-urgency-btn{flex:1;padding:8px 6px;border-radius:8px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.45);font-size:10px;font-weight:700;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit;}
+    .rq-urgency-btn.sel-low{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:#10b981;}
+    .rq-urgency-btn.sel-mid{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+    .rq-urgency-btn.sel-hi{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:#ef4444;}
+
+    .rq-post-btn{width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:900;font-size:13px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;transition:filter .2s,transform .2s;display:flex;align-items:center;justify-content:center;gap:7px;}
+    .rq-post-btn:hover{filter:brightness(1.08);transform:translateY(-1px);}
+    .rq-post-tip{margin-top:10px;padding:10px 12px;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.1);border-radius:9px;font-size:10px;color:rgba(255,255,255,0.38);line-height:1.6;}
+    .rq-post-msg{min-height:16px;font-size:11px;margin-top:8px;text-align:center;}
+
+    .rq-panel-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+    .rq-panel-title{font-size:14px;font-weight:800;color:white;display:flex;align-items:center;gap:7px;}
+    .rq-live-dot{width:7px;height:7px;border-radius:50%;background:#71ff00;box-shadow:0 0 6px #71ff00;animation:pulse-dot 2s infinite;}
+    @keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+    .rq-tabs{display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;padding-bottom:2px;margin-bottom:12px;}
+    .rq-tabs::-webkit-scrollbar{display:none;}
+    .rq-tab{flex-shrink:0;padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+    .rq-tab:hover,.rq-tab.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.28);color:#71ff00;}
+
+    .rq-filter-row{display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none;margin-bottom:14px;}
+    .rq-filter-row::-webkit-scrollbar{display:none;}
+    .rq-filter-pill{flex-shrink:0;padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.45);font-size:10px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap;}
+    .rq-filter-pill:hover,.rq-filter-pill.active{background:rgba(0,170,255,0.1);border-color:rgba(0,170,255,0.25);color:#00aaff;}
+
+    .rq-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:14px 16px;margin-bottom:9px;transition:border-color .15s,transform .15s;position:relative;overflow:hidden;}
+    .rq-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--accent,#71ff00);opacity:0.6;border-radius:0 3px 3px 0;}
+    .rq-card:hover{border-color:rgba(113,255,0,0.18);transform:translateX(2px);}
+    .rq-card.urgent::before{background:#ef4444;}
+    .rq-card.mid-urgent::before{background:#f59e0b;}
+
+    .rq-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:7px;}
+    .rq-card-left{flex:1;min-width:0;}
+    .rq-card-name{font-size:14px;font-weight:800;color:white;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .rq-card-poster{font-size:10px;color:rgba(255,255,255,0.35);display:flex;align-items:center;gap:4px;}
+    .rq-card-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
+    .rq-card-budget{font-size:15px;font-weight:900;color:#71ff00;white-space:nowrap;}
+    .rq-urgency-badge{font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;white-space:nowrap;}
+    .urg-low{background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.2);}
+    .urg-mid{background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.2);}
+    .urg-hi{background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2);}
+
+    .rq-card-desc{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.55;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .rq-card-meta{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+    .rq-meta-tag{padding:2px 8px;border-radius:5px;font-size:9.5px;font-weight:600;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.4);}
+    .rq-offers-pill{margin-left:auto;padding:2px 8px;border-radius:5px;font-size:9.5px;font-weight:800;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);color:#71ff00;cursor:pointer;transition:all .15s;}
+    .rq-offers-pill:hover{background:rgba(113,255,0,0.14);}
+    .rq-upvote-row{display:flex;gap:6px;align-items:center;}
+    .rq-upvote-btn{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.4);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;}
+    .rq-upvote-btn:hover,.rq-upvote-btn.voted{background:rgba(113,255,0,0.09);border-color:rgba(113,255,0,0.24);color:#71ff00;}
+    .rq-offer-btn{margin-left:auto;padding:6px 14px;border:1px solid rgba(113,255,0,0.22);background:rgba(113,255,0,0.06);color:#71ff00;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
+    .rq-offer-btn:hover{background:rgba(113,255,0,0.14);}
+
+    .rq-offers-list{margin-top:10px;display:none;}
+    .rq-offers-list.open{display:block;}
+    .rq-offer-item{display:flex;align-items:flex-start;gap:10px;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.1);border-radius:10px;padding:10px 12px;margin-bottom:6px;}
+    .rq-offer-avatar{width:32px;height:32px;border-radius:50%;background:rgba(113,255,0,0.12);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#71ff00;flex-shrink:0;}
+    .rq-offer-seller{font-size:12px;font-weight:800;color:white;margin-bottom:2px;}
+    .rq-offer-msg{font-size:10px;color:rgba(255,255,255,0.45);line-height:1.5;}
+    .rq-offer-price{font-size:14px;font-weight:900;color:#71ff00;white-space:nowrap;margin-left:auto;flex-shrink:0;}
+    .rq-offer-contact{display:flex;gap:5px;margin-top:6px;}
+    .rq-oc-btn{padding:5px 10px;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-family:inherit;}
+
+    .rq-make-offer-panel{display:none;margin-top:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 14px;}
+    .rq-make-offer-panel.open{display:block;}
+    .rq-make-offer-panel .rq-input{margin-bottom:7px;}
+    .rq-send-offer-btn{padding:9px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:800;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;}
+
+    .rq-empty{text-align:center;padding:50px 20px;color:rgba(255,255,255,0.22);}
+    .rq-empty-icon{font-size:48px;margin-bottom:12px;}
+
+    @media(max-width:768px){
+      .rq-body{grid-template-columns:1fr;gap:12px;padding:12px 14px 80px;}
+      .rq-post-panel{position:relative;top:auto;}
+      .rq-hero{padding:16px 14px 14px;}
+      .rq-del-grid{grid-template-columns:1fr !important;}
+    }
+    @media(max-width:600px){
+      .rq-body{padding:10px 12px 90px;gap:10px;}
+      .rq-list-panel{order:1;}
+      .rq-post-panel{order:2;}
+      .rq-hero{padding:12px 14px 12px;}
+      .rq-hero h1{font-size:20px;}
+      .rq-hero p{display:none;}
+      .rq-stats{gap:10px;flex-wrap:wrap;}
+      .rq-stat{font-size:10px;}
+      .rq-hero-badge{font-size:9px;}
+      .rq-mode-tabbar button{min-width:90px !important;padding:10px 8px !important;font-size:11px !important;}
+      .rq-panel-header{flex-direction:column;align-items:flex-start;gap:8px;}
+      #rqSearch{width:100% !important;margin:0 !important;font-size:16px !important;}
+      .rq-post-panel{border-radius:14px;}
+      .rq-post-header{cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:14px 16px !important;margin:0;}
+      .rq-post-header::after{content:'▼';font-size:10px;color:rgba(255,255,255,0.35);transition:transform .25s;flex-shrink:0;}
+      .rq-post-panel.form-open .rq-post-header::after{transform:rotate(180deg);}
+      .rq-post-body{display:none;}
+      .rq-post-panel.form-open .rq-post-body{display:block;}
+      .rq-post-header p{display:none;}
+      .rq-post-header h2{font-size:13px;margin:0;}
+      .rq-card{padding:12px 13px;}
+      .rq-card-name{font-size:13px;}
+      .rq-card-budget{font-size:14px;}
+      .rq-chip-row{gap:5px;}
+      .rq-chip{font-size:10px;padding:5px 9px;}
+      #delSearch{width:100% !important;margin:0 !important;}
+    }
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="rq-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="rq-logo" alt="Sokoni"></a>
+  <div class="rq-nav-right">
+    <a href="category.html?cat=all" class="rq-nav-link">🛍️ Shop</a>
+    <a href="services.html" class="rq-nav-link">🛠️ Services</a>
+    <a href="messages.html" class="rq-nav-link">💬</a>
+    <a href="profile.html" class="rq-nav-link">👤</a>
+  </div>
+</nav>
+
+<div class="rq-hero">
+  <div class="rq-hero-badge">📋 Request &amp; Delivery Hub</div>
+  <h1>Request it. <span>Deliver it.</span><br>Track it live.</h1>
+  <p>Post product requests, request delivery for your orders, or track any shipment in real time — buyer, seller and driver all see the same live status.</p>
+  <div class="rq-stats">
+    <div class="rq-stat"><strong id="heroReqCount">0</strong> Active Requests</div>
+    <div class="rq-stat"><strong id="heroOfferCount">0</strong> Seller Offers</div>
+    <div class="rq-stat"><strong id="heroDelCount">0</strong> Deliveries</div>
+    <div class="rq-stat"><strong>Free</strong> to Post</div>
+  </div>
+</div>
+
+<div class="rq-mode-tabbar" style="display:flex;gap:0;background:rgba(7,7,7,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:54px;z-index:90;overflow-x:auto;scrollbar-width:none;">
+  <button type="button" id="modeTab-product"  onclick="switchMode('product')"  style="flex:1;min-width:110px;padding:12px 10px;background:rgba(113,255,0,0.07);border:none;border-bottom:2px solid #71ff00;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;">📋 Product Requests</button>
+  <button type="button" id="modeTab-delivery" onclick="switchMode('delivery')" style="flex:1;min-width:110px;padding:12px 10px;background:transparent;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,0.45);font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;">🚚 Request Delivery</button>
+  <button type="button" id="modeTab-track"    onclick="switchMode('track')"    style="flex:1;min-width:110px;padding:12px 10px;background:transparent;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,0.45);font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;">🔍 Track Order</button>
+</div>
+
+<div id="mode-product">
+<div class="rq-body">
+
+  <div class="rq-post-panel">
+    <div class="rq-post-header">
+      <h2>📋 Post Your Request</h2>
+      <p>Tell sellers what you need</p>
+    </div>
+    <div class="rq-post-body">
+      <label class="rq-label">What are you looking for? *</label>
+      <input class="rq-input" type="text" id="rqName" placeholder="e.g. iPhone 15 Pro 256GB Space Black, sealed">
+
+      <label class="rq-label">More details (colour, size, condition, specs)</label>
+      <textarea class="rq-input" id="rqDesc" placeholder="Describe exactly what you want — brand, model, colour, condition (new/second hand)..." style="min-height:60px;resize:vertical;font-size:16px;"></textarea>
+
+      <label class="rq-label">Your max budget (KES)</label>
+      <input class="rq-input" type="number" id="rqBudget" placeholder="e.g. 85000" min="0" inputmode="numeric">
+
+      <label class="rq-label">Category</label>
+      <div class="rq-chip-row" id="rqCatChips">
+        <span class="rq-chip" data-val="electronics">📱 Electronics</span>
+        <span class="rq-chip" data-val="fashion">👕 Fashion</span>
+        <span class="rq-chip" data-val="furniture">🛋️ Furniture</span>
+        <span class="rq-chip" data-val="beauty">💄 Beauty</span>
+        <span class="rq-chip" data-val="food">🍎 Food</span>
+        <span class="rq-chip" data-val="automotive">🚗 Auto</span>
+        <span class="rq-chip" data-val="sports">⚽ Sports</span>
+        <span class="rq-chip" data-val="books">📚 Books</span>
+        <span class="rq-chip" data-val="appliances">🔌 Appliances</span>
+        <span class="rq-chip" data-val="other">🔧 Other</span>
+      </div>
+
+      <label class="rq-label">Location</label>
+      <select class="rq-input" id="rqLocation">
+        <option value="">Anywhere in Kenya</option>
+        <option value="nairobi">📍 Nairobi</option>
+        <option value="mombasa">📍 Mombasa</option>
+        <option value="kisumu">📍 Kisumu</option>
+        <option value="nakuru">📍 Nakuru</option>
+        <option value="eldoret">📍 Eldoret</option>
+        <option value="thika">📍 Thika</option>
+        <option value="nyeri">📍 Nyeri</option>
+        <option value="meru">📍 Meru</option>
+        <option value="embu">📍 Embu</option>
+        <option value="machakos">📍 Machakos</option>
+        <option value="naivasha">📍 Naivasha</option>
+        <option value="nanyuki">📍 Nanyuki</option>
+        <option value="kisii">📍 Kisii</option>
+        <option value="kericho">📍 Kericho</option>
+        <option value="kakamega">📍 Kakamega</option>
+        <option value="kitale">📍 Kitale</option>
+        <option value="bungoma">📍 Bungoma</option>
+        <option value="malindi">📍 Malindi</option>
+        <option value="isiolo">📍 Isiolo</option>
+        <option value="garissa">📍 Garissa</option>
+        <option value="nationwide">🌍 Nationwide delivery</option>
+      </select>
+
+      <label class="rq-label">Urgency</label>
+      <div class="rq-urgency-row">
+        <button type="button" class="rq-urgency-btn sel-low" data-urg="low" onclick="setUrgency('low',this)">🟢 Not urgent</button>
+        <button type="button" class="rq-urgency-btn" data-urg="mid" onclick="setUrgency('mid',this)">🟡 Need soon</button>
+        <button type="button" class="rq-urgency-btn" data-urg="hi" onclick="setUrgency('hi',this)">🔴 Urgent</button>
+      </div>
+
+      <label class="rq-label">Your name (optional)</label>
+      <input class="rq-input" type="text" id="rqPoster" placeholder="e.g. Brian or Anonymous" autocomplete="off">
+
+      <button type="button" class="rq-post-btn" onclick="postRequest()">
+        📨 Post Request — Get Offers
+      </button>
+      <div class="rq-post-msg" id="rqPostMsg"></div>
+      <div class="rq-post-tip">💡 Once posted, sellers will contact you directly via Sokoni Messages with their best prices. You pick the winner — no pressure.</div>
+    </div>
+  </div>
+
+  <div class="rq-list-panel">
+    <div class="rq-panel-header">
+      <div class="rq-panel-title">
+        <div class="rq-live-dot"></div>
+        Active Requests <span id="rqCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:4px;">(0)</span>
+      </div>
+      <input type="search" id="rqSearch" class="rq-input" placeholder="🔍 Search requests..." oninput="applyFilters()" style="width:200px;margin:0;" autocomplete="off">
+    </div>
+
+    <div class="rq-tabs">
+      <button type="button" class="rq-tab active" onclick="setTab('all',this)">🌍 All</button>
+      <button type="button" class="rq-tab" onclick="setTab('hot',this)">🔥 Most Wanted</button>
+      <button type="button" class="rq-tab" onclick="setTab('new',this)">✨ Newest</button>
+      <button type="button" class="rq-tab" onclick="setTab('unanswered',this)">📬 No Offers Yet</button>
+      <button type="button" class="rq-tab" onclick="setTab('urgent',this)">🔴 Urgent Only</button>
+    </div>
+
+    <div class="rq-filter-row">
+      <span class="rq-filter-pill active" onclick="setCatFilter('',this)">All</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('electronics',this)">📱 Electronics</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('fashion',this)">👕 Fashion</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('furniture',this)">🛋️ Furniture</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('beauty',this)">💄 Beauty</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('food',this)">🍎 Food</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('automotive',this)">🚗 Auto</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('sports',this)">⚽ Sports</span>
+      <span class="rq-filter-pill" onclick="setCatFilter('appliances',this)">🔌 Appliances</span>
+    </div>
+
+    <div id="rqList"></div>
+  </div>
+
+</div>
+</div>
+
+<div id="mode-delivery" style="display:none;max-width:1100px;margin:0 auto;padding:16px 20px 80px;">
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start;" class="rq-del-grid">
+    <div class="rq-post-panel" style="position:sticky;top:110px;">
+      <div class="rq-post-header">
+        <h2>🚚 Request a Delivery</h2>
+        <p>Buyer, seller or anyone — post a delivery job. Verified Sokoni drivers will pick it up.</p>
+      </div>
+      <div class="rq-post-body">
+        <label class="rq-label">Your Role</label>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <button type="button" class="rq-urgency-btn sel-low" id="drole-buyer"  onclick="setDelRole('buyer',this)"  style="font-family:inherit;">🛍️ Buyer</button>
+          <button type="button" class="rq-urgency-btn"         id="drole-seller" onclick="setDelRole('seller',this)" style="font-family:inherit;">🏪 Seller</button>
+          <button type="button" class="rq-urgency-btn"         id="drole-other"  onclick="setDelRole('other',this)"  style="font-family:inherit;">👤 Other</button>
+        </div>
+        <label class="rq-label">What needs delivering?</label>
+        <input class="rq-input" id="delItem" placeholder="e.g. Sofa set, phone, medicine, groceries..." autocomplete="off">
+        <label class="rq-label">Pickup Location</label>
+        <input class="rq-input" id="delPickup" placeholder="e.g. Westlands, Nairobi" autocomplete="off">
+        <label class="rq-label">Dropoff Location</label>
+        <input class="rq-input" id="delDropoff" placeholder="e.g. South B, Nairobi" autocomplete="off">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>
+            <label class="rq-label">Weight / Size</label>
+            <select class="rq-input" id="delSize" style="margin-bottom:0;cursor:pointer;">
+              <option value="small">📦 Small (&lt;5kg)</option>
+              <option value="medium">📫 Medium (5–20kg)</option>
+              <option value="large">🗳️ Large (20–100kg)</option>
+              <option value="oversized">🚛 Oversized / Furniture</option>
+            </select>
+          </div>
+          <div>
+            <label class="rq-label">Your Budget (KES)</label>
+            <input class="rq-input" type="number" id="delBudget" placeholder="e.g. 500" style="margin-bottom:0;" inputmode="numeric">
+          </div>
+        </div>
+        <label class="rq-label" style="margin-top:8px;">Your Name / Contact</label>
+        <input class="rq-input" id="delPoster" placeholder="Name or phone" autocomplete="off">
+        <label class="rq-label">Linked Order ID (optional)</label>
+        <input class="rq-input" id="delOrderRef" placeholder="e.g. ORD1234 from your purchase" autocomplete="off">
+        <button type="button" class="rq-post-btn" style="margin-top:4px;" onclick="postDeliveryRequest()">🚛 Post Delivery Request</button>
+        <div class="rq-post-msg" id="delPostMsg"></div>
+        <div class="rq-post-tip">🔒 Once a driver accepts, all three parties — buyer, seller and driver — get a live tracking link with the delivery ID.</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="rq-panel-header">
+        <div class="rq-panel-title"><div class="rq-live-dot"></div> Open Deliveries <span id="delCount" style="font-size:12px;font-weight:400;color:rgba(255,255,255,0.35);margin-left:4px;">(0)</span></div>
+        <input type="search" id="delSearch" class="rq-input" placeholder="🔍 Search deliveries..." oninput="renderDeliveries()" style="width:180px;margin:0;" autocomplete="off">
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none;">
+        <button type="button" class="rq-tab active" id="dtab-all"     onclick="setDelTab('all',this)">All</button>
+        <button type="button" class="rq-tab"        id="dtab-pending" onclick="setDelTab('pending',this)">🟡 Pending</button>
+        <button type="button" class="rq-tab"        id="dtab-active"  onclick="setDelTab('active',this)">🟢 In Transit</button>
+        <button type="button" class="rq-tab"        id="dtab-done"    onclick="setDelTab('done',this)">✅ Delivered</button>
+      </div>
+      <div id="delList"></div>
+    </div>
+  </div>
+</div>
+
+<div id="mode-track" style="display:none;max-width:700px;margin:0 auto;padding:24px 20px 80px;">
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.15);border-radius:20px;padding:24px;">
+    <div style="font-size:20px;font-weight:900;margin-bottom:4px;">🔍 Track Your Order or Delivery</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Buyers, sellers and drivers can all track the same shipment with the delivery or order ID.</div>
+    <div style="display:flex;gap:8px;">
+      <input class="rq-input" id="trackInput" placeholder="Enter Order ID (e.g. ORD123456) or Delivery ID (e.g. DEL123456)" style="flex:1;margin:0;" onkeydown="if(event.key==='Enter')trackOrder()" autocomplete="off">
+      <button type="button" onclick="trackOrder()" style="padding:10px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap;font-size:13px;">Track →</button>
+    </div>
+    <div id="trackResult" style="margin-top:20px;"></div>
+  </div>
+  <div id="recentOrdersSection" style="margin-top:20px;"></div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html"            class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html"         class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html"         class="bnav-item active-bnav"><span class="bnav-emoji">📋</span><span>Requests</span></a>
+  <a href="profile.html"          class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script>
+const DEMO_REQS = [
+  { id:"REQ0000001", name:"iPhone 15 Pro Max 256GB — Natural Titanium", desc:"Must be sealed box, with original Apple Kenya warranty. Prefer Space from an authorised reseller.", budget:195000, category:"electronics", location:"nairobi", poster:"Brian K.", urgency:"hi", votes:42, timestamp:Date.now()-1*3600000, date:"Today", offers:[
+    { sellerName:"Sokoni Electronics", price:189000, message:"Sealed iPhone 15 Pro Max, Apple Kenya warranty, can deliver same day. DM for photos.", timestamp:Date.now()-30*60000 },
+    { sellerName:"TechMart Nairobi",   price:192000, message:"100% genuine, box sealed. Free delivery CBD & Westlands.", timestamp:Date.now()-15*60000 }
+  ]},
+  { id:"REQ0000002", name:"Sofa Set — L-Shape 7-Seater (Dark Grey)", desc:"High density foam, fabric or leather. Need delivery + assembly within Nairobi. Budget negotiable for good quality.", budget:55000, category:"furniture", location:"nairobi", poster:"Grace W.", urgency:"mid", votes:28, timestamp:Date.now()-3*3600000, date:"Today", offers:[
+    { sellerName:"HomePlus Kenya", price:48500, message:"7-seater L-shape, high-density foam, steel frame. Free delivery + assembly Nairobi.", timestamp:Date.now()-60*60000 }
+  ]},
+  { id:"REQ0000003", name:"Wedding DJ + PA System for 500 Guests", desc:"Need a professional DJ for wedding reception on 14th June, Kenyatta International Convention Centre. 6 hours. Must have own PA system and lights.", budget:35000, category:"entertainment", location:"nairobi", poster:"Mercy A.", urgency:"hi", votes:19, timestamp:Date.now()-5*3600000, date:"Today", offers:[]},
+  { id:"REQ0000004", name:"MacBook Air M2 2023 — Good Condition Second Hand", desc:"13.6 inch, 8GB RAM, 256GB SSD min. Starlight or Midnight. Good cosmetic condition. With original charger and box preferred.", budget:115000, category:"electronics", location:"nairobi", poster:"James M.", urgency:"low", votes:35, timestamp:Date.now()-8*3600000, date:"Today", offers:[
+    { sellerName:"TechMart Nairobi", price:112000, message:"M2 MacBook Air, 8/256GB, Midnight, 97% battery health. Original box & charger. Tested and working.", timestamp:Date.now()-2*3600000 }
+  ]},
+  { id:"REQ0000005", name:"Fresh Tilapia (Whole) — 10kg Weekly Supply", desc:"Looking for a reliable supplier for fresh Lake Victoria tilapia, delivered weekly to Westlands. Must be same-day fresh, no frozen. Regular contract available.", budget:4500, category:"food", location:"nairobi", poster:"Ranalo Chef", urgency:"mid", votes:14, timestamp:Date.now()-12*3600000, date:"Yesterday", offers:[]},
+  { id:"REQ0000006", name:"Ladies Formal Office Dress — Size 14", desc:"Navy or black. Knee length. Professional look for interviews. Mid-range quality, not fast fashion. Available in Nairobi.", budget:3500, category:"fashion", location:"nairobi", poster:"Cynthia O.", urgency:"hi", votes:9, timestamp:Date.now()-6*3600000, date:"Today", offers:[
+    { sellerName:"Style Point", price:2800, message:"We have exactly this — navy A-line dress, size 14, premium polyester. Can deliver same day.", timestamp:Date.now()-1*3600000 }
+  ]},
+  { id:"REQ0000007", name:"Canon EOS R50 Mirrorless Camera (Body Only)", desc:"New or near-new. Canon Kenya warranty preferred. Will accept grey market if price is significantly lower.", budget:72000, category:"electronics", location:"nationwide", poster:"Kevin Photographer", urgency:"low", votes:23, timestamp:Date.now()-2*86400000, date:"2 days ago", offers:[]},
+  { id:"REQ0000008", name:"Riding Helmet — Full Face, L/XL", desc:"For boda boda use. Good quality, DOT certified. Nairobi pickup or delivery.", budget:3500, category:"automotive", location:"nairobi", poster:"Driver Mike", urgency:"mid", votes:7, timestamp:Date.now()-1*86400000, date:"Yesterday", offers:[]},
+];
+
+let allReqs = [];
+let _activeTab = "all";
+let _activeCatFilter = "";
+let _selectedCat = "";
+let _urgency = "low";
+
+function loadRequests(){
+  try{ allReqs = JSON.parse(localStorage.getItem("sokoniRequests"))||[]; }catch(e){ allReqs=[]; }
+  if(!allReqs.length){
+    allReqs = DEMO_REQS;
+    localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
+  }
+  updateHeroStats();
+  applyFilters();
+}
+
+function updateHeroStats(){
+  const totalOffers = allReqs.reduce((s,r)=>s+(r.offers?.length||0),0);
+  const rqCountEl  = document.getElementById("heroReqCount");
+  const offCountEl = document.getElementById("heroOfferCount");
+  if(rqCountEl)  rqCountEl.textContent  = allReqs.length;
+  if(offCountEl) offCountEl.textContent = totalOffers;
+}
+
+document.querySelectorAll("#rqCatChips .rq-chip").forEach(chip=>{
+  chip.addEventListener("click",()=>{
+    document.querySelectorAll("#rqCatChips .rq-chip").forEach(c=>c.classList.remove("selected"));
+    chip.classList.add("selected");
+    _selectedCat = chip.dataset.val;
+  });
+});
+
+function setUrgency(val, btn){
+  _urgency = val;
+  document.querySelectorAll(".rq-urgency-row .rq-urgency-btn").forEach(b=>{b.classList.remove("sel-low","sel-mid","sel-hi");});
+  btn.classList.add("sel-"+val);
+}
+window.setUrgency = setUrgency;
+
+function setTab(tab, btn){
+  _activeTab = tab;
+  document.querySelectorAll(".rq-tabs .rq-tab").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  applyFilters();
+}
+
+function setCatFilter(cat, el){
+  _activeCatFilter = cat;
+  document.querySelectorAll(".rq-filter-pill").forEach(p=>p.classList.remove("active"));
+  el.classList.add("active");
+  applyFilters();
+}
+
+function applyFilters(){
+  let list = [...allReqs];
+  const q = (document.getElementById("rqSearch")?.value||"").toLowerCase();
+  if(_activeCatFilter) list = list.filter(r=>r.category===_activeCatFilter);
+  if(q) list = list.filter(r=>r.name.toLowerCase().includes(q)||(r.desc||"").toLowerCase().includes(q));
+  if(_activeTab==="hot")             list = [...list].sort((a,b)=>(b.votes||0)-(a.votes||0));
+  else if(_activeTab==="new")        list = [...list].sort((a,b)=>b.timestamp-a.timestamp);
+  else if(_activeTab==="unanswered") list = list.filter(r=>!r.offers?.length);
+  else if(_activeTab==="urgent")     list = list.filter(r=>r.urgency==="hi");
+  else                               list = [...list].sort((a,b)=>b.timestamp-a.timestamp);
+  renderList(list);
+}
+window.setTab = setTab;
+window.setCatFilter = setCatFilter;
+window.applyFilters = applyFilters;
+
+const CAT_EMOJI = {electronics:"📱",fashion:"👕",furniture:"🛋️",beauty:"💄",food:"🍎",automotive:"🚗",sports:"⚽",books:"📚",appliances:"🔌",entertainment:"🎧",other:"🔧"};
+const URG_LABEL = {low:"Not urgent",mid:"Need soon",hi:"Urgent"};
+const URG_CLASS = {low:"urg-low",mid:"urg-mid",hi:"urg-hi"};
+const URG_CARD  = {low:"","mid":"mid-urgent","hi":"urgent"};
+
+function timeAgo(ts){
+  const d = Date.now()-ts;
+  if(d<60000)    return "Just now";
+  if(d<3600000)  return Math.floor(d/60000)+"m ago";
+  if(d<86400000) return Math.floor(d/3600000)+"h ago";
+  return Math.floor(d/86400000)+"d ago";
+}
+
+function _esc(s){ return String(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+function renderList(list){
+  const el      = document.getElementById("rqList");
+  const countEl = document.getElementById("rqCount");
+  if(countEl) countEl.textContent = "("+list.length+")";
+  if(!list.length){
+    el.innerHTML=`<div class="rq-empty"><div class="rq-empty-icon">🔍</div><p style="font-size:13px;">No requests found.<br><span style="font-size:11px;color:rgba(255,255,255,0.28);">Be the first to post what you need!</span></p></div>`;
+    return;
+  }
+  el.innerHTML = list.map(r=>{
+    const urg = r.urgency||"low";
+    const offerCount = r.offers?.length||0;
+    const initials = r.poster?.[0]?.toUpperCase()||"?";
+    return `
+    <div class="rq-card ${URG_CARD[urg]||""}" id="rqcard-${r.id}">
+      <div class="rq-card-top">
+        <div class="rq-card-left">
+          <div class="rq-card-name" title="${_esc(r.name)}">${_esc(r.name)}</div>
+          <div class="rq-card-poster">
+            <span style="width:16px;height:16px;border-radius:50%;background:rgba(113,255,0,0.15);display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;color:#71ff00;">${_esc(initials)}</span>
+            ${_esc(r.poster||"Anonymous")} · ${timeAgo(r.timestamp||Date.now())}
+          </div>
+        </div>
+        <div class="rq-card-right">
+          ${r.budget?`<div class="rq-card-budget">KES ${Number(r.budget).toLocaleString()}</div>`:""}
+          <div class="rq-urgency-badge ${URG_CLASS[urg]}">${URG_LABEL[urg]}</div>
+        </div>
+      </div>
+      ${r.desc?`<div class="rq-card-desc">${_esc(r.desc)}</div>`:""}
+      <div class="rq-card-meta">
+        ${r.category?`<span class="rq-meta-tag">${CAT_EMOJI[r.category]||"📦"} ${r.category}</span>`:""}
+        ${r.location?`<span class="rq-meta-tag">📍 ${_esc(r.location)}</span>`:""}
+        <span class="rq-meta-tag">🆔 ${r.id}</span>
+        <span class="rq-offers-pill" onclick="toggleOffers('${r.id}')">
+          ${offerCount} offer${offerCount!==1?"s":""} ${offerCount?'<span style="font-size:8px;margin-left:2px;">▼</span>':""}
+        </span>
+      </div>
+      <div class="rq-offers-list" id="offers-${r.id}">
+        ${(r.offers||[]).map(o=>`
+          <div class="rq-offer-item">
+            <div class="rq-offer-avatar">${_esc(o.sellerName?.[0]?.toUpperCase()||"S")}</div>
+            <div style="flex:1;min-width:0;">
+              <div class="rq-offer-seller">${_esc(o.sellerName)}</div>
+              <div class="rq-offer-msg">${_esc(o.message)}</div>
+              <div class="rq-offer-contact">
+                <a href="messages.html" class="rq-oc-btn" style="background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;">💬 Chat</a>
+                <a href="tel:+254"      class="rq-oc-btn" style="background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;">📞 Call</a>
+              </div>
+            </div>
+            ${o.price?`<div class="rq-offer-price">KES ${Number(o.price).toLocaleString()}</div>`:""}
+          </div>`).join("")}
+        ${!offerCount?`<div style="text-align:center;padding:12px;font-size:11px;color:rgba(255,255,255,0.25);">No offers yet — be the first seller to respond!</div>`:""}
+      </div>
+      <div class="rq-upvote-row">
+        <button type="button" class="rq-upvote-btn ${(r.voted?"voted":"")}" onclick="upvote('${r.id}',this)">
+          ↑ ${r.votes||0}
+        </button>
+        <span style="font-size:10px;color:rgba(255,255,255,0.25);">upvotes from interested buyers</span>
+        <button type="button" class="rq-offer-btn" onclick="toggleOfferForm('${r.id}')">
+          📤 I Can Supply This →
+        </button>
+      </div>
+      <div class="rq-make-offer-panel" id="offer-form-${r.id}">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px;">📤 Send Your Offer to ${_esc(r.poster||"the buyer")}</div>
+        <input class="rq-input" id="os-${r.id}" placeholder="Your shop / seller name *" autocomplete="off">
+        <input class="rq-input" type="number" id="op-${r.id}" placeholder="Your price (KES) — leave blank for negotiable" inputmode="numeric">
+        <input class="rq-input" id="om-${r.id}" placeholder="Your message — delivery time, condition, warranty... *" autocomplete="off">
+        <button type="button" class="rq-send-offer-btn" onclick="submitOffer('${r.id}')">Send Offer →</button>
+        <div id="offer-msg-${r.id}" style="font-size:11px;min-height:14px;margin-top:6px;"></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function toggleOffers(id){
+  const el = document.getElementById("offers-"+id);
+  if(el) el.classList.toggle("open");
+}
+function toggleOfferForm(id){
+  const el = document.getElementById("offer-form-"+id);
+  if(el) el.classList.toggle("open");
+  if(el?.classList.contains("open")) document.getElementById("os-"+id)?.focus();
+}
+function upvote(id, btn){
+  const idx = allReqs.findIndex(r=>r.id===id);
+  if(idx===-1) return;
+  if(!allReqs[idx].voted){
+    allReqs[idx].votes = (allReqs[idx].votes||0)+1;
+    allReqs[idx].voted = true;
+    localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
+    btn.classList.add("voted");
+    btn.innerHTML = `↑ ${allReqs[idx].votes}`;
+  }
+}
+function submitOffer(id){
+  const sellerName = document.getElementById("os-"+id)?.value.trim();
+  const price      = document.getElementById("op-"+id)?.value;
+  const message    = document.getElementById("om-"+id)?.value.trim();
+  const msgEl      = document.getElementById("offer-msg-"+id);
+  if(!sellerName||!message){ if(msgEl){msgEl.textContent="⚠️ Fill seller name and message";msgEl.style.color="#ff9800";} return; }
+  const idx = allReqs.findIndex(r=>r.id===id);
+  if(idx===-1) return;
+  if(!allReqs[idx].offers) allReqs[idx].offers = [];
+  allReqs[idx].offers.push({ sellerName, price:Number(price)||0, message, timestamp:Date.now() });
+  localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
+  if(msgEl){msgEl.textContent="✅ Offer sent! The buyer will see it.";msgEl.style.color="#71ff00";}
+  setTimeout(()=>{ document.getElementById("offer-form-"+id)?.classList.remove("open"); applyFilters(); updateHeroStats(); },1500);
+}
+function postRequest(){
+  const name   = document.getElementById("rqName")?.value.trim();
+  const desc   = document.getElementById("rqDesc")?.value.trim();
+  const budget = Number(document.getElementById("rqBudget")?.value||0);
+  const loc    = document.getElementById("rqLocation")?.value;
+  const poster = document.getElementById("rqPoster")?.value.trim()||"Anonymous";
+  const msgEl  = document.getElementById("rqPostMsg");
+  if(!name){ if(msgEl){msgEl.textContent="⚠️ Tell us what you're looking for!";msgEl.style.color="#ff9800";} return; }
+  const req = {
+    id:"REQ"+Date.now().toString().slice(-7),
+    name, desc, budget, category:_selectedCat, location:loc,
+    poster, urgency:_urgency||"low", votes:0, voted:false,
+    timestamp:Date.now(), date:"Just now", offers:[]
+  };
+  allReqs.unshift(req);
+  localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
+  ["rqName","rqDesc","rqBudget","rqPoster"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  const locEl = document.getElementById("rqLocation"); if(locEl) locEl.value="";
+  document.querySelectorAll("#rqCatChips .rq-chip").forEach(c=>c.classList.remove("selected"));
+  _selectedCat="";
+  if(msgEl){msgEl.innerHTML='✅ Posted! Sellers will respond via <a href="messages.html" style="color:#71ff00;">Messages →</a>';msgEl.style.color="#71ff00";}
+  setTimeout(()=>{if(msgEl) msgEl.textContent="";},4000);
+  updateHeroStats();
+  applyFilters();
+}
+window.toggleOffers    = toggleOffers;
+window.toggleOfferForm = toggleOfferForm;
+window.upvote          = upvote;
+window.submitOffer     = submitOffer;
+window.postRequest     = postRequest;
+
+loadRequests();
+
+function switchMode(mode){
+  ["product","delivery","track"].forEach(m=>{
+    const el  = document.getElementById("mode-"+m);
+    const tab = document.getElementById("modeTab-"+m);
+    if(el)  el.style.display  = m===mode ? "block" : "none";
+    if(tab){
+      if(m===mode){
+        tab.style.background  ="rgba(113,255,0,0.07)";
+        tab.style.borderBottom="2px solid #71ff00";
+        tab.style.color       ="#71ff00";
+      } else {
+        tab.style.background  ="transparent";
+        tab.style.borderBottom="2px solid transparent";
+        tab.style.color       ="rgba(255,255,255,0.45)";
+      }
+    }
+  });
+  if(mode==="delivery") renderDeliveries();
+  if(mode==="track")    loadRecentOrders();
+}
+window.switchMode = switchMode;
+
+let allDeliveries = [];
+let _delTab  = "all";
+let _delRole = "buyer";
+
+function loadDeliveries(){
+  try{ allDeliveries = JSON.parse(localStorage.getItem("sokoniDeliveries"))||[]; }catch(e){ allDeliveries=[]; }
+  const el = document.getElementById("heroDelCount");
+  if(el) el.textContent = allDeliveries.length;
+}
+
+function setDelRole(role, btn){
+  _delRole = role;
+  ["buyer","seller","other"].forEach(r=>{
+    const b = document.getElementById("drole-"+r);
+    if(b){ b.classList.remove("sel-low","sel-mid","sel-hi"); }
+  });
+  btn.classList.add("sel-low");
+}
+window.setDelRole = setDelRole;
+
+function setDelTab(tab, btn){
+  _delTab = tab;
+  document.querySelectorAll("#mode-delivery .rq-tab").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  renderDeliveries();
+}
+window.setDelTab = setDelTab;
+
+function postDeliveryRequest(){
+  const item     = document.getElementById("delItem")?.value.trim();
+  const pickup   = document.getElementById("delPickup")?.value.trim();
+  const dropoff  = document.getElementById("delDropoff")?.value.trim();
+  const size     = document.getElementById("delSize")?.value;
+  const budget   = Number(document.getElementById("delBudget")?.value||0);
+  const poster   = document.getElementById("delPoster")?.value.trim()||"Anonymous";
+  const orderRef = document.getElementById("delOrderRef")?.value.trim();
+  const msgEl    = document.getElementById("delPostMsg");
+  if(!item||!pickup||!dropoff){ if(msgEl){msgEl.textContent="⚠️ Item, pickup and dropoff are required.";msgEl.style.color="#ff9800";} return; }
+  const del = {
+    id:"DEL"+Date.now().toString().slice(-7),
+    item, pickup, dropoff, size, budget, poster, role:_delRole,
+    orderRef:orderRef||null, status:"pending",
+    driverName:null, driverPhone:null, vehicle:null,
+    createdAt:Date.now(), updatedAt:Date.now(),
+    timeline:[{status:"posted",time:Date.now(),note:`Delivery requested by ${poster} (${_delRole})`}]
+  };
+  allDeliveries.unshift(del);
+  localStorage.setItem("sokoniDeliveries", JSON.stringify(allDeliveries));
+  ["delItem","delPickup","delDropoff","delBudget","delPoster","delOrderRef"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  if(msgEl){ msgEl.innerHTML=`✅ Posted! Delivery ID: <strong style="color:#71ff00;">${del.id}</strong> — share this with buyer &amp; seller to track.`; msgEl.style.color="#71ff00"; }
+  setTimeout(()=>{if(msgEl)msgEl.textContent="";},6000);
+  const el = document.getElementById("heroDelCount");
+  if(el) el.textContent = allDeliveries.length;
+  renderDeliveries();
+}
+window.postDeliveryRequest = postDeliveryRequest;
+
+function renderDeliveries(){
+  loadDeliveries();
+  const el      = document.getElementById("delList");
+  const countEl = document.getElementById("delCount");
+  const q = (document.getElementById("delSearch")?.value||"").toLowerCase();
+  let list = [...allDeliveries];
+  if(q) list = list.filter(d=>d.item.toLowerCase().includes(q)||d.pickup.toLowerCase().includes(q)||d.dropoff.toLowerCase().includes(q)||d.id.toLowerCase().includes(q));
+  if(_delTab==="pending") list = list.filter(d=>d.status==="pending");
+  else if(_delTab==="active") list = list.filter(d=>["accepted","picked_up","in_transit"].includes(d.status));
+  else if(_delTab==="done")   list = list.filter(d=>d.status==="delivered");
+  if(countEl) countEl.textContent="("+list.length+")";
+  const STATUS_COLOR={pending:"#f59e0b",accepted:"#00aaff",picked_up:"#00aaff",in_transit:"#71ff00",delivered:"#10b981"};
+  const STATUS_LABEL={pending:"Pending driver",accepted:"Driver assigned",picked_up:"Item picked up",in_transit:"In transit",delivered:"Delivered ✓"};
+  if(!list.length){
+    el.innerHTML=`<div class="rq-empty"><div class="rq-empty-icon">🚚</div><p style="font-size:13px;">No delivery requests yet.</p></div>`;
+    return;
+  }
+  el.innerHTML = list.map(d=>`
+    <div class="rq-card" style="--accent:${STATUS_COLOR[d.status]||"#71ff00"};">
+      <div class="rq-card-top">
+        <div class="rq-card-left">
+          <div class="rq-card-name">📦 ${_esc(d.item)}</div>
+          <div class="rq-card-poster">📍 ${_esc(d.pickup)} → ${_esc(d.dropoff)}</div>
+        </div>
+        <div class="rq-card-right">
+          ${d.budget?`<div class="rq-card-budget">KES ${Number(d.budget).toLocaleString()}</div>`:"<div style='font-size:12px;color:rgba(255,255,255,0.3);'>Open offer</div>"}
+          <span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${STATUS_COLOR[d.status]||"#71ff00"};color:${STATUS_COLOR[d.status]||"#71ff00"};">${STATUS_LABEL[d.status]||d.status}</span>
+        </div>
+      </div>
+      <div class="rq-card-meta">
+        <span class="rq-meta-tag">📦 ${_esc(d.size||"unspecified")}</span>
+        <span class="rq-meta-tag">👤 ${_esc(d.poster)} (${d.role})</span>
+        <span class="rq-meta-tag">🆔 ${d.id}</span>
+        ${d.orderRef?`<span class="rq-meta-tag">🧾 ${_esc(d.orderRef)}</span>`:""}
+      </div>
+      <div class="rq-upvote-row" style="gap:8px;">
+        ${d.status==="pending"?`
+          <button type="button" class="rq-offer-btn" onclick="acceptDelivery('${d.id}')">🚗 I Can Deliver This →</button>
+        `:`
+          <span style="font-size:11px;color:rgba(255,255,255,0.4);">Driver: ${_esc(d.driverName||"—")} · ${_esc(d.vehicle||"")}</span>
+        `}
+        <button type="button" class="rq-upvote-btn" onclick="switchMode('track');document.getElementById('trackInput').value='${d.id}';trackOrder();" style="margin-left:auto;">
+          🔍 Track
+        </button>
+      </div>
+      ${d.status==="pending"?`
+      <div id="accept-form-${d.id}" style="display:none;margin-top:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px;">🚗 Accept this delivery</div>
+        <input class="rq-input" id="adn-${d.id}" placeholder="Your name" autocomplete="off">
+        <input class="rq-input" type="tel" id="adp-${d.id}" placeholder="Your phone: 07XXXXXXXX" inputmode="tel">
+        <select class="rq-input" id="adv-${d.id}" style="cursor:pointer;">
+          <option value="motorcycle">🏍️ Motorcycle</option>
+          <option value="car">🚗 Car</option>
+          <option value="van">🚐 Van</option>
+          <option value="pickup">🛻 Pickup</option>
+        </select>
+        <button type="button" onclick="confirmAccept('${d.id}')" style="padding:9px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;">Confirm Accept →</button>
+      </div>`:""}
+    </div>`).join("");
+}
+
+function acceptDelivery(id){
+  const form = document.getElementById("accept-form-"+id);
+  if(form) form.style.display = form.style.display==="none"?"block":"none";
+}
+window.acceptDelivery = acceptDelivery;
+
+function confirmAccept(id){
+  const idx = allDeliveries.findIndex(d=>d.id===id);
+  if(idx===-1) return;
+  const name  = document.getElementById("adn-"+id)?.value.trim();
+  const phone = document.getElementById("adp-"+id)?.value.trim();
+  const veh   = document.getElementById("adv-"+id)?.value;
+  if(!name||!phone){ (window._skToast||alert)("Enter your name and phone to accept."); return; }
+  allDeliveries[idx].status="accepted";
+  allDeliveries[idx].driverName=name;
+  allDeliveries[idx].driverPhone=phone;
+  allDeliveries[idx].vehicle=veh;
+  allDeliveries[idx].updatedAt=Date.now();
+  allDeliveries[idx].timeline.push({status:"accepted",time:Date.now(),note:`Driver ${name} (${veh}) accepted the delivery`});
+  localStorage.setItem("sokoniDeliveries",JSON.stringify(allDeliveries));
+  renderDeliveries();
+}
+window.confirmAccept = confirmAccept;
+
+function updateDeliveryStatus(id, newStatus, note){
+  loadDeliveries();
+  const idx = allDeliveries.findIndex(d=>d.id===id);
+  if(idx===-1) return false;
+  allDeliveries[idx].status=newStatus;
+  allDeliveries[idx].updatedAt=Date.now();
+  allDeliveries[idx].timeline.push({status:newStatus,time:Date.now(),note:note||newStatus});
+  localStorage.setItem("sokoniDeliveries",JSON.stringify(allDeliveries));
+  return true;
+}
+window.updateDeliveryStatus = updateDeliveryStatus;
+
+function trackOrder(){
+  const id = (document.getElementById("trackInput")?.value||"").trim().toUpperCase();
+  const resultEl = document.getElementById("trackResult");
+  if(!resultEl||!id){ return; }
+  loadDeliveries();
+  const del = allDeliveries.find(d=>d.id.toUpperCase()===id);
+  let orders = [];
+  try{ orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; }catch(e){}
+  const order = orders.find(o=>(o.id||"").toUpperCase()===id||(o.orderId||"").toUpperCase()===id);
+  if(del){   resultEl.innerHTML = renderTrackDelivery(del); return; }
+  if(order){ resultEl.innerHTML = renderTrackOrder(order);  return; }
+  resultEl.innerHTML=`<div style="text-align:center;padding:24px;color:rgba(255,255,255,0.35);font-size:13px;">
+    <div style="font-size:36px;margin-bottom:8px;">🔍</div>
+    No order or delivery found for <strong style="color:#71ff00;">${_esc(id)}</strong><br>
+    <span style="font-size:11px;">Check the ID and try again, or post a new delivery request.</span>
+  </div>`;
+}
+window.trackOrder = trackOrder;
+
+const STATUS_STEPS_DEL = ["posted","accepted","picked_up","in_transit","delivered"];
+const STEP_ICONS  = {posted:"📋",placed:"🛒",confirmed:"✅",accepted:"🚗",picked_up:"📦",dispatched:"📦",in_transit:"🚚",delivered:"🏠"};
+const STEP_LABELS = {posted:"Request Posted",placed:"Order Placed",confirmed:"Seller Confirmed",accepted:"Driver Assigned",picked_up:"Item Picked Up",dispatched:"Dispatched",in_transit:"In Transit",delivered:"Delivered"};
+
+function renderTrackDelivery(del){
+  const steps = STATUS_STEPS_DEL;
+  const curIdx = steps.indexOf(del.status);
+  const pc = Math.round(((curIdx+1)/steps.length)*100);
+  return `
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.15);border-radius:16px;padding:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:900;">📦 ${_esc(del.item)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;">📍 ${_esc(del.pickup)} → ${_esc(del.dropoff)}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);">Delivery ID</div>
+        <div style="font-size:13px;font-weight:900;color:#71ff00;">${del.id}</div>
+      </div>
+    </div>
+    <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:18px;overflow:hidden;">
+      <div style="height:100%;width:${pc}%;background:linear-gradient(90deg,#71ff00,#4fc800);border-radius:3px;transition:width .5s;"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${steps.map((s,i)=>{
+        const done   = i<=curIdx;
+        const active = i===curIdx;
+        const tl = del.timeline?.find(t=>t.status===s);
+        return `<div style="display:flex;align-items:flex-start;gap:12px;">
+          <div style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid ${done?"#71ff00":"rgba(255,255,255,0.1)"};background:${done?"rgba(113,255,0,0.12)":"rgba(255,255,255,0.03)"};${active?"box-shadow:0 0 10px rgba(113,255,0,0.3);":""}">${STEP_ICONS[s]||"•"}</div>
+          <div style="flex:1;padding-top:4px;">
+            <div style="font-size:12px;font-weight:${active?"900":"700"};color:${done?"white":"rgba(255,255,255,0.35)"};">${STEP_LABELS[s]||s}</div>
+            ${tl?`<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px;">${_esc(tl.note)} · ${new Date(tl.time).toLocaleTimeString("en-KE",{hour:"2-digit",minute:"2-digit"})}</div>`:""}
+          </div>
+          ${active?`<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;">NOW</span>`:""}
+        </div>`;
+      }).join("")}
+    </div>
+    ${del.driverName?`
+    <div style="margin-top:16px;padding:12px 14px;background:rgba(0,170,255,0.05);border:1px solid rgba(0,170,255,0.15);border-radius:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="width:36px;height:36px;border-radius:50%;background:rgba(0,170,255,0.15);display:flex;align-items:center;justify-content:center;font-size:18px;">🚗</div>
+      <div>
+        <div style="font-size:13px;font-weight:800;color:white;">${_esc(del.driverName)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${_esc(del.vehicle||"Driver")}</div>
+      </div>
+      <a href="tel:${_esc(del.driverPhone)}" style="margin-left:auto;padding:8px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:9px;text-decoration:none;font-size:12px;font-weight:700;">📞 ${_esc(del.driverPhone)}</a>
+    </div>`:""}
+    ${del.status!=="delivered"?`
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      ${del.status==="accepted"  ?`<button type="button" onclick="updateDeliveryStatus('${del.id}','picked_up','Item picked up by driver');trackOrder();"   style="padding:8px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Mark: Picked Up</button>`:""}
+      ${del.status==="picked_up" ?`<button type="button" onclick="updateDeliveryStatus('${del.id}','in_transit','Delivery in progress');trackOrder();"        style="padding:8px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Mark: In Transit</button>`:""}
+      ${del.status==="in_transit"?`<button type="button" onclick="updateDeliveryStatus('${del.id}','delivered','Successfully delivered');trackOrder();"        style="padding:8px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Mark: Delivered ✓</button>`:""}
+    </div>`:""}
+  </div>`;
+}
+
+function renderTrackOrder(order){
+  const statuses = ["placed","confirmed","dispatched","in_transit","delivered"];
+  const statusMap = {placed:0,confirmed:1,dispatched:2,in_transit:3,delivered:4};
+  const curIdx = statusMap[order.status||"placed"]||0;
+  const pc = Math.round(((curIdx+1)/statuses.length)*100);
+  return `
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.15);border-radius:16px;padding:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="font-size:16px;font-weight:900;">🛒 Order ${_esc(order.id||order.orderId||"—")}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;">${order.items?.length||1} item(s) · KES ${Number(order.total||0).toLocaleString()}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);">Deliver to</div>
+        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">${_esc(order.address||"—")}</div>
+      </div>
+    </div>
+    <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;margin-bottom:18px;overflow:hidden;">
+      <div style="height:100%;width:${pc}%;background:linear-gradient(90deg,#71ff00,#4fc800);border-radius:3px;"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${statuses.map((s,i)=>{
+        const done=i<=curIdx, active=i===curIdx;
+        return `<div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid ${done?"#71ff00":"rgba(255,255,255,0.1)"};background:${done?"rgba(113,255,0,0.12)":"rgba(255,255,255,0.03)"};">${STEP_ICONS[s]||"•"}</div>
+          <div style="font-size:12px;font-weight:${active?"900":"700"};color:${done?"white":"rgba(255,255,255,0.35)"};">${STEP_LABELS[s]||s}</div>
+          ${active?`<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;margin-left:auto;">NOW</span>`:""}
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+function loadRecentOrders(){
+  const section = document.getElementById("recentOrdersSection");
+  if(!section) return;
+  let orders = [];
+  try{ orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; }catch(e){}
+  if(!orders.length){ section.innerHTML=""; return; }
+  section.innerHTML=`
+  <div style="font-size:13px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:10px;">Your Recent Orders</div>
+  ${orders.slice(0,5).map(o=>`
+  <div class="rq-card" style="cursor:pointer;" onclick="document.getElementById('trackInput').value='${_esc(o.id||o.orderId||"")}';trackOrder();">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:13px;font-weight:800;">${_esc(o.id||o.orderId||"Order")}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${o.items?.length||1} item(s) · ${_esc(o.address||"")}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:13px;font-weight:900;color:#71ff00;">KES ${Number(o.total||0).toLocaleString()}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);">${o.status||"placed"}</div>
+      </div>
+    </div>
+  </div>`).join("")}`;
+}
+
+loadDeliveries();
+</script>
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+(function(){
+  if(window.innerWidth > 600) return;
+  var panel  = document.querySelector('.rq-post-panel');
+  var header = panel && panel.querySelector('.rq-post-header');
+  if(!header) return;
+  header.addEventListener('click', function(){ panel.classList.toggle('form-open'); });
+})();
+</script>
+<script type="module" src="sokoni-init.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

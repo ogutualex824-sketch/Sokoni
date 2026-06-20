@@ -1,0 +1,2311 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+<script src="security.js"></script><script src="auth-guard.js"></script><link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI Entertainment — DJs, Bands, MCs &amp; Event Performers</title>
+  <meta name="description" content="Book DJs, bands, MCs, comedians and event performers in Kenya on SOKONI Entertainment.">
+  <meta property="og:title" content="SOKONI Entertainment — DJs, Bands, MCs & Event Performers">
+  <meta property="og:description" content="Find and book event entertainers across Kenya on SOKONI.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:white;min-height:100vh;padding-bottom:80px;}
+
+    /*  Nav  */
+    .en-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(10,10,10,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+    .en-nav-logo{height:34px;}
+    .en-nav-right{display:flex;gap:10px;}
+    .en-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;}
+    .en-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .en-nav-book{background:rgba(168,85,247,0.12);border-color:rgba(168,85,247,0.3);color:#c084fc;}
+
+    /*  Hero  */
+    .en-hero{position:relative;overflow:hidden;padding:60px 24px 50px;text-align:center;}
+    .en-hero-bg{position:absolute;inset:0;background:linear-gradient(135deg,rgba(168,85,247,0.12),rgba(236,72,153,0.08),rgba(249,115,22,0.06));z-index:0;}
+    .en-hero-bg::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 60% at 50% 50%,rgba(168,85,247,0.15),transparent);}
+    .en-hero-content{position:relative;z-index:1;}
+    .en-hero-badge{display:inline-block;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);border-radius:999px;padding:6px 16px;font-size:12px;font-weight:700;color:#c084fc;margin-bottom:16px;}
+    .en-hero h1{font-size:clamp(26px,6vw,46px);font-weight:900;margin-bottom:10px;line-height:1.1;}
+    .en-hero h1 span{background:linear-gradient(135deg,#c084fc,#f472b6,#fb923c);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .en-hero p{color:rgba(255,255,255,0.5);font-size:15px;margin-bottom:28px;max-width:560px;margin-left:auto;margin-right:auto;}
+    .en-search-bar{display:flex;max-width:520px;margin:0 auto;gap:8px;}
+    .en-search-bar input{flex:1;padding:14px 18px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+    .en-search-bar input::placeholder{color:rgba(255,255,255,0.35);}
+    .en-search-btn{padding:14px 22px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;}
+
+    /*  Body  */
+    .en-body{max-width:1200px;margin:0 auto;padding:0 24px 60px;}
+
+    /*  Category scroll  */
+    .en-cats{display:flex;gap:10px;overflow-x:auto;padding:20px 0 8px;scrollbar-width:none;margin-bottom:8px;}
+    .en-cats::-webkit-scrollbar{display:none;}
+    .en-cat-pill{flex-shrink:0;padding:10px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;}
+    .en-cat-pill:hover,.en-cat-pill.active{background:rgba(168,85,247,0.12);border-color:rgba(168,85,247,0.35);color:#c084fc;}
+
+    /*  Section heading  */
+    .en-section-h{font-size:15px;font-weight:800;color:white;margin:28px 0 16px;display:flex;align-items:center;gap:8px;}
+    .en-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+    /*  Performer cards  */
+    .en-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px;}
+    .en-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:22px;overflow:hidden;transition:transform .2s,border-color .2s;}
+    .en-card:hover{transform:translateY(-4px);border-color:rgba(168,85,247,0.3);}
+    .en-card-banner{height:110px;display:flex;align-items:center;justify-content:center;font-size:52px;position:relative;}
+    .en-card-banner .genre-strip{position:absolute;bottom:8px;left:12px;right:12px;display:flex;gap:4px;flex-wrap:wrap;}
+    .en-genre-tag{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);}
+    .en-card-body{padding:16px 18px 18px;}
+    .en-card-name{font-size:16px;font-weight:900;color:white;margin-bottom:4px;}
+    .en-card-type-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;margin-bottom:8px;}
+    .badge-dj{background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.25);}
+    .badge-mc{background:rgba(249,115,22,0.15);color:#fb923c;border:1px solid rgba(249,115,22,0.25);}
+    .badge-band{background:rgba(236,72,153,0.15);color:#f472b6;border:1px solid rgba(236,72,153,0.25);}
+    .badge-comedian{background:rgba(234,179,8,0.15);color:#fbbf24;border:1px solid rgba(234,179,8,0.25);}
+    .badge-photographer{background:rgba(0,180,255,0.15);color:#60aaff;border:1px solid rgba(0,180,255,0.25);}
+    .badge-videographer{background:rgba(0,200,120,0.15);color:#00c878;border:1px solid rgba(0,200,120,0.25);}
+    .badge-dancer{background:rgba(255,60,120,0.15);color:#ff6b9d;border:1px solid rgba(255,60,120,0.25);}
+    .en-card-location{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+    .en-card-desc{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:12px;}
+    .en-card-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+    .en-card-price{font-size:16px;font-weight:900;color:#c084fc;}
+    .en-card-price span{font-size:10px;color:rgba(255,255,255,0.35);font-weight:400;}
+    .en-card-rating{font-size:12px;color:rgba(255,255,255,0.45);display:flex;align-items:center;gap:3px;}
+    .en-card-rating .star{color:#fbbf24;}
+    .en-book-btn{padding:9px 18px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:10px;color:white;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:filter .2s;}
+    .en-book-btn:hover{filter:brightness(1.1);}
+
+    /*  Equipment tags  */
+    .en-equip-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;}
+    .en-equip-tag{font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);}
+
+    /*  Trending / featured strip  */
+    .en-featured-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:0 0 28px;}
+    .en-feat-card{border-radius:16px;padding:20px;text-align:center;cursor:pointer;transition:transform .2s;text-decoration:none;display:block;font-family:inherit;color:inherit;border:none;width:100%;}
+    .en-feat-card:hover{transform:translateY(-3px);}
+    .feat-dj{background:linear-gradient(135deg,rgba(168,85,247,0.12),rgba(124,58,237,0.08));border:1px solid rgba(168,85,247,0.2);}
+    .feat-mc{background:linear-gradient(135deg,rgba(249,115,22,0.12),rgba(234,88,12,0.08));border:1px solid rgba(249,115,22,0.2);}
+    .feat-band{background:linear-gradient(135deg,rgba(236,72,153,0.12),rgba(219,39,119,0.08));border:1px solid rgba(236,72,153,0.2);}
+    .feat-photo{background:linear-gradient(135deg,rgba(0,180,255,0.12),rgba(0,100,200,0.08));border:1px solid rgba(0,180,255,0.2);}
+    .en-feat-card .feat-icon{font-size:34px;margin-bottom:10px;}
+    .en-feat-card h3{font-size:14px;font-weight:800;color:white;margin-bottom:4px;}
+    .en-feat-card p{font-size:11px;color:rgba(255,255,255,0.45);}
+
+    /*  How it works  */
+    .hiw-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:0 0 28px;}
+    .hiw-step{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:18px;text-align:center;}
+    .hiw-step .step-num{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#a855f7,#7c3aed);color:white;font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;}
+    .hiw-step h4{font-size:13px;font-weight:700;color:white;margin-bottom:4px;}
+    .hiw-step p{font-size:11px;color:rgba(255,255,255,0.45);}
+
+    /*  Booking Modal  */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+    .modal-box{background:#141414;border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:28px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;}
+    .modal-box h2{font-size:18px;font-weight:900;color:white;margin-bottom:6px;}
+    .modal-box p.modal-sub{color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;}
+    .modal-input{width:100%;padding:13px 15px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:12px;}
+    .modal-input::placeholder{color:rgba(255,255,255,0.3);}
+    .modal-input:focus{border-color:rgba(168,85,247,0.45);}
+    .modal-btn{width:100%;padding:13px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px;}
+    .modal-close{float:right;background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;cursor:pointer;padding:0 4px;}
+    .modal-price-preview{background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:12px;padding:14px;margin-bottom:14px;font-size:13px;}
+    .modal-price-preview .mp-val{font-size:20px;font-weight:900;color:#c084fc;}
+
+    /*  List your talent CTA  */
+    .list-cta{background:linear-gradient(135deg,rgba(168,85,247,0.08),rgba(236,72,153,0.06));border:1px solid rgba(168,85,247,0.2);border-radius:20px;padding:28px 32px;margin:28px 0;display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
+    .list-cta-icon{font-size:44px;flex-shrink:0;}
+    .list-cta-info h3{font-size:18px;font-weight:900;color:white;margin-bottom:5px;}
+    .list-cta-info p{font-size:13px;color:rgba(255,255,255,0.5);line-height:1.5;}
+    .list-cta-btn{padding:13px 26px;background:linear-gradient(135deg,#a855f7,#7c3aed);color:white;font-weight:800;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;}
+
+    /*  DJ Video Status Cards  */
+    .dj-status-strip{display:flex;gap:12px;overflow-x:auto;padding:4px 0 12px;scrollbar-width:none;margin-bottom:24px;}
+    .dj-status-strip::-webkit-scrollbar{display:none;}
+    .dj-status-card{flex-shrink:0;width:100px;cursor:pointer;text-align:center;position:relative;}
+    .dj-status-ring{width:76px;height:76px;border-radius:50%;margin:0 auto 6px;position:relative;display:flex;align-items:center;justify-content:center;}
+    .dj-status-ring::before{content:'';position:absolute;inset:-3px;border-radius:50%;background:conic-gradient(from 0deg,#a855f7,#ec4899,#fb923c,#a855f7);z-index:0;}
+    .dj-status-ring.unseen::before{background:conic-gradient(from 0deg,#a855f7,#ec4899,#f97316,#a855f7);}
+    .dj-status-ring.seen::before{background:rgba(255,255,255,0.1);}
+    .dj-status-inner{width:68px;height:68px;border-radius:50%;background:#141414;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;font-size:28px;overflow:hidden;}
+    .dj-status-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.65);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:96px;}
+    .dj-live-dot{position:absolute;top:0;right:0;z-index:2;background:#ff3b3b;border:2px solid #0a0a0a;width:14px;height:14px;border-radius:50%;animation:pulse-live 1.5s infinite;}
+    @keyframes pulse-live{0%,100%{box-shadow:0 0 0 2px rgba(255,60,60,0.4);}50%{box-shadow:0 0 0 5px rgba(255,60,60,0.15);}}
+
+    /*  Waveform animation (DJ card banner)  */
+    .dj-waveform{display:flex;align-items:center;justify-content:center;gap:2px;height:32px;margin:6px 0;}
+    .dj-bar{width:3px;border-radius:3px;background:linear-gradient(180deg,#c084fc,#a855f7);animation:wave 1.2s ease-in-out infinite;}
+    .dj-bar:nth-child(1){animation-delay:0s;height:8px;}
+    .dj-bar:nth-child(2){animation-delay:.1s;height:20px;}
+    .dj-bar:nth-child(3){animation-delay:.2s;height:14px;}
+    .dj-bar:nth-child(4){animation-delay:.3s;height:26px;}
+    .dj-bar:nth-child(5){animation-delay:.4s;height:10px;}
+    .dj-bar:nth-child(6){animation-delay:.5s;height:22px;}
+    .dj-bar:nth-child(7){animation-delay:.6s;height:16px;}
+    .dj-bar:nth-child(8){animation-delay:.7s;height:28px;}
+    .dj-bar:nth-child(9){animation-delay:.8s;height:12px;}
+    .dj-bar:nth-child(10){animation-delay:.9s;height:20px;}
+    .dj-bar:nth-child(11){animation-delay:1s;height:8px;}
+    .dj-bar:nth-child(12){animation-delay:1.1s;height:18px;}
+    @keyframes wave{0%,100%{transform:scaleY(.4);opacity:.6;}50%{transform:scaleY(1);opacity:1;}}
+    .en-card-banner .dj-waveform .dj-bar{background:linear-gradient(180deg,rgba(192,132,252,0.9),rgba(168,85,247,0.5));}
+
+    /*  Now Playing pill  */
+    .now-playing{display:inline-flex;align-items:center;gap:5px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);border-radius:999px;padding:3px 10px;font-size:10px;font-weight:800;color:#c084fc;margin-bottom:6px;}
+    .now-playing-dot{width:7px;height:7px;background:#c084fc;border-radius:50%;animation:pulse-live 1s infinite;}
+
+    /*  Stats strip  */
+    .en-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));background:rgba(168,85,247,0.04);border-bottom:1px solid rgba(168,85,247,0.1);padding:14px 24px;gap:0;}
+    .en-stat{text-align:center;padding:8px 4px;border-right:1px solid rgba(168,85,247,0.08);}
+    .en-stat:last-child{border-right:none;}
+    .en-stat-val{font-size:18px;font-weight:900;color:#c084fc;}
+    .en-stat-lbl{font-size:10px;color:rgba(255,255,255,0.38);margin-top:2px;}
+
+    /*  Video status modal  */
+    .vs-modal{position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:2000;display:flex;align-items:center;justify-content:center;}
+    .vs-modal-inner{width:min(340px,90vw);aspect-ratio:9/16;border-radius:20px;position:relative;overflow:hidden;background:#111;}
+    .vs-close{position:absolute;top:14px;right:14px;z-index:2;background:rgba(0,0,0,0.5);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+    .vs-content{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+    .vs-big-emoji{font-size:80px;}
+    .vs-dj-name{font-size:20px;font-weight:900;color:white;}
+    .vs-genre-text{font-size:13px;color:rgba(255,255,255,0.6);}
+    .vs-big-wave{display:flex;gap:3px;align-items:center;height:60px;margin:8px 0;}
+    .vs-big-bar{width:5px;border-radius:4px;background:linear-gradient(180deg,#c084fc,#f472b6);animation:wave .8s ease-in-out infinite;}
+    .vs-action-row{position:absolute;bottom:28px;right:16px;display:flex;flex-direction:column;gap:14px;align-items:center;}
+    .vs-action-btn{width:42px;height:42px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:white;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+    .vs-top-bar{position:absolute;top:16px;left:16px;right:52px;display:flex;align-items:center;gap:10px;}
+    .vs-top-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(168,85,247,0.4),rgba(236,72,153,0.3));display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid rgba(168,85,247,0.5);}
+    .vs-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.15);}
+    .vs-progress-bar{height:100%;background:linear-gradient(90deg,#a855f7,#ec4899);animation:vs-progress 15s linear forwards;}
+    @keyframes vs-progress{0%{width:0%;}100%{width:100%;}}
+
+    @media(max-width:600px){
+      .en-nav-right{display:none !important;}
+      .en-grid{grid-template-columns:1fr;}
+      .en-featured-strip{grid-template-columns:repeat(2,1fr);}
+      .list-cta{flex-direction:column;text-align:center;}
+    }
+
+    /* Rate Cards */
+    .rate-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:28px;}
+    .rate-card{background:rgba(255,255,255,0.03);border:1px solid rgba(168,85,247,0.25);border-radius:18px;padding:20px;transition:border-color .2s;}
+    .rate-card:hover{border-color:rgba(168,85,247,0.5);}
+    .rate-card-hdr{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:15px;font-weight:900;background:linear-gradient(135deg,#c084fc,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .rate-tier{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .rate-tier:last-child{border-bottom:none;}
+    .rate-tier-name{font-size:12px;color:rgba(255,255,255,0.55);}
+    .rate-tier-price{font-size:13px;font-weight:800;color:#c084fc;}
+
+    /* Bundle Cards */
+    .bundle-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-bottom:28px;}
+    .bundle-card{background:rgba(255,255,255,0.03);border:1px solid rgba(168,85,247,0.2);border-radius:20px;padding:22px;position:relative;transition:border-color .2s;}
+    .bundle-card:hover{border-color:rgba(168,85,247,0.45);}
+    .bundle-tag{display:inline-block;background:linear-gradient(135deg,#a855f7,#ec4899);color:white;font-size:10px;font-weight:900;padding:3px 10px;border-radius:999px;letter-spacing:.5px;margin-bottom:10px;}
+    .bundle-includes{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px;}
+    .bundle-chip{font-size:11px;padding:3px 9px;border-radius:6px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);color:rgba(255,255,255,0.7);}
+    .bundle-price{font-size:20px;font-weight:900;color:#c084fc;margin-bottom:12px;}
+    .bundle-book-btn{padding:10px 20px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;transition:filter .2s;}
+    .bundle-book-btn:hover{filter:brightness(1.1);}
+
+    /* New badge classes */
+    .badge-singer{background:rgba(45,212,191,0.15);color:#2dd4bf;border:1px solid rgba(45,212,191,0.25);}
+    .badge-soundeng{background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.25);}
+    .badge-lighting{background:rgba(250,204,21,0.15);color:#facc15;border:1px solid rgba(250,204,21,0.25);}
+    .badge-voiceover{background:rgba(129,140,248,0.15);color:#818cf8;border:1px solid rgba(129,140,248,0.25);}
+    .badge-planner{background:rgba(251,113,133,0.15);color:#fb7185;border:1px solid rgba(251,113,133,0.25);}
+    .badge-makeup{background:rgba(240,171,252,0.15);color:#f0abfc;border:1px solid rgba(240,171,252,0.25);}
+    .badge-magician{background:rgba(124,58,237,0.15);color:#7c3aed;border:1px solid rgba(124,58,237,0.25);}
+    .badge-producer{background:rgba(34,211,238,0.15);color:#22d3ee;border:1px solid rgba(34,211,238,0.25);}
+    .badge-musician{background:rgba(251,146,60,0.15);color:#fb923c;border:1px solid rgba(251,146,60,0.25);}
+
+    /* Rate Card Detail Modal */
+    .rc-modal{position:fixed;inset:0;background:rgba(0,0,0,0.82);backdrop-filter:blur(12px);z-index:2000;overflow-y:auto;align-items:flex-start;justify-content:center;padding:24px 16px;display:none;}
+    .rc-modal.open{display:flex;}
+    .rc-modal-box{background:#141414;border:1px solid rgba(168,85,247,0.2);border-radius:24px;padding:28px;max-width:520px;width:100%;margin:auto;}
+    .rc-modal-box h2{font-size:20px;font-weight:900;color:white;margin-bottom:4px;}
+    .rc-pkg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0;}
+    .rc-pkg-col{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px;text-align:center;}
+    .rc-pkg-col.highlight{border-color:rgba(168,85,247,0.4);background:rgba(168,85,247,0.06);}
+    .rc-pkg-name{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,0.45);margin-bottom:8px;}
+    .rc-pkg-col.highlight .rc-pkg-name{color:#c084fc;}
+    .rc-pkg-price{font-size:16px;font-weight:900;color:#c084fc;margin-bottom:6px;}
+    .rc-pkg-detail{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;}
+
+/* ── Tab navigation ── */
+.en-tabs{display:flex;gap:4px;overflow-x:auto;padding:12px 24px;background:rgba(5,5,5,0.98);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:56px;z-index:90;scrollbar-width:none;}
+.en-tabs::-webkit-scrollbar{display:none;}
+.en-tab{flex-shrink:0;padding:9px 18px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.55);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.en-tab:hover{background:rgba(168,85,247,0.08);border-color:rgba(168,85,247,0.25);color:#c084fc;}
+.en-tab.active{background:rgba(168,85,247,0.15);border-color:rgba(168,85,247,0.4);color:#c084fc;}
+.en-pane{display:none;}
+.en-pane.active{display:block;}
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#a855f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="sokoni-pay.js" defer></script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"EntertainmentBusiness","name":"SOKONI Entertainment — Book DJs, MCs, Bands Kenya","description":"Book top DJs, MCs, live bands, comedians, dancers and photographers for weddings, corporate events and parties in Nairobi, Mombasa and across Kenya.","url":"https://mysokoni.co.ke/entertainment.html","logo":"https://mysokoni.co.ke/assets/Sokonilogo2.png","telephone":"+254705726803","areaServed":{"@type":"Country","name":"Kenya"}}</script>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<!--  Nav  -->
+<nav class="en-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="en-nav-logo" alt="Sokoni"></a>
+  <div class="en-nav-right">
+    <a href="javascript:history.back()" class="en-nav-link">← Back</a>
+    <button type="button" onclick="openRegisterModal()" class="en-nav-link" style="background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;">⭐ Join as Performer</button>
+    <button type="button" onclick="openBooking(null,'custom')" class="en-nav-link en-nav-book">📅 Book Now</button>
+    <a href="notifications.html" class="en-nav-link" style="position:relative;" title="Notifications">🔔<span id="enNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
+  </div>
+</nav>
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('enNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
+<!--  Hero  -->
+<div class="en-hero">
+  <div class="en-hero-bg"></div>
+  <div class="en-hero-content">
+    <div class="en-hero-badge">🎶 Kenya's Entertainment Marketplace</div>
+    <h1>Book <span>DJs, MCs, Bands</span><br>&amp; Event Performers</h1>
+    <p>From rooftop parties to corporate events, weddings to club nights — find and book Kenya's top talent in minutes.</p>
+    <div class="en-search-bar">
+      <input type="text" id="enSearch" placeholder="Search e.g. 'DJ Nairobi wedding', 'MC corporate event'..." oninput="filterPerformers()">
+      <button type="button" class="en-search-btn" onclick="filterPerformers()">🔍 Search</button>
+    </div>
+    <div style="margin-top:16px;">
+      <button type="button" onclick="openRegisterModal()" style="display:inline-flex;align-items:center;gap:7px;padding:10px 22px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:999px;color:#71ff00;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;" onmouseover="this.style.background='rgba(113,255,0,0.18)'" onmouseout="this.style.background='rgba(113,255,0,0.1)'">
+        ⭐ Are you a DJ, Singer, Musician? List yourself free →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!--  Stats Strip  -->
+<div class="en-stats">
+  <div class="en-stat"><div class="en-stat-val">80+</div><div class="en-stat-lbl">Performers Listed</div></div>
+  <div class="en-stat"><div class="en-stat-val">25+</div><div class="en-stat-lbl">DJs Available</div></div>
+  <div class="en-stat"><div class="en-stat-val">4.8 ⭐</div><div class="en-stat-lbl">Avg. Rating</div></div>
+  <div class="en-stat"><div class="en-stat-val">5 Cities</div><div class="en-stat-lbl">Kenya-wide</div></div>
+  <div class="en-stat"><div class="en-stat-val">M-PESA</div><div class="en-stat-lbl">50% Deposit</div></div>
+  <div class="en-stat"><div class="en-stat-val">2 hrs</div><div class="en-stat-lbl">Booking Confirm</div></div>
+</div>
+
+<!-- ── Tab navigation ── -->
+<div class="en-tabs" id="enTabs">
+  <button type="button" class="en-tab active" onclick="showEntTab('home',this)">🏠 Home</button>
+  <button type="button" class="en-tab" onclick="showEntTab('performers',this)">🎭 Performers</button>
+  <button type="button" class="en-tab" onclick="showEntTab('events',this)">🎟️ Events</button>
+  <button type="button" class="en-tab" onclick="showEntTab('venues',this)">🏛️ Venues</button>
+  <button type="button" class="en-tab" onclick="showEntTab('mytickets',this)">🎫 My Tickets</button>
+  <button type="button" class="en-tab" onclick="showEntTab('packages',this)">💰 Packages</button>
+  <button type="button" class="en-tab" onclick="showEntTab('bookings',this)">📋 My Bookings</button>
+  <a href="ent-organizer.html" style="flex-shrink:0;padding:9px 18px;border-radius:999px;border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.06);color:#71ff00;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;">⚡ Organizer</a>
+</div>
+
+<div class="en-body">
+
+  <!-- ═══ HOME ═══ -->
+  <div class="en-pane active" id="pane-home">
+
+  <!--  DJ Status Strip  -->
+  <div class="en-section-h" style="margin-top:24px;">🔴 Live & Active Now</div>
+  <div class="dj-status-strip" id="djStatusStrip"></div>
+
+  <!--  Quick category tiles  -->
+  <div class="en-section-h" style="margin-top:8px;">🎭 Browse by Category</div>
+  <div class="en-featured-strip">
+    <button type="button" class="en-feat-card feat-dj" onclick="setCat('dj');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎧</div>
+      <h3>DJ / Disc Jockey</h3>
+      <p>Club nights, weddings, corporate, house parties</p>
+    </button>
+    <button type="button" class="en-feat-card feat-mc" onclick="setCat('mc');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎤</div>
+      <h3>MC / Emcee</h3>
+      <p>Weddings, launches, galas, ceremonies</p>
+    </button>
+    <button type="button" class="en-feat-card feat-band" onclick="setCat('band');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎸</div>
+      <h3>Live Bands</h3>
+      <p>Jazz, afrobeat, gospel, pop &amp; fusion</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(234,179,8,0.12),rgba(202,138,4,0.08));border:1px solid rgba(234,179,8,0.2);" onclick="setCat('comedian');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">😂</div>
+      <h3>Comedians</h3>
+      <p>Stand-up, roast, corporate entertainment</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(45,212,191,0.12),rgba(20,180,160,0.08));border:1px solid rgba(45,212,191,0.2);" onclick="setCat('singer');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎙️</div>
+      <h3>Singers / Vocalists</h3>
+      <p>Wedding solos, concert guests, studio sessions</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(251,146,60,0.12),rgba(217,119,6,0.08));border:1px solid rgba(251,146,60,0.2);" onclick="setCat('musician');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎵</div>
+      <h3>Musicians</h3>
+      <p>Keyboardists, guitarists, traditional &amp; acoustic</p>
+    </button>
+    <button type="button" class="en-feat-card feat-photo" onclick="setCat('photographer');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">📷</div>
+      <h3>Photographers</h3>
+      <p>Weddings, events, portraits, drone shots</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(0,200,120,0.12),rgba(0,150,100,0.08));border:1px solid rgba(0,200,120,0.2);" onclick="setCat('videographer');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎥</div>
+      <h3>Videographers</h3>
+      <p>Wedding films, music videos, corporate docs</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(255,60,120,0.12),rgba(219,39,119,0.08));border:1px solid rgba(255,60,120,0.2);" onclick="setCat('dancer');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">💃</div>
+      <h3>Dancers &amp; Crews</h3>
+      <p>Afrobeats, contemporary, brand activations</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(217,119,6,0.08));border:1px solid rgba(245,158,11,0.2);" onclick="setCat('soundeng');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🔊</div>
+      <h3>Sound Engineers</h3>
+      <p>PA hire, live mixing, studio sessions</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(250,204,21,0.12),rgba(202,138,4,0.08));border:1px solid rgba(250,204,21,0.2);" onclick="setCat('lighting');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">💡</div>
+      <h3>Lighting Techs</h3>
+      <p>Stage rigs, LEDs, lasers, architectural lighting</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(34,211,238,0.12),rgba(8,145,178,0.08));border:1px solid rgba(34,211,238,0.2);" onclick="setCat('producer');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎹</div>
+      <h3>Music Producers</h3>
+      <p>Beats, full production, mixing &amp; mastering</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(129,140,248,0.12),rgba(99,102,241,0.08));border:1px solid rgba(129,140,248,0.2);" onclick="setCat('voiceover');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🗣️</div>
+      <h3>Voice Artists</h3>
+      <p>Radio, TV ads, animation, audiobooks</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(251,113,133,0.12),rgba(219,39,119,0.08));border:1px solid rgba(251,113,133,0.2);" onclick="setCat('planner');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">📋</div>
+      <h3>Event Planners</h3>
+      <p>Full-service weddings, corporate &amp; parties</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(240,171,252,0.12),rgba(192,132,252,0.08));border:1px solid rgba(240,171,252,0.2);" onclick="setCat('makeup');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">💄</div>
+      <h3>Makeup Artists</h3>
+      <p>Bridal, editorial, TV &amp; music videos</p>
+    </button>
+    <button type="button" class="en-feat-card" style="background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(109,40,217,0.08));border:1px solid rgba(124,58,237,0.2);" onclick="setCat('magician');showEntTab('performers',document.querySelector('.en-tab:nth-child(2)'))">
+      <div class="feat-icon">🎩</div>
+      <h3>Magicians</h3>
+      <p>Corporate, stage illusions, kids shows</p>
+    </button>
+  </div>
+
+  <!--  How it works  -->
+  <div class="en-section-h">✨ How It Works</div>
+  <div class="hiw-strip">
+    <div class="hiw-step"><div class="step-num">1</div><h4>🔍 Browse Talent</h4><p>Filter by category, location, genre and budget.</p></div>
+    <div class="hiw-step"><div class="step-num">2</div><h4>📅 Check Availability</h4><p>Pick your event date and confirm the slot.</p></div>
+    <div class="hiw-step"><div class="step-num">3</div><h4>💳 Book &amp; Pay</h4><p>Secure via M-PESA. 50% deposit, 50% on day.</p></div>
+    <div class="hiw-step"><div class="step-num">4</div><h4>🎉 Enjoy the Night</h4><p>Rate your performer and earn Sokoni points.</p></div>
+  </div>
+
+  <!-- Ask the Hub on Home tab -->
+  <div class="en-section-h" style="margin-top:36px;">💬 Ask the Entertainment Hub</div>
+  <div style="background:linear-gradient(135deg,rgba(168,85,247,0.07),rgba(236,72,153,0.04));border:1px solid rgba(168,85,247,0.2);border-radius:20px;padding:22px;margin-bottom:8px;">
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:14px;">Post a request — DJs, MCs, photographers &amp; event planners respond directly</p>
+    <textarea id="entAskTextHome" placeholder="e.g. Need a DJ for a corporate event in Nairobi on July 15, budget KES 30,000..." style="width:100%;padding:13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;min-height:80px;resize:vertical;outline:none;font-family:inherit;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <select id="entAskTypeHome" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.8);font-size:16px;outline:none;font-family:inherit;">
+        <option value="">🎭 What do you need?</option>
+        <option>DJ</option><option>MC</option><option>Live Band</option><option>Photographer</option>
+        <option>Comedian</option><option>Event Venue</option><option>Full Event Package</option>
+      </select>
+      <input type="tel" id="entAskPhoneHome" placeholder="Your phone" style="flex:1;min-width:130px;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      <button type="button" onclick="postEntRequestHome()" style="padding:10px 20px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">📢 Post Request</button>
+    </div>
+    <div id="entAskFeedHome" style="margin-top:18px;display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+
+  </div><!-- end pane-home -->
+
+  <!-- ═══ PERFORMERS ═══ -->
+  <div class="en-pane" id="pane-performers">
+
+  <!--  Category pills  -->
+  <div class="en-cats" id="enCatPills">
+    <div class="en-cat-pill active" data-cat="" onclick="setCat('')">🎭 All Performers</div>
+    <div class="en-cat-pill" data-cat="dj" onclick="setCat('dj')">🎧 DJs</div>
+    <div class="en-cat-pill" data-cat="mc" onclick="setCat('mc')">🎤 MCs / Emcees</div>
+    <div class="en-cat-pill" data-cat="band" onclick="setCat('band')">🎸 Live Bands</div>
+    <div class="en-cat-pill" data-cat="comedian" onclick="setCat('comedian')">😂 Comedians</div>
+    <div class="en-cat-pill" data-cat="singer" onclick="setCat('singer')">🎙️ Singers</div>
+    <div class="en-cat-pill" data-cat="musician" onclick="setCat('musician')">🎵 Musicians</div>
+    <div class="en-cat-pill" data-cat="photographer" onclick="setCat('photographer')">📷 Photographers</div>
+    <div class="en-cat-pill" data-cat="videographer" onclick="setCat('videographer')">🎥 Videographers</div>
+    <div class="en-cat-pill" data-cat="dancer" onclick="setCat('dancer')">💃 Dancers</div>
+    <div class="en-cat-pill" data-cat="soundeng" onclick="setCat('soundeng')">🔊 Sound Engineers</div>
+    <div class="en-cat-pill" data-cat="lighting" onclick="setCat('lighting')">💡 Lighting Tech</div>
+    <div class="en-cat-pill" data-cat="voiceover" onclick="setCat('voiceover')">🗣️ Voice Artists</div>
+    <div class="en-cat-pill" data-cat="producer" onclick="setCat('producer')">🎹 Producers</div>
+    <div class="en-cat-pill" data-cat="planner" onclick="setCat('planner')">📋 Event Planners</div>
+    <div class="en-cat-pill" data-cat="makeup" onclick="setCat('makeup')">💄 Makeup Artists</div>
+    <div class="en-cat-pill" data-cat="magician" onclick="setCat('magician')">🎩 Magicians</div>
+  </div>
+
+  <!--  List your talent CTA  -->
+  <div class="hub-spotlight-cta">
+    <div class="hsc-icon">👑</div>
+    <div class="hsc-body">
+      <h3>Get Your Talent in the Spotlight</h3>
+      <p>Event planners book performers on Sokoni every week. A spotlight listing puts you first — so they choose you before scrolling past.</p>
+      <div class="hsc-perks">
+        <span class="hsc-perk">🌟 Top performer placement</span>
+        <span class="hsc-perk">🎤 Featured artist badge</span>
+        <span class="hsc-perk">📈 More bookings</span>
+        <span class="hsc-perk">🛡️ Verified artist</span>
+      </div>
+      <a href="javascript:void(0)" onclick="openRegisterModal()" class="hsc-btn">⚡ Get Spotlighted</a>
+      <div class="hsc-price">From KES 500 / week · Free to register</div>
+    </div>
+  </div>
+
+  <!--  Performers grid  -->
+  <div class="en-section-h" id="enResultLabel">All Performers</div>
+  <div class="en-grid" id="enGrid"></div>
+  <div id="enEmpty" style="display:none;text-align:center;padding:60px 0;color:rgba(255,255,255,0.25);font-size:14px;">
+    <div style="font-size:48px;margin-bottom:12px;">🎭</div><p>No performers found in this category.<br>Be the first to list your talent!</p>
+    <button type="button" onclick="openRegisterModal()" style="display:inline-block;margin-top:16px;padding:10px 22px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:#c084fc;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Register as Performer</button>
+  </div>
+
+  </div><!-- end pane-performers -->
+
+  <!-- ═══ EVENTS ═══ -->
+  <div class="en-pane" id="pane-events">
+
+  <div class="en-section-h" style="margin-top:24px;">🎟️ Upcoming Events &amp; Tickets</div>
+  <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
+    <button type="button" class="en-evt-filter active" onclick="filterEvents('all',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(168,85,247,0.3);background:rgba(168,85,247,0.1);color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">All Events</button>
+    <button type="button" class="en-evt-filter" onclick="filterEvents('concert',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">🎤 Concerts</button>
+    <button type="button" class="en-evt-filter" onclick="filterEvents('festival',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">🎪 Festivals</button>
+    <button type="button" class="en-evt-filter" onclick="filterEvents('comedy',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">😂 Comedy</button>
+    <button type="button" class="en-evt-filter" onclick="filterEvents('club',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">🎶 Club Night</button>
+    <button type="button" onclick="togglePromoteForm()" style="margin-left:auto;padding:7px 16px;border-radius:20px;border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.08);color:#71ff00;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">+ Promote Event</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;" id="eventsGrid"></div>
+  <div id="promoteEventForm" style="display:none;margin-top:18px;background:rgba(168,85,247,0.04);border:1px solid rgba(168,85,247,0.15);border-radius:18px;padding:22px;">
+    <div style="font-size:14px;font-weight:800;color:white;margin-bottom:16px;">📢 Promote Your Event</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <input type="text" id="evtName" class="modal-input" placeholder="Event Name">
+      <select id="evtType" class="modal-input"><option value="concert">Concert</option><option value="festival">Festival</option><option value="comedy">Comedy Night</option><option value="club">Club Night</option><option value="other">Other</option></select>
+      <input type="date" id="evtDate" class="modal-input">
+      <input type="text" id="evtVenue" class="modal-input" placeholder="Venue (e.g. Carnivore Grounds)">
+      <input type="number" id="evtPrice" class="modal-input" placeholder="Ticket Price (KES)">
+      <input type="tel" id="evtPhone" class="modal-input" placeholder="Contact / WhatsApp">
+    </div>
+    <button type="button" onclick="promoteEvent()" style="width:100%;padding:12px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;margin-top:12px;">📣 Submit Event</button>
+    <div id="evtMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+  </div>
+
+  </div><!-- end pane-events -->
+
+  <!-- ═══ PACKAGES ═══ -->
+  <div class="en-pane" id="pane-packages">
+
+  <div class="en-section-h" style="margin-top:24px;">💰 Industry Rate Cards</div>
+  <div class="rate-cards-grid">
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🎧</span> DJs</div>
+      <div class="rate-tier"><span class="rate-tier-name">Club Night 4hrs</span><span class="rate-tier-price">KES 8k – 40k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Wedding 6hrs</span><span class="rate-tier-price">KES 15k – 80k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Corporate</span><span class="rate-tier-price">KES 25k – 100k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Concert Support</span><span class="rate-tier-price">KES 50k – 200k</span></div>
+      <button type="button" onclick="showRateCard('dj')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🎤</span> MCs / Emcees</div>
+      <div class="rate-tier"><span class="rate-tier-name">Wedding</span><span class="rate-tier-price">KES 15k – 35k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Corporate Gala</span><span class="rate-tier-price">KES 20k – 50k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Concert Host</span><span class="rate-tier-price">KES 30k – 80k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Awards Night</span><span class="rate-tier-price">KES 40k – 100k</span></div>
+      <button type="button" onclick="showRateCard('mc')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🎸</span> Live Bands</div>
+      <div class="rate-tier"><span class="rate-tier-name">3-piece</span><span class="rate-tier-price">KES 30k – 80k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">5-piece</span><span class="rate-tier-price">KES 60k – 150k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">8-piece full</span><span class="rate-tier-price">KES 120k – 300k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Church service</span><span class="rate-tier-price">KES 20k – 60k</span></div>
+      <button type="button" onclick="showRateCard('band')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>😂</span> Comedians</div>
+      <div class="rate-tier"><span class="rate-tier-name">Corporate 45min</span><span class="rate-tier-price">KES 20k – 60k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Club Show</span><span class="rate-tier-price">KES 15k – 35k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Stand-up Special</span><span class="rate-tier-price">KES 50k – 150k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Private Party</span><span class="rate-tier-price">KES 25k – 70k</span></div>
+      <button type="button" onclick="showRateCard('comedian')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🎙️</span> Singers / Vocalists</div>
+      <div class="rate-tier"><span class="rate-tier-name">Wedding solo</span><span class="rate-tier-price">KES 15k – 40k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Concert guest</span><span class="rate-tier-price">KES 30k – 100k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Studio session</span><span class="rate-tier-price">KES 5k – 20k/hr</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Corporate</span><span class="rate-tier-price">KES 20k – 60k</span></div>
+      <button type="button" onclick="showRateCard('singer')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>📷</span> Photographers</div>
+      <div class="rate-tier"><span class="rate-tier-name">Event 4hrs</span><span class="rate-tier-price">KES 8k – 25k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Wedding full day</span><span class="rate-tier-price">KES 15k – 50k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Corporate</span><span class="rate-tier-price">KES 10k – 30k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Drone add-on</span><span class="rate-tier-price">KES 5k – 15k</span></div>
+      <button type="button" onclick="showRateCard('photographer')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🎥</span> Videographers</div>
+      <div class="rate-tier"><span class="rate-tier-name">Event highlights</span><span class="rate-tier-price">KES 15k – 40k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Wedding film</span><span class="rate-tier-price">KES 25k – 80k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Music video</span><span class="rate-tier-price">KES 40k – 150k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Corporate promo</span><span class="rate-tier-price">KES 30k – 100k</span></div>
+      <button type="button" onclick="showRateCard('videographer')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>💃</span> Dancers</div>
+      <div class="rate-tier"><span class="rate-tier-name">Single performer</span><span class="rate-tier-price">KES 10k – 25k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Crew 5+</span><span class="rate-tier-price">KES 40k – 120k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Music video</span><span class="rate-tier-price">KES 20k – 60k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Brand activation</span><span class="rate-tier-price">KES 30k – 80k</span></div>
+      <button type="button" onclick="showRateCard('dancer')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🔊</span> Sound Engineers</div>
+      <div class="rate-tier"><span class="rate-tier-name">Club/bar setup</span><span class="rate-tier-price">KES 8k – 20k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Wedding PA</span><span class="rate-tier-price">KES 10k – 25k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Concert</span><span class="rate-tier-price">KES 20k – 60k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Studio session</span><span class="rate-tier-price">KES 3k – 8k/hr</span></div>
+      <button type="button" onclick="showRateCard('soundeng')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>💡</span> Lighting Techs</div>
+      <div class="rate-tier"><span class="rate-tier-name">Basic event rig</span><span class="rate-tier-price">KES 10k – 25k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Wedding</span><span class="rate-tier-price">KES 15k – 40k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Stage show</span><span class="rate-tier-price">KES 25k – 80k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Laser / LED</span><span class="rate-tier-price">KES 40k – 150k</span></div>
+      <button type="button" onclick="showRateCard('lighting')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🎙️</span> Voice-Over Artists</div>
+      <div class="rate-tier"><span class="rate-tier-name">Radio/TV ad</span><span class="rate-tier-price">KES 5k – 20k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Animation</span><span class="rate-tier-price">KES 8k – 30k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Corporate video</span><span class="rate-tier-price">KES 6k – 25k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Audiobook</span><span class="rate-tier-price">KES 10k – 50k</span></div>
+      <button type="button" onclick="showRateCard('voiceover')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+    <div class="rate-card">
+      <div class="rate-card-hdr"><span>🎹</span> Music Producers</div>
+      <div class="rate-tier"><span class="rate-tier-name">Beat lease</span><span class="rate-tier-price">KES 3k – 15k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Custom beat</span><span class="rate-tier-price">KES 8k – 30k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Full production</span><span class="rate-tier-price">KES 20k – 80k</span></div>
+      <div class="rate-tier"><span class="rate-tier-name">Album</span><span class="rate-tier-price">KES 100k – 500k</span></div>
+      <button type="button" onclick="showRateCard('producer')" style="margin-top:12px;width:100%;padding:8px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);border-radius:9px;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Package Details →</button>
+    </div>
+  </div>
+  <p style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:28px;line-height:1.6;">Rates are market estimates. Actual quotes depend on experience, event size, equipment &amp; distance. Always confirm directly with the performer.</p>
+
+  <!-- Bundle Packages section -->
+  <div class="en-section-h">🎁 Bundle &amp; Save — Full Event Packages</div>
+  <div class="bundle-grid">
+    <div class="bundle-card">
+      <div style="font-size:32px;margin-bottom:8px;">💍</div>
+      <div class="bundle-tag">SAVE 15%</div>
+      <div style="font-size:16px;font-weight:900;color:white;margin-bottom:4px;">Wedding Essentials</div>
+      <div class="bundle-includes">
+        <span class="bundle-chip">🎧 DJ</span>
+        <span class="bundle-chip">📷 Photographer</span>
+        <span class="bundle-chip">🎤 MC</span>
+      </div>
+      <div class="bundle-price">From KES 60,000</div>
+      <button type="button" class="bundle-book-btn" onclick="openBooking(null,'bundle')">Book Bundle →</button>
+    </div>
+    <div class="bundle-card">
+      <div style="font-size:32px;margin-bottom:8px;">🎵</div>
+      <div class="bundle-tag">SAVE 20%</div>
+      <div style="font-size:16px;font-weight:900;color:white;margin-bottom:4px;">Club Night Package</div>
+      <div class="bundle-includes">
+        <span class="bundle-chip">🎧 DJ</span>
+        <span class="bundle-chip">💡 Lighting Tech</span>
+        <span class="bundle-chip">🔊 Sound Engineer</span>
+      </div>
+      <div class="bundle-price">From KES 45,000</div>
+      <button type="button" class="bundle-book-btn" onclick="openBooking(null,'bundle')">Book Bundle →</button>
+    </div>
+    <div class="bundle-card">
+      <div style="font-size:32px;margin-bottom:8px;">🏢</div>
+      <div class="bundle-tag">SAVE 15%</div>
+      <div style="font-size:16px;font-weight:900;color:white;margin-bottom:4px;">Corporate Event Bundle</div>
+      <div class="bundle-includes">
+        <span class="bundle-chip">🎤 MC</span>
+        <span class="bundle-chip">📷 Photographer</span>
+        <span class="bundle-chip">🎥 Videographer</span>
+      </div>
+      <div class="bundle-price">From KES 75,000</div>
+      <button type="button" class="bundle-book-btn" onclick="openBooking(null,'bundle')">Book Bundle →</button>
+    </div>
+    <div class="bundle-card">
+      <div style="font-size:32px;margin-bottom:8px;">🎤</div>
+      <div class="bundle-tag">SAVE 25%</div>
+      <div style="font-size:16px;font-weight:900;color:white;margin-bottom:4px;">Concert Production</div>
+      <div class="bundle-includes">
+        <span class="bundle-chip">🎧 DJ</span>
+        <span class="bundle-chip">🎤 MC</span>
+        <span class="bundle-chip">🎸 Band</span>
+        <span class="bundle-chip">🔊 Sound</span>
+        <span class="bundle-chip">💡 Lighting</span>
+      </div>
+      <div class="bundle-price">From KES 200,000</div>
+      <button type="button" class="bundle-book-btn" onclick="openBooking(null,'bundle')">Book Bundle →</button>
+    </div>
+  </div>
+
+  </div><!-- end pane-packages -->
+
+  <!-- ═══ MY BOOKINGS ═══ -->
+  <div class="en-pane" id="pane-bookings">
+    <div class="en-section-h" style="margin-top:24px;">📋 My Bookings</div>
+    <div id="myBookingsContainer"></div>
+  </div><!-- end pane-bookings -->
+
+  <!-- ═══ VENUES ═══ -->
+  <div class="en-pane" id="pane-venues">
+    <div class="en-section-h" style="margin-top:24px;">🏛️ Venues for Hire</div>
+    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
+      <button type="button" class="en-evt-filter active" onclick="filterVenues('all',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(168,85,247,0.3);background:rgba(168,85,247,0.1);color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">All Venues</button>
+      <button type="button" class="en-evt-filter" onclick="filterVenues('hall',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🏛️ Halls</button>
+      <button type="button" class="en-evt-filter" onclick="filterVenues('rooftop',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🌆 Rooftops</button>
+      <button type="button" class="en-evt-filter" onclick="filterVenues('outdoor',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🌿 Outdoor</button>
+      <button type="button" class="en-evt-filter" onclick="filterVenues('hotel',this)" style="padding:7px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🏨 Hotels</button>
+      <a href="ent-organizer.html" style="margin-left:auto;padding:7px 16px;border-radius:20px;border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.08);color:#71ff00;font-size:12px;font-weight:700;text-decoration:none;display:inline-block;">+ List My Venue</a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;" id="venuesGrid">
+      <div style="grid-column:1/-1;text-align:center;padding:40px 0;color:rgba(255,255,255,0.25);">
+        <div style="font-size:48px;margin-bottom:12px;">🏛️</div>
+        <p>Loading venues…</p>
+      </div>
+    </div>
+  </div><!-- end pane-venues -->
+
+  <!-- ═══ MY TICKETS ═══ -->
+  <div class="en-pane" id="pane-mytickets">
+    <div class="en-section-h" style="margin-top:24px;">🎫 My Tickets</div>
+    <div id="myTicketsContainer">
+      <div style="text-align:center;padding:60px 0;color:rgba(255,255,255,0.25);">
+        <div style="font-size:48px;margin-bottom:12px;">🎫</div>
+        <p>No tickets yet. Browse events and buy a ticket!</p>
+        <button type="button" onclick="showEntTab('events',document.querySelector('.en-tab:nth-child(3)'))" style="margin-top:14px;padding:10px 22px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:10px;color:#c084fc;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Browse Events →</button>
+      </div>
+    </div>
+  </div><!-- end pane-mytickets -->
+
+</div>
+
+<!--  Booking Modal  -->
+<div id="bookModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeBooking()">
+  <div class="modal-box">
+    <button type="button" class="modal-close" onclick="closeBooking()">✕</button>
+    <h2>✦ Book a Performer</h2>
+    <p class="modal-sub" id="bookPerformerName">Booking performer</p>
+    <div class="modal-price-preview" id="bookPricePreview"></div>
+    <input class="modal-input" type="text" id="bookClientName" placeholder="Your Name / Event Organiser">
+    <input class="modal-input" type="tel" id="bookPhone" placeholder="Phone: 07XXXXXXXX">
+    <input class="modal-input" type="date" id="bookDate">
+    <input class="modal-input" type="time" id="bookTime" value="19:00">
+    <select class="modal-input" id="bookEventType" style="cursor:pointer;">
+      <option value="">Event Type</option>
+      <option value="wedding"> Wedding</option>
+      <option value="corporate">🏢 Corporate / Launch</option>
+      <option value="birthday">🎂 Birthday Party</option>
+      <option value="club">🎵 Club Night</option>
+      <option value="concert">🎤 Concert / Show</option>
+      <option value="festival">🎪 Festival</option>
+      <option value="house">🏠 House Party</option>
+      <option value="other">🎉 Other</option>
+    </select>
+    <input class="modal-input" type="text" id="bookVenue" placeholder="Venue / Location">
+    <textarea class="modal-input" id="bookNotes" placeholder="Additional notes (song requests, setup requirements, etc.)" style="resize:vertical;height:80px;"></textarea>
+    <button type="button" class="modal-btn" onclick="submitBooking()">✓ Confirm Booking (50% M-PESA Deposit)</button>
+  </div>
+</div>
+
+<script>
+  /*  DJ Status Ring Data  */
+  const DJ_STATUSES = [
+    { name:"DJ BVMBXNO",   emoji:"🎵", live:true,  genre:"Amapiano Mix",    seen:false },
+    { name:"DJ Blaze 254", emoji:"🎵", live:false, genre:"Afrobeats Set",   seen:false },
+    { name:"DJ Krystal",   emoji:"🎵", live:true,  genre:"Deep House Live", seen:false },
+    { name:"MC Jabali",    emoji:"🎵", live:false, genre:"New Promo",       seen:true  },
+    { name:"DJ Spinach",   emoji:"🎵", live:false, genre:"Bongo Session",   seen:false },
+    { name:"KenVisuals",   emoji:"🎵", live:false, genre:"Behind Scenes",   seen:true  },
+    { name:"DJ Kevo Fresh",emoji:"🎵", live:false, genre:"Gospel Set",      seen:false },
+    { name:"AfroFlames",   emoji:"💃", live:false, genre:"New Choreography",seen:false },
+    { name:"Pixel Perfect",emoji:"📷", live:false, genre:"Wedding Reel",    seen:true  },
+    { name:"Churchill Jr", emoji:"😂", live:false, genre:"New Joke Clip",   seen:false },
+  ];
+
+  /* Sort order: live+unseen   unseen   live+seen   seen */
+  function getSortedStoryOrder(){
+    const entries = DJ_STATUSES.map((s,i)=>({s,i}));
+    return [
+      ...entries.filter(({s})=>  s.live && !s.seen),
+      ...entries.filter(({s})=> !s.live && !s.seen),
+      ...entries.filter(({s})=>  s.live &&  s.seen),
+      ...entries.filter(({s})=> !s.live &&  s.seen),
+    ].map(({i})=>i);
+  }
+
+  let _sortedIndices = [];
+  let _currentStoryPos = 0;
+
+  function buildStatusStrip(){
+    _sortedIndices = getSortedStoryOrder();
+    const strip = document.getElementById("djStatusStrip");
+    if(!strip) return;
+    /* "Add Your Story" card first */
+    const addCard = `
+    <div class="dj-status-card" onclick="openAddStoryModal()">
+      <div class="dj-status-ring" style="cursor:pointer;">
+        <div style="position:absolute;inset:-3px;border-radius:50%;background:rgba(255,255,255,0.08);z-index:0;"></div>
+        <div class="dj-status-inner" style="background:#1a1a2a;font-size:32px;">+</div>
+      </div>
+      <div class="dj-status-label">Your Story</div>
+    </div>`;
+    strip.innerHTML = addCard + _sortedIndices.map((origIdx, pos)=>{
+      const s = DJ_STATUSES[origIdx];
+      const thumb = s.videoThumb ? `<img loading="lazy" src="${s.videoThumb}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : s.emoji;
+      return `
+      <div class="dj-status-card" onclick="openVideoStatus(${pos})">
+        <div class="dj-status-ring ${s.seen?'seen':'unseen'}">
+          <div class="dj-status-inner">${thumb}</div>
+          ${s.live?`<div class="dj-live-dot"></div>`:""}
+        </div>
+        <div class="dj-status-label">${s.live?'🔴 ':''} ${s.name}</div>
+      </div>`;
+    }).join("");
+  }
+  buildStatusStrip();
+
+  /*  ADD STORY MODAL  */
+  window.openAddStoryModal = function(){
+    let modal = document.getElementById("addStoryModal");
+    if(modal){ modal.style.display="flex"; return; }
+    modal = document.createElement("div");
+    modal.id = "addStoryModal";
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(16px);";
+    modal.innerHTML = `
+    <div style="width:100%;max-width:420px;background:#0f0f1a;border:1px solid rgba(168,85,247,0.25);border-radius:24px;padding:24px;position:relative;max-height:90vh;overflow-y:auto;">
+      <button type="button" onclick="document.getElementById('addStoryModal').style.display='none'" style="position:absolute;top:14px;right:14px;background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;">✕</button>
+      <div style="font-size:18px;font-weight:900;margin-bottom:4px;">📹 Add Your Promo Story</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Upload up to <strong style="color:#c084fc;">35 seconds</strong>  auto-trimmed & AI-enhanced. Shown to buyers like a WhatsApp status.</div>
+
+      <!-- Video upload area -->
+      <label for="storyVideoInput" id="storyUploadLabel" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:100%;height:160px;border:2px dashed rgba(168,85,247,0.3);border-radius:16px;cursor:pointer;background:rgba(168,85,247,0.04);transition:all .2s;margin-bottom:14px;overflow:hidden;position:relative;">
+        <div id="storyVideoPreviewWrap" style="display:none;position:absolute;inset:0;">
+          <video id="storyVideoPreview" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" muted playsinline></video>
+          <div style="position:absolute;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:32px;"></div>
+        </div>
+        <div id="storyUploadPlaceholder">
+          <div style="font-size:36px;text-align:center;">🎧</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.55);text-align:center;font-weight:700;">Tap to select video</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;">MP4  MOV  max 35 sec  auto-trimmed</div>
+        </div>
+      </label>
+      <input type="file" id="storyVideoInput" accept="video/mp4,video/quicktime,video/webm,video/*" style="display:none;" onchange="previewStoryVideo(this)">
+
+      <!-- AI edit options -->
+      <div id="storyEditOptions" style="display:none;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">S AI Enhancements</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">
+            <input type="checkbox" id="aiEnhanceColor" checked style="accent-color:#a855f7;"> Colour boost
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">
+            <input type="checkbox" id="aiEnhanceBeat" checked style="accent-color:#a855f7;"> Beat-sync cuts
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">
+            <input type="checkbox" id="aiEnhanceCaption" style="accent-color:#a855f7;"> Auto-caption
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:8px;cursor:pointer;font-size:11px;font-weight:600;color:rgba(255,255,255,0.7);">
+            <input type="checkbox" id="aiEnhanceLoop" style="accent-color:#a855f7;"> Loop last 3s
+          </label>
+        </div>
+      </div>
+
+      <!-- Duration bar -->
+      <div id="storyDurationBar" style="display:none;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px;">
+          <span>Duration</span><span id="storyDurLabel">0s / 35s</span>
+        </div>
+        <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+          <div id="storyDurFill" style="height:100%;border-radius:3px;background:linear-gradient(90deg,#a855f7,#ec4899);transition:width .3s;width:0%;"></div>
+        </div>
+        <div id="storyDurWarning" style="font-size:10px;color:#f59e0b;margin-top:4px;display:none;">⚠️ Video will be trimmed to 35 seconds automatically</div>
+      </div>
+
+      <!-- Performer info -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div>
+          <label style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;">Your Stage Name</label>
+          <input id="storyName" placeholder="e.g. DJ Blaze 254" style="width:100%;padding:9px 11px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;">Genre / Role</label>
+          <input id="storyGenre" placeholder="e.g. Amapiano, Wedding DJ" style="width:100%;padding:9px 11px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        </div>
+      </div>
+      <select id="storyEmoji" style="width:100%;padding:9px 11px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;font-family:inherit;margin-bottom:14px;cursor:pointer;">
+        <option value="dj">🎧 DJ / Disc Jockey</option>
+        <option value="mc">🎤 MC / Host</option>
+        <option value="band">🎸 Live Band</option>
+        <option value="dancer">💃 Dancer / Choreographer</option>
+        <option value="videographer">🎬 Videographer</option>
+        <option value="photographer">📷 Photographer</option>
+        <option value="comedian">😂 Comedian / Entertainer</option>
+        <option value="musician">🎵 Musician</option>
+      </select>
+
+      <div id="storyProcessMsg" style="font-size:11px;min-height:14px;margin-bottom:10px;text-align:center;"></div>
+
+      <button type="button" onclick="publishStory()" id="storyPublishBtn" disabled style="width:100%;padding:13px;background:linear-gradient(135deg,#a855f7,#ec4899);color:white;font-weight:900;font-size:13px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;opacity:0.5;transition:opacity .2s;">
+        🚀 Publish Story
+      </button>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e=>{ if(e.target===modal) modal.style.display="none"; });
+  };
+
+  window.previewStoryVideo = function(input){
+    const file = input.files[0];
+    if(!file) return;
+    const url = URL.createObjectURL(file);
+    const vid = document.getElementById("storyVideoPreview");
+    const wrap = document.getElementById("storyVideoPreviewWrap");
+    const placeholder = document.getElementById("storyUploadPlaceholder");
+    const bar = document.getElementById("storyDurationBar");
+    const editOpts = document.getElementById("storyEditOptions");
+    const publishBtn = document.getElementById("storyPublishBtn");
+    if(vid){ vid.src = url; vid.load(); }
+    if(wrap) wrap.style.display = "block";
+    if(placeholder) placeholder.style.display = "none";
+
+    /* Check duration after metadata loads */
+    if(vid) vid.onloadedmetadata = function(){
+      const dur = Math.min(vid.duration, 9999);
+      const capped = Math.min(dur, 35);
+      const pct = Math.min((capped/35)*100, 100);
+      const durLabel = document.getElementById("storyDurLabel");
+      const durFill  = document.getElementById("storyDurFill");
+      const durWarn  = document.getElementById("storyDurWarning");
+      if(durLabel) durLabel.textContent = capped.toFixed(1)+"s / 35s";
+      if(durFill)  durFill.style.width  = pct+"%";
+      if(durWarn)  durWarn.style.display = dur>35 ? "block" : "none";
+      if(bar) bar.style.display = "block";
+      if(editOpts) editOpts.style.display = "block";
+      if(publishBtn){ publishBtn.disabled=false; publishBtn.style.opacity="1"; }
+      /* Simulate AI processing indicator */
+      const msg = document.getElementById("storyProcessMsg");
+      if(msg){ msg.textContent="S AI analysing video..."; msg.style.color="#a855f7"; }
+      setTimeout(()=>{ if(msg){ msg.textContent="✅ Video ready  enhancements applied in real time on publish"; msg.style.color="#71ff00"; } },1800);
+    };
+  };
+
+  window.publishStory = function(){
+    const name  = document.getElementById("storyName")?.value.trim();
+    const genre = document.getElementById("storyGenre")?.value.trim();
+    const emoji = document.getElementById("storyEmoji")?.value || "";
+    const vid   = document.getElementById("storyVideoPreview");
+    const msg   = document.getElementById("storyProcessMsg");
+    if(!name){ if(msg){msg.textContent="⚠️ Enter your stage name.";msg.style.color="#f59e0b";} return; }
+    if(!vid?.src){ if(msg){msg.textContent="⚠️ Upload a video first.";msg.style.color="#f59e0b";} return; }
+
+    const publishBtn = document.getElementById("storyPublishBtn");
+    if(publishBtn){ publishBtn.disabled=true; publishBtn.textContent="Publishing..."; }
+    if(msg){ msg.textContent="🚀 Processing and publishing your story..."; msg.style.color="#a855f7"; }
+
+    /* Capture thumbnail frame from video */
+    const canvas = document.createElement("canvas");
+    canvas.width = 200; canvas.height = 200;
+    const ctx = canvas.getContext("2d");
+    vid.currentTime = 0.5;
+    vid.onseeked = async function(){
+      ctx.drawImage(vid, 0, 0, 200, 200);
+      const thumb = canvas.toDataURL("image/jpeg", 0.7);
+
+      /* Upload video to Firebase Storage so it persists across sessions */
+      let finalVideoSrc = vid.src;
+      const rawFile = document.getElementById("storyVideoInput")?.files?.[0];
+      if(rawFile && window.SokoniUpload){
+        if(msg){ msg.textContent="⬆️ Uploading video…"; msg.style.color="#a855f7"; }
+        try {
+          finalVideoSrc = await window.SokoniUpload.uploadToStorage(
+            rawFile,
+            `entertainment-stories/${Date.now()}_${rawFile.name}`,
+            pct => { if(msg) msg.textContent = `⬆️ Uploading… ${pct}%`; }
+          );
+        } catch(e) {
+          console.warn("[Ent] Story upload failed:", e);
+          /* Fall back to blob URL — works for this session only */
+        }
+      }
+
+      const newStatus = { name, genre:genre||"My Promo", emoji, live:false, seen:false, videoSrc:finalVideoSrc, videoThumb:thumb, isUserStory:true, createdAt:Date.now() };
+      DJ_STATUSES.unshift(newStatus);
+      buildStatusStrip();
+      if(msg){ msg.textContent="✅ Story published! Tap your avatar in the strip to preview."; msg.style.color="#71ff00"; }
+      setTimeout(()=>{ document.getElementById("addStoryModal").style.display="none"; },2000);
+    };
+  };
+
+  function _storyBars(){
+    return Array.from({length:18},(_,i)=>`<div class="vs-big-bar" style="animation-delay:${(i*0.07).toFixed(2)}s;height:${12+Math.floor(Math.random()*36)}px;"></div>`).join("");
+  }
+
+  function _renderStoryInto(container, pos){
+    const origIdx = _sortedIndices[pos];
+    const s = DJ_STATUSES[origIdx];
+    const total = _sortedIndices.length;
+
+    const segs = _sortedIndices.map((_,i)=>{
+      if(i < pos) return `<div style="flex:1;height:3px;border-radius:2px;background:#a855f7;"></div>`;
+      if(i > pos) return `<div style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>`;
+      return `<div style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,0.25);overflow:hidden;"><div id="vsSegCurrent" style="height:100%;width:0%;background:white;border-radius:2px;"></div></div>`;
+    }).join("");
+
+    container.innerHTML = `
+      <div class="vs-modal-inner" style="background:linear-gradient(160deg,#0a0a1a,#1a0a2a,#2a0a1a);">
+        <!-- Story progress segments -->
+        <div style="position:absolute;top:8px;left:8px;right:48px;display:flex;gap:3px;z-index:3;">${segs}</div>
+        <div class="vs-top-bar" style="top:20px;">
+          <div class="vs-top-avatar">${s.emoji}</div>
+          <div>
+            <div style="font-size:12px;font-weight:800;color:white;">${s.name}</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.45);">${s.genre}${s.live?'  🔴 LIVE':''}</div>
+          </div>
+          ${s.live?`<span style="font-size:9px;background:rgba(255,60,60,0.2);color:#ff6b6b;border:1px solid rgba(255,60,60,0.3);padding:2px 8px;border-radius:5px;font-weight:800;margin-left:auto;">LIVE</span>`:""}
+        </div>
+        <!-- Tap-left / tap-right navigation zones -->
+        <div onclick="_navigateStory(-1)" style="position:absolute;left:0;top:0;bottom:0;width:38%;z-index:2;cursor:pointer;display:flex;align-items:center;justify-content:flex-start;padding-left:10px;" title="Previous">
+          ${_currentStoryPos > 0 ? `<div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(255,255,255,0.5);">⬹</div>` : ""}
+        </div>
+        <div onclick="_navigateStory(1)"  style="position:absolute;right:0;top:0;bottom:0;width:38%;z-index:2;cursor:pointer;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;" title="Next">
+          ${_currentStoryPos < _sortedIndices.length-1 ? `<div style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(255,255,255,0.5);">⬺</div>` : ""}
+        </div>
+        <div class="vs-content" style="pointer-events:none;${s.videoSrc?'display:none;':''}">
+          <div class="vs-big-emoji">${s.emoji}</div>
+          <div class="vs-dj-name">${s.name}</div>
+          <div class="vs-genre-text"> ${s.genre}</div>
+          <div class="vs-big-wave">${_storyBars()}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.35);"> tap left/right to switch  ${pos+1}/${total}</div>
+        </div>
+        <div class="vs-action-row" style="z-index:3;">
+          <button type="button" class="vs-action-btn" onclick="event.stopPropagation();this.textContent='❤️';this.style.color='#f472b6';" title="Like">🤍</button>
+          <button type="button" class="vs-action-btn" title="Comment" onclick="event.stopPropagation();">💬</button>
+          <button type="button" class="vs-action-btn" onclick="event.stopPropagation();closeVideoStatus();openBooking(null,'dj');" title="Book">📅</button>
+          <button type="button" class="vs-action-btn" title="Share" onclick="event.stopPropagation();">↗️</button>
+        </div>
+        ${s.videoSrc?`<video id="vsVideo" src="${s.videoSrc}" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;border-radius:inherit;" onended="_navigateStory(1)" ontimeupdate="if(this.currentTime>=35)this.pause(),_navigateStory(1);"></video>`:""}
+        <div class="vs-progress"><div class="vs-progress-bar" id="vsProgressBar"></div></div>
+        <button type="button" class="vs-close" onclick="closeVideoStatus()">✕</button>
+      </div>`;
+  }
+
+  function openVideoStatus(pos){
+    _currentStoryPos = pos;
+    DJ_STATUSES[_sortedIndices[pos]].seen = true;
+    buildStatusStrip();
+
+    let modal = document.getElementById("vsModal");
+    if(!modal){
+      modal = document.createElement("div");
+      modal.className = "vs-modal";
+      modal.id = "vsModal";
+      document.body.appendChild(modal);
+      modal.addEventListener("click", e=>{ if(e.target===modal) closeVideoStatus(); });
+
+      /*  Touch swipe navigation  */
+      let _touchStartX = 0;
+      modal.addEventListener("touchstart", e=>{ _touchStartX = e.touches[0].clientX; }, {passive:true});
+      modal.addEventListener("touchend", e=>{
+        const dx = e.changedTouches[0].clientX - _touchStartX;
+        if(Math.abs(dx) > 45){ _navigateStory(dx < 0 ? 1 : -1); }
+      }, {passive:true});
+
+      /*  Keyboard navigation  */
+      if(!window._vsKeyHandler){
+        window._vsKeyHandler = e=>{
+          const m = document.getElementById("vsModal");
+          if(!m) return;
+          if(e.key==="ArrowRight") _navigateStory(1);
+          else if(e.key==="ArrowLeft") _navigateStory(-1);
+          else if(e.key==="Escape") closeVideoStatus();
+        };
+        document.addEventListener("keydown", window._vsKeyHandler);
+      }
+    }
+    _renderStoryInto(modal, pos);
+    _startVsProgress();
+
+    clearTimeout(window._storyTimer);
+    const dur = DJ_STATUSES[_sortedIndices[pos]].videoSrc ? 15000 : 5000;
+    window._storyTimer = setTimeout(()=>_navigateStory(1), dur);
+  }
+
+  function _startVsProgress(){
+    const seg = document.getElementById("vsSegCurrent");
+    if(!seg) return;
+    const dur = DJ_STATUSES[_sortedIndices[_currentStoryPos]]?.videoSrc ? 15000 : 5000;
+    seg.style.transition = "none"; seg.style.width = "0%";
+    requestAnimationFrame(()=>{
+      seg.style.transition = `width ${dur}ms linear`;
+      seg.style.width = "100%";
+    });
+  }
+
+  function _navigateStory(dir){
+    clearTimeout(window._storyTimer);
+    const next = _currentStoryPos + dir;
+    if(next < 0 || next >= _sortedIndices.length){ closeVideoStatus(); return; }
+    DJ_STATUSES[_sortedIndices[next]].seen = true;
+    buildStatusStrip();
+    _currentStoryPos = next;
+    const modal = document.getElementById("vsModal");
+    if(modal) _renderStoryInto(modal, next);
+    _startVsProgress();
+    const dur = DJ_STATUSES[_sortedIndices[next]].videoSrc ? 15000 : 5000;
+    window._storyTimer = setTimeout(()=>_navigateStory(1), dur);
+  }
+
+  function closeVideoStatus(){
+    clearTimeout(window._storyTimer);
+    const modal = document.getElementById("vsModal");
+    if(modal && modal.parentNode) modal.parentNode.removeChild(modal);
+  }
+  window.openVideoStatus = openVideoStatus;
+  window.closeVideoStatus = closeVideoStatus;
+  window._navigateStory = _navigateStory;
+
+/*  Sample performers data  */
+const PERFORMERS = [
+  /*  FEATURED & VERIFIED  */
+  {
+    id:"en0",
+    name:"DJ BVMBXNO",
+    type:"dj",
+    location:"Kenya",
+    desc:"Versatile DJ and music producer  Afrobeats, Amapiano, Hip-Hop, RnB, House. Available for club nights, corporate events, weddings, concerts and private parties. Follow on Instagram for the latest mixes and bookings.",
+    rating:5.0,
+    reviews:0,
+    genres:["Afrobeats","Amapiano","Hip-Hop","RnB","House"],
+    equipment:["Professional DJ Setup","Pioneer CDJ","High-End Sound System"],
+    priceFrom:0,
+    priceSuffix:"DM for quote",
+    emoji:"🎵",
+    bannerBg:"linear-gradient(135deg,rgba(168,85,247,0.35),rgba(236,72,153,0.25),rgba(249,115,22,0.15))",
+    available:true,
+    instagram:"djbvmbxno",
+    featured:true,
+  },
+  /* DJs */
+  { id:"en1", name:"DJ Blaze 254", type:"dj", location:"Nairobi", desc:"10+ years. Afrobeat, Hip-Hop, Dancehall, Amapiano. Club nights, weddings, outdoor festivals. Own 4-deck Technics setup.", rating:4.9, reviews:220, genres:["Afrobeat","Amapiano","Hip-Hop","Dancehall"], equipment:["4-Deck Technics","Pioneer DJM-900","JBL 18\" Subs","Lighting Rig"], priceFrom:15000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(168,85,247,0.2),rgba(124,58,237,0.1))", available:true },
+  { id:"en2", name:"DJ Krystal", type:"dj", location:"Westlands, Nairobi", desc:"Kenya's leading female DJ. Specialist in House, Afrohouse, Deep House. Regular at Nairobi's top clubs.", rating:4.8, reviews:180, genres:["House","Afrohouse","Deep House","RnB"], equipment:["Pioneer CDJ-3000","DJM-750","KV2 Speakers"], priceFrom:20000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.2),rgba(168,85,247,0.1))", available:true },
+  { id:"en3", name:"DJ Spinach", type:"dj", location:"Mombasa", desc:"Mombasa's top DJ for weddings and beach parties. Taarab, Bongo, Afrobeat, Beachside sets.", rating:4.7, reviews:95, genres:["Bongo","Taarab","Afrobeat","Reggae"], equipment:["CDJ-2000NXS2","Mackie Thump","Pioneer Mixer"], priceFrom:10000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.15),rgba(168,85,247,0.1))", available:true },
+  { id:"en4", name:"DJ Kevo Fresh", type:"dj", location:"Kisumu", desc:"Kisumu's hottest DJ. Gengetone, Ohangla, Afrobeat, Gospel editions available. Church events welcome.", rating:4.6, reviews:77, genres:["Gengetone","Ohangla","Gospel","Afrobeat"], equipment:["Pioneer Setup","2x QSC K12","LED Lights"], priceFrom:8000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(0,200,120,0.15),rgba(0,100,200,0.1))", available:false },
+
+  /* MCs */
+  { id:"en5", name:"MC Jabali", type:"mc", location:"Nairobi", desc:"Professional bilingual MC (English & Swahili). Weddings, product launches, galas, awards nights. 8 years experience.", rating:4.9, reviews:310, genres:["Weddings","Corporate","Gala","Awards"], equipment:["Wireless Lavalier","Sennheiser Handheld"], priceFrom:25000, priceSuffix:"per event", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.2),rgba(234,88,12,0.1))", available:true },
+  { id:"en6", name:"MC Shazzy", type:"mc", location:"Nairobi & Mombasa", desc:"High-energy emcee for parties, clubs and corporate. Fluent in Luo, Swahili, English, Sheng. Crowd engagement specialist.", rating:4.7, reviews:145, genres:["Club","Party","Corporate","Youth Events"], equipment:["Wireless Mic","Own PA"], priceFrom:15000, priceSuffix:"per event", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.15),rgba(249,115,22,0.1))", available:true },
+
+  /* Bands */
+  { id:"en7", name:"The Sauti Collective", type:"band", location:"Nairobi", desc:"7-piece afrojazz & fusion band. Full live set: keyboard, bass, drums, guitar, 3 vocalists. Corporate events & weddings.", rating:4.8, reviews:88, genres:["Afrojazz","Fusion","RnB","Gospel"], equipment:["Full Band Setup","Own PA (3kW)","Lighting"], priceFrom:80000, priceSuffix:"per event", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.2),rgba(168,85,247,0.1))", available:true },
+  { id:"en8", name:"Kisumu Gospel Band", type:"band", location:"Kisumu", desc:"Powerful 5-piece gospel band. Church services, crusades, gospel concerts. Luganda, Swahili and English praise.", rating:4.9, reviews:65, genres:["Gospel","Praise","Worship","Contemporary"], equipment:["Band PA","Drum Kit","Keyboards"], priceFrom:30000, priceSuffix:"per service", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(234,179,8,0.15),rgba(249,115,22,0.08))", available:true },
+  { id:"en9", name:"Mombasa Reggae Crew", type:"band", location:"Mombasa", desc:"Authentic roots reggae & dancehall. 6 members. Beach events, resorts, open-air concerts. Massive dub system.", rating:4.6, reviews:52, genres:["Reggae","Dancehall","Roots","Dub"], equipment:["Full PA","Dub System","Stage Lighting"], priceFrom:50000, priceSuffix:"per show", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(0,200,120,0.15),rgba(0,150,100,0.1))", available:false },
+
+  /* Comedians */
+  { id:"en10", name:"Churchill Jr.", type:"comedian", location:"Nairobi", desc:"Corporate clean comedy. English & Swahili stand-up. 3090 min sets. Annual Churchill Show alumni.", rating:4.8, reviews:130, genres:["Corporate","Clean Comedy","Roast","MC+Comedy"], equipment:["Own Wireless Mic"], priceFrom:35000, priceSuffix:"per show", emoji:"😂", bannerBg:"linear-gradient(135deg,rgba(234,179,8,0.2),rgba(249,115,22,0.1))", available:true },
+  { id:"en11", name:"Mama Sheng Comedy", type:"comedian", location:"Nairobi & Mombasa", desc:"Kenya's funniest mama! Relatable family comedy, corporate and church shows. Safe, clean, hilarious.", rating:4.7, reviews:95, genres:["Family","Church","Corporate","Stand-up"], equipment:["Wireless Lavalier"], priceFrom:20000, priceSuffix:"per show", emoji:"😂", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.15),rgba(234,179,8,0.1))", available:true },
+
+  /* Photographers */
+  { id:"en12", name:"Pixel Perfect KE", type:"photographer", location:"Nairobi", desc:"Award-winning event photographer. Weddings, corporate, concerts, fashion. 48hr turnaround on edited photos.", rating:4.9, reviews:440, genres:["Weddings","Corporate","Concert","Portrait"], equipment:["Sony A7IV","85mm 1.4","24-70mm f2.8","2x Flash"], priceFrom:20000, priceSuffix:"per event", emoji:"📷", bannerBg:"linear-gradient(135deg,rgba(0,180,255,0.2),rgba(0,100,200,0.1))", available:true },
+  { id:"en13", name:"Mombasa Moments", type:"photographer", location:"Mombasa", desc:"Coastal wedding & beach photography. Natural light specialist. Drone shots available.", rating:4.7, reviews:180, genres:["Weddings","Beach","Lifestyle","Drone"], equipment:["Canon R6","DJI Drone","Prime Lenses"], priceFrom:15000, priceSuffix:"per event", emoji:"📷", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.15),rgba(0,180,255,0.1))", available:true },
+
+  /* Videographers */
+  { id:"en14", name:"KenVisuals Studio", type:"videographer", location:"Nairobi", desc:"Cinematic event films. 4K wedding films, corporate documentaries, music videos. Drone included.", rating:4.9, reviews:210, genres:["Weddings","Music Videos","Corporate","Documentaries"], equipment:["Sony FX6","DJI RS3 Gimbal","Drone","LED Lights"], priceFrom:35000, priceSuffix:"per project", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(0,200,120,0.2),rgba(0,100,200,0.1))", available:true },
+
+  /* Dancers */
+  { id:"en15", name:"AfroFlames Dance Crew", type:"dancer", location:"Nairobi", desc:"High-energy 8-person afrobeats and contemporary dance crew. Corporate activations, concerts, TV shows, videos.", rating:4.8, reviews:120, genres:["Afrobeats","Contemporary","Hip-Hop","Corporate"], equipment:["Full Costume Set","Sound System"], priceFrom:40000, priceSuffix:"per performance", emoji:"💃", bannerBg:"linear-gradient(135deg,rgba(255,60,120,0.2),rgba(168,85,247,0.1))", available:true },
+
+  /*  MORE DJs  */
+  { id:"en16", name:"DJ Afro Nation", type:"dj", location:"Nairobi", desc:"Pioneer of Kenya's Afronation movement. 8 years on the decks. KICC, Carnivore, and festival regular. Lasers & LED backdrop included.", rating:4.9, reviews:188, genres:["Afronation","Amapiano","House","Afrobeats"], equipment:["Pioneer XDJ-RX3","QSC K18 Subs x4","LED Backdrop","Laser Rig"], priceFrom:25000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(168,85,247,0.25),rgba(249,115,22,0.15))", available:true, showWave:true },
+  { id:"en17", name:"DJ Creme de la Creme", type:"dj", location:"Nairobi / Mombasa", desc:"Nairobi socialite DJ and radio personality. R&B, Hip-Hop, Trap, Gengetone. Book for ultra-exclusive events.", rating:5.0, reviews:344, genres:["RnB","Hip-Hop","Trap","Gengetone"], equipment:["Pioneer CDJ-3000","4-channel DJM","JBL VRX Line Array","LED Uplighting"], priceFrom:40000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.25),rgba(168,85,247,0.15))", available:true, showWave:true },
+  { id:"en18", name:"DJ Parisien", type:"dj", location:"Nairobi CBD", desc:"Upscale club and lounge DJ. French/Afro fusion. Regular at Sankara, Villa Rosa and exclusive rooftop events.", rating:4.8, reviews:132, genres:["Afro-French","Deep House","Nu-Disco","Lounge"], equipment:["Technics SL-1210","Allen & Heath Mixer","Void Acoustics"], priceFrom:30000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(0,170,255,0.15),rgba(168,85,247,0.15))", available:true, showWave:true },
+  { id:"en19", name:"DJ Sadic", type:"dj", location:"Mombasa / Malindi", desc:"Mombasa's most booked DJ for beachfront parties, resorts and weddings. Bongo, Taarab, Afrobeats, Reggaeton.", rating:4.9, reviews:276, genres:["Bongo","Taarab","Reggaeton","Beach Vibes"], equipment:["Pioneer Setup","Mackie Thump 18","Atmospheric Lighting"], priceFrom:18000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(0,200,120,0.2),rgba(0,120,200,0.12))", available:true, showWave:true },
+  { id:"en20", name:"DJ Hypnotiq", type:"dj", location:"Kisumu", desc:"Western Kenya's #1 DJ. Ohangla, Rhumba, Afrobeats, Gospel. Full event setup available. Church events welcome.", rating:4.7, reviews:99, genres:["Ohangla","Rhumba","Gospel","Afrobeats"], equipment:["Pioneer CDJ","Crown Amplifier","3-way PA"], priceFrom:12000, priceSuffix:"per event", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.2),rgba(234,179,8,0.12))", available:true, showWave:false },
+  { id:"en21", name:"DJ Protg", type:"dj", location:"Nairobi", desc:"Rising star  5 yrs. EDM, Progressive House, Deep House. Under-30 sensation. Residency at one of Nairobi's top clubs.", rating:4.6, reviews:54, genres:["EDM","Progressive House","Deep House","Techno"], equipment:["Pioneer CDJ-2000NXS2","DJM-900NXS2","d&b Audiotechnik"], priceFrom:15000, priceSuffix:"per night", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(59,130,246,0.2),rgba(168,85,247,0.15))", available:false, showWave:true },
+
+  /*  MORE MCs  */
+  { id:"en22", name:"MC Sema Wazi", type:"mc", location:"Nairobi & Kisumu", desc:"Trilingual MC  English, Swahili, Dholuo. 12 years. Political rallies, mega-concerts, NGO events, weddings.", rating:4.9, reviews:210, genres:["Mega Events","Political","NGO","Wedding"], equipment:["Shure Wireless","Own Monitor","Lapel Mic"], priceFrom:20000, priceSuffix:"per event", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.2),rgba(236,72,153,0.1))", available:true },
+  { id:"en23", name:"MC Auntie Carol", type:"mc", location:"Nairobi", desc:"Kenya's queen of ceremonies. Warm, funny, fluent. Corporate dinners, award nights, product launches. BBC-trained voice.", rating:5.0, reviews:167, genres:["Corporate","Awards","Gala","TV Hosting"], equipment:["Sennheiser EW500","Lavalier","Teleprompter"], priceFrom:35000, priceSuffix:"per event", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.2),rgba(249,115,22,0.1))", available:true },
+
+  /*  MORE BANDS  */
+  { id:"en24", name:"Nairobi Nights Jazz Band", type:"band", location:"Nairobi", desc:"5-piece classic jazz and neo-soul. Hotel lobbies, wine dinners, corporate receptions. Smooth, sophisticated vibes.", rating:4.9, reviews:78, genres:["Jazz","Neo-soul","Bossa Nova","Corporate"], equipment:["Full PA","Grand Piano available","Drum kit"], priceFrom:60000, priceSuffix:"per event", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(234,179,8,0.18),rgba(249,115,22,0.1))", available:true },
+  { id:"en25", name:"Afro-Fusion Studio Band", type:"band", location:"Nairobi / Mombasa", desc:"8-piece live band: afrobeats, afropop, soul. Music video backing band. TV performances, concerts.", rating:4.8, reviews:112, genres:["Afrobeats","Afropop","Soul","Concerts"], equipment:["Full Studio-grade PA","Stage Lighting","Backline"], priceFrom:120000, priceSuffix:"per show", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(168,85,247,0.2),rgba(236,72,153,0.12))", available:true },
+
+  /*  MORE COMEDIANS  */
+  { id:"en26", name:"Professor Hamisi", type:"comedian", location:"Nairobi / Coast", desc:"University of comedy with a PhD in laughs! Swahili / Coastal edge. Safe family comedy, church crusades and corporate.", rating:4.8, reviews:88, genres:["Coastal","Family","Church","Corporate"], equipment:["Own Wireless Mic"], priceFrom:25000, priceSuffix:"per show", emoji:"😂", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.2),rgba(234,179,8,0.1))", available:true },
+
+  /*  MORE PHOTOGRAPHERS  */
+  { id:"en27", name:"Nakuru Lense", type:"photographer", location:"Nakuru", desc:"Rift Valley's top photographer. Weddings, graduations, corporate. Drone + edited deliverables in 48 hrs.", rating:4.7, reviews:134, genres:["Weddings","Corporate","Drone","Events"], equipment:["Canon R6 II","DJI Mini 4 Pro","Prime Lenses"], priceFrom:12000, priceSuffix:"per event", emoji:"📷", bannerBg:"linear-gradient(135deg,rgba(0,200,120,0.15),rgba(0,170,255,0.1))", available:true },
+
+  /*  MORE VIDEOGRAPHERS  */
+  { id:"en28", name:"Savanna Films KE", type:"videographer", location:"Nairobi / Mombasa", desc:"Award-winning wedding and commercial filmmakers. 4K + drone. Same-week highlight reel delivery.", rating:4.9, reviews:155, genres:["Weddings","Commercials","Music Videos","Docs"], equipment:["Sony FX9","DJI Inspire 2","Atomos Shogun","3D Gimbal"], priceFrom:55000, priceSuffix:"per project", emoji:"🎵", bannerBg:"linear-gradient(135deg,rgba(168,85,247,0.2),rgba(0,200,120,0.12))", available:true },
+
+  /*  MORE DANCERS  */
+  { id:"en29", name:"Sway Contemporary", type:"dancer", location:"Nairobi", desc:"Contemporary and ballet-trained dance company. 6 female dancers. Elegant corporate stage shows and video concept.", rating:4.9, reviews:65, genres:["Contemporary","Ballet","Corporate","TV"], equipment:["Costumes","Portable Flooring","Sound System"], priceFrom:55000, priceSuffix:"per show", emoji:"💃", bannerBg:"linear-gradient(135deg,rgba(255,60,120,0.22),rgba(168,85,247,0.12))", available:true },
+  { id:"en30", name:"Gengetone Crew 254", type:"dancer", location:"Nairobi", desc:"Street-style gengetone, drill and hip-hop dance crew. 10 dancers. High-energy. Perfect for music videos, brand activations.", rating:4.7, reviews:88, genres:["Gengetone","Drill","Street-style","Brand Activation"], equipment:["Costumes","Speaker","LED Sneakers"], priceFrom:30000, priceSuffix:"per performance", emoji:"🕺", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.18),rgba(236,72,153,0.12))", available:true },
+
+  /* SINGERS */
+  { id:"en31", name:"Amani Vocal", type:"singer", location:"Nairobi", desc:"Powerful gospel and afropop vocalist. Wedding solos, church concerts, studio sessions. Fluent in Swahili, English, Luo. 3-octave range.", rating:4.9, reviews:142, genres:["Gospel","Afropop","RnB","Wedding"], equipment:["In-ear Monitors","Shure SM58","Own Backing Tracks"], priceFrom:18000, priceSuffix:"per event", emoji:"🎙️", bannerBg:"linear-gradient(135deg,rgba(45,212,191,0.2),rgba(20,180,160,0.1))", available:true },
+  { id:"en32", name:"Stella Mwangi", type:"singer", location:"Nairobi / Mombasa", desc:"Award-winning afrobeats and contemporary RnB singer. Concert performer, brand collaborations, studio sessions available.", rating:4.8, reviews:90, genres:["Afrobeats","RnB","Contemporary","Studio"], equipment:["Professional IEMs","Studio-quality Mic","Full Rider Available"], priceFrom:35000, priceSuffix:"per show", emoji:"🎙️", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.2),rgba(45,212,191,0.12))", available:true },
+  { id:"en33", name:"Ben Acoustic", type:"singer", location:"Nakuru", desc:"Acoustic singer-songwriter. Warm folk, pop and soul. Weddings, intimate dinners, rooftop events. Available solo or with guitarist.", rating:4.7, reviews:55, genres:["Acoustic","Folk","Soul","Pop"], equipment:["Guitar (own)","PA System","Loop Pedal"], priceFrom:12000, priceSuffix:"per event", emoji:"🎙️", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.15),rgba(45,212,191,0.1))", available:true },
+
+  /* SOUND ENGINEERS */
+  { id:"en34", name:"Bassline Sound KE", type:"soundeng", location:"Nairobi", desc:"10+ years live sound engineering. Festivals, concerts, weddings, clubs. Own 10kW PA rig. FOH and monitors specialist.", rating:4.9, reviews:175, genres:["Concerts","Festivals","Weddings","Corporate"], equipment:["10kW D&B PA","Yamaha CL5 Console","IEM System","Stage Box"], priceFrom:25000, priceSuffix:"per event", emoji:"🔊", bannerBg:"linear-gradient(135deg,rgba(245,158,11,0.2),rgba(217,119,6,0.1))", available:true },
+  { id:"en35", name:"Clarity Audio Mombasa", type:"soundeng", location:"Mombasa", desc:"Coastal events specialist. Beach parties, resort shows, weddings. Waterproof outdoor PA. Church PA hire available.", rating:4.7, reviews:88, genres:["Outdoor Events","Church","Beach","Weddings"], equipment:["QSC K12 Array","Mackie Mixer","Wireless Mics x6","Monitor Wedges"], priceFrom:15000, priceSuffix:"per event", emoji:"🔊", bannerBg:"linear-gradient(135deg,rgba(0,200,120,0.15),rgba(245,158,11,0.1))", available:true },
+
+  /* LIGHTING TECHS */
+  { id:"en36", name:"Luminos Lighting KE", type:"lighting", location:"Nairobi", desc:"Full-service lighting design and production. LED walls, moving heads, lasers, stage rigs. 8 years in Kenya's top venues.", rating:4.9, reviews:120, genres:["Concerts","Clubs","Weddings","Corporate"], equipment:["40 Moving Heads","LED Wall","Laser Rig","DMX Console","Haze Machine"], priceFrom:40000, priceSuffix:"per event", emoji:"💡", bannerBg:"linear-gradient(135deg,rgba(250,204,21,0.2),rgba(202,138,4,0.1))", available:true },
+  { id:"en37", name:"Glow Events Rig", type:"lighting", location:"Nairobi / Kisumu", desc:"Wedding and corporate lighting specialist. Fairy lights, uplighting, LED dance floor, chandeliers. Elegant and dramatic.", rating:4.7, reviews:68, genres:["Weddings","Corporate","Birthdays","Gala"], equipment:["Uplighting x24","LED Dance Floor","Fairy Light Canopy","Intelligent Heads"], priceFrom:20000, priceSuffix:"per event", emoji:"💡", bannerBg:"linear-gradient(135deg,rgba(250,204,21,0.15),rgba(168,85,247,0.1))", available:true },
+
+  /* VOICE ARTISTS */
+  { id:"en38", name:"VoiceBox KE — David", type:"voiceover", location:"Nairobi (Remote)", desc:"Deep, warm Kenyan baritone. Radio ads, TV commercials, corporate explainers, audiobooks. English & Swahili. Same-day delivery.", rating:4.9, reviews:320, genres:["Radio","TV","Explainers","Audiobooks"], equipment:["Professional Studio","Neumann U87","Acoustic Treatment"], priceFrom:6000, priceSuffix:"per spot", emoji:"🎙️", bannerBg:"linear-gradient(135deg,rgba(129,140,248,0.2),rgba(168,85,247,0.1))", available:true },
+  { id:"en39", name:"Aisha Sauti — VO", type:"voiceover", location:"Nairobi", desc:"Versatile female voice: warm & authoritative. Swahili narration, English RP accent, Kikuyu. Animation, eLearning, NGO campaigns.", rating:4.8, reviews:185, genres:["Animation","eLearning","NGO","Swahili VO"], equipment:["Home Studio","AKG C414","Izotope RX","ISDN/Source Connect"], priceFrom:5000, priceSuffix:"per spot", emoji:"🎙️", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.15),rgba(129,140,248,0.1))", available:true },
+
+  /* MUSIC PRODUCERS */
+  { id:"en40", name:"BeatCraft Studios", type:"producer", location:"Nairobi CBD", desc:"Nairobi's top beat factory. Afrobeats, amapiano, drill, trap. Custom beats, full production, mixing & mastering. A-list client roster.", rating:5.0, reviews:290, genres:["Afrobeats","Amapiano","Drill","Trap"], equipment:["SSL G+ Console","Pro Tools","Neve Outboard","Live Room"], priceFrom:8000, priceSuffix:"per beat", emoji:"🎹", bannerBg:"linear-gradient(135deg,rgba(34,211,238,0.2),rgba(8,145,178,0.12))", available:true },
+  { id:"en41", name:"Melodi Productions", type:"producer", location:"Mombasa", desc:"Coastal sounds and Bongo-fusion. Swahili pop, taarab-fusion, afropop, gospel. Full production from scratch to master.", rating:4.8, reviews:112, genres:["Bongo","Swahili Pop","Gospel","Taarab-fusion"], equipment:["Ableton Live","Komplete","Focusrite Clarett","Vocal Booth"], priceFrom:5000, priceSuffix:"per beat", emoji:"🎹", bannerBg:"linear-gradient(135deg,rgba(0,200,120,0.15),rgba(34,211,238,0.1))", available:true },
+
+  /* MUSICIANS */
+  { id:"en42", name:"Kamau Keys", type:"musician", location:"Nairobi", desc:"Versatile keyboardist and pianist. Live sessions, wedding reception, hotel lobby, studio sessions. Classical, jazz, gospel, afro. 15 years experience.", rating:4.9, reviews:98, genres:["Jazz","Gospel","Classical","Afro"], equipment:["Nord Stage 3","Roland FP-90","Own PA"], priceFrom:15000, priceSuffix:"per event", emoji:"🎹", bannerBg:"linear-gradient(135deg,rgba(251,146,60,0.2),rgba(249,115,22,0.12))", available:true },
+  { id:"en43", name:"Acoustic Trio Nairobi", type:"musician", location:"Nairobi", desc:"Guitar, bass and percussion trio. Warm acoustic sets for restaurants, hotels, corporate dinners and weddings. Afrojazz, bossa, pop.", rating:4.8, reviews:72, genres:["Acoustic","Jazz","Bossa Nova","Pop"], equipment:["Martin Acoustic","Upright Bass","Cajon & Percussion"], priceFrom:30000, priceSuffix:"per event", emoji:"🎸", bannerBg:"linear-gradient(135deg,rgba(236,72,153,0.15),rgba(251,146,60,0.1))", available:true },
+  { id:"en44", name:"Ohangla Drum King", type:"musician", location:"Kisumu", desc:"Traditional Ohangla drummer and nyatiti player. Cultural shows, weddings, festivals, music videos. Luo cultural specialist.", rating:4.7, reviews:44, genres:["Ohangla","Traditional","Luo","Cultural"], equipment:["Ohangla Drums","Nyatiti","Orutu"], priceFrom:8000, priceSuffix:"per event", emoji:"🥁", bannerBg:"linear-gradient(135deg,rgba(249,115,22,0.2),rgba(234,179,8,0.12))", available:true },
+
+  /* EVENT PLANNERS */
+  { id:"en45", name:"Graceful Events KE", type:"planner", location:"Nairobi", desc:"Premium wedding and corporate event planning. Full-service from concept to cleanup. 200+ events delivered. Vendor management, décor, logistics.", rating:4.9, reviews:215, genres:["Weddings","Corporate","Birthdays","Galas"], equipment:["Décor Inventory","Logistics Team","Vendor Network"], priceFrom:50000, priceSuffix:"starting package", emoji:"📋", bannerBg:"linear-gradient(135deg,rgba(251,113,133,0.2),rgba(236,72,153,0.12))", available:true },
+  { id:"en46", name:"Budget Bash Planners", type:"planner", location:"Nairobi / Mombasa", desc:"Affordable event planning for birthdays, graduations and small weddings. Décor, catering coordination, MC, photography bundles.", rating:4.6, reviews:88, genres:["Birthdays","Graduations","Budget Weddings","Kids Parties"], equipment:["Décor Stock","Tent & Chairs","Sound System"], priceFrom:15000, priceSuffix:"starting package", emoji:"📋", bannerBg:"linear-gradient(135deg,rgba(168,85,247,0.12),rgba(251,113,133,0.1))", available:true },
+
+  /* MAKEUP ARTISTS */
+  { id:"en47", name:"Glam by Zawadi", type:"makeup", location:"Nairobi", desc:"Bridal and editorial makeup artist. Flawless finish for weddings, photo shoots, TV, music videos. HD & airbrush specialist. Swahili & English.", rating:5.0, reviews:310, genres:["Bridal","Editorial","TV","Music Videos"], equipment:["Airbrush System","HD Products","Lighting Ring","Travel Kit"], priceFrom:8000, priceSuffix:"per look", emoji:"💄", bannerBg:"linear-gradient(135deg,rgba(240,171,252,0.2),rgba(236,72,153,0.12))", available:true },
+  { id:"en48", name:"Mombasa Beauty Studio", type:"makeup", location:"Mombasa", desc:"Coastal bridal and event makeup. Arabic, Swahili and western bridal looks. Hair styling available. On-site or studio.", rating:4.8, reviews:140, genres:["Bridal","Arabic Bridal","Hair Styling","Coastal Events"], equipment:["Pro Makeup Kit","HD Products","Hair Tools","Travel Ready"], priceFrom:6000, priceSuffix:"per look", emoji:"💄", bannerBg:"linear-gradient(135deg,rgba(251,113,133,0.15),rgba(240,171,252,0.1))", available:true },
+
+  /* MAGICIANS */
+  { id:"en49", name:"Mzee Magic KE", type:"magician", location:"Nairobi", desc:"Kenya's premier corporate and stage magician. Close-up magic, stage illusions, mentalism. School shows, product launches, galas, TV appearances.", rating:4.9, reviews:88, genres:["Corporate","Stage","Close-up","Kids Shows"], equipment:["Full Stage Illusion Kit","Close-up Props","Sound System"], priceFrom:30000, priceSuffix:"per show", emoji:"🎩", bannerBg:"linear-gradient(135deg,rgba(124,58,237,0.2),rgba(168,85,247,0.12))", available:true },
+];
+
+let activeCat = "";
+let bookTarget = null;
+
+const TYPE_LABEL   = { dj:"DJ / Disc Jockey", mc:"MC / Emcee", band:"Live Band", comedian:"Comedian", photographer:"Photographer", videographer:"Videographer", dancer:"Dancer", singer:"Singer / Vocalist", soundeng:"Sound Engineer", lighting:"Lighting Tech", voiceover:"Voice Artist", producer:"Music Producer", musician:"Musician", planner:"Event Planner", makeup:"Makeup Artist", magician:"Magician" };
+const BADGE_CLASS  = { dj:"badge-dj", mc:"badge-mc", band:"badge-band", comedian:"badge-comedian", photographer:"badge-photographer", videographer:"badge-videographer", dancer:"badge-dancer", singer:"badge-singer", soundeng:"badge-soundeng", lighting:"badge-lighting", voiceover:"badge-voiceover", producer:"badge-producer", musician:"badge-musician", planner:"badge-planner", makeup:"badge-makeup", magician:"badge-magician" };
+
+function setCat(cat){
+  showEntTab('performers', document.querySelector('.en-tab:nth-child(2)'));
+  activeCat = cat;
+
+  /* Sync all category pills */
+  document.querySelectorAll(".en-cat-pill").forEach(p=>{
+    p.classList.toggle("active", p.dataset.cat === cat);
+  });
+
+  /* Sync featured strip tiles — highlight the one whose onclick matches */
+  document.querySelectorAll(".en-feat-card").forEach(btn=>{
+    const onclk = btn.getAttribute("onclick")||"";
+    const match = /setCat\(['"]([^'"]*)['"]\)/.exec(onclk);
+    const btnCat = match ? match[1] : null;
+    const active = btnCat === cat;
+    btn.style.outline = active ? "2px solid rgba(168,85,247,0.6)" : "";
+    btn.style.transform = active ? "translateY(-4px) scale(1.02)" : "";
+  });
+
+  /* Scroll the matching pill into view inside the horizontal strip */
+  const activePill = document.querySelector(`.en-cat-pill[data-cat="${cat}"]`);
+  if(activePill) activePill.scrollIntoView({behavior:"smooth", block:"nearest", inline:"center"});
+
+  filterPerformers(true);
+}
+
+function filterPerformers(scroll){
+  const q = (document.getElementById("enSearch").value||"").toLowerCase();
+  let list = PERFORMERS;
+  if(activeCat) list = list.filter(p=>p.type===activeCat);
+  if(q) list = list.filter(p=>
+    p.name.toLowerCase().includes(q)||
+    p.location.toLowerCase().includes(q)||
+    p.desc.toLowerCase().includes(q)||
+    (p.genres||[]).join(" ").toLowerCase().includes(q)||
+    (TYPE_LABEL[p.type]||"").toLowerCase().includes(q)||
+    (p.instagram||"").toLowerCase().includes(q)
+  );
+
+  const label = activeCat ? (TYPE_LABEL[activeCat]||activeCat)+"s" : "All Performers";
+  const labelEl = document.getElementById("enResultLabel");
+  if(labelEl){
+    labelEl.textContent = `${label} (${list.length})`;
+    /* Brief flash to show the filter changed */
+    labelEl.style.color = "#c084fc";
+    setTimeout(()=>{ labelEl.style.color = ""; }, 600);
+  }
+
+  /* Scroll to results when triggered from a button (not from search typing) */
+  if(scroll){
+    setTimeout(()=>{
+      const grid = document.getElementById("enResultLabel");
+      if(grid) grid.scrollIntoView({behavior:"smooth", block:"start"});
+    }, 120);
+  }
+
+  const grid  = document.getElementById("enGrid");
+  const empty = document.getElementById("enEmpty");
+  if(!list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
+  empty.style.display="none";
+
+  grid.innerHTML = list.map(p=>{
+    const genreTags  = (p.genres||[]).map(g=>`<span class="en-genre-tag">${g}</span>`).join("");
+    const equipTags  = (p.equipment||[]).map(e=>`<span class="en-equip-tag">${e}</span>`).join("");
+    const waveHtml = p.showWave ? `<div class="dj-waveform">${[8,18,12,26,10,22,16,28,14,20,9,19].map((h,i)=>`<div class="dj-bar" style="height:${h}px;animation-delay:${(i*0.1).toFixed(1)}s;"></div>`).join("")}</div>` : "";
+    const availBadge = p.available
+      ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:rgba(0,200,120,0.12);color:#00c878;border:1px solid rgba(0,200,120,0.2);">✓ Available</span>`
+      : `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:rgba(255,60,60,0.1);color:#ff6b6b;border:1px solid rgba(255,60,60,0.15);">⏳ Busy — Enquire</span>`;
+
+    /* Featured / verified ribbon */
+    const featuredRibbon = p.featured
+      ? `<div style="position:absolute;top:10px;left:10px;background:linear-gradient(135deg,#fb923c,#a855f7);color:white;font-size:9px;font-weight:900;padding:3px 9px;border-radius:6px;letter-spacing:0.5px;z-index:2;">⭐ FEATURED</div>`
+      : "";
+
+    /* Instagram link */
+    const igBtn = p.instagram
+      ? `<a href="https://www.instagram.com/${p.instagram}/" target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;background:linear-gradient(135deg,rgba(225,48,108,0.15),rgba(168,85,247,0.12));border:1px solid rgba(225,48,108,0.3);border-radius:9px;color:#e1306c;font-size:11px;font-weight:700;text-decoration:none;transition:filter .2s;"
+           onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">
+           <i class="fab fa-instagram"></i> @${p.instagram}
+         </a>`
+      : "";
+
+    /* Price display  if priceFrom is 0 show DM instead */
+    const priceHtml = p.priceFrom > 0
+      ? `From KES ${p.priceFrom.toLocaleString()} <span>/${p.priceSuffix}</span>`
+      : `<span style="color:#c084fc;">${p.priceSuffix}</span>`;
+
+    /* Book button  if has instagram, open booking modal; extra IG option */
+    const bookBtns = `
+      <button type="button" class="en-book-btn" onclick="openBooking('${p.id}','${p.type}')">✦ Book</button>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button type="button" style="flex:1;padding:7px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'en_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Entertainment: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
+        <button type="button" style="flex:1;padding:7px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'en_${p.id}',name:p.name,category:p.type,tagline:p.bio||p.tagline,type:'service'})">📣 Share</button>
+        <button type="button" id="_fen${p.id}" style="flex:1;padding:7px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);border-radius:9px;color:rgba(255,255,255,0.55);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('en_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'entertainment')">❤ Follow</button>
+      </div>
+      ${p.instagram ? `<a href="https://www.instagram.com/${p.instagram}/" target="_blank" rel="noopener" style="display:block;text-align:center;padding:7px 14px;background:rgba(225,48,108,0.1);border:1px solid rgba(225,48,108,0.25);border-radius:9px;color:#e1306c;font-size:11px;font-weight:700;text-decoration:none;margin-top:4px;"><i class="fab fa-instagram"></i> Instagram</a>` : ""}
+    `;
+
+    return `
+    <div class="en-card" style="${p.featured?"border-color:rgba(168,85,247,0.4);box-shadow:0 0 24px rgba(168,85,247,0.12);":""}">
+      <div class="en-card-banner" style="background:${p.bannerBg};position:relative;flex-direction:column;gap:0;">
+        ${featuredRibbon}
+        <span style="font-size:48px;">${p.emoji}</span>
+        ${waveHtml}
+        <div class="genre-strip">${genreTags}</div>
+      </div>
+      <div class="en-card-body">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          <div class="en-card-name" style="margin:0;">${p.name}</div>
+          ${igBtn}
+        </div>
+        <span class="en-card-type-badge ${BADGE_CLASS[p.type]||''}">${TYPE_LABEL[p.type]||p.type}</span>
+        <div class="en-card-location"><i class="fas fa-map-marker-alt" style="color:#c084fc;margin-right:4px;"></i>${p.location}</div>
+        <div class="en-card-desc">${p.desc}</div>
+        <div class="en-equip-row">${equipTags}</div>
+        <div class="en-card-footer">
+          <div>
+            <div class="en-card-price">${priceHtml}</div>
+            <div class="en-card-rating"><span class="star">&#9733;</span> ${p.rating}${p.reviews>0?` <span>(${p.reviews} reviews)</span>`:` <span style="color:rgba(255,255,255,0.3);">New</span>`}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+            ${availBadge}
+            ${bookBtns}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/*  Booking modal  */
+function openBooking(id, type){
+  const perf = id ? PERFORMERS.find(x=>x.id===id) : null;
+  const deposit = (type==='dj'||type==='band'||type==='comedian'||type==='dancer') ? 500 : 300;
+  if(typeof SokoniPay!=='undefined'){
+    SokoniPay.bookNow({
+      providerName: perf?perf.name:'Performer',
+      category: 'entertainment',
+      serviceDesc: (perf?(perf.name+'  '+perf.type):type)+' Booking',
+      providerPhone: perf?.instagram ? '' : '',
+      depositAmount: deposit
+    }, function(ref){
+      _proceedOpenBooking(id, type, ref);
+    });
+    return;
+  }
+  _proceedOpenBooking(id, type, null);
+}
+function _proceedOpenBooking(id, type, ref){
+  const p = id ? PERFORMERS.find(x=>x.id===id) : null;
+  bookTarget = p || { id:"custom", name:"Custom Request", type:type||"performer", priceFrom:0 };
+
+  document.getElementById("bookPerformerName").textContent = p ? `Booking: ${p.name}` : "Custom Booking Request";
+  document.getElementById("bookPricePreview").innerHTML = p
+    ? `<div>From <span class="mp-val">KES ${p.priceFrom.toLocaleString()}</span> /${p.priceSuffix}</div><div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;">50% M-PESA deposit to confirm — Balance due on event day</div>`
+    : `<div style="font-size:12px;color:rgba(255,255,255,0.5);">We'll send you a custom quote within 2 hours of your enquiry.</div>`;
+
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("bookDate").min = today;
+  document.getElementById("bookModal").style.display = "flex";
+}
+function closeBooking(){ document.getElementById("bookModal").style.display="none"; }
+
+function submitBooking(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('ent_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  const name  = document.getElementById("bookClientName").value.trim();
+  const phone = document.getElementById("bookPhone").value.trim();
+  const date  = document.getElementById("bookDate").value;
+  const event = document.getElementById("bookEventType").value;
+  const venue = document.getElementById("bookVenue").value.trim();
+  if(!name||!phone||!date||!event){ (window._skToast||alert)("Please fill all required fields."); return; }
+
+  const booking = { id:"BKG"+Date.now(), performerId:bookTarget?.id, performerName:bookTarget?.name, type:bookTarget?.type, clientName:name, phone, date, time:document.getElementById("bookTime").value, eventType:event, venue, notes:document.getElementById("bookNotes").value, status:"pending", createdAt:new Date().toLocaleDateString() };
+  let bookings = [];
+  try { bookings = JSON.parse(localStorage.getItem("sokoniBookings"))||[]; } catch(e){}
+  bookings.push(booking);
+  localStorage.setItem("sokoniBookings", JSON.stringify(bookings));
+  if(typeof renderMyBookings === 'function') renderMyBookings();
+  /* Also save to Firestore entArtistBookings if EntHub is loaded */
+  if(window.EntHub && bookTarget?.fsId) {
+    EntHub.bookArtist(bookTarget.fsId, {
+      bookerName: name, bookerPhone: phone, eventDate: date,
+      eventTime: document.getElementById("bookTime").value,
+      eventType: event, venue, notes: document.getElementById("bookNotes").value,
+    }).catch(e => console.warn('[SOKONI] Artist booking save:', e.message));
+  }
+
+  closeBooking();
+  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'booking',buyerName:name,buyerPhone:phone,items:[{name:(bookTarget?.name||'Performer')+' — '+event,category:bookTarget?.type||'Entertainment',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'Pending M-Pesa Confirmation',paymentRef:booking.id,sellerName:bookTarget?.name||'SOKONI Entertainment',date:new Date().toISOString(),notes:date+' · '+venue});},500);
+  else (window._skToast||alert)(`🎉 Booking Request Sent!\n\n ${bookTarget?.name}\n📅 ${date}\n📍 ${venue}\n🎤 ${event}\n\nRef: ${booking.id}\nWe'll confirm availability and send M-PESA payment details to ${phone} within 2 hours.`);
+}
+
+/* ── Package Details Modal ─────────────────────────────────────────────
+   showRateCard(type) — opens a 3-tier package breakdown for each category.
+   Called by every "View Package Details →" button in the Rate Cards section.
+──────────────────────────────────────────────────────────────────────── */
+const RATE_PACKAGES = {
+  dj:{icon:'🎧',label:'DJ / Disc Jockey',pkgs:[
+    {name:'ESSENTIAL', price:'KES 8k – 20k',  detail:'4-hr set · Own playlist · Basic PA system included',        highlight:false},
+    {name:'STANDARD',  price:'KES 20k – 45k', detail:'6-hr wedding/event · Custom set · Full PA + lighting rig',  highlight:true},
+    {name:'PREMIUM',   price:'KES 50k – 200k',detail:'8hr+ · LED backdrop · Lasers · Concert-grade production',   highlight:false},
+  ],note:'50% M-PESA deposit secures the date. Balance paid on the day.'},
+
+  mc:{icon:'🎤',label:'MC / Emcee',pkgs:[
+    {name:'CEREMONY',  price:'KES 15k – 25k', detail:'Ceremony only · 3–4 hrs · English / Swahili',               highlight:false},
+    {name:'FULL DAY',  price:'KES 25k – 50k', detail:'Full wedding or corporate · Bilingual · Wireless mic',       highlight:true},
+    {name:'HEADLINE',  price:'KES 50k – 120k',detail:'Awards / gala / mega-event · Teleprompter · Script writing', highlight:false},
+  ],note:'Script prep and event run-of-show included in Standard and Premium packages.'},
+
+  band:{icon:'🎸',label:'Live Band',pkgs:[
+    {name:'3-PIECE',   price:'KES 30k – 70k', detail:'Guitar, keys, vocals · 3 hrs · Acoustic or semi-plugged',   highlight:false},
+    {name:'5-PIECE',   price:'KES 70k – 150k',detail:'Full rhythm section + 2 vocalists · 5 hrs · Own PA',        highlight:true},
+    {name:'FULL BAND', price:'KES 120k – 300k',detail:'8+ piece · Stage lighting · Full production backline',     highlight:false},
+  ],note:'Out-of-town travel incurs an additional transport fee agreed in advance.'},
+
+  comedian:{icon:'😂',label:'Comedian',pkgs:[
+    {name:'SHORT SET',  price:'KES 20k – 40k', detail:'30-min corporate or birthday clean comedy',                 highlight:false},
+    {name:'FULL SHOW',  price:'KES 45k – 80k', detail:'60-min stand-up · Club, wedding or church · Bilingual',    highlight:true},
+    {name:'HEADLINE',   price:'KES 90k – 250k',detail:'90+ min special · TV-ready · MC duties included',          highlight:false},
+  ],note:'All content is customisable for your event theme and audience demographics.'},
+
+  singer:{icon:'🎙️',label:'Singer / Vocalist',pkgs:[
+    {name:'CEREMONY',  price:'KES 15k – 30k', detail:'Wedding ceremony · 3–5 songs · Live or semi-live',          highlight:false},
+    {name:'RECEPTION', price:'KES 35k – 70k', detail:'Full reception · 60 min · Originals + covers set',          highlight:true},
+    {name:'CONCERT',   price:'KES 80k – 200k',detail:'Headline guest slot · Full band backing · 90 min',          highlight:false},
+  ],note:'Studio session rates are available separately — from KES 5k/hr.'},
+
+  photographer:{icon:'📷',label:'Photographer',pkgs:[
+    {name:'EVENT',     price:'KES 8k – 20k',  detail:'4-hr event · 100+ edited photos · Online gallery link',     highlight:false},
+    {name:'WEDDING',   price:'KES 20k – 50k', detail:'Full day · 400+ edits · 48-hr delivery · 2 shooters',      highlight:true},
+    {name:'PREMIUM',   price:'KES 55k – 120k',detail:'Full day + drone + photo album + same-day slideshow',       highlight:false},
+  ],note:'All packages include an online gallery delivered within 48 hours.'},
+
+  videographer:{icon:'🎥',label:'Videographer',pkgs:[
+    {name:'HIGHLIGHTS', price:'KES 15k – 35k', detail:'3–5 min reel · Same-week delivery · 4K',                   highlight:false},
+    {name:'FULL FILM',  price:'KES 40k – 90k', detail:'10–20 min cinematic film · Drone · Full colour grade',     highlight:true},
+    {name:'PRODUCTION', price:'KES 100k – 250k',detail:'30 min+ · Multi-cam · Live stream · Same-day teaser',    highlight:false},
+  ],note:'Every package includes a 60-sec Instagram/TikTok cut for social media.'},
+
+  dancer:{icon:'💃',label:'Dancer / Dance Crew',pkgs:[
+    {name:'SOLO',      price:'KES 10k – 25k', detail:'1–2 dancers · 2 performances · 5 min each',                 highlight:false},
+    {name:'CREW 5+',   price:'KES 40k – 100k',detail:'5+ dancers · 4 performances · Full choreography',           highlight:true},
+    {name:'SHOWCASE',  price:'KES 120k – 250k',detail:'10+ dancers · Full show · Costumes · Own sound system',    highlight:false},
+  ],note:'Custom choreography for first dances and brand activations available.'},
+
+  soundeng:{icon:'🔊',label:'Sound Engineer',pkgs:[
+    {name:'BASIC',     price:'KES 8k – 18k',  detail:'Club or bar setup · 4-hr mix · Basic PA system',            highlight:false},
+    {name:'WEDDING',   price:'KES 18k – 35k', detail:'Full-day wedding PA · Live mixing · Wireless mics x4',      highlight:true},
+    {name:'CONCERT',   price:'KES 40k – 100k',detail:'Line-array · FOH + monitor mix · Full backline support',    highlight:false},
+  ],note:'PA equipment hire can be arranged separately if you require additional kit.'},
+
+  lighting:{icon:'💡',label:'Lighting Technician',pkgs:[
+    {name:'BASIC RIG', price:'KES 10k – 25k', detail:'Par cans + moving heads · 4 hrs · Colour wash',             highlight:false},
+    {name:'WEDDING',   price:'KES 25k – 55k', detail:'Uplighting + dance-floor rig · Full day · DMX control',     highlight:true},
+    {name:'STAGE',     price:'KES 60k – 200k',detail:'Concert rig · Lasers · LED walls · Haze machines',          highlight:false},
+  ],note:'Generator hire available for outdoor events — ask for a quote.'},
+
+  voiceover:{icon:'🎙️',label:'Voice-Over Artist',pkgs:[
+    {name:'AD SPOT',   price:'KES 5k – 15k',  detail:'30-sec radio or TV ad · 2 revisions · 24-hr delivery',      highlight:false},
+    {name:'CORPORATE', price:'KES 15k – 35k', detail:'2-min corporate video · Multilingual option · 48 hrs',      highlight:true},
+    {name:'LONG FORM', price:'KES 40k – 120k',detail:'Animation / audiobook / e-learning · Full direction',       highlight:false},
+  ],note:'Studio-quality, noise-free recordings with professional post-processing guaranteed.'},
+
+  producer:{icon:'🎹',label:'Music Producer',pkgs:[
+    {name:'BEAT LEASE', price:'KES 3k – 12k', detail:'Non-exclusive lease · MP3 + WAV · 2 revisions',              highlight:false},
+    {name:'CUSTOM',     price:'KES 15k – 50k',detail:'Exclusive custom beat + mixing · 5 revisions',              highlight:true},
+    {name:'FULL ALBUM', price:'KES 80k – 500k',detail:'Full production · Mixing & mastering · Up to 10 tracks',  highlight:false},
+  ],note:'All exclusive purchases include full commercial and distribution rights.'},
+};
+
+function showRateCard(type){
+  const d = RATE_PACKAGES[type];
+  if(!d) return;
+  let modal = document.getElementById('rcModal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'rcModal';
+    modal.className = 'rc-modal';
+    modal.onclick = function(e){ if(e.target===modal) modal.classList.remove('open'); };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="rc-modal-box">
+      <button type="button" onclick="document.getElementById('rcModal').classList.remove('open')"
+        style="float:right;background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;line-height:1;padding:0 2px;">✕</button>
+      <h2>${d.icon} ${d.label}</h2>
+      <p style="font-size:12px;color:rgba(255,255,255,0.38);margin:4px 0 2px;">Market rate guide · Actual quotes vary per performer</p>
+      <div class="rc-pkg-grid">
+        ${d.pkgs.map(p=>`
+          <div class="rc-pkg-col${p.highlight?' highlight':''}">
+            <div class="rc-pkg-name">${p.name}</div>
+            <div class="rc-pkg-price">${p.price}</div>
+            <div class="rc-pkg-detail">${p.detail}</div>
+          </div>`).join('')}
+      </div>
+      <div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:10px;padding:12px;font-size:11px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:16px;">
+        ℹ️ ${d.note}
+      </div>
+      <button type="button"
+        onclick="document.getElementById('rcModal').classList.remove('open');openBooking(null,'${type}')"
+        style="width:100%;padding:13px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">
+        ✦ Book a ${d.label} →
+      </button>
+    </div>`;
+  modal.classList.add('open');
+}
+window.setCat = setCat;
+window.filterPerformers = filterPerformers;
+window.openBooking = openBooking;
+window._proceedOpenBooking = _proceedOpenBooking;
+window.closeBooking = closeBooking;
+window.submitBooking = submitBooking;
+window.showRateCard = showRateCard;
+
+/* ── Performer Registration Modal ────────────────────────────────── */
+const PERFORMER_TYPES = [
+  { value:"dj",          icon:"🎧", label:"DJ / Disc Jockey" },
+  { value:"musician",    icon:"🎸", label:"Musician" },
+  { value:"singer",      icon:"🎙️", label:"Singer / Vocalist" },
+  { value:"mc",          icon:"🎤", label:"MC / Emcee" },
+  { value:"band",        icon:"🎵", label:"Live Band" },
+  { value:"comedian",    icon:"😂", label:"Comedian" },
+  { value:"dancer",      icon:"💃", label:"Dancer / Crew" },
+  { value:"photographer",icon:"📷", label:"Photographer" },
+  { value:"videographer",icon:"🎥", label:"Videographer" },
+  { value:"soundeng",    icon:"🔊", label:"Sound Engineer" },
+  { value:"lighting",    icon:"💡", label:"Lighting Tech" },
+  { value:"voiceover",   icon:"🎙️", label:"Voice Artist" },
+  { value:"producer",    icon:"🎹", label:"Music Producer" },
+  { value:"planner",     icon:"📋", label:"Event Planner" },
+  { value:"makeup",      icon:"💄", label:"Makeup Artist" },
+  { value:"magician",    icon:"🎩", label:"Magician" },
+];
+
+window.openRegisterModal = function(){
+  let modal = document.getElementById("regModal");
+  if(modal){ modal.style.display="flex"; return; }
+  modal = document.createElement("div");
+  modal.id = "regModal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(18px);overflow-y:auto;";
+  modal.innerHTML = `
+  <div style="width:100%;max-width:480px;background:#0f0f1a;border:1px solid rgba(168,85,247,0.3);border-radius:24px;padding:28px;position:relative;max-height:92vh;overflow-y:auto;">
+    <button type="button" onclick="document.getElementById('regModal').style.display='none'" style="position:absolute;top:14px;right:14px;background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+    <div style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;">🎤 Join as a Performer</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Free to list. 10% commission only when you earn. Verified listings get priority placement.</div>
+
+    <!-- Performer type grid -->
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">I am a…</div>
+    <div id="regTypeGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:20px;">
+      ${PERFORMER_TYPES.map(t=>`
+        <button type="button" data-rtype="${t.value}" onclick="_selectRegType('${t.value}')"
+          style="padding:12px 8px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);cursor:pointer;font-family:inherit;text-align:center;transition:all .2s;">
+          <div style="font-size:24px;margin-bottom:5px;">${t.icon}</div>
+          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);">${t.label}</div>
+        </button>`).join('')}
+    </div>
+
+    <!-- Form fields -->
+    <div id="regFields" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:4px;">STAGE / BUSINESS NAME *</div>
+          <input id="regName" placeholder="e.g. DJ Blaze 254" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:4px;">PHONE NUMBER *</div>
+          <input id="regPhone" type="tel" placeholder="07XXXXXXXX" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:4px;">LOCATION / CITY *</div>
+        <input id="regLocation" placeholder="e.g. Nairobi, Mombasa, Kisumu" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:4px;">STARTING FEE (KES)</div>
+          <input id="regRate" type="number" placeholder="e.g. 15000" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:4px;">GENRE / SPECIALTY</div>
+          <input id="regGenre" placeholder="e.g. Afrobeats, Gospel" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:4px;">SHORT BIO</div>
+        <textarea id="regBio" placeholder="Tell clients about yourself, your experience, and what makes you great..." rows="3" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:4px;">INSTAGRAM HANDLE (optional)</div>
+        <input id="regInstagram" placeholder="e.g. djblaze254 (no @)" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:9px;color:white;font-size:16px;outline:none;font-family:inherit;">
+      </div>
+      <div id="regMsg" style="font-size:12px;min-height:16px;margin-bottom:10px;text-align:center;"></div>
+      <button type="button" onclick="_submitRegistration()" style="width:100%;padding:14px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">
+        ✦ Submit Application →
+      </button>
+      <p style="font-size:10px;color:rgba(255,255,255,0.25);text-align:center;margin-top:10px;">Your listing will be reviewed within 24 hours. We'll call you on the number provided.</p>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click", e=>{ if(e.target===modal) modal.style.display="none"; });
+};
+
+let _regSelectedType = "";
+window._selectRegType = function(type){
+  _regSelectedType = type;
+  document.querySelectorAll("#regTypeGrid [data-rtype]").forEach(b=>{
+    const sel = b.dataset.rtype === type;
+    b.style.borderColor = sel ? "rgba(168,85,247,0.5)" : "rgba(255,255,255,0.1)";
+    b.style.background  = sel ? "rgba(168,85,247,0.12)" : "rgba(255,255,255,0.03)";
+    b.querySelector("div:last-child").style.color = sel ? "#c084fc" : "rgba(255,255,255,0.7)";
+  });
+  document.getElementById("regFields").style.display = "block";
+};
+
+window._submitRegistration = function(){
+  const name     = document.getElementById("regName")?.value.trim();
+  const phone    = document.getElementById("regPhone")?.value.trim();
+  const location = document.getElementById("regLocation")?.value.trim();
+  const rate     = parseInt(document.getElementById("regRate")?.value)||0;
+  const genre    = document.getElementById("regGenre")?.value.trim();
+  const bio      = document.getElementById("regBio")?.value.trim();
+  const instagram= document.getElementById("regInstagram")?.value.trim().replace("@","");
+  const msg      = document.getElementById("regMsg");
+
+  if(!_regSelectedType){ if(msg){msg.textContent="Please select your performer type.";msg.style.color="#f59e0b";} return; }
+  if(!name){ if(msg){msg.textContent="Enter your stage/business name.";msg.style.color="#f59e0b";} return; }
+  if(!phone){ if(msg){msg.textContent="Enter your phone number.";msg.style.color="#f59e0b";} return; }
+  if(!location){ if(msg){msg.textContent="Enter your city/location.";msg.style.color="#f59e0b";} return; }
+
+  const typeInfo = PERFORMER_TYPES.find(t=>t.value===_regSelectedType);
+  const application = {
+    id:"ENT"+Date.now().toString(36).toUpperCase(),
+    type:_regSelectedType,
+    typeLabel:typeInfo?.label||_regSelectedType,
+    name, phone, location, rate, genre, bio, instagram,
+    status:"pending",
+    hub:"entertainment",
+    category:"Entertainment Performer",
+    submittedAt: new Date().toLocaleDateString("en-KE")
+  };
+
+  /* Save to pending applications (admin panel picks this up) */
+  let apps=[]; try{apps=JSON.parse(localStorage.getItem("sokoniPendingApplications"))||[];}catch(e){}
+  apps.unshift(application);
+  localStorage.setItem("sokoniPendingApplications", JSON.stringify(apps));
+  /* Sync to Firestore so admin sees it on any device */
+  if(window.SokoniDB){
+    window.SokoniDB.saveApplication(application)
+      .catch(e=>console.warn('[SOKONI] Entertainment app save:',e.message));
+  }
+  /* Also save to entArtists collection via EntHub */
+  if(window.EntHub){
+    EntHub.registerArtist({
+      name, type:_regSelectedType, city:location, phone,
+      priceFrom:rate, priceSuffix:'per event',
+      genres: genre ? genre.split(',').map(s=>s.trim()).filter(Boolean) : [],
+      bio: bio||'', instagram,
+    }).catch(e=>console.warn('[SOKONI] EntHub artist save:',e.message));
+  }
+
+  /* Also save to provider profile so provider.html dashboard works */
+  const profile = {
+    cat:"entertainment", name, phone, location, bio: bio||"",
+    extras:{ rate, genre },
+    status:"available",
+    schedule:{},
+    blockedDates:[],
+    createdAt:Date.now(),
+    id: application.id,
+    performerType: _regSelectedType
+  };
+  localStorage.setItem("sokoniProviderProfile", JSON.stringify(profile));
+
+  if(msg){ msg.textContent="✅ Application submitted! We'll call you within 24 hours."; msg.style.color="#71ff00"; }
+  setTimeout(()=>{
+    document.getElementById("regModal").style.display="none";
+    _skConfirm("Application submitted! Go to your Provider Dashboard to manage bookings?", function(){
+      window.location.href="provider.html?cat=entertainment";
+    });
+  }, 2000);
+};
+
+/* handle url cat — also activates matching pill */
+const urlCat = new URLSearchParams(window.location.search).get("cat")||"";
+if(urlCat){ setCat(urlCat); } else { filterPerformers(); }
+
+/* =============================================================
+   EVENTS & TICKETS
+============================================================= */
+const DEMO_EVENTS = [
+  { id:'EV01', name:'Nairobi Jazz Festival', type:'festival', date:'2026-07-05', venue:'Uhuru Gardens', price:1500, desc:'3-day outdoor jazz festival. 20+ artists.', phone:'0712400001', emoji:'🎷', color:'rgba(168,85,247,0.1)', border:'rgba(168,85,247,0.25)' },
+  { id:'EV02', name:'Laugh Factory Kenya', type:'comedy', date:'2026-06-20', venue:'Carnivore Grounds', price:1000, desc:'Kenya\'s biggest comedy night. 8 comedians.', phone:'0723400002', emoji:'😂', color:'rgba(234,179,8,0.08)', border:'rgba(234,179,8,0.2)' },
+  { id:'EV03', name:'Afrobeats Night Vol.4', type:'concert', date:'2026-06-28', venue:'Blankets & Wine', price:2000, desc:'Live Afrobeats performances. 6 artists.', phone:'0734400003', emoji:'🎤', color:'rgba(239,68,68,0.08)', border:'rgba(239,68,68,0.2)' },
+  { id:'EV04', name:'Club Friday: DJ Styles', type:'club', date:'2026-06-21', venue:'B-Club Westlands', price:500, desc:'Resident DJ Styles + guest DJs. Doors 9pm.', phone:'0745400004', emoji:'🎶', color:'rgba(57,255,20,0.06)', border:'rgba(57,255,20,0.18)' },
+  { id:'EV05', name:'Gospel Praise Night', type:'concert', date:'2026-06-29', venue:'KICC Grounds', price:0, desc:'Free entry praise and worship night.', phone:'0756400005', emoji:'🙏', color:'rgba(0,180,255,0.07)', border:'rgba(0,180,255,0.2)' },
+  { id:'EV06', name:'Nairobi Food & Music Fest', type:'festival', date:'2026-07-12', venue:'Two Rivers Mall', price:800, desc:'Food trucks, live bands & family fun.', phone:'0767400006', emoji:'🎪', color:'rgba(249,115,22,0.08)', border:'rgba(249,115,22,0.22)' },
+];
+
+let _evtFilter = 'all';
+
+function filterEvents(type, btn) {
+  _evtFilter = type;
+  document.querySelectorAll('.en-evt-filter').forEach(b => {
+    b.style.background = 'rgba(255,255,255,0.04)';
+    b.style.borderColor = 'rgba(255,255,255,0.1)';
+    b.style.color = 'rgba(255,255,255,0.5)';
+  });
+  if (btn) {
+    btn.style.background = 'rgba(168,85,247,0.1)';
+    btn.style.borderColor = 'rgba(168,85,247,0.3)';
+    btn.style.color = '#c084fc';
+  }
+  renderEventsGrid();
+}
+
+/* _fsEvents: events loaded from Firestore (may be empty until EntHub loads) */
+let _fsEvents = [];
+
+function renderEventsGrid() {
+  const grid = document.getElementById('eventsGrid'); if (!grid) return;
+  /* Merge: Firestore first (real), then DEMO fallback for any ids not already present */
+  let local = []; try { local = JSON.parse(localStorage.getItem('sokoniEvents'))||[]; } catch(e) {}
+  const fsNorm = _fsEvents.map(e => ({
+    id: e._id, name: e.title || e.name, type: e.type, date: e.date, time: e.time,
+    venue: e.venueName || e.venue, price: (e.ticketTypes && e.ticketTypes[0]?.price) ?? e.price ?? 0,
+    desc: e.description || e.desc, phone: e.organizerPhone || e.phone || e.whatsapp,
+    emoji: _evtEmoji(e.type), ticketTypes: e.ticketTypes, ticketsSold: e.ticketsSold || 0,
+    totalCapacity: e.totalCapacity, fsId: e._id,
+    color: 'rgba(168,85,247,0.06)', border: 'rgba(168,85,247,0.2)',
+  }));
+  const demoFallback = DEMO_EVENTS.filter(d => !fsNorm.some(f => f.date === d.date && f.name === d.name));
+  let list = [...fsNorm, ...local, ...demoFallback];
+  if (_evtFilter !== 'all') list = list.filter(e => e.type === _evtFilter);
+  if (!list.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No events found. <a href="ent-organizer.html" style="color:#c084fc;font-weight:700;">Create one →</a></div>'; return; }
+  const today = new Date().toISOString().slice(0,10);
+  grid.innerHTML = list.map(e => {
+    const isFree = !e.price || e.price === 0;
+    const isPast = e.date < today;
+    const hasFsTickets = !!e.fsId;
+    const sold = e.ticketsSold || 0;
+    const cap = e.totalCapacity || 0;
+    const pct = cap > 0 ? Math.min(100, Math.round((sold / cap) * 100)) : 0;
+    return `
+    <div style="background:${e.color||'rgba(255,255,255,0.03)'};border:1px solid ${e.border||'rgba(255,255,255,0.08)'};border-radius:20px;padding:18px;transition:all .2s;${isPast?'opacity:.6':''}">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <div style="font-size:36px;">${e.emoji||'🎭'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:900;color:white;margin-bottom:3px;">${esc(e.name||'Event')}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">📍 ${esc(e.venue||'')}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);">📅 ${e.date}${e.time?' · '+e.time:''}</div>
+        </div>
+        ${isPast ? '<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.35);font-weight:700;">PAST</span>' : '<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#4ade80;font-weight:700;">UPCOMING</span>'}
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;margin-bottom:12px;">${esc(e.desc||'')}</div>
+      ${cap > 0 ? `<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.3);margin-bottom:3px;"><span>Tickets</span><span>${sold}/${cap} sold</span></div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;"><div style="height:100%;border-radius:3px;background:linear-gradient(90deg,#a855f7,#ec4899);width:${pct}%;"></div></div></div>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:16px;font-weight:900;color:#c084fc;">${isFree?'FREE':'KES '+Number(e.price).toLocaleString()}</div>
+        ${hasFsTickets && !isPast ? `<span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);color:#71ff00;font-weight:700;">✓ Instant QR Ticket</span>` : ''}
+      </div>
+      <div style="display:flex;gap:8px;">
+        ${hasFsTickets && !isPast ? `<button type="button" onclick="openTicketModal('${e.fsId}')" style="flex:1;padding:10px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">${isFree?'🎟️ Reserve Free':'🎟️ Buy Ticket'}</button>` : `<a href="https://wa.me/254${(e.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi, I\'d like to buy a ticket for '+(e.name||'')+ ' on '+e.date+'. Please send payment details.')}" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:10px;background:linear-gradient(135deg,#a855f7,#7c3aed);color:white;font-weight:900;font-size:13px;border-radius:12px;text-decoration:none;">${isFree?'🎟️ Reserve Spot':'🎟️ Buy Ticket'}</a>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _evtEmoji(type) {
+  const m={concert:'🎤',festival:'🎪',comedy:'😂',club:'🎶',party:'🎉',sport:'⚽',church:'🙏',art:'🎨',conference:'🏢'};
+  return m[type]||'🎭';
+}
+
+/* ── Ticket Purchase Modal ── */
+let _ticketEvt = null;
+window.openTicketModal = async function(fsId) {
+  if (!window.EntHub) { (window._skToast||alert)('Please wait a moment and try again.'); return; }
+  const ev = await EntHub.getEvent(fsId);
+  if (!ev) { (window._skToast||alert)('Event not found'); return; }
+  _ticketEvt = ev;
+  let modal = document.getElementById('tkModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'tkModal';
+    modal.className = 'modal-overlay';
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+    document.body.appendChild(modal);
+  }
+  const types = ev.ticketTypes || [{ name: 'General', price: ev.price || 0, capacity: 100 }];
+  modal.innerHTML = `
+  <div class="modal-box">
+    <button type="button" class="modal-close" onclick="document.getElementById('tkModal').style.display='none'">✕</button>
+    <h2>🎟️ Buy Ticket</h2>
+    <p class="modal-sub">${esc(ev.title || ev.name || 'Event')} · ${ev.date || ''}</p>
+    <div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:12px;padding:12px;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,0.5);">
+      📍 ${esc(ev.venueName || ev.venue || '')} · ⏰ ${ev.time || ''}
+    </div>
+    <label style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;">TICKET TYPE</label>
+    <select id="tkType" class="modal-input" onchange="updateTkPreview()">
+      ${types.map((t,i) => `<option value="${i}">${esc(t.name)} — ${t.price ? 'KES '+Number(t.price).toLocaleString() : 'FREE'}</option>`).join('')}
+    </select>
+    <label style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;">QUANTITY</label>
+    <select id="tkQty" class="modal-input" onchange="updateTkPreview()">
+      <option value="1">1 ticket</option><option value="2">2 tickets</option><option value="3">3 tickets</option><option value="4">4 tickets</option><option value="5">5 tickets</option>
+    </select>
+    <div class="modal-price-preview" id="tkPreview"><div style="font-size:12px;color:rgba(255,255,255,0.5);">Total</div><div class="mp-val" id="tkTotal">KES 0</div></div>
+    <label style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;">YOUR NAME *</label>
+    <input class="modal-input" type="text" id="tkName" placeholder="Your full name">
+    <label style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;">PHONE (for M-PESA / confirmation) *</label>
+    <input class="modal-input" type="tel" id="tkPhone" placeholder="07XXXXXXXX">
+    <label style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;">EMAIL (optional)</label>
+    <input class="modal-input" type="email" id="tkEmail" placeholder="your@email.com">
+    <div id="tkMsg" style="font-size:12px;min-height:16px;margin-bottom:8px;text-align:center;"></div>
+    <button type="button" class="modal-btn" onclick="submitTicketPurchase()">✓ Confirm & Get QR Ticket</button>
+  </div>`;
+  modal.style.display = 'flex';
+  updateTkPreview();
+};
+
+window.updateTkPreview = function() {
+  const types = _ticketEvt?.ticketTypes || [{ name: 'General', price: _ticketEvt?.price || 0 }];
+  const idx = parseInt(document.getElementById('tkType')?.value || '0');
+  const qty = parseInt(document.getElementById('tkQty')?.value || '1');
+  const price = types[idx]?.price || 0;
+  const total = price * qty;
+  const el = document.getElementById('tkTotal');
+  if (el) el.textContent = total > 0 ? 'KES ' + total.toLocaleString() : 'FREE';
+};
+
+window.submitTicketPurchase = async function() {
+  const name  = document.getElementById('tkName')?.value.trim();
+  const phone = document.getElementById('tkPhone')?.value.trim();
+  const email = document.getElementById('tkEmail')?.value.trim();
+  const idx   = parseInt(document.getElementById('tkType')?.value || '0');
+  const qty   = parseInt(document.getElementById('tkQty')?.value || '1');
+  const msg   = document.getElementById('tkMsg');
+  if (!name || !phone) { msg.textContent = '⚠️ Name and phone are required'; msg.style.color = '#f59e0b'; return; }
+  if (!window.EntHub) { msg.textContent = '⚠️ System loading, try again'; msg.style.color = '#f87171'; return; }
+  const types = _ticketEvt?.ticketTypes || [{ name: 'General', price: _ticketEvt?.price || 0 }];
+  const ttype = types[idx];
+  msg.textContent = '⏳ Processing…'; msg.style.color = '#c084fc';
+  document.querySelector('#tkModal .modal-btn').disabled = true;
+  try {
+    const ticket = await EntHub.purchaseTicket(_ticketEvt._id, {
+      buyerName: name, buyerPhone: phone, buyerEmail: email,
+      ticketType: ttype?.name || 'General',
+      price: ttype?.price || 0, quantity: qty,
+      eventTitle: _ticketEvt.title || _ticketEvt.name,
+      eventDate: _ticketEvt.date, eventVenue: _ticketEvt.venueName || _ticketEvt.venue,
+    });
+    document.getElementById('tkModal').style.display = 'none';
+    showQRModal(ticket);
+  } catch (e) {
+    msg.textContent = '❌ ' + e.message; msg.style.color = '#f87171';
+    document.querySelector('#tkModal .modal-btn').disabled = false;
+  }
+};
+
+/* ── QR Display Modal ── */
+function showQRModal(ticket) {
+  let modal = document.getElementById('qrDisplayModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'qrDisplayModal';
+    modal.className = 'modal-overlay';
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+  <div class="modal-box" style="text-align:center;">
+    <h2 style="color:#4ade80;margin-bottom:4px;">🎉 Ticket Confirmed!</h2>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">${esc(ticket.eventTitle || 'Event')} · ${ticket.eventDate || ''}</p>
+    <div id="qrCodeImg" style="margin:0 auto 16px;width:200px;height:200px;background:white;border-radius:14px;display:flex;align-items:center;justify-content:center;">
+      <div style="font-size:12px;color:#0a0a0a;">Generating QR…</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:12px;margin-bottom:16px;text-align:left;font-size:12px;">
+      <div style="color:rgba(255,255,255,0.4);margin-bottom:4px;">Ticket Details</div>
+      <div style="font-weight:700;color:white;">${esc(ticket.buyerName)}</div>
+      <div style="color:rgba(255,255,255,0.55);">${esc(ticket.ticketType || 'General')} × ${ticket.quantity || 1}</div>
+      <div style="color:#c084fc;font-weight:700;margin-top:6px;font-size:11px;font-family:monospace;">${ticket.ticketCode || ''}</div>
+    </div>
+    <p style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:14px;">Screenshot this QR code — it will be scanned at the venue gate.</p>
+    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:14px;flex-wrap:wrap;" id="ticketShareBtns"></div>
+    <button type="button" class="modal-btn" onclick="document.getElementById('qrDisplayModal').style.display='none';showEntTab('mytickets',document.querySelector('.en-tab:nth-child(5)'))">📋 View My Tickets</button>
+  </div>`;
+  modal.style.display = 'flex';
+  /* Generate QR */
+  if (window.QRCode && ticket.qrData) {
+    const el = document.getElementById('qrCodeImg');
+    QRCode.toDataURL(ticket.qrData, { width: 196, margin: 1, color: { dark: '#0a0a0a', light: '#ffffff' } }, (err, url) => {
+      if (!err && el) el.innerHTML = `<img src="${url}" style="width:196px;height:196px;border-radius:12px;" alt="QR Ticket">`;
+    });
+  }
+  /* Share buttons */
+  _renderTicketShareBtns(ticket);
+  /* Refresh my tickets tab */
+  renderMyTickets();
+}
+
+/* ── Ticket Share: WhatsApp + Email ── */
+function _renderTicketShareBtns(ticket) {
+  const wrap = document.getElementById('ticketShareBtns');
+  if (!wrap) return;
+
+  const eventName  = ticket.eventTitle || 'Event';
+  const ticketType = ticket.ticketType || 'General';
+  const qty        = ticket.quantity || 1;
+  const code       = ticket.ticketCode || '';
+  const date       = ticket.eventDate  || '';
+  const venue      = ticket.eventVenue || '';
+  const buyerName  = ticket.buyerName  || '';
+  const buyerEmail = ticket.buyerEmail || '';
+  const rawPhone   = (ticket.buyerPhone || '').replace(/[^0-9]/g, '');
+  /* Kenya 07xx → 2547xx */
+  const waPhone = rawPhone.startsWith('0') ? '254' + rawPhone.slice(1) : rawPhone;
+
+  const waText = [
+    '🎟️ *SOKONI TICKET CONFIRMED*',
+    '',
+    `*Event:* ${eventName}`,
+    `*Date:* ${date}`,
+    `*Venue:* ${venue}`,
+    `*Ticket:* ${ticketType} × ${qty}`,
+    `*Code:* ${code}`,
+    '',
+    'Show this code at the gate. Screenshot as backup.',
+    'View tickets: https://mysokoni.co.ke/entertainment.html'
+  ].join('\n');
+
+  const emailSubject = `🎟️ Your ${eventName} Ticket — SOKONI`;
+  const emailBody = [
+    `Hi ${buyerName},`,
+    '',
+    `Your ticket for ${eventName} is confirmed!`,
+    '',
+    `Event: ${eventName}`,
+    `Date: ${date}`,
+    `Venue: ${venue}`,
+    `Ticket: ${ticketType} × ${qty}`,
+    `Ticket Code: ${code}`,
+    '',
+    'Please show this code at the venue gate.',
+    'View your tickets: https://mysokoni.co.ke/entertainment.html',
+    '',
+    'Enjoy the event!',
+    'SOKONI Team'
+  ].join('\n');
+
+  const waUrl    = `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}`;
+  const mailUrl  = `mailto:${buyerEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+
+  wrap.innerHTML =
+    (waPhone ? `<a href="${waUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.35);border-radius:12px;color:#25d366;font-size:13px;font-weight:800;text-decoration:none;transition:background .15s;" onmouseover="this.style.background='rgba(37,211,102,0.22)'" onmouseout="this.style.background='rgba(37,211,102,0.12)'">📱 Send via WhatsApp</a>` : '') +
+    `<a href="${mailUrl}" style="display:inline-flex;align-items:center;gap:7px;padding:10px 18px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.35);border-radius:12px;color:#c084fc;font-size:13px;font-weight:800;text-decoration:none;transition:background .15s;" onmouseover="this.style.background='rgba(168,85,247,0.22)'" onmouseout="this.style.background='rgba(168,85,247,0.12)'">📧 Send to Email</a>`;
+}
+
+/* ── My Tickets ── */
+function renderMyTickets() {
+  const el = document.getElementById('myTicketsContainer'); if (!el) return;
+  if (!window.EntHub) { return; }
+  EntHub.listenMyTickets(tickets => {
+    if (!tickets.length) {
+      el.innerHTML = `<div style="text-align:center;padding:60px 0;color:rgba(255,255,255,0.25);">
+        <div style="font-size:48px;margin-bottom:12px;">🎫</div>
+        <p>No tickets yet. Browse events and buy a ticket!</p>
+        <button type="button" onclick="showEntTab('events',document.querySelector('.en-tab:nth-child(3)'))" style="margin-top:14px;padding:10px 22px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:10px;color:#c084fc;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Browse Events →</button>
+      </div>`;
+      return;
+    }
+    el.innerHTML = tickets.map(t => `
+    <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:18px;padding:18px;margin-bottom:12px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px;">
+        <div>
+          <div style="font-size:15px;font-weight:900;color:white;">${esc(t.eventTitle || 'Event')}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.4);">📅 ${t.eventDate || '—'} · 📍 ${esc(t.eventVenue || '—')}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.4);">🎟️ ${esc(t.ticketType || 'General')} × ${t.quantity || 1}</div>
+        </div>
+        <span style="font-size:9px;padding:3px 8px;border-radius:5px;background:${t.status==='used'?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)'};border:1px solid ${t.status==='used'?'rgba(239,68,68,0.2)':'rgba(34,197,94,0.2)'};color:${t.status==='used'?'#f87171':'#4ade80'};font-weight:700;">${(t.status==='used'?'USED':'VALID').toUpperCase()}</span>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:12px;text-align:center;margin-bottom:10px;" id="qr_${t._id}">
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:8px;">Show this QR at the gate</div>
+        <div style="display:inline-block;background:white;border-radius:10px;padding:4px;">Loading QR…</div>
+      </div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.25);font-family:monospace;text-align:center;">${t.ticketCode || ''}</div>
+    </div>`).join('');
+    /* Render QRs for each ticket */
+    if (window.QRCode) {
+      tickets.forEach(t => {
+        const qrContainer = document.querySelector(`#qr_${t._id} div:last-child`);
+        if (t.qrData && qrContainer) {
+          QRCode.toDataURL(t.qrData, { width: 160, margin: 1, color: { dark: '#0a0a0a', light: '#ffffff' } }, (err, url) => {
+            if (!err && qrContainer) qrContainer.innerHTML = `<img src="${url}" style="width:160px;height:160px;border-radius:8px;" alt="QR">`;
+          });
+        }
+      });
+    }
+  });
+}
+
+/* ── Venues ── */
+let _venueFilter = 'all';
+window.filterVenues = function(type, btn) {
+  _venueFilter = type;
+  document.querySelectorAll('.en-evt-filter').forEach(b => {
+    b.style.background = 'rgba(255,255,255,0.04)'; b.style.borderColor = 'rgba(255,255,255,0.1)'; b.style.color = 'rgba(255,255,255,0.5)';
+  });
+  if (btn) { btn.style.background = 'rgba(168,85,247,0.1)'; btn.style.borderColor = 'rgba(168,85,247,0.3)'; btn.style.color = '#c084fc'; }
+  renderVenuesGrid();
+};
+
+function renderVenuesGrid() {
+  const grid = document.getElementById('venuesGrid'); if (!grid) return;
+  if (!window.EntHub) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.3);">Loading…</div>'; return; }
+  EntHub.listenVenues({ type: _venueFilter === 'all' ? null : _venueFilter }, venues => {
+    if (!venues.length) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.3);">No venues listed yet. <a href="ent-organizer.html" style="color:#c084fc;font-weight:700;">List your venue →</a></div>`;
+      return;
+    }
+    grid.innerHTML = venues.map(v => `
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(168,85,247,0.18);border-radius:20px;padding:18px;transition:border-color .2s;">
+      ${v.photos && v.photos[0] ? `<img src="${v.photos[0]}" style="width:100%;height:140px;object-fit:cover;border-radius:12px;margin-bottom:12px;" loading="lazy" alt="${esc(v.name)}">` : `<div style="height:120px;border-radius:12px;background:linear-gradient(135deg,rgba(168,85,247,0.15),rgba(236,72,153,0.1));margin-bottom:12px;display:flex;align-items:center;justify-content:center;font-size:48px;">🏛️</div>`}
+      <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">${esc(v.name || 'Venue')}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:6px;">📍 ${esc(v.city || '')} · 👥 ${v.capacity ? v.capacity.toLocaleString() + ' capacity' : 'Private'}</div>
+      ${v.amenities && v.amenities.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">${v.amenities.slice(0,4).map(a=>`<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);">${esc(a)}</span>`).join('')}</div>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:14px;font-weight:900;color:#c084fc;">${v.pricePerDay ? 'KES '+Number(v.pricePerDay).toLocaleString()+'/day' : 'Price on request'}</div>
+        <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);color:#4ade80;font-weight:700;">AVAILABLE</span>
+      </div>
+      <button type="button" onclick="bookVenueModal('${v._id}')" style="width:100%;padding:10px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏛️ Request Booking</button>
+    </div>`).join('');
+  });
+}
+
+window.bookVenueModal = async function(venueId) {
+  if (!window.EntHub) return;
+  const v = await EntHub.getVenue(venueId);
+  if (!v) return;
+  let modal = document.getElementById('venueBookModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'venueBookModal';
+    modal.className = 'modal-overlay';
+    modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+  <div class="modal-box">
+    <button type="button" class="modal-close" onclick="document.getElementById('venueBookModal').style.display='none'">✕</button>
+    <h2>🏛️ Book ${esc(v.name || 'Venue')}</h2>
+    <p class="modal-sub">📍 ${esc(v.city || '')} · 👥 ${v.capacity || 'Private'} capacity</p>
+    <input class="modal-input" type="text" id="vbName" placeholder="Your Name / Organisation *">
+    <input class="modal-input" type="tel" id="vbPhone" placeholder="Phone (WhatsApp) *">
+    <input class="modal-input" type="date" id="vbDate" placeholder="Event Date *">
+    <input class="modal-input" type="number" id="vbGuests" placeholder="Expected guests">
+    <textarea class="modal-input" id="vbNotes" placeholder="Describe your event…" rows="3"></textarea>
+    <div id="vbMsg" style="font-size:12px;min-height:16px;margin-bottom:8px;text-align:center;"></div>
+    <button type="button" class="modal-btn" onclick="submitVenueBooking('${venueId}')">✓ Send Booking Request</button>
+  </div>`;
+  modal.style.display = 'flex';
+};
+
+window.submitVenueBooking = async function(venueId) {
+  const name   = document.getElementById('vbName')?.value.trim();
+  const phone  = document.getElementById('vbPhone')?.value.trim();
+  const date   = document.getElementById('vbDate')?.value;
+  const msg    = document.getElementById('vbMsg');
+  if (!name || !phone || !date) { msg.textContent = '⚠️ Fill name, phone and date'; msg.style.color = '#f59e0b'; return; }
+  msg.textContent = 'Sending…'; msg.style.color = '#c084fc';
+  try {
+    await EntHub.bookVenue(venueId, {
+      bookerName: name, bookerPhone: phone, eventDate: date,
+      expectedGuests: parseInt(document.getElementById('vbGuests')?.value) || 0,
+      message: document.getElementById('vbNotes')?.value || '',
+    });
+    msg.textContent = '✅ Request sent! The venue will contact you soon.'; msg.style.color = '#4ade80';
+    setTimeout(() => document.getElementById('venueBookModal').style.display = 'none', 2500);
+  } catch (e) { msg.textContent = '❌ ' + e.message; msg.style.color = '#f87171'; }
+};
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function togglePromoteForm() {
+  const f = document.getElementById('promoteEventForm');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function promoteEvent() {
+  const name  = (document.getElementById('evtName')?.value||'').trim();
+  const date  = document.getElementById('evtDate')?.value || '';
+  const venue = (document.getElementById('evtVenue')?.value||'').trim();
+  const phone = (document.getElementById('evtPhone')?.value||'').trim();
+  const msgEl = document.getElementById('evtMsg');
+  if (!name || !date || !phone) { if(msgEl) { msgEl.textContent='Fill event name, date and contact'; msgEl.style.color='#ff9800'; } return; }
+  const evt = { id:'EV'+Date.now(), name, date, venue, phone, price:Number(document.getElementById('evtPrice')?.value||0), type:document.getElementById('evtType')?.value||'other', emoji:'🎭', color:'rgba(168,85,247,0.08)', border:'rgba(168,85,247,0.2)', desc:'' };
+  let local = []; try { local = JSON.parse(localStorage.getItem('sokoniEvents'))||[]; } catch(e) {}
+  local.unshift(evt); localStorage.setItem('sokoniEvents', JSON.stringify(local));
+  renderEventsGrid();
+  togglePromoteForm();
+  if(msgEl) { msgEl.textContent='Event submitted!'; msgEl.style.color='#71ff00'; }
+}
+function showEntTab(name, btn){
+  document.querySelectorAll('.en-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.en-tab').forEach(b => b.classList.remove('active'));
+  const pane = document.getElementById('pane-'+name);
+  if(pane) pane.classList.add('active');
+  if(btn) btn.classList.add('active');
+  else { const tb = document.querySelector(`.en-tab[onclick*="'${name}'"]`); if(tb) tb.classList.add('active'); }
+  if(name === 'performers') { setTimeout(filterPerformers, 50); }
+  if(name === 'events') { renderEventsGrid(); }
+  if(name === 'venues') { renderVenuesGrid(); }
+  if(name === 'mytickets') { renderMyTickets(); }
+  if(name === 'bookings') { renderMyBookings(); }
+  window.scrollTo(0,0);
+}
+function renderMyBookings(){
+  const el = document.getElementById('myBookingsContainer');
+  if(!el) return;
+  let bkgs = []; try{ bkgs = JSON.parse(localStorage.getItem('sokoniBookings'))||[]; }catch(e){}
+  if(!bkgs.length){
+    el.innerHTML = '<div style="text-align:center;padding:60px 0;color:rgba(255,255,255,0.3);"><div style="font-size:48px;margin-bottom:12px;">📋</div><p>No bookings yet. Browse performers and tap Book!</p><button type="button" onclick="showEntTab(\'performers\',document.querySelector(\'.en-tab:nth-child(2)\'))" style="margin-top:14px;padding:10px 22px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:10px;color:#c084fc;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Browse Performers →</button></div>';
+    return;
+  }
+  el.innerHTML = bkgs.slice().reverse().map(b=>`
+  <div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.18);border-radius:16px;padding:16px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="font-size:15px;font-weight:900;color:white;">${(b.performerName||'Performer').replace(/</g,'&lt;')}</div>
+      <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.25);color:#fbbf24;font-weight:700;text-transform:uppercase;">${b.status||'pending'}</span>
+    </div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.45);">📅 ${b.date||'—'} &nbsp;·&nbsp; 📍 ${(b.venue||'—').replace(/</g,'&lt;')} &nbsp;·&nbsp; 🎤 ${b.eventType||'—'}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.28);margin-top:4px;">Ref: ${b.id} · Booked ${b.createdAt||'—'}</div>
+  </div>`).join('');
+}
+window.showEntTab = showEntTab;
+window.renderMyBookings = renderMyBookings;
+window.filterEvents = filterEvents;
+window.togglePromoteForm = togglePromoteForm;
+window.promoteEvent = promoteEvent;
+
+/* =============================================================
+   ASK THE ENTERTAINMENT HUB
+============================================================= */
+function postEntRequest() {
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('ent_req',5,60000)){(window._skToast||alert)('Posting too fast. Please wait a moment.');return;}
+  const text  = (document.getElementById('entAskText')?.value||'').trim();
+  const type  = document.getElementById('entAskType')?.value || '';
+  const phone = (document.getElementById('entAskPhone')?.value||'').trim();
+  if (!text) { return; }
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_entertainment'))||[]; } catch(e) {}
+  reqs.unshift({ id:'EREQ'+Date.now(), text, type: type||'General', phone, ts: Date.now() });
+  localStorage.setItem('askHub_entertainment', JSON.stringify(reqs.slice(0,30)));
+  document.getElementById('entAskText').value = '';
+  document.getElementById('entAskPhone').value = '';
+  renderEntFeed();
+}
+
+function renderEntFeed() {
+  const feed = document.getElementById('entAskFeed'); if (!feed) return;
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_entertainment'))||[]; } catch(e) {}
+  if (!reqs.length) { feed.innerHTML = ''; return; }
+  const ago = ts => { const s=Math.floor((Date.now()-ts)/1000); return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago'; };
+  feed.innerHTML = '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Recent Requests</div>' +
+    reqs.slice(0,5).map(r => `
+      <div style="padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);color:#c084fc;font-weight:700;">${r.type}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
+          <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        ${r.phone ? `<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your Entertainment Hub request: '+r.text+'\n\nI can help — SOKONI Verified Performer')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
+      </div>`).join('');
+}
+
+window.postEntRequest = postEntRequest;
+
+/* Home-tab Ask Hub — shares same localStorage key, different DOM ids */
+function postEntRequestHome() {
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('ent_req',5,60000)){(window._skToast||alert)('Posting too fast. Please wait a moment.');return;}
+  const text  = (document.getElementById('entAskTextHome')?.value||'').trim();
+  const type  = document.getElementById('entAskTypeHome')?.value || '';
+  const phone = (document.getElementById('entAskPhoneHome')?.value||'').trim();
+  if (!text) { return; }
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_entertainment'))||[]; } catch(e) {}
+  reqs.unshift({ id:'EREQ'+Date.now(), text, type: type||'General', phone, ts: Date.now() });
+  localStorage.setItem('askHub_entertainment', JSON.stringify(reqs.slice(0,30)));
+  document.getElementById('entAskTextHome').value = '';
+  document.getElementById('entAskPhoneHome').value = '';
+  renderEntFeedHome();
+}
+
+function renderEntFeedHome() {
+  const feed = document.getElementById('entAskFeedHome'); if (!feed) return;
+  let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_entertainment'))||[]; } catch(e) {}
+  if (!reqs.length) { feed.innerHTML = ''; return; }
+  const ago = ts => { const s=Math.floor((Date.now()-ts)/1000); return s<60?'just now':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago'; };
+  feed.innerHTML = '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Recent Requests</div>' +
+    reqs.slice(0,5).map(r => `
+      <div style="padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);color:#c084fc;font-weight:700;">${r.type}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.3);">${ago(r.ts)}</span>
+          <span style="margin-left:auto;font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:4px;color:#4ade80;font-weight:700;">OPEN</span>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">${r.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        ${r.phone ? `<a href="https://wa.me/254${r.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi, I saw your Entertainment Hub request: '+r.text+'\n\nI can help — SOKONI Verified Performer')}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 12px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.18);border-radius:7px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">💬 Respond</a>` : ''}
+      </div>`).join('');
+}
+window.postEntRequestHome = postEntRequestHome;
+window.renderEntFeedHome = renderEntFeedHome;
+
+renderEventsGrid();
+renderEntFeed();
+renderEntFeedHome();
+
+/* Load real Firestore events — updates _fsEvents and re-renders */
+function _initFsEvents() {
+  if (!window.EntHub) return;
+  EntHub.listenEvents({}, events => {
+    _fsEvents = events;
+    renderEventsGrid();
+  });
+}
+/* Try immediately, retry once EntHub is ready */
+_initFsEvents();
+</script>
+<script src="scroll-memory.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="entertainment.html" class="bnav-item active-bnav"><span class="bnav-emoji">🎬</span><span>Events</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js" defer></script>
+<script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script type="module" src="sokoni-upload.js"></script>
+<script type="module">import SokoniDB from './sokoni-db.js'; window.SokoniDB = SokoniDB;</script>
+<script type="module">
+import EntHub from './entertainment-hub.js';
+window.EntHub = EntHub;
+/* Once EntHub is ready, boot real-time events */
+if (typeof _initFsEvents === 'function') _initFsEvents();
+</script>
+<!-- QR libraries -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script>
+/* Nav state init */
+(function(){
+  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script><script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
+  <!-- REGISTER CTA — universal fallback for other business types -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
+    <button onclick="HubRegister.open({hub:'entertainment', category:'dj'})" style="padding:10px 24px;background:#c084fc;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

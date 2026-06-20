@@ -1,0 +1,481 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Platform Monitor — SOKONI</title>
+  <link rel="icon" href="assets/icon-96.png">
+  <style>
+    /* ── Base ── */
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --bg:#0a0a0a;--surface:#111;--surface2:#1a1a1a;--border:rgba(113,255,0,.15);
+      --green:#71ff00;--green-dim:rgba(113,255,0,.08);--green-glow:rgba(113,255,0,.25);
+      --text:#e8e8e8;--muted:#888;--red:#ff4444;--yellow:#ffcc00;--blue:#4499ff;--orange:#ff8800;
+      --radius:12px;--shadow:0 4px 24px rgba(0,0,0,.5);
+    }
+    html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh}
+
+    /* ── Auth Gate ── */
+    #auth-gate{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;text-align:center;padding:24px}
+    #auth-gate .gate-icon{font-size:56px}
+    #auth-gate h2{color:var(--green);font-size:24px}
+    #auth-gate p{color:var(--muted);max-width:360px}
+
+    /* ── Top Bar ── */
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+    .topbar-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;color:var(--green)}
+    .topbar-brand span{font-size:22px}
+    .topbar-right{display:flex;align-items:center;gap:16px}
+    .live-indicator{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+    .live-dot{width:8px;height:8px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+    .topbar-time{font-size:12px;color:var(--muted);font-family:monospace}
+    .admin-badge{background:var(--green);color:#000;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700}
+
+    /* ── Layout ── */
+    .page-wrap{display:none;flex-direction:column;min-height:100vh}
+    .page-wrap.visible{display:flex}
+    .main{padding:24px;flex:1}
+
+    /* ── Section Headers ── */
+    .section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:28px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+
+    /* ── Metric Cards ── */
+    .metrics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+    .metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden;transition:border-color .2s,box-shadow .2s;cursor:default}
+    .metric-card:hover{border-color:var(--green-glow);box-shadow:0 0 20px var(--green-glow)}
+    .metric-card .label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px}
+    .metric-card .value{font-size:32px;font-weight:800;color:var(--text);line-height:1;font-family:monospace}
+    .metric-card .subtext{font-size:11px;color:var(--muted);margin-top:6px}
+    .metric-card .trend{font-size:11px;font-weight:600;margin-top:4px}
+    .metric-card .trend.up{color:#71ff00}.metric-card .trend.down{color:var(--red)}.metric-card .trend.neutral{color:var(--muted)}
+    .metric-card .icon-bg{position:absolute;right:16px;top:16px;font-size:24px;opacity:.25}
+    .metric-card.alert{border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.04)}
+    .metric-card.alert .value{color:var(--red)}
+    .metric-card.warning{border-color:rgba(255,204,0,.35)}
+    .metric-card.warning .value{color:var(--yellow)}
+    .metric-card.primary .value{color:var(--green)}
+    .metric-card.loading .value{color:var(--muted)}
+    .skeleton{background:linear-gradient(90deg,var(--surface2) 25%,#222 50%,var(--surface2) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+    @keyframes shimmer{to{background-position:-200% 0}}
+
+    /* ── Two-column panels ── */
+    .panels{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media(max-width:900px){.panels{grid-template-columns:1fr}}
+
+    /* ── Panel ── */
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+    .panel-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .panel-title{font-size:13px;font-weight:700;color:var(--text)}
+    .panel-badge{background:var(--green-dim);border:1px solid var(--border);color:var(--green);font-size:11px;padding:2px 7px;border-radius:4px;font-weight:700}
+    .panel-badge.red{background:rgba(255,68,68,.08);border-color:rgba(255,68,68,.25);color:var(--red)}
+    .panel-badge.yellow{background:rgba(255,204,0,.08);border-color:rgba(255,204,0,.25);color:var(--yellow)}
+    .panel-body{overflow-y:auto;max-height:320px}
+
+    /* ── Table ── */
+    table{width:100%;border-collapse:collapse}
+    th{padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)}
+    td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:var(--green-dim)}
+    .no-data{text-align:center;color:var(--muted);padding:32px;font-size:13px}
+
+    /* ── Status Pills ── */
+    .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    .pill-green{background:rgba(113,255,0,.12);color:#71ff00;border:1px solid rgba(113,255,0,.3)}
+    .pill-red{background:rgba(255,68,68,.1);color:#ff6666;border:1px solid rgba(255,68,68,.25)}
+    .pill-yellow{background:rgba(255,204,0,.1);color:#ffcc00;border:1px solid rgba(255,204,0,.25)}
+    .pill-blue{background:rgba(68,153,255,.1);color:#77aaff;border:1px solid rgba(68,153,255,.25)}
+    .pill-grey{background:rgba(255,255,255,.06);color:#aaa;border:1px solid rgba(255,255,255,.1)}
+
+    /* ── Revenue Bar Chart ── */
+    .chart-wrap{padding:16px}
+    .bar-chart{display:flex;align-items:flex-end;gap:6px;height:120px;padding:0 4px}
+    .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .bar{width:100%;background:var(--green);border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;position:relative}
+    .bar:hover::after{content:attr(data-val);position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:#222;color:var(--green);font-size:10px;padding:2px 5px;border-radius:3px;white-space:nowrap}
+    .bar-label{font-size:9px;color:var(--muted);text-align:center}
+    .bar-chart-empty{display:flex;align-items:center;justify-content:center;height:120px;color:var(--muted);font-size:13px}
+
+    /* ── Error List ── */
+    .error-item{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:10px;align-items:flex-start}
+    .error-item:last-child{border-bottom:none}
+    .error-level{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
+    .error-level.error{background:var(--red)}.error-level.warn{background:var(--yellow)}.error-level.info{background:var(--blue)}
+    .error-msg{font-size:12px;color:var(--text);word-break:break-all;flex:1}
+    .error-time{font-size:10px;color:var(--muted);white-space:nowrap;font-family:monospace}
+
+    /* ── Health Checks ── */
+    .health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;padding:16px}
+    .health-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+    .health-item .h-icon{font-size:24px;margin-bottom:6px}
+    .health-item .h-name{font-size:11px;color:var(--muted);margin-bottom:4px}
+    .health-item .h-status{font-size:12px;font-weight:700}
+    .h-ok{color:var(--green)}.h-warn{color:var(--yellow)}.h-err{color:var(--red)}
+
+    /* ── Tabs ── */
+    .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px}
+    .tab{padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .2s}
+    .tab.active{color:var(--green);border-bottom-color:var(--green)}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+
+    /* ── Refresh Button ── */
+    .btn-refresh{background:transparent;border:1px solid var(--border);color:var(--green);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
+    .btn-refresh:hover{background:var(--green-dim);border-color:var(--green)}
+
+    /* ── Role Management (quick panel) ── */
+    .role-form{padding:16px;display:flex;flex-direction:column;gap:10px}
+    .role-form input,.role-form select{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:7px;font-size:13px;width:100%;outline:none}
+    .role-form input:focus,.role-form select:focus{border-color:var(--green)}
+    .btn-grant{background:var(--green);color:#000;border:none;padding:10px;border-radius:7px;font-weight:700;cursor:pointer;font-size:13px;width:100%}
+    .role-msg{font-size:12px;padding:6px 10px;border-radius:6px;display:none}
+    .role-msg.ok{background:rgba(113,255,0,.1);color:var(--green);display:block}
+    .role-msg.err{background:rgba(255,68,68,.1);color:var(--red);display:block}
+
+    /* ── Responsive ── */
+    @media(max-width:600px){
+      .main{padding:14px}
+      .metrics-grid{grid-template-columns:1fr 1fr}
+      .metric-card .value{font-size:24px}
+      .topbar{padding:0 14px}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Auth Gate ══ -->
+<div id="auth-gate">
+  <div class="gate-icon">🔒</div>
+  <h2>Platform Monitor</h2>
+  <p>Checking your credentials…</p>
+</div>
+
+<!-- ══ Dashboard ══ -->
+<div class="page-wrap" id="dashboard">
+
+  <!-- Top Bar -->
+  <nav class="topbar">
+    <div class="topbar-brand"><span>📊</span> Platform Monitor</div>
+    <div class="topbar-right">
+      <div class="live-indicator"><div class="live-dot"></div> Live</div>
+      <span class="topbar-time" id="clock">--:--:--</span>
+      <span class="admin-badge" id="role-badge">ADMIN</span>
+      <a href="admin.html" style="color:var(--muted);font-size:12px;text-decoration:none">Admin Panel →</a>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <!-- ══ Key Metrics ══ -->
+    <div class="section-title">Live Metrics</div>
+    <div class="metrics-grid" id="metrics-grid">
+      <div class="metric-card primary loading" id="card-active-users">
+        <div class="icon-bg">👥</div>
+        <div class="label">Active Users (30 min)</div>
+        <div class="value skeleton" style="width:60px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+      <div class="metric-card loading" id="card-orders-today">
+        <div class="icon-bg">📦</div>
+        <div class="label">Orders Today</div>
+        <div class="value skeleton" style="width:60px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+      <div class="metric-card loading" id="card-revenue">
+        <div class="icon-bg">💰</div>
+        <div class="label">Revenue Today (KES)</div>
+        <div class="value skeleton" style="width:80px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+      <div class="metric-card loading" id="card-deliveries">
+        <div class="icon-bg">🚚</div>
+        <div class="label">Active Deliveries</div>
+        <div class="value skeleton" style="width:50px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+      <div class="metric-card loading" id="card-rides">
+        <div class="icon-bg">🚗</div>
+        <div class="label">Active Rides</div>
+        <div class="value skeleton" style="width:50px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+      <div class="metric-card loading" id="card-pending">
+        <div class="icon-bg">⏳</div>
+        <div class="label">Pending Applications</div>
+        <div class="value skeleton" style="width:50px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+      <div class="metric-card loading" id="card-flags">
+        <div class="icon-bg">🚩</div>
+        <div class="label">Open Flags</div>
+        <div class="value skeleton" style="width:50px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+      <div class="metric-card loading" id="card-disputes">
+        <div class="icon-bg">⚖️</div>
+        <div class="label">Open Disputes</div>
+        <div class="value skeleton" style="width:50px;height:32px;border-radius:4px"></div>
+        <div class="subtext">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ══ Platform Health ══ -->
+    <div class="section-title">Platform Health</div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Service Status</span>
+        <button class="btn-refresh" onclick="SokoniMonitor.checkHealth()">Refresh</button>
+      </div>
+      <div class="health-grid" id="health-grid">
+        <div class="health-item"><div class="h-icon">🔥</div><div class="h-name">Firebase Auth</div><div class="h-status h-ok" id="h-auth">Checking…</div></div>
+        <div class="health-item"><div class="h-icon">🗄️</div><div class="h-name">Firestore</div><div class="h-status h-ok" id="h-db">Checking…</div></div>
+        <div class="health-item"><div class="h-icon">🔔</div><div class="h-name">FCM / Push</div><div class="h-status h-ok" id="h-fcm">Checking…</div></div>
+        <div class="health-item"><div class="h-icon">📡</div><div class="h-name">Service Worker</div><div class="h-status h-ok" id="h-sw">Checking…</div></div>
+        <div class="health-item"><div class="h-icon">⚡</div><div class="h-name">Page Load</div><div class="h-status" id="h-perf">Checking…</div></div>
+        <div class="health-item"><div class="h-icon">📶</div><div class="h-name">Network</div><div class="h-status h-ok" id="h-net">Checking…</div></div>
+        <div class="health-item"><div class="h-icon">🧮</div><div class="h-name">Memory</div><div class="h-status" id="h-mem">Checking…</div></div>
+        <div class="health-item"><div class="h-icon">🔒</div><div class="h-name">CSP / Headers</div><div class="h-status h-ok" id="h-csp">Active</div></div>
+      </div>
+    </div>
+
+    <!-- ══ Orders & Drivers ══ -->
+    <div class="section-title">Live Activity</div>
+    <div class="panels">
+
+      <!-- Recent Orders -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Recent Orders</span>
+          <span class="panel-badge" id="orders-badge">0</span>
+        </div>
+        <div class="panel-body">
+          <table>
+            <thead><tr><th>ID</th><th>Status</th><th>Total</th><th>Time</th></tr></thead>
+            <tbody id="orders-table"><tr><td colspan="4" class="no-data">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Active Drivers -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Online Drivers</span>
+          <span class="panel-badge" id="drivers-badge">0</span>
+        </div>
+        <div class="panel-body">
+          <table>
+            <thead><tr><th>Driver</th><th>Mode</th><th>Status</th><th>Trips</th></tr></thead>
+            <tbody id="drivers-table"><tr><td colspan="4" class="no-data">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Revenue Chart + Moderation ══ -->
+    <div class="section-title">Revenue & Moderation</div>
+    <div class="panels">
+
+      <!-- Revenue Chart -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">7-Day Revenue (KES)</span>
+          <span class="panel-badge" id="rev-total">KES 0</span>
+        </div>
+        <div class="chart-wrap">
+          <div class="bar-chart" id="revenue-chart">
+            <div class="bar-chart-empty">Loading revenue data…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flags & Disputes -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Moderation Queue</span>
+          <span class="panel-badge yellow" id="mod-badge">0</span>
+        </div>
+        <div class="panel-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab('flags')">Flags</div>
+            <div class="tab" onclick="switchTab('disputes')">Disputes</div>
+          </div>
+          <div class="tab-panel active" id="tab-flags">
+            <table>
+              <thead><tr><th>Type</th><th>Content</th><th>Time</th></tr></thead>
+              <tbody id="flags-table"><tr><td colspan="3" class="no-data">Loading…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="tab-panel" id="tab-disputes">
+            <table>
+              <thead><tr><th>ID</th><th>Status</th><th>Time</th></tr></thead>
+              <tbody id="disputes-table"><tr><td colspan="3" class="no-data">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Role Management ══ -->
+    <div class="section-title" id="role-mgmt-section">Role Management</div>
+    <div class="panels" id="role-mgmt-panels">
+
+      <!-- Grant Role -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Grant / Revoke Role</span></div>
+        <div class="role-form">
+          <div style="display:flex;gap:8px">
+            <input type="text" id="role-uid" placeholder="User UID or email" autocomplete="off" style="flex:1">
+            <button class="btn-grant" style="flex-shrink:0;padding:0 14px" onclick="SokoniMonitor.lookupUser()" title="Look up user by email">Lookup</button>
+          </div>
+          <div id="role-uid-preview" style="font-size:12px;color:#71ff00;min-height:16px;padding:2px 0 4px;opacity:0.85"></div>
+          <select id="role-select">
+            <option value="">Select role to grant…</option>
+            <option value="moderator">Moderator</option>
+            <option value="admin">Admin</option>
+            <option value="superAdmin">Super Admin</option>
+          </select>
+          <div style="display:flex;gap:8px">
+            <button class="btn-grant" onclick="SokoniMonitor.grantRole()">Grant Role</button>
+            <button class="btn-grant" style="background:#ff4444;color:#fff" onclick="SokoniMonitor.revokeRole()">Revoke</button>
+          </div>
+          <div class="role-msg" id="role-msg" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- Audit Log -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Recent Audit Log</span>
+          <span class="panel-badge" id="audit-badge">0</span>
+        </div>
+        <div class="panel-body">
+          <div id="error-list">
+            <div class="no-data">Loading audit entries…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Health Report ══ -->
+    <div class="section-title">Platform Health Report</div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Audit Summary</span>
+        <button class="btn-refresh" onclick="SokoniMonitor.generateReport()">Generate Report</button>
+      </div>
+      <div id="health-report" style="padding:20px;color:var(--muted);font-size:13px;line-height:1.7">
+        Click "Generate Report" to run a live platform audit.
+      </div>
+    </div>
+
+    <div style="height:40px"></div>
+  </div>
+</div>
+
+<!-- ══ Firebase SDK ══ -->
+<script type="module">
+import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+
+const firebaseConfig = {
+  apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+  authDomain:"sokoni-aeb26.firebaseapp.com",
+  projectId:"sokoni-aeb26",
+  storageBucket:"sokoni-aeb26.firebasestorage.app",
+  messagingSenderId:"24799054989",
+  appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const fns  = getFunctions(app);
+
+window.firebaseAuth    = auth;
+window.firebaseDB      = db;
+window.firebaseFns     = fns;
+window.httpsCallable   = httpsCallable;
+
+onAuthStateChanged(auth, async (user) => {
+  const gate = document.getElementById("auth-gate");
+  const dash  = document.getElementById("dashboard");
+
+  if (!user) {
+    gate.querySelector("p").textContent = "You must be signed in to access this page.";
+    const link = document.createElement("a");
+    link.href = "login.html?next=" + encodeURIComponent(location.href);
+    link.textContent = "Sign in →";
+    link.style.cssText = "color:#71ff00;font-weight:700;text-decoration:none;margin-top:8px";
+    gate.appendChild(link);
+    return;
+  }
+
+  // Verify admin or superAdmin claim
+  const result = await user.getIdTokenResult();
+  const claims = result.claims;
+
+  if (!claims.admin && !claims.superAdmin && !claims.moderator) {
+    gate.querySelector(".gate-icon").textContent = "🚫";
+    gate.querySelector("h2").textContent = "Access Denied";
+    gate.querySelector("p").textContent = "This page is restricted to platform administrators.";
+    return;
+  }
+
+  // Show dashboard
+  gate.style.display = "none";
+  dash.classList.add("visible");
+
+  const badge = document.getElementById("role-badge");
+  if (claims.superAdmin) badge.textContent = "SUPER ADMIN";
+  else if (claims.admin) badge.textContent = "ADMIN";
+  else badge.textContent = "MODERATOR";
+
+  // Hide role management for non-admins
+  if (!claims.admin && !claims.superAdmin) {
+    document.getElementById("role-mgmt-section").style.display = "none";
+    document.getElementById("role-mgmt-panels").style.display = "none";
+  }
+
+  // Init monitor
+  window.SokoniMonitor.init(db, user, fns, claims);
+});
+</script>
+
+<!-- ══ Monitor Logic ══ -->
+<script src="monitor.js"></script>
+<script src="kass-widget.js" defer></script>
+
+<script>
+/* ── Clock ── */
+function updateClock(){
+  const now = new Date();
+  document.getElementById("clock").textContent =
+    now.toLocaleTimeString("en-KE",{hour12:false});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ── Tab switcher ── */
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  event.target.classList.add("active");
+  document.getElementById("tab-" + name).classList.add("active");
+}
+</script>
+  <!-- Scale + Resilience stack -->
+  <script defer src="sokoni-scale.js"></script>
+  <script defer src="sokoni-queue.js"></script>
+  <script defer src="sokoni-cache.js"></script>
+  <script defer src="sokoni-monitor.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>

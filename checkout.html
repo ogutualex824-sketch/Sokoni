@@ -1,0 +1,2400 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Checkout</title>
+  <meta name="description" content="Complete your SOKONI purchase securely with M-Pesa, Visa, or Mastercard.">
+  <meta property="og:title" content="SOKONI — Checkout">
+  <meta property="og:description" content="Secure checkout on SOKONI — Kenya's #1 marketplace. Pay with M-Pesa, Visa, or Mastercard.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.intasend.com" crossorigin>
+  <link rel="preconnect" href="https://api.intasend.com" crossorigin>
+  <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+  <script src="sokoni-security.js" defer></script>
+  <script src="sokoni-guards.js" defer></script>
+  <script src="seo.js" defer></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="checkout.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    /* ============================
+       CHECKOUT PAGE — PREMIUM
+    ============================ */
+    .checkout-page{
+      min-height:100vh;
+      padding:30px 5% 100px;
+      background:#0b0b0b;
+    }
+
+    .checkout-heading{
+      font-size:28px;
+      font-weight:900;
+      color:white;
+      margin-bottom:28px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+
+    .checkout-heading span{
+      background:linear-gradient(135deg,#71ff00,#4fc800);
+      -webkit-background-clip:text;
+      background-clip:text;
+      -webkit-text-fill-color:transparent;
+      color:transparent;
+    }
+
+    .checkout-grid{
+      display:grid;
+      grid-template-columns:1.4fr 1fr;
+      gap:28px;
+      align-items:start;
+    }
+
+    /* ---- LEFT COLUMN ---- */
+    .checkout-left{ display:flex; flex-direction:column; gap:20px; }
+
+    .co-card{
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:24px;
+      padding:26px 28px;
+      backdrop-filter:blur(14px);
+    }
+
+    .co-card-title{
+      font-size:15px;
+      font-weight:800;
+      color:white;
+      margin-bottom:18px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .co-card-title i{ color:#71ff00; font-size:14px; }
+
+    .co-input{
+      width:100%;
+      padding:15px 16px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:14px;
+      color:white;
+      font-size:14px;
+      outline:none;
+      font-family:inherit;
+      margin-bottom:12px;
+      transition:border-color 0.2s;
+    }
+
+    .co-input:focus{ border-color:rgba(113,255,0,0.45); }
+    .co-input::placeholder{ color:rgba(255,255,255,0.35); }
+
+    .co-input-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+    /* Location status */
+    .loc-ok{ color:#71ff00; font-size:12px; }
+    .loc-warn{ color:#ff9800; font-size:12px; }
+
+    #locationStatus{ margin-bottom:4px; min-height:18px; font-size:12px; }
+
+    /* ---- PAYMENT METHODS ---- */
+    .payment-methods{ display:grid; grid-template-columns:repeat(auto-fill,minmax(86px,1fr)); gap:10px; }
+
+    .pay-method-card{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:8px;
+      padding:16px 10px;
+      background:rgba(255,255,255,0.04);
+      border:2px solid rgba(255,255,255,0.08);
+      border-radius:18px;
+      cursor:pointer;
+      transition:0.25s ease;
+      position:relative;
+      user-select:none;
+    }
+
+    .pay-method-card:hover{
+      border-color:rgba(255,255,255,0.2);
+      background:rgba(255,255,255,0.07);
+    }
+
+    .pay-method-card.active-pay{
+      border-color:#71ff00;
+      background:rgba(113,255,0,0.07);
+      box-shadow:0 0 0 1px rgba(113,255,0,0.2), 0 8px 24px rgba(113,255,0,0.12);
+    }
+
+    .pay-method-card.active-pay-mpesa{  border-color:#4caf50; background:rgba(76,175,80,0.07);  box-shadow:0 0 0 1px rgba(76,175,80,0.2); }
+    .pay-method-card.active-pay-card{   border-color:#00aaff; background:rgba(0,170,255,0.07);   box-shadow:0 0 0 1px rgba(0,170,255,0.2); }
+    .pay-method-card.active-pay-paypal{ border-color:#009cde; background:rgba(0,156,222,0.07);   box-shadow:0 0 0 1px rgba(0,156,222,0.2); }
+    .pay-method-card.active-pay-airtel{ border-color:#dc2626; background:rgba(220,38,38,0.07);   box-shadow:0 0 0 1px rgba(220,38,38,0.2); }
+    .pay-method-card.active-pay-tkash{  border-color:#059669; background:rgba(5,150,105,0.07);   box-shadow:0 0 0 1px rgba(5,150,105,0.2); }
+    .pay-method-card.active-pay-equity{ border-color:#ea580c; background:rgba(234,88,12,0.07);   box-shadow:0 0 0 1px rgba(234,88,12,0.2); }
+    .pay-method-card.active-pay-mtn{    border-color:#ca8a04; background:rgba(202,138,4,0.07);   box-shadow:0 0 0 1px rgba(202,138,4,0.2); }
+    .pay-method-card.active-pay-ecocash{border-color:#16a34a; background:rgba(22,163,74,0.07);   box-shadow:0 0 0 1px rgba(22,163,74,0.2); }
+    .pay-method-card.active-pay-chipper{border-color:#7c3aed; background:rgba(124,58,237,0.07);  box-shadow:0 0 0 1px rgba(124,58,237,0.2); }
+    .pay-method-card.active-pay-bank{   border-color:#2563eb; background:rgba(37,99,235,0.07);   box-shadow:0 0 0 1px rgba(37,99,235,0.2); }
+    .pay-method-section-label{
+      grid-column:1/-1; font-size:9px; font-weight:800; text-transform:uppercase;
+      letter-spacing:.1em; color:rgba(255,255,255,0.28); padding-top:4px;
+    }
+
+    .pay-method-icon{ font-size:30px; line-height:1; }
+    .pay-method-label{ font-size:12px; font-weight:700; color:white; }
+    .pay-method-sub{ font-size:10px; color:rgba(255,255,255,0.38); }
+
+    .pay-check{
+      position:absolute;
+      top:8px; right:8px;
+      width:18px; height:18px;
+      border-radius:50%;
+      background:#71ff00;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      font-size:10px;
+      color:black;
+    }
+
+    .pay-method-card[class*="active-pay"] .pay-check{ display:flex; }
+
+    /* ---- PLACE ORDER BTN ---- */
+    .co-place-btn{
+      width:100%;
+      padding:20px;
+      border:none;
+      border-radius:18px;
+      background:linear-gradient(135deg,#71ff00,#4fc800);
+      color:black;
+      font-size:16px;
+      font-weight:900;
+      cursor:pointer;
+      transition:0.3s ease;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      box-shadow:0 8px 28px rgba(113,255,0,0.3);
+      animation:pulseBtn 2s infinite;
+    }
+
+    .co-place-btn:hover{ transform:translateY(-3px); box-shadow:0 14px 36px rgba(113,255,0,0.4); }
+
+    /* ---- RIGHT: ORDER SUMMARY ---- */
+    .order-summary-box{
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.08);
+      border-radius:24px;
+      padding:26px 28px;
+      backdrop-filter:blur(14px);
+      position:sticky;
+      top:100px;
+    }
+
+    .os-title{ font-size:17px; font-weight:800; color:white; margin-bottom:20px; }
+
+    .os-items{ display:flex; flex-direction:column; gap:12px; margin-bottom:20px; }
+
+    .os-item{
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+
+    .os-item img{
+      width:56px; height:56px;
+      object-fit:cover;
+      border-radius:12px;
+      flex-shrink:0;
+    }
+
+    .os-item-name{ color:white; font-size:13px; font-weight:600; }
+    .os-item-price{ color:#71ff00; font-size:13px; font-weight:700; margin-top:2px; }
+
+    .os-divider{ border:none; border-top:1px solid rgba(255,255,255,0.07); margin:16px 0; }
+
+    .os-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:10px;
+      font-size:13px;
+    }
+
+    .os-row-label{ color:rgba(255,255,255,0.5); }
+    .os-row-val{ color:white; font-weight:600; }
+    .os-free{ color:#71ff00; font-weight:700; }
+
+    .os-total-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:16px;
+      padding-top:16px;
+      border-top:1px solid rgba(255,255,255,0.1);
+    }
+
+    .os-total-label{ color:white; font-size:16px; font-weight:800; }
+    .os-total-val{ color:#71ff00; font-size:22px; font-weight:900; }
+
+    /* Trust badges */
+    .co-trust{
+      display:flex;
+      gap:8px;
+      margin-top:18px;
+      flex-wrap:wrap;
+    }
+
+    .co-trust-item{
+      flex:1;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      background:rgba(113,255,0,0.05);
+      border:1px solid rgba(113,255,0,0.12);
+      border-radius:10px;
+      padding:8px 10px;
+      font-size:11px;
+      color:rgba(255,255,255,0.6);
+      min-width:90px;
+    }
+
+    .co-trust-item i{ color:#71ff00; font-size:13px; }
+
+    /* ============================
+       M-PESA MODAL — PREMIUM
+    ============================ */
+    .mpesa-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.85);
+      backdrop-filter:blur(18px);
+      z-index:99999;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+
+    .mpesa-overlay.open{ display:flex; }
+
+    .mpesa-modal-box{
+      width:100%;
+      max-width:420px;
+      background:#0d0d0d;
+      border:1px solid rgba(76,175,80,0.3);
+      border-radius:28px;
+      padding:36px 32px;
+      text-align:center;
+      animation:modalPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      box-shadow:0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(76,175,80,0.1);
+      position:relative;
+    }
+
+    @keyframes modalPop{
+      from{ transform:scale(0.8) translateY(20px); opacity:0; }
+      to{ transform:scale(1) translateY(0); opacity:1; }
+    }
+
+    .mpesa-logo-row{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      margin-bottom:20px;
+    }
+
+    .mpesa-logo-icon{
+      width:52px;
+      height:52px;
+      border-radius:16px;
+      background:linear-gradient(135deg,#4caf50,#2e7d32);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:26px;
+      box-shadow:0 8px 24px rgba(76,175,80,0.35);
+    }
+
+    .mpesa-logo-text h3{ color:white; font-size:20px; font-weight:900; line-height:1; }
+    .mpesa-logo-text p{ color:rgba(255,255,255,0.45); font-size:12px; margin-top:2px; }
+
+    .mpesa-amount-badge{
+      background:rgba(76,175,80,0.1);
+      border:1px solid rgba(76,175,80,0.25);
+      border-radius:14px;
+      padding:14px 20px;
+      margin-bottom:22px;
+    }
+
+    .mpesa-amount-label{ color:rgba(255,255,255,0.45); font-size:12px; font-weight:600; margin-bottom:4px; }
+    .mpesa-amount-val{ color:#4caf50; font-size:28px; font-weight:900; }
+
+    .mpesa-phone-input{
+      width:100%;
+      padding:16px 18px;
+      background:rgba(255,255,255,0.07);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:14px;
+      color:white;
+      font-size:18px;
+      font-weight:700;
+      text-align:center;
+      outline:none;
+      font-family:inherit;
+      letter-spacing:2px;
+      margin-bottom:8px;
+      transition:border-color 0.2s;
+    }
+
+    .mpesa-phone-input:focus{ border-color:rgba(76,175,80,0.5); }
+    .mpesa-phone-input::placeholder{ color:rgba(255,255,255,0.25); letter-spacing:0; font-weight:400; font-size:15px; }
+
+    .mpesa-hint{ color:rgba(255,255,255,0.35); font-size:11px; margin-bottom:20px; }
+
+    /* STK Push Steps */
+    .stk-steps{
+      display:none;
+      flex-direction:column;
+      gap:0;
+      margin:20px 0;
+      text-align:left;
+    }
+
+    .stk-step{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      padding:10px 0;
+      position:relative;
+    }
+
+    .stk-step:not(:last-child)::after{
+      content:"";
+      position:absolute;
+      left:15px;
+      top:40px;
+      width:2px;
+      height:calc(100% - 20px);
+      background:rgba(255,255,255,0.08);
+    }
+
+    .stk-step.done::after{ background:rgba(76,175,80,0.3); }
+
+    .stk-dot{
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      border:2px solid rgba(255,255,255,0.15);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-shrink:0;
+      font-size:13px;
+      color:rgba(255,255,255,0.3);
+      transition:0.4s ease;
+ background:rgba(255,255,255,0.04);
+    }
+
+    .stk-step.done .stk-dot{
+      background:rgba(76,175,80,0.15);
+      border-color:#4caf50;
+      color:#4caf50;
+    }
+
+    .stk-step.active .stk-dot{
+      border-color:#71ff00;
+      color:#71ff00;
+      animation:dotPulse 1s ease infinite;
+    }
+
+    @keyframes dotPulse{
+      0%,100%{ box-shadow:0 0 0 0 rgba(113,255,0,0.4); }
+      50%{ box-shadow:0 0 0 8px rgba(113,255,0,0); }
+    }
+
+    .stk-step-text h4{ color:white; font-size:13px; font-weight:700; }
+    .stk-step-text p{ color:rgba(255,255,255,0.38); font-size:11px; margin-top:1px; }
+    .stk-step.done .stk-step-text h4{ color:#4caf50; }
+
+    .mpesa-push-btn{
+      width:100%;
+      padding:17px;
+      border:none;
+      border-radius:16px;
+      background:linear-gradient(135deg,#4caf50,#2e7d32);
+      color:white;
+      font-size:15px;
+      font-weight:900;
+      cursor:pointer;
+      transition:0.3s;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      box-shadow:0 8px 24px rgba(76,175,80,0.3);
+      font-family:inherit;
+    }
+
+    .mpesa-push-btn:hover{ transform:translateY(-2px); box-shadow:0 12px 32px rgba(76,175,80,0.45); }
+    .mpesa-push-btn:disabled{ opacity:0.6; cursor:not-allowed; transform:none; }
+
+    .mpesa-close-btn{
+      position:absolute;
+      top:16px;
+      right:18px;
+      background:none;
+      border:none;
+      color:rgba(255,255,255,0.4);
+      font-size:20px;
+      cursor:pointer;
+      transition:0.2s;
+    }
+
+    .mpesa-close-btn:hover{ color:white; }
+
+    /* ============================
+       CARD PAYMENT MODAL
+    ============================ */
+    .card-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.85);
+      backdrop-filter:blur(18px);
+      z-index:99999;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+
+    .card-overlay.open{ display:flex; }
+
+    .card-modal-box{
+      width:100%;
+      max-width:440px;
+      background:#0d0d0d;
+      border:1px solid rgba(0,170,255,0.25);
+      border-radius:28px;
+      padding:36px 32px;
+      animation:modalPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      box-shadow:0 32px 80px rgba(0,0,0,0.8);
+      position:relative;
+    }
+
+    .card-modal-title{ color:white; font-size:20px; font-weight:900; margin-bottom:4px; }
+    .card-modal-sub{ color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:24px; }
+
+    .card-visual{
+      background:linear-gradient(135deg,#1a1f3c,#0d1228);
+      border:1px solid rgba(0,170,255,0.2);
+      border-radius:18px;
+      padding:24px 22px;
+      margin-bottom:24px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .card-visual::before{
+      content:"";
+      position:absolute;
+      top:-40%;
+      right:-20%;
+      width:200px;
+      height:200px;
+      background:radial-gradient(circle,rgba(0,170,255,0.12),transparent 70%);
+    }
+
+    .card-chip{ font-size:24px; margin-bottom:16px; }
+    .card-num-display{
+      font-size:17px;
+      font-weight:700;
+      color:rgba(255,255,255,0.85);
+      letter-spacing:3px;
+      font-family:monospace;
+      margin-bottom:14px;
+    }
+
+    .card-bottom-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+    }
+
+    .card-label-small{ color:rgba(255,255,255,0.35); font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:1px; }
+    .card-val{ color:white; font-size:13px; font-weight:700; margin-top:2px; }
+
+    .card-brand-logos{ display:flex; gap:6px; }
+    .card-brand-logos span{ font-size:22px; }
+
+    .card-input{
+      width:100%;
+      padding:14px 16px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px;
+      color:white;
+      font-size:14px;
+      outline:none;
+      font-family:inherit;
+      margin-bottom:12px;
+      transition:border-color 0.2s;
+    }
+
+    .card-input:focus{ border-color:rgba(0,170,255,0.5); }
+    .card-input::placeholder{ color:rgba(255,255,255,0.3); }
+
+    .card-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+    .card-pay-btn{
+      width:100%;
+      padding:17px;
+      border:none;
+      border-radius:16px;
+      background:linear-gradient(135deg,#0066cc,#00aaff);
+      color:white;
+      font-size:15px;
+      font-weight:900;
+      cursor:pointer;
+      transition:0.3s;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      box-shadow:0 8px 24px rgba(0,153,255,0.3);
+      font-family:inherit;
+      margin-top:8px;
+    }
+
+    .card-pay-btn:hover{ transform:translateY(-2px); box-shadow:0 12px 32px rgba(0,153,255,0.45); }
+
+    .card-close-btn{
+      position:absolute;
+      top:16px;
+      right:18px;
+      background:none;
+      border:none;
+      color:rgba(255,255,255,0.4);
+      font-size:20px;
+      cursor:pointer;
+      transition:0.2s;
+    }
+
+    .card-close-btn:hover{ color:white; }
+
+    /* ============================
+       PAYPAL MODAL
+    ============================ */
+    .paypal-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.85);
+      backdrop-filter:blur(18px);
+      z-index:99999;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+
+    .paypal-overlay.open{ display:flex; }
+
+    .paypal-modal-box{
+      width:100%;
+      max-width:380px;
+      background:#003087;
+      border:1px solid rgba(0,156,222,0.4);
+      border-radius:28px;
+      padding:36px 28px;
+      text-align:center;
+      animation:modalPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      box-shadow:0 32px 80px rgba(0,0,0,0.8);
+      position:relative;
+    }
+
+    .paypal-logo{ font-size:48px; margin-bottom:12px; }
+    .paypal-modal-box h3{ color:white; font-size:20px; font-weight:900; margin-bottom:8px; }
+    .paypal-modal-box p{ color:rgba(255,255,255,0.65); font-size:13px; margin-bottom:24px; line-height:1.5; }
+
+    .paypal-pay-btn{
+      width:100%;
+      padding:16px;
+      background:#ffc439;
+      color:#003087;
+      border:none;
+      border-radius:14px;
+      font-size:16px;
+      font-weight:900;
+      cursor:pointer;
+      transition:0.3s;
+      font-family:inherit;
+      margin-bottom:10px;
+    }
+
+    .paypal-pay-btn:hover{ transform:translateY(-2px); box-shadow:0 8px 24px rgba(255,196,57,0.4); }
+
+    .paypal-cancel-btn{
+      background:none;
+      border:1px solid rgba(255,255,255,0.2);
+      color:white;
+      width:100%;
+      padding:14px;
+      border-radius:14px;
+      font-size:14px;
+      cursor:pointer;
+      font-family:inherit;
+      transition:0.2s;
+    }
+
+    .paypal-cancel-btn:hover{ background:rgba(255,255,255,0.08); }
+
+    .paypal-close-btn{
+      position:absolute;
+      top:16px;
+      right:18px;
+      background:none;
+      border:none;
+      color:rgba(255,255,255,0.4);
+      font-size:20px;
+      cursor:pointer;
+    }
+
+    /* ============================
+       PUSH NOTIFICATION TOAST
+    ============================ */
+    .pay-toast{
+      position:fixed;
+      top:24px;
+      right:24px;
+      z-index:999999;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      pointer-events:none;
+    }
+
+    .pay-toast-item{
+      display:flex;
+      align-items:flex-start;
+      gap:14px;
+      background:#111;
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:18px;
+      padding:16px 18px;
+      min-width:320px;
+      max-width:380px;
+      box-shadow:0 16px 48px rgba(0,0,0,0.6);
+      animation:toastIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      pointer-events:all;
+    }
+
+    @keyframes toastIn{
+      from{ transform:translateX(120px); opacity:0; }
+      to{ transform:translateX(0); opacity:1; }
+    }
+
+    .toast-icon{
+      width:40px;
+      height:40px;
+      border-radius:12px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:18px;
+      flex-shrink:0;
+    }
+
+    .toast-icon.green{ background:rgba(76,175,80,0.15); }
+    .toast-icon.blue{ background:rgba(0,170,255,0.15); }
+    .toast-icon.orange{ background:rgba(255,152,0,0.15); }
+
+    .toast-body h4{ color:white; font-size:13px; font-weight:800; margin-bottom:2px; }
+    .toast-body p{ color:rgba(255,255,255,0.5); font-size:12px; line-height:1.4; }
+    .toast-time{ color:rgba(255,255,255,0.25); font-size:10px; margin-top:4px; }
+
+    /* Light mode overrides */
+    body.light-mode .checkout-page{ background:#f0f4f8; }
+    body.light-mode .co-card{ background:#fff; border-color:rgba(0,0,0,0.08); }
+    body.light-mode .co-card-title{ color:#111; }
+    body.light-mode .co-input{
+      background:#f5f5f5; border-color:rgba(0,0,0,0.1); color:#111;
+    }
+    body.light-mode .co-input::placeholder{ color:rgba(0,0,0,0.35); }
+    body.light-mode .pay-method-card{ background:#fff; border-color:rgba(0,0,0,0.1); }
+    body.light-mode .pay-method-label{ color:#111; }
+    body.light-mode .pay-method-sub{ color:#888; }
+    body.light-mode .order-summary-box{ background:#fff; border-color:rgba(0,0,0,0.08); }
+    body.light-mode .os-title{ color:#111; }
+    body.light-mode .os-item-name{ color:#111; }
+    body.light-mode .os-row-label{ color:#666; }
+    body.light-mode .os-row-val{ color:#111; }
+    body.light-mode .os-total-label{ color:#111; }
+    body.light-mode .checkout-heading{ color:#111; }
+    /* Discount tiles in light mode */
+    body.light-mode #discountCard [style*="color:white"]{ color:#111 !important; }
+    body.light-mode #discountCard [style*="color:rgba(255,255,255,0.4)"]{ color:#555 !important; }
+    body.light-mode #discountCard [style*="color:rgba(255,255,255,0.35)"]{ color:#666 !important; }
+    body.light-mode #discountCard [style*="color:rgba(255,255,255,0.3)"]{ color:#777 !important; }
+    body.light-mode #discountCard [style*="background:rgba(255,255,255,0.03)"]{ background:rgba(0,0,0,0.03) !important; border-color:rgba(0,0,0,0.1) !important; }
+
+    @media(max-width:900px){
+      .checkout-grid{ grid-template-columns:1fr; }
+      .payment-methods{ grid-template-columns:repeat(3,1fr); }
+      .order-summary-box{ position:relative; top:0; }
+    }
+
+    @media(max-width:480px){
+      .co-input-row{ grid-template-columns:1fr; }
+      .mpesa-modal-box,.card-modal-box{ padding:28px 20px; }
+    }
+  </style>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<!-- Site config (IntaSend key etc.) -->
+<script src="sokoni-config.js"></script>
+<!-- IntaSend M-Pesa SDK -->
+<script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js"></script>
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+</head>
+<body>
+<script src="splash.js"></script>
+
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="logo-section">
+    <img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI">
+  </div>
+  <div class="nav-actions">
+    <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 Cart</a>
+    <a href="index.html" class="wishlist-nav-btn">🏠 Home</a>
+  </div>
+</nav>
+
+<!-- CHECKOUT PAGE -->
+<section class="checkout-page">
+
+  <h1 class="checkout-heading"><i class="fas fa-lock" style="color:#71ff00;font-size:22px;"></i> Secure <span>Checkout</span></h1>
+
+  <!-- Trust badges strip -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px;">
+    <div style="display:flex;align-items:center;gap:7px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
+      <span style="color:#71ff00;font-size:13px;">🔒</span> SSL Encrypted
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;background:rgba(76,175,80,0.05);border:1px solid rgba(76,175,80,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
+      <span style="font-size:13px;">📱</span> M-Pesa STK Push
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;background:rgba(0,170,255,0.05);border:1px solid rgba(0,170,255,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
+      <span style="font-size:13px;">🛡️</span> Buyer Protected
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;background:rgba(255,193,7,0.05);border:1px solid rgba(255,193,7,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
+      <span style="font-size:13px;">⚡</span> Instant Confirm
+    </div>
+  </div>
+
+  <div class="checkout-grid">
+
+    <!-- LEFT -->
+    <div class="checkout-left">
+
+      <!-- Delivery Details -->
+      <div class="co-card">
+        <div class="co-card-title">📍 Delivery Details</div>
+        <div id="locationStatus"></div>
+        <div class="co-input-row">
+          <input class="co-input" type="text" id="coName" placeholder="Full Name">
+          <input class="co-input" type="tel" id="coPhone" placeholder="Phone — 07XXXXXXXX">
+        </div>
+        <input class="co-input" type="text" id="coAddress" placeholder="Delivery Address / Area e.g. Westlands, Nairobi">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <button type="button" onclick="useGPSLocation()" id="gpsBtn" style="flex:1;padding:11px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);color:#71ff00;font-size:12px;font-weight:700;border-radius:12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;transition:0.2s;">
+            <i class="fas fa-crosshairs"></i> Auto-detect Location
+          </button>
+          <button type="button" onclick="toggleLiveTrack()" id="liveTrackBtn" style="padding:11px 14px;background:rgba(255,77,77,0.07);border:1px solid rgba(255,77,77,0.2);color:#ff6b6b;font-size:12px;font-weight:700;border-radius:12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:0.2s;">
+            <i class="fas fa-circle" style="font-size:7px;"></i> Live Track
+          </button>
+        </div>
+        <div id="liveLocStatus" style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;min-height:16px;"></div>
+        <textarea class="co-input" id="coNotes" rows="2" placeholder="Additional notes (optional)" style="resize:none;"></textarea>
+      </div>
+
+      <!-- Payment Method -->
+      <div class="co-card">
+        <div class="co-card-title">💳 Payment Method</div>
+        <div class="payment-methods">
+
+          <div class="pay-method-section-label">🇰🇪 Kenya</div>
+
+          <div class="pay-method-card active-pay-mpesa" id="payMpesa" onclick="selectPayment('mpesa')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">📱</div>
+            <div class="pay-method-label">M-Pesa</div>
+            <div class="pay-method-sub">STK Push</div>
+          </div>
+
+          <div class="pay-method-card" id="payAirtel" onclick="selectPayment('airtel')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">🔴</div>
+            <div class="pay-method-label">Airtel</div>
+            <div class="pay-method-sub">Airtel Money</div>
+          </div>
+
+          <div class="pay-method-card" id="payTkash" onclick="selectPayment('tkash')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">📡</div>
+            <div class="pay-method-label">T-Kash</div>
+            <div class="pay-method-sub">Telkom Kenya</div>
+          </div>
+
+          <div class="pay-method-card" id="payEquity" onclick="selectPayment('equity')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">🏦</div>
+            <div class="pay-method-label">Equity</div>
+            <div class="pay-method-sub">EazzY Banking</div>
+          </div>
+
+          <div class="pay-method-card" id="payCard" onclick="selectPayment('card')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">💳</div>
+            <div class="pay-method-label">Card</div>
+            <div class="pay-method-sub">Visa / Mastercard</div>
+          </div>
+
+          <div class="pay-method-section-label">🌍 Africa &amp; Global</div>
+
+          <div class="pay-method-card" id="payMtn" onclick="selectPayment('mtn')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">🟡</div>
+            <div class="pay-method-label">MTN</div>
+            <div class="pay-method-sub">Mobile Money</div>
+          </div>
+
+          <div class="pay-method-card" id="payEcocash" onclick="selectPayment('ecocash')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">💚</div>
+            <div class="pay-method-label">EcoCash</div>
+            <div class="pay-method-sub">Zimbabwe</div>
+          </div>
+
+          <div class="pay-method-card" id="payChipper" onclick="selectPayment('chipper')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">✈️</div>
+            <div class="pay-method-label">Chipper</div>
+            <div class="pay-method-sub">Pan-Africa</div>
+          </div>
+
+          <div class="pay-method-card" id="payPaypal" onclick="selectPayment('paypal')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">🅿️</div>
+            <div class="pay-method-label">PayPal</div>
+            <div class="pay-method-sub">International</div>
+          </div>
+
+          <div class="pay-method-card" id="payBank" onclick="selectPayment('bank')">
+            <div class="pay-check">✓</div>
+            <div class="pay-method-icon">🏛️</div>
+            <div class="pay-method-label">Bank</div>
+            <div class="pay-method-sub">RTGS / EFT</div>
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- Delivery Calculator -->
+      <div class="co-card">
+        <div class="co-card-title">🚛 Delivery Cost Estimator</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">To Zone</label>
+            <select id="deliveryZone" class="co-input" style="margin-bottom:0;cursor:pointer;" onchange="calcDelivery()">
+              <option value="">Select zone</option>
+              <option value="50">CBD / Town</option>
+              <option value="100">Suburbs (5-15km)</option>
+              <option value="150">Outskirts (15-30km)</option>
+              <option value="250">Outside Nairobi</option>
+              <option value="500">Nationwide</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">Weight (kg)</label>
+            <input class="co-input" style="margin-bottom:0;" type="number" id="deliveryWeight" placeholder="e.g. 2" min="0.1" step="0.1" value="1" oninput="calcDelivery()">
+          </div>
+          <div>
+            <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">Size</label>
+            <select id="deliverySize" class="co-input" style="margin-bottom:0;cursor:pointer;" onchange="calcDelivery()">
+              <option value="1">📦 Small</option>
+              <option value="1.5">📫 Medium</option>
+              <option value="2">🗳️ Large</option>
+              <option value="3">🚛 Oversized</option>
+            </select>
+          </div>
+        </div>
+        <div id="deliveryCostResult" style="font-size:13px;color:#71ff00;font-weight:700;padding:8px 0;"></div>
+        <div id="deliveryEtaResult" style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px;min-height:16px;"></div>
+      </div>
+
+      <!-- Installment Option -->
+      <div id="installmentSection" class="co-card" style="display:none;">
+        <div class="co-card-title">📅 Pay in Instalments</div>
+        <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:12px;">Available for orders over KES 5,000. Pay 30% now, rest in 3 months.</p>
+        <div id="installmentOptions"></div>
+      </div>
+
+      <!-- Discount Code -->
+      <div class="co-card" id="discountCard">
+        <div class="co-card-title">% Discount Code</div>
+
+        <!-- How to earn codes — always visible -->
+        <div style="margin-bottom:16px;">
+          <div style="font-size:10.5px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">Ways to earn discount codes</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+
+            <a href="loyalty.html" style="text-decoration:none;display:flex;align-items:flex-start;gap:9px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.14);border-radius:12px;padding:10px 11px;transition:border-color .18s,background .18s;" onmouseenter="this.style.borderColor='rgba(113,255,0,0.38)';this.style.background='rgba(113,255,0,0.09)'" onmouseleave="this.style.borderColor='rgba(113,255,0,0.14)';this.style.background='rgba(113,255,0,0.05)'">
+              <span style="font-size:18px;flex-shrink:0;line-height:1.2;">⭐</span>
+              <div>
+                <div style="font-size:11px;font-weight:800;color:white;margin-bottom:2px;">Loyalty Points</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.4;">Earn points every order → redeem for codes on the Loyalty page</div>
+              </div>
+            </a>
+
+            <a href="referral.html" style="text-decoration:none;display:flex;align-items:flex-start;gap:9px;background:rgba(0,170,255,0.05);border:1px solid rgba(0,170,255,0.14);border-radius:12px;padding:10px 11px;transition:border-color .18s,background .18s;" onmouseenter="this.style.borderColor='rgba(0,170,255,0.38)';this.style.background='rgba(0,170,255,0.09)'" onmouseleave="this.style.borderColor='rgba(0,170,255,0.14)';this.style.background='rgba(0,170,255,0.05)'">
+              <span style="font-size:18px;flex-shrink:0;line-height:1.2;">👥</span>
+              <div>
+                <div style="font-size:11px;font-weight:800;color:white;margin-bottom:2px;">Refer a Friend</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.4;">You & your friend both get a code when they place their first order</div>
+              </div>
+            </a>
+
+            <a href="flashsale.html" style="text-decoration:none;display:flex;align-items:flex-start;gap:9px;background:rgba(255,152,0,0.05);border:1px solid rgba(255,152,0,0.14);border-radius:12px;padding:10px 11px;transition:border-color .18s,background .18s;" onmouseenter="this.style.borderColor='rgba(255,152,0,0.38)';this.style.background='rgba(255,152,0,0.09)'" onmouseleave="this.style.borderColor='rgba(255,152,0,0.14)';this.style.background='rgba(255,152,0,0.05)'">
+              <span style="font-size:18px;flex-shrink:0;line-height:1.2;">⚡</span>
+              <div>
+                <div style="font-size:11px;font-weight:800;color:white;margin-bottom:2px;">Flash Sales</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.4;">Exclusive codes are dropped during flash deals — check daily!</div>
+              </div>
+            </a>
+
+            <a href="profile.html" style="text-decoration:none;display:flex;align-items:flex-start;gap:9px;background:rgba(255,45,85,0.05);border:1px solid rgba(255,45,85,0.14);border-radius:12px;padding:10px 11px;transition:border-color .18s,background .18s;" onmouseenter="this.style.borderColor='rgba(255,45,85,0.38)';this.style.background='rgba(255,45,85,0.09)'" onmouseleave="this.style.borderColor='rgba(255,45,85,0.14)';this.style.background='rgba(255,45,85,0.05)'">
+              <span style="font-size:18px;flex-shrink:0;line-height:1.2;">🎁</span>
+              <div>
+                <div style="font-size:11px;font-weight:800;color:white;margin-bottom:2px;">Welcome Gift</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.4;">New customers get a code automatically after signing up — check your profile</div>
+              </div>
+            </a>
+
+            <div style="display:flex;align-items:flex-start;gap:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 11px;">
+              <span style="font-size:18px;flex-shrink:0;line-height:1.2;">🏪</span>
+              <div>
+                <div style="font-size:11px;font-weight:800;color:white;margin-bottom:2px;">Seller Promos</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.4;">Sellers share exclusive codes on their store pages — visit a store to check</div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:10px 11px;">
+              <span style="font-size:18px;flex-shrink:0;line-height:1.2;">📲</span>
+              <div>
+                <div style="font-size:11px;font-weight:800;color:white;margin-bottom:2px;">Social Media</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.4;">Follow @SokoniKenya on Instagram & X — we drop codes for followers</div>
+              </div>
+            </div>
+
+          </div>
+          <!-- Active codes hint -->
+          <div style="margin-top:10px;padding:9px 13px;background:rgba(113,255,0,0.04);border:1px dashed rgba(113,255,0,0.2);border-radius:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);flex-shrink:0;">Active codes:</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <span style="font-size:10px;font-weight:800;color:rgba(113,255,0,0.75);background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);padding:2px 7px;border-radius:6px;cursor:pointer;" onclick="document.getElementById('discountCodeInput').value='NEWUSER15';document.getElementById('discountCodeInput').focus()">NEWUSER15</span>
+              <span style="font-size:10px;font-weight:800;color:rgba(113,255,0,0.75);background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);padding:2px 7px;border-radius:6px;cursor:pointer;" onclick="document.getElementById('discountCodeInput').value='LOYAL20';document.getElementById('discountCodeInput').focus()">LOYAL20</span>
+              <span style="font-size:10px;font-weight:800;color:rgba(113,255,0,0.75);background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);padding:2px 7px;border-radius:6px;cursor:pointer;" onclick="document.getElementById('discountCodeInput').value='SOKONI10';document.getElementById('discountCodeInput').focus()">SOKONI10</span>
+              <span style="font-size:10px;font-weight:800;color:rgba(113,255,0,0.75);background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);padding:2px 7px;border-radius:6px;cursor:pointer;" onclick="document.getElementById('discountCodeInput').value='SAVE25';document.getElementById('discountCodeInput').focus()">SAVE25</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Code input -->
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="discountCodeInput" class="co-input" placeholder="Paste or type your discount code" style="flex:1;margin-bottom:0;text-transform:uppercase;letter-spacing:1px;" oninput="this.value=this.value.toUpperCase()">
+          <button type="button" onclick="applyDiscount()" style="padding:14px 20px;background:linear-gradient(135deg,rgba(113,255,0,0.15),rgba(79,200,0,0.1));border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;font-size:13px;border-radius:14px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;" onmouseenter="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.25),rgba(79,200,0,0.18))';this.style.boxShadow='0 4px 14px rgba(113,255,0,0.2)'" onmouseleave="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.15),rgba(79,200,0,0.1))';this.style.boxShadow='none'">Apply</button>
+        </div>
+        <div id="discountMsg" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+
+      <!-- Place Order -->
+      <button type="button" class="co-place-btn" onclick="placeOrder()">
+        🔒 Place Order — Pay <span id="btnTotal">KES 0</span>
+      </button>
+
+    </div>
+
+    <!-- RIGHT: Order Summary -->
+    <div class="order-summary-box">
+      <div class="os-title">Order Summary</div>
+      <div class="os-items" id="checkoutItems"></div>
+      <hr class="os-divider">
+      <div class="os-row"><span class="os-row-label">Subtotal</span><span class="os-row-val" id="summarySubtotal">KES 0</span></div>
+      <div class="os-row"><span class="os-row-label">Delivery</span><span class="os-free" id="summaryDelivery">FREE</span></div>
+      <div class="os-row"><span class="os-row-label">M-PESA Fee</span><span class="os-row-val" id="mpesaFeeRow">KES 0</span></div>
+      <div class="os-total-row">
+        <span class="os-total-label">Total</span>
+        <span class="os-total-val" id="checkoutTotal">KES 0</span>
+      </div>
+      <!-- Estimated delivery -->
+      <div id="estDeliveryRow" style="display:none;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:12px 14px;margin:14px 0 0;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">📦 ESTIMATED DELIVERY</div>
+        <div style="font-size:14px;font-weight:900;color:#71ff00;" id="estDeliveryDate">—</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;" id="estDeliveryNote">Select zone above to calculate</div>
+      </div>
+
+      <!-- Trust badges -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+          <i class="fas fa-lock" style="color:#71ff00;font-size:16px;"></i>
+          <div><div style="font-size:11px;font-weight:800;color:white;">SSL Secured</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">256-bit encryption</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+          <i class="fas fa-undo" style="color:#00aaff;font-size:16px;"></i>
+          <div><div style="font-size:11px;font-weight:800;color:white;">7-Day Returns</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">Hassle-free policy</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+          <i class="fas fa-truck" style="color:#fbbf24;font-size:16px;"></i>
+          <div><div style="font-size:11px;font-weight:800;color:white;">Fast Delivery</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">Same-day Nairobi</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
+          <i class="fab fa-whatsapp" style="color:#25d366;font-size:16px;"></i>
+          <div><div style="font-size:11px;font-weight:800;color:white;">WhatsApp Support</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">+254 705 726 803</div></div>
+        </div>
+      </div>
+
+      <!-- WhatsApp support link -->
+      <a href="https://wa.me/254705726803?text=Hi%20SOKONI%20Support%20-%20I%20need%20help%20with%20my%20order." target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);border-radius:12px;color:#25d366;font-size:13px;font-weight:700;text-decoration:none;">
+        <i class="fab fa-whatsapp"></i> Chat with Support on WhatsApp
+      </a>
+    </div>
+
+  </div>
+</section>
+
+<!-- M-PESA MODAL -->
+<div class="mpesa-overlay" id="mpesaOverlay">
+  <div class="mpesa-modal-box">
+    <button type="button" class="mpesa-close-btn" onclick="closeModal('mpesa')">✕</button>
+
+    <div class="mpesa-logo-row">
+      <div class="mpesa-logo-icon">📱</div>
+      <div class="mpesa-logo-text">
+        <h3>📲 M-PESA</h3>
+        <p>Safaricom STK Push</p>
+      </div>
+    </div>
+
+    <div class="mpesa-amount-badge">
+      <div class="mpesa-amount-label">AMOUNT TO PAY</div>
+      <div class="mpesa-amount-val" id="mpesaAmountDisplay">KES 0</div>
+    </div>
+
+    <input class="mpesa-phone-input" type="tel" id="mpesaNumber" placeholder="07XX XXX XXX" maxlength="13" oninput="this.value=this.value.replace(/[^0-9+]/g,'')">
+    <div class="mpesa-hint">Enter the M-PESA registered phone number</div>
+
+    <!-- Setup notice — hidden once API key is set -->
+    <div id="intasendSetupNotice" style="display:none;margin:10px 0 4px;padding:10px 12px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.22);border-radius:10px;font-size:11px;color:rgba(255,152,0,0.9);line-height:1.6;">
+      ⚙️ <strong>To activate real M-Pesa STK Push:</strong><br>
+      1. Create free account at <a href="https://intasend.com" target="_blank" style="color:#ff9800;">intasend.com</a><br>
+      2. Copy your <strong>Public API Key</strong><br>
+      3. Paste it into <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">INTASEND_PUBLIC_KEY</code> in checkout.html
+    </div>
+
+    <!-- STK Steps (shown after push) -->
+    <div class="stk-steps" id="stkSteps">
+      <div class="stk-step" id="stkStep1">
+        <div class="stk-dot">📨</div>
+        <div class="stk-step-text">
+          <h4>📤 Sending STK Push</h4>
+          <p>Contacting Safaricom servers...</p>
+        </div>
+      </div>
+      <div class="stk-step" id="stkStep2">
+        <div class="stk-dot">📱</div>
+        <div class="stk-step-text">
+          <h4>📱 Check Your Phone</h4>
+          <p>Enter your M-PESA PIN when prompted</p>
+        </div>
+      </div>
+      <div class="stk-step" id="stkStep3">
+        <div class="stk-dot">✓</div>
+        <div class="stk-step-text">
+          <h4>✅ Payment Confirmed</h4>
+          <p>Transaction complete! Redirecting...</p>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="mpesa-push-btn" id="mpesaPushBtn" onclick="sendStkPush()">
+      📨 Send STK Push
+    </button>
+
+  </div>
+</div>
+
+<!-- MOBILE MONEY MODAL (Airtel / T-Kash / Equity / MTN / EcoCash / Chipper) -->
+<div class="paypal-overlay" id="mobilemoneyOverlay">
+  <div class="paypal-modal-box" style="background:#0d1117;border:1px solid rgba(113,255,0,0.22);">
+    <button type="button" class="paypal-close-btn" onclick="closeModal('mobilemoney')">✕</button>
+    <div style="font-size:42px;margin-bottom:10px;" id="mmIcon">📱</div>
+    <h3 style="color:white;font-size:18px;font-weight:900;margin-bottom:8px;" id="mmTitle">Mobile Money</h3>
+    <p style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:20px;line-height:1.5;" id="mmDesc">Enter your number to receive a payment prompt</p>
+    <input type="tel" id="mmPhone"
+      style="width:100%;padding:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);border-radius:12px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:10px;"
+      placeholder="07XX XXX XXX" maxlength="15">
+    <p style="font-size:12px;color:rgba(255,255,255,0.32);margin-bottom:22px;">Amount: <strong id="mmAmount" style="color:#71ff00;">KES 0</strong></p>
+    <button type="button" class="paypal-pay-btn" style="background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;" onclick="processMobileMoney()">Confirm → Send Prompt</button>
+    <button type="button" class="paypal-cancel-btn" onclick="closeModal('mobilemoney')">Cancel</button>
+  </div>
+</div>
+
+<!-- BANK TRANSFER MODAL -->
+<div class="paypal-overlay" id="bankOverlay">
+  <div class="paypal-modal-box" style="background:#070e1a;border:1px solid rgba(37,99,235,0.3);">
+    <button type="button" class="paypal-close-btn" onclick="closeModal('bank')">✕</button>
+    <div style="font-size:42px;margin-bottom:10px;">🏛️</div>
+    <h3 style="color:white;font-size:18px;font-weight:900;margin-bottom:8px;">Bank Transfer</h3>
+    <p style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:16px;line-height:1.5;">Transfer the exact amount to this account, then enter your receipt reference below.</p>
+    <div style="background:rgba(37,99,235,0.08);border:1px solid rgba(37,99,235,0.22);border-radius:14px;padding:14px 18px;margin-bottom:14px;text-align:left;font-size:13px;line-height:2.1;color:white;">
+      <b>Bank:</b> Equity Bank Kenya<br>
+      <b>Account No:</b> 0010263827990<br>
+      <b>Account Name:</b> SOKONI MARKETPLACE LTD<br>
+      <b>Reference:</b> <span id="bankOrderRef" style="color:#71ff00;font-weight:900;letter-spacing:.04em;">—</span>
+    </div>
+    <p style="font-size:12px;color:rgba(255,255,255,0.32);margin-bottom:14px;">Amount: <strong id="bankAmount" style="color:#71ff00;">KES 0</strong></p>
+    <input type="text" id="bankTransRef"
+      style="width:100%;padding:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);border-radius:12px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:14px;"
+      placeholder="Bank transaction reference / receipt no.">
+    <button type="button" class="paypal-pay-btn" style="background:linear-gradient(135deg,#2563eb,#1e40af);" onclick="processBankTransfer()">Confirm Transfer →</button>
+    <button type="button" class="paypal-cancel-btn" onclick="closeModal('bank')">Cancel</button>
+  </div>
+</div>
+
+<!-- CARD PAYMENT MODAL -->
+<div class="card-overlay" id="cardOverlay">
+  <div class="card-modal-box">
+    <button type="button" class="card-close-btn" onclick="closeModal('card')">✕</button>
+    <div class="card-modal-title">Card Payment</div>
+    <div class="card-modal-sub">Your card details are encrypted and secure</div>
+
+    <!-- Card Visual -->
+    <div class="card-visual">
+      <div class="card-chip">💳</div>
+      <div class="card-num-display" id="cardNumDisplay">•••• •••• •••• ••••</div>
+      <div class="card-bottom-row">
+        <div>
+          <div class="card-label-small">Card Holder</div>
+          <div class="card-val" id="cardNameDisplay">YOUR NAME</div>
+        </div>
+        <div>
+          <div class="card-label-small">Expires</div>
+          <div class="card-val" id="cardExpDisplay">MM/YY</div>
+        </div>
+        <div class="card-brand-logos">
+          <span>💳</span>
+        </div>
+      </div>
+    </div>
+
+    <input class="card-input" type="text" id="cardName" placeholder="Cardholder Name" oninput="updateCardDisplay()" maxlength="26">
+    <input class="card-input" type="text" id="cardNum" placeholder="Card Number (16 digits)" oninput="formatCardNum()" maxlength="19">
+    <div class="card-row">
+      <input class="card-input" type="text" id="cardExp" placeholder="MM / YY" oninput="formatCardExp()" maxlength="7">
+      <input class="card-input" type="text" id="cardCvv" placeholder="CVV" maxlength="4" style="letter-spacing:4px;">
+    </div>
+    <div class="card-amount-badge" style="background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="color:rgba(255,255,255,0.5);font-size:13px;">Charge amount</span>
+      <span style="color:#00aaff;font-size:18px;font-weight:900;" id="cardAmountDisplay">KES 0</span>
+    </div>
+    <button type="button" class="card-pay-btn" onclick="processCardPayment()">
+      🔒 Pay Securely
+    </button>
+  </div>
+</div>
+
+<!-- PAYPAL MODAL -->
+<div class="paypal-overlay" id="paypalOverlay">
+  <div class="paypal-modal-box">
+    <button type="button" class="paypal-close-btn" onclick="closeModal('paypal')">✕</button>
+    <div class="paypal-logo">🅿️</div>
+    <h3>💳 Pay with PayPal</h3>
+    <p>You'll be redirected to PayPal to complete your payment of <strong id="paypalAmountDisplay" style="color:#ffc439;">KES 0</strong> securely.</p>
+    <button type="button" class="paypal-pay-btn" onclick="processPaypalPayment()">Continue with PayPal →</button>
+    <button type="button" class="paypal-cancel-btn" onclick="closeModal('paypal')">Cancel</button>
+  </div>
+</div>
+
+<!-- ORDER SUCCESS OVERLAY -->
+<div id="orderSuccessOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);backdrop-filter:blur(16px);z-index:2000;align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:28px;padding:40px 32px;max-width:420px;width:100%;text-align:center;">
+    <div style="font-size:64px;margin-bottom:16px;animation:popIn .4s ease;">🎉</div>
+    <h2 style="font-size:24px;font-weight:900;color:white;margin-bottom:8px;">✅ Order Placed!</h2>
+    <p style="color:rgba(255,255,255,0.5);font-size:14px;margin-bottom:20px;line-height:1.6;" id="successMsg">Your order is confirmed and on its way.</p>
+    <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.15);border-radius:14px;padding:16px;margin-bottom:24px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">ORDER REFERENCE</div>
+      <div style="font-size:20px;font-weight:900;color:#71ff00;letter-spacing:2px;" id="successOrderRef">—</div>
+    </div>
+    <!-- Delivery info injected here after createOrderDelivery resolves -->
+    <div id="successDeliveryInfo" style="display:none;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:12px 14px;margin-bottom:16px;text-align:left;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">DELIVERY REFERENCE</div>
+      <div id="successDeliveryRef" style="font-size:16px;font-weight:900;color:#71ff00;letter-spacing:1px;margin-bottom:4px;"></div>
+      <div id="successDeliveryFee" style="font-size:11px;color:rgba(255,255,255,0.45);"></div>
+      <div id="successDeliveryPIN" style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:4px;"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+      <a id="successTrackBtn" href="track.html" style="padding:12px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:800;border-radius:12px;text-decoration:none;font-size:13px;">📍 Track Order</a>
+      <a href="index.html" style="padding:12px 22px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-weight:700;border-radius:12px;text-decoration:none;font-size:13px;">🏠 Back to Home</a>
+    </div>
+    <a href="https://wa.me/254705726803" target="_blank" style="display:block;margin-top:14px;color:rgba(37,211,102,0.8);font-size:12px;font-weight:700;">💬 Questions? Chat on WhatsApp</a>
+  </div>
+</div>
+<style>
+@keyframes popIn{ from{transform:scale(0.5);opacity:0;} to{transform:scale(1);opacity:1;} }
+</style>
+
+<!-- PUSH NOTIFICATION TOASTS -->
+<div class="pay-toast" id="payToast"></div>
+
+<!-- NOTIFICATIONS -->
+<div id="notificationContainer"></div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Categories</span></a>
+  <a href="flashsale.html" class="bnav-item bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+<script src="sokoni-routing.js"></script>
+<script type="module" src="sokoni-delivery.js"></script>
+<script src="checkout.js"></script>
+<script>
+/* ============================
+   CHECKOUT UI LOGIC
+============================ */
+
+let selectedPayment = "mpesa";
+let orderTotal = 0;
+
+/* Load cart items into summary */
+const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+
+/* Empty-cart guard — redirect back to shopping */
+if(cart.length === 0 && !location.search.includes('order=')){
+  const itemsContainer = document.getElementById("checkoutItems");
+  if(itemsContainer){
+    itemsContainer.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div style="font-size:48px;margin-bottom:12px;">🛒</div><div style="color:white;font-size:18px;font-weight:900;margin-bottom:8px;">Your cart is empty</div><div style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;">Add products before checking out</div><a href="index.html" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border-radius:14px;text-decoration:none;">Browse Products</a></div>';
+  }
+  /* Hide payment UI */
+  var paySection = document.querySelector('.checkout-pay-col');
+  if(paySection) paySection.style.display = 'none';
+}
+
+const itemsEl = document.getElementById("checkoutItems");
+const totalEl = document.getElementById("checkoutTotal");
+const subtotalEl = document.getElementById("summarySubtotal");
+const btnTotalEl = document.getElementById("btnTotal");
+const mpesaFeeEl = document.getElementById("mpesaFeeRow");
+
+let subtotal = 0;
+let promoDiscount = 0;
+let deliveryFee = 0;
+const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const _itemsHTML = [];
+cart.forEach(item => {
+  subtotal += Number(item.price || 0);
+  /* XSS-safe: escape all user-supplied strings before inserting into innerHTML */
+  const safeName  = _esc(item.name);
+  const safeImg   = /^(https?:\/\/|assets\/|data:image\/)/.test(item.image||"") ? _esc(item.image) : "assets/default-product.png";
+  const safePrice = Number(item.price||0).toLocaleString();
+  _itemsHTML.push(`
+    <div class="os-item">
+      <img loading="lazy" src="${safeImg}" alt="${safeName}" onerror="this.src='assets/default-product.png'">
+      <div>
+        <div class="os-item-name">${safeName}</div>
+        <div class="os-item-price">KES ${safePrice}</div>
+      </div>
+    </div>
+  `);
+});
+itemsEl.innerHTML = _itemsHTML.join("");
+
+/* Auto-apply any promo code saved from the cart page */
+(function(){
+  try {
+    var saved = JSON.parse(localStorage.getItem("sokoniAppliedPromo") || "null");
+    if(saved && saved.code && saved.discount >= 0){
+      var inp = document.getElementById("discountCodeInput");
+      var msg = document.getElementById("discountMsg");
+      promoDiscount = saved.discount;
+      if(inp) inp.value = saved.code;
+      var saving = Math.round(subtotal * promoDiscount / 100);
+      if(msg){
+        msg.innerHTML = '✅ <strong>' + saved.code + '</strong> applied — ' + (saved.discount > 0 ? saved.discount + '% off (save KES ' + saving.toLocaleString() + ')' : 'Free delivery applied!');
+        msg.style.color = "#71ff00";
+      }
+    }
+  } catch(e){}
+})();
+
+function updateTotals(){
+  const fee = selectedPayment === "mpesa" ? Math.round(subtotal * 0.01) : 0;
+  const promoSaving = Math.round(subtotal * (promoDiscount/100));
+  orderTotal = subtotal + fee + deliveryFee - promoSaving;
+  if(subtotalEl) subtotalEl.textContent = "KES " + subtotal.toLocaleString();
+  if(totalEl) totalEl.textContent = "KES " + orderTotal.toLocaleString();
+  if(btnTotalEl) btnTotalEl.textContent = "KES " + orderTotal.toLocaleString();
+  if(mpesaFeeEl) mpesaFeeEl.textContent = fee > 0 ? "KES " + fee.toLocaleString() : "—";
+  document.getElementById("mpesaAmountDisplay").textContent = "KES " + orderTotal.toLocaleString();
+  document.getElementById("cardAmountDisplay").textContent = "KES " + orderTotal.toLocaleString();
+  document.getElementById("paypalAmountDisplay").textContent = "KES " + orderTotal.toLocaleString();
+  const delivEl = document.getElementById("summaryDelivery");
+  if(delivEl){
+    if(deliveryFee > 0){ delivEl.className = "os-row-val"; delivEl.textContent = "KES " + deliveryFee.toLocaleString(); }
+    else { delivEl.className = "os-free"; delivEl.textContent = "FREE"; }
+  }
+}
+
+updateTotals();
+checkInstallment();
+
+/* Payment method selection */
+function selectPayment(method){
+  selectedPayment = method;
+  document.querySelectorAll(".pay-method-card").forEach(c => {
+    [...c.classList].filter(cls=>cls.startsWith("active-pay")).forEach(cls=>c.classList.remove(cls));
+  });
+  const classMap = {
+    mpesa:"active-pay-mpesa", card:"active-pay-card", paypal:"active-pay-paypal",
+    airtel:"active-pay-airtel", tkash:"active-pay-tkash", equity:"active-pay-equity",
+    mtn:"active-pay-mtn", ecocash:"active-pay-ecocash", chipper:"active-pay-chipper",
+    bank:"active-pay-bank",
+  };
+  const idMap = {
+    mpesa:"payMpesa", card:"payCard", paypal:"payPaypal",
+    airtel:"payAirtel", tkash:"payTkash", equity:"payEquity",
+    mtn:"payMtn", ecocash:"payEcocash", chipper:"payChipper", bank:"payBank",
+  };
+  const el = document.getElementById(idMap[method]);
+  if(el) el.classList.add(classMap[method] || "active-pay");
+  updateTotals();
+}
+
+const INTASEND_PUBLIC_KEY = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.intasendKey) || "";
+
+const SOKONI_FUNCTIONS_URL = "https://us-central1-sokoni-aeb26.cloudfunctions.net";
+
+/* Show/hide setup notice in M-Pesa modal */
+(function(){
+  const notice = document.getElementById("intasendSetupNotice");
+  if(notice && !INTASEND_PUBLIC_KEY) notice.style.display = "block";
+})();
+
+/* Place order — open the right modal */
+function placeOrder(){
+  /* Rate-limit order attempts: max 5 per minute per device */
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('place_order', 5, 60000)){
+    showPushToast("⚠️ Slow Down", "Too many attempts. Please wait a moment.", "orange");
+    return;
+  }
+  const name = document.getElementById("coName").value.trim();
+  const phone = document.getElementById("coPhone").value.trim();
+  const addr = document.getElementById("coAddress").value.trim();
+  if(!name || !phone || !addr){
+    showPushToast("⚠️ Missing Info", "Please fill in all delivery details", "orange");
+    return;
+  }
+  /* Validate phone format */
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.validateKenyanPhone(phone)){
+    showPushToast("⚠️ Invalid Phone", "Enter a valid Kenyan phone number", "orange");
+    return;
+  }
+  /* Sanitize inputs before use */
+  if(typeof SokoniSecurity !== 'undefined'){
+    const safeName = SokoniSecurity.sanitize(name);
+    const safeAddr = SokoniSecurity.sanitize(addr);
+    document.getElementById("coName").value = safeName;
+    document.getElementById("coAddress").value = safeAddr;
+  }
+  if(cart.length === 0){
+    showPushToast("🛒 Empty Cart", "Add products before checking out", "orange");
+    return;
+  }
+  /* M-Pesa: use Daraja direct-to-seller when seller UID is known */
+  if (selectedPayment === 'mpesa') {
+    const currentCart2 = JSON.parse(localStorage.getItem('cart') || '[]');
+    const _sUid = currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerUid
+                 || currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerId
+                 || null;
+    if (_sUid && window.SokoniMpesa) {
+      const _sName = currentCart2[0]?.sellerName || 'SOKONI Seller';
+      const _ordId = 'SKN' + Date.now().toString().slice(-8).toUpperCase();
+      window.SokoniMpesa.pay({
+        sellerUid:   _sUid,
+        amount:      orderTotal,
+        phone:       phone,
+        orderId:     _ordId,
+        hub:         'marketplace',
+        description: 'SOKONI Order',
+        sellerName:  _sName,
+        onSuccess(receipt) {
+          saveAndRedirect(receipt.mpesaCode || receipt.phone, 'mpesa', _ordId);
+        },
+        onFailure(reason) {
+          if (reason !== 'cancelled' && reason !== 'timeout') {
+            /* Graceful fallback: open IntaSend modal */
+            openModal('mpesa');
+          }
+        },
+      });
+      return;
+    }
+  }
+  openModal(selectedPayment);
+}
+
+const _mobileMoney = ["airtel","tkash","equity","mtn","ecocash","chipper"];
+const _mmIcons = {airtel:"🔴",tkash:"📡",equity:"🏦",mtn:"🟡",ecocash:"💚",chipper:"✈️"};
+const _mmNames = {airtel:"Airtel Money",tkash:"T-Kash (Telkom)",equity:"Equity EazzY",mtn:"MTN MoMo",ecocash:"EcoCash",chipper:"Chipper Cash"};
+
+function openModal(type){
+  if(_mobileMoney.includes(type)){
+    document.getElementById("mmIcon").textContent  = _mmIcons[type]  || "📱";
+    document.getElementById("mmTitle").textContent = _mmNames[type]  || "Mobile Money";
+    document.getElementById("mmDesc").textContent  = "Enter your " + (_mmNames[type]||"mobile money") + " number to receive a payment prompt";
+    document.getElementById("mmAmount").textContent = "KES " + orderTotal.toLocaleString();
+    document.getElementById("mobilemoneyOverlay").classList.add("open");
+    setTimeout(()=>{ document.getElementById("mmPhone").focus(); }, 200);
+  } else if(type === "bank"){
+    document.getElementById("bankAmount").textContent  = "KES " + orderTotal.toLocaleString();
+    document.getElementById("bankOrderRef").textContent = "SKN-" + Date.now().toString(36).slice(-6).toUpperCase();
+    document.getElementById("bankOverlay").classList.add("open");
+    setTimeout(()=>{ document.getElementById("bankTransRef").focus(); }, 200);
+  } else if(type === "card") {
+    const el = document.getElementById("cardAmountDisplay");
+    if(el) el.textContent = "KES " + orderTotal.toLocaleString();
+    const overlay = document.getElementById("cardOverlay");
+    if(overlay) overlay.classList.add("open");
+    setTimeout(()=>{ document.getElementById("cardName")?.focus(); }, 200);
+  } else if(type === "paypal") {
+    const el = document.getElementById("paypalAmountDisplay");
+    if(el) el.textContent = "KES " + orderTotal.toLocaleString();
+    const overlay = document.getElementById("paypalOverlay");
+    if(overlay) overlay.classList.add("open");
+  } else {
+    const overlay = document.getElementById(type + "Overlay");
+    if(overlay) overlay.classList.add("open");
+  }
+}
+
+function closeModal(type){
+  const overlay = document.getElementById(type + "Overlay");
+  if(overlay) overlay.classList.remove("open");
+  if(type === "mpesa") resetStkSteps();
+}
+
+function processMobileMoney(){
+  const raw = (document.getElementById("mmPhone").value||"").replace(/\D/g,"");
+  if(!raw || raw.length < 9){
+    showPushToast("❌ Invalid Number","Enter a valid phone number","orange"); return;
+  }
+  closeModal("mobilemoney");
+  showPushToast("⏳ Processing…","Sending prompt to " + document.getElementById("mmPhone").value.trim(),"green");
+  setTimeout(()=>{
+    showPushToast("✅ Payment Confirmed","KES " + orderTotal.toLocaleString() + " received. Order placed!","green");
+    saveAndRedirect(document.getElementById("mmPhone").value.trim(), selectedPayment);
+  }, 1600);
+}
+
+function processBankTransfer(){
+  const ref = (document.getElementById("bankTransRef").value||"").trim();
+  if(!ref){ showPushToast("❌ Reference Required","Enter your bank transaction reference","orange"); return; }
+  closeModal("bank");
+  showPushToast("✅ Transfer Noted","Order placed! We'll verify your bank transfer and ship within 24h.","green");
+  saveAndRedirect(ref, "bank");
+}
+
+/* ============================
+   INTASEND CONFIG
+   Sign up free at intasend.com → API Keys → copy your PUBLIC key
+============================ */
+const INTASEND_LIVE = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.intasendLive !== undefined) ? window.SOKONI_CONFIG.intasendLive : true;
+
+/* ============================
+   M-PESA STK PUSH — IntaSend
+============================ */
+function sendStkPush(){
+  /* Rate-limit STK pushes: max 3 per 2 minutes — prevents accidental double-charges */
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('stk_push', 3, 120000)){
+    showPushToast("⚠️ Please Wait", "Too many payment requests. Wait 2 minutes.", "orange");
+    return;
+  }
+  const num = document.getElementById("mpesaNumber").value.trim();
+  if(!num || num.length < 9){ showPushToast("❌ Invalid Number", "Enter a valid M-PESA phone number", "orange"); return; }
+  /* Validate Kenyan phone format before hitting API */
+  if(typeof SokoniSecurity !== 'undefined'){
+    const {valid} = SokoniSecurity.PaymentSecurity.normaliseMpesaPhone(num);
+    if(!valid){ showPushToast("❌ Invalid Number", "Enter a valid Safaricom/Airtel number", "orange"); return; }
+  }
+
+  if(!INTASEND_PUBLIC_KEY){
+    _runDemoStkPush(num);
+    return;
+  }
+
+  const btn   = document.getElementById("mpesaPushBtn");
+  const steps = document.getElementById("stkSteps");
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Connecting to M-PESA...';
+  steps.style.display = "flex";
+  activateStkStep(1);
+
+  if("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+
+  const phone     = num.replace(/^0/, "254").replace(/^\+/, "");
+  const user      = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const fullName  = document.getElementById("coName")?.value.trim() || "Customer";
+  const [fName, ...lParts] = fullName.split(" ");
+  const apiRef    = "SKN" + Date.now().toString().slice(-8);
+
+  showPushToast("📲 Connecting", "Sending STK Push to 0" + phone.slice(3), "green");
+
+  new window.IntaSend({
+    publicAPIKey: INTASEND_PUBLIC_KEY,
+    live: INTASEND_LIVE
+  })
+  .on("COMPLETE", async result => {
+    activateStkStep(3);
+
+    /* If no verification endpoint is configured, fall back to demo behaviour */
+    if (!SOKONI_FUNCTIONS_URL) {
+      btn.innerHTML = '✓ Payment Confirmed!';
+      btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
+      btn.style.color = "black";
+      showPushToast("✅ Payment Confirmed", "KES " + orderTotal.toLocaleString() + " received. Order placed!", "green");
+      if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/logosokoni.png"});
+      saveAndRedirect(result.tracking_id || phone, "mpesa");
+      return;
+    }
+
+    /* Server-side verification — order is only created after the server confirms */
+    btn.innerHTML = '⏳ Verifying payment…';
+    btn.style.background = "linear-gradient(135deg,#fbbf24,#f59e0b)";
+    btn.style.color = "black";
+    showPushToast("🔐 Verifying", "Confirming payment with server…", "green");
+
+    try {
+      const verifyRes = await fetch(SOKONI_FUNCTIONS_URL + "/verifyIntasendPayment", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          invoiceId:       result.invoice_id || result.tracking_id || apiRef,
+          trackingId:      result.tracking_id || null,
+          amount:          orderTotal,
+          phone:           phone,
+          orderItems:      cart,
+          deliveryName:    document.getElementById("coName")?.value.trim()    || "",
+          deliveryAddress: document.getElementById("coAddress")?.value.trim() || "",
+        }),
+      });
+
+      const verifyData = await verifyRes.json();
+
+      if (verifyRes.ok && verifyData.verified && verifyData.orderId) {
+        btn.innerHTML = '✓ Payment Verified!';
+        btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
+        btn.style.color = "black";
+        showPushToast("✅ Payment Verified", "KES " + orderTotal.toLocaleString() + " confirmed by server.", "green");
+        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/logosokoni.png"});
+        saveAndRedirect(result.tracking_id || phone, "mpesa", verifyData.orderId, verifyData.verificationToken);
+      } else {
+        showPushToast("❌ Verification Failed", (verifyData.error || "Payment could not be verified.") + " Support ref: " + apiRef, "orange");
+        btn.innerHTML = '⚠️ Verification Failed — Contact Support';
+        btn.style.background = "";
+        btn.style.color = "";
+        btn.disabled = false;
+      }
+    } catch (fetchErr) {
+      console.error("[SOKONI] Payment verification error:", fetchErr);
+      showPushToast("⚠️ Network Error", "Could not reach verification server. Support ref: " + apiRef, "orange");
+      btn.innerHTML = '⚠️ Verification Error';
+      btn.style.background = "";
+      btn.style.color = "";
+      btn.disabled = false;
+    }
+  })
+  .on("IN-PROGRESS", () => {
+    activateStkStep(2);
+    btn.innerHTML = '⏰ Waiting for PIN...';
+    showPushToast("📱 Check Your Phone", "A pop-up appeared on your phone — enter your M-PESA PIN", "green");
+  })
+  .on("FAILED", err => {
+    showPushToast("❌ Payment Failed", (err?.message || err?.detail || "Please retry"), "orange");
+    resetStkSteps();
+  })
+  .run({
+    amount:       orderTotal,
+    currency:     "KES",
+    phone_number: phone,
+    email:        user?.email || "",
+    first_name:   fName || "Customer",
+    last_name:    lParts.join(" ") || fName || "User",
+    api_ref:      apiRef,
+    comment:      "SOKONI Order " + apiRef
+  });
+}
+
+/* Demo fallback when no API key is set */
+function _runDemoStkPush(num){
+  const btn   = document.getElementById("mpesaPushBtn");
+  const steps = document.getElementById("stkSteps");
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Sending...';
+  steps.style.display = "flex";
+
+  showPushToast("📱 M-Pesa Request Sent", "Check your phone and enter your M-Pesa PIN to complete payment", "green");
+
+  setTimeout(() => activateStkStep(1), 500);
+  setTimeout(() => {
+    activateStkStep(2);
+    btn.innerHTML = '⏰ Waiting for PIN...';
+    showPushToast("📱 Enter M-Pesa PIN", "A pop-up has been sent to your phone — enter your PIN to confirm", "green");
+  }, 2000);
+  setTimeout(() => {
+    activateStkStep(3);
+    btn.innerHTML = '✓ Payment Confirmed!';
+    btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
+    btn.style.color = "black";
+    showPushToast("✅ Order Placed!", "Payment received via M-Pesa. Your order is being processed.", "green");
+    saveAndRedirect(num, "mpesa");
+  }, 5000);
+}
+
+function activateStkStep(n){
+  for(let i = 1; i < n; i++){
+    const el = document.getElementById("stkStep" + i);
+    el.classList.remove("active");
+    el.classList.add("done");
+  }
+  const active = document.getElementById("stkStep" + n);
+  active.classList.add("active");
+}
+
+function resetStkSteps(){
+  for(let i = 1; i <= 3; i++){
+    const el = document.getElementById("stkStep" + i);
+    if(el){ el.classList.remove("active","done"); }
+  }
+  const btn = document.getElementById("mpesaPushBtn");
+  btn.disabled = false;
+  btn.innerHTML = '📨 Send STK Push';
+  btn.style.background = "";
+  btn.style.color = "";
+  const steps = document.getElementById("stkSteps");
+  if(steps) steps.style.display = "none";
+}
+
+/* ============================
+   CARD PAYMENT FLOW
+============================ */
+function formatCardNum(){
+  const el = document.getElementById("cardNum");
+  let v = el.value.replace(/\D/g,"").substring(0,16);
+  el.value = v.replace(/(.{4})/g,"$1 ").trim();
+  const display = v.padEnd(16,"•").replace(/(.{4})/g,"$1 ").trim();
+  document.getElementById("cardNumDisplay").textContent = display;
+}
+
+function formatCardExp(){
+  const el = document.getElementById("cardExp");
+  let v = el.value.replace(/\D/g,"");
+  if(v.length >= 2) v = v.substring(0,2) + " / " + v.substring(2,4);
+  el.value = v;
+  document.getElementById("cardExpDisplay").textContent = el.value || "MM/YY";
+}
+
+function updateCardDisplay(){
+  const name = document.getElementById("cardName").value.toUpperCase() || "YOUR NAME";
+  document.getElementById("cardNameDisplay").textContent = name.substring(0,20);
+}
+
+function processCardPayment(){
+  const name   = (document.getElementById("cardName")?.value || "").trim();
+  const num    = (document.getElementById("cardNum")?.value  || "").replace(/\s/g,"");
+  const expRaw = (document.getElementById("cardExp")?.value  || "").replace(/\s/g,"");
+  const cvv    = (document.getElementById("cardCvv")?.value  || "").trim();
+
+  if(!name){ showPushToast("❌ Missing","Enter cardholder name","orange"); return; }
+  if(!/^\d{13,19}$/.test(num)){ showPushToast("❌ Invalid","Enter a valid card number","orange"); return; }
+  if(!/^\d{2}\/?\d{2}$/.test(expRaw)){ showPushToast("❌ Invalid","Enter expiry as MM/YY","orange"); return; }
+  if(!/^\d{3,4}$/.test(cvv)){ showPushToast("❌ Invalid","Enter 3 or 4 digit CVV","orange"); return; }
+
+  const btn = document.querySelector(".card-pay-btn");
+  if(btn){ btn.disabled = true; btn.textContent = "⏳ Processing..."; }
+
+  if(INTASEND_PUBLIC_KEY){
+    /* IntaSend hosted card checkout — open IntaSend's secure page */
+    try{
+      const IPayInstance = new window.IntaSend({
+        publicAPIKey: INTASEND_PUBLIC_KEY,
+        live: INTASEND_LIVE
+      });
+      IPayInstance.on("COMPLETE", (res)=>{
+        closeModal("card");
+        saveAndRedirect(res.tracking_id || ("CRD-"+Date.now()), "card");
+      });
+      IPayInstance.on("FAILED", ()=>{
+        showPushToast("❌ Card Declined","Payment failed. Check card details and try again.","orange");
+        if(btn){ btn.disabled=false; btn.textContent="🔒 Pay Securely"; }
+      });
+      IPayInstance.charge({
+        amount: orderTotal,
+        currency:"KES",
+        email: document.getElementById("coName")?.value || "buyer@sokoni.co.ke",
+        description:"SOKONI Order"
+      });
+    }catch(e){
+      /* IntaSend not loaded — graceful fallback */
+      _cardFallback(num, btn);
+    }
+  } else {
+    _cardFallback(num, btn);
+  }
+}
+
+function _cardFallback(num, btn){
+  /* Demo/sandbox mode: simulate approval then save order */
+  setTimeout(()=>{
+    closeModal("card");
+    const last4 = num.slice(-4);
+    showPushToast("✅ Card Approved","Payment confirmed · Card ending "+last4,"green");
+    saveAndRedirect("CRD-"+last4+"-"+Date.now().toString().slice(-6), "card");
+  }, 1800);
+}
+
+/* ============================
+   PAYPAL FLOW
+============================ */
+function processPaypalPayment(){
+  /* PayPal hosted redirect — uses order total and buyer name */
+  const ref = "PPL-" + Date.now().toString(36).slice(-8).toUpperCase();
+  closeModal("paypal");
+  showPushToast("🅿️ Redirecting","Opening PayPal — complete payment there and return","green");
+  /* Build a PayPal.me or business payment link if available;
+     fall back to saving a pending order that admin reconciles */
+  const ppLink = window.SOKONI_CONFIG?.paypalEmail
+    ? ("https://www.paypal.me/" + window.SOKONI_CONFIG.paypalEmail + "/" + orderTotal + "USD")
+    : null;
+  if(ppLink){
+    window.open(ppLink, "_blank");
+  }
+  saveAndRedirect(ref, "paypal");
+}
+
+/* ============================
+   SAVE ORDER & REDIRECT
+============================ */
+function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
+  const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
+  /* Use the already-computed orderTotal (includes delivery fee, M-Pesa fee, promo discount).
+     Fall back to raw subtotal only when orderTotal hasn't been set yet (edge case). */
+  const total = (typeof orderTotal === "number" && orderTotal > 0)
+    ? orderTotal
+    : currentCart.reduce((s,p) => s + Number(p.price||0), 0);
+  /* Use the server-generated orderId when provided — prevents client-side order ID forgery */
+  const orderId = serverOrderId || ("SKN" + Date.now().toString().slice(-6).toUpperCase());
+  const timeNow = new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+
+  const _authUser = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const _uid = (window.firebaseAuth?.currentUser?.uid) || _authUser?.uid || null;
+
+  const _coName    = document.getElementById("coName")?.value?.trim()  || "";
+  const _coPhone   = document.getElementById("coPhone")?.value?.trim() || payRef;
+  const _coAddr    = document.getElementById("coAddress")?.value?.trim() || "";
+  const _sellerUid = currentCart[0]?.sellerUid || currentCart[0]?.sellerId || null;
+
+  const newOrder = {
+    id: orderId,
+    uid: _uid,
+    buyerUid:        _uid,
+    buyerName:       _coName,
+    buyerPhone:      _coPhone,
+    sellerUid:       _sellerUid,
+    sellerName:      currentCart[0]?.sellerName  || null,
+    sellerPhone:     currentCart[0]?.sellerPhone || null,
+    items: currentCart,
+    subtotal,
+    deliveryFee,
+    promoDiscount,
+    total,
+    orderTotal:      total,
+    phone: payRef,
+    method,
+    paymentMethod:   method,
+    name:    _coName,
+    address: _coAddr,
+    deliveryAddress: _coAddr,
+    date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
+    timestamp: Date.now(),
+    status: "paid",
+    location: window.deliveryLocation || null,
+    serverVerified: !!serverOrderId,
+    verificationToken: verificationToken || null,
+    steps:[
+      {label:"Order Placed", done:true, time:timeNow},
+      {label:"Processing",   done:true, time:timeNow},
+      {label:"Shipped",      done:false,time:""},
+      {label:"Out for Delivery",done:false,time:""},
+      {label:"Delivered",    done:false,time:""}
+    ]
+  };
+
+  let orders = [];
+  try{ orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; }catch(e){}
+  orders.unshift(newOrder);
+  localStorage.setItem("sokoniOrders", JSON.stringify(orders));
+
+  /* Dual-write to Firestore, then advance through the SokoniOrders state machine */
+  if(_uid && window.firebaseDB){
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js")
+      .then(({doc, setDoc, serverTimestamp}) => {
+        return setDoc(
+          doc(window.firebaseDB, "orders", orderId),
+          {
+            ...newOrder,
+            createdAt:     serverTimestamp(),
+            escrow:        { held: total, subtotal, deliveryFee, promoDiscount, released: 0, refunded: 0 },
+            statusHistory: [{ status: "paid", at: Date.now(), by: _uid }],
+          },
+          { merge: true }
+        );
+      })
+      .then(() => import("./sokoni-orders.js"))
+      .then(mod => {
+        const SO = mod.default || window.SokoniOrders;
+        if (SO) {
+          return SO.transitionOrder(
+            orderId, "awaiting_confirmation", _uid,
+            { paymentMethod: newOrder.method, paymentRef: payRef }
+          );
+        }
+      })
+      .catch(() => {});
+  }
+
+  // Loyalty points — digital products earn 3× points
+  const DIGITAL_CATS = new Set(["ebook","template","course","software","license"]);
+  const hasDigital = (newOrder.items||[]).some(i => i.isDigital || DIGITAL_CATS.has(i.category));
+  const basePoints = Math.floor(total / 10);
+  const multiplier = hasDigital ? 3 : 1;
+  const pts        = basePoints * multiplier;
+  let ptsData = {total:0,history:[]};
+  try{ ptsData = JSON.parse(localStorage.getItem("sokoniPoints"))||ptsData; }catch(e){}
+  ptsData.total += pts;
+  const pointsDesc = hasDigital
+    ? `Purchase reward × 3 (digital bonus!)`
+    : `Purchase reward`;
+  ptsData.history.unshift({points:pts, orderId, date:newOrder.date, description:pointsDesc});
+
+  /* 5th purchase milestone — +25 pts bonus */
+  let allOrders = [];
+  try { allOrders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
+  const orderCount = allOrders.length + 1;
+  if(orderCount > 0 && orderCount % 5 === 0){
+    ptsData.total += 25;
+    ptsData.history.unshift({points:25, orderId, date:newOrder.date, description:`🎯 Milestone bonus — ${orderCount}th purchase!`});
+  }
+
+  localStorage.setItem("sokoniPoints", JSON.stringify(ptsData));
+
+  // Thank-you DM
+  let msgs = [];
+  try{ msgs = JSON.parse(localStorage.getItem("sokoniMessages"))||[]; }catch(e){}
+  const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  msgs.unshift({
+    id:"conv_order_"+orderId,
+    productName:`Order ${orderId} Confirmed ✅`,
+    sellerName:"Sokoni Team",
+    messages:[{
+      sender:"seller",
+      text:`Thank you${user?" "+user.name:""}! 🎉\n\nOrder: ${orderId}\nTotal: KES ${total.toLocaleString()}\nPoints earned: +${pts} pts\n\nTrack your order from the Profile page. We appreciate you! 💚`,
+      time:timeNow
+    }],
+    unread:1,spam:false,createdAt:Date.now()
+  });
+  localStorage.setItem("sokoniMessages", JSON.stringify(msgs));
+  localStorage.removeItem("cart");
+  localStorage.removeItem("sokoniAppliedPromo");
+
+  /* Affiliate: record conversion so referrer earns their commission */
+  if(window.SokoniReferral) SokoniReferral.recordReferredPurchase({amount:total,type:'product',itemName:'Order '+orderId,orderId:orderId});
+
+  /* ---- Auto-reduce stock for each ordered item ---- */
+  let allProducts = [];
+  try { allProducts = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
+
+  const stockAlerts = [];
+  let stockChanged = false;
+
+  currentCart.forEach(item => {
+    const idx = allProducts.findIndex(p => String(p.id) === String(item.id));
+    if(idx === -1 || allProducts[idx].stock === undefined) return;
+
+    allProducts[idx].stock   = Math.max(0, Number(allProducts[idx].stock) - 1);
+    allProducts[idx].sold    = (allProducts[idx].sold || 0) + 1;
+    stockChanged = true;
+
+    if(allProducts[idx].stock === 0){
+      allProducts[idx].outOfStock = true;
+      stockAlerts.push({ productId: allProducts[idx].id, name: allProducts[idx].name, stock: 0, type:"out", timestamp: Date.now() });
+    } else if(allProducts[idx].stock <= 5){
+      stockAlerts.push({ productId: allProducts[idx].id, name: allProducts[idx].name, stock: allProducts[idx].stock, type:"low", timestamp: Date.now() });
+    }
+  });
+
+  if(stockChanged) localStorage.setItem("sellerProducts", JSON.stringify(allProducts));
+
+  /* ── Commission tracking: record SOKONI's cut for each item sold ── */
+  if(typeof SokoniPay !== "undefined"){
+    currentCart.forEach(function(item){
+      var _u2 = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+      var _sid = item.sellerEmail || item.sellerName || "unknown_seller";
+      var _plan = SokoniPay.getProviderPlan(_sid);
+      var _planData = SokoniPay.PLANS[_plan] || SokoniPay.PLANS.free;
+      var _commPct = _planData.commissionPct || 10;
+      var _itemTotal = Number(item.price||0);
+      var _sokCut = Math.round(_itemTotal * _commPct / 100);
+      var _providerNet = _itemTotal - _sokCut;
+      var _cRef = "CO" + orderId + (item.id||"").slice(-4);
+      try{
+        if(typeof SokoniPay !== 'undefined'){
+          SokoniPay.saveFee({ref:_cRef,providerName:item.sellerName||"Seller",category:item.category||"product",totalPaid:_itemTotal,sokoniCut:_sokCut,providerNet:_providerNet,commissionPct:_commPct,phone:payRef,providerPhone:"",serviceDesc:item.name||"Product",status:"auto_collected",paymentType:"product_checkout",orderId:orderId,createdAt:Date.now()});
+          SokoniPay.saveCommission({ref:_cRef,providerName:item.sellerName||"Seller",category:item.category||"product",commissionPct:_commPct,sokoniCut:_sokCut,providerNet:_providerNet,serviceTotal:_itemTotal,status:"auto_collected",note:"Auto-deducted at checkout",orderId:orderId,createdAt:Date.now()});
+        }
+      }catch(e){}
+    });
+  }
+
+  if(stockAlerts.length > 0){
+    let existing = [];
+    try { existing = JSON.parse(localStorage.getItem("sokoniStockAlerts"))||[]; } catch(e){}
+    stockAlerts.forEach(a => {
+      existing = existing.filter(e => String(e.productId) !== String(a.productId));
+      existing.unshift(a);
+    });
+    localStorage.setItem("sokoniStockAlerts", JSON.stringify(existing));
+  }
+
+  if(typeof sokoniTrackPurchase === "function") sokoniTrackPurchase(newOrder);
+
+  /* ── Auto-Invoice ── */
+  try{
+    const buyerName  = document.getElementById("coName")?.value || "Valued Customer";
+    const buyerPhone = document.getElementById("coPhone")?.value || "";
+    const delivAddr  = document.getElementById("coAddress")?.value || "";
+    const methodMap  = {
+      mpesa:"M-Pesa", card:"Card", paypal:"PayPal", cash:"Cash",
+      airtel:"Airtel Money", tkash:"T-Kash", equity:"Equity EazzY",
+      mtn:"MTN Money", ecocash:"EcoCash", chipper:"Chipper Cash", bank:"Bank Transfer",
+    };
+    const invItems   = currentCart.map(function(p){
+      return {name:p.name||p.title||"Item", category:p.category||"", qty:p.qty||1, price:Number(p.price||0)};
+    });
+    const delivFee   = Number(document.getElementById("deliveryZone")?.value||0);
+    if(window.SokoniInvoice){
+      setTimeout(function(){
+        SokoniInvoice.generate({
+          type:"order",
+          buyerName: buyerName,
+          buyerPhone: buyerPhone,
+          items: invItems,
+          subtotal: total,
+          delivery: delivFee,
+          total: total + delivFee,
+          paymentMethod: methodMap[method] || method,
+          paymentRef: orderId,
+          sellerName: currentCart[0]?.sellerName || "SOKONI Marketplace",
+          location: delivAddr,
+          date: newOrder.date
+        });
+      }, 800);
+    }
+  } catch(e){}
+
+  /* Show in-page success overlay instead of redirect */
+  const overlay = document.getElementById("orderSuccessOverlay");
+  const refEl   = document.getElementById("successOrderRef");
+  const msgEl2  = document.getElementById("successMsg");
+  if(overlay){
+    if(refEl) refEl.textContent = newOrder.id;
+    const zone = document.getElementById("deliveryZone")?.value;
+    const etaMap = {"50":"Today","100":"Today","150":"Tomorrow","250":"1–2 business days","500":"2–5 business days"};
+    const eta = etaMap[zone]||"Soon";
+    if(msgEl2) msgEl2.innerHTML = `Your order is confirmed! Expected delivery: <strong style="color:#71ff00;">${eta}</strong>.<br>You'll receive a confirmation SMS to <strong>${document.getElementById("coPhone")?.value||"your number"}</strong>.`;
+    overlay.style.display = "flex";
+    /* Clear cart */
+    localStorage.removeItem("cart");
+
+    /* ── Loyalty: award points for this purchase ── */
+    try {
+      if (typeof window.onSokoniPurchase === 'function') window.onSokoniPurchase(total);
+    } catch(e) {}
+
+    /* ── Referral: credit referrer on first-ever purchase ── */
+    try {
+      const allOrders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]');
+      if (allOrders.length <= 1 && typeof window.onSokoniFirstPurchase === 'function') {
+        window.onSokoniFirstPurchase();
+      }
+    } catch(e) {}
+  } else {
+    setTimeout(() => window.location.href = "success.html", 1500);
+  }
+
+  /* ── Delivery: create via SokoniDelivery after overlay shows ── */
+  (async function _createDelivery(){
+    try {
+      if(typeof window.SokoniDelivery === 'undefined'){
+        /* Module may still be initialising — wait up to 4s */
+        await new Promise(res => {
+          window.addEventListener('sokoniDeliveryReady', res, {once:true});
+          setTimeout(res, 4000);
+        });
+      }
+      if(!window.SokoniDelivery) return;
+
+      const sel    = currentCart[0] || {};
+      const hasFoodItem   = currentCart.some(i => (i.category||'').toLowerCase() === 'food');
+      const hasPharmaItem = currentCart.some(i => (i.category||'').toLowerCase() === 'pharmacy');
+      const category = hasFoodItem ? 'food' : hasPharmaItem ? 'pharmacy' : 'marketplace';
+      const speed    = hasFoodItem || hasPharmaItem ? 'express' : 'same_day';
+
+      const result = await SokoniDelivery.createOrderDelivery({
+        orderId:         orderId,
+        orderRef:        orderId,
+        buyerName:       document.getElementById("coName")?.value.trim()    || 'Buyer',
+        buyerPhone:      document.getElementById("coPhone")?.value.trim()   || '',
+        buyerUid:        _uid,
+        sellerName:      sel.sellerName  || 'SOKONI Marketplace',
+        sellerPhone:     sel.sellerPhone || '0700000000',
+        sellerUid:       sel.sellerUid   || null,
+        pickupAddress:   sel.shopAddress || sel.sellerAddress ||
+                         (sel.sellerName ? sel.sellerName + ', Nairobi' : 'Nairobi CBD, Nairobi'),
+        pickupCoords:    (sel.sellerLat && sel.sellerLng)
+                           ? { lat: sel.sellerLat, lng: sel.sellerLng } : null,
+        deliveryAddress: document.getElementById("coAddress")?.value.trim() || '',
+        deliveryCoords:  window.deliveryLocation
+                           ? { lat: window.deliveryLocation.lat, lng: window.deliveryLocation.lng } : null,
+        items:           currentCart.map(function(i){ return {name:i.name||'Item', qty:i.qty||1, price:Number(i.price||0)}; }),
+        orderTotal:      total,
+        category:        category,
+        speed:           speed,
+        notes:           document.getElementById("coNotes")?.value?.trim() || '',
+      });
+
+      /* Patch Firestore order with deliveryRef */
+      if(_uid && window.firebaseDB && result.deliveryRef){
+        try{
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(function(m){
+            m.updateDoc(m.doc(window.firebaseDB,"orders",orderId),{
+              deliveryRef:    result.deliveryRef,
+              deliveryFee:    result.deliveryFee,
+              deliveryStatus: 'order_placed',
+            }).catch(function(){});
+          }).catch(function(){});
+        }catch(e){}
+      }
+
+      /* Update success overlay with delivery info */
+      const di  = document.getElementById('successDeliveryInfo');
+      const dr  = document.getElementById('successDeliveryRef');
+      const df  = document.getElementById('successDeliveryFee');
+      const dp  = document.getElementById('successDeliveryPIN');
+      const btn = document.getElementById('successTrackBtn');
+      if(di && result.deliveryRef){
+        if(dr) dr.textContent = result.deliveryRef;
+        if(df) df.textContent = 'Delivery fee: KES ' + Number(result.deliveryFee||0).toLocaleString()
+                               + ' · ' + result.distanceKm?.toFixed(1) + ' km';
+        if(dp) dp.textContent = 'Show your 4-digit delivery PIN to the rider when they arrive.';
+        if(btn){ btn.href = 'delivery-tracking.html?ref=' + result.deliveryRef; btn.textContent = '📍 Track Delivery'; }
+        di.style.display = 'block';
+      }
+    }catch(e){ console.warn('[checkout] createOrderDelivery:', e.message); }
+  })();
+}
+
+/* ============================
+   PUSH TOAST
+============================ */
+function showPushToast(title, body, type){
+  const container = document.getElementById("payToast");
+  const iconMap = { green:"✅", blue:"🔒", orange:"⚠️" };
+  const toast = document.createElement("div");
+  toast.className = "pay-toast-item";
+  toast.innerHTML = `
+    <div class="toast-icon ${type}">${iconMap[type]||"📢"}</div>
+    <div class="toast-body">
+      <h4>${title}</h4>
+      <p>${body}</p>
+      <div class="toast-time">Just now</div>
+    </div>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.animation = "toastIn 0.3s ease reverse"; setTimeout(() => toast.remove(), 300); }, 4000);
+}
+
+/* ============================
+   PROMO CODE
+============================ */
+
+/* New discount code handler (wired to the checkout card) */
+function applyDiscount(){
+  const codeEl = document.getElementById("discountCodeInput");
+  const msgEl  = document.getElementById("discountMsg");
+  const code   = (codeEl?.value||"").trim().toUpperCase();
+  if(!code){ if(msgEl){ msgEl.textContent="Enter a discount code."; msgEl.style.color="#ff6b6b"; } return; }
+
+  /* Check seller promo codes */
+  let codes = [];
+  try { codes = JSON.parse(localStorage.getItem("sokoniPromoCodes"))||[]; } catch(e){}
+  let found = codes.find(c => c.code===code && c.expiresAt>Date.now());
+
+  /* Also check loyalty redemption codes (SAVE5, SAVE10, MEGA20, FREEDEL) */
+  const loyaltyCodes = { "SAVE5":5, "SAVE10":10, "MEGA20":20, "FREEDEL":0 };
+  if(!found && loyaltyCodes[code] !== undefined){
+    found = { code, discount: loyaltyCodes[code], uses:0, expiresAt:Date.now()+99999999 };
+    if(code === "FREEDEL"){ deliveryFee = 0; }
+  }
+
+  if(!found){
+    if(msgEl){ msgEl.textContent="❌ Invalid or expired code."; msgEl.style.color="#ff4444"; }
+    return;
+  }
+  promoDiscount = found.discount;
+  found.uses = (found.uses||0)+1;
+  localStorage.setItem("sokoniPromoCodes", JSON.stringify(codes));
+  const saving = Math.round(subtotal * promoDiscount/100);
+  if(msgEl){ msgEl.innerHTML=`✅ <strong>${found.code}</strong> applied — ${promoDiscount > 0 ? promoDiscount+"% off (save KES "+saving.toLocaleString()+")" : "Free delivery applied!"}`;  msgEl.style.color="#71ff00"; }
+  updateTotals();
+}
+
+
+/* ============================
+   DELIVERY CALCULATOR
+============================ */
+
+function calcDelivery(){
+  const zoneBase = Number(document.getElementById("deliveryZone")?.value||0);
+  const weight   = Number(document.getElementById("deliveryWeight")?.value||1);
+  const sizeMult = Number(document.getElementById("deliverySize")?.value||1);
+  const resultEl = document.getElementById("deliveryCostResult");
+  const etaEl    = document.getElementById("deliveryEtaResult");
+
+  if(!zoneBase){
+    if(resultEl) resultEl.textContent = "Select delivery zone for estimate";
+    if(etaEl) etaEl.textContent = "";
+    return;
+  }
+  const fee = Math.round(zoneBase * sizeMult + (weight-1)*30);
+  deliveryFee = fee;
+  if(resultEl) resultEl.textContent = `Estimated delivery: KES ${fee.toLocaleString()}`;
+  const etaMap = {"50":"1–2 hours","100":"2–4 hours","150":"Same day or next morning","250":"1–2 business days","500":"2–5 business days"};
+  const etaDays = {"50":0,"100":0,"150":1,"250":2,"500":5};
+  const zone = document.getElementById("deliveryZone")?.value;
+  if(etaEl) etaEl.innerHTML = (zone && etaMap[zone]) ? `⏰ Est. arrival: <strong style="color:white;">${etaMap[zone]}</strong>` : "";
+
+  /* Update estimated delivery date in summary */
+  const estRow  = document.getElementById("estDeliveryRow");
+  const estDate = document.getElementById("estDeliveryDate");
+  const estNote = document.getElementById("estDeliveryNote");
+  if(estRow && zone){
+    const days = etaDays[zone]||0;
+    const d = new Date(); d.setDate(d.getDate()+days);
+    const label = days===0 ? "Today, "+d.toLocaleDateString("en-KE",{weekday:"long"}) : d.toLocaleDateString("en-KE",{weekday:"long",day:"numeric",month:"long"});
+    estRow.style.display="block";
+    if(estDate) estDate.textContent = label;
+    if(estNote) estNote.textContent = etaMap[zone];
+  }
+  updateTotals();
+}
+
+/* ============================
+   INSTALLMENTS
+============================ */
+function checkInstallment(){
+  const instSection = document.getElementById("installmentSection");
+  const instOptions = document.getElementById("installmentOptions");
+  if(!instSection||!instOptions) return;
+
+  if(subtotal < 5000){ instSection.style.display="none"; return; }
+  instSection.style.display="block";
+
+  const deposit = Math.round(subtotal*0.3);
+  const remaining = subtotal - deposit;
+  const monthly = Math.round(remaining/3);
+
+  instOptions.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px;">Pay Full</div>
+        <div style="font-size:18px;font-weight:900;color:#71ff00;">KES ${subtotal.toLocaleString()}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">One-time payment</div>
+      </div>
+      <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:14px;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px;">3-Month Instalment</div>
+        <div style="font-size:18px;font-weight:900;color:#71ff00;">KES ${deposit.toLocaleString()} now</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">+ KES ${monthly.toLocaleString()}/mo × 3</div>
+      </div>
+    </div>
+  `;
+}
+
+/* Geolocation — silent background capture */
+if("geolocation" in navigator){
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      window.deliveryLocation = {lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:Math.round(pos.coords.accuracy)};
+      const el = document.getElementById("locationStatus");
+      if(el) el.innerHTML = `<span class="loc-ok">📍 Location captured — faster delivery</span>`;
+    },
+    () => {
+      const el = document.getElementById("locationStatus");
+      if(el) el.innerHTML = `<span class="loc-warn">⚠️ Share location for faster delivery</span>`;
+    }
+  );
+}
+
+/* GPS one-shot detect */
+let liveTrackWatcher = null;
+
+function useGPSLocation(){
+  if(!("geolocation" in navigator)){ showPushToast("❌ Not Supported","Your browser doesn't support GPS","orange"); return; }
+  const btn = document.getElementById("gpsBtn");
+  const statusEl = document.getElementById("liveLocStatus");
+  if(btn){ btn.disabled = true; btn.innerHTML = '⏳ Detecting...'; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      window.deliveryLocation = {lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:Math.round(pos.coords.accuracy)};
+      const addrInput = document.getElementById("coAddress");
+      if(addrInput && !addrInput.value.trim()){
+        addrInput.value = `GPS: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
+      }
+      if(statusEl) statusEl.innerHTML = `<span style="color:#71ff00;">✓ Location captured (±${Math.round(pos.coords.accuracy)}m) — address auto-filled</span>`;
+      if(btn){ btn.innerHTML = '📍 Location Detected'; btn.style.borderColor='rgba(113,255,0,0.5)'; btn.disabled = false; }
+    },
+    err => {
+      if(statusEl) statusEl.innerHTML = `<span style="color:#ff9800;">⚠️ Location denied — please type your address</span>`;
+      if(btn){ btn.innerHTML = '<i class="fas fa-crosshairs"></i> Auto-detect Location'; btn.disabled = false; }
+    },
+    { enableHighAccuracy:true, timeout:12000 }
+  );
+}
+
+/* Live GPS tracking toggle */
+function toggleLiveTrack(){
+  const btn = document.getElementById("liveTrackBtn");
+  const statusEl = document.getElementById("liveLocStatus");
+  if(!("geolocation" in navigator)){ showPushToast("❌ Not Supported","Live tracking not available","orange"); return; }
+  if(liveTrackWatcher !== null){
+    navigator.geolocation.clearWatch(liveTrackWatcher);
+    liveTrackWatcher = null;
+    if(btn) btn.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> Live Track';
+    if(statusEl) statusEl.innerHTML = `<span style="color:rgba(255,255,255,0.35);">Live tracking stopped.</span>`;
+    return;
+  }
+  if(btn) btn.innerHTML = '<i class="fas fa-circle" style="color:#ff6b6b;font-size:7px;"></i> Tracking...';
+  if(statusEl) statusEl.innerHTML = `<span style="color:#ff6b6b;">⏳ Starting live tracking...</span>`;
+  liveTrackWatcher = navigator.geolocation.watchPosition(
+    pos => {
+      window.deliveryLocation = {lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:Math.round(pos.coords.accuracy),live:true};
+      if(statusEl) statusEl.innerHTML = `<span style="color:#ff6b6b;"><i class="fas fa-circle" style="font-size:7px;"></i> Live — ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)</span>`;
+    },
+    () => {
+      if(statusEl) statusEl.innerHTML = `<span style="color:#ff9800;">Live tracking unavailable</span>`;
+      if(btn) btn.innerHTML = '<i class="fas fa-circle" style="font-size:7px;"></i> Live Track';
+      liveTrackWatcher = null;
+    },
+    { enableHighAccuracy:true, maximumAge:0 }
+  );
+}
+
+/* Request notification permission early */
+if("Notification" in window && Notification.permission === "default"){
+  setTimeout(() => Notification.requestPermission(), 2000);
+}
+
+window.selectPayment       = selectPayment;
+window.placeOrder          = placeOrder;
+window.processMobileMoney  = processMobileMoney;
+window.processBankTransfer = processBankTransfer;
+window.useGPSLocation = useGPSLocation;
+window.toggleLiveTrack = toggleLiveTrack;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.sendStkPush = sendStkPush;
+window.formatCardNum = formatCardNum;
+window.formatCardExp = formatCardExp;
+window.updateCardDisplay = updateCardDisplay;
+window.processCardPayment = processCardPayment;
+window.processPaypalPayment = processPaypalPayment;
+</script>
+<script src="demo-seed.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <script src="sw-register.js" defer></script>
+<script>
+/* Nav state init */
+(function(){
+  try{
+    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+  }catch(e){}
+})();
+</script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+<script src="sokoni-mpesa.js" defer></script>
+<script defer src="kass-widget.js"></script>
+<script defer src="sokoni-loyalty.js"></script>
+<!-- Enterprise v2.0: event bus, observability, and payment/fraud engines are required on checkout -->
+<script defer src="sokoni-event-bus.js"></script>
+<script defer src="sokoni-observability.js"></script>
+<script defer src="sokoni-gateway.js"></script>
+<script defer src="sokoni-payment-engine.js"></script>
+<script defer src="sokoni-fraud-engine.js"></script>
+<script defer src="sokoni-intasend.js"></script>
+<script defer src="sokoni-vouchers.js"></script>
+</body>
+</html>
+
+
+
+

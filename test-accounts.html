@@ -1,0 +1,195 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Test Accounts</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding:24px 16px 80px}
+    .logo{display:block;width:64px;height:64px;margin:24px auto 12px;border-radius:16px}
+    h1{text-align:center;font-size:22px;font-weight:900;color:#71ff00;margin-bottom:4px}
+    .sub{text-align:center;font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:28px}
+    .note{background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:14px 16px;margin-bottom:24px;font-size:13px;line-height:1.6;color:rgba(255,255,255,0.75)}
+    .note strong{color:#71ff00}
+    .card{background:#131313;border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;margin-bottom:16px;position:relative}
+    .card-badge{position:absolute;top:16px;right:16px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25)}
+    .card h2{font-size:16px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .row{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+    .label{font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.35);margin-bottom:1px}
+    .val{font-size:14px;color:#fff;font-weight:600;font-family:'Courier New',monospace;background:#0a0a0a;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .copy-btn{font-size:11px;background:rgba(113,255,0,0.1);border:none;color:#71ff00;padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0}
+    .copy-btn:active{background:rgba(113,255,0,0.25)}
+    .perms{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+    .perm{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
+    .perm-buyer{background:rgba(59,130,246,0.15);color:#60a5fa}
+    .perm-seller{background:rgba(245,158,11,0.15);color:#fbbf24}
+    .perm-driver{background:rgba(239,68,68,0.15);color:#f87171}
+    .perm-healthcare{background:rgba(16,185,129,0.15);color:#34d399}
+    .login-btn{display:block;margin-top:14px;padding:12px;text-align:center;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:14px;border-radius:12px;text-decoration:none;cursor:pointer;border:none;width:100%}
+    .divider{border:none;border-top:1px solid rgba(255,255,255,0.06);margin:24px 0}
+    .section-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.3);margin-bottom:12px}
+    .link-row{display:flex;gap:8px;flex-wrap:wrap}
+    .link-btn{flex:1;min-width:120px;padding:11px 8px;border:1px solid rgba(255,255,255,0.1);border-radius:12px;text-align:center;color:#fff;text-decoration:none;font-size:13px;font-weight:600;background:#1a1a1a}
+    .warn{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:12px 14px;font-size:12px;color:rgba(239,68,68,0.85);margin-top:8px;line-height:1.5}
+    .copied-toast{display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#71ff00;color:#000;font-weight:800;padding:10px 22px;border-radius:20px;font-size:13px;z-index:9999}
+  </style>
+<script src="shared-header.js" defer></script>
+</head>
+<body>
+
+<img src="assets/Sokonilogo2.png" alt="SOKONI" class="logo">
+<h1>SOKONI Test Accounts</h1>
+<p class="sub">Client testing credentials — for testers only</p>
+
+<div class="note">
+  <strong>Password for all accounts:</strong> Demo1234!<br>
+  These accounts work on both <strong>mysokoni.co.ke</strong> and localhost.<br>
+  All demo data (shops, products, fixtures) seeds automatically on first visit.
+</div>
+
+<!-- Account Cards -->
+<div class="card">
+  <span class="card-badge">Buyer</span>
+  <h2>🛍️ Amina Buyer</h2>
+  <div class="row">
+    <div class="label">Email</div>
+    <div class="val"><span>buyer@test.sokoni.co.ke</span><button class="copy-btn" onclick="cp(this,'buyer@test.sokoni.co.ke')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Password</div>
+    <div class="val"><span>Demo1234!</span><button class="copy-btn" onclick="cp(this,'Demo1234!')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Phone</div>
+    <div class="val"><span>0712 001 001</span><button class="copy-btn" onclick="cp(this,'0712001001')">Copy</button></div>
+  </div>
+  <div class="perms"><span class="perm perm-buyer">Buyer</span></div>
+  <button class="login-btn" onclick="autoLogin('buyer@test.sokoni.co.ke','Amina Buyer',{buyer:true},'0712001001')">Sign in as Amina →</button>
+</div>
+
+<div class="card">
+  <span class="card-badge">Seller</span>
+  <h2>🏪 Brian Seller</h2>
+  <div class="row">
+    <div class="label">Email</div>
+    <div class="val"><span>seller@test.sokoni.co.ke</span><button class="copy-btn" onclick="cp(this,'seller@test.sokoni.co.ke')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Password</div>
+    <div class="val"><span>Demo1234!</span><button class="copy-btn" onclick="cp(this,'Demo1234!')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Phone</div>
+    <div class="val"><span>0722 001 002</span><button class="copy-btn" onclick="cp(this,'0722001002')">Copy</button></div>
+  </div>
+  <div class="perms"><span class="perm perm-buyer">Buyer</span><span class="perm perm-seller">Seller</span></div>
+  <button class="login-btn" onclick="autoLogin('seller@test.sokoni.co.ke','Brian Seller',{buyer:true,seller:true},'0722001002')">Sign in as Brian →</button>
+</div>
+
+<div class="card">
+  <span class="card-badge">Driver</span>
+  <h2>🚗 Caro Driver</h2>
+  <div class="row">
+    <div class="label">Email</div>
+    <div class="val"><span>driver@test.sokoni.co.ke</span><button class="copy-btn" onclick="cp(this,'driver@test.sokoni.co.ke')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Password</div>
+    <div class="val"><span>Demo1234!</span><button class="copy-btn" onclick="cp(this,'Demo1234!')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Phone</div>
+    <div class="val"><span>0733 001 003</span><button class="copy-btn" onclick="cp(this,'0733001003')">Copy</button></div>
+  </div>
+  <div class="perms"><span class="perm perm-buyer">Buyer</span><span class="perm perm-driver">Driver</span></div>
+  <button class="login-btn" onclick="autoLogin('driver@test.sokoni.co.ke','Caro Driver',{buyer:true,driver:true},'0733001003')">Sign in as Caro →</button>
+</div>
+
+<div class="card">
+  <span class="card-badge">Healthcare</span>
+  <h2>💉 Diana Health</h2>
+  <div class="row">
+    <div class="label">Email</div>
+    <div class="val"><span>health@test.sokoni.co.ke</span><button class="copy-btn" onclick="cp(this,'health@test.sokoni.co.ke')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Password</div>
+    <div class="val"><span>Demo1234!</span><button class="copy-btn" onclick="cp(this,'Demo1234!')">Copy</button></div>
+  </div>
+  <div class="row">
+    <div class="label">Phone</div>
+    <div class="val"><span>0744 001 004</span><button class="copy-btn" onclick="cp(this,'0744001004')">Copy</button></div>
+  </div>
+  <div class="perms"><span class="perm perm-buyer">Buyer</span><span class="perm perm-healthcare">Healthcare</span></div>
+  <button class="login-btn" onclick="autoLogin('health@test.sokoni.co.ke','Diana Health',{buyer:true,healthcare:true},'0744001004')">Sign in as Diana →</button>
+</div>
+
+<hr class="divider">
+<div class="section-title">Quick Links</div>
+<div class="link-row">
+  <a href="index.html" class="link-btn">🏠 Home</a>
+  <a href="login.html" class="link-btn">🔑 Login</a>
+  <a href="sports-hub.html" class="link-btn">⚽ Fixtures</a>
+  <a href="ministore.html" class="link-btn">🏪 Shops</a>
+  <a href="profile.html" class="link-btn">👤 Profile</a>
+</div>
+
+<div class="warn">
+  This page is for authorized testers only. Do not share the URL publicly.
+  Test accounts have no access to admin features.
+</div>
+
+<div class="copied-toast" id="toast">Copied!</div>
+
+<script type="module">
+/* Admin-only gate: redirect non-admins before page content is usable */
+import { auth } from './firebase.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+document.body.style.visibility = 'hidden';
+onAuthStateChanged(auth, async function(user) {
+  if (!user) { window.location.replace('login.html'); return; }
+  const token = await user.getIdTokenResult().catch(() => null);
+  if (!token || !token.claims.admin) {
+    window.location.replace('index.html'); return;
+  }
+  document.body.style.visibility = '';
+});
+</script>
+<script src="demo-seed.js"></script>
+<script>
+function cp(btn, text) {
+  navigator.clipboard.writeText(text).then(function(){
+    var t = document.getElementById('toast');
+    t.style.display = 'block';
+    setTimeout(function(){ t.style.display = 'none'; }, 1400);
+  }).catch(function(){
+    // fallback
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    var t = document.getElementById('toast');
+    t.style.display = 'block';
+    setTimeout(function(){ t.style.display = 'none'; }, 1400);
+  });
+}
+
+function autoLogin(email, name, roles, phone) {
+  localStorage.setItem("sokoniUser", JSON.stringify({
+    uid: 'demo-' + email.split('@')[0],
+    name: name, email: email, phone: phone,
+    roles: roles, registeredAs: roles
+  }));
+  localStorage.setItem("loggedIn", "true");
+  window.location.href = "index.html";
+}
+</script>
+<script src="sw-register.js" defer></script>
+</body>
+</html>

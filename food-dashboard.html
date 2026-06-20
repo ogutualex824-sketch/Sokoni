@@ -1,0 +1,621 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Restaurant Dashboard — SOKONI Food</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.fn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
+
+/* ── TAB BAR ── */
+.fd-tabs{display:flex;overflow-x:auto;gap:8px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.07);scrollbar-width:none;}
+.fd-tabs::-webkit-scrollbar{display:none;}
+.fd-tab{padding:7px 16px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);transition:all .2s;}
+.fd-tab.active{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.4);color:#22c55e;}
+
+.fd-body{max-width:800px;margin:0 auto;padding:14px 16px;}
+.fd-pane{display:none;}
+.fd-pane.active{display:block;}
+
+/* ── STAT CARDS ── */
+.fd-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.fd-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;}
+.fd-stat-val{font-size:22px;font-weight:900;color:white;}
+.fd-stat-val.green{color:#22c55e;}
+.fd-stat-val.amber{color:#f59e0b;}
+.fd-stat-val.blue{color:#3b82f6;}
+.fd-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px;}
+.fd-stat-icon{font-size:24px;margin-bottom:6px;}
+
+/* ── ORDER CARD ── */
+.fd-order-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:14px;margin-bottom:10px;}
+.fd-oc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.fd-oc-id{font-size:13px;font-weight:800;color:white;font-family:monospace;}
+.fd-oc-time{font-size:10px;color:rgba(255,255,255,0.35);}
+.fd-oc-badge{font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;}
+.fd-oc-badge.placed{background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;}
+.fd-oc-badge.confirmed{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;}
+.fd-oc-badge.preparing{background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:#a855f7;}
+.fd-oc-badge.ready{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;}
+.fd-oc-badge.picked_up,.fd-oc-badge.delivered{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#10b981;}
+.fd-oc-items{font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px;}
+.fd-oc-footer{display:flex;justify-content:space-between;align-items:center;}
+.fd-oc-total{font-size:14px;font-weight:900;color:#22c55e;}
+.fd-oc-actions{display:flex;gap:6px;}
+.fd-oc-btn{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid;font-family:inherit;}
+.fd-oc-btn.confirm{background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:#22c55e;}
+.fd-oc-btn.ready{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#f59e0b;}
+.fd-oc-btn.reject{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#ef4444;}
+
+/* ── MENU MANAGEMENT ── */
+.fd-menu-section{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:12px;}
+.fd-ms-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.fd-ms-title{font-size:13px;font-weight:800;color:white;}
+.fd-add-btn{padding:6px 14px;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-weight:900;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:11px;}
+.fd-menu-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.fd-menu-item:last-child{border-bottom:none;padding-bottom:0;}
+.fd-mi-emoji{font-size:28px;flex-shrink:0;}
+.fd-mi-info{flex:1;min-width:0;}
+.fd-mi-name{font-size:13px;font-weight:800;color:white;}
+.fd-mi-price{font-size:12px;color:#22c55e;font-weight:700;}
+.fd-mi-desc{font-size:10px;color:rgba(255,255,255,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fd-mi-actions{display:flex;gap:6px;flex-shrink:0;}
+.fd-mi-btn{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid;font-size:14px;}
+.fd-mi-edit{background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.2);color:#3b82f6;}
+.fd-mi-del{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#ef4444;}
+
+/* ── PROMO MANAGEMENT ── */
+.fd-promo-card{background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:14px;margin-bottom:10px;}
+.fd-promo-code{font-size:18px;font-weight:900;font-family:monospace;color:#f59e0b;}
+.fd-promo-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;}
+.fd-promo-progress{background:rgba(255,255,255,0.05);border-radius:6px;height:4px;margin-top:8px;overflow:hidden;}
+.fd-promo-bar{height:100%;background:#f59e0b;border-radius:6px;}
+
+/* ── ANALYTICS ── */
+.fd-chart{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:12px;}
+.fd-chart-title{font-size:13px;font-weight:800;color:white;margin-bottom:12px;}
+.fd-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.fd-bar-lbl{font-size:11px;color:rgba(255,255,255,0.4);width:70px;text-align:right;flex-shrink:0;}
+.fd-bar-track{flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:16px;overflow:hidden;}
+.fd-bar-fill{height:100%;background:linear-gradient(90deg,#22c55e,#16a34a);border-radius:4px;transition:width .5s;}
+.fd-bar-val{font-size:11px;color:#22c55e;width:70px;flex-shrink:0;font-weight:700;}
+
+/* ── FORM ── */
+.fd-input{width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:8px;}
+.fd-input:focus{border-color:rgba(34,197,94,0.4);}
+.fd-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:4px;display:block;}
+.fd-select{width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:8px;appearance:none;}
+.fd-select option{background:#1a1a1a;}
+.fd-submit-btn{width:100%;padding:13px;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:14px;}
+.fd-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+/* ── MODAL ── */
+.fd-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+.fd-modal-ov.open{opacity:1;pointer-events:all;}
+.fd-modal-box{background:#111;border-radius:24px 24px 0 0;padding:24px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;transform:translateY(40px);transition:transform .3s;}
+.fd-modal-ov.open .fd-modal-box{transform:translateY(0);}
+.fd-modal-title{font-size:16px;font-weight:900;color:white;margin-bottom:16px;}
+.fd-modal-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);border:none;color:white;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;}
+
+/* ── TOGGLE ── */
+.fd-toggle-wrap{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:10px;}
+.fd-toggle-label{font-size:13px;font-weight:700;color:white;}
+.fd-toggle{position:relative;width:44px;height:24px;}
+.fd-toggle input{opacity:0;width:0;height:0;}
+.fd-toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,0.12);border-radius:12px;cursor:pointer;transition:background .2s;}
+.fd-toggle-slider:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:transform .2s;}
+.fd-toggle input:checked + .fd-toggle-slider{background:#22c55e;}
+.fd-toggle input:checked + .fd-toggle-slider:before{transform:translateX(20px);}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;}
+.bnav-item i{font-size:18px;}
+.bnav-item.active{color:#22c55e;}
+
+.fd-section-hdr{font-size:14px;font-weight:900;color:white;margin:16px 0 10px;}
+.fd-empty{text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);}
+.fd-empty .big{font-size:40px;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-food.js"></script>
+
+<nav class="fn">
+  <a href="food.html" class="fn-back">←</a>
+  <span style="font-size:15px;font-weight:800;flex:1;" id="dashRestaurantName">Restaurant Dashboard</span>
+  <span id="openStatusToggle" style="font-size:11px;font-weight:800;padding:4px 12px;border-radius:8px;cursor:pointer;"></span>
+</nav>
+
+<div class="fd-tabs" id="fdTabs">
+  <div class="fd-tab active" onclick="switchTab('orders')">📋 Orders</div>
+  <div class="fd-tab" onclick="switchTab('menu')">🍽️ Menu</div>
+  <div class="fd-tab" onclick="switchTab('promos')">🏷️ Promos</div>
+  <div class="fd-tab" onclick="switchTab('analytics')">📊 Analytics</div>
+  <div class="fd-tab" onclick="switchTab('settings')">⚙️ Settings</div>
+</div>
+
+<div class="fd-body">
+
+  <!-- ORDERS PANE -->
+  <div class="fd-pane active" id="pane-orders">
+    <div class="fd-stats-grid" id="orderStats"></div>
+    <div id="newOrdersSection">
+      <div class="fd-section-hdr">🔔 New Orders</div>
+      <div id="newOrders"></div>
+    </div>
+    <div id="activeOrdersSection">
+      <div class="fd-section-hdr">🔥 Active Orders</div>
+      <div id="activeOrders"></div>
+    </div>
+    <div id="historySection">
+      <div class="fd-section-hdr">✅ Completed Today</div>
+      <div id="historyOrders"></div>
+    </div>
+  </div>
+
+  <!-- MENU PANE -->
+  <div class="fd-pane" id="pane-menu">
+    <div class="fd-section-hdr">Menu Items <button class="fd-add-btn" onclick="openAddItem()">+ Add Item</button></div>
+    <div id="menuByCategory"></div>
+  </div>
+
+  <!-- PROMOS PANE -->
+  <div class="fd-pane" id="pane-promos">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="fd-section-hdr" style="margin:0;">Your Promo Codes</div>
+      <button class="fd-add-btn" onclick="openAddPromo()">+ Create</button>
+    </div>
+    <div id="promosList"></div>
+    <div style="margin-top:16px;font-size:12px;color:rgba(255,255,255,0.3);">💡 System promos (WELCOME50, FOOD20, etc.) apply site-wide and are managed by Sokoni.</div>
+  </div>
+
+  <!-- ANALYTICS PANE -->
+  <div class="fd-pane" id="pane-analytics">
+    <div class="fd-stats-grid" id="analyticsStats"></div>
+    <div id="analyticsCharts"></div>
+  </div>
+
+  <!-- SETTINGS PANE -->
+  <div class="fd-pane" id="pane-settings">
+    <div class="fd-section-hdr">Restaurant Settings</div>
+    <div id="settingsForm"></div>
+  </div>
+
+</div>
+
+<!-- MODAL -->
+<div class="fd-modal-ov" id="fdModal">
+  <div class="fd-modal-box" id="fdModalBox">
+    <div class="fd-modal-title" id="fdModalTitle"></div>
+    <div id="fdModalBody"></div>
+    <button class="fd-modal-close" onclick="closeModal()">×</button>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
+  <a href="food.html" class="bnav-item"><i class="fas fa-utensils"></i><span>Food</span></a>
+  <a href="food-dashboard.html" class="bnav-item active"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+</nav>
+
+<script>
+const _rid = new URLSearchParams(window.location.search).get('id') || 'jambo-burgers';
+let _restaurant = null;
+let _menu = null;
+let _vendorOrders = [];
+let _vendorPromos = [];
+let _openStatus = true;
+
+function init() {
+  _restaurant = SokoniFood.RESTAURANTS.find(r => r.id === _rid) || SokoniFood.RESTAURANTS[0];
+  _menu = SokoniFood.MENUS[_restaurant.id] || { categories: ['Main'], items: [] };
+  _vendorOrders = SokoniFood.getVendorOrders(_restaurant.id);
+  _vendorPromos = JSON.parse(localStorage.getItem('vendor_promos_' + _restaurant.id) || '[]');
+  _openStatus = _restaurant.open !== false;
+
+  document.getElementById('dashRestaurantName').textContent = _restaurant.emoji + ' ' + _restaurant.name;
+  updateOpenToggle();
+  renderOrders();
+  renderMenu();
+  renderPromos();
+  renderAnalytics();
+  renderSettings();
+}
+
+function updateOpenToggle() {
+  const el = document.getElementById('openStatusToggle');
+  el.textContent = _openStatus ? '🟢 Open' : '🔴 Closed';
+  el.style.background = _openStatus ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+  el.style.border = _openStatus ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(239,68,68,0.3)';
+  el.style.color = _openStatus ? '#22c55e' : '#ef4444';
+  el.onclick = () => { _openStatus = !_openStatus; updateOpenToggle(); };
+}
+
+/* ── TABS ── */
+function switchTab(name) {
+  document.querySelectorAll('.fd-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.fd-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+/* ── ORDERS ── */
+function renderOrders() {
+  const all = _vendorOrders;
+  const newOrds = all.filter(o => o.status === 'placed');
+  const active = all.filter(o => ['confirmed','preparing','ready'].includes(o.status));
+  const done = all.filter(o => ['picked_up','delivered'].includes(o.status));
+
+  const today = new Date();
+  const todayStr = today.toDateString();
+  const todayDone = done.filter(o => o.placedAt && new Date(o.placedAt).toDateString() === todayStr);
+  const todayRevenue = todayDone.reduce((s, o) => { const vend = (o.vendors||[]).find(v=>v.restaurantId===_restaurant.id); return s + (vend ? vend.subtotal : o.total); }, 0);
+
+  document.getElementById('orderStats').innerHTML = `
+    <div class="fd-stat"><div class="fd-stat-icon">🔔</div><div class="fd-stat-val ${newOrds.length?'amber':''}">${newOrds.length}</div><div class="fd-stat-lbl">New Orders</div></div>
+    <div class="fd-stat"><div class="fd-stat-icon">🔥</div><div class="fd-stat-val blue">${active.length}</div><div class="fd-stat-lbl">Active Now</div></div>
+    <div class="fd-stat"><div class="fd-stat-icon">✅</div><div class="fd-stat-val">${todayDone.length}</div><div class="fd-stat-lbl">Completed Today</div></div>
+    <div class="fd-stat"><div class="fd-stat-icon">💰</div><div class="fd-stat-val green">KES ${SokoniFood.fmt(todayRevenue)}</div><div class="fd-stat-lbl">Revenue Today</div></div>`;
+
+  document.getElementById('newOrders').innerHTML = newOrds.length ? newOrds.map(o => orderCard(o, ['confirm','reject'])).join('') : `<div class="fd-empty"><div class="big">🕐</div><p>No new orders</p></div>`;
+  document.getElementById('activeOrders').innerHTML = active.length ? active.map(o => orderCard(o, ['ready'])).join('') : `<div class="fd-empty"><div class="big">🍳</div><p>No active orders</p></div>`;
+  document.getElementById('historyOrders').innerHTML = todayDone.length ? todayDone.map(o => orderCard(o, [])).join('') : `<div class="fd-empty"><div class="big">📋</div><p>No completions yet today</p></div>`;
+}
+
+function orderCard(o, actions) {
+  const vend = (o.vendors||[]).find(v=>v.restaurantId===_restaurant.id);
+  const items = vend ? (vend.items||[]).map(i=>`${i.name}×${i.qty}`).join(', ') : 'Items not listed';
+  const total = vend ? vend.subtotal : o.total;
+  const timeAgo = o.placedAt ? timeSince(o.placedAt) : '';
+  return `
+  <div class="fd-order-card">
+    <div class="fd-oc-top">
+      <div>
+        <div class="fd-oc-id">#${o.id.slice(-8)}</div>
+        <div class="fd-oc-time">${timeAgo}</div>
+      </div>
+      <span class="fd-oc-badge ${o.status}">${SokoniFood.STATUS_LABELS[o.status]||o.status}</span>
+    </div>
+    <div class="fd-oc-items">${items}</div>
+    <div class="fd-oc-footer">
+      <div class="fd-oc-total">KES ${SokoniFood.fmt(total)}</div>
+      <div class="fd-oc-actions">
+        ${actions.includes('confirm') ? `<button class="fd-oc-btn confirm" onclick="advOrder('${o.id}','confirmed')">✅ Confirm</button>` : ''}
+        ${actions.includes('ready') ? `<button class="fd-oc-btn ready" onclick="advOrder('${o.id}','ready')">🔔 Mark Ready</button>` : ''}
+        ${actions.includes('reject') ? `<button class="fd-oc-btn reject" onclick="advOrder('${o.id}','cancelled')">✗ Reject</button>` : ''}
+        <button class="fd-oc-btn confirm" onclick="viewOrder('${o.id}')">👁</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function advOrder(orderId, status) {
+  SokoniFood.updateOrderStatus(orderId, status);
+  _vendorOrders = SokoniFood.getVendorOrders(_restaurant.id);
+  renderOrders();
+}
+
+function viewOrder(orderId) {
+  window.open('food-order.html?id=' + orderId, '_blank');
+}
+
+/* ── MENU ── */
+function renderMenu() {
+  const cats = _menu.categories || ['Main'];
+  const items = _menu.items || [];
+  const bycat = {};
+  cats.forEach(c => bycat[c] = []);
+  items.forEach(i => { if (bycat[i.cat] !== undefined) bycat[i.cat].push(i); else { if (!bycat['Other']) bycat['Other'] = []; bycat['Other'].push(i); } });
+
+  const html = Object.entries(bycat).map(([cat, citems]) => `
+    <div class="fd-menu-section">
+      <div class="fd-ms-header"><div class="fd-ms-title">${cat}</div></div>
+      ${citems.length ? citems.map(item => `
+      <div class="fd-menu-item">
+        <div class="fd-mi-emoji">${item.emoji||'🍽️'}</div>
+        <div class="fd-mi-info">
+          <div class="fd-mi-name">${item.name}</div>
+          <div class="fd-mi-price">KES ${SokoniFood.fmt(item.price)}</div>
+          <div class="fd-mi-desc">${item.desc||''}</div>
+        </div>
+        <div class="fd-mi-actions">
+          <button class="fd-mi-btn fd-mi-edit" onclick="editItem('${item.id}')">✏️</button>
+          <button class="fd-mi-btn fd-mi-del" onclick="delItem('${item.id}')">🗑</button>
+        </div>
+      </div>`).join('') : '<div style="font-size:12px;color:rgba(255,255,255,0.3);padding:10px 0;">No items in this category</div>'}
+    </div>`).join('');
+
+  document.getElementById('menuByCategory').innerHTML = html || '<div class="fd-empty"><div class="big">🍽️</div><p>No menu items</p></div>';
+}
+
+function openAddItem() {
+  const cats = _menu.categories || ['Main'];
+  openModal('Add Menu Item', `
+    <label class="fd-label">Item Name</label><input id="miName" class="fd-input" placeholder="e.g. Chicken Burger">
+    <label class="fd-label">Category</label>
+    <select id="miCat" class="fd-select">${cats.map(c=>`<option value="${c}">${c}</option>`).join('')}<option value="__new">+ New Category</option></select>
+    <input id="miNewCat" class="fd-input" placeholder="New category name" style="display:none;">
+    <div class="fd-grid2">
+      <div><label class="fd-label">Price (KES)</label><input id="miPrice" class="fd-input" type="number" placeholder="350"></div>
+      <div><label class="fd-label">Emoji</label><input id="miEmoji" class="fd-input" placeholder="🍔"></div>
+    </div>
+    <label class="fd-label">Description</label><input id="miDesc" class="fd-input" placeholder="Short description">
+    <button class="fd-submit-btn" onclick="saveItem()">Add Item</button>
+    <div id="miMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+  `);
+  document.getElementById('miCat').addEventListener('change', function() {
+    document.getElementById('miNewCat').style.display = this.value === '__new' ? 'block' : 'none';
+  });
+}
+
+function editItem(itemId) {
+  const items = _menu.items || [];
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+  const cats = _menu.categories || ['Main'];
+  openModal('Edit Item', `
+    <label class="fd-label">Item Name</label><input id="miName" class="fd-input" value="${item.name}">
+    <label class="fd-label">Category</label>
+    <select id="miCat" class="fd-select">${cats.map(c=>`<option value="${c}" ${c===item.cat?'selected':''}>${c}</option>`).join('')}</select>
+    <div class="fd-grid2">
+      <div><label class="fd-label">Price (KES)</label><input id="miPrice" class="fd-input" type="number" value="${item.price}"></div>
+      <div><label class="fd-label">Emoji</label><input id="miEmoji" class="fd-input" value="${item.emoji||''}"></div>
+    </div>
+    <label class="fd-label">Description</label><input id="miDesc" class="fd-input" value="${item.desc||''}">
+    <button class="fd-submit-btn" onclick="saveItem('${itemId}')">Save Changes</button>
+    <div id="miMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+  `);
+}
+
+function saveItem(editId) {
+  const name = document.getElementById('miName')?.value.trim();
+  const catEl = document.getElementById('miCat');
+  let cat = catEl?.value;
+  if (cat === '__new') cat = document.getElementById('miNewCat')?.value.trim();
+  const price = parseInt(document.getElementById('miPrice')?.value);
+  const emoji = document.getElementById('miEmoji')?.value.trim();
+  const desc = document.getElementById('miDesc')?.value.trim();
+  const msg = document.getElementById('miMsg');
+
+  if (!name) { if(msg) msg.textContent = '⚠️ Item name is required'; return; }
+  if (!price || price < 1) { if(msg) msg.textContent = '⚠️ Enter a valid price'; return; }
+
+  const menuKey = 'fd_menu_' + _restaurant.id;
+  const saved = JSON.parse(localStorage.getItem(menuKey) || 'null') || _menu;
+
+  if (editId) {
+    const idx = (saved.items||[]).findIndex(i => i.id === editId);
+    if (idx > -1) { saved.items[idx] = {...saved.items[idx], name, cat, price, emoji, desc}; }
+  } else {
+    const newItem = { id: 'mi_' + Date.now(), name, cat, price, emoji, desc };
+    if (!saved.items) saved.items = [];
+    saved.items.push(newItem);
+    if (cat && !saved.categories?.includes(cat)) { if (!saved.categories) saved.categories = []; saved.categories.push(cat); }
+  }
+
+  localStorage.setItem(menuKey, JSON.stringify(saved));
+  _menu = saved;
+  SokoniFood.MENUS[_restaurant.id] = saved;
+  closeModal();
+  renderMenu();
+}
+
+function delItem(itemId) {
+  if(!_c){_skConfirm('Remove this item from your menu?',()=>_doRmMenu(_mid,true));return;}
+  const menuKey = 'fd_menu_' + _restaurant.id;
+  const saved = JSON.parse(localStorage.getItem(menuKey) || 'null') || _menu;
+  saved.items = (saved.items||[]).filter(i => i.id !== itemId);
+  localStorage.setItem(menuKey, JSON.stringify(saved));
+  _menu = saved;
+  SokoniFood.MENUS[_restaurant.id] = saved;
+  renderMenu();
+}
+
+/* ── PROMOS ── */
+function renderPromos() {
+  const promos = _vendorPromos;
+  document.getElementById('promosList').innerHTML = promos.length ? promos.map((p, idx) => {
+    const used = parseInt(localStorage.getItem('promo_used_' + p.code) || '0');
+    const pct = p.maxUses ? Math.min(100, (used / p.maxUses) * 100) : 0;
+    return `
+    <div class="fd-promo-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="fd-promo-code">${p.code}</div>
+        <button style="background:none;border:none;color:rgba(239,68,68,0.6);cursor:pointer;font-size:18px;" onclick="delPromo(${idx})">🗑</button>
+      </div>
+      <div class="fd-promo-meta">${p.type === 'percent' ? p.value + '% off' : p.type === 'flat' ? 'KES ' + p.value + ' off' : 'Free delivery'} · Min order KES ${p.minOrder||0} · ${p.maxUses ? used + '/' + p.maxUses + ' used' : 'Unlimited'}</div>
+      ${p.maxUses ? `<div class="fd-promo-progress"><div class="fd-promo-bar" style="width:${pct}%"></div></div>` : ''}
+    </div>`;
+  }).join('') : `<div class="fd-empty"><div class="big">🏷️</div><p>No promo codes yet.<br>Create one to attract customers!</p></div>`;
+}
+
+function openAddPromo() {
+  openModal('Create Promo Code', `
+    <label class="fd-label">Promo Code (UPPERCASE)</label><input id="pCode" class="fd-input" placeholder="MYPROMO20" style="text-transform:uppercase">
+    <label class="fd-label">Discount Type</label>
+    <select id="pType" class="fd-select"><option value="percent">Percentage (%)</option><option value="flat">Flat Amount (KES)</option><option value="delivery">Free Delivery</option></select>
+    <div class="fd-grid2">
+      <div><label class="fd-label">Discount Value</label><input id="pVal" class="fd-input" type="number" placeholder="20"></div>
+      <div><label class="fd-label">Min Order (KES)</label><input id="pMin" class="fd-input" type="number" placeholder="500"></div>
+    </div>
+    <div class="fd-grid2">
+      <div><label class="fd-label">Max Uses (0 = unlimited)</label><input id="pMaxUses" class="fd-input" type="number" placeholder="50"></div>
+      <div><label class="fd-label">Max Discount (KES)</label><input id="pMaxDisc" class="fd-input" type="number" placeholder="300"></div>
+    </div>
+    <button class="fd-submit-btn" onclick="savePromo()">Create Promo</button>
+    <div id="promoMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+  `);
+}
+
+function savePromo() {
+  const code = document.getElementById('pCode')?.value.trim().toUpperCase();
+  const type = document.getElementById('pType')?.value;
+  const value = parseInt(document.getElementById('pVal')?.value) || 0;
+  const minOrder = parseInt(document.getElementById('pMin')?.value) || 0;
+  const maxUses = parseInt(document.getElementById('pMaxUses')?.value) || 0;
+  const maxDiscount = parseInt(document.getElementById('pMaxDisc')?.value) || 0;
+  const msg = document.getElementById('promoMsg');
+
+  if (!code || code.length < 3) { if(msg) msg.textContent = '⚠️ Enter a valid promo code (3+ chars)'; return; }
+  if (!value && type !== 'delivery') { if(msg) msg.textContent = '⚠️ Enter a discount value'; return; }
+
+  _vendorPromos.push({ code, type, value, minOrder, maxUses: maxUses || 0, maxDiscount });
+  localStorage.setItem('vendor_promos_' + _restaurant.id, JSON.stringify(_vendorPromos));
+  closeModal();
+  renderPromos();
+}
+
+function delPromo(idx) {
+  if(!_c){_skConfirm('Delete this promo code?',()=>_doRmPromo(_pid,true));return;}
+  _vendorPromos.splice(idx, 1);
+  localStorage.setItem('vendor_promos_' + _restaurant.id, JSON.stringify(_vendorPromos));
+  renderPromos();
+}
+
+/* ── ANALYTICS ── */
+function renderAnalytics() {
+  const orders = _vendorOrders.filter(o => ['delivered','picked_up'].includes(o.status));
+  const totalRevenue = orders.reduce((s, o) => { const v = (o.vendors||[]).find(v=>v.restaurantId===_restaurant.id); return s + (v ? v.subtotal : o.total); }, 0);
+  const commission = Math.round(totalRevenue * 0.1);
+  const ratings = SokoniFood.getRatings(_restaurant.id);
+  const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r.rating, 0) / ratings.length).toFixed(1) : _restaurant.rating || '4.5';
+
+  document.getElementById('analyticsStats').innerHTML = `
+    <div class="fd-stat"><div class="fd-stat-icon">💰</div><div class="fd-stat-val green">KES ${SokoniFood.fmt(totalRevenue)}</div><div class="fd-stat-lbl">Total Revenue</div></div>
+    <div class="fd-stat"><div class="fd-stat-icon">📦</div><div class="fd-stat-val blue">${orders.length}</div><div class="fd-stat-lbl">Orders Completed</div></div>
+    <div class="fd-stat"><div class="fd-stat-icon">⭐</div><div class="fd-stat-val amber">${avgRating}</div><div class="fd-stat-lbl">Avg Rating</div></div>
+    <div class="fd-stat"><div class="fd-stat-icon">🏦</div><div class="fd-stat-val" style="color:rgba(239,68,68,0.8);">KES ${SokoniFood.fmt(commission)}</div><div class="fd-stat-lbl">Sokoni Commission (10%)</div></div>`;
+
+  /* Revenue by day (last 7 days) */
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const today = new Date().getDay();
+  const reorder = [...Array(7)].map((_,i)=>days[(today-6+i+7)%7]);
+  const dayRev = [480, 920, 750, 1100, 890, 2200, 1650];
+  const maxRev = Math.max(...dayRev, 1);
+
+  document.getElementById('analyticsCharts').innerHTML = `
+  <div class="fd-chart">
+    <div class="fd-chart-title">Revenue This Week</div>
+    ${reorder.map((day, i) => `
+    <div class="fd-bar-row">
+      <div class="fd-bar-lbl">${day}</div>
+      <div class="fd-bar-track"><div class="fd-bar-fill" style="width:${(dayRev[i]/maxRev)*100}%"></div></div>
+      <div class="fd-bar-val">KES ${SokoniFood.fmt(dayRev[i])}</div>
+    </div>`).join('')}
+  </div>
+  <div class="fd-chart">
+    <div class="fd-chart-title">Top Menu Items</div>
+    ${(_menu.items||[]).slice(0,5).map((item, i) => {
+      const count = 5 - i;
+      return `
+      <div class="fd-bar-row">
+        <div class="fd-bar-lbl">${(item.emoji||'🍽️')+' '+item.name.split(' ')[0]}</div>
+        <div class="fd-bar-track"><div class="fd-bar-fill" style="width:${(count/5)*100}%;background:linear-gradient(90deg,#f59e0b,#d97706)"></div></div>
+        <div class="fd-bar-val" style="color:#f59e0b;">${count*7} orders</div>
+      </div>`;
+    }).join('')}
+  </div>
+  ${ratings.length ? `
+  <div class="fd-chart">
+    <div class="fd-chart-title">Recent Reviews</div>
+    ${ratings.slice(-3).reverse().map(r=>`
+    <div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="color:#f59e0b;">${'⭐'.repeat(r.rating)}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,0.3);">${r.ts ? new Date(r.ts).toLocaleDateString() : ''}</span>
+      </div>
+      ${r.comment ? `<div style="font-size:12px;color:rgba(255,255,255,0.6);">"${r.comment}"</div>` : ''}
+    </div>`).join('')}
+  </div>` : ''}`;
+}
+
+/* ── SETTINGS ── */
+function renderSettings() {
+  document.getElementById('settingsForm').innerHTML = `
+    <div class="fd-toggle-wrap">
+      <div class="fd-toggle-label">🟢 Restaurant Open</div>
+      <label class="fd-toggle"><input type="checkbox" ${_openStatus?'checked':''} onchange="_openStatus=this.checked;updateOpenToggle()"><span class="fd-toggle-slider"></span></label>
+    </div>
+    <div class="fd-toggle-wrap">
+      <div class="fd-toggle-label">📦 Accepting Orders</div>
+      <label class="fd-toggle"><input type="checkbox" checked><span class="fd-toggle-slider"></span></label>
+    </div>
+    <div class="fd-toggle-wrap">
+      <div class="fd-toggle-label">🛵 Delivery Available</div>
+      <label class="fd-toggle"><input type="checkbox" checked><span class="fd-toggle-slider"></span></label>
+    </div>
+    <div class="fd-toggle-wrap">
+      <div class="fd-toggle-label">🏃 Pickup Available</div>
+      <label class="fd-toggle"><input type="checkbox" checked><span class="fd-toggle-slider"></span></label>
+    </div>
+    <label class="fd-label">Delivery Fee (KES)</label>
+    <input class="fd-input" type="number" value="${_restaurant.deliveryFee||50}" id="settingDeliveryFee">
+    <label class="fd-label">Minimum Order (KES)</label>
+    <input class="fd-input" type="number" value="${_restaurant.minOrder||200}" id="settingMinOrder">
+    <label class="fd-label">Estimated Delivery Time</label>
+    <input class="fd-input" value="${_restaurant.deliveryTime||'30-45 min'}" id="settingDeliveryTime">
+    <button class="fd-submit-btn" onclick="saveSettings()">Save Settings</button>
+    <div id="settingsMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
+  `;
+}
+
+function saveSettings() {
+  const key = 'fd_settings_' + _restaurant.id;
+  const data = {
+    deliveryFee: parseInt(document.getElementById('settingDeliveryFee')?.value)||50,
+    minOrder: parseInt(document.getElementById('settingMinOrder')?.value)||200,
+    deliveryTime: document.getElementById('settingDeliveryTime')?.value||'30-45 min',
+    isOpen: _openStatus
+  };
+  localStorage.setItem(key, JSON.stringify(data));
+  const msg = document.getElementById('settingsMsg');
+  if(msg) { msg.innerHTML = '✅ Settings saved!'; msg.style.color = '#22c55e'; }
+  setTimeout(() => { if(msg) msg.textContent = ''; }, 2000);
+}
+
+/* ── MODAL ── */
+function openModal(title, body) {
+  document.getElementById('fdModalTitle').textContent = title;
+  document.getElementById('fdModalBody').innerHTML = body;
+  document.getElementById('fdModal').classList.add('open');
+}
+function closeModal() { document.getElementById('fdModal').classList.remove('open'); }
+document.getElementById('fdModal').addEventListener('click', e => { if(e.target===document.getElementById('fdModal')) closeModal(); });
+
+/* ── UTILS ── */
+function timeSince(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'Just now';
+  if (m < 60) return m + ' min ago';
+  return Math.floor(m / 60) + 'h ago';
+}
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,943 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI Business OS — Inventory, Orders, Customers &amp; Accounting</title>
+<meta name="description" content="Run your business on SOKONI — manage inventory, track orders, handle accounting, manage customers and staff all in one place.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mysokoni.co.ke/business-os.html">
+<meta property="og:title" content="SOKONI Business OS — Inventory, Orders, Customers &amp; Accounting">
+<meta property="og:description" content="Run your business on SOKONI — manage inventory, track orders, handle accounting, manage customers and staff all in one place.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:site_name" content="SOKONI">
+<meta property="og:locale" content="en_KE">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6366f1">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#04040f;color:white;min-height:100vh;padding-bottom:100px;}
+:root{--bc:#6366f1;--bc2:#818cf8;}
+
+/* NAV */
+.bo-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:rgba(4,4,15,0.97);border-bottom:1px solid rgba(99,102,241,0.12);position:sticky;top:0;z-index:200;backdrop-filter:blur(20px);gap:10px;}
+.bo-nav-logo{height:28px;flex-shrink:0;}
+.bo-tabs{display:flex;gap:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:3px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;}
+.bo-tabs::-webkit-scrollbar{display:none;}
+.bo-tab{padding:6px 11px;border-radius:8px;border:none;background:transparent;color:rgba(255,255,255,0.4);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.bo-tab.active{background:rgba(99,102,241,0.14);color:#818cf8;border:1px solid rgba(99,102,241,0.28);}
+.bo-tab:hover:not(.active){color:rgba(255,255,255,0.65);background:rgba(255,255,255,0.04);}
+
+/* PANELS */
+.bo-panel{display:none;max-width:860px;margin:0 auto;padding:20px 16px 70px;}
+.bo-panel.active{display:block;}
+
+/* KPIs */
+.bo-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.bo-kpi{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px 12px;text-align:center;}
+.bo-kpi-num{font-size:22px;font-weight:900;margin-bottom:3px;}
+.bo-kpi-label{font-size:9.5px;color:rgba(255,255,255,0.35);text-transform:uppercase;font-weight:700;letter-spacing:.04em;}
+
+/* TABLES */
+.bo-table{width:100%;border-collapse:collapse;}
+.bo-table th{font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:left;}
+.bo-table td{font-size:12px;color:rgba(255,255,255,0.75);padding:10px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.bo-table tr:hover td{background:rgba(255,255,255,0.02);}
+.bo-badge{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:800;}
+
+.bo-h{font-size:13px;font-weight:800;color:white;margin:20px 0 10px;display:flex;align-items:center;gap:8px;}
+.bo-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+.bo-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
+.bo-input:focus{border-color:rgba(99,102,241,0.5);}
+.bo-input::placeholder{color:rgba(255,255,255,0.25);}
+.bo-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);display:block;margin-bottom:4px;}
+
+.bo-btn{padding:11px 18px;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;}
+.bo-btn-primary{background:linear-gradient(135deg,#6366f1,#818cf8);color:white;border:none;}
+.bo-btn-primary:hover{opacity:.9;transform:translateY(-1px);}
+.bo-btn-sm{padding:6px 12px;font-size:10px;border-radius:7px;}
+.bo-btn-danger{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;}
+.bo-btn-success{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:#10b981;}
+.bo-btn-ghost{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.35);}
+.bo-btn-wa{background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);color:#25d366;}
+.bo-btn-inv{background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);color:#818cf8;}
+
+.bo-row{display:flex;gap:10px;align-items:flex-start;}
+.bo-row>div{flex:1;min-width:0;}
+
+/* CARDS */
+.bo-card{background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.12);border-radius:18px;padding:18px;margin-bottom:20px;}
+.bo-card-title{font-size:13px;font-weight:800;color:white;margin-bottom:14px;}
+
+.bo-item-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:13px;margin-bottom:8px;display:flex;gap:12px;align-items:center;transition:border-color .2s;}
+.bo-item-card:hover{border-color:rgba(99,102,241,0.2);}
+.bo-item-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:rgba(99,102,241,0.1);}
+.bo-item-info{flex:1;min-width:0;}
+.bo-item-name{font-size:13px;font-weight:700;color:white;margin-bottom:2px;}
+.bo-item-meta{font-size:11px;color:rgba(255,255,255,0.38);}
+.bo-item-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+
+/* BAR CHART */
+.bo-bar-wrap{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.bo-bar-label{font-size:11px;color:rgba(255,255,255,0.45);width:90px;flex-shrink:0;}
+.bo-bar-track{flex:1;height:7px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;}
+.bo-bar-fill{height:100%;border-radius:4px;transition:width .5s ease;}
+.bo-bar-val{font-size:11px;color:rgba(255,255,255,0.4);width:90px;text-align:right;flex-shrink:0;}
+
+/* FILTER PILLS */
+.bo-filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.bo-pill{padding:5px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;}
+.bo-pill.active{background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.35);color:#818cf8;}
+
+/* STATUS MSG */
+.bo-msg{font-size:11px;margin-top:8px;min-height:14px;transition:opacity .3s;}
+
+/* SYNC BADGE */
+.sync-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);color:#10b981;}
+
+/* DESKTOP IMPROVEMENTS */
+@media(min-width:769px){
+  .bo-nav{padding:12px 28px;}
+  .bo-panel{padding:24px 28px 80px;}
+  .bo-kpis{grid-template-columns:repeat(4,1fr);}
+  .bo-row{gap:14px;}
+}
+
+/* MOBILE */
+@media(max-width:480px){
+  .bo-kpis{grid-template-columns:1fr 1fr;}
+  .bo-kpi-num{font-size:18px;}
+  .bo-row{flex-direction:column;}
+  .bo-row>div{width:100%;}
+}
+
+/* EMPTY STATE */
+.bo-empty{padding:32px;text-align:center;color:rgba(255,255,255,0.28);font-size:12px;}
+.bo-empty-icon{font-size:32px;margin-bottom:8px;opacity:.4;}
+</style>
+<script src="shared-header.js" defer></script>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="bo-nav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="bo-nav-logo" alt="SOKONI"></a>
+  <div class="bo-tabs" id="boTabsEl">
+    <button type="button" class="bo-tab active" data-panel="dash">📊 Dashboard</button>
+    <button type="button" class="bo-tab" data-panel="inventory">📦 Inventory</button>
+    <button type="button" class="bo-tab" data-panel="orders">🧾 Orders</button>
+    <button type="button" class="bo-tab" data-panel="accounts">💰 Accounts</button>
+    <button type="button" class="bo-tab" data-panel="customers">👥 Customers</button>
+    <button type="button" class="bo-tab" data-panel="staff">🧑‍💼 Staff</button>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    <a href="messages.html" style="position:relative;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:15px;">💬<span id="boInboxBadge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#ff3c3c;color:white;border-radius:999px;font-size:9px;font-weight:900;line-height:16px;text-align:center;padding:0 3px;"></span></a>
+    <a href="notifications.html" style="position:relative;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:15px;">🔔<span id="boBellBadge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#ff3c3c;color:white;border-radius:999px;font-size:9px;font-weight:900;line-height:16px;text-align:center;padding:0 3px;"></span></a>
+  </div>
+</nav>
+<script>
+(function(){
+  var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');
+  if(n>0){
+    var bb=document.getElementById('boBellBadge'),ib=document.getElementById('boInboxBadge');
+    if(bb){bb.textContent=n>9?'9+':n;bb.style.display='block';}
+    if(ib){ib.textContent=n>9?'9+':n;ib.style.display='block';}
+  }
+  window.addEventListener('sokoniInboxUnread',function(e){
+    var c=(e.detail&&e.detail.count)||0;
+    var bb=document.getElementById('boBellBadge'),ib=document.getElementById('boInboxBadge');
+    if(bb){bb.textContent=c>9?'9+':c;bb.style.display=c>0?'block':'none';}
+    if(ib){ib.textContent=c>9?'9+':c;ib.style.display=c>0?'block':'none';}
+  });
+})();
+</script>
+
+<!-- ── DASHBOARD ── -->
+<div id="bopanel-dash" class="bo-panel active">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;padding-top:4px;gap:12px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:20px;font-weight:900;color:white;">📊 Business Dashboard</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.35);margin-top:3px;" id="bosBizName">Loading…</div>
+    </div>
+    <a href="seller.html" style="padding:8px 16px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:10px;font-size:12px;font-weight:800;text-decoration:none;white-space:nowrap;">🛒 Seller Dashboard</a>
+  </div>
+
+  <div class="bo-kpis">
+    <div class="bo-kpi"><div class="bo-kpi-num" id="dk-revenue" style="color:#10b981;">KES 0</div><div class="bo-kpi-label">Monthly Revenue</div></div>
+    <div class="bo-kpi"><div class="bo-kpi-num" id="dk-orders" style="color:#6366f1;">0</div><div class="bo-kpi-label">Orders / Month</div></div>
+    <div class="bo-kpi"><div class="bo-kpi-num" id="dk-items" style="color:#f59e0b;">0</div><div class="bo-kpi-label">In Stock</div></div>
+    <div class="bo-kpi"><div class="bo-kpi-num" id="dk-customers" style="color:#00d4ff;">0</div><div class="bo-kpi-label">Customers</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px;">
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:20px;font-weight:900;color:#f87171;" id="dk-lowstock">0</div>
+      <div style="font-size:9.5px;color:rgba(255,255,255,0.35);margin-top:2px;text-transform:uppercase;font-weight:700;">Low Stock</div>
+    </div>
+    <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:20px;font-weight:900;color:#f59e0b;" id="dk-pending">0</div>
+      <div style="font-size:9.5px;color:rgba(255,255,255,0.35);margin-top:2px;text-transform:uppercase;font-weight:700;">Pending Orders</div>
+    </div>
+    <div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:20px;font-weight:900;color:#818cf8;" id="dk-profit">KES 0</div>
+      <div style="font-size:9.5px;color:rgba(255,255,255,0.35);margin-top:2px;text-transform:uppercase;font-weight:700;">Net Profit</div>
+    </div>
+  </div>
+
+  <div class="bo-h">Revenue by Category</div>
+  <div id="dashRevenueChart" style="margin-bottom:24px;"></div>
+
+  <div class="bo-h">Business Setup</div>
+  <div class="bo-card">
+    <label class="bo-label">Business Name</label>
+    <input type="text" id="bsBizName" class="bo-input" placeholder="e.g. Alex Electronics">
+    <div class="bo-row">
+      <div>
+        <label class="bo-label">Category</label>
+        <select id="bsBizCat" class="bo-input">
+          <option>Retail Shop</option><option>Restaurant / Food</option><option>Services</option>
+          <option>Fashion &amp; Clothing</option><option>Electronics</option><option>Agri-Business</option>
+          <option>Beauty &amp; Salon</option><option>Construction</option><option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="bo-label">M-Pesa / Contact</label>
+        <input type="tel" id="bsBizPhone" class="bo-input" placeholder="07XXXXXXXX">
+      </div>
+    </div>
+    <button type="button" onclick="saveBizProfile()" class="bo-btn bo-btn-primary" style="width:100%;">💾 Save Business Profile</button>
+    <div class="bo-msg" id="bizSetupMsg"></div>
+  </div>
+</div>
+
+<!-- ── INVENTORY ── -->
+<div id="bopanel-inventory" class="bo-panel">
+  <div style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;padding-top:4px;">📦 Inventory</div>
+  <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Track stock levels, set low-stock alerts, add products</div>
+
+  <div class="bo-card">
+    <div class="bo-card-title">➕ Add Product</div>
+    <div class="bo-row">
+      <div><label class="bo-label">Product Name *</label><input type="text" id="inv-name" class="bo-input" placeholder="e.g. Men's Jacket"></div>
+      <div><label class="bo-label">Category</label><input type="text" id="inv-cat" class="bo-input" placeholder="e.g. Clothing"></div>
+    </div>
+    <div class="bo-row">
+      <div><label class="bo-label">Price (KES) *</label><input type="number" id="inv-price" class="bo-input" placeholder="e.g. 3500" min="0"></div>
+      <div><label class="bo-label">Stock Qty *</label><input type="number" id="inv-qty" class="bo-input" placeholder="e.g. 20" min="0"></div>
+    </div>
+    <div class="bo-row">
+      <div><label class="bo-label">Low Stock Alert at</label><input type="number" id="inv-alert" class="bo-input" placeholder="e.g. 5" min="0"></div>
+      <div><label class="bo-label">SKU / Code</label><input type="text" id="inv-sku" class="bo-input" placeholder="e.g. JKT-001"></div>
+    </div>
+    <button type="button" onclick="addInventoryItem()" class="bo-btn bo-btn-primary" style="width:100%;">📦 Add to Inventory</button>
+    <div class="bo-msg" id="invMsg"></div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <input type="text" id="invSearch" class="bo-input" placeholder="Search products…" style="margin:0;flex:1;min-width:160px;" oninput="renderInventory()">
+    <select id="invFilter" class="bo-input" style="margin:0;flex:0 0 130px;" onchange="renderInventory()">
+      <option value="all">All Items</option>
+      <option value="low">Low Stock</option>
+      <option value="out">Out of Stock</option>
+    </select>
+  </div>
+  <div id="inventoryList"></div>
+</div>
+
+<!-- ── ORDERS ── -->
+<div id="bopanel-orders" class="bo-panel">
+  <div style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;padding-top:4px;">🧾 Orders</div>
+  <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Track incoming orders, update status, send invoices</div>
+
+  <div class="bo-card">
+    <div class="bo-card-title">➕ Record Order</div>
+    <div class="bo-row">
+      <div><label class="bo-label">Customer Name *</label><input type="text" id="ord-cust" class="bo-input" placeholder="e.g. Jane Wanjiru"></div>
+      <div><label class="bo-label">Customer Phone</label><input type="tel" id="ord-phone" class="bo-input" placeholder="07XXXXXXXX"></div>
+    </div>
+    <div class="bo-row">
+      <div><label class="bo-label">Items / Description *</label><input type="text" id="ord-items" class="bo-input" placeholder="e.g. Men's Jacket × 2"></div>
+      <div><label class="bo-label">Total (KES) *</label><input type="number" id="ord-total" class="bo-input" placeholder="7000" min="0"></div>
+    </div>
+    <div class="bo-row">
+      <div>
+        <label class="bo-label">Channel</label>
+        <select id="ord-channel" class="bo-input"><option>SOKONI</option><option>Walk-In</option><option>WhatsApp</option><option>Phone</option><option>Instagram</option></select>
+      </div>
+      <div>
+        <label class="bo-label">Status</label>
+        <select id="ord-status" class="bo-input"><option>Pending</option><option>Confirmed</option><option>Processing</option><option>Dispatched</option><option>Delivered</option></select>
+      </div>
+    </div>
+    <button type="button" onclick="addOrder()" class="bo-btn bo-btn-primary" style="width:100%;">📋 Record Order</button>
+    <div class="bo-msg" id="ordMsg"></div>
+  </div>
+
+  <div class="bo-filter-row" id="ordFilterRow">
+    <button type="button" class="bo-pill active" onclick="filterOrders('all',this)">All</button>
+    <button type="button" class="bo-pill" onclick="filterOrders('Pending',this)">Pending</button>
+    <button type="button" class="bo-pill" onclick="filterOrders('Confirmed',this)">Confirmed</button>
+    <button type="button" class="bo-pill" onclick="filterOrders('Processing',this)">Processing</button>
+    <button type="button" class="bo-pill" onclick="filterOrders('Dispatched',this)">Dispatched</button>
+    <button type="button" class="bo-pill" onclick="filterOrders('Delivered',this)">Delivered</button>
+  </div>
+  <div id="ordersList"></div>
+</div>
+
+<!-- ── ACCOUNTS ── -->
+<div id="bopanel-accounts" class="bo-panel">
+  <div style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;padding-top:4px;">💰 Accounts</div>
+  <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Income &amp; expense tracker — simple P&amp;L</div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+    <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:18px;font-weight:900;color:#10b981;" id="acc-income">KES 0</div>
+      <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:2px;text-transform:uppercase;font-weight:700;">Income</div>
+    </div>
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:18px;font-weight:900;color:#f87171;" id="acc-expense">KES 0</div>
+      <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:2px;text-transform:uppercase;font-weight:700;">Expenses</div>
+    </div>
+    <div style="border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:18px;font-weight:900;" id="acc-profit">KES 0</div>
+      <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:2px;text-transform:uppercase;font-weight:700;">Net Profit</div>
+    </div>
+  </div>
+
+  <div class="bo-card">
+    <div class="bo-card-title">➕ Record Transaction</div>
+    <div class="bo-row">
+      <div>
+        <label class="bo-label">Type</label>
+        <select id="acc-type" class="bo-input"><option>Income</option><option>Expense</option></select>
+      </div>
+      <div><label class="bo-label">Amount (KES) *</label><input type="number" id="acc-amount" class="bo-input" placeholder="e.g. 5000" min="0"></div>
+    </div>
+    <div class="bo-row">
+      <div><label class="bo-label">Description *</label><input type="text" id="acc-desc" class="bo-input" placeholder="e.g. Jacket sales"></div>
+      <div>
+        <label class="bo-label">Category</label>
+        <select id="acc-cat" class="bo-input"><option>Sales</option><option>Services</option><option>Rent</option><option>Salaries</option><option>Stock</option><option>Transport</option><option>Marketing</option><option>Other</option></select>
+      </div>
+    </div>
+    <button type="button" onclick="addAccTransaction()" class="bo-btn bo-btn-primary" style="width:100%;">💰 Record</button>
+    <div class="bo-msg" id="accMsg"></div>
+  </div>
+
+  <div class="bo-filter-row">
+    <button type="button" class="bo-pill active" onclick="filterAcc('all',this)">All</button>
+    <button type="button" class="bo-pill" onclick="filterAcc('Income',this)">Income</button>
+    <button type="button" class="bo-pill" onclick="filterAcc('Expense',this)">Expense</button>
+  </div>
+  <div id="accList"></div>
+</div>
+
+<!-- ── CUSTOMERS ── -->
+<div id="bopanel-customers" class="bo-panel">
+  <div style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;padding-top:4px;">👥 Customers</div>
+  <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:18px;">CRM — track customers, purchase history, send broadcasts</div>
+
+  <div class="bo-card">
+    <div class="bo-card-title">➕ Add Customer</div>
+    <div class="bo-row">
+      <div><label class="bo-label">Name *</label><input type="text" id="cust-name" class="bo-input" placeholder="Jane Wanjiru"></div>
+      <div><label class="bo-label">Phone *</label><input type="tel" id="cust-phone" class="bo-input" placeholder="07XXXXXXXX"></div>
+    </div>
+    <div class="bo-row">
+      <div>
+        <label class="bo-label">Category</label>
+        <select id="cust-cat" class="bo-input"><option>Regular</option><option>VIP</option><option>Wholesale</option><option>One-time</option></select>
+      </div>
+      <div><label class="bo-label">Total Spent (KES)</label><input type="number" id="cust-spent" class="bo-input" placeholder="0" min="0"></div>
+    </div>
+    <button type="button" onclick="addCustomer()" class="bo-btn bo-btn-primary" style="width:100%;">👤 Add Customer</button>
+    <div class="bo-msg" id="custMsg"></div>
+  </div>
+
+  <div style="background:rgba(0,180,90,0.04);border:1px solid rgba(0,180,90,0.12);border-radius:16px;padding:16px;margin-bottom:18px;">
+    <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:10px;">📢 WhatsApp Broadcast</div>
+    <input type="text" id="broadcastMsg" class="bo-input" placeholder="Type your message to all customers…" style="margin-bottom:8px;">
+    <button type="button" onclick="sendBroadcast()" class="bo-btn bo-btn-success bo-btn-sm" style="width:100%;">📤 Send to All via WhatsApp</button>
+    <div class="bo-msg" id="broadcastStatus"></div>
+  </div>
+
+  <input type="text" id="custSearch" class="bo-input" placeholder="Search customers…" oninput="renderCustomers()">
+  <div id="customerList"></div>
+</div>
+
+<!-- ── STAFF ── -->
+<div id="bopanel-staff" class="bo-panel">
+  <div style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;padding-top:4px;">🧑‍💼 Staff</div>
+  <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Manage your team — roles, attendance, salaries</div>
+
+  <div class="bo-card">
+    <div class="bo-card-title">➕ Add Staff Member</div>
+    <div class="bo-row">
+      <div><label class="bo-label">Name *</label><input type="text" id="stf-name" class="bo-input" placeholder="Brian Omondi"></div>
+      <div><label class="bo-label">Phone</label><input type="tel" id="stf-phone" class="bo-input" placeholder="07XXXXXXXX"></div>
+    </div>
+    <div class="bo-row">
+      <div><label class="bo-label">Role *</label><input type="text" id="stf-role" class="bo-input" placeholder="e.g. Sales Attendant"></div>
+      <div><label class="bo-label">Salary (KES/mo)</label><input type="number" id="stf-salary" class="bo-input" placeholder="e.g. 25000" min="0"></div>
+    </div>
+    <button type="button" onclick="addStaff()" class="bo-btn bo-btn-primary" style="width:100%;">🧑‍💼 Add Staff</button>
+    <div class="bo-msg" id="stfMsg"></div>
+  </div>
+
+  <div style="display:none;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;" id="staffSummary">
+    <div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:20px;font-weight:900;color:#818cf8;" id="stf-count">0</div>
+      <div style="font-size:9.5px;color:rgba(255,255,255,0.35);margin-top:2px;text-transform:uppercase;font-weight:700;">Team Members</div>
+    </div>
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:14px;padding:14px;text-align:center;">
+      <div style="font-size:20px;font-weight:900;color:#f87171;" id="stf-payroll">KES 0</div>
+      <div style="font-size:9.5px;color:rgba(255,255,255,0.35);margin-top:2px;text-transform:uppercase;font-weight:700;">Monthly Payroll</div>
+    </div>
+  </div>
+
+  <div class="bo-h">Team</div>
+  <div id="staffList"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="wallet.html" class="bnav-item"><span class="bnav-emoji">💳</span><span>Wallet</span></a>
+  <a href="business-os.html" class="bnav-item active-bnav"><span class="bnav-emoji">💼</span><span>Business</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+  <a href="opportunity.html" class="bnav-item"><span class="bnav-emoji">💡</span><span>Earn</span></a>
+</nav>
+
+<script>
+/* ── STORAGE HELPERS ── */
+function getBS(k){try{return JSON.parse(localStorage.getItem(k)||'[]');}catch(e){return[];}}
+function setBS(k,v){localStorage.setItem(k,JSON.stringify(v));}
+function getBSO(k){try{return JSON.parse(localStorage.getItem(k)||'{}');}catch(e){return{};}}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(n){return Number(n||0).toLocaleString('en-KE');}
+function hexRgb(h){var r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return r+','+g+','+b;}
+function msg(id,text,ok){var el=document.getElementById(id);if(!el)return;el.textContent=text;el.style.color=ok?'#10b981':'#f97316';}
+function clearInputs(ids){ids.forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});}
+
+/* ── PANEL ROUTING (hash-based) ── */
+var _activePanel='dash';
+var _ordFilter='all';
+var _accFilter='all';
+
+function showBPanel(name){
+  document.querySelectorAll('.bo-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.bo-tab').forEach(function(t){t.classList.remove('active');});
+  var p=document.getElementById('bopanel-'+name);
+  if(p)p.classList.add('active');
+  var tab=document.querySelector('.bo-tab[data-panel="'+name+'"]');
+  if(tab){tab.classList.add('active');tab.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});}
+  _activePanel=name;
+  history.replaceState(null,'','#'+name);
+  var renders={dash:renderDash,inventory:renderInventory,orders:function(){renderOrders(_ordFilter);},accounts:renderAccounts,customers:renderCustomers,staff:renderStaff};
+  if(renders[name])renders[name]();
+}
+window.showBPanel=showBPanel;
+
+/* Tab click wiring */
+document.getElementById('boTabsEl').addEventListener('click',function(e){
+  var tab=e.target.closest('.bo-tab');
+  if(tab&&tab.dataset.panel)showBPanel(tab.dataset.panel);
+});
+
+/* Hash routing on load */
+(function(){
+  var h=(location.hash||'').replace('#','');
+  var valid=['dash','inventory','orders','accounts','customers','staff'];
+  if(valid.indexOf(h)>=0)showBPanel(h);
+  else renderDash();
+})();
+
+/* ── BIZ PROFILE ── */
+function saveBizProfile(){
+  var name=(document.getElementById('bsBizName').value||'').trim();
+  var cat=document.getElementById('bsBizCat').value||'';
+  var phone=(document.getElementById('bsBizPhone').value||'').trim();
+  if(!name){msg('bizSetupMsg','Enter business name',false);return;}
+  setBS('bosBizProfile',{name:name,cat:cat,phone:phone,updated:Date.now()});
+  document.getElementById('bosBizName').textContent=name+(cat?' · '+cat:'');
+  msg('bizSetupMsg','✅ Profile saved!',true);
+  syncToFirestore();
+}
+window.saveBizProfile=saveBizProfile;
+
+function loadBizProfile(){
+  var biz=getBSO('bosBizProfile');
+  var nameEl=document.getElementById('bosBizName');
+  if(biz.name){
+    if(nameEl)nameEl.textContent=biz.name+(biz.cat?' · '+biz.cat:'');
+    var ni=document.getElementById('bsBizName');if(ni)ni.value=biz.name;
+    var ci=document.getElementById('bsBizCat');if(ci)ci.value=biz.cat;
+    var pi=document.getElementById('bsBizPhone');if(pi)pi.value=biz.phone||'';
+  } else {
+    /* Try to get user name from auth */
+    try{
+      var u=JSON.parse(localStorage.getItem('sokoniUser')||'{}');
+      if(u.name&&nameEl)nameEl.textContent=u.name;
+    }catch(e){}
+    if(nameEl&&nameEl.textContent==='Loading…')nameEl.textContent='Set up your business below ↓';
+  }
+}
+
+/* ── DASHBOARD ── */
+function renderDash(){
+  loadBizProfile();
+  var inv=getBS('bosInventory');
+  var orders=getBS('bosOrders');
+  var acc=getBS('bosAccounts');
+  var custs=getBS('bosCustomers');
+  var now=Date.now(),m30=now-30*864e5;
+  var monthOrders=orders.filter(function(o){return o.ts>m30;});
+  var revenue=monthOrders.filter(function(o){return o.status==='Delivered';}).reduce(function(s,o){return s+Number(o.total||0);},0);
+  var pending=orders.filter(function(o){return o.status==='Pending';}).length;
+  var lowStock=inv.filter(function(i){return Number(i.qty)<=Number(i.alert||3);}).length;
+  var income=acc.filter(function(a){return a.type==='Income';}).reduce(function(s,a){return s+Number(a.amount);},0);
+  var expense=acc.filter(function(a){return a.type==='Expense';}).reduce(function(s,a){return s+Number(a.amount);},0);
+  var profit=income-expense;
+  function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+  set('dk-revenue','KES '+fmt(revenue));
+  set('dk-orders',monthOrders.length);
+  set('dk-items',inv.length);
+  set('dk-customers',custs.length);
+  set('dk-lowstock',lowStock);
+  set('dk-pending',pending);
+  var profitEl=document.getElementById('dk-profit');
+  if(profitEl){profitEl.textContent='KES '+fmt(profit);profitEl.style.color=profit>=0?'#818cf8':'#f87171';}
+  renderRevChart(acc);
+}
+
+function renderRevChart(acc){
+  var chart=document.getElementById('dashRevenueChart');if(!chart)return;
+  var bycat={};
+  acc.filter(function(a){return a.type==='Income';}).forEach(function(a){bycat[a.cat]=(bycat[a.cat]||0)+Number(a.amount||0);});
+  var entries=Object.entries(bycat).sort(function(a,b){return b[1]-a[1];});
+  var max=entries[0]?entries[0][1]:1;
+  var colors=['#6366f1','#10b981','#f59e0b','#a855f7','#00d4ff','#f97316'];
+  if(!entries.length){chart.innerHTML='<div class="bo-empty"><div class="bo-empty-icon">📊</div>Record income transactions to see breakdown</div>';return;}
+  chart.innerHTML=entries.map(function(e,i){
+    return '<div class="bo-bar-wrap"><div class="bo-bar-label">'+esc(e[0])+'</div><div class="bo-bar-track"><div class="bo-bar-fill" style="width:'+Math.round(e[1]/max*100)+'%;background:'+colors[i%colors.length]+';"></div></div><div class="bo-bar-val">KES '+fmt(e[1])+'</div></div>';
+  }).join('');
+}
+
+/* ── INVENTORY ── */
+function addInventoryItem(){
+  var name=(document.getElementById('inv-name').value||'').trim();
+  var price=Number(document.getElementById('inv-price').value||0);
+  var qty=Number(document.getElementById('inv-qty').value||0);
+  if(!name||!price||qty<0){msg('invMsg','Fill name, price and quantity',false);return;}
+  var item={id:'INV'+Date.now(),name:name,cat:(document.getElementById('inv-cat').value||'').trim(),price:price,qty:qty,alert:Number(document.getElementById('inv-alert').value||3),sku:(document.getElementById('inv-sku').value||'').trim(),ts:Date.now()};
+  var inv=getBS('bosInventory');inv.unshift(item);setBS('bosInventory',inv);
+  msg('invMsg','✅ '+name+' added to inventory!',true);
+  clearInputs(['inv-name','inv-price','inv-qty','inv-alert','inv-sku','inv-cat']);
+  renderInventory();
+  syncToFirestore();
+}
+window.addInventoryItem=addInventoryItem;
+
+function renderInventory(){
+  var list=document.getElementById('inventoryList');if(!list)return;
+  var q=(document.getElementById('invSearch').value||'').toLowerCase();
+  var f=document.getElementById('invFilter').value||'all';
+  var inv=getBS('bosInventory');
+  if(q)inv=inv.filter(function(i){return (i.name+i.cat+i.sku).toLowerCase().includes(q);});
+  if(f==='low')inv=inv.filter(function(i){return Number(i.qty)>0&&Number(i.qty)<=Number(i.alert||3);});
+  if(f==='out')inv=inv.filter(function(i){return Number(i.qty)===0;});
+  if(!inv.length){list.innerHTML='<div class="bo-empty"><div class="bo-empty-icon">📦</div>No products found — add your first item above</div>';return;}
+  list.innerHTML=inv.map(function(i){
+    var low=Number(i.qty)<=Number(i.alert||3);
+    var out=Number(i.qty)===0;
+    var sc=out?'#f87171':low?'#f97316':'#10b981';
+    var label=out?'OUT OF STOCK':low?'⚠ LOW STOCK':'';
+    return '<div class="bo-item-card">'
+      +'<div class="bo-item-icon">📦</div>'
+      +'<div class="bo-item-info">'
+      +'<div class="bo-item-name">'+esc(i.name)+(i.sku?' <span style="font-size:9px;color:rgba(255,255,255,0.28);">#'+esc(i.sku)+'</span>':'')+'</div>'
+      +'<div class="bo-item-meta">'+esc(i.cat||'—')+' · KES '+fmt(i.price)+'</div>'
+      +'<div style="font-size:11.5px;font-weight:700;color:'+sc+';margin-top:3px;">Qty: '+i.qty+(label?' <span style="font-size:9px;font-weight:900;">'+label+'</span>':'')+'</div>'
+      +'</div>'
+      +'<div class="bo-item-actions">'
+      +'<button type="button" onclick="adjStock(\''+i.id+'\',1)" class="bo-btn bo-btn-sm bo-btn-success">+</button>'
+      +'<button type="button" onclick="adjStock(\''+i.id+'\',-1)" class="bo-btn bo-btn-sm bo-btn-danger">−</button>'
+      +'<button type="button" onclick="deleteInvItem(\''+i.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost">🗑</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+window.renderInventory=renderInventory;
+
+function adjStock(id,delta){
+  var inv=getBS('bosInventory');
+  var item=inv.find(function(i){return i.id===id;});if(!item)return;
+  item.qty=Math.max(0,Number(item.qty)+delta);
+  setBS('bosInventory',inv);renderInventory();syncToFirestore();
+}
+window.adjStock=adjStock;
+
+function deleteInvItem(id,_c){
+  if(!_c){_skConfirm('Remove this product?',()=>deleteInvItem(id,true));return;}
+  setBS('bosInventory',getBS('bosInventory').filter(function(i){return i.id!==id;}));
+  renderInventory();syncToFirestore();
+}
+window.deleteInvItem=deleteInvItem;
+
+/* ── ORDERS ── */
+function addOrder(){
+  var cust=(document.getElementById('ord-cust').value||'').trim();
+  var total=Number(document.getElementById('ord-total').value||0);
+  var items=(document.getElementById('ord-items').value||'').trim();
+  if(!cust||!total||!items){msg('ordMsg','Fill customer, items and total',false);return;}
+  var phone=(document.getElementById('ord-phone').value||'').trim();
+  var order={id:'ORD'+Date.now().toString().slice(-8),cust:cust,phone:phone,items:items,total:total,channel:document.getElementById('ord-channel').value||'SOKONI',status:document.getElementById('ord-status').value||'Pending',ts:Date.now()};
+  var orders=getBS('bosOrders');orders.unshift(order);setBS('bosOrders',orders);
+  /* Auto-add customer if new */
+  var custs=getBS('bosCustomers');
+  if(phone&&!custs.find(function(c){return c.phone===phone;})){
+    custs.unshift({id:'CUST'+Date.now(),name:cust,phone:phone,cat:'Regular',spent:total,ts:Date.now()});
+    setBS('bosCustomers',custs);
+  }
+  msg('ordMsg','✅ Order #'+order.id+' recorded!',true);
+  clearInputs(['ord-cust','ord-phone','ord-items','ord-total']);
+  /* WhatsApp confirmation */
+  if(phone){
+    var waMsg='📋 *SOKONI Order Confirmation*\n\nHi '+cust+'! Your order has been recorded.\n📦 '+items+'\n💰 Total: KES '+fmt(total)+'\n🔖 Ref: #'+order.id+'\nStatus: '+order.status+'\n\nThank you for your business!';
+    window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+encodeURIComponent(waMsg),'_blank');
+  }
+  renderOrders(_ordFilter);syncToFirestore();
+}
+window.addOrder=addOrder;
+
+function filterOrders(f,btn){
+  _ordFilter=f;
+  document.querySelectorAll('#ordFilterRow .bo-pill').forEach(function(b){b.classList.remove('active');});
+  if(btn)btn.classList.add('active');
+  renderOrders(f);
+}
+window.filterOrders=filterOrders;
+
+var STATUS_COLORS={Pending:'#f59e0b',Confirmed:'#00d4ff',Processing:'#a855f7',Dispatched:'#f97316',Delivered:'#10b981'};
+
+function renderOrders(f){
+  f=f||'all';
+  var list=document.getElementById('ordersList');if(!list)return;
+  var orders=getBS('bosOrders');
+  if(f!=='all')orders=orders.filter(function(o){return o.status===f;});
+  if(!orders.length){list.innerHTML='<div class="bo-empty"><div class="bo-empty-icon">🧾</div>No orders found</div>';return;}
+  list.innerHTML=orders.map(function(o){
+    var sc=STATUS_COLORS[o.status]||'#6366f1';
+    var rgb=hexRgb(sc);
+    return '<div class="bo-item-card" style="flex-direction:column;align-items:flex-start;gap:8px;">'
+      +'<div style="display:flex;justify-content:space-between;width:100%;align-items:flex-start;gap:8px;">'
+      +'<div>'
+      +'<span class="bo-badge" style="background:rgba('+rgb+',0.1);color:'+sc+';border:1px solid rgba('+rgb+',0.25);">'+esc(o.status)+'</span>'
+      +'<div style="font-size:13px;font-weight:700;color:white;margin-top:4px;">'+esc(o.cust)+'</div>'
+      +'<div style="font-size:11px;color:rgba(255,255,255,0.35);">#'+esc(o.id)+' · '+esc(o.channel||'—')+' · '+new Date(o.ts).toLocaleDateString('en-KE')+'</div>'
+      +'</div>'
+      +'<div style="font-size:16px;font-weight:900;color:#818cf8;flex-shrink:0;">KES '+fmt(o.total)+'</div>'
+      +'</div>'
+      +'<div style="font-size:11.5px;color:rgba(255,255,255,0.5);">📦 '+esc(o.items)+'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;width:100%;">'
+      +['Confirmed','Processing','Dispatched','Delivered'].map(function(s){
+        var sr=hexRgb(STATUS_COLORS[s]);
+        return '<button type="button" onclick="updateOrderStatus(\''+o.id+'\',\''+s+'\')" class="bo-btn bo-btn-sm" style="background:rgba('+sr+',0.07);border:1px solid rgba('+sr+',0.22);color:'+STATUS_COLORS[s]+';opacity:'+( o.status===s?'1':'0.45')+';">→ '+s+'</button>';
+      }).join('')
+      +(o.phone?'<button type="button" onclick="waOrderUpdate(\''+o.id+'\')" class="bo-btn bo-btn-sm bo-btn-wa">💬</button>':'')
+      +'<button type="button" onclick="invoiceOrder(\''+o.id+'\')" class="bo-btn bo-btn-sm bo-btn-inv">🧾 Invoice</button>'
+      +'<button type="button" onclick="deleteOrder(\''+o.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost" style="margin-left:auto;">🗑</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function updateOrderStatus(id,status){
+  var orders=getBS('bosOrders');
+  var o=orders.find(function(x){return x.id===id;});if(o)o.status=status;
+  setBS('bosOrders',orders);renderOrders(_ordFilter);syncToFirestore();
+}
+window.updateOrderStatus=updateOrderStatus;
+
+function waOrderUpdate(id){
+  var o=getBS('bosOrders').find(function(x){return x.id===id;});
+  if(!o||!o.phone)return;
+  var waMsg='Hi '+o.cust+', update on your SOKONI order #'+o.id+': status is now *'+o.status+'*. Thank you!';
+  window.open('https://wa.me/254'+o.phone.replace(/^0/,'')+'?text='+encodeURIComponent(waMsg),'_blank');
+}
+window.waOrderUpdate=waOrderUpdate;
+
+function deleteOrder(id,_c){
+  if(!_c){_skConfirm('Delete this order?',()=>deleteOrder(id,true));return;}
+  setBS('bosOrders',getBS('bosOrders').filter(function(o){return o.id!==id;}));
+  renderOrders(_ordFilter);syncToFirestore();
+}
+window.deleteOrder=deleteOrder;
+
+function invoiceOrder(id){
+  var o=getBS('bosOrders').find(function(x){return x.id===id;});if(!o)return;
+  var biz=getBSO('bosBizProfile');
+  if(typeof SokoniInvoice==='undefined'){window.open('invoice.html?ref='+o.id,'_blank');return;}
+  SokoniInvoice.generate({
+    orderId:'#'+o.id,
+    sellerName:biz.name||'My Business',
+    buyerName:o.cust,
+    buyerPhone:o.phone||'',
+    items:[{name:o.items,qty:1,price:o.total}],
+    total:o.total,
+    channel:o.channel||'SOKONI',
+    date:new Date(o.ts).toLocaleDateString('en-KE'),
+    note:'Thank you for your business!'
+  });
+}
+window.invoiceOrder=invoiceOrder;
+
+/* ── ACCOUNTS ── */
+function addAccTransaction(){
+  var type=document.getElementById('acc-type').value||'Income';
+  var amount=Number(document.getElementById('acc-amount').value||0);
+  var desc=(document.getElementById('acc-desc').value||'').trim();
+  var cat=document.getElementById('acc-cat').value||'Other';
+  if(!amount||!desc){msg('accMsg','Enter amount and description',false);return;}
+  var tx={id:'ACC'+Date.now(),type:type,amount:amount,desc:desc,cat:cat,ts:Date.now()};
+  var acc=getBS('bosAccounts');acc.unshift(tx);setBS('bosAccounts',acc);
+  msg('accMsg','✅ '+type+' of KES '+fmt(amount)+' recorded',true);
+  clearInputs(['acc-amount','acc-desc']);
+  renderAccounts();renderDash();syncToFirestore();
+}
+window.addAccTransaction=addAccTransaction;
+
+function filterAcc(f,btn){
+  _accFilter=f;
+  document.querySelectorAll('#bopanel-accounts .bo-filter-row .bo-pill').forEach(function(b){b.classList.remove('active');});
+  if(btn)btn.classList.add('active');
+  renderAccounts();
+}
+window.filterAcc=filterAcc;
+
+function renderAccounts(){
+  var list=document.getElementById('accList');
+  var acc=getBS('bosAccounts');
+  var income=acc.filter(function(a){return a.type==='Income';}).reduce(function(s,a){return s+Number(a.amount);},0);
+  var expense=acc.filter(function(a){return a.type==='Expense';}).reduce(function(s,a){return s+Number(a.amount);},0);
+  var profit=income-expense;
+  function set(id,v,c){var e=document.getElementById(id);if(e){e.textContent=v;if(c)e.style.color=c;}}
+  set('acc-income','KES '+fmt(income));
+  set('acc-expense','KES '+fmt(expense));
+  set('acc-profit','KES '+fmt(profit),profit>=0?'#10b981':'#f87171');
+  if(!list)return;
+  var filtered=acc;
+  if(_accFilter!=='all')filtered=acc.filter(function(a){return a.type===_accFilter;});
+  if(!filtered.length){list.innerHTML='<div class="bo-empty"><div class="bo-empty-icon">💰</div>No transactions yet</div>';return;}
+  list.innerHTML=filtered.map(function(a){
+    return '<div class="bo-item-card">'
+      +'<div class="bo-item-icon" style="background:'+(a.type==='Income'?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)')+';font-size:18px;">'+(a.type==='Income'?'📈':'📉')+'</div>'
+      +'<div class="bo-item-info">'
+      +'<div class="bo-item-name">'+esc(a.desc)+'</div>'
+      +'<div class="bo-item-meta">'+esc(a.cat)+' · '+new Date(a.ts).toLocaleDateString('en-KE')+'</div>'
+      +'</div>'
+      +'<div style="font-size:14px;font-weight:900;color:'+(a.type==='Income'?'#10b981':'#f87171')+';flex-shrink:0;">'+(a.type==='Income'?'+':'-')+'KES '+fmt(a.amount)+'</div>'
+      +'<button type="button" onclick="deleteAccTx(\''+a.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost" style="margin-left:8px;">🗑</button>'
+      +'</div>';
+  }).join('');
+}
+
+function deleteAccTx(id,_c){
+  if(!_c){_skConfirm('Delete this transaction?',()=>deleteAccTx(id,true));return;}
+  setBS('bosAccounts',getBS('bosAccounts').filter(function(a){return a.id!==id;}));
+  renderAccounts();renderDash();syncToFirestore();
+}
+window.deleteAccTx=deleteAccTx;
+
+/* ── CUSTOMERS ── */
+function addCustomer(){
+  var name=(document.getElementById('cust-name').value||'').trim();
+  var phone=(document.getElementById('cust-phone').value||'').trim();
+  if(!name||!phone){msg('custMsg','Enter name and phone',false);return;}
+  var custs=getBS('bosCustomers');
+  if(custs.find(function(c){return c.phone===phone;})){msg('custMsg','Customer with this phone already exists',false);return;}
+  var cust={id:'CUST'+Date.now(),name:name,phone:phone,cat:document.getElementById('cust-cat').value||'Regular',spent:Number(document.getElementById('cust-spent').value||0),ts:Date.now()};
+  custs.unshift(cust);setBS('bosCustomers',custs);
+  msg('custMsg','✅ '+name+' added!',true);
+  clearInputs(['cust-name','cust-phone','cust-spent']);
+  renderCustomers();syncToFirestore();
+}
+window.addCustomer=addCustomer;
+
+function sendBroadcast(){
+  var m=(document.getElementById('broadcastMsg').value||'').trim();
+  if(!m){msg('broadcastStatus','Type a message first',false);return;}
+  var custs=getBS('bosCustomers');
+  var biz=getBSO('bosBizProfile');
+  if(!custs.length){msg('broadcastStatus','No customers yet — add customers first',false);return;}
+  var full='📢 *'+(biz.name||'SOKONI Business')+'*\n\n'+m;
+  window.open('https://wa.me/?text='+encodeURIComponent(full),'_blank');
+  msg('broadcastStatus','✅ Message ready — broadcast to '+custs.length+' customers via WhatsApp',true);
+}
+window.sendBroadcast=sendBroadcast;
+
+var CUST_COLORS={VIP:'#f59e0b',Regular:'#6366f1',Wholesale:'#10b981','One-time':'rgba(255,255,255,0.3)'};
+
+function renderCustomers(){
+  var list=document.getElementById('customerList');if(!list)return;
+  var q=(document.getElementById('custSearch').value||'').toLowerCase();
+  var custs=getBS('bosCustomers');
+  if(q)custs=custs.filter(function(c){return (c.name+c.phone).toLowerCase().includes(q);});
+  if(!custs.length){list.innerHTML='<div class="bo-empty"><div class="bo-empty-icon">👥</div>No customers found</div>';return;}
+  list.innerHTML=custs.map(function(c){
+    var cc=CUST_COLORS[c.cat]||'#6366f1';
+    return '<div class="bo-item-card">'
+      +'<div class="bo-item-icon">👤</div>'
+      +'<div class="bo-item-info">'
+      +'<div class="bo-item-name">'+esc(c.name)+' <span class="bo-badge" style="color:'+cc+';background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.15);">'+esc(c.cat)+'</span></div>'
+      +'<div class="bo-item-meta">'+esc(c.phone||'—')+' · Spent: KES '+fmt(c.spent)+'</div>'
+      +'</div>'
+      +'<div class="bo-item-actions">'
+      +(c.phone?'<button type="button" onclick="window.open(\'https://wa.me/254'+c.phone.replace(/^0/,'')+'\',\'_blank\')" class="bo-btn bo-btn-sm bo-btn-wa">💬</button>':'')
+      +'<button type="button" onclick="deleteCust(\''+c.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost">🗑</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+window.renderCustomers=renderCustomers;
+
+function deleteCust(id,_c){
+  if(!_c){_skConfirm('Remove this customer?',()=>deleteCust(id,true));return;}
+  setBS('bosCustomers',getBS('bosCustomers').filter(function(c){return c.id!==id;}));
+  renderCustomers();syncToFirestore();
+}
+window.deleteCust=deleteCust;
+
+/* ── STAFF ── */
+function addStaff(){
+  var name=(document.getElementById('stf-name').value||'').trim();
+  var role=(document.getElementById('stf-role').value||'').trim();
+  if(!name||!role){msg('stfMsg','Enter name and role',false);return;}
+  var member={id:'STF'+Date.now(),name:name,phone:(document.getElementById('stf-phone').value||'').trim(),role:role,salary:Number(document.getElementById('stf-salary').value||0),since:Date.now()};
+  var staff=getBS('bosStaff');staff.unshift(member);setBS('bosStaff',staff);
+  msg('stfMsg','✅ '+name+' added!',true);
+  clearInputs(['stf-name','stf-phone','stf-role','stf-salary']);
+  renderStaff();syncToFirestore();
+}
+window.addStaff=addStaff;
+
+function renderStaff(){
+  var list=document.getElementById('staffList');if(!list)return;
+  var staff=getBS('bosStaff');
+  /* Summary */
+  var payroll=staff.reduce(function(s,m){return s+Number(m.salary||0);},0);
+  var sc=document.getElementById('stf-count'),sp=document.getElementById('stf-payroll');
+  if(sc)sc.textContent=staff.length;
+  if(sp)sp.textContent='KES '+fmt(payroll);
+  var summary=document.getElementById('staffSummary');
+  if(summary)summary.style.display=staff.length?'grid':'none';
+
+  if(!staff.length){list.innerHTML='<div class="bo-empty"><div class="bo-empty-icon">🧑‍💼</div>No staff added yet</div>';return;}
+  list.innerHTML=staff.map(function(s){
+    return '<div class="bo-item-card">'
+      +'<div class="bo-item-icon">🧑‍💼</div>'
+      +'<div class="bo-item-info">'
+      +'<div class="bo-item-name">'+esc(s.name)+'</div>'
+      +'<div class="bo-item-meta">'+esc(s.role)+(s.salary?' · KES '+fmt(s.salary)+'/mo':'')+' · Since '+new Date(s.since).toLocaleDateString('en-KE',{month:'short',year:'numeric'})+'</div>'
+      +'</div>'
+      +'<div class="bo-item-actions">'
+      +(s.phone?'<button type="button" onclick="window.open(\'https://wa.me/254'+s.phone.replace(/^0/,'')+'\',\'_blank\')" class="bo-btn bo-btn-sm bo-btn-wa">💬</button>':'')
+      +'<button type="button" onclick="deleteStaff(\''+s.id+'\')" class="bo-btn bo-btn-sm bo-btn-ghost">🗑</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+window.renderStaff=renderStaff;
+
+function deleteStaff(id,_c){
+  if(!_c){_skConfirm('Remove this staff member?',()=>deleteStaff(id,true));return;}
+  setBS('bosStaff',getBS('bosStaff').filter(function(s){return s.id!==id;}));
+  renderStaff();syncToFirestore();
+}
+window.deleteStaff=deleteStaff;
+
+/* ── FIRESTORE SYNC ── (non-blocking, fails silently if offline) */
+var _syncTimer=null;
+function syncToFirestore(){
+  clearTimeout(_syncTimer);
+  _syncTimer=setTimeout(_doSync,2000);
+}
+function _doSync(){
+  try{
+    var uid=null;
+    try{uid=(JSON.parse(localStorage.getItem('sokoniUser')||'{}')).uid;}catch(e){}
+    if(!uid||typeof firebase==='undefined'||!firebase.firestore)return;
+    var db=firebase.firestore();
+    var data={
+      profile:getBSO('bosBizProfile'),
+      inventory:getBS('bosInventory'),
+      orders:getBS('bosOrders'),
+      accounts:getBS('bosAccounts'),
+      customers:getBS('bosCustomers'),
+      staff:getBS('bosStaff'),
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    };
+    db.collection('businessOS').doc(uid).set(data,{merge:true}).catch(function(){});
+  }catch(e){}
+}
+
+/* ── INIT ── */
+renderDash();
+
+/* Try to pull from Firestore if available */
+(function(){
+  function tryLoad(){
+    try{
+      var uid=null;
+      try{uid=(JSON.parse(localStorage.getItem('sokoniUser')||'{}')).uid;}catch(e){}
+      if(!uid||typeof firebase==='undefined'||!firebase.firestore)return;
+      firebase.firestore().collection('businessOS').doc(uid).get().then(function(snap){
+        if(!snap.exists)return;
+        var d=snap.data();
+        if(d.profile)setBS('bosBizProfile',d.profile);
+        if(d.inventory)setBS('bosInventory',d.inventory);
+        if(d.orders)setBS('bosOrders',d.orders);
+        if(d.accounts)setBS('bosAccounts',d.accounts);
+        if(d.customers)setBS('bosCustomers',d.customers);
+        if(d.staff)setBS('bosStaff',d.staff);
+        /* Re-render current panel */
+        showBPanel(_activePanel);
+      }).catch(function(){});
+    }catch(e){}
+  }
+  /* Delay to let firebase.js initialize */
+  setTimeout(tryLoad,2000);
+})();
+</script>
+
+<script src="sokoni-invoice.js" defer></script>
+<script src="sokoni-init.js" type="module"></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="analytics.js" defer></script>
+<script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
+</body>
+</html>
+
+
+
+
+

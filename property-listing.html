@@ -1,0 +1,317 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Property Listing — SOKONI Property Hub</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#10b981">
+<script src="security.js"></script>
+<script src="sokoni-inbox.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:90px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.pl-body{max-width:800px;margin:0 auto;padding:16px;}
+.pl-main-img{height:220px;display:flex;align-items:center;justify-content:center;font-size:80px;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(5,150,105,0.06));border:1px solid rgba(16,185,129,0.15);border-radius:18px;position:relative;margin-bottom:8px;}
+.pl-thumbnails{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;scrollbar-width:none;}
+.pl-thumbnails::-webkit-scrollbar{display:none;}
+.pl-thumb{width:70px;height:60px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);cursor:pointer;flex-shrink:0;transition:all .2s;}
+.pl-thumb:hover,.pl-thumb.active{border-color:rgba(16,185,129,0.4);}
+.pl-hd{margin-bottom:16px;}
+.pl-status-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.pl-price{font-size:28px;font-weight:900;color:#10b981;}
+.pl-title{font-size:18px;font-weight:900;color:white;margin-bottom:6px;line-height:1.3;}
+.pl-loc{font-size:13px;color:rgba(255,255,255,0.45);display:flex;align-items:center;gap:6px;margin-bottom:12px;}
+.pl-specs{display:flex;gap:0;margin-bottom:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden;}
+.pl-spec{flex:1;padding:14px 8px;text-align:center;border-right:1px solid rgba(255,255,255,0.07);}
+.pl-spec:last-child{border-right:none;}
+.pl-spec-icon{font-size:20px;margin-bottom:4px;}
+.pl-spec-val{font-size:14px;font-weight:900;color:white;}
+.pl-spec-lbl{font-size:10px;color:rgba(255,255,255,0.35);}
+.pl-section{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:14px;}
+.pl-sh{font-size:14px;font-weight:800;color:white;margin-bottom:12px;}
+.pl-desc{font-size:13px;color:rgba(255,255,255,0.6);line-height:1.7;}
+.pl-feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;}
+.pl-feature{display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.6);}
+.pl-feature::before{content:'✓';color:#10b981;font-weight:900;}
+.pl-amenities{display:flex;gap:6px;flex-wrap:wrap;}
+.pl-map{height:160px;background:rgba(16,185,129,0.04);border:1px solid rgba(16,185,129,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;margin-bottom:14px;cursor:pointer;}
+.pl-agent{display:flex;align-items:center;gap:14px;padding:16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;margin-bottom:14px;}
+.pl-agent-icon{width:52px;height:52px;border-radius:13px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+.pl-agent-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.pl-action-bar{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:10px;z-index:60;backdrop-filter:blur(16px);}
+.pl-action-btn{flex:1;padding:13px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .2s;}
+.pl-action-btn.primary{background:linear-gradient(135deg,#10b981,#059669);color:white;}
+.pl-action-btn.secondary{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);}
+.pl-calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.pl-calc-result{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.pl-calc-box{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:11px;padding:12px;text-align:center;}
+.pl-calc-val{font-size:16px;font-weight:900;color:#10b981;}
+.pl-calc-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+#plModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:flex-end;justify-content:center;animation:fadein .2s;}
+#plModal.open{display:flex;}
+#plModalBox{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.pl-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;margin-bottom:10px;outline:none;}
+.pl-input:focus{border-color:rgba(16,185,129,0.4);}
+.pl-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block;}
+.pl-submit{width:100%;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:11px;color:white;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+.pl-review{padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.pl-review:last-child{border-bottom:none;}
+.pl-review-name{font-size:12px;font-weight:800;color:white;}
+.pl-review-text{font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px;line-height:1.5;}
+.pl-similar{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;}
+.pl-similar::-webkit-scrollbar{display:none;}
+.pl-sim-card{flex-shrink:0;width:200px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:13px;overflow:hidden;cursor:pointer;transition:all .2s;}
+.pl-sim-card:hover{border-color:rgba(16,185,129,0.25);}
+.pl-sim-img{height:100px;display:flex;align-items:center;justify-content:center;font-size:40px;background:rgba(16,185,129,0.06);}
+.pl-sim-body{padding:10px;}
+.pl-sim-price{font-size:13px;font-weight:900;color:#10b981;}
+.pl-sim-title{font-size:11px;font-weight:700;color:white;margin-top:2px;}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="sokoni-property.js"></script>
+
+<nav class="fn">
+  <a href="property-hub.html" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;">←</a>
+  <span style="font-size:14px;font-weight:800;flex:1;" id="fnTitle">Property Details</span>
+  <button onclick="toggleSave()" id="saveBtn" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer;font-family:inherit;">🤍 Save</button>
+  <button onclick="shareProp()" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer;font-family:inherit;">↑ Share</button>
+</nav>
+
+<div class="pl-body" id="plBody">
+  <div style="text-align:center;padding:60px;color:rgba(255,255,255,0.3);">Loading property...</div>
+</div>
+
+<div class="pl-action-bar" id="actionBar" style="display:none;">
+  <button class="pl-action-btn secondary" onclick="openInquiry()">💬 Inquire</button>
+  <button class="pl-action-btn primary" onclick="openViewing()">📅 Request Viewing</button>
+</div>
+
+<div id="plModal"><div id="plModalBox"><div id="plModalContent"></div></div></div>
+
+<script>
+const P = window.SokoniProperty;
+let _prop = null;
+
+function init() {
+  const id = new URLSearchParams(window.location.search).get('id');
+  _prop = id ? P.getListingById(id) : null;
+  if (!_prop) {
+    document.getElementById('plBody').innerHTML = '<div style="text-align:center;padding:60px;color:rgba(255,255,255,0.3);"><div style="font-size:48px;margin-bottom:14px;">😕</div><p>Property not found.</p><a href="property-hub.html" style="color:#10b981;font-weight:700;">← Back to Hub</a></div>';
+    return;
+  }
+  renderProp();
+  updateSaveBtn();
+}
+
+function renderProp() {
+  const p = _prop;
+  const st = P.PROPERTY_STATUS[p.status]||{label:p.status,icon:'🏠',color:'white'};
+  const agent = P.getAgentById(p.agentId)||{name:p.agentName||'Agent',icon:'🏢',phone:'—',rating:4.5,reviews:0,listings:0};
+  const reviews = P.getReviews(p.id);
+  document.getElementById('fnTitle').textContent = p.title;
+  const imgs = p.images||[p.icon||'🏠'];
+
+  document.getElementById('plBody').innerHTML = `
+    <div class="pl-main-img" id="mainImg">${imgs[0]}</div>
+    ${imgs.length>1?`<div class="pl-thumbnails">${imgs.map((img,i)=>`<div class="pl-thumb ${i===0?'active':''}" onclick="setImg('${img}',this)">${img}</div>`).join('')}</div>`:''}
+
+    <div class="pl-hd">
+      <div class="pl-status-row">
+        <span style="padding:4px 12px;border-radius:6px;font-size:11px;font-weight:900;background:${st.color}18;border:1px solid ${st.color}50;color:${st.color};">${st.icon} ${st.label}</span>
+        ${p.featured?'<span style="padding:4px 10px;border-radius:6px;font-size:10px;font-weight:900;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;">⭐ Featured</span>':''}
+        ${p.furnished?'<span style="padding:4px 10px;border-radius:6px;font-size:10px;font-weight:900;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);color:#a855f7;">🛋️ Furnished</span>':''}
+      </div>
+      <div class="pl-price">${P.fmtPrice(p.price,p.priceUnit)}</div>
+      <div class="pl-title">${p.title}</div>
+      <div class="pl-loc">📍 ${p.location}</div>
+      <div class="pl-specs">
+        ${p.bedrooms>0?`<div class="pl-spec"><div class="pl-spec-icon">🛏️</div><div class="pl-spec-val">${p.bedrooms}</div><div class="pl-spec-lbl">${p.bedrooms===1?'Bedroom':'Bedrooms'}</div></div>`:''}
+        ${p.bathrooms>0?`<div class="pl-spec"><div class="pl-spec-icon">🚿</div><div class="pl-spec-val">${p.bathrooms}</div><div class="pl-spec-lbl">${p.bathrooms===1?'Bathroom':'Bathrooms'}</div></div>`:''}
+        ${p.size?`<div class="pl-spec"><div class="pl-spec-icon">📐</div><div class="pl-spec-val">${p.size}</div><div class="pl-spec-lbl">${p.sizeUnit||'sqm'}</div></div>`:''}
+        ${p.parking?`<div class="pl-spec"><div class="pl-spec-icon">🚗</div><div class="pl-spec-val">${p.parking}</div><div class="pl-spec-lbl">Parking</div></div>`:''}
+        ${p.yearBuilt?`<div class="pl-spec"><div class="pl-spec-icon">🏗️</div><div class="pl-spec-val">${p.yearBuilt}</div><div class="pl-spec-lbl">Built</div></div>`:''}
+      </div>
+    </div>
+
+    <div class="pl-section">
+      <div class="pl-sh">📋 Description</div>
+      <div class="pl-desc">${p.description||'No description available.'}</div>
+    </div>
+
+    ${p.features?.length?`<div class="pl-section"><div class="pl-sh">✅ Key Features</div><div class="pl-feature-grid">${(p.features||[]).map(f=>`<div class="pl-feature">${f}</div>`).join('')}</div></div>`:''}
+
+    ${p.amenities?.length?`<div class="pl-section"><div class="pl-sh">🏡 Amenities</div><div class="pl-amenities">${(p.amenities||[]).map(a=>P.amenityBadge(a)).join('')}</div></div>`:''}
+
+    ${p.status==='for_sale'?`
+    <div class="pl-section">
+      <div class="pl-sh">💰 Mortgage Calculator</div>
+      <div class="pl-calc-grid">
+        <div><label class="pl-label">Deposit (KES)</label><input type="number" class="pl-input" id="mcDeposit" value="${Math.round(p.price*0.2)}"></div>
+        <div><label class="pl-label">Loan Period (Years)</label><input type="number" class="pl-input" id="mcYears" value="20"></div>
+        <div><label class="pl-label">Interest Rate (%)</label><input type="number" class="pl-input" id="mcRate" value="12.5"></div>
+        <div style="display:flex;align-items:flex-end;"><button onclick="calcMortgage()" style="width:100%;padding:11px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;color:#10b981;font-weight:800;cursor:pointer;font-family:inherit;font-size:13px;">Calculate</button></div>
+      </div>
+      <div id="mortgageResult" style="display:none;" class="pl-calc-result"></div>
+      <button onclick="openFinanceModal()" style="width:100%;margin-top:10px;padding:10px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:10px;color:#10b981;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">🏦 Apply for Mortgage →</button>
+    </div>`:''}
+
+    <div class="pl-map" onclick="openMap()">
+      <div style="font-size:36px;">🗺️</div>
+      <div style="font-size:14px;font-weight:800;color:white;">View on Map</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.35);">📍 ${p.location}</div>
+    </div>
+
+    <div class="pl-agent">
+      <div class="pl-agent-icon">${agent.icon||'🏢'}</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:900;color:white;">${agent.name}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${agent.contact||''} · ${P.starsHTML(agent.rating)} ${agent.rating} (${agent.reviews||0} reviews)</div>
+        ${agent.verified?'<div style="font-size:10px;font-weight:700;color:#22c55e;margin-top:3px;">✅ Verified Agent</div>':''}
+        <div class="pl-agent-btns">
+          <a href="tel:${agent.phone}" style="padding:7px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:9px;color:#10b981;font-size:12px;font-weight:800;text-decoration:none;">📞 Call</a>
+          <a href="https://wa.me/254${(agent.phone||'').replace(/[^0-9]/g,'').replace(/^0/,'')}" target="_blank" style="padding:7px 14px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:9px;color:#25d366;font-size:12px;font-weight:800;text-decoration:none;">WhatsApp</a>
+          <a href="property-agent.html?id=${agent.id||p.agentId}" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:12px;font-weight:800;text-decoration:none;">Profile →</a>
+          <button onclick="if(window.SokoniInbox)SokoniInbox.openChat({otherUid:'${agent.uid||agent.id||p.agentId||'property-agent'}',otherName:'${agent.name}',type:'tenant-landlord',context:'${p.title||'Property Inquiry'}'});else window.location.href='messages.html';" style="padding:7px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:9px;color:#10b981;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">💬 Message</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pl-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="pl-sh" style="margin:0;">⭐ Reviews (${reviews.length})</div>
+        <button onclick="openReview()" style="padding:6px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:8px;color:#f59e0b;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">+ Write Review</button>
+      </div>
+      ${reviews.length?reviews.slice(0,3).map(r=>`
+      <div class="pl-review">
+        <div style="display:flex;justify-content:space-between;"><div class="pl-review-name">${r.name||'Reviewer'}</div><div>${P.starsHTML(r.rating)}</div></div>
+        <div class="pl-review-text">${r.comment||''}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.2);margin-top:4px;">${P.timeSince(r.ts)}</div>
+      </div>`).join(''):'<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No reviews yet. Be the first!</div>'}
+    </div>
+
+    <div class="pl-sh">🏘️ Similar Properties</div>
+    <div class="pl-similar">${P.getListings({category:p.category}).filter(x=>x.id!==p.id).slice(0,5).map(sp=>`
+      <div class="pl-sim-card" onclick="window.location.href='property-listing.html?id=${sp.id}'">
+        <div class="pl-sim-img">${sp.icon||'🏠'}</div>
+        <div class="pl-sim-body">
+          <div class="pl-sim-price">${P.fmtPrice(sp.price,sp.priceUnit)}</div>
+          <div class="pl-sim-title">${sp.title}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:3px;">📍 ${sp.location}</div>
+        </div>
+      </div>`).join('')}
+    </div>
+  `;
+  document.getElementById('actionBar').style.display='flex';
+}
+
+function setImg(img,btn){document.getElementById('mainImg').textContent=img;document.querySelectorAll('.pl-thumb').forEach(t=>t.classList.remove('active'));btn.classList.add('active');}
+window.setImg=setImg;
+function updateSaveBtn(){const saved=P.isSaved(_prop?.id);document.getElementById('saveBtn').textContent=saved?'❤️ Saved':'🤍 Save';}
+function toggleSave(){if(!_prop)return;P.saveProperty(_prop.id);updateSaveBtn();}
+window.toggleSave=toggleSave;
+function shareProp(){if(!_prop)return;if(navigator.share)navigator.share({title:_prop.title,url:window.location.href});else{navigator.clipboard.writeText(window.location.href);(window._skToast||alert)('Link copied!');}}
+window.shareProp=shareProp;
+
+function openViewing() {
+  const p=_prop;
+  document.getElementById('plModalContent').innerHTML=`
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">📅 Request Viewing<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
+    <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,0.6);">📍 ${p.title} · ${p.location}</div>
+    <label class="pl-label">Your Name *</label><input class="pl-input" id="vName" placeholder="John Kamau">
+    <label class="pl-label">Phone *</label><input class="pl-input" id="vPhone" placeholder="0712 345 678">
+    <label class="pl-label">Email</label><input class="pl-input" id="vEmail" type="email" placeholder="john@example.com">
+    <label class="pl-label">Preferred Date *</label><input class="pl-input" id="vDate" type="date" min="${new Date().toISOString().split('T')[0]}">
+    <label class="pl-label">Preferred Time</label>
+    <select class="pl-input" id="vTime"><option>Morning (9am–12pm)</option><option>Afternoon (12pm–3pm)</option><option>Evening (3pm–6pm)</option></select>
+    <label class="pl-label">Notes</label><textarea class="pl-input" id="vNotes" rows="2" placeholder="Any questions or requirements?"></textarea>
+    <button class="pl-submit" onclick="submitViewing()">📅 Submit Viewing Request</button>`;
+  document.getElementById('plModal').classList.add('open');
+}
+window.openViewing=openViewing;
+
+function submitViewing() {
+  const name=document.getElementById('vName').value.trim();const phone=document.getElementById('vPhone').value.trim();const date=document.getElementById('vDate').value;
+  if(!name||!phone||!date){(window._skToast||alert)('Please fill all required fields.');return;}
+  P.requestViewing({propertyId:_prop.id,propertyTitle:_prop.title,agentId:_prop.agentId,agentName:_prop.agentName||'Agent',name,phone,email:document.getElementById('vEmail').value,date,time:document.getElementById('vTime').value,notes:document.getElementById('vNotes').value});
+  closeModal();(window._skToast||alert)(`✅ Viewing request submitted!\n\nDate: ${date}\nThe agent will confirm within 24 hours.`);
+}
+window.submitViewing=submitViewing;
+
+function openInquiry() {
+  const p=_prop;
+  document.getElementById('plModalContent').innerHTML=`
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">💬 Send Inquiry<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
+    <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,0.6);">📍 ${p.title}</div>
+    <label class="pl-label">Name *</label><input class="pl-input" id="iqName" placeholder="Your full name">
+    <label class="pl-label">Phone *</label><input class="pl-input" id="iqPhone" placeholder="0712 345 678">
+    <label class="pl-label">Message *</label><textarea class="pl-input" id="iqMsg" rows="4" placeholder="I am interested in this property..."></textarea>
+    <button class="pl-submit" onclick="submitInquiry()">📤 Send Inquiry</button>`;
+  document.getElementById('plModal').classList.add('open');
+}
+window.openInquiry=openInquiry;
+
+function submitInquiry() {
+  const name=document.getElementById('iqName').value.trim();const phone=document.getElementById('iqPhone').value.trim();const msg=document.getElementById('iqMsg').value.trim();
+  if(!name||!phone||!msg){(window._skToast||alert)('Please fill all fields.');return;}
+  P.sendInquiry({propertyId:_prop.id,propertyTitle:_prop.title,agentId:_prop.agentId,name,phone,message:msg});
+  closeModal();(window._skToast||alert)('✅ Inquiry sent! The agent will respond within 24 hours.');
+}
+window.submitInquiry=submitInquiry;
+
+function openReview() {
+  document.getElementById('plModalContent').innerHTML=`
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;">⭐ Write a Review<span onclick="closeModal()" style="cursor:pointer;color:rgba(255,255,255,0.4);">✕</span></div>
+    <label class="pl-label">Your Name</label><input class="pl-input" id="rvName" placeholder="Your name">
+    <label class="pl-label">Rating</label>
+    <div style="display:flex;gap:8px;margin-bottom:12px;font-size:28px;">${[1,2,3,4,5].map(i=>`<span style="cursor:pointer;color:rgba(255,255,255,0.2);" onclick="setRvRating(${i})" id="rvStar${i}">★</span>`).join('')}</div>
+    <label class="pl-label">Review</label><textarea class="pl-input" id="rvComment" rows="4" placeholder="Share your experience..."></textarea>
+    <button class="pl-submit" onclick="submitReview()">⭐ Submit Review</button>`;
+  document.getElementById('plModal').classList.add('open');
+  _rvRating=0;
+}
+window.openReview=openReview;
+let _rvRating=0;
+function setRvRating(n){_rvRating=n;for(let i=1;i<=5;i++){const s=document.getElementById('rvStar'+i);if(s)s.style.color=i<=n?'#f59e0b':'rgba(255,255,255,0.2)';}}
+window.setRvRating=setRvRating;
+function submitReview(){const name=document.getElementById('rvName').value.trim()||'Anonymous';const comment=document.getElementById('rvComment').value.trim();if(!_rvRating||!comment){(window._skToast||alert)('Please select a rating and write a review.');return;}P.addReview(_prop.id,'property',{name,rating:_rvRating,comment});closeModal();(window._skToast||alert)('✅ Review submitted!');renderProp();}
+window.submitReview=submitReview;
+
+function calcMortgage() {
+  const deposit=parseInt(document.getElementById('mcDeposit').value)||0;
+  const years=parseInt(document.getElementById('mcYears').value)||20;
+  const rate=parseFloat(document.getElementById('mcRate').value)||12.5;
+  const result=P.calcMortgage(_prop.price,deposit,years,rate);if(!result)return;
+  const el=document.getElementById('mortgageResult');el.style.display='grid';
+  el.innerHTML=`<div class="pl-calc-box"><div class="pl-calc-val">KES ${P.fmt(result.monthly)}</div><div class="pl-calc-lbl">Monthly Payment</div></div><div class="pl-calc-box"><div class="pl-calc-val">KES ${P.fmt(result.total)}</div><div class="pl-calc-lbl">Total Repayment</div></div><div class="pl-calc-box"><div class="pl-calc-val" style="color:#ef4444;">KES ${P.fmt(result.interest)}</div><div class="pl-calc-lbl">Total Interest</div></div><div class="pl-calc-box"><div class="pl-calc-val">KES ${P.fmt(result.principal)}</div><div class="pl-calc-lbl">Loan Principal</div></div>`;
+}
+window.calcMortgage=calcMortgage;
+function openFinanceModal(){P.submitFinanceRequest({type:'mortgage',propertyId:_prop?.id,propertyTitle:_prop?.title,propertyPrice:_prop?.price});(window._skToast||alert)('✅ Mortgage request noted! A specialist will contact you within 24 hours.');}
+window.openFinanceModal=openFinanceModal;
+function openMap(){const q=encodeURIComponent((_prop?.location||'Nairobi')+' Kenya');window.open('https://maps.google.com/?q='+q,'_blank');}
+window.openMap=openMap;
+function closeModal(){document.getElementById('plModal').classList.remove('open');}
+window.closeModal=closeModal;
+document.getElementById('plModal').addEventListener('click',e=>{if(e.target===document.getElementById('plModal'))closeModal();});
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

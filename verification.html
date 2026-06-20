@@ -1,0 +1,1413 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Get SOKONI Verified â€” Trusted Badges for Businesses & Professionals</title>
+  <meta name="description" content="Apply for SOKONI Verification. Get a trusted badge for your business, practice or profile and unlock priority listings across Kenya.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mysokoni.co.ke/verification.html">
+  <meta property="og:title" content="Get SOKONI Verified â€” Trusted Badges for Businesses & Professionals">
+  <meta property="og:description" content="Apply for SOKONI Verification and build trust with customers across Kenya.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:site_name" content="SOKONI">
+  <meta property="og:locale" content="en_KE">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI Verify">
+  <script src="security.js"></script>
+<script src="auth-guard.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
+
+    /* â”€â”€ NAV â”€â”€ */
+    .vf-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; background: rgba(10,10,10,0.96);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px);
+      gap: 12px; flex-wrap: wrap;
+    }
+    .vf-nav-logo { height: 34px; }
+    .vf-nav-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .vf-nav-link {
+      color: rgba(255,255,255,0.6); text-decoration: none; font-size: 13px; font-weight: 600;
+      padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; transition: all .2s;
+    }
+    .vf-nav-link:hover { border-color: #71ff00; color: #71ff00; }
+    .vf-nav-link.primary { background: #71ff00; color: #000; border-color: #71ff00; font-weight: 800; }
+
+    /* â”€â”€ HERO â”€â”€ */
+    .vf-hero {
+      background: linear-gradient(135deg, rgba(113,255,0,0.07) 0%, rgba(0,170,255,0.04) 50%, rgba(0,0,0,0) 100%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 60px 24px 52px; text-align: center; position: relative; overflow: hidden;
+    }
+    .vf-hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(113,255,0,0.06), transparent);
+      pointer-events: none;
+    }
+    .vf-hero-super {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.3);
+      color: #71ff00; font-size: 11px; font-weight: 800; padding: 5px 14px;
+      border-radius: 20px; margin-bottom: 20px; letter-spacing: .08em; text-transform: uppercase;
+    }
+    .vf-hero h1 {
+      font-size: clamp(28px, 5.5vw, 52px); font-weight: 900; line-height: 1.1;
+      margin-bottom: 16px; letter-spacing: -.01em;
+    }
+    .vf-hero h1 span { color: #71ff00; }
+    .vf-hero-sub {
+      font-size: 16px; color: rgba(255,255,255,0.5); max-width: 560px;
+      margin: 0 auto 36px; line-height: 1.6;
+    }
+    .vf-hero-stats {
+      display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap;
+      margin-bottom: 36px;
+    }
+    .vf-hero-stat { text-align: center; }
+    .vf-hero-stat-num { font-size: 26px; font-weight: 900; color: #71ff00; line-height: 1; }
+    .vf-hero-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 600; margin-top: 4px; }
+    .vf-hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .vf-btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #71ff00, #00cc44); color: #000;
+      font-weight: 900; font-size: 14px; padding: 14px 28px; border-radius: 14px;
+      text-decoration: none; border: none; cursor: pointer; font-family: inherit;
+      transition: all .2s;
+    }
+    .vf-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .vf-btn-outline {
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.7);
+      font-weight: 700; font-size: 14px; padding: 13px 24px; border-radius: 14px;
+      text-decoration: none; background: rgba(255,255,255,0.04);
+      transition: all .2s; cursor: pointer; font-family: inherit;
+    }
+    .vf-btn-outline:hover { border-color: rgba(255,255,255,0.4); color: white; background: rgba(255,255,255,0.08); }
+
+    /* â”€â”€ TRUST PILLARS â”€â”€ */
+    .vf-pillars {
+      display: flex; gap: 24px; justify-content: center; flex-wrap: wrap;
+      padding: 40px 24px; border-bottom: 1px solid rgba(255,255,255,0.05);
+      max-width: 1100px; margin: 0 auto;
+    }
+    .vf-pillar {
+      flex: 1; min-width: 200px; max-width: 260px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 22px 20px; text-align: center;
+      transition: all .22s;
+    }
+    .vf-pillar:hover { border-color: rgba(113,255,0,0.2); background: rgba(113,255,0,0.03); }
+    .vf-pillar-icon { font-size: 30px; margin-bottom: 12px; }
+    .vf-pillar-title { font-size: 14px; font-weight: 800; color: white; margin-bottom: 6px; }
+    .vf-pillar-desc { font-size: 12px; color: rgba(255,255,255,0.45); line-height: 1.6; }
+
+    /* â”€â”€ SECTION WRAPPER â”€â”€ */
+    .vf-section { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
+    .vf-section-title { font-size: clamp(20px,3vw,28px); font-weight: 900; margin-bottom: 8px; }
+    .vf-section-sub { font-size: 14px; color: rgba(255,255,255,0.45); margin-bottom: 32px; line-height: 1.5; }
+
+    /* â”€â”€ TIER CARDS â”€â”€ */
+    .vf-tiers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px; margin-bottom: 16px;
+    }
+    .vf-tier-card {
+      border-radius: 18px; padding: 24px 22px; border: 1px solid; position: relative;
+      transition: all .22s; overflow: hidden;
+    }
+    .vf-tier-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--tier-color);
+    }
+    .vf-tier-card:hover { transform: translateY(-2px); box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
+    .vf-tier-card.tier-business {
+      --tier-color: #71ff00; background: rgba(113,255,0,0.05);
+      border-color: rgba(113,255,0,0.2);
+    }
+    .vf-tier-card.tier-pro {
+      --tier-color: #00aaff; background: rgba(0,170,255,0.05);
+      border-color: rgba(0,170,255,0.2);
+    }
+    .vf-tier-card.tier-driver {
+      --tier-color: #f97316; background: rgba(249,115,22,0.05);
+      border-color: rgba(249,115,22,0.2);
+    }
+    .vf-tier-card.tier-doctor {
+      --tier-color: #ef4444; background: rgba(239,68,68,0.05);
+      border-color: rgba(239,68,68,0.2);
+    }
+    .vf-tier-card.tier-lawyer {
+      --tier-color: #a855f7; background: rgba(168,85,247,0.05);
+      border-color: rgba(168,85,247,0.2);
+    }
+    .vf-tier-card.tier-agent {
+      --tier-color: #eab308; background: rgba(234,179,8,0.05);
+      border-color: rgba(234,179,8,0.2);
+    }
+    .vf-tier-emoji { font-size: 36px; margin-bottom: 12px; display: block; }
+    .vf-tier-name { font-size: 17px; font-weight: 900; color: white; margin-bottom: 6px; }
+    .vf-tier-color-name { font-size: 11px; font-weight: 700; margin-bottom: 12px; color: var(--tier-color); letter-spacing: .04em; }
+    .vf-tier-desc { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; margin-bottom: 14px; }
+    .vf-tier-perks { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .vf-tier-perks li {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: rgba(255,255,255,0.6);
+    }
+    .vf-tier-perks li i { color: var(--tier-color); font-size: 10px; flex-shrink: 0; }
+    .vf-tier-apply-btn {
+      margin-top: 18px; width: 100%; padding: 11px 0; border-radius: 12px; border: 1px solid;
+      border-color: var(--tier-color); background: transparent; color: var(--tier-color);
+      font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit; transition: all .2s;
+    }
+    .vf-tier-apply-btn:hover { background: var(--tier-color); color: #000; }
+
+    /* â”€â”€ APPLICATION FORM â”€â”€ */
+    .vf-form-wrap {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 22px; padding: 36px 32px; max-width: 740px; margin: 0 auto;
+    }
+    @media(max-width:600px) { .vf-form-wrap { padding: 22px 16px; } }
+    .vf-form-title { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+    .vf-form-sub { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 28px; line-height: 1.5; }
+    .vf-form-section {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px; padding: 18px 20px; margin-bottom: 18px;
+    }
+    .vf-form-section-title {
+      font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.5);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .vf-form-section-title i { color: #71ff00; }
+    .vf-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media(max-width:540px) { .vf-grid2 { grid-template-columns: 1fr; } }
+    .vf-field { margin-bottom: 14px; }
+    .vf-field:last-child { margin-bottom: 0; }
+    .vf-label {
+      display: block; font-size: 11px; font-weight: 700;
+      color: rgba(255,255,255,0.45); margin-bottom: 5px; letter-spacing: .02em;
+    }
+    .vf-label span { color: #71ff00; margin-left: 2px; }
+    .vf-input, .vf-select, .vf-textarea {
+      width: 100%; padding: 12px 14px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 11px; color: white; font-size: 16px; outline: none;
+      font-family: inherit; transition: border-color .2s;
+      -webkit-appearance: none; appearance: none;
+    }
+    .vf-input:focus, .vf-select:focus, .vf-textarea:focus {
+      border-color: rgba(113,255,0,0.45); background: rgba(255,255,255,0.08);
+    }
+    .vf-input::placeholder, .vf-textarea::placeholder { color: rgba(255,255,255,0.3); }
+    .vf-select { cursor: pointer; }
+    .vf-select option { background: #1a1a1a; color: white; }
+    .vf-textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+    .vf-upload-note {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: rgba(113,255,0,0.06); border: 1px dashed rgba(113,255,0,0.2);
+      border-radius: 12px; padding: 14px 16px; font-size: 12px; color: rgba(255,255,255,0.55);
+      line-height: 1.6;
+    }
+    .vf-upload-note i { color: #71ff00; font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+    .vf-upload-note a { color: #71ff00; text-decoration: none; font-weight: 700; }
+    .vf-upload-note a:hover { text-decoration: underline; }
+    .vf-submit-btn {
+      width: 100%; padding: 16px 0;
+      background: linear-gradient(135deg, #71ff00, #00cc44); color: #000;
+      font-weight: 900; font-size: 15px; border: none; border-radius: 14px;
+      cursor: pointer; font-family: inherit; margin-top: 24px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all .2s;
+    }
+    .vf-submit-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .vf-submit-btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+    /* â”€â”€ SUCCESS STATE â”€â”€ */
+    .vf-success {
+      display: none; text-align: center; padding: 40px 24px;
+    }
+    .vf-success.show { display: block; }
+    .vf-success-icon { font-size: 56px; margin-bottom: 16px; }
+    .vf-success-title { font-size: 22px; font-weight: 900; color: #71ff00; margin-bottom: 8px; }
+    .vf-success-sub { font-size: 14px; color: rgba(255,255,255,0.55); margin-bottom: 20px; line-height: 1.6; max-width: 420px; margin-left: auto; margin-right: auto; }
+    .vf-ref-badge {
+      display: inline-block;
+      background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.3);
+      color: #71ff00; font-weight: 900; font-size: 18px; padding: 10px 24px;
+      border-radius: 12px; letter-spacing: .06em; margin-bottom: 24px; font-family: monospace;
+    }
+
+    /* â”€â”€ STATUS CHECKER â”€â”€ */
+    .vf-checker-wrap {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; padding: 28px 28px; max-width: 560px; margin: 0 auto;
+    }
+    .vf-checker-title { font-size: 17px; font-weight: 900; margin-bottom: 6px; }
+    .vf-checker-sub { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 20px; }
+    .vf-checker-row { display: flex; gap: 10px; align-items: center; }
+    .vf-checker-row .vf-input { flex: 1; font-size: 16px; letter-spacing: .04em; }
+    .vf-checker-btn {
+      padding: 12px 20px; background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.3);
+      color: #71ff00; font-weight: 800; font-size: 13px; border-radius: 11px;
+      cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .2s; flex-shrink: 0;
+    }
+    .vf-checker-btn:hover { background: rgba(113,255,0,0.2); }
+    .vf-status-result {
+      margin-top: 18px; padding: 14px 16px; border-radius: 12px; display: none;
+      font-size: 13px; line-height: 1.6;
+    }
+    .vf-status-result.show { display: block; }
+    .vf-status-result.pending {
+      background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.2);
+      color: rgba(255,255,255,0.7);
+    }
+    .vf-status-result.approved {
+      background: rgba(113,255,0,0.08); border: 1px solid rgba(113,255,0,0.25);
+      color: rgba(255,255,255,0.7);
+    }
+    .vf-status-result.rejected {
+      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+      color: rgba(255,255,255,0.7);
+    }
+    .vf-status-result.not-found {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.5);
+    }
+    .vf-status-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+    .vf-status-label.pending { color: #ff9800; }
+    .vf-status-label.approved { color: #71ff00; }
+    .vf-status-label.rejected { color: #ef4444; }
+
+    /* â”€â”€ VERIFIED DIRECTORY â”€â”€ */
+    .vf-dir-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;
+    }
+    .vf-dir-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px; padding: 20px; transition: all .22s; position: relative; overflow: hidden;
+    }
+    .vf-dir-card:hover { border-color: rgba(113,255,0,0.25); transform: translateY(-2px); box-shadow: 0 10px 36px rgba(0,0,0,0.4); }
+    .vf-dir-card-top { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+    .vf-dir-avatar {
+      width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 900;
+    }
+    .vf-dir-info { flex: 1; min-width: 0; }
+    .vf-dir-name { font-size: 14px; font-weight: 900; color: white; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vf-dir-practice { font-size: 11px; color: rgba(255,255,255,0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vf-dir-desc { font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.55; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .vf-dir-meta { display: flex; align-items: center; justify-content: space-between; }
+    .vf-dir-county { font-size: 11px; color: rgba(255,255,255,0.35); display: flex; align-items: center; gap: 4px; }
+    .vf-dir-date { font-size: 10px; color: rgba(255,255,255,0.25); }
+    .vf-dir-empty {
+      grid-column: 1/-1; text-align: center; padding: 48px 24px;
+      color: rgba(255,255,255,0.3); font-size: 13px;
+    }
+    .vf-dir-empty i { font-size: 36px; margin-bottom: 12px; display: block; color: rgba(255,255,255,0.15); }
+
+    /* â”€â”€ LOADING â”€â”€ */
+    .vf-spinner {
+      width: 24px; height: 24px; border: 3px solid rgba(113,255,0,0.2);
+      border-top-color: #71ff00; border-radius: 50%; animation: vfSpin .7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes vfSpin { to { transform: rotate(360deg); } }
+
+    /* â”€â”€ DIVIDER â”€â”€ */
+    .vf-divider { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 0; }
+
+    /* â”€â”€ FOOTER NOTE â”€â”€ */
+    .vf-footer-note {
+      text-align: center; padding: 32px 24px 60px; font-size: 12px;
+      color: rgba(255,255,255,0.3); line-height: 1.8;
+    }
+    .vf-footer-note a { color: rgba(113,255,0,0.7); text-decoration: none; }
+    .vf-footer-note a:hover { color: #71ff00; }
+
+    /* â”€â”€ MOBILE BOT NAV SPACER â”€â”€ */
+    @media(max-width:768px) { .vf-section { padding: 32px 16px; } }
+
+    /* â”€â”€ HOW IT WORKS (STEPS) â”€â”€ */
+    .vf-steps-grid {
+      display: flex; gap: 0; position: relative; flex-wrap: wrap; justify-content: center;
+    }
+    .vf-step {
+      flex: 1; min-width: 160px; max-width: 220px;
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 0 12px 8px; position: relative;
+    }
+    .vf-step-connector {
+      position: absolute; top: 28px; left: calc(50% + 28px); right: calc(-50% + 28px);
+      height: 2px; background: linear-gradient(90deg, rgba(113,255,0,0.35), rgba(113,255,0,0.08));
+      z-index: 0;
+    }
+    .vf-step:last-child .vf-step-connector { display: none; }
+    .vf-step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: rgba(113,255,0,0.08); border: 2px solid rgba(113,255,0,0.3);
+      color: #71ff00; font-size: 20px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 14px; position: relative; z-index: 1; flex-shrink: 0;
+    }
+    .vf-step-title { font-size: 13px; font-weight: 800; color: white; margin-bottom: 6px; }
+    .vf-step-desc { font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.55; }
+    @media(max-width:700px) {
+      .vf-steps-grid { flex-direction: column; align-items: flex-start; gap: 0; }
+      .vf-step { flex-direction: row; text-align: left; max-width: 100%; padding: 0 0 24px 0; gap: 16px; align-items: flex-start; }
+      .vf-step-connector { display: none; }
+      .vf-step-body { flex: 1; }
+    }
+
+    /* â”€â”€ TIER DETAILS (expanded) â”€â”€ */
+    .vf-tier-detail-section {
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .vf-tier-detail-label {
+      font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.3);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+    }
+    .vf-tier-detail-pills {
+      display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;
+    }
+    .vf-tier-detail-pill {
+      font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .vf-tier-detail-pill.highlight {
+      background: rgba(var(--tier-rgb),0.12); color: var(--tier-color);
+      border-color: rgba(var(--tier-rgb),0.2);
+    }
+    .vf-tier-access-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .vf-tier-access-list li {
+      font-size: 12px; color: rgba(255,255,255,0.5); display: flex; gap: 8px; align-items: flex-start;
+    }
+    .vf-tier-access-list li i { color: var(--tier-color); margin-top: 2px; flex-shrink: 0; font-size: 10px; }
+
+    /* â”€â”€ FAQ ACCORDION â”€â”€ */
+    .vf-faq-list { display: flex; flex-direction: column; gap: 10px; max-width: 740px; margin: 0 auto; }
+    .vf-faq-item {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; overflow: hidden;
+    }
+    .vf-faq-q {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 18px 20px; cursor: pointer; user-select: none;
+      font-size: 14px; font-weight: 700; color: white; transition: background .15s;
+    }
+    .vf-faq-q:hover { background: rgba(255,255,255,0.03); }
+    .vf-faq-q i { color: #71ff00; font-size: 13px; flex-shrink: 0; transition: transform .25s; }
+    .vf-faq-item.open .vf-faq-q i { transform: rotate(45deg); }
+    .vf-faq-a {
+      max-height: 0; overflow: hidden;
+      transition: max-height .3s ease, padding .3s ease;
+      font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.7;
+      padding: 0 20px;
+    }
+    .vf-faq-item.open .vf-faq-a { max-height: 400px; padding: 0 20px 18px; }
+  </style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<!-- NAV -->
+<nav class="vf-nav">
+  <a href="index.html"><img src="assets/Sokonilogo2.png" alt="SOKONI" class="vf-nav-logo"></a>
+  <div class="vf-nav-right">
+    <a href="providers.html" class="vf-nav-link">Verified Providers</a>
+    <a href="services.html" class="vf-nav-link">Services</a>
+    <a href="#vf-apply" class="vf-nav-link primary">Apply Now</a>
+  </div>
+</nav>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 1 Â· HERO
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-hero">
+  <div class="vf-hero-super"><i class="fa-solid fa-shield-halved"></i> SOKONI VERIFIED PROGRAMME</div>
+  <h1>Get <span>SOKONI</span> Verified</h1>
+  <p class="vf-hero-sub">Build instant trust with customers across Kenya. A verification badge signals that your business or practice has been reviewed and confirmed as legitimate by the SOKONI team.</p>
+  <div class="vf-hero-stats">
+    <div class="vf-hero-stat">
+      <div class="vf-hero-stat-num">3x</div>
+      <div class="vf-hero-stat-label">More Profile Views</div>
+    </div>
+    <div class="vf-hero-stat">
+      <div class="vf-hero-stat-num">Priority</div>
+      <div class="vf-hero-stat-label">Search Listing</div>
+    </div>
+    <div class="vf-hero-stat">
+      <div class="vf-hero-stat-num">Free</div>
+      <div class="vf-hero-stat-label">To Apply</div>
+    </div>
+    <div class="vf-hero-stat">
+      <div class="vf-hero-stat-num">6</div>
+      <div class="vf-hero-stat-label">Badge Tiers</div>
+    </div>
+  </div>
+  <div class="vf-hero-btns">
+    <a href="#vf-apply" class="vf-btn-primary"><i class="fa-solid fa-circle-check"></i> Apply for Verification</a>
+    <a href="#vf-status" class="vf-btn-outline"><i class="fa-solid fa-magnifying-glass"></i> Check Application Status</a>
+  </div>
+</section>
+
+<!-- TRUST PILLARS -->
+<div style="border-bottom:1px solid rgba(255,255,255,0.05)">
+  <div class="vf-pillars">
+    <div class="vf-pillar">
+      <div class="vf-pillar-icon">ðŸ›¡ï¸</div>
+      <div class="vf-pillar-title">Trust Signal</div>
+      <div class="vf-pillar-desc">Customers know you are a genuine, reviewed and legitimate business or professional in Kenya.</div>
+    </div>
+    <div class="vf-pillar">
+      <div class="vf-pillar-icon">ðŸ“</div>
+      <div class="vf-pillar-title">Priority Listing</div>
+      <div class="vf-pillar-desc">Verified accounts rank higher in search results, category pages and recommendation feeds.</div>
+    </div>
+    <div class="vf-pillar">
+      <div class="vf-pillar-icon">âš¡</div>
+      <div class="vf-pillar-title">More Bookings</div>
+      <div class="vf-pillar-desc">Verified professionals receive up to 3Ã— more booking enquiries than unverified profiles.</div>
+    </div>
+    <div class="vf-pillar">
+      <div class="vf-pillar-icon">ðŸ…</div>
+      <div class="vf-pillar-title">Permanent Badge</div>
+      <div class="vf-pillar-desc">Your badge stays on your profile, product listings and every customer-facing page on SOKONI.</div>
+    </div>
+  </div>
+</div>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 2 Â· VERIFICATION TIERS
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-section">
+  <div class="vf-section-title">Verification Tiers</div>
+  <p class="vf-section-sub">Choose the badge that best describes your business or practice. Each tier has specific requirements and a unique badge colour.</p>
+
+  <div class="vf-tiers-grid">
+
+    <!-- VERIFIED BUSINESS -->
+    <div class="vf-tier-card tier-business">
+      <span class="vf-tier-emoji">âœ…</span>
+      <div class="vf-tier-name">Verified Business</div>
+      <div class="vf-tier-color-name">GREEN BADGE</div>
+      <div class="vf-tier-desc">For registered companies, shops, retailers and market traders with a valid business registration.</div>
+      <ul class="vf-tier-perks">
+        <li><i class="fa-solid fa-check"></i> Certificate of Incorporation or Business Name</li>
+        <li><i class="fa-solid fa-check"></i> KRA PIN Certificate</li>
+        <li><i class="fa-solid fa-check"></i> Owner National ID</li>
+        <li><i class="fa-solid fa-check"></i> Physical address verification</li>
+      </ul>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Business')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED PROFESSIONAL -->
+    <div class="vf-tier-card tier-pro">
+      <span class="vf-tier-emoji">ðŸŽ“</span>
+      <div class="vf-tier-name">Verified Professional</div>
+      <div class="vf-tier-color-name">BLUE BADGE</div>
+      <div class="vf-tier-desc">For freelancers, consultants, designers, engineers and independent service providers.</div>
+      <ul class="vf-tier-perks">
+        <li><i class="fa-solid fa-check"></i> National ID or Passport</li>
+        <li><i class="fa-solid fa-check"></i> Relevant professional certificate or diploma</li>
+        <li><i class="fa-solid fa-check"></i> Portfolio or work samples</li>
+        <li><i class="fa-solid fa-check"></i> Active phone number and email</li>
+      </ul>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Professional')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED DRIVER -->
+    <div class="vf-tier-card tier-driver">
+      <span class="vf-tier-emoji">ðŸš—</span>
+      <div class="vf-tier-name">Verified Driver</div>
+      <div class="vf-tier-color-name">ORANGE BADGE</div>
+      <div class="vf-tier-desc">For delivery riders, taxi drivers and logistics operators on the SOKONI platform.</div>
+      <ul class="vf-tier-perks">
+        <li><i class="fa-solid fa-check"></i> National ID and Driving Licence</li>
+        <li><i class="fa-solid fa-check"></i> NTSA Good Conduct Certificate</li>
+        <li><i class="fa-solid fa-check"></i> Vehicle Logbook or Hire Agreement</li>
+        <li><i class="fa-solid fa-check"></i> Comprehensive Insurance</li>
+      </ul>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Driver')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED DOCTOR -->
+    <div class="vf-tier-card tier-doctor">
+      <span class="vf-tier-emoji">ðŸ¥</span>
+      <div class="vf-tier-name">Verified Doctor</div>
+      <div class="vf-tier-color-name">RED BADGE</div>
+      <div class="vf-tier-desc">For medical doctors, nurses, pharmacists and all licensed healthcare providers in Kenya.</div>
+      <ul class="vf-tier-perks">
+        <li><i class="fa-solid fa-check"></i> KMPDC / NCK / PPB Registration Certificate</li>
+        <li><i class="fa-solid fa-check"></i> National ID or Passport</li>
+        <li><i class="fa-solid fa-check"></i> Annual Practising Licence</li>
+        <li><i class="fa-solid fa-check"></i> Facility registration (if applicable)</li>
+      </ul>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Doctor')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED LAWYER -->
+    <div class="vf-tier-card tier-lawyer">
+      <span class="vf-tier-emoji">âš–ï¸</span>
+      <div class="vf-tier-name">Verified Lawyer</div>
+      <div class="vf-tier-color-name">PURPLE BADGE</div>
+      <div class="vf-tier-desc">For advocates, legal consultants and law firms admitted to the Roll of Advocates in Kenya.</div>
+      <ul class="vf-tier-perks">
+        <li><i class="fa-solid fa-check"></i> LSK Practising Certificate (current year)</li>
+        <li><i class="fa-solid fa-check"></i> National ID or Passport</li>
+        <li><i class="fa-solid fa-check"></i> Advocate Roll Admission Certificate</li>
+        <li><i class="fa-solid fa-check"></i> Law firm name and address</li>
+      </ul>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Lawyer')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED PROPERTY AGENT -->
+    <div class="vf-tier-card tier-agent">
+      <span class="vf-tier-emoji">ðŸ˜ï¸</span>
+      <div class="vf-tier-name">Verified Property Agent</div>
+      <div class="vf-tier-color-name">YELLOW BADGE</div>
+      <div class="vf-tier-desc">For real estate agents, property managers and letting agencies operating in Kenya.</div>
+      <ul class="vf-tier-perks">
+        <li><i class="fa-solid fa-check"></i> Estate Agents Registration Board Licence</li>
+        <li><i class="fa-solid fa-check"></i> National ID or Passport</li>
+        <li><i class="fa-solid fa-check"></i> Company Registration (if agency)</li>
+        <li><i class="fa-solid fa-check"></i> KRA PIN Certificate</li>
+      </ul>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Property Agent')">Apply for this Tier</button>
+    </div>
+
+  </div>
+</section>
+
+<hr class="vf-divider">
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 3 Â· APPLICATION FORM
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-section" id="vf-apply">
+  <div class="vf-section-title">Apply for Verification</div>
+  <p class="vf-section-sub">Fill in the form below accurately. Applications are reviewed within 3â€“5 business days. We may contact you for additional information.</p>
+
+  <div class="vf-form-wrap" id="vfFormWrap">
+
+    <!-- â”€â”€ Success state â”€â”€ -->
+    <div class="vf-success" id="vfSuccess">
+      <div class="vf-success-icon">ðŸŽ‰</div>
+      <div class="vf-success-title">Application Submitted!</div>
+      <p class="vf-success-sub">Your verification request has been received. Please save your reference number below â€” use it to track your application status.</p>
+      <div class="vf-ref-badge" id="vfRefDisplay">SKV-XXXXXX</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;">We'll review your application within 3â€“5 business days.<br>Email us documents at <a href="mailto:verify@mysokoni.co.ke" style="color:#71ff00;text-decoration:none;font-weight:700;">verify@mysokoni.co.ke</a> quoting your reference.</p>
+      <button class="vf-btn-primary" onclick="resetForm()" style="display:inline-flex;margin:0 auto;"><i class="fa-solid fa-arrow-left"></i> Submit Another</button>
+    </div>
+
+    <!-- â”€â”€ The form â”€â”€ -->
+    <form id="vfForm" novalidate>
+
+      <!-- Personal -->
+      <div class="vf-form-section">
+        <div class="vf-form-section-title"><i class="fa-solid fa-user"></i> Personal Information</div>
+        <div class="vf-grid2">
+          <div class="vf-field">
+            <label class="vf-label" for="vfFullName">Full Name <span>*</span></label>
+            <input class="vf-input" id="vfFullName" type="text" placeholder="e.g. Jane Wambui Njoroge" required>
+          </div>
+          <div class="vf-field">
+            <label class="vf-label" for="vfIdNumber">National ID / Passport No <span>*</span></label>
+            <input class="vf-input" id="vfIdNumber" type="text" placeholder="e.g. 28734567" required>
+          </div>
+          <div class="vf-field">
+            <label class="vf-label" for="vfPhone">Phone Number <span>*</span></label>
+            <input class="vf-input" id="vfPhone" type="tel" placeholder="e.g. 0712 345 678" required>
+          </div>
+          <div class="vf-field">
+            <label class="vf-label" for="vfEmail">Email Address <span>*</span></label>
+            <input class="vf-input" id="vfEmail" type="email" placeholder="e.g. jane@mybusiness.co.ke" required>
+          </div>
+        </div>
+      </div>
+
+      <!-- Business / Practice -->
+      <div class="vf-form-section">
+        <div class="vf-form-section-title"><i class="fa-solid fa-briefcase"></i> Business / Practice Details</div>
+        <div class="vf-field">
+          <label class="vf-label" for="vfPracticeName">Business / Practice Name <span>*</span></label>
+          <input class="vf-input" id="vfPracticeName" type="text" placeholder="e.g. Njoroge & Associates Advocates" required>
+        </div>
+        <div class="vf-grid2">
+          <div class="vf-field">
+            <label class="vf-label" for="vfVerifyType">Verification Tier <span>*</span></label>
+            <select class="vf-select" id="vfVerifyType" required>
+              <option value="" disabled selected>Select a tierâ€¦</option>
+              <option value="Verified Business">âœ… Verified Business</option>
+              <option value="Verified Professional">ðŸŽ“ Verified Professional</option>
+              <option value="Verified Driver">ðŸš— Verified Driver</option>
+              <option value="Verified Doctor">ðŸ¥ Verified Doctor</option>
+              <option value="Verified Lawyer">âš–ï¸ Verified Lawyer</option>
+              <option value="Verified Property Agent">ðŸ˜ï¸ Verified Property Agent</option>
+            </select>
+          </div>
+          <div class="vf-field">
+            <label class="vf-label" for="vfKraPin">KRA PIN <span style="color:rgba(255,255,255,0.3);font-weight:400;">(optional)</span></label>
+            <input class="vf-input" id="vfKraPin" type="text" placeholder="e.g. A000000000A">
+          </div>
+        </div>
+        <div class="vf-grid2">
+          <div class="vf-field">
+            <label class="vf-label" for="vfAddress">Physical Address <span>*</span></label>
+            <input class="vf-input" id="vfAddress" type="text" placeholder="e.g. Tom Mboya Street, Nairobi CBD" required>
+          </div>
+          <div class="vf-field">
+            <label class="vf-label" for="vfCounty">County <span>*</span></label>
+            <select class="vf-select" id="vfCounty" required>
+              <option value="" disabled selected>Select countyâ€¦</option>
+              <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
+              <option>Nakuru</option><option>Eldoret / Uasin Gishu</option><option>Thika / Kiambu</option>
+              <option>Nyeri</option><option>Machakos</option><option>Meru</option>
+              <option>Kisii</option><option>Kakamega</option><option>Kericho</option>
+              <option>Embu</option><option>Garissa</option><option>Isiolo</option>
+              <option>Kajiado</option><option>Kilifi</option><option>Kirinyaga</option>
+              <option>Kitui</option><option>Kwale</option><option>Laikipia</option>
+              <option>Lamu</option><option>Mandera</option><option>Marsabit</option>
+              <option>Migori</option><option>Murang'a</option><option>Nandi</option>
+              <option>Narok</option><option>Nyandarua</option><option>Nyamira</option>
+              <option>Samburu</option><option>Siaya</option><option>Taita Taveta</option>
+              <option>Tana River</option><option>Trans Nzoia</option><option>Turkana</option>
+              <option>Vihiga</option><option>Wajir</option><option>West Pokot</option>
+              <option>Bomet</option><option>Bungoma</option><option>Busia</option>
+              <option>Elgeyo Marakwet</option><option>Homa Bay</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile -->
+      <div class="vf-form-section">
+        <div class="vf-form-section-title"><i class="fa-solid fa-circle-info"></i> Profile Information</div>
+        <div class="vf-field">
+          <label class="vf-label" for="vfDescription">Brief Description â€” What you do <span>*</span></label>
+          <textarea class="vf-textarea" id="vfDescription" placeholder="Tell us about your business or practice, the services you offer, and how long you have been operatingâ€¦" required></textarea>
+        </div>
+        <div class="vf-field">
+          <label class="vf-label" for="vfLinks">Website / Social Media Links <span style="color:rgba(255,255,255,0.3);font-weight:400;">(optional)</span></label>
+          <input class="vf-input" id="vfLinks" type="text" placeholder="e.g. https://mybusiness.co.ke, facebook.com/mybusiness">
+        </div>
+      </div>
+
+      <!-- Documents -->
+      <div class="vf-form-section">
+        <div class="vf-form-section-title"><i class="fa-solid fa-file-arrow-up"></i> Supporting Documents</div>
+        <div class="vf-upload-note">
+          <i class="fa-solid fa-envelope"></i>
+          <div>
+            <strong style="color:white;">Email your documents</strong> directly to <a href="mailto:verify@mysokoni.co.ke">verify@mysokoni.co.ke</a> with the subject line <em style="color:rgba(255,255,255,0.6);">"SOKONI Verification â€” [Your Name]"</em>.<br>
+            Accepted formats: PDF, JPG, PNG. Max 5 MB per file. Include ID, registration certificates and any licences relevant to your tier.
+          </div>
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div id="vfError" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:11px;padding:12px 16px;font-size:13px;color:#ef4444;margin-top:16px;"></div>
+
+      <button type="submit" class="vf-submit-btn" id="vfSubmitBtn">
+        <i class="fa-solid fa-circle-check"></i> Submit Verification Application
+      </button>
+    </form>
+  </div>
+</section>
+
+<hr class="vf-divider">
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 4 Â· STATUS CHECKER
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-section" id="vf-status">
+  <div class="vf-section-title">Check Application Status</div>
+  <p class="vf-section-sub">Enter the reference number you received after submitting your application.</p>
+
+  <div class="vf-checker-wrap">
+    <div class="vf-checker-title">Track Your Application</div>
+    <p class="vf-checker-sub">Your reference number looks like <strong style="color:rgba(255,255,255,0.7);font-family:monospace;">SKV-XXXXXX</strong></p>
+    <div class="vf-checker-row">
+      <input class="vf-input" id="vfRefInput" type="text" placeholder="e.g. SKV-A3F9C2" style="text-transform:uppercase;letter-spacing:.05em;">
+      <button class="vf-checker-btn" id="vfCheckBtn" onclick="checkStatus()"><i class="fa-solid fa-magnifying-glass"></i> Check</button>
+    </div>
+    <div class="vf-status-result" id="vfStatusResult">
+      <div class="vf-status-label" id="vfStatusLabel"></div>
+      <div id="vfStatusMsg"></div>
+    </div>
+  </div>
+</section>
+
+<hr class="vf-divider">
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 5 Â· VERIFIED LISTINGS DIRECTORY
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-section">
+  <div class="vf-section-title">Recently Verified Members</div>
+  <p class="vf-section-sub">Businesses and professionals who have been reviewed and approved for SOKONI verification.</p>
+
+  <div class="vf-dir-grid" id="vfDirectory">
+    <div class="vf-dir-empty"><div class="vf-spinner"></div><div style="margin-top:16px;">Loading verified membersâ€¦</div></div>
+  </div>
+</section>
+
+<hr class="vf-divider">
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 6 Â· HOW VERIFICATION WORKS
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-section" id="vf-how">
+  <div class="vf-section-title">How Verification Works</div>
+  <p class="vf-section-sub">Five simple steps from application to badge. The whole process takes 1â€“3 business days for most applicants.</p>
+
+  <div class="vf-steps-grid">
+
+    <div class="vf-step">
+      <div class="vf-step-connector"></div>
+      <div class="vf-step-num">1</div>
+      <div class="vf-step-body">
+        <div class="vf-step-title">Submit Application</div>
+        <div class="vf-step-desc">Fill in the form above and email your supporting documents to verify@mysokoni.co.ke.</div>
+      </div>
+    </div>
+
+    <div class="vf-step">
+      <div class="vf-step-connector"></div>
+      <div class="vf-step-num">2</div>
+      <div class="vf-step-body">
+        <div class="vf-step-title">SOKONI Review</div>
+        <div class="vf-step-desc">Our team checks your documents and information within 1â€“3 business days.</div>
+      </div>
+    </div>
+
+    <div class="vf-step">
+      <div class="vf-step-connector"></div>
+      <div class="vf-step-num">3</div>
+      <div class="vf-step-body">
+        <div class="vf-step-title">Video Call</div>
+        <div class="vf-step-desc">Business and Professional tier applicants may be invited to a short verification call.</div>
+      </div>
+    </div>
+
+    <div class="vf-step">
+      <div class="vf-step-connector"></div>
+      <div class="vf-step-num">4</div>
+      <div class="vf-step-body">
+        <div class="vf-step-title">Badge Issued</div>
+        <div class="vf-step-desc">Your verified badge appears on your profile and every listing across SOKONI.</div>
+      </div>
+    </div>
+
+    <div class="vf-step">
+      <div class="vf-step-num">5</div>
+      <div class="vf-step-body">
+        <div class="vf-step-title">Annual Renewal</div>
+        <div class="vf-step-desc">You receive a renewal reminder each year to keep your badge current and active.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="vf-divider">
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 7 Â· TIER BENEFITS (expanded cards)
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-section" id="vf-benefits">
+  <div class="vf-section-title">What You Get Per Tier</div>
+  <p class="vf-section-sub">Each badge unlocks specific listing changes, platform access, and credibility signals. Choose the tier that matches your work.</p>
+
+  <div class="vf-tiers-grid">
+
+    <!-- VERIFIED BUSINESS â€” expanded -->
+    <div class="vf-tier-card tier-business" style="--tier-rgb:113,255,0">
+      <span class="vf-tier-emoji">âœ…</span>
+      <div class="vf-tier-name">Verified Business</div>
+      <div class="vf-tier-color-name">GREEN BADGE</div>
+      <div class="vf-tier-desc">For registered companies, shops, retailers and market traders with a valid business registration.</div>
+
+      <div class="vf-tier-detail-section">
+        <div class="vf-tier-detail-label">Listing Changes</div>
+        <div class="vf-tier-detail-pills">
+          <span class="vf-tier-detail-pill highlight">Green Verified Badge</span>
+          <span class="vf-tier-detail-pill highlight">Priority Search Boost</span>
+          <span class="vf-tier-detail-pill">Trust Indicator Banner</span>
+        </div>
+        <div class="vf-tier-detail-label">Platform Access</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-chart-line"></i> Sales analytics dashboard</li>
+          <li><i class="fa-solid fa-bullhorn"></i> Up to 3 promoted product slots</li>
+          <li><i class="fa-solid fa-star"></i> Featured on Verified Businesses page</li>
+          <li><i class="fa-solid fa-tags"></i> Exclusive discount voucher campaigns</li>
+        </ul>
+        <div class="vf-tier-detail-label" style="margin-top:10px;">Requirements</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-file-circle-check"></i> Certificate of Incorporation or Business Name</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> KRA PIN Certificate</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Owner National ID</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Physical address verification</li>
+        </ul>
+      </div>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Business')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED PROFESSIONAL â€” expanded -->
+    <div class="vf-tier-card tier-pro" style="--tier-rgb:0,170,255">
+      <span class="vf-tier-emoji">ðŸŽ“</span>
+      <div class="vf-tier-name">Verified Professional</div>
+      <div class="vf-tier-color-name">BLUE BADGE</div>
+      <div class="vf-tier-desc">For freelancers, consultants, designers, engineers and independent service providers.</div>
+
+      <div class="vf-tier-detail-section">
+        <div class="vf-tier-detail-label">Listing Changes</div>
+        <div class="vf-tier-detail-pills">
+          <span class="vf-tier-detail-pill highlight">Blue Verified Badge</span>
+          <span class="vf-tier-detail-pill highlight">Priority in Services</span>
+          <span class="vf-tier-detail-pill">Credentials Shown</span>
+        </div>
+        <div class="vf-tier-detail-label">Platform Access</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-chart-line"></i> Profile view and enquiry analytics</li>
+          <li><i class="fa-solid fa-calendar-check"></i> Booking calendar integration</li>
+          <li><i class="fa-solid fa-star"></i> Featured in Verified Professionals directory</li>
+          <li><i class="fa-solid fa-envelope-open-text"></i> Direct lead notifications by email</li>
+        </ul>
+        <div class="vf-tier-detail-label" style="margin-top:10px;">Requirements</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-file-circle-check"></i> National ID or Passport</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Professional certificate or diploma</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Portfolio or work samples</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Active phone and email</li>
+        </ul>
+      </div>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Professional')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED DRIVER â€” expanded -->
+    <div class="vf-tier-card tier-driver" style="--tier-rgb:249,115,22">
+      <span class="vf-tier-emoji">ðŸš—</span>
+      <div class="vf-tier-name">Verified Driver</div>
+      <div class="vf-tier-color-name">ORANGE BADGE</div>
+      <div class="vf-tier-desc">For delivery riders, taxi drivers and logistics operators on the SOKONI platform.</div>
+
+      <div class="vf-tier-detail-section">
+        <div class="vf-tier-detail-label">Listing Changes</div>
+        <div class="vf-tier-detail-pills">
+          <span class="vf-tier-detail-pill highlight">Orange Driver Badge</span>
+          <span class="vf-tier-detail-pill highlight">Safety Verified Tag</span>
+          <span class="vf-tier-detail-pill">Ride Priority Queue</span>
+        </div>
+        <div class="vf-tier-detail-label">Platform Access</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-chart-line"></i> Trip earnings analytics</li>
+          <li><i class="fa-solid fa-shield-halved"></i> Safety-verified label on ride app</li>
+          <li><i class="fa-solid fa-star"></i> Priority matching for deliveries</li>
+          <li><i class="fa-solid fa-bell"></i> Instant ride and delivery alerts</li>
+        </ul>
+        <div class="vf-tier-detail-label" style="margin-top:10px;">Requirements</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-file-circle-check"></i> National ID and Driving Licence</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> NTSA Good Conduct Certificate</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Vehicle Logbook or Hire Agreement</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Comprehensive Insurance</li>
+        </ul>
+      </div>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Driver')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED DOCTOR â€” expanded -->
+    <div class="vf-tier-card tier-doctor" style="--tier-rgb:239,68,68">
+      <span class="vf-tier-emoji">ðŸ¥</span>
+      <div class="vf-tier-name">Verified Doctor</div>
+      <div class="vf-tier-color-name">RED BADGE</div>
+      <div class="vf-tier-desc">For medical doctors, nurses, pharmacists and all licensed healthcare providers in Kenya.</div>
+
+      <div class="vf-tier-detail-section">
+        <div class="vf-tier-detail-label">Listing Changes</div>
+        <div class="vf-tier-detail-pills">
+          <span class="vf-tier-detail-pill highlight">Red Medical Badge</span>
+          <span class="vf-tier-detail-pill highlight">Licence Verified</span>
+          <span class="vf-tier-detail-pill">Top of Health Search</span>
+        </div>
+        <div class="vf-tier-detail-label">Platform Access</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-chart-line"></i> Patient enquiry analytics</li>
+          <li><i class="fa-solid fa-calendar-check"></i> Online appointment booking</li>
+          <li><i class="fa-solid fa-star"></i> Featured in Health Hub directory</li>
+          <li><i class="fa-solid fa-shield-halved"></i> KMPDC/NCK licence badge displayed</li>
+        </ul>
+        <div class="vf-tier-detail-label" style="margin-top:10px;">Requirements</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-file-circle-check"></i> KMPDC / NCK / PPB Registration</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> National ID or Passport</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Annual Practising Licence</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Facility registration (if applicable)</li>
+        </ul>
+      </div>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Doctor')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED LAWYER â€” expanded -->
+    <div class="vf-tier-card tier-lawyer" style="--tier-rgb:168,85,247">
+      <span class="vf-tier-emoji">âš–ï¸</span>
+      <div class="vf-tier-name">Verified Lawyer</div>
+      <div class="vf-tier-color-name">PURPLE BADGE</div>
+      <div class="vf-tier-desc">For advocates, legal consultants and law firms admitted to the Roll of Advocates in Kenya.</div>
+
+      <div class="vf-tier-detail-section">
+        <div class="vf-tier-detail-label">Listing Changes</div>
+        <div class="vf-tier-detail-pills">
+          <span class="vf-tier-detail-pill highlight">Purple Legal Badge</span>
+          <span class="vf-tier-detail-pill highlight">LSK Verified</span>
+          <span class="vf-tier-detail-pill">Top of Legal Search</span>
+        </div>
+        <div class="vf-tier-detail-label">Platform Access</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-chart-line"></i> Client enquiry and case analytics</li>
+          <li><i class="fa-solid fa-calendar-check"></i> Consultation booking widget</li>
+          <li><i class="fa-solid fa-star"></i> Featured in Legal Services directory</li>
+          <li><i class="fa-solid fa-shield-halved"></i> LSK certificate number displayed</li>
+        </ul>
+        <div class="vf-tier-detail-label" style="margin-top:10px;">Requirements</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-file-circle-check"></i> LSK Practising Certificate (current year)</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> National ID or Passport</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Advocate Roll Admission Certificate</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Law firm name and address</li>
+        </ul>
+      </div>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Lawyer')">Apply for this Tier</button>
+    </div>
+
+    <!-- VERIFIED PROPERTY AGENT â€” expanded -->
+    <div class="vf-tier-card tier-agent" style="--tier-rgb:234,179,8">
+      <span class="vf-tier-emoji">ðŸ˜ï¸</span>
+      <div class="vf-tier-name">Verified Property Agent</div>
+      <div class="vf-tier-color-name">YELLOW BADGE</div>
+      <div class="vf-tier-desc">For real estate agents, property managers and letting agencies operating in Kenya.</div>
+
+      <div class="vf-tier-detail-section">
+        <div class="vf-tier-detail-label">Listing Changes</div>
+        <div class="vf-tier-detail-pills">
+          <span class="vf-tier-detail-pill highlight">Yellow Agent Badge</span>
+          <span class="vf-tier-detail-pill highlight">EARB Verified</span>
+          <span class="vf-tier-detail-pill">Property Listing Boost</span>
+        </div>
+        <div class="vf-tier-detail-label">Platform Access</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-chart-line"></i> Property view and lead analytics</li>
+          <li><i class="fa-solid fa-bullhorn"></i> Up to 5 promoted property listings</li>
+          <li><i class="fa-solid fa-star"></i> Featured in Real Estate Hub</li>
+          <li><i class="fa-solid fa-shield-halved"></i> EARB licence badge displayed</li>
+        </ul>
+        <div class="vf-tier-detail-label" style="margin-top:10px;">Requirements</div>
+        <ul class="vf-tier-access-list">
+          <li><i class="fa-solid fa-file-circle-check"></i> Estate Agents Registration Board Licence</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> National ID or Passport</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> Company Registration (if agency)</li>
+          <li><i class="fa-solid fa-file-circle-check"></i> KRA PIN Certificate</li>
+        </ul>
+      </div>
+      <button class="vf-tier-apply-btn" onclick="prefillTier('Verified Property Agent')">Apply for this Tier</button>
+    </div>
+
+  </div>
+</section>
+
+<hr class="vf-divider">
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     SECTION 8 Â· FAQ ACCORDION
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="vf-section" id="vf-faq">
+  <div class="vf-section-title">Frequently Asked Questions</div>
+  <p class="vf-section-sub">Everything you need to know about the SOKONI Verification Programme.</p>
+
+  <div class="vf-faq-list">
+
+    <div class="vf-faq-item">
+      <div class="vf-faq-q" onclick="toggleFaq(this)">
+        <span>How long does verification take?</span>
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <div class="vf-faq-a">
+        Most applications are reviewed within <strong style="color:white;">1â€“3 business days</strong> of receiving your documents. If we need additional information we'll contact you by email or phone. Business and Professional tier applicants who require a video call may take up to 5 business days in total. You can check your current status at any time using your reference number in the Status Checker above.
+      </div>
+    </div>
+
+    <div class="vf-faq-item">
+      <div class="vf-faq-q" onclick="toggleFaq(this)">
+        <span>What documents do I need?</span>
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <div class="vf-faq-a">
+        Required documents depend on your tier. All applicants need a <strong style="color:white;">valid National ID or Passport</strong>. Beyond that: businesses need a Certificate of Incorporation and KRA PIN; drivers need a Driving Licence, NTSA certificate and vehicle logbook; doctors need their KMPDC/NCK/PPB registration and practising licence; lawyers need their LSK practising certificate; property agents need their EARB licence. Email all documents as PDF, JPG or PNG (max 5 MB each) to <a href="mailto:verify@mysokoni.co.ke" style="color:#71ff00;text-decoration:none;font-weight:700;">verify@mysokoni.co.ke</a> with your reference number in the subject.
+      </div>
+    </div>
+
+    <div class="vf-faq-item">
+      <div class="vf-faq-q" onclick="toggleFaq(this)">
+        <span>Can I lose my verification badge?</span>
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <div class="vf-faq-a">
+        Yes. SOKONI reserves the right to suspend or revoke a verification badge if: your licence or registration expires and is not renewed, we receive credible complaints about fraudulent activity, your business closes or you cease to practise, or you fail to complete the <strong style="color:white;">annual renewal</strong> check-in. You will always be notified before any badge is revoked and given a chance to provide updated documentation.
+      </div>
+    </div>
+
+    <div class="vf-faq-item">
+      <div class="vf-faq-q" onclick="toggleFaq(this)">
+        <span>Does verification guarantee sales or bookings?</span>
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <div class="vf-faq-a">
+        Verification does <strong style="color:white;">not guarantee</strong> sales, bookings or any specific revenue outcome. It is a trust and credibility signal that shows customers your business or practice is genuine and has been reviewed. Verified accounts typically receive significantly more profile views and enquiries than unverified ones, but results depend on the quality of your listings, pricing, responsiveness and customer service.
+      </div>
+    </div>
+
+    <div class="vf-faq-item">
+      <div class="vf-faq-q" onclick="toggleFaq(this)">
+        <span>How is verification renewed?</span>
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <div class="vf-faq-a">
+        Verification is valid for <strong style="color:white;">12 months</strong>. Approximately 30 days before expiry you will receive a renewal reminder by email and an in-app notification. Renewal requires confirming that your details are still accurate and uploading any updated licences or certificates. The renewal process is free and typically takes 1â€“2 business days. If you do not renew, your badge will be paused (not deleted) and reactivated as soon as you complete the renewal.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<div class="vf-footer-note">
+  SOKONI Verification is free to apply for. Badges are awarded at SOKONI's sole discretion after review.<br>
+  Questions? Email <a href="mailto:verify@mysokoni.co.ke">verify@mysokoni.co.ke</a> &nbsp;|&nbsp; <a href="index.html">Back to SOKONI</a>
+</div>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     FIREBASE + LOGIC
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<script type="module">
+  /* â”€â”€ Firebase lazy init â”€â”€ */
+  const FIREBASE_VER = "10.12.2";
+  const FB_CFG = {
+    apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+    authDomain:        "sokoni-aeb26.firebaseapp.com",
+    projectId:         "sokoni-aeb26",
+    storageBucket:     "sokoni-aeb26.firebasestorage.app",
+    messagingSenderId: "24799054989",
+    appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4"
+  };
+
+  async function getDB() {
+    const { initializeApp, getApps } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-app.js`);
+    const { getFirestore }           = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+    const apps = getApps();
+    const app  = apps.find(a => a.name === "sokoni-verify") || initializeApp(FB_CFG, "sokoni-verify");
+    return getFirestore(app);
+  }
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• TIER COLOUR MAP â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  const TIER_MAP = {
+    "Verified Business":       { color: "#71ff00", bg: "rgba(113,255,0,0.12)",  emoji: "âœ…" },
+    "Verified Professional":   { color: "#00aaff", bg: "rgba(0,170,255,0.12)",  emoji: "ðŸŽ“" },
+    "Verified Driver":         { color: "#f97316", bg: "rgba(249,115,22,0.12)", emoji: "ðŸš—" },
+    "Verified Doctor":         { color: "#ef4444", bg: "rgba(239,68,68,0.12)",  emoji: "ðŸ¥" },
+    "Verified Lawyer":         { color: "#a855f7", bg: "rgba(168,85,247,0.12)", emoji: "âš–ï¸" },
+    "Verified Property Agent": { color: "#eab308", bg: "rgba(234,179,8,0.12)",  emoji: "ðŸ˜ï¸" }
+  };
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• BADGE BUILDER â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  function tierBadge(type) {
+    const t = TIER_MAP[type];
+    if (!t) return "";
+    const cls = {
+      "Verified Business":       "sk-badge-business",
+      "Verified Professional":   "sk-badge-pro",
+      "Verified Driver":         "sk-badge-driver",
+      "Verified Doctor":         "sk-badge-doctor",
+      "Verified Lawyer":         "sk-badge-lawyer",
+      "Verified Property Agent": "sk-badge-agent"
+    }[type] || "";
+    return `<span class="sk-badge ${cls}">${t.emoji} ${type}</span>`;
+  }
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• GENERATE REF NUMBER â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  function genRef() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let r = "SKV-";
+    for (let i = 0; i < 6; i++) r += chars[Math.floor(Math.random() * chars.length)];
+    return r;
+  }
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• FORM SUBMISSION â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  document.getElementById("vfForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const get = id => document.getElementById(id).value.trim();
+    const showErr = msg => {
+      const el = document.getElementById("vfError");
+      el.textContent = msg; el.style.display = "block";
+    };
+    document.getElementById("vfError").style.display = "none";
+
+    const fullName     = get("vfFullName");
+    const idNumber     = get("vfIdNumber");
+    const phone        = get("vfPhone");
+    const email        = get("vfEmail");
+    const practiceName = get("vfPracticeName");
+    const verifyType   = get("vfVerifyType");
+    const address      = get("vfAddress");
+    const county       = get("vfCounty");
+    const description  = get("vfDescription");
+
+    if (!fullName)     return showErr("Please enter your full name.");
+    if (!idNumber)     return showErr("Please enter your ID or Passport number.");
+    if (!phone)        return showErr("Please enter your phone number.");
+    if (!email || !email.includes("@")) return showErr("Please enter a valid email address.");
+    if (!practiceName) return showErr("Please enter your business or practice name.");
+    if (!verifyType)   return showErr("Please select a verification tier.");
+    if (!address)      return showErr("Please enter your physical address.");
+    if (!county)       return showErr("Please select your county.");
+    if (!description || description.length < 30) return showErr("Please write a brief description (at least 30 characters).");
+
+    const btn = document.getElementById("vfSubmitBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="vf-spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;"></span> Checkingâ€¦';
+
+    const refNumber = genRef();
+
+    try {
+      const db = await getDB();
+      const { collection, addDoc, getDocs, query, where, serverTimestamp } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+
+      /* Prevent duplicate requests: one active/pending request per email */
+      const existing = await getDocs(query(
+        collection(db, "verificationRequests"),
+        where("email", "==", email),
+        where("status", "in", ["pending", "under_review"])
+      ));
+      if (!existing.empty) {
+        btn.disabled = false;
+        btn.innerHTML = 'Submit Application';
+        return showErr("You already have a pending application. Please wait for it to be reviewed before submitting another.");
+      }
+      btn.innerHTML = '<span class="vf-spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;"></span> Submittingâ€¦';
+
+      await addDoc(collection(db, "verificationRequests"), {
+        refNumber,
+        fullName,
+        idNumber,
+        phone,
+        email,
+        practiceName,
+        verifyType,
+        kraPin:      get("vfKraPin"),
+        address,
+        county,
+        description,
+        links:       get("vfLinks"),
+        status:      "pending",
+        createdAt:   serverTimestamp()
+      });
+
+      document.getElementById("vfRefDisplay").textContent = refNumber;
+      document.getElementById("vfForm").style.display = "none";
+      document.getElementById("vfSuccess").classList.add("show");
+
+    } catch (err) {
+      console.error("Verification submit error:", err);
+      showErr("Submission failed â€” please check your internet connection and try again.");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Submit Verification Application';
+    }
+  });
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• RESET FORM â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  window.resetForm = function () {
+    document.getElementById("vfForm").reset();
+    document.getElementById("vfForm").style.display = "block";
+    document.getElementById("vfSuccess").classList.remove("show");
+    const btn = document.getElementById("vfSubmitBtn");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Submit Verification Application';
+    document.getElementById("vfError").style.display = "none";
+  };
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• PREFILL TIER â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  window.prefillTier = function (tier) {
+    const sel = document.getElementById("vfVerifyType");
+    sel.value = tier;
+    document.getElementById("vf-apply").scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• STATUS CHECKER â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  window.checkStatus = async function () {
+    const ref = document.getElementById("vfRefInput").value.trim().toUpperCase();
+    const resultEl  = document.getElementById("vfStatusResult");
+    const labelEl   = document.getElementById("vfStatusLabel");
+    const msgEl     = document.getElementById("vfStatusMsg");
+    const btn       = document.getElementById("vfCheckBtn");
+
+    if (!ref || ref.length < 6) {
+      resultEl.className = "vf-status-result not-found show";
+      labelEl.className  = "vf-status-label";
+      labelEl.textContent = "Invalid";
+      msgEl.textContent  = "Please enter a valid reference number (e.g. SKV-A3F9C2).";
+      return;
+    }
+
+    btn.innerHTML = '<span class="vf-spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;"></span>';
+    btn.disabled  = true;
+    resultEl.className  = "vf-status-result";
+    resultEl.classList.remove("show");
+
+    try {
+      const db = await getDB();
+      const { collection, query, where, getDocs } = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+
+      const q = query(collection(db, "verificationRequests"), where("refNumber", "==", ref));
+      const snap = await getDocs(q);
+
+      const _e = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      if (snap.empty) {
+        resultEl.className  = "vf-status-result not-found show";
+        labelEl.className   = "vf-status-label";
+        labelEl.textContent = "Not Found";
+        msgEl.innerHTML = `No application found with reference <strong style="font-family:monospace;color:rgba(255,255,255,0.6);">${_e(ref)}</strong>. Please check the reference number and try again.`;
+      } else {
+        const data   = snap.docs[0].data();
+        const status = data.status || "pending";
+        const vType  = _e(data.verifyType || 'your');
+        const vEmail = _e(data.email || '');
+        const vReason = _e(data.rejectionReason || 'please contact verify@mysokoni.co.ke for details');
+
+        const messages = {
+          pending:  `Your application for <strong style="color:white;">${vType}</strong> verification is currently under review. Our team will contact you at <strong style="color:white;">${vEmail}</strong> within 3â€“5 business days.<br><br><em>Tip: If you have not yet emailed your documents, send them to <a href="mailto:verify@mysokoni.co.ke" style="color:#71ff00;text-decoration:none;">verify@mysokoni.co.ke</a> with your reference number in the subject line.</em>`,
+          approved: `Congratulations! Your <strong style="color:white;">${vType}</strong> badge has been approved. Your SOKONI profile will be updated shortly. Welcome to the verified community!`,
+          rejected: `Your application for <strong style="color:white;">${vType}</strong> verification was not approved at this time. Reason: <em style="color:rgba(255,255,255,0.5);">${vReason}</em>. You are welcome to re-apply after addressing any issues.`
+        };
+
+        resultEl.className  = `vf-status-result ${status} show`;
+        labelEl.className   = `vf-status-label ${status}`;
+        labelEl.textContent = status === "pending" ? "Under Review" : status === "approved" ? "Approved" : "Not Approved";
+        msgEl.innerHTML     = messages[status] || "Status unknown â€” please contact verify@mysokoni.co.ke";
+      }
+
+    } catch (err) {
+      console.error("Status check error:", err);
+      resultEl.className  = "vf-status-result not-found show";
+      labelEl.className   = "vf-status-label";
+      labelEl.textContent = "Error";
+      msgEl.textContent  = "Could not connect. Please check your internet connection and try again.";
+    }
+
+    btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Check';
+    btn.disabled  = false;
+  };
+
+  /* Allow Enter key in checker */
+  document.getElementById("vfRefInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") window.checkStatus();
+  });
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• LOAD VERIFIED DIRECTORY â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  async function loadDirectory() {
+    const grid = document.getElementById("vfDirectory");
+    try {
+      const db = await getDB();
+      const { collection, query, where, orderBy, limit, getDocs } =
+        await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`);
+
+      const q = query(
+        collection(db, "verifications"),
+        where("status", "==", "approved"),
+        orderBy("approvedAt", "desc"),
+        limit(12)
+      );
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        grid.innerHTML = `<div class="vf-dir-empty"><i class="fa-solid fa-badge-check"></i><div>No verified members yet â€” be the first to apply!</div></div>`;
+        return;
+      }
+
+      const cards = snap.docs.map(doc => {
+        const d = doc.data();
+        const t = TIER_MAP[d.verifyType] || { color: "#71ff00", bg: "rgba(113,255,0,0.12)", emoji: "âœ…" };
+        const initials = (d.practiceName || d.fullName || "?").split(" ").slice(0,2).map(w => w[0]).join("").toUpperCase();
+        const approvedDate = d.approvedAt?.toDate ? d.approvedAt.toDate().toLocaleDateString("en-KE", { month:"short", year:"numeric" }) : "";
+
+        return `
+          <div class="vf-dir-card">
+            <div class="vf-dir-card-top">
+              <div class="vf-dir-avatar" style="background:${t.bg};color:${t.color};">${initials}</div>
+              <div class="vf-dir-info">
+                <div class="vf-dir-name">${escHtml(d.practiceName || d.fullName || "â€”")}</div>
+                <div class="vf-dir-practice">${escHtml(d.fullName || "")}</div>
+                <div style="margin-top:5px;">${tierBadge(d.verifyType)}</div>
+              </div>
+            </div>
+            <div class="vf-dir-desc">${escHtml(d.description || "")}</div>
+            <div class="vf-dir-meta">
+              <div class="vf-dir-county"><i class="fa-solid fa-location-dot" style="font-size:9px;"></i> ${escHtml(d.county || "")}</div>
+              <div class="vf-dir-date">${approvedDate}</div>
+            </div>
+          </div>`;
+      });
+
+      grid.innerHTML = cards.join("");
+
+    } catch (err) {
+      console.error("Directory load error:", err);
+      grid.innerHTML = `<div class="vf-dir-empty"><i class="fa-solid fa-wifi"></i><div>Could not load directory. Please refresh the page.</div></div>`;
+    }
+  }
+
+  /* â”€â”€ HTML escape helper â”€â”€ */
+  function escHtml(str) {
+    return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  /* â”€â”€ Boot â”€â”€ */
+  loadDirectory();
+
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â• FAQ ACCORDION â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  window.toggleFaq = function(btn) {
+    const item = btn.closest(".vf-faq-item");
+    const isOpen = item.classList.contains("open");
+    // close all
+    document.querySelectorAll(".vf-faq-item.open").forEach(el => el.classList.remove("open"));
+    if (!isOpen) item.classList.add("open");
+  };
+</script>
+  <script defer src="kass-widget.js"></script>
+
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,983 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head><script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Event Organizer Dashboard</title>
+<meta name="description" content="Manage your events, tickets, attendees and revenue on SOKONI Entertainment.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#a855f7">
+<script src="shared-header.js" defer></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--pur:#a855f7;--pur2:#7c3aed;--pink:#ec4899;--green:#71ff00;--bg:#0a0a0a;--card:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:white;min-height:100vh;padding-bottom:80px;}
+.eo-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(168,85,247,0.12);position:sticky;top:56px;z-index:90;backdrop-filter:blur(12px);}
+.eo-nav-logo{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:900;color:white;text-decoration:none;}
+.eo-nav-logo img{height:28px;}
+.eo-nav-right{display:flex;gap:8px;}
+.eo-btn{padding:8px 16px;border-radius:10px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;transition:all .2s;}
+.eo-btn-pri{background:linear-gradient(135deg,var(--pur),var(--pur2));color:white;}
+.eo-btn-sec{background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);color:#c084fc;}
+.eo-tabs{display:flex;gap:4px;overflow-x:auto;padding:10px 20px;background:rgba(5,5,5,0.98);border-bottom:1px solid var(--border);scrollbar-width:none;}
+.eo-tabs::-webkit-scrollbar{display:none;}
+.eo-tab{flex-shrink:0;padding:8px 16px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.eo-tab.active{background:rgba(168,85,247,0.12);border-color:rgba(168,85,247,0.35);color:#c084fc;}
+.eo-body{max-width:1200px;margin:0 auto;padding:24px 20px 80px;}
+.eo-pane{display:none;}
+.eo-pane.active{display:block;}
+.eo-section-h{font-size:14px;font-weight:800;color:white;margin:0 0 16px;display:flex;align-items:center;gap:8px;}
+.eo-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+.eo-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:20px;}
+.eo-stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px;}
+.eo-stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;}
+.eo-stat-val{font-size:22px;font-weight:900;color:#c084fc;margin-bottom:4px;}
+.eo-stat-lbl{font-size:11px;color:rgba(255,255,255,0.4);}
+.eo-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:12px;}
+.eo-input:focus{border-color:rgba(168,85,247,0.45);}
+.eo-input::placeholder{color:rgba(255,255,255,0.3);}
+.eo-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;}
+.eo-2col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.eo-3col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.eo-event-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;transition:border-color .2s;}
+.eo-event-card:hover{border-color:rgba(168,85,247,0.3);}
+.eo-event-title{font-size:15px;font-weight:900;color:white;margin-bottom:4px;}
+.eo-event-meta{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px;display:flex;gap:12px;flex-wrap:wrap;}
+.eo-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;vertical-align:middle;}
+.badge-pub{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#4ade80;}
+.badge-can{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;}
+.badge-dft{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);}
+.eo-progress{height:8px;border-radius:4px;background:rgba(255,255,255,0.08);overflow:hidden;margin-bottom:8px;}
+.eo-progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--pur),var(--pink));transition:width .5s;}
+.eo-attendee-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+.eo-attendee-row:last-child{border-bottom:none;}
+.eo-attendee-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(168,85,247,0.3),rgba(236,72,153,0.2));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#c084fc;flex-shrink:0;}
+.eo-scan-area{border:2px dashed rgba(168,85,247,0.35);border-radius:20px;padding:32px;text-align:center;margin-bottom:20px;}
+.eo-scan-video{width:100%;max-width:360px;border-radius:14px;background:#111;aspect-ratio:1;object-fit:cover;}
+.eo-scan-result{padding:16px;border-radius:14px;margin-top:12px;font-size:14px;font-weight:700;text-align:center;}
+.scan-ok{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#4ade80;}
+.scan-fail{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;}
+.scan-warn{background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.25);color:#fbbf24;}
+.eo-chart-wrap{height:120px;display:flex;align-items:flex-end;gap:4px;padding:0 4px;}
+.eo-chart-bar{flex:1;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--pur),var(--pur2));min-width:8px;transition:height .4s;}
+.eo-ticket-type-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.eo-remove-btn{width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.eo-add-btn{padding:8px 14px;border-radius:9px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:12px;}
+.eo-empty{text-align:center;padding:60px 0;color:rgba(255,255,255,0.25);}
+.eo-empty-icon{font-size:48px;margin-bottom:12px;}
+
+/* QR */
+#qrScanCanvas{display:none;}
+.qr-manual{display:flex;gap:8px;margin-top:16px;}
+.qr-manual input{flex:1;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(168,85,247,0.2);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;}
+
+@media(max-width:600px){.eo-2col,.eo-3col{grid-template-columns:1fr;}.eo-stat-grid{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+
+<nav class="eo-nav">
+  <a href="entertainment.html" class="eo-nav-logo">
+    <img src="assets/Sokonilogo2.png" alt="SOKONI">
+    <span>Organizer Hub</span>
+  </a>
+  <div class="eo-nav-right">
+    <button type="button" class="eo-btn eo-btn-sec" onclick="showTab('create')">+ New Event</button>
+    <a href="entertainment.html" class="eo-btn eo-btn-pri" style="text-decoration:none;">← Live</a>
+  </div>
+</nav>
+
+<div class="eo-tabs" id="eoTabs">
+  <button type="button" class="eo-tab active" onclick="showTab('overview',this)">📊 Overview</button>
+  <button type="button" class="eo-tab" onclick="showTab('events',this)">🎟️ My Events</button>
+  <button type="button" class="eo-tab" onclick="showTab('create',this)">➕ Create Event</button>
+  <button type="button" class="eo-tab" onclick="showTab('scanner',this)">📷 QR Scanner</button>
+  <button type="button" class="eo-tab" onclick="showTab('attendees',this)">👥 Attendees</button>
+  <button type="button" class="eo-tab" onclick="showTab('analytics',this)">📈 Analytics</button>
+  <button type="button" class="eo-tab" onclick="showTab('artist',this)">🎤 Artist Profile</button>
+  <button type="button" class="eo-tab" onclick="showTab('venue',this)">🏛️ List Venue</button>
+</div>
+
+<div class="eo-body">
+
+  <!-- ═══ OVERVIEW ═══ -->
+  <div class="eo-pane active" id="pane-overview">
+    <div class="eo-section-h">📊 Dashboard Overview</div>
+    <div class="eo-stat-grid" id="overviewStats">
+      <div class="eo-stat"><div class="eo-stat-val" id="statEvents">—</div><div class="eo-stat-lbl">My Events</div></div>
+      <div class="eo-stat"><div class="eo-stat-val" id="statTickets">—</div><div class="eo-stat-lbl">Tickets Sold</div></div>
+      <div class="eo-stat"><div class="eo-stat-val" id="statRevenue">—</div><div class="eo-stat-lbl">Revenue (KES)</div></div>
+      <div class="eo-stat"><div class="eo-stat-val" id="statCheckins">—</div><div class="eo-stat-lbl">Check-ins</div></div>
+    </div>
+
+    <div class="eo-section-h">🎟️ Recent Events</div>
+    <div id="overviewEvents"></div>
+
+    <div class="eo-section-h" style="margin-top:24px;">⚡ Quick Actions</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
+      <button type="button" onclick="showTab('create',document.querySelector('.eo-tab:nth-child(3)'))" style="padding:16px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:14px;color:#c084fc;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;">➕<br>Create Event</button>
+      <button type="button" onclick="showTab('scanner',document.querySelector('.eo-tab:nth-child(4)'))" style="padding:16px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);border-radius:14px;color:#4ade80;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;">📷<br>Scan Tickets</button>
+      <button type="button" onclick="showTab('attendees',document.querySelector('.eo-tab:nth-child(5)'))" style="padding:16px;background:rgba(0,180,255,0.06);border:1px solid rgba(0,180,255,0.15);border-radius:14px;color:#60aaff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;">👥<br>Attendees</button>
+      <button type="button" onclick="showTab('artist',document.querySelector('.eo-tab:nth-child(7)'))" style="padding:16px;background:rgba(236,72,153,0.06);border:1px solid rgba(236,72,153,0.15);border-radius:14px;color:#f472b6;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;">🎤<br>My Profile</button>
+    </div>
+  </div>
+
+  <!-- ═══ MY EVENTS ═══ -->
+  <div class="eo-pane" id="pane-events">
+    <div class="eo-section-h">🎟️ My Events</div>
+    <div id="myEventsList">
+      <div class="eo-empty"><div class="eo-empty-icon">🎟️</div><p>No events yet. Create your first event!</p></div>
+    </div>
+  </div>
+
+  <!-- ═══ CREATE EVENT ═══ -->
+  <div class="eo-pane" id="pane-create">
+    <div class="eo-section-h">➕ Create New Event</div>
+    <div class="eo-card">
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">Event Title *</label>
+          <input type="text" id="evtTitle" class="eo-input" placeholder="e.g. Nairobi Jazz Night">
+        </div>
+        <div>
+          <label class="eo-label">Event Type *</label>
+          <select id="evtType" class="eo-input">
+            <option value="">Select type…</option>
+            <option value="concert">🎤 Concert</option>
+            <option value="festival">🎪 Festival</option>
+            <option value="comedy">😂 Comedy Night</option>
+            <option value="club">🎶 Club Night</option>
+            <option value="conference">🏢 Conference</option>
+            <option value="party">🎉 Party</option>
+            <option value="sport">⚽ Sport</option>
+            <option value="art">🎨 Art Exhibition</option>
+            <option value="church">🙏 Church / Gospel</option>
+            <option value="other">🎭 Other</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="eo-label">Description</label>
+        <textarea id="evtDesc" class="eo-input" rows="3" placeholder="Describe your event — lineup, highlights, what to expect…"></textarea>
+      </div>
+      <div class="eo-3col">
+        <div>
+          <label class="eo-label">Date *</label>
+          <input type="date" id="evtDate" class="eo-input">
+        </div>
+        <div>
+          <label class="eo-label">Time *</label>
+          <input type="time" id="evtTime" class="eo-input" value="19:00">
+        </div>
+        <div>
+          <label class="eo-label">City</label>
+          <input type="text" id="evtCity" class="eo-input" placeholder="e.g. Nairobi">
+        </div>
+      </div>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">Venue Name *</label>
+          <input type="text" id="evtVenueName" class="eo-input" placeholder="e.g. Carnivore Grounds">
+        </div>
+        <div>
+          <label class="eo-label">Venue Address</label>
+          <input type="text" id="evtVenueAddr" class="eo-input" placeholder="e.g. Langata Rd, Nairobi">
+        </div>
+      </div>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">Contact Phone</label>
+          <input type="tel" id="evtPhone" class="eo-input" placeholder="07XXXXXXXX">
+        </div>
+        <div>
+          <label class="eo-label">WhatsApp Booking Link</label>
+          <input type="tel" id="evtWhatsapp" class="eo-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <div>
+        <label class="eo-label">Event Poster / Banner URL</label>
+        <input type="url" id="evtPoster" class="eo-input" placeholder="https://… (image link)">
+      </div>
+
+      <!-- Ticket Types -->
+      <div class="eo-section-h" style="margin-top:8px;">🎟️ Ticket Types</div>
+      <div id="ticketTypeRows">
+        <div class="eo-ticket-type-row" data-idx="0">
+          <input type="text" class="eo-input tt-name" placeholder="Name (e.g. General)" style="flex:2;margin:0;">
+          <input type="number" class="eo-input tt-price" placeholder="Price (KES)" style="flex:1;margin:0;" min="0">
+          <input type="number" class="eo-input tt-cap" placeholder="Capacity" style="flex:1;margin:0;" min="1">
+          <button type="button" class="eo-remove-btn" onclick="removeTicketType(this)">✕</button>
+        </div>
+      </div>
+      <button type="button" class="eo-add-btn" onclick="addTicketType()">+ Add Ticket Type</button>
+
+      <div id="createEvtMsg" style="font-size:12px;min-height:16px;margin-bottom:10px;text-align:center;"></div>
+      <button type="button" class="eo-btn eo-btn-pri" style="width:100%;padding:14px;font-size:14px;" onclick="submitCreateEvent()">🚀 Publish Event</button>
+    </div>
+  </div>
+
+  <!-- ═══ QR SCANNER ═══ -->
+  <div class="eo-pane" id="pane-scanner">
+    <div class="eo-section-h">📷 Ticket QR Scanner</div>
+
+    <div style="margin-bottom:16px;">
+      <label class="eo-label">Select Event to Validate</label>
+      <select id="scanEventSelect" class="eo-input" onchange="loadScanEvent()">
+        <option value="">— Select your event —</option>
+      </select>
+    </div>
+
+    <div class="eo-scan-area">
+      <video id="scanVideo" class="eo-scan-video" autoplay playsinline muted></video>
+      <canvas id="qrScanCanvas"></canvas>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button type="button" class="eo-btn eo-btn-pri" id="startScanBtn" onclick="startQRScan()">📷 Start Camera Scan</button>
+        <button type="button" class="eo-btn eo-btn-sec" id="stopScanBtn" onclick="stopQRScan()" style="display:none;">⏹ Stop Camera</button>
+      </div>
+    </div>
+
+    <div class="qr-manual">
+      <input type="text" id="manualTicketInput" placeholder="Or paste Ticket ID / Code here…" style="font-size:16px;">
+      <button type="button" class="eo-btn eo-btn-pri" onclick="validateManual()">✓ Validate</button>
+    </div>
+
+    <div id="scanResult" style="display:none;" class="eo-scan-result"></div>
+
+    <div id="lastScanInfo" style="margin-top:16px;"></div>
+  </div>
+
+  <!-- ═══ ATTENDEES ═══ -->
+  <div class="eo-pane" id="pane-attendees">
+    <div class="eo-section-h">👥 Attendees</div>
+    <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <select id="attendeeEventSelect" class="eo-input" style="flex:1;min-width:200px;margin:0;" onchange="loadAttendees()">
+        <option value="">— Select event —</option>
+      </select>
+      <input type="text" id="attendeeSearch" class="eo-input" style="flex:1;min-width:140px;margin:0;" placeholder="Search by name…" oninput="filterAttendees()">
+    </div>
+    <div id="attendeeStats" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;"></div>
+    <div id="attendeeList">
+      <div class="eo-empty"><div class="eo-empty-icon">👥</div><p>Select an event to view attendees</p></div>
+    </div>
+  </div>
+
+  <!-- ═══ ANALYTICS ═══ -->
+  <div class="eo-pane" id="pane-analytics">
+    <div class="eo-section-h">📈 Revenue Analytics</div>
+    <div class="eo-stat-grid" id="analyticsStats">
+      <div class="eo-stat"><div class="eo-stat-val" id="anTotalRev">KES 0</div><div class="eo-stat-lbl">Total Revenue</div></div>
+      <div class="eo-stat"><div class="eo-stat-val" id="anTotalTickets">0</div><div class="eo-stat-lbl">Tickets Sold</div></div>
+      <div class="eo-stat"><div class="eo-stat-val" id="anTotalEvents">0</div><div class="eo-stat-lbl">Events</div></div>
+      <div class="eo-stat"><div class="eo-stat-val" id="anAvgTicket">KES 0</div><div class="eo-stat-lbl">Avg Ticket Value</div></div>
+    </div>
+
+    <div class="eo-section-h">Revenue by Event</div>
+    <div id="eventRevenueList"></div>
+
+    <div class="eo-section-h" style="margin-top:20px;">Ticket Sales Chart</div>
+    <div class="eo-card">
+      <div class="eo-chart-wrap" id="salesChart" style="height:140px;"></div>
+      <div id="chartLabels" style="display:flex;gap:4px;padding:6px 4px 0;"></div>
+    </div>
+  </div>
+
+  <!-- ═══ ARTIST PROFILE ═══ -->
+  <div class="eo-pane" id="pane-artist">
+    <div class="eo-section-h">🎤 Artist / Creator Profile</div>
+    <div id="artistProfileView" style="display:none;"></div>
+    <div id="artistProfileForm" class="eo-card">
+      <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:20px;">List yourself as an artist, DJ, photographer or any creative. Clients will find and book you directly.</p>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">Stage / Business Name *</label>
+          <input type="text" id="apName" class="eo-input" placeholder="e.g. DJ Blaze 254">
+        </div>
+        <div>
+          <label class="eo-label">Category *</label>
+          <select id="apType" class="eo-input">
+            <option value="">Select…</option>
+            <option value="dj">🎧 DJ</option><option value="mc">🎤 MC</option><option value="band">🎸 Band</option>
+            <option value="comedian">😂 Comedian</option><option value="singer">🎙️ Singer</option><option value="musician">🎵 Musician</option>
+            <option value="photographer">📷 Photographer</option><option value="videographer">🎥 Videographer</option>
+            <option value="dancer">💃 Dancer</option><option value="soundeng">🔊 Sound Engineer</option>
+            <option value="lighting">💡 Lighting Tech</option><option value="voiceover">🗣️ Voice Artist</option>
+            <option value="producer">🎹 Music Producer</option><option value="planner">📋 Event Planner</option>
+            <option value="makeup">💄 Makeup Artist</option><option value="influencer">📱 Influencer</option>
+            <option value="magician">🎩 Magician</option>
+          </select>
+        </div>
+      </div>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">City / Location *</label>
+          <input type="text" id="apCity" class="eo-input" placeholder="e.g. Nairobi">
+        </div>
+        <div>
+          <label class="eo-label">Phone *</label>
+          <input type="tel" id="apPhone" class="eo-input" placeholder="07XXXXXXXX">
+        </div>
+      </div>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">Starting Fee (KES)</label>
+          <input type="number" id="apPrice" class="eo-input" placeholder="e.g. 15000" min="0">
+        </div>
+        <div>
+          <label class="eo-label">Instagram Handle</label>
+          <input type="text" id="apInstagram" class="eo-input" placeholder="djblaze254 (no @)">
+        </div>
+      </div>
+      <div>
+        <label class="eo-label">Genres / Specialties</label>
+        <input type="text" id="apGenres" class="eo-input" placeholder="e.g. Afrobeats, Amapiano, Weddings">
+      </div>
+      <div>
+        <label class="eo-label">Equipment / Services</label>
+        <input type="text" id="apEquipment" class="eo-input" placeholder="e.g. Pioneer CDJ, Own PA System">
+      </div>
+      <div>
+        <label class="eo-label">Bio / Description *</label>
+        <textarea id="apBio" class="eo-input" rows="4" placeholder="Tell clients about your experience, style, and what makes you great…"></textarea>
+      </div>
+      <div>
+        <label class="eo-label">Portfolio / Promo Links (comma separated URLs)</label>
+        <input type="text" id="apPortfolio" class="eo-input" placeholder="https://youtube.com/… , https://instagram.com/…">
+      </div>
+      <div id="apMsg" style="font-size:12px;min-height:16px;margin-bottom:10px;text-align:center;"></div>
+      <button type="button" class="eo-btn eo-btn-pri" style="width:100%;padding:14px;font-size:14px;" onclick="submitArtistProfile()">✦ Save Artist Profile</button>
+    </div>
+  </div>
+
+  <!-- ═══ LIST VENUE ═══ -->
+  <div class="eo-pane" id="pane-venue">
+    <div class="eo-section-h">🏛️ List Your Venue</div>
+    <div id="myVenueView" style="display:none;"></div>
+    <div id="venueForm" class="eo-card">
+      <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:20px;">List your space and get bookings from event organizers across Kenya.</p>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">Venue Name *</label>
+          <input type="text" id="vnName" class="eo-input" placeholder="e.g. Rooftop Event Space">
+        </div>
+        <div>
+          <label class="eo-label">Type *</label>
+          <select id="vnType" class="eo-input">
+            <option value="">Select…</option>
+            <option value="hall">🏛️ Event Hall</option><option value="rooftop">🌆 Rooftop</option>
+            <option value="outdoor">🌿 Outdoor Grounds</option><option value="beach">🏖️ Beach / Waterfront</option>
+            <option value="garden">🌸 Garden</option><option value="club">🎶 Club / Bar</option>
+            <option value="hotel">🏨 Hotel / Resort</option><option value="restaurant">🍽️ Restaurant</option>
+            <option value="stadium">🏟️ Stadium / Arena</option><option value="other">📍 Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">City *</label>
+          <input type="text" id="vnCity" class="eo-input" placeholder="e.g. Nairobi">
+        </div>
+        <div>
+          <label class="eo-label">Capacity (people)</label>
+          <input type="number" id="vnCapacity" class="eo-input" placeholder="e.g. 500" min="1">
+        </div>
+      </div>
+      <div>
+        <label class="eo-label">Full Address</label>
+        <input type="text" id="vnAddress" class="eo-input" placeholder="e.g. Westlands, Nairobi">
+      </div>
+      <div class="eo-2col">
+        <div>
+          <label class="eo-label">Price per Day (KES)</label>
+          <input type="number" id="vnPriceDay" class="eo-input" placeholder="e.g. 50000" min="0">
+        </div>
+        <div>
+          <label class="eo-label">Price per Hour (KES, optional)</label>
+          <input type="number" id="vnPriceHr" class="eo-input" placeholder="e.g. 8000" min="0">
+        </div>
+      </div>
+      <div>
+        <label class="eo-label">Amenities (comma separated)</label>
+        <input type="text" id="vnAmenities" class="eo-input" placeholder="e.g. Parking, AV System, Kitchen, Stage, AC">
+      </div>
+      <div>
+        <label class="eo-label">Description</label>
+        <textarea id="vnDesc" class="eo-input" rows="3" placeholder="Describe your venue — size, atmosphere, ideal events…"></textarea>
+      </div>
+      <div>
+        <label class="eo-label">Contact Phone *</label>
+        <input type="tel" id="vnPhone" class="eo-input" placeholder="07XXXXXXXX">
+      </div>
+      <div>
+        <label class="eo-label">Photo URLs (comma separated)</label>
+        <input type="text" id="vnPhotos" class="eo-input" placeholder="https://… , https://…">
+      </div>
+      <div id="vnMsg" style="font-size:12px;min-height:16px;margin-bottom:10px;text-align:center;"></div>
+      <button type="button" class="eo-btn eo-btn-pri" style="width:100%;padding:14px;font-size:14px;" onclick="submitVenueListing()">🏛️ List My Venue</button>
+    </div>
+  </div>
+
+</div><!-- eo-body -->
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="entertainment.html" class="bnav-item"><span class="bnav-emoji">🎬</span><span>Events</span></a>
+  <a href="entertainment.html" class="bnav-item"><span class="bnav-emoji">🎭</span><span>Artists</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<!-- QR Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+
+<script type="module">
+import EntHub from './entertainment-hub.js';
+window.EntHub = EntHub;
+
+/* ── Tab navigation ── */
+window.showTab = function(name, btn) {
+  document.querySelectorAll('.eo-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.eo-tab').forEach(b => b.classList.remove('active'));
+  const pane = document.getElementById('pane-' + name);
+  if (pane) pane.classList.add('active');
+  if (btn) btn.classList.add('active');
+  else {
+    const b = document.querySelector(`.eo-tab[onclick*="'${name}'"]`);
+    if (b) b.classList.add('active');
+  }
+  if (name === 'overview') loadOverview();
+  if (name === 'events') loadMyEvents();
+  if (name === 'scanner') loadScannerEvents();
+  if (name === 'attendees') loadAttendeeEvents();
+  if (name === 'analytics') loadAnalytics();
+  if (name === 'artist') loadArtistProfile();
+  if (name === 'venue') loadMyVenue();
+};
+
+/* ── State ── */
+let _myEvents = [];
+let _allAttendees = [];
+let _scanActive = false;
+let _scanStream = null;
+let _scanAnimFrame = null;
+
+/* ═══ OVERVIEW ═══ */
+async function loadOverview() {
+  EntHub.getMyEvents(events => {
+    _myEvents = events;
+    document.getElementById('statEvents').textContent = events.length;
+    const totalSold = events.reduce((s, e) => s + (e.ticketsSold || 0), 0);
+    const totalRev  = events.reduce((s, e) => s + (e.revenue || 0), 0);
+    document.getElementById('statTickets').textContent = totalSold;
+    document.getElementById('statRevenue').textContent = 'KES ' + totalRev.toLocaleString();
+    /* Check-ins = used tickets across all events (approximation from event data) */
+    document.getElementById('statCheckins').textContent = '—';
+    renderOverviewEvents(events.slice(0, 4));
+  });
+}
+
+function renderOverviewEvents(events) {
+  const el = document.getElementById('overviewEvents');
+  if (!events.length) { el.innerHTML = '<div class="eo-empty"><div class="eo-empty-icon">🎟️</div><p>No events yet.</p></div>'; return; }
+  el.innerHTML = events.map(e => buildEventCard(e)).join('');
+}
+
+function buildEventCard(e) {
+  const sold = e.ticketsSold || 0;
+  const cap = (e.ticketTypes || []).reduce((s, t) => s + (t.capacity || 0), 0) || e.totalCapacity || 0;
+  const pct = cap > 0 ? Math.min(100, Math.round((sold / cap) * 100)) : 0;
+  const badgeClass = e.status === 'published' ? 'badge-pub' : e.status === 'cancelled' ? 'badge-can' : 'badge-dft';
+  return `
+  <div class="eo-event-card">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
+      <div>
+        <div class="eo-event-title">${esc(e.title || e.name || 'Event')}</div>
+        <div class="eo-event-meta">
+          <span>📅 ${e.date || '—'} ${e.time || ''}</span>
+          <span>📍 ${esc(e.venueName || e.venue || '—')}</span>
+          <span>🎟️ ${sold} sold</span>
+          <span>💰 KES ${(e.revenue || 0).toLocaleString()}</span>
+        </div>
+      </div>
+      <span class="eo-badge ${badgeClass}">${(e.status || 'draft').toUpperCase()}</span>
+    </div>
+    ${cap > 0 ? `
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:4px;">
+      <span>Tickets sold</span><span>${sold} / ${cap} (${pct}%)</span>
+    </div>
+    <div class="eo-progress"><div class="eo-progress-fill" style="width:${pct}%;"></div></div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button type="button" class="eo-btn eo-btn-sec" style="font-size:11px;padding:6px 12px;" onclick="viewEventAttendees('${e._id}')">👥 Attendees</button>
+      <button type="button" class="eo-btn eo-btn-sec" style="font-size:11px;padding:6px 12px;" onclick="openEditEvent('${e._id}')">✏️ Edit</button>
+      <button type="button" style="font-size:11px;padding:6px 12px;border-radius:9px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;cursor:pointer;font-family:inherit;" onclick="cancelEvent('${e._id}')">🗑 Cancel</button>
+    </div>
+  </div>`;
+}
+
+/* ═══ MY EVENTS ═══ */
+function loadMyEvents() {
+  EntHub.getMyEvents(events => {
+    _myEvents = events;
+    const el = document.getElementById('myEventsList');
+    if (!events.length) { el.innerHTML = '<div class="eo-empty"><div class="eo-empty-icon">🎟️</div><p>No events yet. <button type="button" onclick="showTab(\'create\')" style="color:#c084fc;background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit;">Create one →</button></p></div>'; return; }
+    el.innerHTML = events.map(e => buildEventCard(e)).join('');
+  });
+}
+
+window.cancelEvent = async function(id, _c) {
+  if (!_c) { _skConfirm('Cancel this event? Ticket buyers will be notified.', ()=>window.cancelEvent(id,true)); return; }
+  await EntHub.deleteEvent(id);
+  loadMyEvents();
+};
+
+window.viewEventAttendees = function(id) {
+  document.getElementById('attendeeEventSelect').value = id;
+  showTab('attendees', document.querySelector('.eo-tab:nth-child(5)'));
+  loadAttendees();
+};
+
+window.openEditEvent = function(id) {
+  const ev = _myEvents.find(e => e._id === id);
+  if (!ev) return;
+  showTab('create', document.querySelector('.eo-tab:nth-child(3)'));
+  setTimeout(() => {
+    document.getElementById('evtTitle').value = ev.title || ev.name || '';
+    document.getElementById('evtType').value = ev.type || '';
+    document.getElementById('evtDesc').value = ev.description || ev.desc || '';
+    document.getElementById('evtDate').value = ev.date || '';
+    document.getElementById('evtTime').value = ev.time || '';
+    document.getElementById('evtCity').value = ev.city || '';
+    document.getElementById('evtVenueName').value = ev.venueName || ev.venue || '';
+    document.getElementById('evtVenueAddr').value = ev.venueAddress || '';
+    document.getElementById('evtPhone').value = ev.organizerPhone || ev.phone || '';
+    document.getElementById('evtPoster').value = ev.poster || '';
+    document.querySelector('.eo-btn-pri[onclick="submitCreateEvent()"]').textContent = '💾 Update Event';
+    document.querySelector('.eo-btn-pri[onclick="submitCreateEvent()"]').dataset.editId = id;
+  }, 100);
+};
+
+/* ═══ CREATE / UPDATE EVENT ═══ */
+let _ticketTypeCount = 1;
+
+window.addTicketType = function() {
+  _ticketTypeCount++;
+  const row = document.createElement('div');
+  row.className = 'eo-ticket-type-row';
+  row.dataset.idx = _ticketTypeCount;
+  row.innerHTML = `
+    <input type="text" class="eo-input tt-name" placeholder="Name (e.g. VIP)" style="flex:2;margin:0;">
+    <input type="number" class="eo-input tt-price" placeholder="Price (KES)" style="flex:1;margin:0;" min="0">
+    <input type="number" class="eo-input tt-cap" placeholder="Capacity" style="flex:1;margin:0;" min="1">
+    <button type="button" class="eo-remove-btn" onclick="removeTicketType(this)">✕</button>`;
+  document.getElementById('ticketTypeRows').appendChild(row);
+};
+
+window.removeTicketType = function(btn) {
+  const rows = document.querySelectorAll('.eo-ticket-type-row');
+  if (rows.length <= 1) return;
+  btn.closest('.eo-ticket-type-row').remove();
+};
+
+window.submitCreateEvent = async function() {
+  const btn = document.querySelector('.eo-btn-pri[onclick="submitCreateEvent()"]');
+  const editId = btn?.dataset?.editId;
+  const msg = document.getElementById('createEvtMsg');
+  const title   = document.getElementById('evtTitle').value.trim();
+  const type    = document.getElementById('evtType').value;
+  const date    = document.getElementById('evtDate').value;
+  const venue   = document.getElementById('evtVenueName').value.trim();
+  if (!title || !type || !date || !venue) { msg.textContent = '⚠️ Fill title, type, date and venue'; msg.style.color = '#f59e0b'; return; }
+
+  const ticketTypes = [];
+  document.querySelectorAll('.eo-ticket-type-row').forEach(row => {
+    const name  = row.querySelector('.tt-name')?.value.trim();
+    const price = parseFloat(row.querySelector('.tt-price')?.value) || 0;
+    const cap   = parseInt(row.querySelector('.tt-cap')?.value)   || 100;
+    if (name) ticketTypes.push({ name, price, capacity: cap, sold: 0 });
+  });
+  if (!ticketTypes.length) ticketTypes.push({ name: 'General', price: 0, capacity: 100, sold: 0 });
+
+  const data = {
+    title, type, date,
+    time: document.getElementById('evtTime').value,
+    city: document.getElementById('evtCity').value.trim(),
+    venueName: venue,
+    venueAddress: document.getElementById('evtVenueAddr').value.trim(),
+    description: document.getElementById('evtDesc').value.trim(),
+    organizerPhone: document.getElementById('evtPhone').value.trim(),
+    whatsapp: document.getElementById('evtWhatsapp').value.trim(),
+    poster: document.getElementById('evtPoster').value.trim(),
+    ticketTypes,
+    totalCapacity: ticketTypes.reduce((s, t) => s + t.capacity, 0),
+    price: ticketTypes[0]?.price || 0,
+  };
+
+  msg.textContent = editId ? '💾 Updating…' : '🚀 Publishing…';
+  msg.style.color = '#c084fc';
+  btn.disabled = true;
+
+  try {
+    if (editId) {
+      await EntHub.updateEvent(editId, data);
+      msg.textContent = '✅ Event updated!';
+    } else {
+      await EntHub.createEvent(data);
+      msg.textContent = '✅ Event published!';
+    }
+    msg.style.color = '#4ade80';
+    if (btn) { btn.textContent = '🚀 Publish Event'; delete btn.dataset.editId; }
+    setTimeout(() => showTab('events', document.querySelector('.eo-tab:nth-child(2)')), 1500);
+  } catch (e) {
+    msg.textContent = '❌ Error: ' + e.message;
+    msg.style.color = '#f87171';
+  }
+  btn.disabled = false;
+};
+
+/* ═══ QR SCANNER ═══ */
+function _populateScanSelect(events) {
+  const sel = document.getElementById('scanEventSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Select your event —</option>';
+  events.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e._id;
+    opt.textContent = (e.title || e.name || 'Event') + ' — ' + (e.date || '');
+    sel.appendChild(opt);
+  });
+}
+
+function loadScannerEvents() {
+  if (_myEvents.length) { _populateScanSelect(_myEvents); return; }
+  /* If overview wasn't visited first, load events now */
+  EntHub.getMyEvents(events => { _myEvents = events; _populateScanSelect(events); });
+}
+
+window.loadScanEvent = function() { /* event selected — ready to scan */ };
+
+window.startQRScan = async function() {
+  const video = document.getElementById('scanVideo');
+  const canvas = document.getElementById('qrScanCanvas');
+  try {
+    _scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = _scanStream;
+    _scanActive = true;
+    document.getElementById('startScanBtn').style.display = 'none';
+    document.getElementById('stopScanBtn').style.display = 'inline-block';
+    scanFrame(video, canvas);
+  } catch (e) {
+    showScanResult('❌ Camera access denied. Use manual input below.', 'scan-fail');
+  }
+};
+
+function scanFrame(video, canvas) {
+  if (!_scanActive) return;
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (window.jsQR) {
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code?.data) {
+        stopQRScan();
+        processQRData(code.data);
+        return;
+      }
+    }
+  }
+  _scanAnimFrame = requestAnimationFrame(() => scanFrame(video, canvas));
+}
+
+window.stopQRScan = function() {
+  _scanActive = false;
+  if (_scanAnimFrame) cancelAnimationFrame(_scanAnimFrame);
+  if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
+  document.getElementById('startScanBtn').style.display = 'inline-block';
+  document.getElementById('stopScanBtn').style.display = 'none';
+};
+
+async function processQRData(rawData) {
+  let parsed;
+  try { parsed = JSON.parse(rawData); } catch (e) { showScanResult('❌ Invalid QR code', 'scan-fail'); return; }
+  if (parsed.t !== 'SOKONI-TICKET') { showScanResult('❌ Not a SOKONI ticket QR code', 'scan-fail'); return; }
+  const eventId = document.getElementById('scanEventSelect').value;
+  if (eventId && parsed.e !== eventId) { showScanResult('⚠️ This ticket is for a DIFFERENT event', 'scan-warn'); return; }
+  showScanResult('⏳ Validating ticket…', 'scan-warn');
+  try {
+    const result = await EntHub.validateTicket(parsed.id, parsed.c);
+    if (result.ok) {
+      const t = result.ticket;
+      showScanResult(`✅ VALID TICKET\n${t.buyerName || 'Guest'} · ${t.ticketType || 'General'} · Qty ${t.quantity || 1}`, 'scan-ok');
+      showLastScan(t, true);
+    } else {
+      showScanResult(`❌ ${result.reason}`, 'scan-fail');
+    }
+  } catch (e) {
+    showScanResult('❌ Error: ' + e.message, 'scan-fail');
+  }
+}
+
+window.validateManual = async function() {
+  const val = document.getElementById('manualTicketInput').value.trim();
+  if (!val) return;
+  /* Try as JSON first */
+  if (val.startsWith('{')) { processQRData(val); return; }
+  /* Try as ticketId:code split */
+  const parts = val.split(':');
+  const ticketId = parts[0];
+  const code = parts[1] || val;
+  if (!ticketId) { showScanResult('❌ Enter a valid ticket code', 'scan-fail'); return; }
+  showScanResult('⏳ Validating…', 'scan-warn');
+  try {
+    const result = await EntHub.validateTicket(ticketId, code);
+    if (result.ok) {
+      showScanResult(`✅ VALID — ${result.ticket.buyerName || 'Guest'} · ${result.ticket.ticketType || 'General'}`, 'scan-ok');
+      showLastScan(result.ticket, true);
+    } else {
+      showScanResult('❌ ' + result.reason, 'scan-fail');
+    }
+  } catch (e) {
+    showScanResult('❌ Error: ' + e.message, 'scan-fail');
+  }
+};
+
+function showScanResult(msg, cls) {
+  const el = document.getElementById('scanResult');
+  el.className = 'eo-scan-result ' + cls;
+  el.textContent = msg;
+  el.style.display = 'block';
+  if (cls === 'scan-ok') setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+function showLastScan(ticket, valid) {
+  const el = document.getElementById('lastScanInfo');
+  el.innerHTML = `
+  <div style="padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;font-size:12px;">
+    <div style="font-weight:700;color:white;margin-bottom:4px;">Last Scan</div>
+    <div style="color:rgba(255,255,255,0.45);">${ticket.buyerName || 'Guest'} · ${ticket.ticketType || 'General'} · ${ticket.eventTitle || ''}</div>
+    <div style="color:${valid ? '#4ade80' : '#f87171'};font-weight:700;margin-top:4px;">${valid ? '✅ Checked In' : '❌ Invalid'}</div>
+  </div>`;
+}
+
+/* ═══ ATTENDEES ═══ */
+function _populateAttendeeSelect(events) {
+  const sel = document.getElementById('attendeeEventSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Select event —</option>';
+  events.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e._id;
+    opt.textContent = (e.title || e.name || 'Event') + ' — ' + (e.date || '');
+    sel.appendChild(opt);
+  });
+}
+
+function loadAttendeeEvents() {
+  if (_myEvents.length) { _populateAttendeeSelect(_myEvents); return; }
+  EntHub.getMyEvents(events => { _myEvents = events; _populateAttendeeSelect(events); });
+}
+
+window.loadAttendees = async function() {
+  const eventId = document.getElementById('attendeeEventSelect').value;
+  const list = document.getElementById('attendeeList');
+  if (!eventId) { list.innerHTML = '<div class="eo-empty"><div class="eo-empty-icon">👥</div><p>Select an event</p></div>'; return; }
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);">Loading…</div>';
+  EntHub.getEventAttendees(eventId, attendees => {
+    _allAttendees = attendees;
+    renderAttendeeStats(attendees);
+    renderAttendeeList(attendees);
+  });
+};
+
+function renderAttendeeStats(list) {
+  const el = document.getElementById('attendeeStats');
+  const valid = list.filter(t => t.status === 'valid').length;
+  const used  = list.filter(t => t.status === 'used').length;
+  const rev   = list.reduce((s, t) => s + ((t.price || 0) * (t.quantity || 1)), 0);
+  el.innerHTML = `
+    <span style="padding:8px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.18);border-radius:10px;font-size:12px;font-weight:700;color:#4ade80;">✅ Valid: ${valid}</span>
+    <span style="padding:8px 14px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.18);border-radius:10px;font-size:12px;font-weight:700;color:#c084fc;">📥 Checked In: ${used}</span>
+    <span style="padding:8px 14px;background:rgba(0,180,255,0.08);border:1px solid rgba(0,180,255,0.18);border-radius:10px;font-size:12px;font-weight:700;color:#60aaff;">💰 KES ${rev.toLocaleString()}</span>`;
+}
+
+function renderAttendeeList(list) {
+  const el = document.getElementById('attendeeList');
+  if (!list.length) { el.innerHTML = '<div class="eo-empty"><div class="eo-empty-icon">👥</div><p>No attendees yet</p></div>'; return; }
+  el.innerHTML = '<div class="eo-card">' + list.map(t => `
+  <div class="eo-attendee-row">
+    <div class="eo-attendee-avatar">${(t.buyerName || 'G')[0].toUpperCase()}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:700;color:white;">${esc(t.buyerName || 'Guest')}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);">${esc(t.buyerPhone || '')} · ${t.ticketType || 'General'} · Qty ${t.quantity || 1}</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:12px;font-weight:800;color:#c084fc;">KES ${((t.price || 0) * (t.quantity || 1)).toLocaleString()}</div>
+      <span class="eo-badge ${t.status === 'used' ? 'badge-pub' : t.status === 'cancelled' ? 'badge-can' : 'badge-dft'}">${t.status || 'valid'}</span>
+    </div>
+  </div>`).join('') + '</div>';
+}
+
+window.filterAttendees = function() {
+  const q = document.getElementById('attendeeSearch').value.toLowerCase();
+  const filtered = _allAttendees.filter(t => (t.buyerName || '').toLowerCase().includes(q) || (t.buyerPhone || '').includes(q));
+  renderAttendeeList(filtered);
+};
+
+/* ═══ ANALYTICS ═══ */
+async function loadAnalytics() {
+  const events = _myEvents;
+  const totalRev     = events.reduce((s, e) => s + (e.revenue || 0), 0);
+  const totalTickets = events.reduce((s, e) => s + (e.ticketsSold || 0), 0);
+  const avgTicket    = totalTickets > 0 ? Math.round(totalRev / totalTickets) : 0;
+  document.getElementById('anTotalRev').textContent = 'KES ' + totalRev.toLocaleString();
+  document.getElementById('anTotalTickets').textContent = totalTickets;
+  document.getElementById('anTotalEvents').textContent = events.length;
+  document.getElementById('anAvgTicket').textContent = 'KES ' + avgTicket.toLocaleString();
+
+  const revList = document.getElementById('eventRevenueList');
+  revList.innerHTML = events.map(e => {
+    const cap = (e.ticketTypes || []).reduce((s, t) => s + (t.capacity || 0), 0) || e.totalCapacity || 1;
+    const pct = Math.min(100, Math.round(((e.ticketsSold || 0) / cap) * 100));
+    return `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+        <span style="color:white;font-weight:700;">${esc(e.title || e.name || 'Event')}</span>
+        <span style="color:#c084fc;font-weight:700;">KES ${(e.revenue || 0).toLocaleString()}</span>
+      </div>
+      <div class="eo-progress"><div class="eo-progress-fill" style="width:${pct}%;"></div></div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">${e.ticketsSold || 0} / ${cap} tickets (${pct}%)</div>
+    </div>`;
+  }).join('');
+
+  /* Simple bar chart */
+  const chart = document.getElementById('salesChart');
+  const labels = document.getElementById('chartLabels');
+  const maxRev = Math.max(1, ...events.map(e => e.revenue || 0));
+  chart.innerHTML = events.slice(0, 12).map(e => {
+    const h = Math.max(6, Math.round(((e.revenue || 0) / maxRev) * 130));
+    return `<div class="eo-chart-bar" style="height:${h}px;" title="${e.title || 'Event'}: KES ${(e.revenue||0).toLocaleString()}"></div>`;
+  }).join('');
+  labels.innerHTML = events.slice(0, 12).map(e => `<div style="flex:1;font-size:8px;color:rgba(255,255,255,0.3);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(e.title || 'E').substring(0, 6)}</div>`).join('');
+}
+
+/* ═══ ARTIST PROFILE ═══ */
+async function loadArtistProfile() {
+  const profile = await EntHub.getMyArtistProfile();
+  if (profile) {
+    document.getElementById('artistProfileForm').style.display = 'none';
+    const view = document.getElementById('artistProfileView');
+    view.style.display = 'block';
+    view.innerHTML = `
+    <div class="eo-card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,rgba(168,85,247,0.35),rgba(236,72,153,0.2));display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#c084fc;">${(profile.name || 'A')[0].toUpperCase()}</div>
+        <div>
+          <div style="font-size:17px;font-weight:900;color:white;">${esc(profile.name || 'Artist')}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);">${esc(profile.type || '')} · ${esc(profile.city || '')}</div>
+          <span class="eo-badge ${profile.status === 'active' ? 'badge-pub' : 'badge-dft'}" style="margin-top:4px;">${profile.status || 'pending'}</span>
+        </div>
+      </div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:14px;">${esc(profile.bio || '')}</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:rgba(255,255,255,0.4);">
+        <span>⭐ ${profile.rating?.toFixed(1) || '0.0'} rating</span>
+        <span>📥 ${profile.bookingCount || 0} bookings</span>
+        <span>💰 KES ${(profile.priceFrom || 0).toLocaleString()}</span>
+      </div>
+      <button type="button" class="eo-btn eo-btn-sec" style="margin-top:14px;font-size:12px;" onclick="editArtistProfile()">✏️ Edit Profile</button>
+    </div>`;
+  }
+}
+
+window.editArtistProfile = function() {
+  document.getElementById('artistProfileForm').style.display = 'block';
+  document.getElementById('artistProfileView').style.display = 'none';
+};
+
+window.submitArtistProfile = async function() {
+  const msg = document.getElementById('apMsg');
+  const name = document.getElementById('apName').value.trim();
+  const type = document.getElementById('apType').value;
+  const city = document.getElementById('apCity').value.trim();
+  const phone = document.getElementById('apPhone').value.trim();
+  const bio = document.getElementById('apBio').value.trim();
+  if (!name || !type || !city || !phone || !bio) { msg.textContent = '⚠️ Fill all required fields'; msg.style.color = '#f59e0b'; return; }
+  msg.textContent = 'Saving…'; msg.style.color = '#c084fc';
+  const data = {
+    name, type, city, phone, bio,
+    priceFrom: parseInt(document.getElementById('apPrice').value) || 0,
+    priceSuffix: 'per event',
+    instagram: document.getElementById('apInstagram').value.trim().replace('@', ''),
+    genres: document.getElementById('apGenres').value.split(',').map(s => s.trim()).filter(Boolean),
+    equipment: document.getElementById('apEquipment').value.split(',').map(s => s.trim()).filter(Boolean),
+    portfolio: document.getElementById('apPortfolio').value.split(',').map(s => s.trim()).filter(Boolean),
+  };
+  try {
+    const existing = await EntHub.getMyArtistProfile();
+    if (existing) await EntHub.updateArtist(existing._id, data);
+    else await EntHub.registerArtist(data);
+    msg.textContent = '✅ Profile saved!'; msg.style.color = '#4ade80';
+    setTimeout(() => loadArtistProfile(), 1500);
+  } catch (e) { msg.textContent = '❌ ' + e.message; msg.style.color = '#f87171'; }
+};
+
+/* ═══ VENUE LISTING ═══ */
+async function loadMyVenue() {
+  /* Load existing venues by this user — future enhancement */
+}
+
+window.submitVenueListing = async function() {
+  const msg = document.getElementById('vnMsg');
+  const name = document.getElementById('vnName').value.trim();
+  const type = document.getElementById('vnType').value;
+  const city = document.getElementById('vnCity').value.trim();
+  const phone = document.getElementById('vnPhone').value.trim();
+  if (!name || !type || !city || !phone) { msg.textContent = '⚠️ Fill required fields'; msg.style.color = '#f59e0b'; return; }
+  msg.textContent = 'Saving…'; msg.style.color = '#c084fc';
+  const data = {
+    name, type, city, phone,
+    address: document.getElementById('vnAddress').value.trim(),
+    capacity: parseInt(document.getElementById('vnCapacity').value) || 0,
+    pricePerDay: parseInt(document.getElementById('vnPriceDay').value) || 0,
+    pricePerHour: parseInt(document.getElementById('vnPriceHr').value) || 0,
+    amenities: document.getElementById('vnAmenities').value.split(',').map(s => s.trim()).filter(Boolean),
+    description: document.getElementById('vnDesc').value.trim(),
+    photos: document.getElementById('vnPhotos').value.split(',').map(s => s.trim()).filter(Boolean),
+  };
+  try {
+    await EntHub.listVenue(data);
+    msg.textContent = '✅ Venue listed! It will appear after review.'; msg.style.color = '#4ade80';
+  } catch (e) { msg.textContent = '❌ ' + e.message; msg.style.color = '#f87171'; }
+};
+
+/* ── Helper ── */
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ── Bootstrap ── */
+document.getElementById('evtDate').min = new Date().toISOString().split('T')[0];
+loadOverview();
+</script>
+
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js" defer></script>
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+</body>
+</html>
+
+
