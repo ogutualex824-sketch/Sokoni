@@ -405,30 +405,41 @@ service cloud.firestore {
        creation.  uid field is frozen on user updates.
     ══════════════════════════════════════════════════════════════ */
     match /notifications/{notifId} {
-      /* SokoniNotifications.push() runs client-side for multi-party order
-         dispatch. Non-admin callers may only create notifications that:
-           1. Do NOT target 'broadcast' (only admin can broadcast)
-           2. Include required fields (heading, sub, targetUid)
-           3. Have type in the allowed order-event whitelist              */
-      /* SECURITY: wallet_credit/debit, security_alert, listing_approved/rejected,
-         platform_update must originate server-side only — restricting client to
-         workflow-safe types prevents social-engineering via fake payment alerts. */
+      /* SokoniNotifEngine.push() creates notifications client-side for order/delivery dispatch.
+         SECURITY: wallet_credit, security_alert, listing_approved/rejected, platform_update must
+         originate server-side (CF) only — restricting client to safe workflow types prevents
+         social-engineering via fake payment or security alerts. */
       allow create: if isAdmin()
                     || (isAuthed()
+                        && request.resource.data.targetUid == request.auth.uid
                         && request.resource.data.targetUid != 'broadcast'
                         && request.resource.data.keys().hasAll(['targetUid','heading','sub'])
-                        && request.resource.data.type in ['order','delivery','ride','general']);
+                        && request.resource.data.type in [
+                             'order','delivery','ride','general',
+                             'booking','message','review','inventory_low',
+                             'payment_reminder','support_reply'
+                           ]);
       allow read:   if isAdmin()
                     || (isAuthed() && (
                          resource.data.targetUid == request.auth.uid
                       || resource.data.targetUid == 'broadcast'
                     ));
+      /* Users may update only presentation-state fields on their own notifications.
+         Server-side fields (targetUid, type, heading, sub, priority, groupKey) are frozen. */
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.targetUid == request.auth.uid
                         && request.resource.data.diff(resource.data).affectedKeys()
-                           .hasOnly(['read']));
-      allow delete: if isAdmin();
+                           .hasOnly(['read', 'archived', 'pinned']));
+      /* Users may delete their own notifications (engine exposes delete action) */
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.targetUid == request.auth.uid);
+    }
+
+    /* Notification preferences — per-user DND, quiet hours, category toggles.
+       Only the owning user may read or write their own preference document. */
+    match /userNotifPrefs/{userId} {
+      allow read, write: if isAuthed() && request.auth.uid == userId;
     }
 
     /* /escrow/{orderId} — DEPRECATED. Canonical escrow collection is /escrows/{escrowId} below.
