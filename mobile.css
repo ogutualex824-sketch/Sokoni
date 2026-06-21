@@ -4176,24 +4176,4 @@ img { max-width: 100%; height: auto; }
   .prop-filter-bar::-webkit-scrollbar { display: none; }
   .prop-type-btn { flex-shrink: 0 !important; white-space: nowrap !important; }
 
-  /* Absolute-positioned badges inside cards don't escape containers */
-  [class*="-card"] { overflow: hidden !important; }
-}
-
-/* ════════════════════════════════════════
-   GLOBAL — ABSOLUTE-POSITIONED BADGES
-   Badges/overlays positioned top-right inside cards must not
-   escape their containing block on narrow screens.
-════════════════════════════════════════ */
-@media (max-width: 480px) {
-  /* Any inline-style absolute-right badge */
-  [style*="position:absolute"][style*="right:"] {
-    right: 8px !important;
-  }
-  /* Modal widths — never wider than viewport */
-  [class*="-modal"],
-  [class*="-overlay"] > div {
-    max-width: calc(100vw - 24px) !important;
-    box-sizing: border-box !important;
-  }
 }
