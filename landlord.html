@@ -831,12 +831,19 @@
     <div id="collectRentInfo" style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:14px;line-height:1.6;"></div>
     <input type="tel" id="collectRentPhone" placeholder="Tenant phone — 07XXXXXXXX" class="modal-input" oninput="this.value=this.value.replace(/[^0-9+]/g,'')">
     <div id="collectRentSetupNotice" style="display:none;padding:10px 12px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.22);border-radius:10px;font-size:11px;color:rgba(255,152,0,0.9);line-height:1.7;margin-bottom:12px;">
-      ⚙️ To send real STK Push, paste your <strong>IntaSend PUBLIC key</strong> into the <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">LANDLORD_INTASEND_KEY</code> variable in this page's script.
+      ⚙️ To send real STK Push, set <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">intasendKey</code> in <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">sokoni-config.js</code>
     </div>
     <div id="collectRentResult" style="min-height:18px;font-size:13px;margin-bottom:10px;"></div>
     <div style="display:flex;gap:10px;">
       <button type="button" class="modal-confirm-btn" id="sendRentStkBtn" onclick="sendRentStkPush()">📨 Send STK Push</button>
       <button type="button" class="modal-cancel-btn" onclick="document.getElementById('collectRentModal').style.display='none'">Cancel</button>
+    </div>
+    <!-- IntaSend trust badge -->
+    <div id="rentIntasendBadge" style="display:none;margin-top:14px;padding:8px 12px;background:rgba(76,175,80,0.06);border:1px solid rgba(76,175,80,0.16);border-radius:10px;align-items:center;justify-content:center;gap:8px;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6L12 2z" fill="#4caf50" opacity=".85"/></svg>
+      <span style="font-size:11px;color:rgba(76,175,80,0.85);font-weight:700;">Secured by IntaSend</span>
+      <span style="width:1px;height:10px;background:rgba(76,175,80,0.25);"></span>
+      <span style="font-size:10px;color:rgba(255,255,255,0.32);">256-bit SSL · PCI Compliant</span>
     </div>
   </div>
 </div>
@@ -1545,6 +1552,8 @@
     document.getElementById("collectRentResult").textContent = "";
     const notice = document.getElementById("collectRentSetupNotice");
     if(notice) notice.style.display = LANDLORD_INTASEND_KEY ? "none" : "block";
+    const badge = document.getElementById("rentIntasendBadge");
+    if(badge) badge.style.display = LANDLORD_INTASEND_KEY ? "flex" : "none";
     const btn = document.getElementById("sendRentStkBtn");
     if(btn){ btn.disabled = false; btn.innerHTML = '📨 Send STK Push'; btn.style.background = ""; btn.style.color = ""; }
     document.getElementById("collectRentModal").style.display = "flex";

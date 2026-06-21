@@ -338,15 +338,54 @@
   <div class="s-head">Self-Heal Automation</div>
   <div class="os-card" style="margin-bottom:20px">
     <div style="display:flex;flex-direction:column;gap:12px">
-      ${['Auto-expire past-due subscriptions', 'Auto-apply pending downgrades', 'Auto-queue billing reminders', 'Auto-retry failed payments', 'Auto-update brain scores daily', 'Auto-reconcile billing daily'].map((label, i) => `
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:13px">${label}</span>
-          <label style="position:relative;width:44px;height:24px;cursor:pointer">
-            <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="${i}">
-            <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
-            <span style="position:absolute;top:3px;left:25px;width:18px;height:18px;background:#000;border-radius:50%"></span>
-          </label>
-        </div>`).join('')}
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px">Auto-expire past-due subscriptions</span>
+        <label style="position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0">
+          <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="0">
+          <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
+          <span style="position:absolute;top:3px;left:22px;width:18px;height:18px;background:#000;border-radius:50%"></span>
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px">Auto-apply pending downgrades</span>
+        <label style="position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0">
+          <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="1">
+          <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
+          <span style="position:absolute;top:3px;left:22px;width:18px;height:18px;background:#000;border-radius:50%"></span>
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px">Auto-queue billing reminders</span>
+        <label style="position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0">
+          <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="2">
+          <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
+          <span style="position:absolute;top:3px;left:22px;width:18px;height:18px;background:#000;border-radius:50%"></span>
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px">Auto-retry failed payments</span>
+        <label style="position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0">
+          <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="3">
+          <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
+          <span style="position:absolute;top:3px;left:22px;width:18px;height:18px;background:#000;border-radius:50%"></span>
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px">Auto-update brain scores daily</span>
+        <label style="position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0">
+          <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="4">
+          <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
+          <span style="position:absolute;top:3px;left:22px;width:18px;height:18px;background:#000;border-radius:50%"></span>
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px">Auto-reconcile billing daily</span>
+        <label style="position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0">
+          <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="5">
+          <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
+          <span style="position:absolute;top:3px;left:22px;width:18px;height:18px;background:#000;border-radius:50%"></span>
+        </label>
+      </div>
     </div>
   </div>
 

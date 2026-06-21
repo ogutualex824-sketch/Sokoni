@@ -1117,7 +1117,7 @@
       ⚙️ <strong>To activate real M-Pesa STK Push:</strong><br>
       1. Create free account at <a href="https://intasend.com" target="_blank" style="color:#ff9800;">intasend.com</a><br>
       2. Copy your <strong>Public API Key</strong><br>
-      3. Paste it into <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">INTASEND_PUBLIC_KEY</code> in checkout.html
+      3. Paste it into <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">intasendKey</code> in <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">sokoni-config.js</code>
     </div>
 
     <!-- STK Steps (shown after push) -->
@@ -1148,6 +1148,14 @@
     <button type="button" class="mpesa-push-btn" id="mpesaPushBtn" onclick="sendStkPush()">
       📨 Send STK Push
     </button>
+
+    <!-- IntaSend trust badge — visible when live key is active -->
+    <div id="intasendTrustBadge" style="display:none;margin-top:16px;padding:9px 14px;background:rgba(76,175,80,0.06);border:1px solid rgba(76,175,80,0.16);border-radius:10px;align-items:center;justify-content:center;gap:10px;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6L12 2z" fill="#4caf50" opacity=".85"/></svg>
+      <span style="font-size:11px;color:rgba(76,175,80,0.85);font-weight:700;letter-spacing:.3px;">Secured by IntaSend</span>
+      <span style="width:1px;height:11px;background:rgba(76,175,80,0.25);flex-shrink:0;"></span>
+      <span style="font-size:10px;color:rgba(255,255,255,0.32);letter-spacing:.2px;">256-bit SSL · PCI Compliant</span>
+    </div>
 
   </div>
 </div>
@@ -1407,10 +1415,12 @@ const INTASEND_PUBLIC_KEY = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.intase
 
 const SOKONI_FUNCTIONS_URL = "https://us-central1-sokoni-aeb26.cloudfunctions.net";
 
-/* Show/hide setup notice in M-Pesa modal */
+/* Show/hide setup notice + trust badge in M-Pesa modal */
 (function(){
   const notice = document.getElementById("intasendSetupNotice");
+  const badge  = document.getElementById("intasendTrustBadge");
   if(notice && !INTASEND_PUBLIC_KEY) notice.style.display = "block";
+  if(badge  &&  INTASEND_PUBLIC_KEY) badge.style.display  = "flex";
 })();
 
 /* Place order — open the right modal */

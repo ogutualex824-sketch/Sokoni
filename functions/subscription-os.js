@@ -23,6 +23,10 @@
      Financial changes require dual-admin approval.
      Payment idempotency enforced via aiPaymentRefs collection.
      HMAC tokens signed with SUB_OS_SIGNING_SECRET (Firebase Secret Manager).
+
+   Firebase Functions v2 calling convention: handler receives a single
+   CallableRequest object (req) — req.data contains the payload,
+   req.auth contains authentication info.
 ================================================================ */
 'use strict';
 
@@ -39,20 +43,20 @@ const db = () => admin.firestore();
 /* ── Signing secret (stored in Firebase Secret Manager) ──────── */
 const SIGNING_SECRET = defineSecret('SUB_OS_SIGNING_SECRET');
 
-/* ── Auth helpers ────────────────────────────────────────────── */
-const assertAuth = ctx => {
-  if (!ctx.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required.');
-  return ctx.auth.uid;
+/* ── Auth helpers (v2: req.auth / req.auth.token) ────────────── */
+const assertAuth = req => {
+  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required.');
+  return req.auth.uid;
 };
-const assertAdmin = ctx => {
-  const uid = assertAuth(ctx);
-  if (!ctx.auth.token?.admin && !ctx.auth.token?.superAdmin)
+const assertAdmin = req => {
+  const uid = assertAuth(req);
+  if (!req.auth.token?.admin && !req.auth.token?.superAdmin)
     throw new HttpsError('permission-denied', 'Admin access required.');
   return uid;
 };
-const assertSuperAdmin = ctx => {
-  const uid = assertAuth(ctx);
-  if (!ctx.auth.token?.superAdmin)
+const assertSuperAdmin = req => {
+  const uid = assertAuth(req);
+  if (!req.auth.token?.superAdmin)
     throw new HttpsError('permission-denied', 'Super admin required.');
   return uid;
 };
@@ -135,8 +139,8 @@ async function _loadUsage(uid) {
 ================================================================ */
 const generateEntitlementToken = onCall(
   { region: 'us-central1', timeoutSeconds: 20, memory: '256MiB', secrets: [SIGNING_SECRET] },
-  async (data, context) => {
-    const uid = assertAuth(context);
+  async (req) => {
+    const uid    = assertAuth(req);
     const secret = SIGNING_SECRET.value();
 
     const [ent, usage, credSnap, riskSnap] = await Promise.all([
@@ -167,7 +171,7 @@ const generateEntitlementToken = onCall(
     };
 
     /* Process fraud signals from the client silently */
-    const signals = Array.isArray(data.signals) ? data.signals.slice(0, 10) : [];
+    const signals = Array.isArray(req.data.signals) ? req.data.signals.slice(0, 10) : [];
     if (signals.length) _processFraudSignals(uid, signals).catch(() => {});
 
     /* Update unified entitlement document */
@@ -192,11 +196,11 @@ const generateEntitlementToken = onCall(
 ================================================================ */
 const verifyEntitlement = onCall(
   { region: 'us-central1', timeoutSeconds: 15, memory: '256MiB', secrets: [SIGNING_SECRET] },
-  async (data, context) => {
-    const uid     = assertAuth(context);
-    const product = san(data.product, 30);
-    const feature = san(data.feature, 60);
-    const rawTok  = typeof data.token === 'string' ? data.token : '';
+  async (req) => {
+    const uid     = assertAuth(req);
+    const product = san(req.data.product, 30);
+    const feature = san(req.data.feature, 60);
+    const rawTok  = typeof req.data.token === 'string' ? req.data.token : '';
 
     /* Validate and parse the token */
     let tokenClaims = null;
@@ -214,7 +218,7 @@ const verifyEntitlement = onCall(
     }
 
     /* Session fingerprint consistency check */
-    if (tokenClaims?.sessionFp && data.sessionFp && tokenClaims.sessionFp !== data.sessionFp) {
+    if (tokenClaims?.sessionFp && req.data.sessionFp && tokenClaims.sessionFp !== req.data.sessionFp) {
       _logFraud(uid, 'session_fp_mismatch', {}).catch(() => {});
       /* Don't block — log and monitor; fingerprint can change on device update */
     }
@@ -269,13 +273,13 @@ const verifyEntitlement = onCall(
 ================================================================ */
 const processSubscriptionChange = onCall(
   { region: 'us-central1', timeoutSeconds: 30, memory: '256MiB' },
-  async (data, context) => {
-    const uid      = assertAuth(context);
-    const action   = san(data.action, 20);
-    const product  = san(data.product, 30);
-    const newPlan  = san(data.newPlan, 40);
-    const billing  = data.billing === 'annual' ? 'annual' : 'monthly';
-    const payRef   = san(data.paymentRef, 120);
+  async (req) => {
+    const uid     = assertAuth(req);
+    const action  = san(req.data.action, 20);
+    const product = san(req.data.product, 30);
+    const newPlan = san(req.data.newPlan, 40);
+    const billing = req.data.billing === 'annual' ? 'annual' : 'monthly';
+    const payRef  = san(req.data.paymentRef, 120);
 
     if (!['upgrade', 'downgrade', 'cancel'].includes(action))
       throw new HttpsError('invalid-argument', 'Invalid action.');
@@ -381,9 +385,9 @@ async function _logFraud(uid, type, data) {
 
 const detectFraud = onCall(
   { region: 'us-central1', timeoutSeconds: 15, memory: '128MiB' },
-  async (data, context) => {
-    assertAdmin(context);
-    const targetUid = san(data.uid, 128);
+  async (req) => {
+    assertAdmin(req);
+    const targetUid = san(req.data.uid, 128);
     const [evSnap, entSnap] = await Promise.all([
       db().collection('fraudEvents').where('uid', '==', targetUid).orderBy('ts', 'desc').limit(20).get(),
       db().collection('entitlements').doc(targetUid).get(),
@@ -421,11 +425,11 @@ const REQUIRES_SECOND_ADMIN = new Set([
 
 const proposeFinancialChange = onCall(
   { region: 'us-central1', timeoutSeconds: 20, memory: '128MiB' },
-  async (data, context) => {
-    const proposerUid = assertAdmin(context);
-    const type     = san(data.type, 60);
-    const payload  = data.payload || {};
-    const summary  = san(data.summary, 400);
+  async (req) => {
+    const proposerUid = assertAdmin(req);
+    const type    = san(req.data.type, 60);
+    const payload = req.data.payload || {};
+    const summary = san(req.data.summary, 400);
 
     if (!FINANCIAL_TYPES.has(type))
       throw new HttpsError('invalid-argument', `Unknown financial change type: "${type}"`);
@@ -456,9 +460,9 @@ const proposeFinancialChange = onCall(
 
 const approveFinancialChange = onCall(
   { region: 'us-central1', timeoutSeconds: 30, memory: '256MiB' },
-  async (data, context) => {
-    const approverUid = assertAdmin(context);
-    const proposalId  = san(data.proposalId, 60);
+  async (req) => {
+    const approverUid = assertAdmin(req);
+    const proposalId  = san(req.data.proposalId, 60);
 
     const ref  = db().collection('financialProposals').doc(proposalId);
     const snap = await ref.get();
@@ -472,9 +476,9 @@ const approveFinancialChange = onCall(
     if (p.approvals.includes(approverUid))
       throw new HttpsError('already-exists', 'You have already approved this proposal.');
 
-    const newApprovals = [...p.approvals, approverUid];
+    const newApprovals  = [...p.approvals, approverUid];
     const fullyApproved = newApprovals.length >= p.requiredApprovals;
-    const now = Date.now();
+    const now           = Date.now();
 
     await db().runTransaction(async tx => {
       tx.update(ref, {
@@ -519,9 +523,9 @@ async function _applyFinancialChange(tx, proposal) {
 ================================================================ */
 const forecastRevenue = onCall(
   { region: 'us-central1', timeoutSeconds: 60, memory: '256MiB' },
-  async (data, context) => {
-    assertAdmin(context);
-    const months = Math.min(24, Math.max(1, Number(data.months) || 6));
+  async (req) => {
+    assertAdmin(req);
+    const months = Math.min(24, Math.max(1, Number(req.data.months) || 6));
 
     const snap = await db().collection('aiSubscriptions').where('status', '==', 'active').get();
     let mrr = 0;
@@ -554,8 +558,8 @@ const forecastRevenue = onCall(
 ================================================================ */
 const runSubscriptionBrain = onCall(
   { region: 'us-central1', timeoutSeconds: 60, memory: '512MiB' },
-  async (data, context) => {
-    const uid = assertAuth(context);
+  async (req) => {
+    const uid = assertAuth(req);
 
     const [subSnap, usageSnap, credSnap] = await Promise.all([
       db().collection('aiSubscriptions').doc(uid).get(),
@@ -650,15 +654,15 @@ const selfHealSubscriptions = onSchedule(
     downSnap.forEach(d => {
       const s = d.data();
       b2.update(d.ref, {
-        plan:             s.pendingPlan,
-        billing:          s.pendingBilling || 'monthly',
+        plan:               s.pendingPlan,
+        billing:            s.pendingBilling || 'monthly',
         currentPeriodStart: now,
-        currentPeriodEnd: now + ((s.pendingBilling === 'annual' ? 365 : 30) * 86400000),
-        pendingPlan:      admin.firestore.FieldValue.delete(),
-        pendingBilling:   admin.firestore.FieldValue.delete(),
-        pendingAt:        admin.firestore.FieldValue.delete(),
-        status:           'active',
-        updatedAt:        now,
+        currentPeriodEnd:   now + ((s.pendingBilling === 'annual' ? 365 : 30) * 86400000),
+        pendingPlan:        admin.firestore.FieldValue.delete(),
+        pendingBilling:     admin.firestore.FieldValue.delete(),
+        pendingAt:          admin.firestore.FieldValue.delete(),
+        status:             'active',
+        updatedAt:          now,
       });
       issues.push({ type: 'downgrade_applied', uid: s.uid, newPlan: s.pendingPlan });
     });
@@ -667,7 +671,7 @@ const selfHealSubscriptions = onSchedule(
     /* 3. Past-due accounts: queue payment retry notification */
     const pastDueSnap = await db().collection('aiSubscriptions')
       .where('status', '==', 'past_due')
-      .where('pastDueAt', '>', now - 7 * 86400000) // within last 7 days
+      .where('pastDueAt', '>', now - 7 * 86400000)
       .limit(50).get();
 
     const b3 = db().batch();
@@ -767,7 +771,7 @@ const reconcileBilling = onSchedule(
     snap.forEach(d => {
       const s = d.data();
       if (s.plan === 'ai_free') return;
-      if (!s.paymentRef)                           issues.push({ uid: s.uid, plan: s.plan, issue: 'no_payment_ref' });
+      if (!s.paymentRef)                                  issues.push({ uid: s.uid, plan: s.plan, issue: 'no_payment_ref' });
       if (s.currentPeriodEnd && s.currentPeriodEnd < now) issues.push({ uid: s.uid, plan: s.plan, issue: 'period_expired' });
     });
 
