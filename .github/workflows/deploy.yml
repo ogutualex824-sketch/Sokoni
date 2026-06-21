@@ -17,17 +17,32 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: write      # git push --tags on production release
+  deployments: write   # GitHub environment deployment status
+  pull-requests: write # future: staging preview URL on PRs
+
 env:
   FIREBASE_PROJECT: sokoni-aeb26
 
 jobs:
   # ─────────────────────────────────────────────────────────────
-  # STAGING — Auto-deploys on every push to main
+  # STAGING — Auto-deploys on every push to main.
+  # Also runs for workflow_dispatch target=staging or target=production.
+  # Does NOT run for target=rollback (rollback job runs independently).
   # ─────────────────────────────────────────────────────────────
   deploy-staging:
     name: Deploy → Staging
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.event.inputs.target == 'staging'
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.target == 'staging' ||
+        github.event.inputs.target == 'production'))
     environment: staging
     steps:
       - uses: actions/checkout@v4
@@ -66,24 +81,13 @@ jobs:
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
-      - name: Post staging URL to PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: "🚀 **Staging preview deployed!**\n\nhttps://sokoni-aeb26--staging.web.app\n\n*Expires in 7 days.*"
-            })
-
   # ─────────────────────────────────────────────────────────────
   # SMOKE TESTS AGAINST STAGING
   # ─────────────────────────────────────────────────────────────
   smoke-staging:
     name: Smoke Test Staging
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: deploy-staging
     if: "!github.event.inputs.skip_tests"
     steps:
@@ -107,15 +111,28 @@ jobs:
           SMOKE_BASE_URL: "https://sokoni-aeb26--staging.web.app"
 
   # ─────────────────────────────────────────────────────────────
-  # PRODUCTION — Requires manual approval + passing smoke tests
+  # PRODUCTION — Requires manual approval gate + passing smoke tests.
+  # Proceeds when smoke tests pass OR when explicitly skipped
+  # via skip_tests=true (emergency deploy).
   # ─────────────────────────────────────────────────────────────
   deploy-production:
     name: Deploy → Production
     runs-on: ubuntu-latest
-    needs: smoke-staging
-    if: github.event.inputs.target == 'production' || (github.ref == 'refs/heads/main' && needs.smoke-staging.result == 'success')
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    needs: [deploy-staging, smoke-staging]
+    # always() overrides the default "skip if needed job was skipped" behaviour,
+    # which is what blocks the emergency path when skip_tests=true.
+    # We gate manually on needs results to preserve all safety invariants.
+    if: >-
+      always() &&
+      needs.deploy-staging.result == 'success' &&
+      (needs.smoke-staging.result == 'success' || needs.smoke-staging.result == 'skipped') &&
+      (github.event.inputs.target == 'production' || github.ref == 'refs/heads/main')
     environment:
-      name: production          # requires manual approval in GitHub Environments
+      name: production
       url: https://mysokoni.co.ke
     steps:
       - uses: actions/checkout@v4
@@ -156,7 +173,7 @@ jobs:
 
       - name: Apply Cloud Monitoring alert policies
         # Idempotent — gcloud upserts policies by displayName.
-        # Requires GCP_SA_KEY secret (JSON service-account key with roles/monitoring.alertPolicyEditor).
+        # Requires GCP_SA_KEY secret (JSON service-account key, roles/monitoring.alertPolicyEditor).
         # Set once: gh secret set GCP_SA_KEY < path/to/sa-key.json
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
@@ -202,11 +219,13 @@ jobs:
             || true
 
   # ─────────────────────────────────────────────────────────────
-  # ROLLBACK JOB (manual trigger only)
+  # ROLLBACK (manual trigger only — workflow_dispatch target=rollback)
+  # Runs independently — no staging deploy is triggered alongside it.
   # ─────────────────────────────────────────────────────────────
   rollback:
     name: Rollback Production
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'rollback'
     environment: production
     steps:
