@@ -607,7 +607,8 @@ else{
             var {getFirestore,doc,getDoc,collection,query,where,getDocs} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
             var cfg = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",
               projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
-              messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+              messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",
+              measurementId:"G-QT32H65TJS"};
             var app = getApps().length?getApps()[0]:initializeApp(cfg);
             var db  = getFirestore(app);
 
