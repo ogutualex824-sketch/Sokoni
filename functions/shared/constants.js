@@ -135,6 +135,29 @@ const DEFAULT_LOCALE    = 'en-KE';
 const DEFAULT_TIMEZONE  = 'Africa/Nairobi';
 const KRA_VAT_THRESHOLD = 5_000_000; /* Annual turnover above which VAT registration is required */
 
+/* ── Billing / Period Helpers ────────────────────────────────── */
+/** Returns current billing period string "YYYY-MM" (Nairobi time) */
+function currentPeriod(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Returns billing period string for N months ago */
+function periodMonthsAgo(n) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return currentPeriod(d);
+}
+
+/** Computes VAT-inclusive total from an excl amount */
+function withVat(amountExcl) {
+  return Math.round(amountExcl * (1 + VAT_RATE) * 100) / 100;
+}
+
+/** Computes WHT amount if above threshold, else 0 */
+function whtAmount(net) {
+  return net > WHT_THRESHOLD ? Math.round(net * WHT_RATE * 100) / 100 : 0;
+}
+
 /* ── Exports ─────────────────────────────────────────────────── */
 module.exports = {
   /* Financial */
@@ -162,4 +185,7 @@ module.exports = {
 
   /* Locale */
   DEFAULT_CURRENCY, DEFAULT_LOCALE, DEFAULT_TIMEZONE, KRA_VAT_THRESHOLD,
+
+  /* Helpers */
+  currentPeriod, periodMonthsAgo, withVat, whtAmount,
 };

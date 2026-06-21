@@ -37,31 +37,14 @@ const { logger }              = require('firebase-functions');
 const admin                   = require('firebase-admin');
 const FieldValue              = admin.firestore.FieldValue;
 
+const { assertAuth, assertAdmin, assertSuperAdmin, sanitize } = require('./shared/errors');
+const { currentPeriod } = require('./shared/constants');
+
 const db = () => admin.firestore();
 
-/* ── Auth guards ──────────────────────────────────────────── */
-const assertAuth = req => {
-  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required.');
-  return req.auth.uid;
-};
-const assertAdmin = req => {
-  const uid = assertAuth(req);
-  if (!req.auth.token?.admin && !req.auth.token?.superAdmin)
-    throw new HttpsError('permission-denied', 'Admin access required.');
-  return uid;
-};
-const assertSuperAdmin = req => {
-  const uid = assertAuth(req);
-  if (!req.auth.token?.superAdmin)
-    throw new HttpsError('permission-denied', 'Super admin required.');
-  return uid;
-};
-
-/* ── Input sanitiser ──────────────────────────────────────── */
-const san = (s, n = 200) => typeof s === 'string' ? s.replace(/<[^>]*>/g, '').trim().slice(0, n) : '';
-
-/* ── Period helper (YYYY-MM) ──────────────────────────────── */
-const period = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+/* ── Aliases for brevity within this file ──────────────────── */
+const san    = (s, n = 200) => sanitize(s, n);
+const period = () => currentPeriod();
 
 /* ================================================================
    SASOS PLAN REGISTRY
@@ -224,7 +207,7 @@ const SASOS_PLANS = {
     productId: 'logistics', tier: 'starter', name: 'Logistics Starter',
     billing: { monthly: 999, annual: 9990, trialDays: 14, currency: 'KES' },
     limits: { warehouses: 1, sku_count: 500, shipments_per_month: 200, staff_accounts: 3, storage_gb: 5, ai_credits: 20 },
-    features: { barcode_scanning: true, inventory_alerts: true, shipping_labels: true, analytics: false, api_access: false, multi_warehouse: false, 3pl_integration: false },
+    features: { barcode_scanning: true, inventory_alerts: true, shipping_labels: true, analytics: false, api_access: false, multi_warehouse: false, tpl_integration: false },
     commission: { rate_pct: 0, minimum_kes: 0 },
     tax: { vat_applicable: true, vat_rate: 0.16 },
   },
@@ -232,7 +215,7 @@ const SASOS_PLANS = {
     productId: 'logistics', tier: 'pro', name: 'Logistics Pro',
     billing: { monthly: 2999, annual: 29990, trialDays: 14, currency: 'KES' },
     limits: { warehouses: 5, sku_count: 10000, shipments_per_month: 2000, staff_accounts: 15, storage_gb: 50, ai_credits: 100 },
-    features: { barcode_scanning: true, inventory_alerts: true, shipping_labels: true, analytics: true, api_access: false, multi_warehouse: true, 3pl_integration: false },
+    features: { barcode_scanning: true, inventory_alerts: true, shipping_labels: true, analytics: true, api_access: false, multi_warehouse: true, tpl_integration: false },
     commission: { rate_pct: 0, minimum_kes: 0 },
     tax: { vat_applicable: true, vat_rate: 0.16 },
   },
@@ -240,7 +223,7 @@ const SASOS_PLANS = {
     productId: 'logistics', tier: 'enterprise', name: 'Logistics Enterprise',
     billing: { monthly: 9999, annual: 99990, trialDays: 7, currency: 'KES' },
     limits: { warehouses: -1, sku_count: -1, shipments_per_month: -1, staff_accounts: -1, storage_gb: 500, ai_credits: 500 },
-    features: { barcode_scanning: true, inventory_alerts: true, shipping_labels: true, analytics: true, api_access: true, multi_warehouse: true, 3pl_integration: true, dedicated_support: true },
+    features: { barcode_scanning: true, inventory_alerts: true, shipping_labels: true, analytics: true, api_access: true, multi_warehouse: true, tpl_integration: true, dedicated_support: true },
     commission: { rate_pct: 0, minimum_kes: 0 },
     tax: { vat_applicable: true, vat_rate: 0.16 },
   },

@@ -31,13 +31,12 @@ const FieldValue             = admin.firestore.FieldValue;
 const Anthropic              = require('@anthropic-ai/sdk');
 
 const { _resolvePlan, SASOS_PLANS, SASOS_PRODUCTS, TIER_ORDER } = require('./sasos-core');
-const db  = () => admin.firestore();
-const san = (s, n = 200) => typeof s === 'string' ? s.replace(/<[^>]*>/g,'').trim().slice(0,n) : '';
+const { assertAuth, assertAdmin, sanitize } = require('./shared/errors');
+const { currentPeriod } = require('./shared/constants');
 
-const assertAuth  = req => { if (!req.auth?.uid) throw new HttpsError('unauthenticated','Auth required.'); return req.auth.uid; };
-const assertAdmin = req => { const uid = assertAuth(req); if (!req.auth.token?.admin && !req.auth.token?.superAdmin) throw new HttpsError('permission-denied','Admin required.'); return uid; };
-
-const period = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const db     = () => admin.firestore();
+const san    = (s, n = 200) => sanitize(s, n);
+const period = () => currentPeriod();
 
 /* ================================================================
    DETERMINISTIC BRAIN HEURISTICS

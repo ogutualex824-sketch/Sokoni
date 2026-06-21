@@ -38,19 +38,14 @@ const admin                  = require('firebase-admin');
 const FieldValue             = admin.firestore.FieldValue;
 const { _resolvePlan, SASOS_PRODUCTS } = require('./sasos-core');
 
+const { assertAuth, assertAdmin, sanitize } = require('./shared/errors');
+const { VAT_RATE, DUNNING_DAYS, GRACE_PERIOD_DAYS, currentPeriod } = require('./shared/constants');
+
 const db = () => admin.firestore();
 
-/* ── Auth guards ──────────────────────────────────────────── */
-const assertAuth  = req => { if (!req.auth?.uid) throw new HttpsError('unauthenticated','Auth required.'); return req.auth.uid; };
-const assertAdmin = req => { const uid = assertAuth(req); if (!req.auth.token?.admin && !req.auth.token?.superAdmin) throw new HttpsError('permission-denied','Admin required.'); return uid; };
-const san = (s, n = 200) => typeof s === 'string' ? s.replace(/<[^>]*>/g,'').trim().slice(0,n) : '';
-
-/* ── Kenya VAT rate ───────────────────────────────────────── */
-const VAT_RATE = 0.16;
-
-/* ── Dunning schedule (days after failed payment) ─────────── */
-const DUNNING_SCHEDULE_DAYS = [1, 3, 7, 14];
-const GRACE_PERIOD_DAYS     = 7;
+/* ── Local aliases ──────────────────────────────────────────── */
+const san    = (s, n = 200) => sanitize(s, n);
+const DUNNING_SCHEDULE_DAYS = DUNNING_DAYS;
 
 /* ── Invoice number generator ─────────────────────────────── */
 function _generateInvoiceNo(date) {
@@ -62,7 +57,7 @@ function _generateInvoiceNo(date) {
 }
 
 /* ── Period helper ────────────────────────────────────────── */
-const period = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const period = () => currentPeriod();
 const today  = () => new Date().toISOString().slice(0, 10);
 
 /* ── Calculate tax ────────────────────────────────────────── */
