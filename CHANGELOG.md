@@ -1,4 +1,59 @@
-﻿## [2026-06-21] — Phase 34–40: Production Certification v1.0.0
+﻿## [2026-06-21] — fix(geo): Safari Live Map Crash — Geolocation errorCallback TypeError
+
+### Root Cause
+`car-hub.html` passed an **options object** as arg2 to `watchPosition()`:
+```js
+// BROKEN — options in errorCallback slot:
+navigator.geolocation.watchPosition(fn, {enableHighAccuracy:true, maximumAge:5000})
+
+// CORRECT:
+navigator.geolocation.watchPosition(fn, errorFn, {enableHighAccuracy:true, maximumAge:5000})
+```
+Safari (WebKit) strictly enforces that arg2 must be a callable function. Chrome and Firefox silently accept options-as-arg2, hiding the bug on desktop. The resulting `TypeError` propagated to the outer `try/catch` that also wraps Leaflet initialization, causing the catch block to destroy the already-initialized map and display "Map failed to initialize."
+
+**Error on iPhone Safari:**
+> Argument 2 ('errorCallback') to Geolocation.watchPosition must be a function
+
+### Secondary Bugs (same file)
+Two `getCurrentPosition` calls passed `null` as errorCallback. Safari ≤15 rejects `null` for errorCallback.
+
+### Files Changed
+- **`sokoni-geo.js`** (NEW) — shared defensive geolocation wrapper
+  - `SokoniGeo.getLocation({ onSuccess, onError?, options? })`
+  - `SokoniGeo.startLocationTracking({ onSuccess, onError?, options? })`
+  - `SokoniGeo.stopLocationTracking(watchId)`
+  - `SokoniGeo.getLocationAsync(options?) → Promise<{lat,lng}|null>`
+  - Always validates arg2 before calling native API; supplies default error handler; wraps in try/catch; never crashes host page
+- **`car-hub.html`** — 3 bugs fixed using SokoniGeo wrapper; script tag added after Leaflet
+- **`service-worker.js`** — v251 → v252, `sokoni-geo.js` added to precache
+- **`functions/test/geolocation.test.js`** (NEW) — 40 regression tests
+
+### Architecture Change
+Leaflet map initializes first (line 3301 of car-hub.html). GPS tracking is now explicitly secondary. `startLocationTracking` is called **after** the map is live — a GPS failure leaves the map intact at the Nairobi CBD default view (−1.2921, 36.8219).
+
+### Safari Compatibility
+| Platform | Result |
+|---|---|
+| iPhone Safari (all versions) | Fixed — no more TypeError |
+| iPhone Safari PWA mode | Fixed |
+| Android Chrome | Was working, still works |
+| Desktop Chrome/Firefox/Edge | Was working, still works |
+| Offline / GPS denied | Map loads at default view, warning logged |
+
+### Regression Tests (40 tests)
+- `isSupported()` — null geo, missing `getCurrentPosition`
+- `getLocation()` — null/object/missing errorCallback always substituted with function
+- `startLocationTracking()` — **CRITICAL**: arg2 to `watchPosition` is always a function, never an object
+- `stopLocationTracking()` — null watchId, unsupported geo, `clearWatch` errors
+- `getLocationAsync()` — success resolves `{lat,lng}`, failure resolves `null` (never rejects)
+- GEO_ERRORS codes 0-3, DEFAULT_OPTIONS fields
+
+### Security
+None — geolocation is always user-permissioned. The wrapper does not weaken or bypass permissions.
+
+---
+
+## [2026-06-21] — Phase 34–40: Production Certification v1.0.0
 
 ### Summary
 40-phase SOKONI Master Implementation Directive complete.
