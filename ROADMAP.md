@@ -83,6 +83,8 @@ Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 | Platform Operations Center (platform.html — 8-tab admin) | v2.8 | ✅ Done |
 | Shared CF constants + error handling (functions/shared/) | v2.9 | ✅ Done |
 | Expanded test suite — 169 passing tests (5 test files) | v2.9 | ✅ Done |
+| Auth & RBAC hardening — claim-preserving merge, getUserClaims CF, idle session timeout | v3.0 | ✅ Done |
+| Expanded test suite — 201 passing tests (6 test files) | v3.0 | ✅ Done |
 | Unit tests — 67 tests (helpers, fraud, webhooks) | v2.2 | ✅ Done |
 
 ### Search & Discovery

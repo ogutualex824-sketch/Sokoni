@@ -273,15 +273,18 @@ async function _doSignup(name, email, password){
 
         /* Build the profile object stored in both Firestore and localStorage */
         const dobStr = `${dobYear}-${String(dobMonth).padStart(2,'0')}-${String(dobDay).padStart(2,'0')}`;
+        const _now = new Date();
         const profile = {
-            uid:          cred.user.uid,
+            uid:              cred.user.uid,
             name,
             email,
-            dob:          dobStr,
-            ageVerified:  true,
-            joinedAt:     new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
-            registeredAs: { buyer: true },
-            role:         'buyer',
+            dob:              dobStr,
+            ageVerified:      true,
+            joinedAt:         _now.toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
+            joinedTimestamp:  _now.getTime(),
+            registeredAs:     { user: true },
+            roles:            ['user'],
+            role:             'user',
         };
 
         /* Persist to Firestore users collection (the authoritative source) */

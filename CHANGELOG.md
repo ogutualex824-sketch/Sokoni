@@ -1,4 +1,24 @@
-﻿## [2026-06-21] — Platform Foundation v2.9.0 — Shared Constants, Error Handling, Expanded Tests
+﻿## [2026-06-21] — Identity, Auth & RBAC v3.0.0 — Claim Hardening, Session Timeout, Role Consistency
+
+### Summary
+Phase 3 of the Master Implementation Directive. Hardens the auth and RBAC layer: fixes two claim-destructive bugs in legacy admin CFs, adds `getUserClaims` for admin inspection, enforces `role: 'user'` as the canonical new-user role, adds ISO-sortable `joinedTimestamp`, implements 30/60-min idle session timeout, and expands test coverage to 201 tests.
+
+### Files Changed (4)
+- **`functions/index.js`**: FIX H1 `grantAdminClaim` (claim-preserving merge); FIX H2 `revokeAdminClaim` (delete key, not set to false); NEW `getUserClaims` CF (admin inspection); both legacy CFs now audit-log changes.
+- **`auth.js`**: New user profile uses `role: 'user'`, `registeredAs: { user: true }`, `roles: ['user']`, `joinedTimestamp: Date.now()`.
+- **`firebase.js`**: Auto-created profiles now use `role: 'user'`; added 30/60-min idle timeout IIFE wired into `onAuthStateChanged`.
+- **`functions/test/auth-claims.test.js`** (NEW): 32 tests — role hierarchy, auth guards, profile schema, claim preservation, timeout constants.
+
+### Security Fixes
+- H1 HIGH: `grantAdminClaim` was overwriting all existing claims with `{ admin: true }`. Fixed.
+- H2 HIGH: `revokeAdminClaim` was setting `{ admin: false }` instead of deleting. Fixed.
+
+### Quality Gates
+- Tests: **201 passing, 0 failing** (6 test files)
+
+---
+
+## [2026-06-21] — Platform Foundation v2.9.0 — Shared Constants, Error Handling, Expanded Tests
 
 ### Summary
 Phase 2 of the Master Implementation Directive. Establishes the shared platform foundation that all CFs must build on: single-source-of-truth constants, standardized error handling, and a comprehensive test suite expanded from 3 to 5 files (143 → 169 passing tests). Identifies and documents the localStorage auth pattern as a safe UI optimization (not a security risk). CI/CD pipeline was already present and comprehensive.

@@ -75,13 +75,16 @@ onAuthStateChanged(auth, async (user) => {
         localStorage.setItem("sokoniUser", JSON.stringify(snap.data()));
       } else {
         /* Profile missing — create it now from Firebase Auth data */
+        const _joinedNow = new Date();
         const profile = {
-          uid:          user.uid,
-          name:         user.displayName || user.email.split("@")[0],
-          email:        user.email,
-          registeredAs: { buyer: true },
-          role:         "buyer",
-          joinedAt:     new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
+          uid:             user.uid,
+          name:            user.displayName || user.email.split("@")[0],
+          email:           user.email,
+          registeredAs:    { user: true },
+          roles:           ['user'],
+          role:            'user',
+          joinedAt:        _joinedNow.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
+          joinedTimestamp: _joinedNow.getTime(),
         };
         await setDoc(doc(db, "users", user.uid), { ...profile, createdAt: serverTimestamp() });
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
@@ -92,6 +95,9 @@ onAuthStateChanged(auth, async (user) => {
 
     /* ── SokoniSync: restore cross-device data on every login ── */
     _initSokoniSync(db, user.uid);
+
+    /* ── Start idle session timeout ── */
+    if (window._sokoniStartIdleTimer) window._sokoniStartIdleTimer();
 
     /* ── Update lastSeen + sync any cached FCM token (fire-and-forget) ── */
     try {
@@ -108,6 +114,9 @@ onAuthStateChanged(auth, async (user) => {
     } catch (_) {}
 
   } else {
+    /* Stop idle timeout when signed out */
+    if (window._sokoniStopIdleTimer) window._sokoniStopIdleTimer();
+
     /* Firebase session gone — clear ALL auth-related storage */
     localStorage.removeItem("loggedIn");
     localStorage.removeItem("sokoniUser");
@@ -348,6 +357,78 @@ function _showSokoniPushToast(title, body, icon, url) {
     setTimeout(() => toast.remove(), 400);
   }, 6000);
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   IDLE SESSION TIMEOUT
+   Auto-signs out after 30 minutes of inactivity for regular users
+   (60 min for admin/superAdmin). Resets on any user interaction.
+   Prevents abandoned-session attacks on shared devices.
+══════════════════════════════════════════════════════════════════ */
+(function _initIdleTimeout() {
+  const IDLE_MS_STANDARD = 30 * 60 * 1000; // 30 min
+  const IDLE_MS_ADMIN    = 60 * 60 * 1000; // 60 min
+
+  let _idleTimer = null;
+
+  function _getIdleLimit() {
+    try {
+      const u = JSON.parse(localStorage.getItem("sokoniUser") || "{}");
+      const isAdmin = u.roles && (u.roles.includes("admin") || u.roles.includes("superAdmin"));
+      return isAdmin ? IDLE_MS_ADMIN : IDLE_MS_STANDARD;
+    } catch (_) {
+      return IDLE_MS_STANDARD;
+    }
+  }
+
+  function _onTimeout() {
+    /* Only timeout if still logged in */
+    if (localStorage.getItem("loggedIn") !== "true") return;
+
+    /* Show a toast warning before signing out */
+    const toast = document.createElement("div");
+    toast.style.cssText = "position:fixed;top:80px;right:16px;z-index:2147483647;width:min(320px,calc(100vw - 32px));background:#1a0000;border:1px solid rgba(255,60,60,0.4);border-radius:16px;padding:14px 16px;font-family:'Segoe UI',system-ui,sans-serif;color:white;box-shadow:0 12px 40px rgba(0,0,0,0.7);";
+    toast.textContent = "Session expired due to inactivity. Signing out…";
+    document.body && document.body.appendChild(toast);
+
+    setTimeout(async () => {
+      toast.remove && toast.remove();
+      await sokoniSignOut();
+      try {
+        sessionStorage.setItem("sokoniLoginRedirect", window.location.pathname.split("/").pop() + (window.location.search || ""));
+        sessionStorage.setItem("sokoniSessionExpired", "1");
+      } catch (_) {}
+      window.location.href = "login.html";
+    }, 2000);
+  }
+
+  function _resetTimer() {
+    if (!_idleTimer) return; /* timer not started — user not logged in */
+    clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(_onTimeout, _getIdleLimit());
+  }
+
+  function _startIdleTimer() {
+    clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(_onTimeout, _getIdleLimit());
+    /* Bind interaction events */
+    ["click", "keydown", "touchstart", "scroll", "mousemove"].forEach(evt => {
+      document.removeEventListener(evt, _resetTimer, { passive: true });
+      document.addEventListener(evt, _resetTimer, { passive: true });
+    });
+  }
+
+  function _stopIdleTimer() {
+    clearTimeout(_idleTimer);
+    _idleTimer = null;
+    ["click", "keydown", "touchstart", "scroll", "mousemove"].forEach(evt => {
+      document.removeEventListener(evt, _resetTimer, { passive: true });
+    });
+  }
+
+  /* Start timer on auth state (Firebase onAuthStateChanged calls this) */
+  window._sokoniStartIdleTimer = _startIdleTimer;
+  window._sokoniStopIdleTimer  = _stopIdleTimer;
+})();
 
 /* ── Firestore audit writer (exposed for non-module security.js) ── */
 window.sokoniFirestoreAudit = async function(entry = {}) {
