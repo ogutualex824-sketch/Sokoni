@@ -1,11 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" data-splash="1" data-require-auth="true">
-<head><script src="security.js"></script>
-<script src="auth-guard.js"></script>
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Notifications — SOKONI</title>
-  <meta name="description" content="Your SOKONI notifications — orders, deliveries, rides, appointments and more.">
+  <meta name="description" content="Manage all your SOKONI notifications — orders, deliveries, payments, messages and more.">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
@@ -14,813 +15,1063 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SOKONI">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="premium.css">
   <link rel="stylesheet" href="mobile.css">
-  <link rel="stylesheet" href="sokoni-premium-v2.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="sokoni-tokens.css">
+  <script src="shared-header.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding-bottom:90px;}
+    body{
+      font-family:'Segoe UI',system-ui,sans-serif;
+      background:#050f05;color:#fff;
+      min-height:100vh;
+    }
 
-    /* ── HEADER ─────────────────────────────────────────────── */
-    .notif-nav{
-      position:sticky;top:0;z-index:100;
-      display:flex;align-items:center;justify-content:space-between;
-      padding:0 16px;height:58px;
-      background:rgba(5,5,5,0.97);backdrop-filter:blur(20px);
-      border-bottom:1px solid rgba(113,255,0,0.08);
+    /* ────────────────── LAYOUT ────────────────── */
+    #nc-root{
+      display:flex;
+      max-width:1280px;
+      margin:0 auto;
+      min-height:calc(100vh - 64px);
     }
-    .notif-nav-left{display:flex;align-items:center;gap:10px;}
-    .notif-back{
-      width:36px;height:36px;display:flex;align-items:center;justify-content:center;
-      background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
-      border-radius:10px;color:rgba(255,255,255,0.7);text-decoration:none;font-size:14px;
-      transition:background .15s;
-    }
-    .notif-back:hover{background:rgba(255,255,255,0.1);}
-    .notif-logo{height:26px;}
-    .notif-title{font-size:15px;font-weight:900;color:#fff;}
-    .notif-header-right{display:flex;align-items:center;gap:8px;}
-    .unread-badge{
-      min-width:20px;height:20px;padding:0 6px;
-      background:#71ff00;border-radius:10px;
-      font-size:11px;font-weight:900;color:#050f05;
-      display:none;align-items:center;justify-content:center;
-      line-height:1;
-    }
-    .unread-badge.visible{display:flex;}
-    .mark-all-btn{
-      font-size:12px;font-weight:700;color:#71ff00;
-      background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);
-      border-radius:8px;cursor:pointer;padding:6px 11px;
-      font-family:inherit;transition:all .15s;white-space:nowrap;
-    }
-    .mark-all-btn:hover{background:rgba(113,255,0,0.16);}
 
-    /* ── FILTER TABS ─────────────────────────────────────────── */
-    .notif-tabs{
-      display:flex;gap:6px;padding:12px 16px 10px;
-      overflow-x:auto;scrollbar-width:none;
-      border-bottom:1px solid rgba(255,255,255,0.05);
-      position:sticky;top:58px;z-index:90;
-      background:#0a0a0a;
+    /* ── Sidebar (desktop) ── */
+    #nc-sidebar{
+      width:240px;flex-shrink:0;
+      border-right:1px solid rgba(255,255,255,0.07);
+      padding:20px 0;
+      position:sticky;
+      top:64px;
+      height:calc(100vh - 64px);
+      overflow-y:auto;
     }
-    .notif-tabs::-webkit-scrollbar{display:none;}
-    .notif-tab{
-      flex-shrink:0;padding:7px 14px;border-radius:20px;
-      border:1px solid rgba(255,255,255,0.1);
-      background:transparent;color:rgba(255,255,255,0.5);
-      font-size:12px;font-weight:700;cursor:pointer;
-      font-family:inherit;transition:all .18s;
-      display:flex;align-items:center;gap:5px;
+    #nc-sidebar::-webkit-scrollbar{width:4px;}
+    #nc-sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px;}
+
+    .nc-sidebar-title{
+      font-size:11px;font-weight:900;
+      color:rgba(255,255,255,0.35);
+      text-transform:uppercase;letter-spacing:0.08em;
+      padding:12px 20px 6px;
     }
-    .notif-tab.active{
-      background:rgba(113,255,0,0.12);
-      border-color:rgba(113,255,0,0.35);
+
+    .nc-sidebar-item{
+      display:flex;align-items:center;gap:10px;
+      padding:10px 20px;
+      color:rgba(255,255,255,0.6);
+      font-size:13px;font-weight:600;
+      cursor:pointer;
+      transition:background 120ms ease,color 120ms ease;
+      border-radius:0;
+      border-left:3px solid transparent;
+    }
+    .nc-sidebar-item:hover{
+      background:rgba(255,255,255,0.04);
+      color:rgba(255,255,255,0.9);
+    }
+    .nc-sidebar-item.active{
+      background:rgba(113,255,0,0.08);
       color:#71ff00;
+      border-left-color:#71ff00;
+      font-weight:800;
     }
-    .tab-dot{
-      width:7px;height:7px;border-radius:50%;
-      background:#71ff00;display:none;flex-shrink:0;
+    .nc-sidebar-badge{
+      margin-left:auto;
+      background:rgba(255,68,68,0.85);
+      color:#fff;
+      font-size:9px;font-weight:900;
+      min-width:18px;height:18px;
+      border-radius:999px;
+      padding:0 4px;
+      display:inline-flex;align-items:center;justify-content:center;
     }
-    .notif-tab.has-unread .tab-dot{display:block;}
+    .nc-sidebar-item.active .nc-sidebar-badge{background:#ff3c3c;}
 
-    /* ── NOTIFICATION FEED ───────────────────────────────────── */
-    .notif-list{display:flex;flex-direction:column;gap:0;}
-    .section-label{
-      padding:10px 18px 6px;font-size:10px;
-      text-transform:uppercase;letter-spacing:1px;
-      color:rgba(255,255,255,0.28);font-weight:700;
+    /* ── Main area ── */
+    #nc-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+
+    /* ── Main toolbar ── */
+    #nc-toolbar{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      padding:16px 24px;
+      border-bottom:1px solid rgba(255,255,255,0.07);
+      position:sticky;
+      top:64px;
+      background:#050f05;
+      z-index:10;
     }
-    .notif-item{
-      display:flex;align-items:flex-start;gap:13px;
-      padding:14px 16px;
+    #nc-toolbar-title{
+      font-size:18px;font-weight:900;color:#fff;flex:1;
+    }
+    .nc-toolbar-btn{
+      padding:8px 16px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.1);
+      background:rgba(255,255,255,0.05);
+      color:rgba(255,255,255,0.75);
+      font-size:12px;font-weight:700;
+      cursor:pointer;
+      white-space:nowrap;
+      transition:background 150ms ease;
+      font-family:inherit;
+    }
+    .nc-toolbar-btn:hover{background:rgba(255,255,255,0.1);}
+    .nc-toolbar-btn.danger:hover{background:rgba(255,68,68,0.15);border-color:rgba(255,68,68,0.3);color:#ff6b6b;}
+
+    /* ── Search + filter row ── */
+    #nc-search-row{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      padding:12px 24px;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+    }
+    #nc-search-wrap{position:relative;flex:1;min-width:180px;}
+    #nc-search{
+      width:100%;
+      background:rgba(255,255,255,0.05);
+      border:1px solid rgba(255,255,255,0.09);
+      border-radius:10px;
+      padding:9px 14px 9px 36px;
+      color:#fff;font-size:13px;
+      outline:none;font-family:inherit;
+    }
+    #nc-search:focus{border-color:rgba(113,255,0,0.4);}
+    #nc-search::placeholder{color:rgba(255,255,255,0.3);}
+    #nc-search-icon{
+      position:absolute;left:12px;top:50%;transform:translateY(-50%);
+      font-size:13px;color:rgba(255,255,255,0.3);pointer-events:none;
+    }
+
+    .nc-filter-select{
+      background:rgba(255,255,255,0.05);
+      border:1px solid rgba(255,255,255,0.09);
+      border-radius:10px;
+      padding:9px 12px;
+      color:rgba(255,255,255,0.75);
+      font-size:12px;
+      outline:none;
+      cursor:pointer;
+      font-family:inherit;
+    }
+    .nc-filter-select:focus{border-color:rgba(113,255,0,0.4);}
+
+    /* ── List ── */
+    #nc-list-wrap{flex:1;overflow-y:auto;min-height:0;}
+
+    .nc-date-divider{
+      padding:8px 24px;
+      font-size:11px;font-weight:900;
+      color:rgba(255,255,255,0.3);
+      text-transform:uppercase;letter-spacing:0.06em;
+      background:rgba(255,255,255,0.02);
+      border-bottom:1px solid rgba(255,255,255,0.05);
+    }
+
+    /* ── Notification card ── */
+    .nc-card{
+      display:flex;gap:14px;
+      padding:14px 24px;
       border-bottom:1px solid rgba(255,255,255,0.04);
-      cursor:pointer;transition:background .15s;position:relative;
+      cursor:pointer;
+      transition:background 120ms ease;
+      position:relative;
     }
-    .notif-item:hover{background:rgba(255,255,255,0.028);}
-    .notif-item.unread{background:rgba(113,255,0,0.03);}
-    .notif-item.unread::before{
-      content:'';position:absolute;left:0;top:0;bottom:0;
-      width:3px;background:#71ff00;border-radius:0 2px 2px 0;
+    .nc-card:hover{background:rgba(255,255,255,0.03);}
+    .nc-card.unread{background:rgba(113,255,0,0.025);}
+    .nc-card.unread::before{
+      content:"";
+      position:absolute;left:0;top:0;bottom:0;
+      width:3px;
+      background:linear-gradient(to bottom,#71ff00,#4fc800);
+      border-radius:0 3px 3px 0;
     }
-    .notif-dot-outer{
-      display:flex;align-items:flex-start;padding-top:2px;flex-shrink:0;
-    }
-    .notif-dot{
-      width:9px;height:9px;border-radius:50%;background:#71ff00;
-      flex-shrink:0;margin-top:2px;
-      box-shadow:0 0 6px #71ff00;
-      opacity:0;transition:opacity .2s;
-    }
-    .notif-item.unread .notif-dot{opacity:1;}
-    .notif-icon{
-      width:44px;height:44px;border-radius:14px;
+    .nc-card.priority-critical::before{background:linear-gradient(to bottom,#ff1744,#c01);}
+    .nc-card.priority-high::before    {background:linear-gradient(to bottom,#ff6d00,#e64a19);}
+
+    .nc-card-icon{
+      width:44px;height:44px;
+      border-radius:13px;
+      background:rgba(255,255,255,0.07);
       display:flex;align-items:center;justify-content:center;
       font-size:22px;flex-shrink:0;
+      align-self:flex-start;
     }
-    /* icon backgrounds by category */
-    .notif-icon.orders    {background:rgba(113,255,0,0.10);}
-    .notif-icon.deliveries{background:rgba(255,152,0,0.10);}
-    .notif-icon.rides     {background:rgba(0,170,255,0.10);}
-    .notif-icon.appointments{background:rgba(200,100,255,0.10);}
-    .notif-icon.applications{background:rgba(255,220,0,0.10);}
-    .notif-icon.community {background:rgba(255,80,160,0.10);}
-    .notif-icon.promotions{background:rgba(255,80,80,0.10);}
-    .notif-icon.wallet    {background:rgba(0,220,180,0.10);}
-    .notif-icon.system    {background:rgba(255,255,255,0.06);}
-    .notif-body{flex:1;min-width:0;}
-    .notif-heading{font-size:13px;font-weight:700;color:#fff;margin-bottom:3px;line-height:1.35;}
-    .notif-sub{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.45;margin-bottom:5px;}
-    .notif-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;}
-    .notif-time{font-size:10px;color:rgba(255,255,255,0.28);font-weight:600;}
-    .notif-action{
-      font-size:11px;font-weight:800;color:#71ff00;
-      background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);
-      border-radius:8px;padding:4px 10px;white-space:nowrap;
-      text-decoration:none;cursor:pointer;font-family:inherit;
-      transition:background .15s;flex-shrink:0;
-    }
-    .notif-action:hover{background:rgba(113,255,0,0.2);}
+    .nc-card.priority-critical .nc-card-icon{background:rgba(255,23,68,0.12);border:1px solid rgba(255,23,68,0.2);}
+    .nc-card.priority-high .nc-card-icon    {background:rgba(255,109,0,0.1);border:1px solid rgba(255,109,0,0.2);}
 
-    /* ── EMPTY STATE ─────────────────────────────────────────── */
-    .notif-empty{
-      display:flex;flex-direction:column;align-items:center;
-      justify-content:center;padding:70px 20px;gap:14px;text-align:center;
+    .nc-card-body{flex:1;min-width:0;}
+    .nc-card-title{
+      font-size:14px;font-weight:700;color:#fff;
+      line-height:1.35;margin-bottom:3px;
     }
-    .notif-empty-icon{font-size:56px;opacity:.22;}
-    .notif-empty-title{font-size:17px;font-weight:800;color:rgba(255,255,255,0.4);}
-    .notif-empty-sub{font-size:13px;color:rgba(255,255,255,0.22);line-height:1.5;max-width:260px;}
-    .notif-enable-btn{
-      margin-top:10px;padding:12px 26px;
-      background:linear-gradient(135deg,#71ff00,#4fc800);
-      color:#050f05;font-weight:900;font-size:13px;
-      border:none;border-radius:14px;cursor:pointer;font-family:inherit;
-      transition:opacity .15s;
+    .nc-card.unread .nc-card-title{font-weight:900;}
+    .nc-card-text{
+      font-size:12px;color:rgba(255,255,255,0.5);
+      line-height:1.5;margin-bottom:6px;
     }
-    .notif-enable-btn:hover{opacity:.88;}
+    .nc-card-meta{
+      display:flex;align-items:center;gap:8px;
+      font-size:11px;color:rgba(255,255,255,0.3);
+      flex-wrap:wrap;
+    }
+    .nc-card-cat{
+      padding:2px 8px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.07);
+      font-size:10px;font-weight:700;
+      color:rgba(255,255,255,0.4);
+    }
+    .nc-card-priority{
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:10px;font-weight:700;
+    }
+    .nc-card-priority.critical{background:rgba(255,23,68,0.15);color:#ff1744;}
+    .nc-card-priority.high    {background:rgba(255,109,0,0.12);color:#ff6d00;}
+    .nc-card-priority.normal  {background:rgba(113,255,0,0.1);color:#71ff00;}
+    .nc-card-priority.low     {background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.4);}
 
-    /* ── PUSH PERMISSION BANNER ─────────────────────────────── */
-    .push-banner{
-      margin:12px 16px;padding:14px 16px;
-      background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);
-      border-radius:14px;display:flex;align-items:center;gap:12px;
+    .nc-card-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+    .nc-act-btn{
+      padding:5px 12px;
+      border-radius:7px;
+      background:rgba(255,255,255,0.07);
+      border:1px solid rgba(255,255,255,0.1);
+      color:rgba(255,255,255,0.7);
+      font-size:11px;font-weight:700;
+      cursor:pointer;
+      transition:background 120ms ease;
+      font-family:inherit;
     }
-    .push-banner-text{flex:1;font-size:12px;color:rgba(255,255,255,0.6);line-height:1.45;}
-    .push-banner-text strong{color:#fff;display:block;margin-bottom:2px;font-size:13px;}
-    .push-banner-btn{
-      font-size:12px;font-weight:800;color:#050f05;
-      background:#71ff00;border:none;border-radius:10px;
-      padding:8px 14px;cursor:pointer;font-family:inherit;
-      flex-shrink:0;white-space:nowrap;
-    }
-    .push-banner-close{
-      width:24px;height:24px;display:flex;align-items:center;justify-content:center;
-      background:rgba(255,255,255,0.06);border:none;border-radius:6px;
-      color:rgba(255,255,255,0.4);cursor:pointer;font-size:13px;font-family:inherit;
+    .nc-act-btn:hover{background:rgba(255,255,255,0.13);}
+    .nc-act-btn.primary{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+    .nc-act-btn.primary:hover{background:rgba(113,255,0,0.22);}
+    .nc-act-btn.danger{background:rgba(255,68,68,0.1);border-color:rgba(255,68,68,0.25);color:#ff6b6b;}
+
+    .nc-card-right{
+      display:flex;flex-direction:column;align-items:flex-end;gap:6px;
       flex-shrink:0;
     }
+    .nc-card-time{font-size:11px;color:rgba(255,255,255,0.3);white-space:nowrap;}
+    .nc-unread-dot{
+      width:8px;height:8px;
+      border-radius:50%;
+      background:#71ff00;
+    }
 
-    /* ── SWIPE-TO-DELETE ─────────────────────────────────────── */
-    .notif-item{
-      position:relative;
+    /* ── Empty / error states ── */
+    .nc-empty{
+      padding:64px 24px;
+      text-align:center;
+      color:rgba(255,255,255,0.35);
+    }
+    .nc-empty-icon{font-size:56px;margin-bottom:16px;opacity:0.4;}
+    .nc-empty-title{font-size:18px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:8px;}
+    .nc-empty-sub{font-size:13px;line-height:1.5;}
+
+    /* ────────────────── PREFERENCES PAGE ────────────────── */
+    #nc-prefs-page{display:none;}
+    #nc-prefs-page.visible{display:block;}
+    #nc-history-page.hidden{display:none;}
+
+    .nc-prefs-section{
+      padding:24px 24px 0;
+    }
+    .nc-prefs-section-title{
+      font-size:12px;font-weight:900;
+      color:rgba(255,255,255,0.35);
+      text-transform:uppercase;letter-spacing:0.08em;
+      margin-bottom:14px;
+    }
+    .nc-pref-card{
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.07);
+      border-radius:14px;
       overflow:hidden;
-      touch-action:pan-y;
+      margin-bottom:16px;
     }
-    .notif-item .swipe-delete-bg{
+    .nc-pref-row{
+      display:flex;align-items:center;gap:14px;
+      padding:14px 18px;
+      border-bottom:1px solid rgba(255,255,255,0.05);
+    }
+    .nc-pref-row:last-child{border-bottom:none;}
+    .nc-pref-icon{font-size:22px;width:32px;text-align:center;flex-shrink:0;}
+    .nc-pref-info{flex:1;}
+    .nc-pref-label{font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;}
+    .nc-pref-sub{font-size:11px;color:rgba(255,255,255,0.35);line-height:1.4;}
+    /* Toggle switch */
+    .sk-toggle{position:relative;width:46px;height:27px;flex-shrink:0;}
+    .sk-toggle input{opacity:0;width:0;height:0;position:absolute;}
+    .sk-toggle-slider{
       position:absolute;inset:0;
-      background:rgba(255,50,50,0.18);
-      display:flex;align-items:center;justify-content:flex-end;
-      padding-right:20px;
-      opacity:0;transition:opacity .15s;
-      pointer-events:none;
-      font-size:18px;
-      color:rgba(255,100,100,0.9);
+      background:rgba(255,255,255,0.15);
+      border-radius:999px;cursor:pointer;
+      transition:background 200ms ease;
     }
-    .notif-item .swipe-inner{
-      position:relative;z-index:1;
-      display:contents;
-      transition:transform .2s cubic-bezier(.4,0,.2,1);
+    .sk-toggle-slider::after{
+      content:"";position:absolute;
+      top:3px;left:3px;
+      width:21px;height:21px;
+      border-radius:50%;background:#fff;
+      transition:transform 200ms ease;
+      box-shadow:0 1px 5px rgba(0,0,0,0.45);
     }
-    .notif-item[data-deleting]{
-      opacity:0;max-height:0;padding:0;margin:0;
-      overflow:hidden;transition:opacity .25s,max-height .3s,padding .3s,margin .3s;
+    .sk-toggle input:checked + .sk-toggle-slider{background:#71ff00;}
+    .sk-toggle input:checked + .sk-toggle-slider::after{transform:translateX(19px);}
+
+    /* Master action buttons */
+    .nc-master-btns{
+      display:flex;gap:8px;flex-wrap:wrap;
+      padding:0 24px 16px;
+    }
+    .nc-master-btn{
+      flex:1;min-width:0;
+      padding:11px 14px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.1);
+      background:rgba(255,255,255,0.05);
+      color:rgba(255,255,255,0.75);
+      font-size:12px;font-weight:700;
+      cursor:pointer;text-align:center;
+      white-space:nowrap;
+      transition:background 150ms ease;
+      font-family:inherit;
+    }
+    .nc-master-btn:hover{background:rgba(255,255,255,0.1);}
+    .nc-master-btn.active{
+      background:rgba(113,255,0,0.15);
+      border-color:rgba(113,255,0,0.3);
+      color:#71ff00;
     }
 
-    @media(min-width:769px){
-      .bottom-nav{display:none!important;}
-      body{padding-bottom:0;}
+    /* DND time picker */
+    .nc-time-row{
+      display:grid;grid-template-columns:1fr auto 1fr;gap:10px;
+      align-items:center;padding:0 24px 16px;
+    }
+    .nc-time-input{
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:10px;padding:10px 12px;
+      color:#fff;font-size:14px;text-align:center;
+      outline:none;font-family:inherit;
+      width:100%;
+    }
+    .nc-time-input:focus{border-color:rgba(113,255,0,0.4);}
+    .nc-time-sep{color:rgba(255,255,255,0.3);text-align:center;font-size:13px;}
+
+    /* ────────────────── MOBILE OVERRIDES ────────────────── */
+    @media(max-width:768px){
+      #nc-sidebar{display:none;}
+      #nc-toolbar{padding:12px 16px;}
+      #nc-search-row{padding:10px 16px;}
+      .nc-card{padding:12px 16px;}
+      .nc-prefs-section{padding:16px 16px 0;}
+      .nc-master-btns{padding:0 16px 12px;}
+      .nc-time-row{padding:0 16px 12px;}
+    }
+
+    /* Mobile category tabs (replaces sidebar on mobile) */
+    #nc-mobile-tabs{
+      display:none;
+      overflow-x:auto;
+      gap:6px;
+      padding:10px 16px;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+      scrollbar-width:none;
+    }
+    #nc-mobile-tabs::-webkit-scrollbar{display:none;}
+    @media(max-width:768px){
+      #nc-mobile-tabs{display:flex;}
+    }
+    .nc-mob-tab{
+      display:flex;align-items:center;gap:4px;
+      padding:6px 12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.08);
+      background:rgba(255,255,255,0.04);
+      color:rgba(255,255,255,0.6);
+      font-size:12px;font-weight:700;
+      white-space:nowrap;cursor:pointer;flex-shrink:0;
+      transition:all 150ms ease;
+      font-family:inherit;
+    }
+    .nc-mob-tab.active{
+      background:rgba(113,255,0,0.15);
+      border-color:rgba(113,255,0,0.3);
+      color:#71ff00;
+    }
+    .nc-mob-tab-badge{
+      background:rgba(255,68,68,0.9);color:#fff;
+      font-size:9px;font-weight:900;
+      min-width:15px;height:15px;
+      border-radius:999px;padding:0 3px;
+      display:inline-flex;align-items:center;justify-content:center;
     }
   </style>
-<script src="shared-header.js" defer></script>
-  <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
-<script src="splash.js"></script>
+<div id="nc-root">
 
-<!-- ── HEADER ──────────────────────────────────────────────────── -->
-<nav class="notif-nav">
-  <div class="notif-nav-left">
-    <a href="javascript:history.back()" class="notif-back">&#8592;</a>
-    <a href="index.html"><img src="assets/Sokonilogo2.png" class="notif-logo" alt="SOKONI"></a>
-    <span class="notif-title">Notifications</span>
-  </div>
-  <div class="notif-header-right">
-    <span class="unread-badge" id="unreadBadge"></span>
-    <button class="mark-all-btn" onclick="SokoniNotifs.markAllRead()">Mark all read</button>
-  </div>
-</nav>
+  <!-- ═══ SIDEBAR (desktop) ═══ -->
+  <aside id="nc-sidebar" aria-label="Notification categories">
+    <div class="nc-sidebar-title">Notifications</div>
 
-<!-- ── FILTER TABS ──────────────────────────────────────────────── -->
-<div class="notif-tabs" id="notifTabs">
-  <button class="notif-tab active" data-filter="all" onclick="SokoniNotifs.setFilter('all',this)">All <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="orders" onclick="SokoniNotifs.setFilter('orders',this)">&#128722; Orders <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="deliveries" onclick="SokoniNotifs.setFilter('deliveries',this)">&#128667; Deliveries <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="rides" onclick="SokoniNotifs.setFilter('rides',this)">&#128663; Rides <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="appointments" onclick="SokoniNotifs.setFilter('appointments',this)">&#128197; Appointments <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="applications" onclick="SokoniNotifs.setFilter('applications',this)">&#128232; Applications <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="community" onclick="SokoniNotifs.setFilter('community',this)">&#128172; Community <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="wallet" onclick="SokoniNotifs.setFilter('wallet',this)">&#128179; Wallet <span class="tab-dot"></span></button>
-  <button class="notif-tab" data-filter="system" onclick="SokoniNotifs.setFilter('system',this)">&#9881;&#65039; System <span class="tab-dot"></span></button>
-</div>
+    <div class="nc-sidebar-item active" data-cat="all">
+      <span>🔔</span><span>All</span>
+      <span class="nc-sidebar-badge" id="nc-sb-all" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="unread">
+      <span>🔵</span><span>Unread</span>
+      <span class="nc-sidebar-badge" id="nc-sb-unread" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="important">
+      <span>⭐</span><span>Important</span>
+      <span class="nc-sidebar-badge" id="nc-sb-important" style="display:none"></span>
+    </div>
 
-<!-- ── PUSH BANNER (shown if permission not granted) ─────────────── -->
-<div class="push-banner" id="pushBanner" style="display:none;">
-  <div class="notif-banner-icon" style="font-size:24px;">&#128276;</div>
-  <div class="push-banner-text">
-    <strong>Stay in the loop</strong>
-    Get real-time alerts for orders, rides &amp; deals.
-  </div>
-  <button class="push-banner-btn" onclick="SokoniNotifs.enablePush()">Enable</button>
-  <button class="push-banner-close" onclick="SokoniNotifs.dismissPushBanner()" title="Dismiss">&#10005;</button>
-</div>
+    <div class="nc-sidebar-title" style="margin-top:8px">Commerce</div>
+    <div class="nc-sidebar-item" data-cat="orders">
+      <span>📦</span><span>Orders</span>
+      <span class="nc-sidebar-badge" id="nc-sb-orders" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="payments">
+      <span>💳</span><span>Payments</span>
+      <span class="nc-sidebar-badge" id="nc-sb-payments" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="deliveries">
+      <span>🚚</span><span>Deliveries</span>
+      <span class="nc-sidebar-badge" id="nc-sb-deliveries" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="marketplace">
+      <span>🏪</span><span>Marketplace</span>
+      <span class="nc-sidebar-badge" id="nc-sb-marketplace" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="bookings">
+      <span>📅</span><span>Bookings</span>
+      <span class="nc-sidebar-badge" id="nc-sb-bookings" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="messages">
+      <span>💬</span><span>Messages</span>
+      <span class="nc-sidebar-badge" id="nc-sb-messages" style="display:none"></span>
+    </div>
 
-<!-- ── NOTIFICATION FEED ────────────────────────────────────────── -->
-<div id="notifContainer"></div>
+    <div class="nc-sidebar-title" style="margin-top:8px">Business</div>
+    <div class="nc-sidebar-item" data-cat="inventory">
+      <span>📊</span><span>Inventory</span>
+      <span class="nc-sidebar-badge" id="nc-sb-inventory" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="pos">
+      <span>🖥️</span><span>POS</span>
+      <span class="nc-sidebar-badge" id="nc-sb-pos" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="employees">
+      <span>👥</span><span>Employees</span>
+      <span class="nc-sidebar-badge" id="nc-sb-employees" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="finance">
+      <span>💰</span><span>Finance</span>
+      <span class="nc-sidebar-badge" id="nc-sb-finance" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="business">
+      <span>💼</span><span>Business</span>
+      <span class="nc-sidebar-badge" id="nc-sb-business" style="display:none"></span>
+    </div>
 
-<!-- ── BOTTOM NAV ───────────────────────────────────────────────── -->
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">&#127968;</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">&#128717;&#65039;</span><span>Shop</span></a>
-  <a href="services.html" class="bnav-item"><span class="bnav-emoji">&#128295;</span><span>Services</span></a>
-  <a href="community.html" class="bnav-item"><span class="bnav-emoji">&#128172;</span><span>Community</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">&#128100;</span><span>Profile</span></a>
-</nav>
+    <div class="nc-sidebar-title" style="margin-top:8px">Account</div>
+    <div class="nc-sidebar-item" data-cat="security">
+      <span>🔒</span><span>Security</span>
+      <span class="nc-sidebar-badge" id="nc-sb-security" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="verification">
+      <span>✅</span><span>Verification</span>
+      <span class="nc-sidebar-badge" id="nc-sb-verification" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="support">
+      <span>🛟</span><span>Support</span>
+      <span class="nc-sidebar-badge" id="nc-sb-support" style="display:none"></span>
+    </div>
 
-<!-- ── CORE SCRIPT ──────────────────────────────────────────────── -->
+    <div class="nc-sidebar-title" style="margin-top:8px">Platform</div>
+    <div class="nc-sidebar-item" data-cat="ai">
+      <span>🤖</span><span>AI Assistant</span>
+      <span class="nc-sidebar-badge" id="nc-sb-ai" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="promotions">
+      <span>🎁</span><span>Promotions</span>
+      <span class="nc-sidebar-badge" id="nc-sb-promotions" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="updates">
+      <span>🔄</span><span>Updates</span>
+      <span class="nc-sidebar-badge" id="nc-sb-updates" style="display:none"></span>
+    </div>
+    <div class="nc-sidebar-item" data-cat="system">
+      <span>⚙️</span><span>System</span>
+      <span class="nc-sidebar-badge" id="nc-sb-system" style="display:none"></span>
+    </div>
+
+    <div class="nc-sidebar-title" style="margin-top:8px">Archive</div>
+    <div class="nc-sidebar-item" data-cat="archived">
+      <span>📁</span><span>Archived</span>
+    </div>
+
+    <div class="nc-sidebar-title" style="margin-top:8px">Settings</div>
+    <div class="nc-sidebar-item" data-page="preferences" id="nc-prefs-nav">
+      <span>⚙️</span><span>Preferences</span>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <main id="nc-main" id="sk-main-content">
+
+    <!-- Mobile category tabs -->
+    <div id="nc-mobile-tabs" role="tablist">
+      <button class="nc-mob-tab active" data-cat="all">🔔 All</button>
+      <button class="nc-mob-tab" data-cat="unread">🔵 Unread</button>
+      <button class="nc-mob-tab" data-cat="important">⭐ Important</button>
+      <button class="nc-mob-tab" data-cat="orders">📦 Orders</button>
+      <button class="nc-mob-tab" data-cat="payments">💳 Payments</button>
+      <button class="nc-mob-tab" data-cat="messages">💬 Messages</button>
+      <button class="nc-mob-tab" data-cat="deliveries">🚚 Deliveries</button>
+      <button class="nc-mob-tab" data-cat="security">🔒 Security</button>
+      <button class="nc-mob-tab" data-cat="archived">📁 Archived</button>
+      <button class="nc-mob-tab" data-page="preferences">⚙️ Prefs</button>
+    </div>
+
+    <!-- ── HISTORY PAGE ── -->
+    <div id="nc-history-page">
+
+      <!-- Toolbar -->
+      <div id="nc-toolbar">
+        <h1 id="nc-toolbar-title">All Notifications</h1>
+        <button class="nc-toolbar-btn" id="nc-mark-all-btn">Mark All Read</button>
+        <button class="nc-toolbar-btn" id="nc-archive-all-btn">Archive All</button>
+        <button class="nc-toolbar-btn danger" id="nc-clear-read-btn">Clear Read</button>
+      </div>
+
+      <!-- Search + filter -->
+      <div id="nc-search-row">
+        <div id="nc-search-wrap">
+          <span id="nc-search-icon">🔍</span>
+          <input id="nc-search" type="search" placeholder="Search notifications…" autocomplete="off" aria-label="Search notifications">
+        </div>
+        <select class="nc-filter-select" id="nc-filter-priority" aria-label="Filter by priority">
+          <option value="">All Priorities</option>
+          <option value="critical">🔴 Critical</option>
+          <option value="high">🟠 High</option>
+          <option value="normal">🟢 Normal</option>
+          <option value="low">⚪ Low</option>
+        </select>
+        <select class="nc-filter-select" id="nc-filter-read" aria-label="Filter by read status">
+          <option value="">All</option>
+          <option value="unread">Unread only</option>
+          <option value="read">Read only</option>
+        </select>
+      </div>
+
+      <!-- Notification list -->
+      <div id="nc-list-wrap" role="list" aria-label="Notifications">
+        <div class="nc-empty" id="nc-loading">
+          <div class="nc-empty-icon">🔔</div>
+          <div class="nc-empty-title">Loading notifications…</div>
+        </div>
+      </div>
+
+    </div><!-- /#nc-history-page -->
+
+    <!-- ── PREFERENCES PAGE ── -->
+    <div id="nc-prefs-page">
+
+      <!-- Toolbar -->
+      <div id="nc-toolbar" style="position:static;border-bottom:none;">
+        <h1 id="nc-toolbar-title" style="font-size:18px">Notification Preferences</h1>
+      </div>
+
+      <!-- Master switch -->
+      <div class="nc-prefs-section">
+        <div class="nc-prefs-section-title">Master Controls</div>
+        <div class="nc-pref-card">
+          <div class="nc-pref-row">
+            <span class="nc-pref-icon">🔔</span>
+            <div class="nc-pref-info">
+              <div class="nc-pref-label">All Notifications</div>
+              <div class="nc-pref-sub">Master switch — critical security alerts always bypass this</div>
+            </div>
+            <label class="sk-toggle" aria-label="Toggle all notifications">
+              <input type="checkbox" id="nc-global-toggle" checked>
+              <span class="sk-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="nc-prefs-section">
+        <div class="nc-prefs-section-title">Pause Notifications</div>
+      </div>
+      <div class="nc-master-btns" id="nc-pause-btns">
+        <button class="nc-master-btn" data-pause="900000">15 min</button>
+        <button class="nc-master-btn" data-pause="3600000">1 hour</button>
+        <button class="nc-master-btn" data-pause="28800000">8 hours</button>
+        <button class="nc-master-btn" data-pause="86400000">24 hours</button>
+        <button class="nc-master-btn" id="nc-resume-btn">Resume Now</button>
+      </div>
+
+      <div class="nc-master-btns" style="padding-top:0;padding-bottom:20px;">
+        <button class="nc-master-btn" id="nc-enable-all-btn">Enable All Categories</button>
+        <button class="nc-master-btn" id="nc-disable-all-btn">Disable All Categories</button>
+      </div>
+
+      <!-- DND -->
+      <div class="nc-prefs-section">
+        <div class="nc-prefs-section-title">Do Not Disturb / Quiet Hours</div>
+        <div class="nc-pref-card">
+          <div class="nc-pref-row">
+            <span class="nc-pref-icon">🌙</span>
+            <div class="nc-pref-info">
+              <div class="nc-pref-label">Quiet Hours</div>
+              <div class="nc-pref-sub">Block all but critical notifications during set hours</div>
+            </div>
+            <label class="sk-toggle" aria-label="Toggle quiet hours">
+              <input type="checkbox" id="nc-dnd-toggle">
+              <span class="sk-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="nc-pref-row">
+            <span class="nc-pref-icon">🛡️</span>
+            <div class="nc-pref-info">
+              <div class="nc-pref-label">Allow Critical Security Alerts</div>
+              <div class="nc-pref-sub">Security threats always break through quiet hours</div>
+            </div>
+            <label class="sk-toggle" aria-label="Allow critical in quiet hours">
+              <input type="checkbox" id="nc-dnd-critical" checked>
+              <span class="sk-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="nc-time-row" id="nc-dnd-time-row">
+        <input type="time" class="nc-time-input" id="nc-dnd-start" value="22:00" aria-label="Quiet hours start">
+        <span class="nc-time-sep">until</span>
+        <input type="time" class="nc-time-input" id="nc-dnd-end" value="07:00" aria-label="Quiet hours end">
+      </div>
+
+      <!-- Per-category -->
+      <div class="nc-prefs-section">
+        <div class="nc-prefs-section-title">Category Preferences</div>
+        <div class="nc-pref-card" id="nc-cat-prefs">
+          <!-- Rows injected by JS -->
+        </div>
+      </div>
+
+    </div><!-- /#nc-prefs-page -->
+
+  </main>
+</div><!-- /#nc-root -->
+
 <script>
-/* ============================================================
-   SokoniNotifs — Universal Notification Centre v2
-   ============================================================ */
-var SokoniNotifs = (function(){
-  var NOTIF_KEY   = 'sokoniNotifications';
-  var BANNER_KEY  = 'sokoniNotifBannerDismissed';
-  var activeFilter = 'all';
+(function() {
+  'use strict';
 
-  /* ── NOTIFICATION TYPE DEFINITIONS ─────────────────────── */
-  var TYPE_META = {
-    order_placed:          {icon:'&#128722;',  category:'orders',       action:'Track Order',    link:'track.html'},
-    order_shipped:         {icon:'&#128230;',  category:'orders',       action:'Track Order',    link:'track.html'},
-    order_delivered:       {icon:'&#9989;',    category:'orders',       action:'Rate & Review',  link:'profile.html?tab=orders'},
-    delivery_update:       {icon:'&#128667;',  category:'deliveries',   action:'Track Delivery', link:'track.html'},
-    ride_accepted:         {icon:'&#128663;',  category:'rides',        action:'Track Ride',     link:'track.html'},
-    ride_arrived:          {icon:'&#128205;',  category:'rides',        action:'Open Ride',      link:'track.html'},
-    appointment_reminder:  {icon:'&#128197;',  category:'appointments', action:'View Booking',   link:'services.html'},
-    appointment_confirmed: {icon:'&#9989;',    category:'appointments', action:'View Booking',   link:'services.html'},
-    application_received:  {icon:'&#128232;',  category:'applications', action:'Review',         link:'seller.html?tab=applications'},
-    application_accepted:  {icon:'&#127881;',  category:'applications', action:'View Offer',     link:'profile.html'},
-    community_reply:       {icon:'&#128172;',  category:'community',    action:'Reply',          link:'community.html'},
-    community_like:        {icon:'&#10084;&#65039;', category:'community', action:'View Post',  link:'community.html'},
-    promotion:             {icon:'&#127873;',  category:'orders',       action:'Shop Now',       link:'category.html?cat=all'},
-    wallet_credit:         {icon:'&#128179;',  category:'wallet',       action:'View Wallet',    link:'profile.html?tab=wallet'},
-    wallet_debit:          {icon:'&#128183;',  category:'wallet',       action:'View Wallet',    link:'profile.html?tab=wallet'},
-    wallet_cashout:        {icon:'&#128200;',  category:'wallet',       action:'View Wallet',    link:'profile.html?tab=wallet'},
-    verification_approved: {icon:'&#9989;',    category:'system',       action:'View Profile',   link:'profile.html'},
-    security_alert:        {icon:'&#128274;',  category:'system',       action:'Review',         link:'profile.html'},
-    platform_update:       {icon:'&#128640;',  category:'system',       action:'Learn More',     link:'index.html'}
-  };
+  /* ── State ── */
+  var _activeCategory = 'all';
+  var _activePage     = 'history';
+  var _filterPriority = '';
+  var _filterRead     = '';
+  var _searchTerm     = '';
+  var _searchTimer    = null;
 
-  /* Legacy type aliases from old notification keys */
-  var LEGACY_CATEGORY = {
-    order:'orders', msg:'community', deal:'orders',
-    alert:'system', system:'system'
-  };
-
-  /* ── STORAGE ─────────────────────────────────────────────── */
-  function get(){ try{ return JSON.parse(localStorage.getItem(NOTIF_KEY)||'[]'); }catch(e){ return []; } }
-  function save(arr){ localStorage.setItem(NOTIF_KEY, JSON.stringify(arr)); }
-
-  /* ── HELPERS ─────────────────────────────────────────────── */
-  function timeAgo(ts){
-    if(!ts) return '';
-    var diff = Math.floor((Date.now()-ts)/1000);
-    if(diff<60)    return 'Just now';
-    if(diff<3600)  return Math.floor(diff/60)+'m ago';
-    if(diff<86400) return Math.floor(diff/3600)+'h ago';
-    if(diff<172800) return 'Yesterday';
-    return Math.floor(diff/86400)+'d ago';
+  /* ── Helpers ── */
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  function uid(){ try{ return (JSON.parse(localStorage.getItem('sokoniUser')||'{}')).uid||null; }catch(e){ return null; } }
-  function userName(){ try{ var u=JSON.parse(localStorage.getItem('sokoniUser')||'{}'); return (u.name||u.displayName||'').split(' ')[0]||'there'; }catch(e){ return 'there'; } }
+  /* ── Navigate categories ── */
+  function _selectCategory(cat) {
+    _activeCategory = cat;
+    _activePage = 'history';
 
-  function resolveCategory(n){
-    if(n.category) return n.category;
-    var meta = TYPE_META[n.type];
-    if(meta) return meta.category;
-    return LEGACY_CATEGORY[n.type] || 'system';
-  }
-
-  function resolveIcon(n){
-    if(n.icon && !n.icon.match(/^[a-z]/i)) return n.icon; /* emoji already */
-    var meta = TYPE_META[n.type];
-    return meta ? meta.icon : '&#128276;';
-  }
-
-  /* ── SEED DATA ───────────────────────────────────────────── */
-  function seed(){
-    if(get().length) return;
-    var now = Date.now();
-    var name = userName();
-    var items = [
-      /* orders */
-      {id:'N001',type:'order_placed',heading:'Order #ORD-7821 placed',sub:'Your order for 3 items has been confirmed. Payment received.',ts:now-4*60000,read:false,link:'track.html'},
-      {id:'N002',type:'order_shipped',heading:'Order #ORD-7821 is on the way',sub:'Your package has been picked up by the courier and is heading to you.',ts:now-30*60000,read:false,link:'track.html'},
-      {id:'N003',type:'order_delivered',heading:'Order #ORD-7788 delivered',sub:'Your order was delivered successfully. How was your experience?',ts:now-2*86400000,read:true,link:'profile.html?tab=orders'},
-      /* deliveries */
-      {id:'N004',type:'delivery_update',heading:'Driver is 2 km away',sub:'Brian is on a boda boda heading to your location. ETA: 6 minutes.',ts:now-8*60000,read:false,link:'track.html'},
-      /* rides */
-      {id:'N005',type:'ride_accepted',heading:'Driver accepted your ride',sub:'Peter (Toyota Corolla, KCG 421W) is on the way to pick you up.',ts:now-3*60000,read:false,link:'track.html'},
-      {id:'N006',type:'ride_arrived',heading:'Your driver has arrived',sub:'Peter is at your pickup location. Please come out within 5 minutes.',ts:now-60000,read:false,link:'track.html'},
-      /* appointments */
-      {id:'N007',type:'appointment_reminder',heading:'Appointment reminder: Dr. Ouma',sub:'You have an appointment tomorrow at 10:00 AM at Aga Khan Hospital.',ts:now-3600000,read:false,link:'services.html'},
-      {id:'N008',type:'appointment_confirmed',heading:'Booking confirmed: Plumber at 2 PM',sub:'John Mwangi (Licensed Plumber) confirmed your appointment for today.',ts:now-5*3600000,read:true,link:'services.html'},
-      /* applications */
-      {id:'N009',type:'application_received',heading:'New application for your job post',sub:'3 new applicants for "Delivery Driver — Nairobi CBD". Review them now.',ts:now-90*60000,read:false,link:'seller.html?tab=applications'},
-      {id:'N010',type:'application_accepted',heading:'Your application was accepted!',sub:'Congratulations '+name+'! QuickMart has accepted your delivery driver application.',ts:now-4*3600000,read:false,link:'profile.html'},
-      /* community */
-      {id:'N011',type:'community_reply',heading:'Jane replied to your post',sub:'"I totally agree! The market in Gikomba has great deals..."',ts:now-45*60000,read:false,link:'community.html'},
-      {id:'N012',type:'community_like',heading:'5 people liked your post',sub:'Your post "Best local mangoes in Nairobi?" is getting attention.',ts:now-2*3600000,read:true,link:'community.html'},
-      /* promotions & wallet */
-      {id:'N013',type:'promotion',heading:'Flash sale: 50% off Electronics today only',sub:'Samsung, Xiaomi, JBL and more — limited stock. Ends at midnight.',ts:now-15*60000,read:false,link:'category.html?cat=electronics'},
-      {id:'N014',type:'wallet_credit',heading:'KES 500 added to your wallet',sub:'Referral bonus credited. Use it on your next order at checkout.',ts:now-6*3600000,read:true,link:'profile.html?tab=wallet'},
-      {id:'N015',type:'verification_approved',heading:'Business verified!',sub:'Your SOKONI seller account is now verified. Display your badge with pride.',ts:now-86400000,read:true,link:'profile.html'}
-    ];
-    save(items);
-  }
-
-  /* ── RENDER ──────────────────────────────────────────────── */
-  function unreadCount(arr, filter){
-    var filtered = (filter && filter!=='all') ? arr.filter(function(n){ return resolveCategory(n)===filter; }) : arr;
-    return filtered.filter(function(n){ return !n.read; }).length;
-  }
-
-  function updateBadge(arr){
-    var count = unreadCount(arr,'all');
-    var badge = document.getElementById('unreadBadge');
-    if(!badge) return;
-    badge.textContent = count > 99 ? '99+' : String(count);
-    badge.className = 'unread-badge'+(count>0?' visible':'');
-    /* Update tab dots */
-    document.querySelectorAll('.notif-tab').forEach(function(tab){
-      var f = tab.getAttribute('data-filter');
-      var hasUnread = (f==='all') ? count>0 : unreadCount(arr,f)>0;
-      tab.classList.toggle('has-unread', hasUnread);
+    /* Sidebar active state */
+    document.querySelectorAll('.nc-sidebar-item').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.cat === cat);
     });
+    /* Mobile tabs */
+    document.querySelectorAll('.nc-mob-tab').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.cat === cat);
+    });
+
+    document.getElementById('nc-history-page').classList.remove('hidden');
+    document.getElementById('nc-prefs-page').classList.remove('visible');
+
+    /* Update title */
+    var meta = (window.SokoniNotifEngine && window.SokoniNotifEngine.CATEGORIES[cat]) || { label: cat };
+    document.getElementById('nc-toolbar-title').textContent = (meta.icon||'') + ' ' + (meta.label || cat);
+
+    _render();
   }
 
-  function buildCard(n){
-    var cat  = resolveCategory(n);
-    var icon = resolveIcon(n);
-    var meta = TYPE_META[n.type] || {};
-    var action = n.action || meta.action || null;
-    var link   = n.link   || meta.link   || 'index.html';
-    var ts     = n.ts || n.createdAt || Date.now();
-    var timeStr = timeAgo(ts);
-
-    var footerHtml = '<div class="notif-footer">'+
-      '<span class="notif-time">'+timeStr+'</span>'+
-      (action ? '<button class="notif-action" onclick="event.stopPropagation();SokoniNotifs.openNotif(\''+n.id+'\',\''+encodeURIComponent(link)+'\')">'+action+'</button>' : '')+
-    '</div>';
-
-    return '<div class="notif-item'+(n.read?'':' unread')+'" id="notif-'+n.id+'" onclick="SokoniNotifs.tapNotif(\''+n.id+'\',\''+encodeURIComponent(link)+'\')" role="button" tabindex="0">'+
-      '<div class="notif-dot-outer"><div class="notif-dot"></div></div>'+
-      '<div class="notif-icon '+cat+'">'+icon+'</div>'+
-      '<div class="notif-body">'+
-        '<div class="notif-heading">'+escHtml(n.heading||n.title||'')+'</div>'+
-        '<div class="notif-sub">'+escHtml(n.sub||n.body||'')+'</div>'+
-        footerHtml+
-      '</div>'+
-    '</div>';
+  function _selectPreferences() {
+    _activePage = 'preferences';
+    document.querySelectorAll('.nc-sidebar-item').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.page === 'preferences');
+    });
+    document.querySelectorAll('.nc-mob-tab').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.page === 'preferences');
+    });
+    document.getElementById('nc-history-page').classList.add('hidden');
+    document.getElementById('nc-prefs-page').classList.add('visible');
+    _buildPrefRows();
+    _applyPrefs();
   }
 
-  function escHtml(s){
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  /* ── Wire sidebar and mobile tabs ── */
+  document.getElementById('nc-sidebar').addEventListener('click', function(e) {
+    var item = e.target.closest('.nc-sidebar-item');
+    if (!item) return;
+    if (item.dataset.page === 'preferences') { _selectPreferences(); return; }
+    if (item.dataset.cat) _selectCategory(item.dataset.cat);
+  });
+  document.getElementById('nc-mobile-tabs').addEventListener('click', function(e) {
+    var btn = e.target.closest('.nc-mob-tab');
+    if (!btn) return;
+    if (btn.dataset.page === 'preferences') { _selectPreferences(); return; }
+    if (btn.dataset.cat) _selectCategory(btn.dataset.cat);
+  });
 
-  function _dateGroup(ts){
-    var now = Date.now();
-    var diff = now - (ts || now);
-    if(diff < 86400000)                          return 'Today';
-    if(diff < 2*86400000)                        return 'Yesterday';
-    if(diff < 7*86400000)                        return 'This Week';
-    if(diff < 30*86400000)                       return 'This Month';
-    return 'Older';
-  }
+  /* ── Toolbar buttons ── */
+  document.getElementById('nc-mark-all-btn').addEventListener('click', function() {
+    var eng = window.SokoniNotifEngine;
+    if (!eng) return;
+    eng.markAllRead(_activeCategory !== 'all' ? _activeCategory : null).then(_render);
+  });
+  document.getElementById('nc-archive-all-btn').addEventListener('click', function() {
+    if (!confirm('Archive all visible notifications?')) return;
+    var eng = window.SokoniNotifEngine;
+    if (!eng) return;
+    eng.archiveAll().then(_render);
+  });
+  document.getElementById('nc-clear-read-btn').addEventListener('click', function() {
+    if (!confirm('Delete all read notifications? This cannot be undone.')) return;
+    var eng = window.SokoniNotifEngine;
+    if (!eng) return;
+    var items = eng.getAll({ category: _activeCategory, grouped: false });
+    var reads = items.filter(function(n) { return n.read && !n.pinned; });
+    Promise.all(reads.map(function(n) { return eng.delete(n.id); })).then(_render);
+  });
 
-  var _GROUP_ORDER = ['Today','Yesterday','This Week','This Month','Older'];
+  /* ── Filters ── */
+  document.getElementById('nc-search').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var val = this.value.trim();
+    _searchTimer = setTimeout(function() { _searchTerm = val; _render(); }, 200);
+  });
+  document.getElementById('nc-filter-priority').addEventListener('change', function() {
+    _filterPriority = this.value; _render();
+  });
+  document.getElementById('nc-filter-read').addEventListener('change', function() {
+    _filterRead = this.value; _render();
+  });
 
-  function render(){
-    var all = get();
-    updateBadge(all);
-    var f = activeFilter;
-    var filtered = (f && f!=='all') ? all.filter(function(n){ return resolveCategory(n)===f; }) : all;
-    /* sort newest first */
-    filtered.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
-
-    var c = document.getElementById('notifContainer');
-    if(!c) return;
-
-    if(!filtered.length){
-      var emptyIcons = {wallet:'&#128179;',system:'&#9881;&#65039;',orders:'&#128722;',deliveries:'&#128667;',rides:'&#128663;',appointments:'&#128197;',applications:'&#128232;',community:'&#128172;'};
-      var msg = f==='all' ? "You're all caught up! &#127881;" : 'No '+f+' notifications yet.';
-      var sub = f==='all' ? "We'll alert you about orders, rides, deals and more." : "Switch to 'All' to see everything.";
-      c.innerHTML =
-        '<div class="notif-empty">'+
-          '<div class="notif-empty-icon">'+(emptyIcons[f]||'&#128276;')+'</div>'+
-          '<div class="notif-empty-title">'+msg+'</div>'+
-          '<div class="notif-empty-sub">'+sub+'</div>'+
-          ('Notification' in window && Notification.permission!=='granted' ?
-            '<button class="notif-enable-btn" onclick="SokoniNotifs.enablePush()">&#128276; Enable Push Notifications</button>' : '')+
-        '</div>';
+  /* ── Render list ── */
+  function _render() {
+    var wrap = document.getElementById('nc-list-wrap');
+    var eng  = window.SokoniNotifEngine;
+    if (!eng) {
+      wrap.innerHTML = '<div class="nc-empty"><div class="nc-empty-icon">🔔</div><div class="nc-empty-title">Loading…</div></div>';
       return;
     }
 
-    /* Group by date bucket */
-    var groups = {};
-    filtered.forEach(function(n){
-      var g = _dateGroup(n.ts || n.createdAt || Date.now());
-      if(!groups[g]) groups[g] = [];
-      groups[g].push(n);
+    var opts = {
+      category:    _activeCategory,
+      search:      _searchTerm,
+      priority:    _filterPriority,
+      grouped:     true,
+      archivedOnly: _activeCategory === 'archived'
+    };
+    if (_filterRead === 'unread') opts.unreadOnly = true;
+
+    var items = eng.getAll(opts);
+
+    if (!items.length) {
+      wrap.innerHTML = '<div class="nc-empty">' +
+        '<div class="nc-empty-icon">✅</div>' +
+        '<div class="nc-empty-title">' + (_searchTerm ? 'No results' : 'All caught up!') + '</div>' +
+        '<div class="nc-empty-sub">' + (_searchTerm ? 'Try a different search term' : 'No notifications in this category') + '</div>' +
+      '</div>';
+      return;
+    }
+
+    /* Group by date */
+    var today     = new Date(); today.setHours(0,0,0,0);
+    var yesterday = new Date(today - 86400000);
+    var groups    = {};
+    var order     = [];
+
+    items.forEach(function(n) {
+      var d = new Date(n.createdAt || Date.now()); d.setHours(0,0,0,0);
+      var label;
+      if (d >= today)     { label = 'Today'; }
+      else if (d >= yesterday) { label = 'Yesterday'; }
+      else { label = d.toLocaleDateString('en-KE', { weekday:'long', month:'short', day:'numeric' }); }
+      if (!groups[label]) { groups[label] = []; order.push(label); }
+      groups[label].push(n);
     });
 
-    var html = '<div class="notif-list">';
-    _GROUP_ORDER.forEach(function(label){
-      if(!groups[label] || !groups[label].length) return;
-      html += '<div class="section-label">'+label+'</div>';
-      html += groups[label].map(buildCard).join('');
-    });
-    html += '</div>';
-    c.innerHTML = html;
-    _attachSwipeHandlers(c);
-  }
-
-  /* ── SWIPE-TO-DELETE HANDLER ──────────────────────────────── */
-  function dismiss(id){
-    var all = get().filter(function(n){ return n.id !== id; });
-    save(all);
-    var el = document.getElementById('notif-'+id);
-    if(el){ el.setAttribute('data-deleting','1'); setTimeout(function(){ el.remove(); updateBadge(get()); }, 320); }
-    else { render(); }
-  }
-
-  function _attachSwipeHandlers(container){
-    var items = container.querySelectorAll('.notif-item');
-    items.forEach(function(item){
-      /* Inject delete background layer */
-      if(!item.querySelector('.swipe-delete-bg')){
-        var bg = document.createElement('div');
-        bg.className = 'swipe-delete-bg';
-        bg.innerHTML = '🗑';
-        item.insertBefore(bg, item.firstChild);
-      }
-
-      var startX=0, startY=0, curX=0, isSwipe=false, lockAxis=false;
-      var THRESHOLD = 80; /* px to trigger delete */
-
-      function onStart(clientX, clientY){
-        startX=clientX; startY=clientY; curX=0; isSwipe=false; lockAxis=false;
-        item.style.transition='none';
-      }
-      function onMove(clientX, clientY){
-        var dx=clientX-startX, dy=clientY-startY;
-        if(!lockAxis){ lockAxis=true; isSwipe=Math.abs(dx)>Math.abs(dy)*1.5; }
-        if(!isSwipe) return;
-        if(dx>0) dx=0; /* left only */
-        curX=dx;
-        item.style.transform='translateX('+dx+'px)';
-        var ratio=Math.min(1,Math.abs(dx)/THRESHOLD);
-        var bg=item.querySelector('.swipe-delete-bg');
-        if(bg) bg.style.opacity=ratio;
-      }
-      function onEnd(){
-        item.style.transition='';
-        if(isSwipe && Math.abs(curX)>=THRESHOLD){
-          item.style.transform='translateX(-100%)';
-          var id=item.id.replace('notif-','');
-          setTimeout(function(){ dismiss(id); },220);
-        } else {
-          item.style.transform='';
-          var bg=item.querySelector('.swipe-delete-bg');
-          if(bg) bg.style.opacity=0;
-        }
-      }
-
-      /* Touch */
-      item.addEventListener('touchstart',function(e){onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
-      item.addEventListener('touchmove',function(e){onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
-      item.addEventListener('touchend',onEnd,{passive:true});
-
-      /* Mouse (desktop) */
-      item.addEventListener('mousedown',function(e){
-        if(e.button!==0) return;
-        onStart(e.clientX,e.clientY);
-        function mMove(e2){ onMove(e2.clientX,e2.clientY); e2.preventDefault(); }
-        function mUp(){ onEnd(); window.removeEventListener('mousemove',mMove); window.removeEventListener('mouseup',mUp); }
-        window.addEventListener('mousemove',mMove);
-        window.addEventListener('mouseup',mUp);
+    var html = '';
+    order.forEach(function(label) {
+      html += '<div class="nc-date-divider">' + esc(label) + '</div>';
+      groups[label].forEach(function(n) {
+        html += n.isGroup ? _groupHtml(n) : _cardHtml(n);
       });
     });
-  }
 
-  /* ── PUSH BANNER ─────────────────────────────────────────── */
-  function checkPushBanner(){
-    if(localStorage.getItem(BANNER_KEY)) return;
-    if(!('Notification' in window)) return;
-    if(Notification.permission === 'granted') return;
-    var banner = document.getElementById('pushBanner');
-    if(banner) banner.style.display = 'flex';
-  }
+    wrap.innerHTML = html;
 
-  /* ── PUBLIC API ──────────────────────────────────────────── */
-  function setFilter(filter, btn){
-    activeFilter = filter;
-    document.querySelectorAll('.notif-tab').forEach(function(t){ t.classList.remove('active'); });
-    if(btn) btn.classList.add('active');
-    render();
-  }
-
-  function tapNotif(id, encodedLink){
-    var all = get();
-    var n = all.find(function(x){ return x.id===id; });
-    if(n && !n.read){
-      n.read=true;
-      save(all);
-      render();
-      _fsMarkRead(id);  /* persist to Firestore so header badge clears */
-    }
-    setTimeout(function(){ window.location.href = decodeURIComponent(encodedLink); }, 120);
-  }
-
-  /* called from action button — mark read + navigate */
-  function openNotif(id, encodedLink){
-    var all = get();
-    var n = all.find(function(x){ return x.id===id; });
-    if(n && !n.read){
-      n.read=true;
-      save(all);
-      _fsMarkRead(id);
-    }
-    window.location.href = decodeURIComponent(encodedLink);
-  }
-
-  function markAllRead(){
-    var all = get();
-    var unreadIds = all.filter(function(n){ return !n.read; }).map(function(n){ return n.id; });
-    all.forEach(function(n){ n.read=true; });
-    save(all);
-    render();
-    _fsMarkAllRead(unreadIds);  /* batch-update Firestore so header badge clears */
-  }
-
-  function enablePush(){
-    if(!('Notification' in window)){ var b=document.getElementById('pushBanner'); if(b){ b.querySelector('.push-banner-text').innerHTML='<strong>Not supported</strong> Push notifications are not available in this browser.'; b.style.display='flex'; } return; }
-    Notification.requestPermission().then(function(p){
-      var banner = document.getElementById('pushBanner');
-      if(banner) banner.style.display = 'none';
-      if(p==='granted'){
-        /* Sync with window.sokoniNotif if present */
-        if(window.sokoniNotif && typeof window.sokoniNotif.sync === 'function'){
-          window.sokoniNotif.sync();
-        }
-        new Notification('SOKONI Notifications Enabled!',{
-          body:'You will now receive real-time alerts for orders, rides and deals.',
-          icon:'assets/logosokoni.png'
+    /* Wire card events */
+    wrap.querySelectorAll('.nc-card').forEach(function(card) {
+      card.addEventListener('click', function(e) {
+        if (e.target.closest('.nc-act-btn')) return;
+        var id = card.dataset.id;
+        if (id && eng) eng.markRead(id).then(function() { card.classList.remove('unread'); var dot = card.querySelector('.nc-unread-dot'); if(dot) dot.remove(); });
+        var url = card.dataset.url;
+        if (url && url !== 'notifications.html') window.location.href = url;
+      });
+      card.querySelectorAll('.nc-act-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          _handleAction(btn.dataset.action, card.dataset.id, card.dataset.url, card);
         });
-        render(); /* re-render to remove "Enable Push" button from empty state */
-      }
+      });
+    });
+
+    /* Wire group expand */
+    wrap.querySelectorAll('[data-group-expand]').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        /* Expand not shown on full page — just navigate to that category */
+        var cat = btn.dataset.groupCat;
+        if (cat) _selectCategory(cat);
+      });
     });
   }
 
-  function dismissPushBanner(){
-    localStorage.setItem(BANNER_KEY,'1');
-    var banner = document.getElementById('pushBanner');
-    if(banner) banner.style.display='none';
+  function _cardHtml(n) {
+    var eng = window.SokoniNotifEngine;
+    var time = eng ? eng.formatTime(n.createdAt) : '';
+    var cats = (eng && eng.CATEGORIES[n.category]) || {};
+    var prio = n.priority || 'normal';
+    var prioLabel = { critical:'Critical', high:'High', normal:'', low:'Low', silent:'' }[prio] || '';
+
+    var acts = (n.actions||[]).slice(0,3).map(function(a) {
+      var cls = (a.id==='view'||a.id==='approve'||a.id==='accept') ? ' primary' : (a.id==='delete'||a.id==='reject') ? ' danger' : '';
+      return '<button class="nc-act-btn' + cls + '" data-action="' + esc(a.id) + '">' + esc((a.label||'')) + '</button>';
+    }).join('');
+
+    return '<div class="nc-card' + (n.read?'':' unread') + ' priority-' + esc(prio) + '" role="listitem" data-id="' + esc(n.id) + '" data-url="' + esc(n.actionUrl||'notifications.html') + '">' +
+      '<div class="nc-card-icon">' + esc(n.icon||'🔔') + '</div>' +
+      '<div class="nc-card-body">' +
+        '<div class="nc-card-title">' + esc(n.title) + '</div>' +
+        '<div class="nc-card-text">' + esc(n.body) + '</div>' +
+        '<div class="nc-card-meta">' +
+          '<span>' + time + '</span>' +
+          (cats.label ? '<span class="nc-card-cat">' + esc(cats.label) + '</span>' : '') +
+          (prioLabel ? '<span class="nc-card-priority ' + esc(prio) + '">' + esc(prioLabel) + '</span>' : '') +
+        '</div>' +
+        (acts ? '<div class="nc-card-actions">' + acts + '</div>' : '') +
+      '</div>' +
+      '<div class="nc-card-right">' +
+        '<span class="nc-card-time">' + time + '</span>' +
+        (n.read ? '' : '<div class="nc-unread-dot"></div>') +
+      '</div>' +
+    '</div>';
   }
 
-  /* ── INGEST EXTERNAL NOTIFICATION (for push / Firestore) ── */
-  function ingest(notifObj){
-    var all = get();
-    var exists = all.find(function(n){ return n.id===notifObj.id; });
-    if(!exists){
-      var ts = notifObj.ts || (notifObj.createdAt && notifObj.createdAt.seconds ? notifObj.createdAt.seconds*1000 : Date.now());
-      all.unshift({
-        id:      notifObj.id || ('fs-'+Date.now()),
-        type:    notifObj.type    || 'system',
-        heading: notifObj.heading || notifObj.title || '',
-        sub:     notifObj.sub     || notifObj.body  || '',
-        link:    notifObj.link    || 'index.html',
-        action:  notifObj.action  || null,
-        ts:      ts,
-        read:    notifObj.read    || false,
-        _fs:     true
-      });
-      save(all);
-      render();
+  function _groupHtml(g) {
+    var eng  = window.SokoniNotifEngine;
+    var time = eng ? eng.formatTime(g.createdAt) : '';
+    return '<div class="nc-card unread priority-' + esc(g.priority||'normal') + '" role="listitem" style="background:rgba(113,255,0,0.025)">' +
+      '<div class="nc-card-icon" style="background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2)">' + esc(g.icon||'🔔') + '</div>' +
+      '<div class="nc-card-body">' +
+        '<div class="nc-card-title">' + esc(g.title) + '</div>' +
+        '<div class="nc-card-text">' + esc(g.body||'') + '</div>' +
+        '<div class="nc-card-meta"><span>' + time + '</span></div>' +
+        '<div class="nc-card-actions">' +
+          '<button class="nc-act-btn primary" data-group-expand="1" data-group-cat="' + esc(g.category) + '">View All ' + g.count + '</button>' +
+          '<button class="nc-act-btn" data-action="mark_group_read" data-group-id="' + esc(g.id) + '">Mark All Read</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="nc-card-right"><span class="nc-card-time">' + time + '</span></div>' +
+    '</div>';
+  }
+
+  function _handleAction(action, id, url, card) {
+    var eng = window.SokoniNotifEngine;
+    if (!eng || !id) return;
+    switch(action) {
+      case 'view':
+        eng.markRead(id); if (url && url!=='notifications.html') window.location.href=url; break;
+      case 'mark_read':
+        eng.markRead(id).then(function() { card.classList.remove('unread'); var d=card.querySelector('.nc-unread-dot'); if(d) d.remove(); }); break;
+      case 'archive':
+        eng.archive(id).then(function() { card.style.opacity='0'; setTimeout(function(){if(card.parentNode)card.parentNode.removeChild(card);},200); }); break;
+      case 'delete':
+        eng.delete(id).then(function() { card.style.opacity='0'; setTimeout(function(){if(card.parentNode)card.parentNode.removeChild(card);},200); }); break;
+      case 'pin':
+        eng.pin(id).then(_render); break;
+      default:
+        eng.markRead(id); if (url && url!=='notifications.html') window.location.href=url+'?action='+action; break;
     }
   }
 
-  /* ── FIRESTORE REAL-TIME LISTENER + READ WRITES ─────────── */
-  var _fsUnsub  = null;
-  var _fsDb     = null;  /* shared db ref for read-marking */
-  var _fsUid    = null;  /* shared uid ref for read-marking */
-
-  /* Mark a single notification doc as read in Firestore (best-effort) */
-  function _fsMarkRead(id){
-    if(!_fsDb || !id || id.startsWith('local-')) return;
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
-      .then(function(fs){
-        fs.updateDoc(fs.doc(_fsDb,'notifications',id),{read:true}).catch(function(){});
-      }).catch(function(){});
+  /* ── Badge updates ── */
+  function _updateBadges(counts) {
+    counts = counts || {};
+    var cats = ['all','unread','important','orders','payments','messages','deliveries',
+                'marketplace','bookings','inventory','pos','employees','finance',
+                'business','security','verification','support','ai','promotions','updates','system'];
+    cats.forEach(function(cat) {
+      var el = document.getElementById('nc-sb-' + cat);
+      if (!el) return;
+      var n = counts[cat] || 0;
+      el.textContent = n > 99 ? '99+' : String(n);
+      el.style.display = n > 0 ? 'inline-flex' : 'none';
+    });
   }
 
-  /* Batch-mark all unread notifications as read in Firestore */
-  function _fsMarkAllRead(ids){
-    if(!_fsDb || !ids || !ids.length) return;
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
-      .then(function(fs){
-        var batch = fs.writeBatch(_fsDb);
-        ids.forEach(function(id){
-          if(!id || id.startsWith('local-')) return;
-          batch.update(fs.doc(_fsDb,'notifications',id),{read:true});
+  /* ── Preferences ── */
+  function _buildPrefRows() {
+    var eng   = window.SokoniNotifEngine;
+    var wrap  = document.getElementById('nc-cat-prefs');
+    if (!eng || !wrap || wrap.children.length > 0) return;
+    var cats  = eng.PREF_CATEGORIES;
+    var meta  = eng.CATEGORIES;
+    var prefs = eng.prefs.get();
+    var html  = '';
+    cats.forEach(function(cat) {
+      var m = meta[cat] || { icon:'🔔', label:cat };
+      var chk = prefs.categories && prefs.categories[cat] !== false ? 'checked' : '';
+      html += '<div class="nc-pref-row">' +
+        '<span class="nc-pref-icon">' + esc(m.icon) + '</span>' +
+        '<div class="nc-pref-info"><div class="nc-pref-label">' + esc(m.label) + '</div></div>' +
+        '<label class="sk-toggle" aria-label="Toggle ' + esc(m.label) + ' notifications">' +
+          '<input type="checkbox" data-cat="' + esc(cat) + '" ' + chk + '>' +
+          '<span class="sk-toggle-slider"></span>' +
+        '</label>' +
+      '</div>';
+    });
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('input[data-cat]').forEach(function(chk) {
+      chk.addEventListener('change', function() {
+        if (eng) eng.prefs.setCategoryEnabled(this.dataset.cat, this.checked);
+      });
+    });
+  }
+
+  function _applyPrefs() {
+    var eng = window.SokoniNotifEngine;
+    if (!eng) return;
+    var prefs = eng.prefs.get();
+    var gt = document.getElementById('nc-global-toggle');
+    if (gt) gt.checked = !!prefs.globalEnabled;
+    var dt = document.getElementById('nc-dnd-toggle');
+    if (dt) dt.checked = !!(prefs.dnd && prefs.dnd.enabled);
+    var ds = document.getElementById('nc-dnd-start');
+    var de = document.getElementById('nc-dnd-end');
+    if (ds && prefs.dnd) ds.value = prefs.dnd.startTime || '22:00';
+    if (de && prefs.dnd) de.value = prefs.dnd.endTime   || '07:00';
+    var dc = document.getElementById('nc-dnd-critical');
+    if (dc && prefs.dnd) dc.checked = prefs.dnd.allowCritical !== false;
+  }
+
+  /* Wire preference controls */
+  document.getElementById('nc-global-toggle').addEventListener('change', function() {
+    var eng = window.SokoniNotifEngine;
+    if (eng) eng.prefs.setGlobalEnabled(this.checked);
+  });
+  document.getElementById('nc-dnd-toggle').addEventListener('change', function() {
+    var eng = window.SokoniNotifEngine;
+    if (eng) eng.prefs.setDND({ enabled: this.checked });
+    document.getElementById('nc-dnd-time-row').style.opacity = this.checked ? '1' : '0.4';
+  });
+  document.getElementById('nc-dnd-critical').addEventListener('change', function() {
+    var eng = window.SokoniNotifEngine;
+    if (eng) eng.prefs.setDND({ allowCritical: this.checked });
+  });
+  function _saveDNDTimes() {
+    var eng = window.SokoniNotifEngine;
+    var s = document.getElementById('nc-dnd-start').value;
+    var e = document.getElementById('nc-dnd-end').value;
+    if (eng) eng.prefs.setDND({ startTime: s, endTime: e });
+  }
+  document.getElementById('nc-dnd-start').addEventListener('change', _saveDNDTimes);
+  document.getElementById('nc-dnd-end').addEventListener('change', _saveDNDTimes);
+
+  document.getElementById('nc-enable-all-btn').addEventListener('click', function() {
+    var eng = window.SokoniNotifEngine;
+    if (!eng) return;
+    eng.prefs.save({ globalEnabled: true });
+    eng.PREF_CATEGORIES.forEach(function(c) { eng.prefs.setCategoryEnabled(c, true); });
+    _applyPrefs();
+    _buildPrefRows();
+    /* Rebuild pref rows */
+    document.getElementById('nc-cat-prefs').innerHTML = '';
+    _buildPrefRows();
+    if (window.SokoniUI) window.SokoniUI.toast('All notifications enabled', 'success');
+  });
+  document.getElementById('nc-disable-all-btn').addEventListener('click', function() {
+    var eng = window.SokoniNotifEngine;
+    if (!eng) return;
+    eng.prefs.save({ globalEnabled: false });
+    eng.PREF_CATEGORIES.forEach(function(c) { eng.prefs.setCategoryEnabled(c, false); });
+    _applyPrefs();
+    document.getElementById('nc-cat-prefs').innerHTML = '';
+    _buildPrefRows();
+    if (window.SokoniUI) window.SokoniUI.toast('All notifications disabled. Critical security alerts still active.', 'info');
+  });
+
+  document.getElementById('nc-pause-btns').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-pause]');
+    if (!btn) return;
+    var eng = window.SokoniNotifEngine;
+    if (eng) {
+      eng.prefs.pauseFor(parseInt(btn.dataset.pause));
+      if (window.SokoniUI) window.SokoniUI.toast('Paused for ' + btn.textContent, 'info');
+    }
+  });
+  document.getElementById('nc-resume-btn').addEventListener('click', function() {
+    var eng = window.SokoniNotifEngine;
+    if (eng) { eng.prefs.pauseFor(0); if (window.SokoniUI) window.SokoniUI.toast('Notifications resumed', 'success'); }
+  });
+
+  /* ── Boot sequence ── */
+  function _boot() {
+    /* Deep-link to preferences via #preferences hash */
+    if (window.location.hash === '#preferences') {
+      _selectPreferences();
+    } else {
+      _selectCategory('all');
+    }
+
+    /* Wait for engine */
+    function _tryWire() {
+      var eng = window.SokoniNotifEngine;
+      if (eng) {
+        _render();
+        _updateBadges(eng.getUnreadCounts());
+        eng.on('update', function(data) {
+          _render();
+          _updateBadges(data.unreadCounts);
         });
-        batch.commit().catch(function(){});
-      }).catch(function(){});
-  }
-
-  function _startFirestoreListener(userUid){
-    if(_fsUnsub) return; /* already listening */
-    _fsUid = userUid;
-    (async function(){
-      try{
-        var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-        var {getFirestore,collection,query,where,orderBy,limit,onSnapshot} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-        var cfg = {apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',authDomain:'sokoni-aeb26.firebaseapp.com',
-          projectId:'sokoni-aeb26',storageBucket:'sokoni-aeb26.firebasestorage.app',
-          messagingSenderId:'24799054989',appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4'};
-        var app = getApps().length ? getApps()[0] : initializeApp(cfg);
-        var db  = getFirestore(app);
-        _fsDb = db;  /* store for read-marking */
-        /* Listen to notifications collection for this user, newest 50 */
-        var q = query(
-          collection(db,'notifications'),
-          where('targetUid','==',userUid),
-          orderBy('createdAt','desc'),
-          limit(50)
-        );
-        _fsUnsub = onSnapshot(q, function(snap){
-          snap.docChanges().forEach(function(change){
-            if(change.type === 'added' || change.type === 'modified'){
-              var d = change.doc.data();
-              ingest({
-                id:      change.doc.id,
-                type:    d.type    || 'system',
-                heading: d.heading || d.title  || '',
-                sub:     d.sub     || d.body   || '',
-                link:    d.link    || 'index.html',
-                action:  d.action  || null,
-                ts:      d.createdAt && d.createdAt.seconds ? d.createdAt.seconds*1000 : Date.now(),
-                read:    d.read    || false,
-              });
-            }
-          });
-        }, function(err){ console.warn('[SokoniNotifs] Firestore listener error:', err.message); });
-      } catch(e){ console.warn('[SokoniNotifs] Could not start Firestore listener:', e.message); }
-    })();
-  }
-
-  /* ── INIT ─────────────────────────────────────────────────── */
-  function init(){
-    seed();
-    render();
-    checkPushBanner();
-
-    /* Sync push permission status */
-    if(window.sokoniNotif && typeof window.sokoniNotif.permissionStatus === 'function'){
-      window.sokoniNotif.permissionStatus();
+      } else {
+        setTimeout(_tryWire, 400);
+      }
     }
-
-    /* Start real-time Firestore listener once auth is ready */
-    function _tryStartListener(){
-      try{
-        var u = JSON.parse(localStorage.getItem('sokoniUser')||'{}');
-        if(u && u.uid){ _startFirestoreListener(u.uid); return; }
-      } catch(e){}
-    }
-    _tryStartListener();
-    document.addEventListener('sokoniAuthReady', function(e){
-      if(e.detail && e.detail.uid) _startFirestoreListener(e.detail.uid);
-    });
+    _tryWire();
   }
 
-  return {
-    init:              init,
-    setFilter:         setFilter,
-    tapNotif:          tapNotif,
-    openNotif:         openNotif,
-    markAllRead:       markAllRead,
-    enablePush:        enablePush,
-    dismissPushBanner: dismissPushBanner,
-    ingest:            ingest,
-    render:            render,
-    dismiss:           dismiss
-  };
-})();
+  if (document.readyState !== 'loading') { _boot(); }
+  else { document.addEventListener('DOMContentLoaded', _boot, { once: true }); }
 
-document.addEventListener('DOMContentLoaded', function(){ SokoniNotifs.init(); });
-if(document.readyState !== 'loading'){ SokoniNotifs.init(); }
-
-/* ── Inbox unread count badge in the bell nav icon ── */
-window.addEventListener('sokoniInboxUnread', function(e){
-  var count = (e.detail||{}).count||0;
-  var badge = document.getElementById('unreadBadge');
-  if(!badge) return;
-  var all = SokoniNotifs.render && count>0;
-  if(count>0){
-    badge.textContent = count>99?'99+':String(count);
-    badge.className = 'unread-badge visible';
-  }
-});
-
-/* ── New message → inject as notification ── */
-window.addEventListener('sokoniNewMessage', function(e){
-  var d = e.detail||{};
-  var msg = d.msg||{};
-  if(!msg.senderId) return;
-  SokoniNotifs.ingest({
-    id:      'msg-'+d.convId+'-'+(msg.ts||Date.now()),
-    type:    'community_reply',
-    heading: 'New message from '+(msg.senderName||'Someone'),
-    sub:     msg.text ? msg.text.substring(0,80) : '[Image]',
-    link:    'messages.html?convo='+encodeURIComponent(d.convId||''),
-    action:  'Reply',
-    ts:      msg.ts||Date.now(),
-    read:    false
-  });
-});
-</script>
-
-<!-- ── FIRESTORE REAL-TIME LISTENER ─────────────────────────────── -->
-<script type="module">
-import SokoniDB from './sokoni-db.js';
-(function(){
-  var user = {};
-  try{ user = JSON.parse(localStorage.getItem('sokoniUser')||'{}'); }catch(e){}
-  var uid = user.uid || null;
-  if(!uid) return;
-
-  SokoniDB.listenNotifications(uid, function(fsNotifs){
-    if(!fsNotifs || !fsNotifs.length) return;
-    fsNotifs.forEach(function(n){
-      SokoniNotifs.ingest({
-        id:      n.id || n._fsId,
-        type:    n.type    || 'system',
-        heading: n.heading || n.title  || '',
-        sub:     n.sub     || n.body   || '',
-        link:    n.link    || 'index.html',
-        action:  n.action  || null,
-        ts:      n.createdAt && n.createdAt.seconds ? n.createdAt.seconds*1000 : (n.ts || Date.now()),
-        read:    n.read    || false
-      });
-    });
-  });
 })();
 </script>
-<script src="demo-seed.js"></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="scroll-top.js" defer></script>
-<script src="nav-active.js" defer></script>
-<script src="analytics.js" defer></script>
-<script src="sw-register.js" defer></script>
-<script src="sokoni-security.js"></script>
-<script src="sokoni-guards.js"></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-notifications.js"></script>
 </body>
 </html>

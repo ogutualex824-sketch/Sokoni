@@ -262,6 +262,12 @@
   /* Layout manager — resolves floating element overlaps, sets CSS vars */
   _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
 
+  /* Notification engine — core real-time engine, preferences, grouping */
+  _injectAsset('script', { src: 'sokoni-notif-engine.js', defer: true }, 'sk-notif-engine-script');
+
+  /* Notification center — bell UI, slide-in panel, inline actions */
+  _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
+
   /* ── Pages where search bar is hidden (no benefit) ── */
   const NO_SEARCH = [
     'checkout.html', 'cart.html', 'track.html', 'messages.html',
@@ -329,11 +335,11 @@
       /* Actions */
       '<div id="sk-nav-actions">' +
 
-        /* Notifications */
-        '<a href="notifications.html" class="sk-nav-icon-btn" aria-label="Notifications" id="sk-notif-btn">' +
-          '<span aria-hidden="true">🔔</span>' +
+        /* Notifications — button opens slide-in panel; SokoniNotifCenter.attachBell() wires the rest */
+        '<button type="button" class="sk-nav-icon-btn" aria-label="Notifications" aria-expanded="false" aria-haspopup="dialog" id="sk-notif-btn">' +
+          '<span id="sk-notif-bell-icon" aria-hidden="true">🔔</span>' +
           '<span class="sk-badge" id="sk-notif-badge" role="status" aria-label="Unread notifications"></span>' +
-        '</a>' +
+        '</button>' +
 
         /* Messages */
         '<a href="messages.html" class="sk-nav-icon-btn" aria-label="Messages" id="sk-msg-btn">' +
@@ -561,21 +567,24 @@
       const app = getApps().length ? getApps()[0] : initializeApp(FB_CFG);
       const db  = getFirestore(app);
 
-      /* Unread notifications */
-      try {
-        onSnapshot(
-          query(collection(db, 'notifications'),
-            where('targetUid', '==', uid),
-            where('read', '==', false)),
-          function(snap) {
-            _setBadge('sk-notif-badge', snap.size);
-            /* Keep localStorage dot in sync for pages that read it */
-            if (snap.size > 0) localStorage.setItem('sokoniHasNotif', '1');
-            else localStorage.removeItem('sokoniHasNotif');
-          },
-          function() { /* silent fail — badge stays hidden */ }
-        );
-      } catch (e) {}
+      /* Unread notifications — delegate to SokoniNotifEngine when available.
+         Engine handles Firestore listener, cross-tab sync, badge updates itself.
+         This fallback fires only if engine hasn't loaded yet. */
+      if (!window.SokoniNotifEngine) {
+        try {
+          onSnapshot(
+            query(collection(db, 'notifications'),
+              where('targetUid', '==', uid),
+              where('read', '==', false)),
+            function(snap) {
+              _setBadge('sk-notif-badge', snap.size);
+              if (snap.size > 0) localStorage.setItem('sokoniHasNotif', '1');
+              else localStorage.removeItem('sokoniHasNotif');
+            },
+            function() {}
+          );
+        } catch (e) {}
+      }
 
       /* Unread messages — conversations where user is a participant,
          last message was sent by someone else, and unread > 0 */
@@ -646,7 +655,17 @@
     /* Wire search autocomplete */
     if (showSearch) _wireSearch();
 
-    /* Wire real-time counts */
+    /* Wire notification center bell — deferred until scripts load */
+    function _attachNotifCenter() {
+      if (window.SokoniNotifCenter) {
+        window.SokoniNotifCenter.attachBell(document.getElementById('sk-notif-btn'));
+      } else {
+        setTimeout(_attachNotifCenter, 300);
+      }
+    }
+    setTimeout(_attachNotifCenter, 200);
+
+    /* Wire real-time counts (fallback when notif engine not yet loaded) */
     _waitForAuth();
 
     /* Listen for cart/auth changes from other tabs */
