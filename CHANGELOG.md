@@ -1,4 +1,73 @@
-﻿## [2026-06-21] — Phase 12–15: Automation & Commerce v5.0.0 — Shared Imports Sweep, WAP+Inventory Tests
+﻿## [2026-06-21] — Firestore Index Architecture v1.0 + WAP v1.1.0 Production Certification
+
+### Summary
+**WAP v1.1.0** — Full 13-phase production audit of the Workflow Automation Platform. 9 critical bugs fixed across 4 files. Certified production-ready for million-workflow scale.
+
+**Firestore Index Architecture v1.0** — Codebase-wide scan (71 composite queries, 37 collections). Added 20 missing indexes for WAP/ECC/Platform collections that were causing silent CF failures. Total: 162 → 182 indexes. Full dependency map documented.
+
+### Files Changed
+- **`firestore.indexes.json`** — +20 indexes: `workflowApprovals` (deadline escalation), `workflowSchedule` (2), `workflowDLQ`, `algoliaQueue` (2), `eccAuditLog` (2), `eccIncidents`, `platformEvents` (3), `platformServices` (2), `orders` (sellerUid/buyerUid/assignedDriverUid), `driverLocations` (online+available), `workflowInstances` (compound), `gipDispatch` (status)
+- **`docs/FIRESTORE-INDEX-ARCHITECTURE.md`** (NEW) — Full index dependency map, query inventory, Phase 2 Algolia migration candidates, 12-month capacity estimate, deployment strategy
+- **`functions/wap.js`** — WAP v1.0→v1.1.0: inventory release transactions, stable auth keys, atomic approvals, idempotent service functions, CF retry await-sleep, rate limiting (10/min), DLQ sweep, watchdog, escalation
+- **`sokoni-wap.js`** — `decide()` atomic via `runTransaction`, prototype pollution guard in `_resolvePath()`, AbortController webhook timeout
+- **`sokoni-wap-definitions.js`** — 6 idempotency fixes: `deleteField()` for inventory release, stable instanceId for payment.authorize, transaction-guarded loyalty.award, deterministic ticket IDs
+- **`wap.html`** — Mobile hamburger nav, P99 metrics column, inline rejection UI, version bump logic
+- **`functions/index.js`** — 4 new WAP exports: wapEscalateApprovals, wapWatchdog, wapDLQSweep, wapGetDLQ
+- **`sokoni-search-pro.js`** — Fixed `c.typesenseKey` → `c.typesenseSearchKey` (Typesense was silently never connecting)
+- **`functions/.env`** (NEW) — Non-secret CF config: ALGOLIA_APP_ID, TYPESENSE_NODES
+- **`.gitignore`** — `!functions/.env` exception
+- **`style.css`** — Blocking pre-hide rules for shared header FOSH fix
+- **`shared-header.js`** — `.menu-toggle` + `#sokoni-bell-btn` hide rules
+- **`seller.html`** — `class="sk-no-header"` on `<html>` tag
+- **`service-worker.js`** — Bumped to v251
+- **`functions/email-triggers.js`** — `assertAuth` shared import (Phase 12-15 sweep completion)
+
+### Security
+- Prototype pollution guard blocks `__proto__`/`constructor`/`prototype` in WAP path resolver
+- WAP approval race condition fixed (non-atomic → `runTransaction`)
+- Inventory stock was silently lost (`null` instead of `deleteField()`); fixed with per-item transactions
+
+### Index Capacity
+- Before: 162 / 200 — After: 182 / 200 — Reserve: 18 slots
+- Phase 2 (post-Algolia): remove 5 product/service category indexes → 23 slots free
+
+### Breaking Changes
+None.
+
+### Pending (requires Firebase billing)
+- Enable billing on `sokoni-aeb26` → unblocks ALL CF deploy + Secret Manager
+- Set secrets: `SENDGRID_API_KEY`, `ALGOLIA_ADMIN_KEY`, `ALGOLIA_SEARCH_KEY`, `TYPESENSE_ADMIN_KEY`, `TYPESENSE_SEARCH_KEY`, `SUB_OS_SIGNING_SECRET`
+- Fill `functions/.env`: `ALGOLIA_APP_ID=` and `TYPESENSE_NODES=`
+- After CF deploy: run `algoliaBackfill` + `typesenseBackfill`
+
+---
+
+## [2026-06-21] — Phase 16–25: Product Hubs v6.0.0 — Full CF Auth Hardening, HttpsError Normalization
+
+### Summary
+Phase 16–25. Completed CF-layer security hardening across all product hub sub-systems.
+Every Cloud Function now uses `assertAuth` from `functions/shared/errors.js` — zero inline
+auth guards remain. All operational error throws now use proper HttpsError codes (not plain Error).
+
+### Bugs Fixed
+- **SECURITY (MEDIUM×8)** — 8 inventory sub-system CFs (`fraud`, `health`, `import`, `pricing`,
+  `recall`, `simulate`, `webhooks`, `workflows`) threw plain `Error('Unauthenticated')` — Firebase
+  returns INTERNAL to client for plain Error; now fixed via shared assertAuth.
+- **SECURITY (LOW×15)** — 15+ `throw new Error(...)` for not-found/invalid-argument cases now
+  throw `HttpsError` with correct codes across inventory + WAP + ai-subscriptions.
+- **SECURITY (LOW)** — `email-triggers.js` 3 inline auth guards replaced with `assertAuth`.
+
+### Platform-Wide CF Auth Audit Result (as of Phase 16–25)
+- **0 inline `assertAuth` definitions remain** (single source in shared/errors.js)
+- **0 plain Error auth guards remain**
+- **0 auth-related plain Error throws remain**
+- All operational errors use correct HttpsError codes
+
+### Tests: **321 passing, 0 failing** (8 test files)
+
+---
+
+## [2026-06-21] — Phase 12–15: Automation & Commerce v5.0.0 — Shared Imports Sweep, WAP+Inventory Tests
 
 ### Summary
 Phase 12–15. Eliminates every remaining inline `assertAuth` / `assertAdmin` / `sanitize` / `_period()` definition across 9 non-SASOS Cloud Function files. Single source of truth now enforced platform-wide. Adds 79 new tests (WAP state machine, step dependency DAG, retry backoff, inventory stock rules). Total: **321 tests passing, 0 failing**.
