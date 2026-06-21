@@ -1,4 +1,86 @@
-﻿## [2026-06-21] — AI Subscription Operating System (Sub-OS v1.0.0)
+﻿## [2026-06-21] — Navigation & Layout Stability Fix (v2.0)
+
+### Summary
+Resolved the "go to incognito mode" browser prompt and layout-breaking-on-swipe issues. Root causes identified and eliminated: (1) the SW registration lacked `updateViaCache: 'none'`, allowing browsers to HTTP-cache the SW file for up to 24 hours and blocking version updates; (2) the `controllerchange` event only reloaded pages when the user manually tapped Update, leaving users running stale page content under a new SW; (3) `* { -webkit-backface-visibility: hidden }` in mobile.css applied to every element, corrupting Android WebView compositing on swipe and causing layout breaking; (4) nav-active.js NAV_MAP was missing 70+ pages added in recent sprints; (5) duplicate `padding-bottom` media query at 767px conflicted with the canonical 768px rule.
+
+### Files Modified
+- **`sw-register.js`** — Added `updateViaCache: "none"` to SW registration; removed `_userRequestedUpdate` gate from `controllerchange` so page always reloads when a new SW takes control
+- **`nav-active.js`** — Complete rewrite v2.0: NAV_MAP expanded from 65 to 135 entries covering all pages; added wap.html, gip.html, subscription-os.html, admin-subscriptions.html, ai-subscriptions.html, creative-studio.html, inv-dashboard.html, inv-products.html, inv-product.html, all B2B pages, all service hub pages, all admin tools
+- **`mobile.css`** — Replaced `* { -webkit-backface-visibility: hidden }` (applied to ALL elements) with targeted selector covering only fixed-position nav and header composited layers; removed duplicate `@media (max-width: 767px)` padding-bottom rule
+- **`service-worker.js`** — Bumped to v248 to force cache invalidation on all devices
+
+### Security Implications
+None — pure client-side navigation and CSS fixes.
+
+### Performance Implications
+Removing `backface-visibility: hidden` from every DOM element reduces paint layer count and GPU memory pressure on mobile, especially on Android. Targeted application to only composited nav elements retains the scroll-jank benefit without the rendering cost.
+
+---
+
+## [2026-06-21] — Enterprise Control Center (ECC v1.0.0)
+
+### Summary
+Shipped the SOKONI Enterprise Control Center — the unified operational brain for the entire platform. Single dark-theme command center with 15 real-time sections: Executive Overview, Live Operations, Geo Command (GIP), Intelligence (EIP), Workflow Command (WAP), Payments, Inventory, SmartPOS, Search, Notifications, Support, Security, System Health, Incidents, and Audit Log. Full RBAC with 10 ECC roles. Immutable audit trail, incident lifecycle management, and scheduled health checks across all platform services.
+
+### Files Created
+- **`ecc.html`** — 15-section enterprise command center (dark theme, real-time Firestore listeners, RBAC per section, incident creation, alert panel, immutable audit view)
+- **`sokoni-ecc.js`** — ECC engine: role permissions, listener manager, alert engine, incident manager, immutable audit writer, system health aggregator
+- **`functions/ecc.js`** — 7 Cloud Functions: `eccHealthCheck` (5-min cron), `eccAlertCheck` (Firestore trigger), `eccGetMetrics`, `eccCreateIncident`, `eccResolveIncident`, `eccWriteAudit`, `eccGetAuditLog`
+
+### Files Modified
+- **`functions/index.js`** — ECC CF exports appended
+- **`service-worker.js`** — Bumped to v247; `ecc.html` + `sokoni-ecc.js` added to PRECACHE_STATIC
+
+### ECC Sections
+| Section | Data Source | Real-time |
+|---|---|---|
+| Executive Overview | orders, payments, users, workflowInstances | Partial |
+| Live Operations | orders (pending/confirmed/in_transit), deliveries | Live |
+| Geo Command | driverLocations, gipGeofenceEvents, gipAlerts | KPI only |
+| Intelligence | intelligenceLog, fraudLog, featureFlags | Query |
+| Workflows | workflowInstances, workflowApprovals | Live |
+| Payments | paymentAuthorizations, refunds | Live |
+| Inventory | inventory_products, inventory_alerts | Query |
+| SmartPOS | posTransactions | Live |
+| Security | securityEvents, fraudLog | Live |
+| System Health | eccSystemHealth (written by eccHealthCheck CF) | Live |
+| Incidents | eccIncidents | Live |
+| Audit | eccAuditLog | Live |
+
+### Firestore Collections (ECC)
+- `eccSystemHealth/{serviceId}` — written every 5 min by `eccHealthCheck`
+- `eccAlerts/{alertId}` — active alerts (acknowledged/resolved by ECC staff)
+- `eccIncidents/{docId}` — full incident lifecycle with timeline array
+- `eccAuditLog/{entryId}` — immutable, server-timestamp only, PII stripped
+- `eccConfig/thresholds` — configurable alert thresholds
+
+### ECC Roles
+`super_admin` · `ops_admin` · `finance_admin` · `support_admin` · `security_admin` · `marketplace_admin` · `inventory_admin` · `logistics_admin` · `merchant_admin` · `read_only`
+
+Set via Firebase custom claim: `eccRole`
+
+### Security
+- Auth guard: redirects to `/login.html?redirect=ecc.html` if unauthenticated
+- Section-level RBAC: each of 15 sections checks role before rendering
+- Action-level RBAC: create_incident, resolve_incident, void_payment all permission-gated
+- All audit writes use server-side timestamps — cannot be forged client-side
+- PII fields stripped from all audit entries before Firestore write
+
+### Deployment
+- Hosting: `firebase deploy --only hosting` ✅ (deployed 2026-06-21)
+- Functions: blocked — billing must be enabled first at Firebase console
+- Indexes: blocked — production index limit reached (324/~325); clear auto-generated indexes in Firebase Console → Firestore → Indexes → Composite
+
+### Pending (manual steps)
+1. Enable billing: `https://console.developers.google.com/billing/enable?project=sokoni-aeb26`
+2. Then deploy functions: `firebase deploy --only functions`
+3. Delete 20–30 unused auto-generated composite indexes in Firebase Console
+4. Then deploy indexes: `firebase deploy --only firestore:indexes`
+5. Set ECC role: `admin.auth().setCustomUserClaims(uid, { eccRole: 'super_admin' })`
+
+---
+
+## [2026-06-21] — AI Subscription Operating System (Sub-OS v1.0.0)
 
 ### Summary
 Shipped the SOKONI Subscription OS — a production-grade, zero-trust, self-healing subscription platform that unifies all Sokoni product subscriptions (Marketplace, SmartPOS, AI Studio, Logistics, Events, Property, Vehicles, Advertising, Business Pages, Warehousing, Delivery) under a single, server-authoritative entitlement engine. Includes an AI Subscription Brain for churn prediction and revenue forecasting, a real-time fraud detection engine, and a cryptographic dual-admin approval layer protecting all financial changes.

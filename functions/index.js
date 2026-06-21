@@ -5316,7 +5316,7 @@ const subOS = require("./subscription-os");
 exports.generateEntitlementToken  = subOS.generateEntitlementToken;
 exports.verifyEntitlement         = subOS.verifyEntitlement;
 exports.processSubscriptionChange = subOS.processSubscriptionChange;
-exports.detectFraud               = subOS.detectFraud;
+exports.detectSubscriptionFraud   = subOS.detectFraud;   /* admin: full entitlement fraud lookup (separate from payment detectFraud) */
 exports.proposeFinancialChange    = subOS.proposeFinancialChange;
 exports.approveFinancialChange    = subOS.approveFinancialChange;
 exports.forecastRevenue           = subOS.forecastRevenue;
@@ -5334,3 +5334,13 @@ exports.wapScheduledResume      = wap.wapScheduledResume;
 exports.wapGetInstance          = wap.wapGetInstance;
 exports.wapGetPendingApprovals  = wap.wapGetPendingApprovals;
 exports.wapSaveDefinition       = wap.wapSaveDefinition;
+
+/* ── Enterprise Control Center (ECC) ── */
+const ecc = require("./ecc");
+exports.eccHealthCheck      = ecc.eccHealthCheck;
+exports.eccAlertCheck       = ecc.eccAlertCheck;
+exports.eccGetMetrics       = ecc.eccGetMetrics;
+exports.eccCreateIncident   = ecc.eccCreateIncident;
+exports.eccResolveIncident  = ecc.eccResolveIncident;
+exports.eccWriteAudit       = ecc.eccWriteAudit;
+exports.eccGetAuditLog      = ecc.eccGetAuditLog;

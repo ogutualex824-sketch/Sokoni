@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOKONI Enterprise Control Center</title>
+<style>
+:root{
+  --bg:#07090f;--surface:#0f1420;--card:#141b2d;--border:#1e2a40;
+  --accent:#00d4ff;--accent2:#7c3aed;--success:#10b981;--warn:#f59e0b;
+  --danger:#ef4444;--text:#e2e8f0;--muted:#64748b;--sidebar:240px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:14px}
+
+/* ── Header ─────────────────────────────────────── */
+#ecc-header{
+  height:56px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 20px;gap:16px;flex-shrink:0;z-index:100;
+}
+.ecc-logo{font-size:15px;font-weight:700;letter-spacing:.5px;color:var(--text)}
+.ecc-logo span{color:var(--accent)}
+.ecc-badge{font-size:10px;background:var(--accent2);color:#fff;padding:2px 8px;border-radius:20px;font-weight:600;letter-spacing:.5px}
+.ecc-spacer{flex:1}
+.health-pill{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 12px;border-radius:20px;background:rgba(16,185,129,.12);color:var(--success);border:1px solid rgba(16,185,129,.25)}
+.health-pill.degraded{background:rgba(245,158,11,.12);color:var(--warn);border-color:rgba(245,158,11,.25)}
+.health-pill.outage{background:rgba(239,68,68,.12);color:var(--danger);border-color:rgba(239,68,68,.25)}
+.health-dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#alert-bell{position:relative;cursor:pointer;padding:8px;border-radius:8px;transition:.2s;background:none;border:none;color:var(--muted)}
+#alert-bell:hover{background:var(--border);color:var(--text)}
+#alert-count{position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;display:none}
+.hdr-user{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.hdr-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff}
+#hdr-time{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* ── Layout ─────────────────────────────────────── */
+#ecc-body{display:flex;flex:1;overflow:hidden}
+
+/* ── Sidebar ─────────────────────────────────────── */
+#ecc-sidebar{
+  width:var(--sidebar);background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;
+}
+.sb-section{padding:16px 12px 4px;font-size:10px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase}
+.sb-link{
+  display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;
+  cursor:pointer;transition:.15s;color:var(--muted);font-size:13px;margin:1px 4px;
+}
+.sb-link:hover{background:var(--border);color:var(--text)}
+.sb-link.active{background:rgba(0,212,255,.1);color:var(--accent);font-weight:600}
+.sb-link .icon{width:16px;text-align:center;font-size:14px}
+.sb-badge{margin-left:auto;background:var(--danger);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;min-width:18px;text-align:center}
+.sb-badge.warn{background:var(--warn)}
+.sb-badge.ok{background:var(--success)}
+.sb-health{padding:12px;border-top:1px solid var(--border);margin-top:auto}
+.sb-health-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+.sb-svc{display:flex;align-items:center;gap:8px;font-size:11px;padding:3px 0;color:var(--muted)}
+.sb-svc-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sb-svc-dot.ok{background:var(--success)}
+.sb-svc-dot.warn{background:var(--warn)}
+.sb-svc-dot.err{background:var(--danger)}
+.sb-svc-dot.unk{background:var(--muted)}
+
+/* ── Main ─────────────────────────────────────────── */
+#ecc-main{flex:1;overflow-y:auto;padding:24px;background:var(--bg)}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.section-title{font-size:20px;font-weight:700}
+.section-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.btn{padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:12px;font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--border)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#000}
+.btn.primary:hover{opacity:.9}
+.btn.danger{background:rgba(239,68,68,.15);border-color:var(--danger);color:var(--danger)}
+
+/* ── KPI Cards ─────────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px}
+.kpi-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.kpi-value{font-size:28px;font-weight:700;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.kpi-delta{font-size:11px;display:flex;align-items:center;gap:4px}
+.kpi-delta.up{color:var(--success)}
+.kpi-delta.down{color:var(--danger)}
+.kpi-sub{font-size:11px;color:var(--muted)}
+
+/* ── Data Table ─────────────────────────────────────── */
+.ecc-table-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.ecc-table-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+.ecc-table-title{font-size:13px;font-weight:700}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)}
+tbody td{padding:11px 14px;font-size:12px;border-bottom:1px solid rgba(30,42,64,.5);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+
+/* ── Status badges ─────────────────────────────────── */
+.status{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.status.ok{background:rgba(16,185,129,.12);color:var(--success)}
+.status.warn{background:rgba(245,158,11,.12);color:var(--warn)}
+.status.err{background:rgba(239,68,68,.12);color:var(--danger)}
+.status.info{background:rgba(0,212,255,.12);color:var(--accent)}
+.status.neutral{background:rgba(100,116,139,.15);color:var(--muted)}
+.status::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* ── Service Health Grid ─────────────────────────────── */
+.health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.svc-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px}
+.svc-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.svc-icon.ok{background:rgba(16,185,129,.15)}
+.svc-icon.warn{background:rgba(245,158,11,.15)}
+.svc-icon.err{background:rgba(239,68,68,.15)}
+.svc-icon.unk{background:rgba(100,116,139,.15)}
+.svc-name{font-size:12px;font-weight:600}
+.svc-status{font-size:11px;margin-top:2px}
+.svc-status.ok{color:var(--success)}
+.svc-status.warn{color:var(--warn)}
+.svc-status.err{color:var(--danger)}
+.svc-status.unk{color:var(--muted)}
+
+/* ── Charts (CSS only) ─────────────────────────────── */
+.bar-chart{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:flex;align-items:center;gap:10px}
+.bar-label{width:120px;font-size:11px;color:var(--muted);text-align:right;flex-shrink:0}
+.bar-track{flex:1;background:var(--border);border-radius:4px;height:8px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:.6s ease;background:var(--accent)}
+.bar-val{width:50px;font-size:11px;font-variant-numeric:tabular-nums}
+
+/* ── Alert Panel ─────────────────────────────────────── */
+#alert-panel{
+  position:fixed;top:56px;right:-360px;width:340px;height:calc(100vh - 56px);
+  background:var(--surface);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:200;transition:.3s ease;
+}
+#alert-panel.open{right:0}
+.ap-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.ap-title{font-size:14px;font-weight:700}
+.ap-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:4px}
+.ap-list{flex:1;overflow-y:auto;padding:8px}
+.alert-item{background:var(--card);border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid var(--muted);cursor:pointer;transition:.15s}
+.alert-item:hover{background:var(--border)}
+.alert-item.critical{border-left-color:var(--danger)}
+.alert-item.high{border-left-color:var(--warn)}
+.alert-item.medium{border-left-color:var(--accent)}
+.alert-item.low{border-left-color:var(--success)}
+.alert-title{font-size:12px;font-weight:600;margin-bottom:4px}
+.alert-msg{font-size:11px;color:var(--muted)}
+.alert-meta{font-size:10px;color:var(--muted);margin-top:6px;display:flex;gap:8px}
+
+/* ── Modal ─────────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:500px;max-width:95vw;max-height:85vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px}
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block}
+.form-control{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px}
+.form-control:focus{outline:none;border-color:var(--accent)}
+select.form-control option{background:var(--surface)}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ── Live feed ─────────────────────────────────────── */
+.feed-list{display:flex;flex-direction:column;gap:8px}
+.feed-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.feed-icon{font-size:20px;flex-shrink:0}
+.feed-body{flex:1}
+.feed-title{font-size:12px;font-weight:600}
+.feed-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.feed-time{font-size:10px;color:var(--muted);flex-shrink:0}
+
+/* ── Audit log ─────────────────────────────────────── */
+.audit-entry{padding:10px 14px;border-bottom:1px solid rgba(30,42,64,.5);display:grid;grid-template-columns:130px 140px 1fr 100px;gap:12px;align-items:center;font-size:12px}
+.audit-entry:hover{background:rgba(255,255,255,.02)}
+.audit-action{font-family:monospace;font-size:11px;color:var(--accent)}
+.audit-actor{color:var(--muted);font-size:11px}
+.audit-detail{color:var(--text)}
+.audit-time{color:var(--muted);font-size:11px;text-align:right}
+
+/* ── Incident ─────────────────────────────────────── */
+.incident-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.inc-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+.inc-sev{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;flex-shrink:0}
+.inc-sev.critical{background:rgba(239,68,68,.15);color:var(--danger)}
+.inc-sev.high{background:rgba(245,158,11,.15);color:var(--warn)}
+.inc-sev.medium{background:rgba(0,212,255,.15);color:var(--accent)}
+.inc-title{font-size:14px;font-weight:700;flex:1}
+.inc-meta{font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+.inc-timeline{padding-left:16px;border-left:2px solid var(--border);margin-top:12px}
+.inc-evt{position:relative;padding:6px 0 6px 16px;font-size:11px;color:var(--muted)}
+.inc-evt::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--border);border:2px solid var(--accent);position:absolute;left:-5px;top:10px}
+
+/* ── Map placeholder ─────────────────────────────────── */
+.map-container{background:var(--card);border:1px solid var(--border);border-radius:12px;height:420px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.map-overlay{text-align:center;color:var(--muted)}
+.map-overlay p{font-size:13px;margin-top:8px}
+#gip-map{width:100%;height:100%;border-radius:12px}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+/* ── Responsive ─────────────────────────────────────── */
+@media(max-width:900px){
+  #ecc-sidebar{display:none}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .health-grid{grid-template-columns:repeat(2,1fr)}
+}
+.loading{color:var(--muted);font-size:13px;padding:24px;text-align:center}
+.empty{color:var(--muted);font-size:13px;padding:40px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────── -->
+<header id="ecc-header">
+  <div class="ecc-logo">SOKONI <span>ECC</span></div>
+  <div class="ecc-badge">ENTERPRISE</div>
+  <div class="ecc-spacer"></div>
+  <div class="health-pill" id="overall-health">
+    <span class="health-dot"></span>
+    <span id="health-label">All Systems Operational</span>
+  </div>
+  <button id="alert-bell" onclick="toggleAlertPanel()" title="Alerts">
+    🔔
+    <div id="alert-count">0</div>
+  </button>
+  <div class="hdr-user">
+    <div class="hdr-avatar" id="hdr-initials">?</div>
+    <div>
+      <div id="hdr-name" style="font-size:12px;font-weight:600">Loading…</div>
+      <div id="hdr-role" style="font-size:10px;color:var(--muted)"></div>
+    </div>
+  </div>
+  <div id="hdr-time"></div>
+</header>
+
+<!-- ── Body ─────────────────────────────────────── -->
+<div id="ecc-body">
+
+  <!-- Sidebar -->
+  <nav id="ecc-sidebar">
+    <div class="sb-section">Command</div>
+    <div class="sb-link active" onclick="nav('overview')" id="nav-overview"><span class="icon">📊</span> Executive Overview</div>
+    <div class="sb-link" onclick="nav('live_ops')" id="nav-live_ops"><span class="icon">⚡</span> Live Operations <span class="sb-badge warn" id="sb-pending">0</span></div>
+    <div class="sb-link" onclick="nav('geo_command')" id="nav-geo_command"><span class="icon">🌍</span> Geo Command</div>
+
+    <div class="sb-section">Intelligence</div>
+    <div class="sb-link" onclick="nav('intelligence')" id="nav-intelligence"><span class="icon">🧠</span> EIP Intelligence</div>
+    <div class="sb-link" onclick="nav('workflows')" id="nav-workflows"><span class="icon">⚙️</span> WAP Workflows <span class="sb-badge" id="sb-approvals" style="display:none">0</span></div>
+    <div class="sb-link" onclick="nav('payments')" id="nav-payments"><span class="icon">💳</span> Payments</div>
+
+    <div class="sb-section">Operations</div>
+    <div class="sb-link" onclick="nav('inventory')" id="nav-inventory"><span class="icon">📦</span> Inventory</div>
+    <div class="sb-link" onclick="nav('smartpos')" id="nav-smartpos"><span class="icon">🖥️</span> SmartPOS</div>
+    <div class="sb-link" onclick="nav('search')" id="nav-search"><span class="icon">🔍</span> Search</div>
+    <div class="sb-link" onclick="nav('notifications')" id="nav-notifications"><span class="icon">🔔</span> Notifications</div>
+    <div class="sb-link" onclick="nav('support')" id="nav-support"><span class="icon">🎧</span> Support <span class="sb-badge warn" id="sb-tickets" style="display:none">0</span></div>
+
+    <div class="sb-section">Platform</div>
+    <div class="sb-link" onclick="nav('security')" id="nav-security"><span class="icon">🛡️</span> Security <span class="sb-badge err" id="sb-threats" style="display:none">0</span></div>
+    <div class="sb-link" onclick="nav('system_health')" id="nav-system_health"><span class="icon">💚</span> System Health</div>
+    <div class="sb-link" onclick="nav('incidents')" id="nav-incidents"><span class="icon">🚨</span> Incidents <span class="sb-badge err" id="sb-incidents" style="display:none">0</span></div>
+    <div class="sb-link" onclick="nav('audit')" id="nav-audit"><span class="icon">📋</span> Audit Log</div>
+
+    <!-- Mini health summary -->
+    <div class="sb-health">
+      <div class="sb-health-title">Services</div>
+      <div id="sb-services"></div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main id="ecc-main">
+    <div class="loading">Initializing Enterprise Control Center…</div>
+  </main>
+</div>
+
+<!-- ── Alert Panel ─────────────────────────────────── -->
+<div id="alert-panel">
+  <div class="ap-header">
+    <div class="ap-title">🔔 Active Alerts</div>
+    <button class="ap-close" onclick="toggleAlertPanel()">✕</button>
+  </div>
+  <div class="ap-list" id="ap-list">
+    <div class="loading">No active alerts</div>
+  </div>
+</div>
+
+<!-- ── Incident Modal ────────────────────────────── -->
+<div class="modal-overlay" id="incident-modal">
+  <div class="modal">
+    <div class="modal-title">🚨 Create Incident</div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input class="form-control" id="inc-title" placeholder="Brief incident description">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Severity</label>
+      <select class="form-control" id="inc-sev">
+        <option value="critical">Critical — Platform down</option>
+        <option value="high" selected>High — Major feature impacted</option>
+        <option value="medium">Medium — Degraded performance</option>
+        <option value="low">Low — Minor issue</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-control" id="inc-desc" rows="3" placeholder="What is happening?"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Affected Services (comma-separated)</label>
+      <input class="form-control" id="inc-services" placeholder="e.g. payments, checkout, notifications">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('incident-modal')">Cancel</button>
+      <button class="btn danger" onclick="submitIncident()">Create Incident</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Confirm Modal ─────────────────────────────── -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="width:380px">
+    <div class="modal-title" id="confirm-title">Confirm Action</div>
+    <p id="confirm-msg" style="font-size:13px;color:var(--muted);margin-bottom:16px"></p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('confirm-modal')">Cancel</button>
+      <button class="btn danger" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Firebase + ECC Engine ────────────────────── -->
+<script type="module">
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {
+  getFirestore, collection, query, where, orderBy, limit,
+  onSnapshot, addDoc, updateDoc, doc, getCountFromServer,
+  serverTimestamp, getDocs, getDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* ── Firebase config ── */
+const FB_CONFIG = {
+  apiKey:"AIzaSyD6hcBm6HUXfAI1TbVOmW4pVIJSCdh6DZo",
+  authDomain:"sokoni-aeb26.firebaseapp.com",
+  projectId:"sokoni-aeb26",
+  storageBucket:"sokoni-aeb26.firebasestorage.app",
+  messagingSenderId:"24799054989",
+  appId:"1:24799054989:web:3eda56c8c6c2d5cff99baa"
+};
+const app = getApps().length ? getApps()[0] : initializeApp(FB_CONFIG);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+/* ── ECC Role permissions ── */
+const SECTION_ROLES = {
+  overview:      ['super_admin','ops_admin','finance_admin','marketplace_admin','inventory_admin','logistics_admin','merchant_admin','read_only'],
+  live_ops:      ['super_admin','ops_admin','logistics_admin','marketplace_admin'],
+  geo_command:   ['super_admin','ops_admin','logistics_admin'],
+  intelligence:  ['super_admin','ops_admin','finance_admin'],
+  workflows:     ['super_admin','ops_admin','finance_admin'],
+  payments:      ['super_admin','finance_admin'],
+  inventory:     ['super_admin','inventory_admin','marketplace_admin'],
+  smartpos:      ['super_admin','merchant_admin','ops_admin'],
+  search:        ['super_admin','ops_admin','marketplace_admin'],
+  notifications: ['super_admin','ops_admin'],
+  support:       ['super_admin','support_admin','ops_admin'],
+  security:      ['super_admin','security_admin'],
+  system_health: ['super_admin','ops_admin','security_admin'],
+  incidents:     ['super_admin','ops_admin','security_admin','support_admin'],
+  audit:         ['super_admin','ops_admin','finance_admin','security_admin'],
+};
+
+/* ── State ── */
+let _user=null, _role='read_only', _activeSection='overview', _listeners=[], _alerts=[];
+
+/* ── Auth guard ── */
+onAuthStateChanged(auth, async u => {
+  if (!u) { window.location.href='/login.html?redirect=ecc.html'; return; }
+  _user = u;
+  const idRes = await u.getIdTokenResult();
+  _role = idRes.claims.eccRole || idRes.claims.role || 'read_only';
+  if (!['super_admin','ops_admin','finance_admin','support_admin','security_admin',
+        'marketplace_admin','inventory_admin','logistics_admin','merchant_admin','read_only'].includes(_role)) {
+    document.getElementById('ecc-main').innerHTML = '<div class="empty">🚫<div>Access denied. Contact your administrator.</div></div>';
+    return;
+  }
+  _initHeader(u);
+  _subscribeAlerts();
+  _subscribeHealth();
+  nav('overview');
+  _startClock();
+});
+
+function _initHeader(u) {
+  const name = u.displayName || u.email || 'Admin';
+  document.getElementById('hdr-name').textContent = name;
+  document.getElementById('hdr-role').textContent = _role.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  document.getElementById('hdr-initials').textContent = name.charAt(0).toUpperCase();
+}
+
+function _startClock() {
+  const el = document.getElementById('hdr-time');
+  const tick = () => { el.textContent = new Date().toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); };
+  tick(); setInterval(tick, 1000);
+}
+
+/* ── Global subscriptions ── */
+function _subscribeAlerts() {
+  const q = query(collection(db,'eccAlerts'), where('status','==','active'), orderBy('createdAt','desc'), limit(50));
+  const unsub = onSnapshot(q, snap => {
+    _alerts = snap.docs.map(d=>({id:d.id,...d.data()}));
+    _renderAlertPanel();
+    const cnt = document.getElementById('alert-count');
+    const n = _alerts.length;
+    cnt.textContent = n; cnt.style.display = n>0?'flex':'none';
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+function _subscribeHealth() {
+  const unsub = onSnapshot(collection(db,'eccSystemHealth'), snap => {
+    const svcs = {}; snap.docs.forEach(d=>{ svcs[d.id]={id:d.id,...d.data()}; });
+    _renderSidebarHealth(svcs);
+    _renderOverallHealth(svcs);
+  }, ()=>{ _renderSidebarHealth({}); });
+  _listeners.push(unsub);
+}
+
+function _renderSidebarHealth(svcs) {
+  const el = document.getElementById('sb-services');
+  const keys = Object.keys(svcs).slice(0,6);
+  if (keys.length === 0) {
+    el.innerHTML = '<div class="sb-svc"><div class="sb-svc-dot unk"></div>No health data</div>'; return;
+  }
+  el.innerHTML = keys.map(k => {
+    const s = svcs[k]; const cls = s.status==='operational'?'ok':s.status==='degraded'?'warn':'err';
+    return `<div class="sb-svc"><div class="sb-svc-dot ${cls}"></div>${_esc(s.name||k)}</div>`;
+  }).join('');
+}
+
+function _renderOverallHealth(svcs) {
+  const statuses = Object.values(svcs).map(s=>s.status);
+  const pill = document.getElementById('overall-health');
+  const lbl  = document.getElementById('health-label');
+  if (statuses.includes('major_outage')) { pill.className='health-pill outage'; lbl.textContent='Major Outage'; }
+  else if (statuses.includes('partial_outage')||statuses.includes('degraded')) { pill.className='health-pill degraded'; lbl.textContent='Degraded Performance'; }
+  else { pill.className='health-pill'; lbl.textContent='All Systems Operational'; }
+}
+
+/* ── Navigation ── */
+window.nav = function(section) {
+  if (!SECTION_ROLES[section]?.includes(_role) && _role !== 'super_admin') {
+    document.getElementById('ecc-main').innerHTML = `<div class="empty">🔒<div>You don't have access to <b>${section}</b>.</div></div>`; return;
+  }
+  _clearSectionListeners();
+  _activeSection = section;
+  document.querySelectorAll('.sb-link').forEach(el => el.classList.remove('active'));
+  const nav = document.getElementById('nav-'+section); if(nav) nav.classList.add('active');
+  const renders = { overview, live_ops, geo_command, intelligence, workflows, payments, inventory, smartpos, search, notifications, security, system_health, incidents, support, audit };
+  if (renders[section]) renders[section]();
+};
+
+function _clearSectionListeners() {
+  // Remove all but the first 2 (alerts + health, always active)
+  while(_listeners.length > 2) { try{_listeners.pop()();}catch(_){} }
+}
+
+/* ══════════════════════════════════════════════════════
+   SECTION RENDERERS
+══════════════════════════════════════════════════════ */
+
+/* ── 1. OVERVIEW ─── */
+async function overview() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">Executive Overview</div><div class="section-sub">Real-time platform KPIs — updated live</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="nav('overview')">⟳ Refresh</button>
+      <button class="btn primary" onclick="openModal('incident-modal')">🚨 Create Incident</button>
+    </div>
+  </div>
+  <div class="kpi-grid" id="kpi-grid"><div class="loading">Loading metrics…</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+    <div class="ecc-table-wrap" id="recent-orders-wrap">
+      <div class="ecc-table-hdr"><span class="ecc-table-title">Recent Orders</span><button class="btn" onclick="nav('live_ops')">View All</button></div>
+      <div class="loading">Loading…</div>
+    </div>
+    <div class="ecc-table-wrap" id="recent-payments-wrap">
+      <div class="ecc-table-hdr"><span class="ecc-table-title">Recent Payments</span><button class="btn" onclick="nav('payments')">View All</button></div>
+      <div class="loading">Loading…</div>
+    </div>
+  </div>`;
+  await _loadKPIs();
+  _subscribeOverviewOrders();
+  _subscribeOverviewPayments();
+}
+
+async function _loadKPIs() {
+  const today = _startOfDay();
+  const grid = document.getElementById('kpi-grid');
+  try {
+    const [ordersToday, ordersDone, ordersFail, ordersPending,
+           driversOnline, activeSellers, wfRunning, wfFailed] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'orders'), where('createdAt','>=',today))),
+      getCountFromServer(query(collection(db,'orders'), where('status','==','delivered'), where('createdAt','>=',today))),
+      getCountFromServer(query(collection(db,'orders'), where('status','==','failed'), where('createdAt','>=',today))),
+      getCountFromServer(query(collection(db,'orders'), where('status','in',['pending','confirmed','in_transit']))),
+      getCountFromServer(query(collection(db,'driverLocations'), where('online','==',true))),
+      getCountFromServer(query(collection(db,'users'), where('role','==','seller'), where('active','==',true))),
+      getCountFromServer(query(collection(db,'workflowInstances'), where('status','==','running'))),
+      getCountFromServer(query(collection(db,'workflowInstances'), where('status','==','failed'), where('metadata.startedAt','>=',today))),
+    ]);
+    const c = r => r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    const kpis = [
+      {label:'Orders Today',   value:c(ordersToday),   icon:'📦', delta:'', sub:'total submitted'},
+      {label:'Completed',      value:c(ordersDone),    icon:'✅', delta:'', sub:'delivered today', cls:'success'},
+      {label:'Pending',        value:c(ordersPending),  icon:'⏳', delta:'', sub:'in progress', cls: c(ordersPending)>50?'warn':''},
+      {label:'Failed',         value:c(ordersFail),    icon:'❌', delta:'', sub:'today', cls: c(ordersFail)>5?'danger':''},
+      {label:'Live Drivers',   value:c(driversOnline),  icon:'🛵', delta:'', sub:'online now'},
+      {label:'Active Sellers', value:c(activeSellers),  icon:'🏪', delta:'', sub:'verified'},
+      {label:'Workflows Running',value:c(wfRunning),   icon:'⚙️', delta:'', sub:'active instances'},
+      {label:'Workflow Fails', value:c(wfFailed),      icon:'⚠️', delta:'', sub:'today', cls: c(wfFailed)>0?'danger':''},
+    ];
+    grid.innerHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.cls==='danger'?'var(--danger)':k.cls==='warn'?'var(--warn)':k.cls==='success'?'var(--success)':'var(--text)'}">${k.value.toLocaleString()}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`).join('');
+  } catch(e) {
+    grid.innerHTML = `<div class="loading">Could not load metrics — ${_esc(e.message)}</div>`;
+  }
+}
+
+function _subscribeOverviewOrders() {
+  const q = query(collection(db,'orders'), orderBy('createdAt','desc'), limit(8));
+  const unsub = onSnapshot(q, snap => {
+    const wrap = document.getElementById('recent-orders-wrap'); if(!wrap) return;
+    const rows = snap.docs.map(d => {
+      const o=d.data(); const st=o.status||'unknown';
+      return `<tr><td>${_esc(d.id.slice(-6))}</td><td>${_esc(o.buyerName||'—')}</td>
+        <td>KES ${(o.totalAmount||0).toLocaleString()}</td>
+        <td><span class="status ${st==='delivered'?'ok':st==='failed'?'err':st==='cancelled'?'err':'warn'}">${_esc(st)}</span></td></tr>`;
+    }).join('');
+    const existingHdr = wrap.querySelector('.ecc-table-hdr').outerHTML;
+    wrap.innerHTML = existingHdr + `<table><thead><tr><th>ID</th><th>Buyer</th><th>Amount</th><th>Status</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="loading">No orders</td></tr>'}</tbody></table>`;
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+function _subscribeOverviewPayments() {
+  const q = query(collection(db,'paymentAuthorizations'), orderBy('createdAt','desc'), limit(8));
+  const unsub = onSnapshot(q, snap => {
+    const wrap = document.getElementById('recent-payments-wrap'); if(!wrap) return;
+    const rows = snap.docs.map(d => {
+      const p=d.data(); const st=p.status||'unknown';
+      return `<tr><td>${_esc((p.provider||'mpesa').toUpperCase())}</td><td>KES ${(p.amount||0).toLocaleString()}</td>
+        <td><span class="status ${st==='captured'?'ok':st==='failed'?'err':'warn'}">${_esc(st)}</span></td>
+        <td>${_relTime(p.createdAt)}</td></tr>`;
+    }).join('');
+    const existingHdr = wrap.querySelector('.ecc-table-hdr').outerHTML;
+    wrap.innerHTML = existingHdr + `<table><thead><tr><th>Method</th><th>Amount</th><th>Status</th><th>Time</th></tr></thead><tbody>${rows||'<tr><td colspan="4" class="loading">No payments</td></tr>'}</tbody></table>`;
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+/* ── 2. LIVE OPS ─── */
+function live_ops() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">⚡ Live Operations</div><div class="section-sub">Real-time feed — updates automatically</div></div>
+    <div id="live-counts" style="display:flex;gap:12px;font-size:12px;color:var(--muted)"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--muted)">ORDERS</div>
+      <div class="feed-list" id="feed-orders"><div class="loading">Subscribing…</div></div>
+    </div>
+    <div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--muted)">DELIVERIES</div>
+      <div class="feed-list" id="feed-deliveries"><div class="loading">Subscribing…</div></div>
+    </div>
+  </div>`;
+  _subLiveOrders();
+  _subLiveDeliveries();
+}
+
+function _subLiveOrders() {
+  const q = query(collection(db,'orders'), where('status','in',['pending','confirmed','in_transit']), orderBy('createdAt','desc'), limit(15));
+  const unsub = onSnapshot(q, snap => {
+    const el = document.getElementById('feed-orders'); if(!el) return;
+    const cnts = document.getElementById('live-counts'); if(cnts) cnts.textContent = `${snap.size} active orders`;
+    if(!snap.size) { el.innerHTML='<div class="empty">📦<div>No active orders</div></div>'; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const o=d.data(); const icons={'pending':'🕐','confirmed':'✅','in_transit':'🚗'};
+      return `<div class="feed-item">
+        <div class="feed-icon">${icons[o.status]||'📦'}</div>
+        <div class="feed-body"><div class="feed-title">${_esc(o.buyerName||d.id.slice(-6))} · KES ${(o.totalAmount||0).toLocaleString()}</div>
+          <div class="feed-sub">${_esc(o.status)} · ${_esc(o.itemCount||1)} item(s)</div></div>
+        <div class="feed-time">${_relTime(o.createdAt)}</div></div>`;
+    }).join('');
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+function _subLiveDeliveries() {
+  const q = query(collection(db,'deliveries'), where('status','in',['assigned','picked_up','in_transit']), orderBy('createdAt','desc'), limit(15));
+  const unsub = onSnapshot(q, snap => {
+    const el = document.getElementById('feed-deliveries'); if(!el) return;
+    if(!snap.size) { el.innerHTML='<div class="empty">🛵<div>No active deliveries</div></div>'; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const v=d.data();
+      return `<div class="feed-item">
+        <div class="feed-icon">🛵</div>
+        <div class="feed-body"><div class="feed-title">${_esc(v.driverName||'Driver')} → ${_esc(v.deliveryAddress||'Destination')}</div>
+          <div class="feed-sub">${_esc(v.status)} · Order ${_esc(v.orderId?.slice(-6)||'—')}</div></div>
+        <div class="feed-time">${_relTime(v.updatedAt||v.createdAt)}</div></div>`;
+    }).join('');
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+/* ── 3. GEO COMMAND ─── */
+function geo_command() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">🌍 Geo Intelligence Command</div><div class="section-sub">Live fleet map powered by GIP</div></div>
+    <button class="btn" onclick="window.open('/gip.html','_blank')">Open GIP Full View ↗</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 280px;gap:16px">
+    <div id="gip-map" style="background:var(--card);border:1px solid var(--border);border-radius:12px;height:440px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted)">
+      🌍
+      <div style="font-size:13px">Leaflet map loads when GIP script is present</div>
+      <button class="btn primary" onclick="window.open('/gip.html','_blank')">Open Full GIP Command Center</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="kpi"><div class="kpi-label">Live Drivers</div><div class="kpi-value" id="geo-drivers">—</div><div class="kpi-sub">online now</div></div>
+      <div class="kpi"><div class="kpi-label">Active Deliveries</div><div class="kpi-value" id="geo-deliveries">—</div><div class="kpi-sub">in transit</div></div>
+      <div class="kpi"><div class="kpi-label">Geofence Events</div><div class="kpi-value" id="geo-events">—</div><div class="kpi-sub">last hour</div></div>
+      <div class="kpi"><div class="kpi-label">Alerts</div><div class="kpi-value" id="geo-alerts">—</div><div class="kpi-sub">location anomalies</div></div>
+    </div>
+  </div>`;
+  // Load geo KPIs
+  _geoKPIs();
+}
+
+async function _geoKPIs() {
+  const hour = Date.now() - 3600000;
+  try {
+    const [drivers, deliveries, events, alerts] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'driverLocations'), where('online','==',true))),
+      getCountFromServer(query(collection(db,'deliveries'), where('status','in',['assigned','in_transit']))),
+      getCountFromServer(query(collection(db,'gipGeofenceEvents'), where('ts','>=',hour))),
+      getCountFromServer(query(collection(db,'gipAlerts'), where('status','==','active'))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??'—'):'—';
+    document.getElementById('geo-drivers').textContent    = c(drivers);
+    document.getElementById('geo-deliveries').textContent = c(deliveries);
+    document.getElementById('geo-events').textContent     = c(events);
+    document.getElementById('geo-alerts').textContent     = c(alerts);
+  } catch(_){}
+}
+
+/* ── 4. INTELLIGENCE ─── */
+function intelligence() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">🧠 Enterprise Intelligence</div><div class="section-sub">EIP forecasts, fraud alerts, and AI insights</div></div>
+  </div>
+  <div class="kpi-grid" id="eip-kpis"><div class="loading">Loading…</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+    <div class="ecc-table-wrap">
+      <div class="ecc-table-hdr"><span class="ecc-table-title">Recent Decisions</span></div>
+      <div id="decisions-feed"><div class="loading">Loading…</div></div>
+    </div>
+    <div class="ecc-table-wrap">
+      <div class="ecc-table-hdr"><span class="ecc-table-title">Fraud Alerts</span></div>
+      <div id="fraud-feed"><div class="loading">Loading…</div></div>
+    </div>
+  </div>`;
+  _loadIntelligence();
+}
+
+async function _loadIntelligence() {
+  // Decisions log
+  try {
+    const q = query(collection(db,'intelligenceLog'), orderBy('ts','desc'), limit(10));
+    const snap = await getDocs(q);
+    const feed = document.getElementById('decisions-feed');
+    if(feed) {
+      if(snap.empty) { feed.innerHTML='<div class="empty">No decisions logged yet</div>'; }
+      else feed.innerHTML = `<table><thead><tr><th>Type</th><th>Source</th><th>Confidence</th><th>Time</th></tr></thead><tbody>${
+        snap.docs.map(d => { const v=d.data();
+          return `<tr><td>${_esc(v.decisionType||'—')}</td><td><span class="status ${v.source==='verified'?'ok':v.source==='calculated'?'info':'warn'}">${_esc(v.source||'—')}</span></td>
+            <td>${v.confidence!=null?Math.round(v.confidence*100)+'%':'—'}</td><td>${_relTime(v.ts)}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    }
+  } catch(_) { const f=document.getElementById('decisions-feed'); if(f) f.innerHTML='<div class="loading">intelligenceLog — deploy indexes to query</div>'; }
+
+  // Fraud events
+  try {
+    const q2 = query(collection(db,'fraudLog'), orderBy('ts','desc'), limit(10));
+    const snap2 = await getDocs(q2);
+    const ff = document.getElementById('fraud-feed');
+    if(ff) {
+      if(snap2.empty) { ff.innerHTML='<div class="empty">✅ No fraud events</div>'; }
+      else ff.innerHTML = `<table><thead><tr><th>Event</th><th>Score</th><th>Action</th><th>Time</th></tr></thead><tbody>${
+        snap2.docs.map(d => { const v=d.data();
+          return `<tr><td>${_esc(v.eventType||'fraud_attempt')}</td><td style="color:var(--danger)">${v.score!=null?v.score.toFixed(2):'—'}</td>
+            <td><span class="status ${v.action==='blocked'?'err':'warn'}">${_esc(v.action||'flagged')}</span></td><td>${_relTime(v.ts)}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    }
+  } catch(_) { const ff=document.getElementById('fraud-feed'); if(ff) ff.innerHTML='<div class="loading">No fraud data</div>'; }
+
+  // KPI counts
+  try {
+    const today = _startOfDay();
+    const [decisions, fraudToday, flagsOn] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'intelligenceLog'), where('ts','>=',today))),
+      getCountFromServer(query(collection(db,'fraudLog'), where('ts','>=',today))),
+      getCountFromServer(query(collection(db,'featureFlags'), where('enabled','==',true))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    document.getElementById('eip-kpis').innerHTML = [
+      {label:'Decisions Today', value:c(decisions), sub:'by EIP engine'},
+      {label:'Fraud Events',    value:c(fraudToday), sub:'today', danger:c(fraudToday)>0},
+      {label:'Feature Flags ON',value:c(flagsOn),  sub:'active flags'},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.danger?'var(--danger)':'var(--text)'}">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div></div>`).join('');
+  } catch(_) { document.getElementById('eip-kpis').innerHTML=''; }
+}
+
+/* ── 5. WORKFLOWS ─── */
+function workflows() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">⚙️ Workflow Command</div><div class="section-sub">WAP execution monitoring and approvals</div></div>
+    <button class="btn" onclick="window.open('/wap.html','_blank')">Open WAP Designer ↗</button>
+  </div>
+  <div class="kpi-grid" id="wap-kpis"><div class="loading">Loading…</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">
+    <div class="ecc-table-wrap">
+      <div class="ecc-table-hdr"><span class="ecc-table-title">Active Instances</span></div>
+      <div id="wf-feed"><div class="loading">Subscribing…</div></div>
+    </div>
+    <div class="ecc-table-wrap">
+      <div class="ecc-table-hdr"><span class="ecc-table-title">Pending Approvals</span></div>
+      <div id="wf-approvals"><div class="loading">Loading…</div></div>
+    </div>
+  </div>`;
+  _subWorkflows();
+  _loadApprovals();
+  _loadWapKPIs();
+}
+
+async function _loadWapKPIs() {
+  const today = _startOfDay();
+  try {
+    const [running, completed, failed, waiting] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'workflowInstances'), where('status','==','running'))),
+      getCountFromServer(query(collection(db,'workflowInstances'), where('status','==','completed'), where('metadata.completedAt','>=',today))),
+      getCountFromServer(query(collection(db,'workflowInstances'), where('status','==','failed'), where('metadata.startedAt','>=',today))),
+      getCountFromServer(query(collection(db,'workflowInstances'), where('status','==','waiting'))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    document.getElementById('wap-kpis').innerHTML = [
+      {label:'Running',   value:c(running),   cls:''},
+      {label:'Completed Today',value:c(completed),cls:'success'},
+      {label:'Failed Today',   value:c(failed),   cls:c(failed)>0?'danger':''},
+      {label:'Waiting Approval',value:c(waiting), cls:c(waiting)>0?'warn':''},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.cls==='danger'?'var(--danger)':k.cls==='warn'?'var(--warn)':k.cls==='success'?'var(--success)':'var(--text)'}">${k.value}</div></div>`).join('');
+  } catch(_){}
+}
+
+function _subWorkflows() {
+  const q = query(collection(db,'workflowInstances'), where('status','in',['running','waiting','failed']), orderBy('metadata.startedAt','desc'), limit(15));
+  const unsub = onSnapshot(q, snap => {
+    const el = document.getElementById('wf-feed'); if(!el) return;
+    if(snap.empty) { el.innerHTML='<div class="empty">⚙️<div>No active workflows</div></div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>ID</th><th>Definition</th><th>Status</th><th>Started</th></tr></thead><tbody>${
+      snap.docs.map(d => { const v=d.data(); const st=v.status;
+        return `<tr><td style="font-family:monospace;font-size:11px">${d.id.slice(-8)}</td>
+          <td>${_esc(v.definitionId||'—')}</td>
+          <td><span class="status ${st==='running'?'info':st==='failed'?'err':'warn'}">${st}</span></td>
+          <td>${_relTime(v.metadata?.startedAt)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+async function _loadApprovals() {
+  try {
+    const q = query(collection(db,'workflowApprovals'), where('status','==','pending'), orderBy('requestedAt','desc'), limit(10));
+    const snap = await getDocs(q);
+    const el = document.getElementById('wf-approvals'); if(!el) return;
+    if(snap.empty) { el.innerHTML='<div class="empty">✅<div>No pending approvals</div></div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Step</th><th>Workflow</th><th>Requested</th><th>Action</th></tr></thead><tbody>${
+      snap.docs.map(d => { const v=d.data();
+        return `<tr><td>${_esc(v.stepId||'—')}</td><td style="font-size:11px;color:var(--muted)">${_esc(v.instanceId?.slice(-8)||'—')}</td>
+          <td>${_relTime(v.requestedAt)}</td>
+          <td><button class="btn" style="padding:4px 8px;font-size:11px" onclick="window.open('/wap.html','_blank')">Review</button></td></tr>`;
+      }).join('')}</tbody></table>`;
+    // Update sidebar badge
+    const sb = document.getElementById('sb-approvals');
+    if(sb) { sb.textContent = snap.size; sb.style.display = snap.size>0?'inline':'none'; }
+  } catch(_) { const el=document.getElementById('wf-approvals'); if(el) el.innerHTML='<div class="loading">—</div>'; }
+}
+
+/* ── 6. PAYMENTS ─── */
+function payments() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">💳 Payment Command</div><div class="section-sub">Transaction health and reconciliation</div></div>
+  </div>
+  <div class="kpi-grid" id="pay-kpis"><div class="loading">Loading…</div></div>
+  <div class="ecc-table-wrap" style="margin-top:16px">
+    <div class="ecc-table-hdr"><span class="ecc-table-title">Recent Transactions</span></div>
+    <div id="pay-table"><div class="loading">Subscribing…</div></div>
+  </div>`;
+  _subPayments();
+  _loadPaymentKPIs();
+}
+
+async function _loadPaymentKPIs() {
+  const today = _startOfDay();
+  try {
+    const [cap, fail, pending, refunds] = await Promise.allSettled([
+      getDocs(query(collection(db,'paymentAuthorizations'), where('status','==','captured'), where('createdAt','>=',today), limit(500))),
+      getCountFromServer(query(collection(db,'paymentAuthorizations'), where('status','==','failed'), where('createdAt','>=',today))),
+      getCountFromServer(query(collection(db,'paymentAuthorizations'), where('status','in',['pending','authorized']))),
+      getCountFromServer(query(collection(db,'refunds'), where('status','==','pending'))),
+    ]);
+    const revenue = cap.status==='fulfilled' ? cap.value.docs.reduce((s,d)=>s+(d.data().amount||0),0) : 0;
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??r.value?.size??0):0;
+    document.getElementById('pay-kpis').innerHTML = [
+      {label:'Revenue Today', value:'KES '+revenue.toLocaleString()},
+      {label:'Failed Payments', value:c(fail), danger:c(fail)>10},
+      {label:'Pending', value:c(pending), warn:c(pending)>20},
+      {label:'Pending Refunds', value:c(refunds), warn:c(refunds)>0},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.danger?'var(--danger)':k.warn?'var(--warn)':'var(--text)'}">${typeof k.value==='string'?k.value:k.value.toLocaleString()}</div></div>`).join('');
+  } catch(_){}
+}
+
+function _subPayments() {
+  const q = query(collection(db,'paymentAuthorizations'), orderBy('createdAt','desc'), limit(25));
+  const unsub = onSnapshot(q, snap => {
+    const el = document.getElementById('pay-table'); if(!el) return;
+    el.innerHTML = `<table><thead><tr><th>Method</th><th>Amount</th><th>Status</th><th>Reference</th><th>Time</th></tr></thead><tbody>${
+      snap.docs.map(d=>{ const v=d.data(); const st=v.status||'unknown';
+        return `<tr><td>${_esc((v.provider||'mpesa').toUpperCase())}</td><td>KES ${(v.amount||0).toLocaleString()}</td>
+          <td><span class="status ${st==='captured'?'ok':st==='failed'?'err':'warn'}">${_esc(st)}</span></td>
+          <td style="font-family:monospace;font-size:11px">${_esc(v.reference||d.id.slice(-8))}</td>
+          <td>${_relTime(v.createdAt)}</td></tr>`;
+      }).join('') || '<tr><td colspan="5" class="loading">No payment data</td></tr>'
+    }</tbody></table>`;
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+/* ── 7. INVENTORY ─── */
+function inventory() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">📦 Inventory Command</div><div class="section-sub">Stock levels, movements, and reorder alerts</div></div>
+    <button class="btn" onclick="window.open('/inv-dashboard.html','_blank')">Open Inventory ↗</button>
+  </div>
+  <div class="kpi-grid" id="inv-kpis"><div class="loading">Loading…</div></div>
+  <div class="ecc-table-wrap" style="margin-top:16px">
+    <div class="ecc-table-hdr"><span class="ecc-table-title">Stock Alerts</span></div>
+    <div id="inv-alerts"><div class="loading">Loading…</div></div>
+  </div>`;
+  _loadInventory();
+}
+
+async function _loadInventory() {
+  try {
+    const [total, low, out, moves] = await Promise.allSettled([
+      getCountFromServer(collection(db,'inventory_products')),
+      getCountFromServer(query(collection(db,'inventory_products'), where('status','==','low_stock'))),
+      getCountFromServer(query(collection(db,'inventory_products'), where('status','==','out_of_stock'))),
+      getCountFromServer(query(collection(db,'inventory_movements'), where('createdAt','>=',_startOfDay()))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    document.getElementById('inv-kpis').innerHTML = [
+      {label:'Total SKUs', value:c(total)},
+      {label:'Low Stock',  value:c(low), warn:true},
+      {label:'Out of Stock',value:c(out),danger:c(out)>0},
+      {label:'Movements Today',value:c(moves)},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.danger?'var(--danger)':k.warn&&c(low)>0?'var(--warn)':'var(--text)'}">${k.value.toLocaleString()}</div></div>`).join('');
+
+    const sq = query(collection(db,'inventory_alerts'), where('status','==','active'), orderBy('createdAt','desc'), limit(15));
+    const snap = await getDocs(sq);
+    const el = document.getElementById('inv-alerts');
+    if(el) {
+      if(snap.empty) { el.innerHTML='<div class="empty">✅<div>No stock alerts</div></div>'; return; }
+      el.innerHTML = `<table><thead><tr><th>Product</th><th>Alert</th><th>Stock</th><th>Time</th></tr></thead><tbody>${
+        snap.docs.map(d=>{ const v=d.data();
+          return `<tr><td>${_esc(v.productName||'—')}</td>
+            <td><span class="status ${v.type==='out_of_stock'?'err':'warn'}">${_esc(v.type||'low_stock')}</span></td>
+            <td>${v.currentStock??'—'}</td><td>${_relTime(v.createdAt)}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    }
+  } catch(_) {
+    const el=document.getElementById('inv-alerts'); if(el) el.innerHTML='<div class="loading">No inventory data available</div>';
+  }
+}
+
+/* ── 8. SMARTPOS ─── */
+function smartpos() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">🖥️ SmartPOS Command</div><div class="section-sub">Device health and transaction monitoring</div></div>
+    <button class="btn" onclick="window.open('/pos.html','_blank')">Open SmartPOS ↗</button>
+  </div>
+  <div class="kpi-grid" id="pos-kpis"><div class="loading">Loading…</div></div>
+  <div class="ecc-table-wrap" style="margin-top:16px">
+    <div class="ecc-table-hdr"><span class="ecc-table-title">Recent POS Transactions</span></div>
+    <div id="pos-txns"><div class="loading">Subscribing…</div></div>
+  </div>`;
+  _subPOS();
+}
+
+async function _subPOS() {
+  try {
+    const [txns, failed] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'posTransactions'), where('createdAt','>=',_startOfDay()))),
+      getCountFromServer(query(collection(db,'posTransactions'), where('status','==','failed'), where('createdAt','>=',_startOfDay()))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    document.getElementById('pos-kpis').innerHTML = [
+      {label:'Transactions Today',value:c(txns)},
+      {label:'Failed', value:c(failed), danger:c(failed)>0},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.danger?'var(--danger)':'var(--text)'}">${k.value}</div></div>`).join('');
+  } catch(_){}
+
+  const q = query(collection(db,'posTransactions'), orderBy('createdAt','desc'), limit(20));
+  const unsub = onSnapshot(q, snap => {
+    const el = document.getElementById('pos-txns'); if(!el) return;
+    if(snap.empty) { el.innerHTML='<div class="empty">🖥️<div>No POS transactions</div></div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Terminal</th><th>Amount</th><th>Method</th><th>Status</th><th>Time</th></tr></thead><tbody>${
+      snap.docs.map(d=>{ const v=d.data(); const st=v.status||'unknown';
+        return `<tr><td>${_esc(v.terminalId||'—')}</td><td>KES ${(v.amount||0).toLocaleString()}</td>
+          <td>${_esc(v.paymentMethod||'cash')}</td>
+          <td><span class="status ${st==='completed'?'ok':st==='failed'?'err':'warn'}">${_esc(st)}</span></td>
+          <td>${_relTime(v.createdAt)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+/* ── 9. SEARCH ─── */
+function search() {
+  document.getElementById('ecc-main').innerHTML = `
+  <div class="section-header"><div><div class="section-title">🔍 Search Command</div><div class="section-sub">Search health and analytics</div></div></div>
+  <div class="kpi-grid" id="search-kpis"><div class="loading">Loading…</div></div>
+  <div class="ecc-table-wrap" style="margin-top:16px">
+    <div class="ecc-table-hdr"><span class="ecc-table-title">Search Analytics</span></div>
+    <div id="search-table"><div class="loading">Loading…</div></div>
+  </div>`;
+  _loadSearch();
+}
+
+async function _loadSearch() {
+  const today = _startOfDay();
+  try {
+    const [queries, clicks, events] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'searchAnalytics'), where('ts','>=',today))),
+      getCountFromServer(query(collection(db,'tsClickStats'), where('ts','>=',today))),
+      getCountFromServer(query(collection(db,'typesenseQueue'))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    document.getElementById('search-kpis').innerHTML = [
+      {label:'Searches Today',  value:c(queries)},
+      {label:'Click-Through',   value:c(clicks), sub:'index clicks'},
+      {label:'Index Queue',     value:c(events), warn:c(events)>100},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.warn?'var(--warn)':'var(--text)'}">${k.value.toLocaleString()}</div>
+      ${k.sub?`<div class="kpi-sub">${k.sub}</div>`:''}</div>`).join('');
+
+    const sq = query(collection(db,'tsQueryStats'), orderBy('ts','desc'), limit(20));
+    const snap = await getDocs(sq);
+    const el = document.getElementById('search-table');
+    if(el) el.innerHTML = snap.empty ? '<div class="empty">No search stats yet</div>' :
+      `<table><thead><tr><th>Query</th><th>Hits</th><th>Latency</th><th>Time</th></tr></thead><tbody>${
+        snap.docs.map(d=>{ const v=d.data();
+          return `<tr><td>${_esc(v.query||'—')}</td><td>${v.hits??'—'}</td><td>${v.latencyMs?v.latencyMs+'ms':'—'}</td><td>${_relTime(v.ts)}</td></tr>`;
+        }).join('')}</tbody></table>`;
+  } catch(_) { const el=document.getElementById('search-kpis'); if(el) el.innerHTML='<div class="loading">No search data</div>'; }
+}
+
+/* ── 10. NOTIFICATIONS ─── */
+function notifications() {
+  document.getElementById('ecc-main').innerHTML = `
+  <div class="section-header"><div><div class="section-title">🔔 Notification Command</div><div class="section-sub">Delivery rates and queue health</div></div></div>
+  <div class="kpi-grid" id="notif-kpis"><div class="loading">Loading…</div></div>`;
+  _loadNotifications();
+}
+
+async function _loadNotifications() {
+  const today = _startOfDay();
+  try {
+    const [sent, failed, queued] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'notifications'), where('createdAt','>=',today))),
+      getCountFromServer(query(collection(db,'notifications'), where('status','==','failed'), where('createdAt','>=',today))),
+      getCountFromServer(query(collection(db,'notificationQueue'), where('status','==','pending'))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    document.getElementById('notif-kpis').innerHTML = [
+      {label:'Sent Today',   value:c(sent)},
+      {label:'Failed',       value:c(failed), danger:c(failed)>50},
+      {label:'In Queue',     value:c(queued),  warn:c(queued)>200},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.danger?'var(--danger)':k.warn?'var(--warn)':'var(--text)'}">${k.value.toLocaleString()}</div></div>`).join('');
+  } catch(_){}
+}
+
+/* ── 11. SUPPORT ─── */
+function support() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header"><div><div class="section-title">🎧 Customer Support</div><div class="section-sub">Tickets, disputes, and escalations</div></div></div>
+  <div class="kpi-grid" id="sup-kpis"><div class="loading">Loading…</div></div>
+  <div class="ecc-table-wrap" style="margin-top:16px">
+    <div class="ecc-table-hdr"><span class="ecc-table-title">Open Disputes</span></div>
+    <div id="sup-disputes"><div class="loading">Loading…</div></div>
+  </div>`;
+  _loadSupport();
+}
+
+async function _loadSupport() {
+  try {
+    const [open, disputes, refunds] = await Promise.allSettled([
+      getCountFromServer(query(collection(db,'disputes'), where('status','==','open'))),
+      getCountFromServer(query(collection(db,'disputes'))),
+      getCountFromServer(query(collection(db,'refunds'), where('status','==','pending'))),
+    ]);
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    document.getElementById('sup-kpis').innerHTML = [
+      {label:'Open Disputes',   value:c(open), danger:c(open)>10},
+      {label:'Total Disputes',  value:c(disputes)},
+      {label:'Pending Refunds', value:c(refunds), warn:c(refunds)>0},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.danger?'var(--danger)':k.warn?'var(--warn)':'var(--text)'}">${k.value}</div></div>`).join('');
+
+    const q = query(collection(db,'disputes'), where('status','==','open'), orderBy('createdAt','desc'), limit(20));
+    const snap = await getDocs(q);
+    const el = document.getElementById('sup-disputes');
+    if(el) el.innerHTML = snap.empty ? '<div class="empty">✅<div>No open disputes</div></div>' :
+      `<table><thead><tr><th>ID</th><th>Type</th><th>Amount</th><th>Status</th><th>Created</th></tr></thead><tbody>${
+        snap.docs.map(d=>{ const v=d.data();
+          return `<tr><td style="font-family:monospace;font-size:11px">${d.id.slice(-8)}</td>
+            <td>${_esc(v.type||'dispute')}</td><td>${v.amount?'KES '+v.amount.toLocaleString():'—'}</td>
+            <td><span class="status warn">${_esc(v.status)}</span></td><td>${_relTime(v.createdAt)}</td></tr>`;
+        }).join('')}</tbody></table>`;
+  } catch(_) { const el=document.getElementById('sup-kpis'); if(el) el.innerHTML='<div class="loading">No support data</div>'; }
+}
+
+/* ── 12. SECURITY ─── */
+function security() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">🛡️ Security Command</div><div class="section-sub">Threat monitoring — last 24h</div></div>
+    <button class="btn danger" onclick="openModal('incident-modal')">🚨 Declare Security Incident</button>
+  </div>
+  <div class="kpi-grid" id="sec-kpis"><div class="loading">Loading…</div></div>
+  <div class="ecc-table-wrap" style="margin-top:16px">
+    <div class="ecc-table-hdr"><span class="ecc-table-title">Security Events</span></div>
+    <div id="sec-feed"><div class="loading">Subscribing…</div></div>
+  </div>`;
+  _subSecurity();
+}
+
+function _subSecurity() {
+  const since = Date.now() - 86400000;
+  // Count KPIs
+  Promise.allSettled([
+    getCountFromServer(query(collection(db,'securityEvents'), where('ts','>=',since))),
+    getCountFromServer(query(collection(db,'securityEvents'), where('eventType','==','brute_force'), where('ts','>=',since))),
+    getCountFromServer(query(collection(db,'fraudLog'), where('ts','>=',since))),
+    getCountFromServer(query(collection(db,'securityEvents'), where('eventType','==','fake_gps'), where('ts','>=',since))),
+  ]).then(([total, brute, fraud, gps]) => {
+    const c=r=>r.status==='fulfilled'?(r.value?.data?.()?.count??0):0;
+    const el = document.getElementById('sec-kpis');
+    if(el) el.innerHTML = [
+      {label:'Security Events (24h)', value:c(total), danger:c(total)>50},
+      {label:'Brute Force',           value:c(brute), danger:c(brute)>0},
+      {label:'Fraud Events',          value:c(fraud), danger:c(fraud)>0},
+      {label:'GPS Spoofing',          value:c(gps),   danger:c(gps)>0},
+    ].map(k=>`<div class="kpi"><div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.danger&&k.value>0?'var(--danger)':'var(--text)'}">${k.value}</div></div>`).join('');
+
+    // Update sidebar badge
+    const sb = document.getElementById('sb-threats');
+    const n = c(total);
+    if(sb) { sb.textContent=n; sb.style.display=n>0?'inline':'none'; }
+  }).catch(_=>{});
+
+  // Live feed
+  const q = query(collection(db,'securityEvents'), where('ts','>=',since), orderBy('ts','desc'), limit(25));
+  const unsub = onSnapshot(q, snap => {
+    const el = document.getElementById('sec-feed'); if(!el) return;
+    if(snap.empty) { el.innerHTML='<div class="empty">🛡️<div>No security events in last 24h</div></div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Event</th><th>Severity</th><th>IP / UID</th><th>Time</th></tr></thead><tbody>${
+      snap.docs.map(d=>{ const v=d.data();
+        const sev=v.severity||'medium';
+        return `<tr><td>${_esc(v.eventType||v.type||'unknown')}</td>
+          <td><span class="status ${sev==='critical'||sev==='high'?'err':sev==='medium'?'warn':'info'}">${_esc(sev)}</span></td>
+          <td style="font-family:monospace;font-size:11px">${_esc(v.ip||v.uid?.slice(-8)||'—')}</td>
+          <td>${_relTime(v.ts)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+/* ── 13. SYSTEM HEALTH ─── */
+function system_health() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">💚 System Health</div><div class="section-sub">All service status — updated from eccSystemHealth collection</div></div>
+    <button class="btn" onclick="nav('system_health')">⟳ Refresh</button>
+  </div>
+  <div class="health-grid" id="health-grid"><div class="loading">Loading…</div></div>`;
+
+  // Fallback synthetic health if collection is empty
+  const SERVICES = [
+    {id:'firestore',  name:'Firestore',       icon:'🔥'},
+    {id:'functions',  name:'Cloud Functions', icon:'⚡'},
+    {id:'hosting',    name:'Firebase Hosting',icon:'🌐'},
+    {id:'auth',       name:'Authentication',  icon:'🔐'},
+    {id:'storage',    name:'Cloud Storage',   icon:'💾'},
+    {id:'payments',   name:'Payments (IntaSend)',icon:'💳'},
+    {id:'gip',        name:'GIP Platform',   icon:'🌍'},
+    {id:'eip',        name:'EIP Engine',     icon:'🧠'},
+    {id:'wap',        name:'WAP Engine',     icon:'⚙️'},
+    {id:'search',     name:'Search (Typesense)',icon:'🔍'},
+    {id:'notifications',name:'Notifications',icon:'🔔'},
+    {id:'delivery',   name:'Delivery Engine',icon:'🛵'},
+  ];
+
+  const unsub = onSnapshot(collection(db,'eccSystemHealth'), snap => {
+    const el = document.getElementById('health-grid'); if(!el) return;
+    const data = {};
+    snap.docs.forEach(d=>{ data[d.id]={...d.data(),id:d.id}; });
+    el.innerHTML = SERVICES.map(s => {
+      const h = data[s.id] || {};
+      const st = h.status || 'unknown';
+      const cls = st==='operational'?'ok':st==='degraded'||st==='partial_outage'?'warn':st==='major_outage'?'err':'unk';
+      const lbl = st==='operational'?'Operational':st==='degraded'?'Degraded':st==='partial_outage'?'Partial Outage':st==='major_outage'?'Major Outage':'Unknown';
+      return `<div class="svc-card">
+        <div class="svc-icon ${cls}">${s.icon}</div>
+        <div><div class="svc-name">${s.name}</div><div class="svc-status ${cls}">${lbl}</div>
+        ${h.latencyMs?`<div style="font-size:10px;color:var(--muted)">${h.latencyMs}ms</div>`:''}
+        </div></div>`;
+    }).join('');
+  }, () => {
+    // No collection — show all as unknown
+    const el = document.getElementById('health-grid'); if(!el) return;
+    el.innerHTML = SERVICES.map(s => `<div class="svc-card">
+      <div class="svc-icon unk">${s.icon}</div>
+      <div><div class="svc-name">${s.name}</div><div class="svc-status unk">No Data</div></div></div>`).join('');
+  });
+  _listeners.push(unsub);
+}
+
+/* ── 14. INCIDENTS ─── */
+function incidents() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">🚨 Incident Management</div><div class="section-sub">Create, track, and resolve operational incidents</div></div>
+    <button class="btn danger" onclick="openModal('incident-modal')">+ Create Incident</button>
+  </div>
+  <div id="incidents-list"><div class="loading">Subscribing…</div></div>`;
+  _subIncidents();
+}
+
+function _subIncidents() {
+  const q = query(collection(db,'eccIncidents'), orderBy('createdAt','desc'), limit(30));
+  const unsub = onSnapshot(q, snap => {
+    const el = document.getElementById('incidents-list'); if(!el) return;
+    const open = snap.docs.filter(d=>d.data().status!=='resolved');
+    const sb = document.getElementById('sb-incidents');
+    if(sb) { sb.textContent=open.length; sb.style.display=open.length>0?'inline':'none'; }
+    if(snap.empty) { el.innerHTML='<div class="empty">✅<div>No incidents — platform healthy</div></div>'; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const v=d.data(); const sev=v.severity||'medium';
+      return `<div class="incident-card">
+        <div class="inc-header">
+          <span class="inc-sev ${sev}">${sev.toUpperCase()}</span>
+          <div class="inc-title">${_esc(v.title||'Untitled')}</div>
+          <span class="status ${v.status==='resolved'?'ok':v.status==='investigating'?'warn':'err'}">${_esc(v.status||'open')}</span>
+        </div>
+        <div class="inc-meta">
+          <span>ID: ${_esc(v.id||d.id.slice(-8))}</span>
+          <span>Created: ${_relTime(v.createdAt)}</span>
+          ${v.resolvedAt?`<span style="color:var(--success)">Resolved: ${_relTime(v.resolvedAt)}</span>`:''}
+          ${v.affectedServices?.length?`<span>Affects: ${v.affectedServices.map(s=>_esc(s)).join(', ')}</span>`:''}
+        </div>
+        ${v.status!=='resolved'?`<div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" onclick="updateInc('${d.id}','investigating')">Investigating</button>
+          <button class="btn" onclick="updateInc('${d.id}','identified')">Identified</button>
+          <button class="btn ok" style="color:var(--success)" onclick="updateInc('${d.id}','resolved')">Resolve</button>
+        </div>`:''}
+      </div>`;
+    }).join('');
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+/* ── 15. AUDIT ─── */
+function audit() {
+  const main = document.getElementById('ecc-main');
+  main.innerHTML = `
+  <div class="section-header">
+    <div><div class="section-title">📋 Audit Log</div><div class="section-sub">Immutable record of all platform actions</div></div>
+    <div style="display:flex;gap:8px">
+      <input class="form-control" id="audit-search" placeholder="Filter by action…" style="width:200px;padding:7px 12px" oninput="_filterAudit(this.value)">
+    </div>
+  </div>
+  <div class="ecc-table-wrap">
+    <div style="display:grid;grid-template-columns:130px 140px 1fr 100px;gap:12px;padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);border-bottom:1px solid var(--border)">
+      <div>Time</div><div>Actor</div><div>Action</div><div>Section</div>
+    </div>
+    <div id="audit-feed"><div class="loading">Loading…</div></div>
+  </div>`;
+  _subAudit();
+}
+
+let _allAuditEntries = [];
+function _subAudit() {
+  const q = query(collection(db,'eccAuditLog'), orderBy('ts','desc'), limit(100));
+  const unsub = onSnapshot(q, snap => {
+    _allAuditEntries = snap.docs.map(d=>({id:d.id,...d.data()}));
+    _renderAudit(_allAuditEntries);
+  }, ()=>{});
+  _listeners.push(unsub);
+}
+
+window._filterAudit = function(val) {
+  const filtered = val ? _allAuditEntries.filter(e => e.action?.toLowerCase().includes(val.toLowerCase())) : _allAuditEntries;
+  _renderAudit(filtered);
+};
+
+function _renderAudit(entries) {
+  const el = document.getElementById('audit-feed'); if(!el) return;
+  if(!entries.length) { el.innerHTML='<div class="empty">No audit entries yet</div>'; return; }
+  el.innerHTML = entries.map(e => `
+  <div class="audit-entry">
+    <div class="audit-time">${_relTime(e.ts)}</div>
+    <div class="audit-actor">${_esc(e.actorEmail?.split('@')[0]||e.actorUid?.slice(-6)||'system')}</div>
+    <div class="audit-action">${_esc(e.action)}</div>
+    <div><span class="status neutral">${_esc(e.actorRole||'—')}</span></div>
+  </div>`).join('');
+}
+
+/* ── Alert Panel ─────────────────────────────────── */
+function _renderAlertPanel() {
+  const el = document.getElementById('ap-list'); if(!el) return;
+  if(!_alerts.length) { el.innerHTML='<div class="loading">No active alerts</div>'; return; }
+  el.innerHTML = _alerts.map(a => `
+  <div class="alert-item ${a.severity||'medium'}" onclick="ackAlert('${a.id}')">
+    <div class="alert-title">${_esc(a.title||'Alert')}</div>
+    <div class="alert-msg">${_esc(a.message||'')}</div>
+    <div class="alert-meta">
+      <span>${_esc(a.severity||'medium')}</span>
+      <span>${_esc(a.category||'—')}</span>
+      <span>${_relTime(a.createdAt)}</span>
+    </div>
+  </div>`).join('');
+}
+
+window.toggleAlertPanel = () => {
+  document.getElementById('alert-panel').classList.toggle('open');
+};
+
+window.ackAlert = async (id) => {
+  if(!confirm('Acknowledge this alert?')) return;
+  try {
+    await updateDoc(doc(db,'eccAlerts',id), { status:'acknowledged', acknowledgedBy:_user?.uid, acknowledgedAt:Date.now() });
+  } catch(e) { alert('Error: '+e.message); }
+};
+
+/* ── Incident actions ────────────────────────────── */
+window.openModal = id => document.getElementById(id).classList.add('open');
+window.closeModal = id => document.getElementById(id).classList.remove('open');
+
+window.submitIncident = async () => {
+  const title = document.getElementById('inc-title').value.trim();
+  const desc  = document.getElementById('inc-desc').value.trim();
+  const sev   = document.getElementById('inc-sev').value;
+  const svcs  = document.getElementById('inc-services').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!title) { alert('Title is required'); return; }
+  try {
+    const incId = 'INC-'+Date.now().toString(36).toUpperCase();
+    await addDoc(collection(db,'eccIncidents'), {
+      id:incId, title, description:desc, severity:sev, affectedServices:svcs,
+      status:'open', assignee:_user?.uid,
+      timeline:[{ts:Date.now(),event:'created',by:_user?.uid,note:'Incident created via ECC'}],
+      createdAt:Date.now(), createdBy:_user?.uid, serverTs:serverTimestamp(),
+    });
+    await _audit('incident_created', {incId, title, sev});
+    closeModal('incident-modal');
+    nav('incidents');
+  } catch(e) { alert('Error creating incident: '+e.message); }
+};
+
+window.updateInc = async (id, status) => {
+  try {
+    const { arrayUnion } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const update = { status, serverTs:serverTimestamp(), timeline:arrayUnion({ts:Date.now(),event:status,by:_user?.uid,note:''}) };
+    if(status==='resolved') { update.resolvedAt=Date.now(); }
+    await updateDoc(doc(db,'eccIncidents',id), update);
+    await _audit('incident_updated',{id,status});
+  } catch(e) { alert('Error: '+e.message); }
+};
+
+/* ── Audit helper ────────────────────────────────── */
+async function _audit(action, details={}) {
+  try {
+    await addDoc(collection(db,'eccAuditLog'), {
+      action, details, actorUid:_user?.uid||'system',
+      actorEmail:_user?.email||'system', actorRole:_role,
+      ts:Date.now(), serverTs:serverTimestamp(),
+    });
+  } catch(_){}
+}
+
+/* ── Utilities ───────────────────────────────────── */
+function _esc(s) {
+  if(s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _startOfDay() {
+  const d = new Date(); d.setHours(0,0,0,0); return d.getTime();
+}
+
+function _relTime(ts) {
+  if(!ts) return '—';
+  const ms = typeof ts==='number' ? ts : (ts.toMillis?.() ?? Date.now());
+  const diff = Date.now() - ms;
+  if(diff < 60000)   return Math.round(diff/1000)+'s ago';
+  if(diff < 3600000) return Math.round(diff/60000)+'m ago';
+  if(diff < 86400000)return Math.round(diff/3600000)+'h ago';
+  return new Date(ms).toLocaleDateString('en-KE',{month:'short',day:'numeric'});
+}
+</script>
+</body>
+</html>
