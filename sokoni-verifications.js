@@ -33,7 +33,7 @@ const SokoniVerifications = (function () {
     projectId: 'sokoni-aeb26',
     storageBucket: 'sokoni-aeb26.firebasestorage.app',
     messagingSenderId: '24799054989',
-    appId: '1:24799054989:web:e1cf6ca8c281bf1abf26c4',
+    appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS",
   };
 
   /* In-memory + sessionStorage cache — TTL 10 minutes */
