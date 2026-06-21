@@ -131,6 +131,8 @@ const PRECACHE_STATIC = [
   "/wap.html",
   /* Enterprise Control Center */
   "/sokoni-ecc.js", "/ecc.html",
+  /* SASOS — Universal AI Subscription Operating System */
+  "/sokoni-sasos.js", "/sasos-admin.html",
   /* Commerce — Orders, Notifications, Subscriptions, Vouchers */
   "/sokoni-orders.js", "/sokoni-notifications.js",
   "/sokoni-subscriptions.js", "/sokoni-vouchers.js", "/sokoni-intasend.js",

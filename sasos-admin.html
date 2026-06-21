@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#71ff00">
+  <title>SASOS Admin — SOKONI Universal Subscription OS</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/mobile.css">
+
+  <style>
+    :root{--g:#71ff00;--g2:#4fc800;--r:#ff4444;--o:#ff9500;--p:#a78bfa;--b:#3b82f6;
+          --bg:#0d0d0d;--bg2:#111;--bg3:#181818;--border:rgba(255,255,255,.07);
+          --text:#fff;--muted:rgba(255,255,255,.42);--rad:14px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh}
+
+    /* ── Header ── */
+    .sa-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.7);position:sticky;top:0;z-index:100;backdrop-filter:blur(14px)}
+    .sa-logo{font-size:16px;font-weight:800;color:var(--g);flex:1}
+    .sa-logo span{color:var(--muted);font-weight:400;font-size:11px;display:block;margin-top:-2px}
+    .sa-badge{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.4px}
+    .health-wrap{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
+    .health-dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    /* ── Tabs ── */
+    .sa-tabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:var(--bg2);padding:0 16px;gap:2px;position:sticky;top:52px;z-index:99}
+    .sa-tabs::-webkit-scrollbar{display:none}
+    .sa-tab{flex-shrink:0;padding:13px 16px;font-size:13px;font-weight:700;color:var(--muted);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:.15s}
+    .sa-tab.active{color:var(--g);border-color:var(--g)}
+    .sa-tab:hover:not(.active){color:var(--text)}
+
+    /* ── Pages ── */
+    .sa-page{display:none;padding:24px 20px 120px;max-width:1280px;margin:0 auto}
+    .sa-page.active{display:block}
+
+    /* ── KPI grid ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px}
+    @media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
+    @media(min-width:900px){.kpi-grid{grid-template-columns:repeat(6,1fr)}}
+    .kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:16px}
+    .kpi-val{font-size:26px;font-weight:800;color:var(--g)}
+    .kpi-label{font-size:10px;color:var(--muted);margin-top:4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+    .kpi-sub{font-size:11px;color:rgba(113,255,0,.55);margin-top:2px}
+    .kpi-sub.up{color:#22c55e}.kpi-sub.down{color:#ef4444}.kpi-sub.neutral{color:var(--muted)}
+
+    /* ── Section heading ── */
+    .s-head{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin:28px 0 14px;display:flex;align-items:center;gap:10px}
+    .s-head:first-child{margin-top:0}
+    .s-head::after{content:'';flex:1;height:1px;background:var(--border)}
+
+    /* ── Cards ── */
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:20px;margin-bottom:16px}
+    .card-title{font-size:13px;font-weight:700;margin-bottom:14px;color:#fff}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media(max-width:600px){.two-col{grid-template-columns:1fr}}
+    .three-col{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    @media(max-width:768px){.three-col{grid-template-columns:1fr}}
+
+    /* ── Table ── */
+    .tbl-wrap{overflow-x:auto}
+    .tbl{width:100%;border-collapse:collapse;font-size:13px}
+    .tbl th{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap}
+    .tbl td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .tbl tr:hover td{background:rgba(255,255,255,.025)}
+
+    /* ── Badges ── */
+    .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.2px}
+    .b-green{background:rgba(34,197,94,.15);color:#22c55e}
+    .b-blue{background:rgba(59,130,246,.15);color:#60a5fa}
+    .b-yellow{background:rgba(245,158,11,.15);color:#fbbf24}
+    .b-red{background:rgba(239,68,68,.15);color:#f87171}
+    .b-purple{background:rgba(167,139,250,.15);color:#a78bfa}
+    .b-gray{background:rgba(255,255,255,.07);color:var(--muted)}
+
+    /* ── Input / Select ── */
+    .sa-input,.sa-select,.sa-textarea{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:#fff;font-size:14px;width:100%;outline:none;transition:border-color .15s}
+    .sa-input:focus,.sa-select:focus,.sa-textarea:focus{border-color:var(--g)}
+    .sa-select option{background:#222;color:#fff}
+    .sa-textarea{resize:vertical;min-height:80px}
+    .form-row{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+    .form-row label{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.3px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:500px){.form-grid{grid-template-columns:1fr}}
+
+    /* ── Buttons ── */
+    .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:.15s}
+    .btn-primary{background:var(--g);color:#000}
+    .btn-primary:hover{background:var(--g2)}
+    .btn-danger{background:#ef4444;color:#fff}
+    .btn-danger:hover{background:#dc2626}
+    .btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid var(--border)}
+    .btn-ghost:hover{background:rgba(255,255,255,.1)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+
+    /* ── Progress bar ── */
+    .pbar-wrap{margin-bottom:10px}
+    .pbar-header{display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px}
+    .pbar-label{color:rgba(255,255,255,.7);font-weight:600}
+    .pbar-val{color:var(--muted)}
+    .pbar-track{background:rgba(255,255,255,.08);border-radius:99px;height:7px;overflow:hidden}
+    .pbar-fill{height:100%;border-radius:99px;transition:width .5s}
+
+    /* ── Forecast chart ── */
+    .chart-wrap{display:flex;align-items:flex-end;gap:4px;height:120px;margin-top:8px}
+    .chart-bar{flex:1;background:rgba(113,255,0,.3);border-radius:4px 4px 0 0;transition:background .2s;position:relative;cursor:pointer}
+    .chart-bar:hover{background:rgba(113,255,0,.6)}
+    .chart-bar-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e1e1e;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-weight:700;white-space:nowrap;z-index:10}
+    .chart-bar:hover .chart-bar-tip{display:block}
+
+    /* ── Toast ── */
+    #sasos-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:12px 22px;border-radius:12px;font-size:14px;font-weight:600;z-index:99999;opacity:0;transition:opacity .3s;pointer-events:none;border:1px solid var(--border)}
+    #sasos-toast.show{opacity:1}
+
+    /* ── Loading skeleton ── */
+    .skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.04) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:8px;height:20px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    /* ── Risk level indicator ── */
+    .risk-meter{display:flex;align-items:center;gap:10px;margin-top:8px}
+    .risk-block{flex:1;height:8px;border-radius:2px}
+
+    /* ── Timeline ── */
+    .timeline{display:flex;flex-direction:column;gap:14px}
+    .tl-item{display:flex;gap:14px;align-items:flex-start}
+    .tl-dot{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--bg3);border:1px solid var(--border)}
+    .tl-body{flex:1}
+    .tl-title{font-size:13px;font-weight:700}
+    .tl-meta{font-size:11px;color:var(--muted);margin-top:2px}
+  </style>
+</head>
+<body>
+
+<!-- ── Splash ── -->
+<div id="splash" style="position:fixed;inset:0;background:#0d0d0d;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999">
+  <div style="font-size:36px;font-weight:900;color:#71ff00;letter-spacing:-1px">SASOS</div>
+  <div style="font-size:12px;color:rgba(255,255,255,.42);margin-top:6px;letter-spacing:.5px">UNIVERSAL SUBSCRIPTION OS</div>
+  <div style="margin-top:32px;width:180px;height:3px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
+    <div id="splash-bar" style="width:0%;height:100%;background:#71ff00;border-radius:3px;transition:width .4s"></div>
+  </div>
+</div>
+
+<!-- ── Header ── -->
+<header class="sa-header">
+  <div class="sa-logo">SASOS Admin <span>Universal Subscription Operating System</span></div>
+  <div class="health-wrap"><div class="health-dot"></div><span id="hdr-status">—</span></div>
+  <span class="sa-badge">SUPER ADMIN</span>
+</header>
+
+<!-- ── Tabs ── -->
+<nav class="sa-tabs" role="tablist">
+  <button class="sa-tab active" data-tab="overview"   role="tab">Overview</button>
+  <button class="sa-tab"        data-tab="revenue"    role="tab">Revenue</button>
+  <button class="sa-tab"        data-tab="subscribers" role="tab">Subscribers</button>
+  <button class="sa-tab"        data-tab="billing"    role="tab">Billing</button>
+  <button class="sa-tab"        data-tab="fraud"      role="tab">Fraud & Risk</button>
+  <button class="sa-tab"        data-tab="brain"      role="tab">AI Brain</button>
+  <button class="sa-tab"        data-tab="enterprise" role="tab">Enterprise</button>
+  <button class="sa-tab"        data-tab="plans"      role="tab">Plans</button>
+  <button class="sa-tab"        data-tab="usage"      role="tab">Usage</button>
+  <button class="sa-tab"        data-tab="actions"    role="tab">Actions</button>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: OVERVIEW
+════════════════════════════════════════════════════════════ -->
+<main id="tab-overview" class="sa-page active">
+  <div class="kpi-grid" id="overview-kpis">
+    <div class="kpi"><div class="kpi-val skel" style="width:80px;height:30px"></div><div class="kpi-label">Total Subscribers</div></div>
+    <div class="kpi"><div class="kpi-val skel" style="width:80px;height:30px"></div><div class="kpi-label">Active Plans</div></div>
+    <div class="kpi"><div class="kpi-val skel" style="width:80px;height:30px"></div><div class="kpi-label">MRR</div></div>
+    <div class="kpi"><div class="kpi-val skel" style="width:80px;height:30px"></div><div class="kpi-label">ARR</div></div>
+    <div class="kpi"><div class="kpi-val skel" style="width:80px;height:30px"></div><div class="kpi-label">Trials</div></div>
+    <div class="kpi"><div class="kpi-val skel" style="width:80px;height:30px"></div><div class="kpi-label">Grace Period</div></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Platform Health</div>
+      <div id="health-list">
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Subscriptions by Product</div>
+      <div id="product-breakdown">
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="s-head">Recent Activity</div>
+  <div class="card" id="recent-activity">
+    <div class="skel" style="height:18px;margin-bottom:10px"></div>
+    <div class="skel" style="height:18px;margin-bottom:10px"></div>
+    <div class="skel" style="height:18px"></div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: REVENUE
+════════════════════════════════════════════════════════════ -->
+<main id="tab-revenue" class="sa-page">
+  <div class="kpi-grid" id="revenue-kpis"></div>
+
+  <div class="card">
+    <div class="card-title">30-Day Revenue Trend</div>
+    <div class="chart-wrap" id="revenue-chart"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">12-Month Forecast</div>
+    <div class="chart-wrap" id="forecast-chart"></div>
+    <div id="forecast-meta" style="margin-top:12px;font-size:12px;color:var(--muted)"></div>
+  </div>
+
+  <div class="s-head">Revenue by Plan</div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Plan</th><th>Product</th><th>Tier</th><th>Active Subs</th><th>Monthly KES</th><th>Annual KES</th></tr></thead>
+        <tbody id="revenue-by-plan"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: SUBSCRIBERS
+════════════════════════════════════════════════════════════ -->
+<main id="tab-subscribers" class="sa-page">
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+    <input id="sub-search" class="sa-input" placeholder="Search by UID or email…" style="max-width:320px;flex:1">
+    <select id="sub-product-filter" class="sa-select" style="width:160px">
+      <option value="">All Products</option>
+      <option>marketplace</option><option>smartpos</option><option>ai</option>
+      <option>delivery</option><option>logistics</option><option>events</option>
+      <option>property</option><option>vehicles</option><option>advertising</option>
+      <option>business</option><option>warehousing</option><option>finance</option>
+      <option>analytics</option>
+    </select>
+    <select id="sub-status-filter" class="sa-select" style="width:150px">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option><option value="trial">Trial</option>
+      <option value="grace">Grace Period</option><option value="suspended">Suspended</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadSubscribers()">Search</button>
+  </div>
+
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>UID</th><th>Product</th><th>Plan</th><th>Status</th><th>Billing</th><th>Period End</th><th>Actions</th></tr></thead>
+        <tbody id="sub-table-body"></tbody>
+      </table>
+    </div>
+    <div id="sub-load-more" style="text-align:center;margin-top:14px;display:none">
+      <button class="btn btn-ghost" onclick="loadSubscribers(true)">Load More</button>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: BILLING
+════════════════════════════════════════════════════════════ -->
+<main id="tab-billing" class="sa-page">
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Issue Refund</div>
+      <div class="form-row"><label>User UID</label><input id="ref-uid" class="sa-input" placeholder="uid…"></div>
+      <div class="form-row"><label>Product</label>
+        <select id="ref-product" class="sa-select">
+          <option>ai</option><option>marketplace</option><option>smartpos</option>
+          <option>delivery</option><option>logistics</option><option>events</option>
+          <option>property</option><option>vehicles</option><option>advertising</option>
+          <option>business</option><option>warehousing</option><option>finance</option>
+          <option>analytics</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Amount (KES)</label><input id="ref-amount" class="sa-input" type="number" placeholder="e.g. 500"></div>
+      <div class="form-row"><label>Reason</label><input id="ref-reason" class="sa-input" placeholder="Reason for refund…"></div>
+      <div class="form-row"><label>Revert to Free Plan?</label>
+        <select id="ref-revert" class="sa-select"><option value="false">No</option><option value="true">Yes</option></select>
+      </div>
+      <div class="form-row"><label>Your UID (second approver)</label><input id="ref-approver" class="sa-input" placeholder="Different admin UID…"></div>
+      <button class="btn btn-danger" onclick="issueRefund()">Issue Refund</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Dunning Overview</div>
+      <div id="dunning-stats">
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="s-head">Recent Billing Events</div>
+  <div class="card">
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <input id="bill-uid-filter" class="sa-input" placeholder="Filter by UID…" style="max-width:280px;flex:1">
+      <select id="bill-product-filter" class="sa-select" style="width:160px">
+        <option value="">All Products</option>
+        <option>ai</option><option>marketplace</option><option>smartpos</option>
+      </select>
+      <button class="btn btn-primary" onclick="loadBillingHistory()">Load</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Date</th><th>UID</th><th>Type</th><th>Product</th><th>Amount KES</th><th>VAT</th><th>Plan</th></tr></thead>
+        <tbody id="billing-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: FRAUD & RISK
+════════════════════════════════════════════════════════════ -->
+<main id="tab-fraud" class="sa-page">
+  <div class="kpi-grid" id="fraud-kpis">
+    <div class="kpi"><div class="kpi-val" id="fk-queue">—</div><div class="kpi-label">Review Queue</div></div>
+    <div class="kpi"><div class="kpi-val" id="fk-suspended">—</div><div class="kpi-label">Suspended Accounts</div></div>
+    <div class="kpi"><div class="kpi-val" id="fk-restricted">—</div><div class="kpi-label">Restricted</div></div>
+    <div class="kpi"><div class="kpi-val" id="fk-critical">—</div><div class="kpi-label">Critical Risk</div></div>
+  </div>
+
+  <div class="s-head">Manual Review Queue</div>
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+    <select id="fraud-priority-filter" class="sa-select" style="width:160px">
+      <option value="">All Priorities</option>
+      <option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option>
+    </select>
+    <select id="fraud-status-filter" class="sa-select" style="width:160px">
+      <option value="pending">Pending</option><option value="resolved">Resolved</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadFraudQueue()">Load Queue</button>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>UID</th><th>Risk Score</th><th>Priority</th><th>Signals</th><th>Queued</th><th>Actions</th></tr></thead>
+        <tbody id="fraud-queue-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="s-head">Resolve Risk</div>
+  <div class="card">
+    <div class="two-col">
+      <div>
+        <div class="form-row"><label>User UID</label><input id="risk-uid" class="sa-input" placeholder="uid…"></div>
+        <div class="form-row"><label>Resolution</label>
+          <select id="risk-resolution" class="sa-select">
+            <option value="cleared">Cleared — false positive</option>
+            <option value="warned">Warned — kept account</option>
+            <option value="confirmed_fraud">Confirmed fraud — keep suspended</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Reset Score to 0?</label>
+          <select id="risk-reset" class="sa-select"><option value="true">Yes</option><option value="false">No</option></select>
+        </div>
+        <div class="form-row"><label>Notes</label><textarea id="risk-notes" class="sa-textarea" placeholder="What did you find?"></textarea></div>
+        <button class="btn btn-primary" onclick="resolveRisk()">Resolve Risk</button>
+      </div>
+      <div>
+        <div class="form-row"><label>View Risk Profile for UID</label>
+          <div style="display:flex;gap:8px"><input id="view-risk-uid" class="sa-input" placeholder="uid…"><button class="btn btn-ghost" onclick="viewRiskProfile()">View</button></div>
+        </div>
+        <div id="risk-profile-result"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: AI BRAIN
+════════════════════════════════════════════════════════════ -->
+<main id="tab-brain" class="sa-page">
+  <div class="s-head">Platform Intelligence</div>
+  <div class="three-col" id="brain-segment-cards"></div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Churn Risk Distribution</div>
+      <div id="churn-dist"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Upgrade Opportunity</div>
+      <div id="upgrade-dist"></div>
+    </div>
+  </div>
+
+  <div class="s-head">User Brain Lookup</div>
+  <div class="card">
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <input id="brain-uid" class="sa-input" placeholder="Enter user UID…" style="max-width:300px;flex:1">
+      <button class="btn btn-primary" onclick="lookupBrain()">Analyze</button>
+    </div>
+    <div id="brain-result"></div>
+  </div>
+
+  <div class="s-head">Revenue Forecast</div>
+  <div class="card">
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-row" style="margin:0"><label>Forecast Months</label>
+        <select id="forecast-months" class="sa-select" style="width:130px"><option value="6">6 months</option><option value="12" selected>12 months</option><option value="24">24 months</option></select>
+      </div>
+      <button class="btn btn-primary" onclick="loadForecast()">Generate Forecast</button>
+    </div>
+    <div id="forecast-result"></div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: ENTERPRISE
+════════════════════════════════════════════════════════════ -->
+<main id="tab-enterprise" class="sa-page">
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Create Enterprise License</div>
+      <div class="form-grid">
+        <div class="form-row"><label>Org ID</label><input id="lic-org" class="sa-input" placeholder="orgId…"></div>
+        <div class="form-row"><label>Product</label>
+          <select id="lic-product" class="sa-select"><option>ai</option><option>marketplace</option><option>smartpos</option><option>delivery</option><option>events</option><option>property</option><option>analytics</option></select>
+        </div>
+        <div class="form-row"><label>License Type</label>
+          <select id="lic-type" class="sa-select"><option>enterprise</option><option>business</option><option>partner</option><option>developer</option><option>education</option><option>government</option><option>franchise</option></select>
+        </div>
+        <div class="form-row"><label>Plan ID</label><input id="lic-plan" class="sa-input" placeholder="e.g. ai.enterprise"></div>
+        <div class="form-row"><label>Seats (-1 = unlimited)</label><input id="lic-seats" class="sa-input" type="number" value="10"></div>
+        <div class="form-row"><label>Price (KES)</label><input id="lic-price" class="sa-input" type="number" placeholder="0 = standard price"></div>
+        <div class="form-row"><label>Billing Period</label>
+          <select id="lic-billing" class="sa-select"><option value="monthly">Monthly</option><option value="annual">Annual</option></select>
+        </div>
+        <div class="form-row"><label>Second Approver UID</label><input id="lic-approver" class="sa-input" placeholder="Different admin UID…"></div>
+      </div>
+      <div class="form-row"><label>Notes</label><textarea id="lic-notes" class="sa-textarea" placeholder="Contract notes…"></textarea></div>
+      <button class="btn btn-primary" onclick="createLicense()">Create License</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">License Lookup</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="lic-lookup-id" class="sa-input" placeholder="licenseId…">
+        <button class="btn btn-ghost" onclick="lookupLicense()">View</button>
+      </div>
+      <div id="license-result"></div>
+
+      <div class="card-title" style="margin-top:24px">Revoke License</div>
+      <div class="form-row"><label>License ID</label><input id="lic-revoke-id" class="sa-input" placeholder="licenseId…"></div>
+      <div class="form-row"><label>Reason</label><input id="lic-revoke-reason" class="sa-input" placeholder="Reason…"></div>
+      <button class="btn btn-danger" onclick="revokeLicense()">Revoke License</button>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: PLANS
+════════════════════════════════════════════════════════════ -->
+<main id="tab-plans" class="sa-page">
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+    <select id="plan-product-filter" class="sa-select" style="width:180px">
+      <option value="">All Products</option>
+      <option>marketplace</option><option>smartpos</option><option>ai</option>
+      <option>delivery</option><option>logistics</option><option>events</option>
+      <option>property</option><option>vehicles</option><option>advertising</option>
+      <option>business</option><option>warehousing</option><option>finance</option>
+      <option>analytics</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadPlans()">Load Plans</button>
+  </div>
+
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Plan ID</th><th>Product</th><th>Tier</th><th>Monthly KES</th><th>Annual KES</th><th>Trial Days</th><th>VAT</th><th>Firestore Override</th></tr></thead>
+        <tbody id="plans-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="s-head">Update Plan Configuration</div>
+  <div class="card">
+    <div class="form-grid">
+      <div class="form-row"><label>Plan ID</label><input id="pc-plan-id" class="sa-input" placeholder="e.g. ai.pro"></div>
+      <div class="form-row"><label>Monthly Price (KES)</label><input id="pc-monthly" class="sa-input" type="number" placeholder="e.g. 2500"></div>
+      <div class="form-row"><label>Annual Price (KES)</label><input id="pc-annual" class="sa-input" type="number" placeholder="e.g. 25000"></div>
+      <div class="form-row"><label>Trial Days</label><input id="pc-trial" class="sa-input" type="number" placeholder="e.g. 14"></div>
+      <div class="form-row"><label>Second Approver UID (for price changes)</label><input id="pc-approver" class="sa-input" placeholder="Different admin UID…"></div>
+    </div>
+    <div class="form-row"><label>Reason for change</label><input id="pc-reason" class="sa-input" placeholder="Why are you changing this plan?"></div>
+    <button class="btn btn-primary" onclick="updatePlanConfig()">Update Plan Config</button>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: USAGE
+════════════════════════════════════════════════════════════ -->
+<main id="tab-usage" class="sa-page">
+  <div class="s-head">User Usage Lookup</div>
+  <div class="card">
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <input id="usage-uid" class="sa-input" placeholder="User UID…" style="max-width:280px;flex:1">
+      <select id="usage-product" class="sa-select" style="width:160px">
+        <option>ai</option><option>marketplace</option><option>smartpos</option>
+        <option>delivery</option><option>analytics</option><option>events</option>
+      </select>
+      <button class="btn btn-primary" onclick="lookupUsage()">Look Up</button>
+    </div>
+    <div id="usage-result"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Allocate AI Credits</div>
+      <div class="form-row"><label>User UID</label><input id="cr-uid" class="sa-input" placeholder="uid…"></div>
+      <div class="form-row"><label>Credits to Allocate</label><input id="cr-amount" class="sa-input" type="number" placeholder="e.g. 1000"></div>
+      <div class="form-row"><label>Reason</label><input id="cr-reason" class="sa-input" placeholder="e.g. compensation, promo…"></div>
+      <button class="btn btn-primary" onclick="allocateCredits()">Allocate Credits</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Check User Credits</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="cr-check-uid" class="sa-input" placeholder="uid…">
+        <button class="btn btn-ghost" onclick="checkCredits()">Check</button>
+      </div>
+      <div id="credits-result"></div>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════════════════════════════
+     TAB: ACTIONS
+════════════════════════════════════════════════════════════ -->
+<main id="tab-actions" class="sa-page">
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Migrate Legacy Subscriptions</div>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Migrate data from legacy <code>aiSubscriptions</code> and <code>subscriptions</code> Firestore collections into the SASOS <code>sasosSubscriptions</code> format.</p>
+      <button class="btn btn-primary" onclick="syncLegacy()">Run Legacy Migration</button>
+    </div>
+    <div class="card">
+      <div class="card-title">System Status</div>
+      <div id="system-status-list">
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px;margin-bottom:10px"></div>
+        <div class="skel" style="height:18px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="s-head">Subscription Lifecycle Actions</div>
+  <div class="card">
+    <div class="form-grid">
+      <div class="form-row"><label>User UID</label><input id="act-uid" class="sa-input" placeholder="uid…"></div>
+      <div class="form-row"><label>Product</label>
+        <select id="act-product" class="sa-select"><option>ai</option><option>marketplace</option><option>smartpos</option><option>delivery</option><option>events</option></select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="adminCancelSub()">Cancel Subscription</button>
+      <button class="btn btn-ghost" onclick="adminViewSub()">View Subscription</button>
+    </div>
+    <div id="act-result" style="margin-top:14px"></div>
+  </div>
+
+  <div class="s-head">Audit Log</div>
+  <div class="card">
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <input id="audit-uid-filter" class="sa-input" placeholder="Filter by UID…" style="max-width:280px;flex:1">
+      <select id="audit-type-filter" class="sa-select" style="width:200px">
+        <option value="">All Types</option>
+        <option>sasos_subscribe</option><option>sasos_cancel_immediate</option>
+        <option>org_created</option><option>license_created</option>
+        <option>license_activated</option><option>license_revoked</option>
+        <option>risk_resolved</option><option>seat_accepted</option>
+      </select>
+      <button class="btn btn-primary" onclick="loadAuditLog()">Load Audit Log</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Timestamp</th><th>Type</th><th>UID</th><th>Details</th></tr></thead>
+        <tbody id="audit-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- ── Toast ── -->
+<div id="sasos-toast"></div>
+
+<!-- ── Firebase SDKs ── -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="/firebase.js"></script>
+<script src="/sokoni-sasos.js"></script>
+<script src="/sw-register.js"></script>
+
+<script>
+'use strict';
+
+/* ── Splash ─────────────────────────────────────── */
+window.addEventListener('load', () => {
+  const bar = document.getElementById('splash-bar');
+  let p = 0; const iv = setInterval(() => { p += 20; bar.style.width = p + '%'; if (p >= 100) { clearInterval(iv); setTimeout(() => document.getElementById('splash').remove(), 300); } }, 120);
+});
+
+/* ── Toast ──────────────────────────────────────── */
+function toast(msg, err = false) {
+  const el = document.getElementById('sasos-toast');
+  el.textContent = msg; el.style.borderColor = err ? '#ef4444' : 'rgba(255,255,255,.1)';
+  el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+/* ── Tab router ─────────────────────────────────── */
+document.querySelectorAll('.sa-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sa-tab,.sa-page').forEach(el => el.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    tabActivated(btn.dataset.tab);
+  });
+});
+
+let _tabLoaded = {};
+function tabActivated(tab) {
+  if (_tabLoaded[tab]) return;
+  _tabLoaded[tab] = true;
+  if (tab === 'overview')   loadOverview();
+  if (tab === 'revenue')    loadRevenue();
+  if (tab === 'subscribers') loadSubscribers();
+  if (tab === 'fraud')      loadFraudQueue();
+  if (tab === 'brain')      loadBrainSegments();
+  if (tab === 'plans')      loadPlans();
+  if (tab === 'actions')    loadSystemStatus();
+}
+
+/* ── CF caller ───────────────────────────────────── */
+const CF = name => firebase.functions().httpsCallable(name);
+
+/* ── Formatters ──────────────────────────────────── */
+const fmtKES  = n => 'KES ' + (n||0).toLocaleString();
+const fmtDate = ts => ts ? new Date(ts).toLocaleDateString('en-KE') : '—';
+const fmtTime = ts => ts ? new Date(ts).toLocaleString('en-KE') : '—';
+
+function statusBadge(s) {
+  const map = { active:'b-green', trial:'b-blue', grace:'b-yellow', suspended:'b-red', free:'b-gray', active_license:'b-purple' };
+  return `<span class="badge ${map[s]||'b-gray'}">${s||'—'}</span>`;
+}
+function riskBadge(score) {
+  if (score >= 85) return `<span class="badge b-red">${score} CRITICAL</span>`;
+  if (score >= 70) return `<span class="badge b-yellow">${score} HIGH</span>`;
+  if (score >= 50) return `<span class="badge b-purple">${score} MED</span>`;
+  return `<span class="badge b-green">${score} LOW</span>`;
+}
+
+/* ════════════════════════════════════════════════════════════
+   OVERVIEW TAB
+════════════════════════════════════════════════════════════ */
+async function loadOverview() {
+  try {
+    const [subList, revSnap] = await Promise.all([
+      CF('sasosAdminListSubscriptions')({ pageSize: 200 }),
+      CF('sasosGetRevenueSummary')({}),
+    ]);
+    const subs    = subList.data.items || [];
+    const rev     = revSnap.data || {};
+
+    /* Aggregate stats */
+    let active = 0, trials = 0, grace = 0;
+    const byProduct = {};
+    subs.forEach(s => {
+      const prods = s.products || {};
+      Object.entries(prods).forEach(([p, sub]) => {
+        if (!byProduct[p]) byProduct[p] = 0;
+        if (sub.status === 'active') { active++; byProduct[p]++; }
+        if (sub.status === 'trial')  trials++;
+        if (sub.status === 'grace')  grace++;
+      });
+    });
+
+    document.getElementById('hdr-status').textContent = 'Operational';
+    document.getElementById('overview-kpis').innerHTML = `
+      <div class="kpi"><div class="kpi-val">${subs.length}</div><div class="kpi-label">Total Subscribers</div></div>
+      <div class="kpi"><div class="kpi-val">${active}</div><div class="kpi-label">Active Plans</div><div class="kpi-sub up">across all products</div></div>
+      <div class="kpi"><div class="kpi-val">${fmtKES(rev.estimatedMRR||0)}</div><div class="kpi-label">Est. MRR</div></div>
+      <div class="kpi"><div class="kpi-val">${fmtKES((rev.estimatedMRR||0)*12)}</div><div class="kpi-label">Est. ARR</div></div>
+      <div class="kpi"><div class="kpi-val">${trials}</div><div class="kpi-label">Trials</div><div class="kpi-sub neutral">active</div></div>
+      <div class="kpi"><div class="kpi-val">${grace}</div><div class="kpi-label">Grace Period</div>${grace > 0 ? '<div class="kpi-sub down">needs attention</div>' : ''}</div>`;
+
+    document.getElementById('product-breakdown').innerHTML = Object.entries(byProduct)
+      .sort((a,b)=>b[1]-a[1]).map(([p,c]) => `
+        <div class="pbar-wrap">
+          <div class="pbar-header"><span class="pbar-label">${p}</span><span class="pbar-val">${c} active</span></div>
+          <div class="pbar-track"><div class="pbar-fill" style="width:${Math.min(100,c*5)}%;background:#71ff00"></div></div>
+        </div>`).join('') || '<p style="color:var(--muted);font-size:13px">No subscription data.</p>';
+
+    document.getElementById('health-list').innerHTML = `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>Grace Period Users</span><span class="${grace>0?'b-yellow':'b-green'} badge">${grace}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>Trial Conversions</span><span class="badge b-blue">${trials}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0"><span>Renewal Queue</span><span class="badge b-gray">Auto-managed</span></div>`;
+
+  } catch (e) { toast('Overview load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   REVENUE TAB
+════════════════════════════════════════════════════════════ */
+async function loadRevenue() {
+  try {
+    const res = await CF('sasosGetRevenueSummary')({});
+    const r   = res.data || {};
+    const days = r.dailyRevenue || [];
+
+    document.getElementById('revenue-kpis').innerHTML = `
+      <div class="kpi"><div class="kpi-val">${fmtKES(r.totalNetRevenue30d||0)}</div><div class="kpi-label">30d Revenue</div></div>
+      <div class="kpi"><div class="kpi-val">${fmtKES(r.estimatedMRR||0)}</div><div class="kpi-label">Est. MRR</div></div>
+      <div class="kpi"><div class="kpi-val">${fmtKES((r.estimatedMRR||0)*12)}</div><div class="kpi-label">Est. ARR</div></div>
+      <div class="kpi"><div class="kpi-val">${fmtKES(r.totalTax30d||0)}</div><div class="kpi-label">VAT Collected</div></div>`;
+
+    /* Bar chart */
+    const maxRev = Math.max(...days.map(d => d.netRevenue || 0), 1);
+    document.getElementById('revenue-chart').innerHTML = days.slice(0,30).reverse().map(d =>
+      `<div class="chart-bar" style="height:${Math.max(4,(d.netRevenue/maxRev)*100)}%">
+         <div class="chart-bar-tip">${d.date}<br>${fmtKES(d.netRevenue)}</div>
+       </div>`).join('');
+
+    await loadForecast();
+  } catch (e) { toast('Revenue load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   SUBSCRIBERS TAB
+════════════════════════════════════════════════════════════ */
+let _subCursor = null;
+async function loadSubscribers(more = false) {
+  if (!more) _subCursor = null;
+  try {
+    const res  = await CF('sasosAdminListSubscriptions')({ pageSize: 30, startAfter: _subCursor });
+    const items = res.data.items || [];
+    const tbody = document.getElementById('sub-table-body');
+
+    const html = items.flatMap(s => {
+      const prods = s.products || {};
+      return Object.entries(prods).map(([prod, sub]) => `
+        <tr>
+          <td style="font-family:monospace;font-size:11px">${s.uid.slice(0,12)}…</td>
+          <td>${prod}</td>
+          <td><span class="badge b-purple">${sub.tier||'free'}</span></td>
+          <td>${statusBadge(sub.status)}</td>
+          <td>${sub.billing||'monthly'}</td>
+          <td>${fmtDate(sub.periodEnd)}</td>
+          <td><button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="quickViewSub('${s.uid}','${prod}')">View</button></td>
+        </tr>`);
+    }).join('');
+
+    if (!more) tbody.innerHTML = html;
+    else tbody.insertAdjacentHTML('beforeend', html);
+
+    document.getElementById('sub-load-more').style.display = res.data.hasMore ? 'block' : 'none';
+    if (items.length) _subCursor = items[items.length - 1].uid;
+  } catch (e) { toast('Failed to load subscribers: ' + e.message, true); }
+}
+
+async function quickViewSub(uid, product) {
+  try {
+    const res = await CF('sasosGetSubscription')({ uid });
+    const sub = res.data?.products?.[product];
+    if (!sub) return toast('No subscription for this product.', true);
+    toast(`${product}: ${sub.tier} / ${sub.status} — expires ${fmtDate(sub.periodEnd)}`);
+  } catch (e) { toast(e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   BILLING TAB
+════════════════════════════════════════════════════════════ */
+async function loadBillingHistory() {
+  const uid     = document.getElementById('bill-uid-filter').value.trim();
+  const product = document.getElementById('bill-product-filter').value;
+  try {
+    const res   = await CF('sasosGetBillingHistory')({ uid: uid || undefined, product: product || undefined, pageSize: 50 });
+    const items = res.data.items || [];
+    document.getElementById('billing-table-body').innerHTML = items.map(e => `
+      <tr>
+        <td>${fmtDate(e.ts?.seconds ? e.ts.seconds*1000 : e.ts)}</td>
+        <td style="font-family:monospace;font-size:11px">${(e.uid||'').slice(0,12)}…</td>
+        <td><span class="badge ${e.type==='refund'?'b-red':'b-green'}">${e.type||'—'}</span></td>
+        <td>${e.productId||'—'}</td>
+        <td>${fmtKES(e.amount||0)}</td>
+        <td>${fmtKES(e.tax||0)}</td>
+        <td>${e.planId||'—'}</td>
+      </tr>`).join('') || '<tr><td colspan="7" style="color:var(--muted);text-align:center">No billing events found.</td></tr>';
+  } catch (e) { toast('Billing load failed: ' + e.message, true); }
+}
+
+async function issueRefund() {
+  const uid      = document.getElementById('ref-uid').value.trim();
+  const product  = document.getElementById('ref-product').value;
+  const amount   = Number(document.getElementById('ref-amount').value);
+  const reason   = document.getElementById('ref-reason').value.trim();
+  const revert   = document.getElementById('ref-revert').value === 'true';
+  const approver = document.getElementById('ref-approver').value.trim();
+  if (!uid || !amount) return toast('UID and amount required.', true);
+  try {
+    await CF('sasosAdminRefund')({ uid, product, amount, reason, revertToFree: revert, approvedBy: approver });
+    toast(`Refund of ${fmtKES(amount)} issued for ${uid}.`);
+  } catch (e) { toast('Refund failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   FRAUD TAB
+════════════════════════════════════════════════════════════ */
+async function loadFraudQueue() {
+  const priority = document.getElementById('fraud-priority-filter')?.value || '';
+  const status   = document.getElementById('fraud-status-filter')?.value  || 'pending';
+  try {
+    const res  = await CF('sasosGetFraudQueue')({ status, priority: priority || undefined });
+    const items = res.data.items || [];
+
+    document.getElementById('fk-queue').textContent      = items.filter(i=>i.status==='pending').length;
+    document.getElementById('fk-suspended').textContent  = items.filter(i=>i.riskScore>=95).length;
+    document.getElementById('fk-restricted').textContent = items.filter(i=>i.riskScore>=70&&i.riskScore<95).length;
+    document.getElementById('fk-critical').textContent   = items.filter(i=>i.priority==='critical').length;
+
+    document.getElementById('fraud-queue-body').innerHTML = items.map(i => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${i.uid.slice(0,12)}…</td>
+        <td>${riskBadge(i.riskScore||0)}</td>
+        <td><span class="badge ${i.priority==='critical'?'b-red':'b-yellow'}">${i.priority||'normal'}</span></td>
+        <td style="font-size:11px">${(i.signals||[]).map(s=>s.type).join(', ').slice(0,60)||'—'}</td>
+        <td style="font-size:11px">${fmtDate(i.queuedAt)}</td>
+        <td>
+          <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="prefillResolve('${i.uid}')">Resolve</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Queue is empty.</td></tr>';
+  } catch (e) { toast('Fraud queue load failed: ' + e.message, true); }
+}
+
+function prefillResolve(uid) {
+  document.getElementById('risk-uid').value = uid;
+  document.getElementById('risk-uid').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function resolveRisk() {
+  const uid        = document.getElementById('risk-uid').value.trim();
+  const resolution = document.getElementById('risk-resolution').value;
+  const resetScore = document.getElementById('risk-reset').value === 'true';
+  const notes      = document.getElementById('risk-notes').value.trim();
+  if (!uid) return toast('UID required.', true);
+  try {
+    await CF('sasosResolveRisk')({ uid, resolution, resetScore, notes });
+    toast('Risk resolved for ' + uid.slice(0,12) + '…');
+    _tabLoaded['fraud'] = false; loadFraudQueue();
+  } catch (e) { toast('Resolve failed: ' + e.message, true); }
+}
+
+async function viewRiskProfile() {
+  const uid = document.getElementById('view-risk-uid').value.trim();
+  if (!uid) return;
+  try {
+    const res = await CF('sasosGetRiskProfile')({ uid });
+    const d   = res.data;
+    document.getElementById('risk-profile-result').innerHTML = `
+      <div class="card" style="margin-top:14px">
+        <div style="margin-bottom:10px">${riskBadge(d.riskScore||0)} &nbsp; Trust: <strong style="color:#22c55e">${d.trustScore}</strong></div>
+        <div style="font-size:12px;color:var(--muted)">Action: ${d.actionLabel||'—'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Signals: ${d.signalCount||0}</div>
+        ${(d.recentEvents||[]).map(e=>`<div style="font-size:11px;padding:6px 0;border-top:1px solid var(--border);margin-top:6px"><strong>${e.type}</strong> — weight ${e.weight} — ${fmtDate(e.ts?.seconds?e.ts.seconds*1000:e.ts)}</div>`).join('')}
+      </div>`;
+  } catch (e) { toast('Profile load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   AI BRAIN TAB
+════════════════════════════════════════════════════════════ */
+async function loadBrainSegments() {
+  try {
+    const res = await CF('sasosGetSegmentInsights')({});
+    const d   = res.data;
+    const byT = d.byTier || {};
+
+    document.getElementById('brain-segment-cards').innerHTML = Object.entries(byT).map(([tier, s]) => `
+      <div class="kpi">
+        <div class="kpi-val">${s.count}</div>
+        <div class="kpi-label">${tier} tier</div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+          Churn risk avg: <span style="color:#fbbf24">${s.avgChurn}</span><br>
+          Upgrade prob avg: <span style="color:#22c55e">${s.avgUpgrade}</span><br>
+          Total LTV: <span style="color:#a78bfa">${fmtKES(s.totalLTV)}</span>
+        </div>
+      </div>`).join('') || '<p style="color:var(--muted)">No segment data yet — run sasosRunBrain first.</p>';
+
+    document.getElementById('churn-dist').innerHTML = [
+      { label: 'Critical (80-100)', count: 0, color: '#ef4444' },
+      { label: 'High (60-79)',      count: 0, color: '#f59e0b' },
+      { label: 'Medium (40-59)',    count: 0, color: '#a78bfa' },
+      { label: 'Low (0-39)',        count: d.totalUsersAnalysed||0, color: '#22c55e' },
+    ].map(b => `
+      <div class="pbar-wrap">
+        <div class="pbar-header"><span class="pbar-label">${b.label}</span><span class="pbar-val">${b.count}</span></div>
+        <div class="pbar-track"><div class="pbar-fill" style="width:${Math.min(100, b.count * 5)}%;background:${b.color}"></div></div>
+      </div>`).join('');
+  } catch (e) { toast('Brain segments failed: ' + e.message, true); }
+}
+
+async function lookupBrain() {
+  const uid = document.getElementById('brain-uid').value.trim();
+  if (!uid) return;
+  try {
+    const res = await CF('sasosGetInsights')({ uid });
+    const d   = res.data;
+    const s   = d.scores || {};
+    document.getElementById('brain-result').innerHTML = `
+      <div class="three-col">
+        ${Object.entries(s).map(([prod, sc]) => `
+          <div class="kpi" style="margin-bottom:0">
+            <div style="font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;margin-bottom:8px">${prod}</div>
+            <div style="font-size:12px;margin-bottom:4px">Churn Risk: <strong style="color:#fbbf24">${sc.churnRisk||0}</strong></div>
+            <div style="font-size:12px;margin-bottom:4px">Upgrade Prob: <strong style="color:#22c55e">${sc.upgradeProb||0}</strong></div>
+            <div style="font-size:12px;margin-bottom:4px">Est. LTV: <strong style="color:#a78bfa">${fmtKES(sc.ltv||0)}</strong></div>
+            ${sc.nextPlan ? `<div style="font-size:11px;color:var(--muted)">Next plan: ${sc.nextPlan}</div>` : ''}
+          </div>`).join('')}
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:var(--muted)">Total LTV: <strong style="color:#a78bfa">${fmtKES(d.estimatedLTV||0)}</strong> &nbsp;|&nbsp; Period: ${d.period||'—'}</div>`;
+  } catch (e) { toast('Brain lookup failed: ' + e.message, true); }
+}
+
+async function loadForecast() {
+  const months = Number(document.getElementById('forecast-months')?.value || 12);
+  try {
+    const res = await CF('sasosGetForecast')({ months });
+    const d   = res.data;
+    const fc  = d.forecast || [];
+
+    const forecEl = document.getElementById('forecast-result') || document.getElementById('forecast-chart');
+    const maxMRR  = Math.max(...fc.map(f => f.projectedMRR), 1);
+
+    if (forecEl) {
+      forecEl.innerHTML = `
+        <div class="kpi-grid" style="margin-bottom:16px">
+          <div class="kpi"><div class="kpi-val">${fmtKES(d.currentMRR)}</div><div class="kpi-label">Current MRR</div></div>
+          <div class="kpi"><div class="kpi-val">${d.monthlyGrowthRate}%</div><div class="kpi-label">Monthly Growth</div></div>
+          <div class="kpi"><div class="kpi-val">${d.estimatedChurnRate}%</div><div class="kpi-label">Churn Rate</div></div>
+          <div class="kpi"><div class="kpi-val">${d.newSubscribersLastMonth}</div><div class="kpi-label">New Subs (30d)</div></div>
+        </div>
+        <div class="chart-wrap">
+          ${fc.map(f => `<div class="chart-bar" style="height:${Math.max(4,(f.projectedMRR/maxMRR)*100)}%">
+            <div class="chart-bar-tip">${f.month}<br>${fmtKES(f.projectedMRR)}/mo</div>
+          </div>`).join('')}
+        </div>`;
+    }
+  } catch (e) { toast('Forecast failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   ENTERPRISE TAB
+════════════════════════════════════════════════════════════ */
+async function createLicense() {
+  const data = {
+    orgId:    document.getElementById('lic-org').value.trim(),
+    product:  document.getElementById('lic-product').value,
+    type:     document.getElementById('lic-type').value,
+    planId:   document.getElementById('lic-plan').value.trim(),
+    seats:    Number(document.getElementById('lic-seats').value),
+    priceKES: Number(document.getElementById('lic-price').value) || 0,
+    billingPeriod: document.getElementById('lic-billing').value,
+    approvedBy:    document.getElementById('lic-approver').value.trim(),
+    notes:    document.getElementById('lic-notes').value.trim(),
+  };
+  if (!data.orgId || !data.planId) return toast('orgId and planId required.', true);
+  try {
+    const res = await CF('sasosCreateLicense')(data);
+    toast(`License created: ${res.data.licenseId}`);
+  } catch (e) { toast('License creation failed: ' + e.message, true); }
+}
+
+async function lookupLicense() {
+  const id = document.getElementById('lic-lookup-id').value.trim();
+  if (!id) return;
+  try {
+    const res = await CF('sasosGetLicense')({ licenseId: id });
+    const d   = res.data;
+    document.getElementById('license-result').innerHTML = `
+      <div style="font-size:12px;line-height:1.8">
+        <div><strong>Type:</strong> ${d.type} &nbsp; <strong>Product:</strong> ${d.product}</div>
+        <div><strong>Plan:</strong> ${d.planId} &nbsp; <strong>Seats:</strong> ${d.seats === -1 ? 'Unlimited' : d.seats}</div>
+        <div><strong>Status:</strong> ${statusBadge(d.status)}</div>
+        <div><strong>Ends:</strong> ${fmtDate(d.contractEnd)}</div>
+        ${d.priceKES !== undefined ? `<div><strong>Price:</strong> ${fmtKES(d.priceKES)}/${d.billingPeriod}</div>` : ''}
+      </div>`;
+  } catch (e) { toast('License lookup failed: ' + e.message, true); }
+}
+
+async function revokeLicense() {
+  const id     = document.getElementById('lic-revoke-id').value.trim();
+  const reason = document.getElementById('lic-revoke-reason').value.trim();
+  if (!id) return toast('License ID required.', true);
+  if (!confirm(`Revoke license ${id}? This will downgrade the org to free.`)) return;
+  try {
+    await CF('sasosRevokeLicense')({ licenseId: id, reason });
+    toast('License revoked.');
+  } catch (e) { toast('Revoke failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   PLANS TAB
+════════════════════════════════════════════════════════════ */
+async function loadPlans() {
+  const product = document.getElementById('plan-product-filter').value;
+  try {
+    const res   = await CF('sasosListPlans')({ product: product || undefined });
+    const plans = res.data.plans || [];
+    document.getElementById('plans-table-body').innerHTML = plans.map(p => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${p.planId}</td>
+        <td>${p.productId}</td>
+        <td><span class="badge b-purple">${p.tier}</span></td>
+        <td>${fmtKES(p.billing?.monthly||0)}</td>
+        <td>${fmtKES(p.billing?.annual||0)}</td>
+        <td>${p.billing?.trialDays||0}</td>
+        <td>${p.tax?.vat_applicable ? '<span class="badge b-yellow">16%</span>' : '<span class="badge b-gray">N/A</span>'}</td>
+        <td>${p._fromFirestore ? '<span class="badge b-green">Override</span>' : '<span class="badge b-gray">Default</span>'}</td>
+      </tr>`).join('') || '<tr><td colspan="8" style="color:var(--muted);text-align:center">No plans found.</td></tr>';
+  } catch (e) { toast('Plans load failed: ' + e.message, true); }
+}
+
+async function updatePlanConfig() {
+  const planId   = document.getElementById('pc-plan-id').value.trim();
+  const monthly  = Number(document.getElementById('pc-monthly').value) || undefined;
+  const annual   = Number(document.getElementById('pc-annual').value)  || undefined;
+  const trial    = Number(document.getElementById('pc-trial').value)   || undefined;
+  const approver = document.getElementById('pc-approver').value.trim();
+  const reason   = document.getElementById('pc-reason').value.trim();
+  if (!planId) return toast('Plan ID required.', true);
+  try {
+    await CF('sasosAdminUpdatePlanConfig')({ planId, updates: { billing: { monthly, annual, trialDays: trial } }, approvedBy: approver, reason });
+    toast('Plan config updated.');
+    _tabLoaded['plans'] = false; loadPlans();
+  } catch (e) { toast('Update failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   USAGE TAB
+════════════════════════════════════════════════════════════ */
+async function lookupUsage() {
+  const uid     = document.getElementById('usage-uid').value.trim();
+  const product = document.getElementById('usage-product').value;
+  if (!uid) return toast('UID required.', true);
+  try {
+    const res = await CF('sasosGetUsage')({ uid, product });
+    const d   = res.data || {};
+    const usage = d.usage || {};
+    document.getElementById('usage-result').innerHTML = Object.entries(usage).map(([key, val]) => `
+      <div class="pbar-wrap">
+        <div class="pbar-header"><span class="pbar-label">${key}</span><span class="pbar-val">${val.used} / ${val.limit}</span></div>
+        <div class="pbar-track"><div class="pbar-fill" style="width:${Math.min(100,val.pct||0)}%;background:${(val.pct||0)>=90?'#ef4444':(val.pct||0)>=75?'#f59e0b':'#22c55e'}"></div></div>
+      </div>`).join('') || '<p style="color:var(--muted);font-size:13px">No usage data for this period.</p>';
+  } catch (e) { toast('Usage lookup failed: ' + e.message, true); }
+}
+
+async function allocateCredits() {
+  const uid    = document.getElementById('cr-uid').value.trim();
+  const amount = Number(document.getElementById('cr-amount').value);
+  const reason = document.getElementById('cr-reason').value.trim();
+  if (!uid || !amount) return toast('UID and amount required.', true);
+  try {
+    await CF('sasosAllocateCredits')({ uid, amount, reason });
+    toast(`${amount} credits allocated to ${uid.slice(0,12)}…`);
+  } catch (e) { toast('Credit allocation failed: ' + e.message, true); }
+}
+
+async function checkCredits() {
+  const uid = document.getElementById('cr-check-uid').value.trim();
+  if (!uid) return;
+  try {
+    const res = await CF('sasosGetCredits')({ uid });
+    const d   = res.data;
+    document.getElementById('credits-result').innerHTML = `
+      <div style="font-size:13px;line-height:2">
+        <div>Balance: <strong style="color:#71ff00">${(d.balance||0).toLocaleString()} credits</strong></div>
+        <div>Purchased: <span style="color:var(--muted)">${(d.totalPurchased||0).toLocaleString()}</span></div>
+        <div>Spent: <span style="color:var(--muted)">${(d.totalSpent||0).toLocaleString()}</span></div>
+      </div>`;
+  } catch (e) { toast('Credits check failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   ACTIONS TAB
+════════════════════════════════════════════════════════════ */
+async function loadSystemStatus() {
+  document.getElementById('system-status-list').innerHTML = `
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>SASOS Core</span><span class="badge b-green">Online</span></div>
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>Billing Engine</span><span class="badge b-green">Online</span></div>
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>Fraud Engine</span><span class="badge b-green">Online</span></div>
+    <div style="display:flex;justify-content:space-between;padding:8px 0"><span>AI Brain</span><span class="badge b-green">Online</span></div>`;
+}
+
+async function syncLegacy() {
+  if (!confirm('Run legacy subscription migration? This will migrate aiSubscriptions and subscriptions collections to SASOS format.')) return;
+  try {
+    const res = await CF('sasosSyncLegacy')({});
+    toast(`Migration complete. Migrated: ${res.data.migrated} records.`);
+  } catch (e) { toast('Migration failed: ' + e.message, true); }
+}
+
+async function adminCancelSub() {
+  const uid     = document.getElementById('act-uid').value.trim();
+  const product = document.getElementById('act-product').value;
+  if (!uid) return toast('UID required.', true);
+  if (!confirm(`Cancel ${product} subscription for ${uid.slice(0,12)}…?`)) return;
+  try {
+    await CF('sasosCancel')({ uid, product, immediate: true });
+    toast('Subscription cancelled.');
+  } catch (e) { toast('Cancel failed: ' + e.message, true); }
+}
+
+async function adminViewSub() {
+  const uid = document.getElementById('act-uid').value.trim();
+  if (!uid) return toast('UID required.', true);
+  try {
+    const res = await CF('sasosGetSubscription')({ uid });
+    const prods = res.data?.products || {};
+    document.getElementById('act-result').innerHTML = Object.entries(prods).map(([prod, s]) => `
+      <div style="font-size:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <strong>${prod}</strong> — ${statusBadge(s.status)} — ${s.planId||'—'} — Ends: ${fmtDate(s.periodEnd)}
+      </div>`).join('') || '<p style="color:var(--muted)">No subscriptions found.</p>';
+  } catch (e) { toast('View failed: ' + e.message, true); }
+}
+
+async function loadAuditLog() {
+  const uid  = document.getElementById('audit-uid-filter').value.trim();
+  const type = document.getElementById('audit-type-filter').value;
+  /* Audit log query via Firestore directly (admin SDK not available client-side for advanced queries) */
+  try {
+    const db  = firebase.firestore();
+    let   q   = db.collection('sasosAuditLog').orderBy('ts','desc').limit(50);
+    if (type) q = db.collection('sasosAuditLog').where('type','==',type).orderBy('ts','desc').limit(50);
+    const snap = await q.get();
+    const rows = snap.docs
+      .filter(d => !uid || d.data().uid === uid)
+      .map(d => {
+        const e = d.data();
+        const ts = e.ts?.seconds ? e.ts.seconds * 1000 : e.ts;
+        return `<tr>
+          <td style="font-size:11px">${fmtTime(ts)}</td>
+          <td><span class="badge b-blue" style="font-size:10px">${e.type||'—'}</span></td>
+          <td style="font-family:monospace;font-size:11px">${(e.uid||'—').slice(0,12)}…</td>
+          <td style="font-size:11px">${e.planId||e.orgId||e.licenseId||e.resolution||''}</td>
+        </tr>`;
+      });
+    document.getElementById('audit-table-body').innerHTML = rows.join('') || '<tr><td colspan="4" style="color:var(--muted);text-align:center">No audit events found.</td></tr>';
+  } catch (e) { toast('Audit log failed: ' + e.message, true); }
+}
+
+/* ── Init ─────────────────────────────────────────── */
+firebase.auth().onAuthStateChanged(user => {
+  if (!user) {
+    window.location.href = '/login.html?redirect=sasos-admin.html';
+    return;
+  }
+  user.getIdTokenResult().then(tok => {
+    if (!tok.claims.admin && !tok.claims.superAdmin && !tok.claims.moderator) {
+      window.location.href = '/index.html';
+      return;
+    }
+    tabActivated('overview');
+  });
+});
+</script>
+</body>
+</html>

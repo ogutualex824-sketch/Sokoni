@@ -5348,3 +5348,75 @@ exports.eccCreateIncident   = ecc.eccCreateIncident;
 exports.eccResolveIncident  = ecc.eccResolveIncident;
 exports.eccWriteAudit       = ecc.eccWriteAudit;
 exports.eccGetAuditLog      = ecc.eccGetAuditLog;
+
+/* ════════════════════════════════════════════════════════════
+   SASOS — Universal AI Subscription Operating System
+════════════════════════════════════════════════════════════ */
+
+/* ── SASOS Core — Plan registry, subscription lifecycle, entitlement ── */
+const sasosCore = require("./sasos-core");
+exports.sasosSubscribe                = sasosCore.sasosSubscribe;
+exports.sasosCancel                   = sasosCore.sasosCancel;
+exports.sasosGetSubscription          = sasosCore.sasosGetSubscription;
+exports.sasosListPlans                = sasosCore.sasosListPlans;
+exports.sasosCheckFeature             = sasosCore.sasosCheckFeature;
+exports.sasosAdminListSubscriptions   = sasosCore.sasosAdminListSubscriptions;
+exports.sasosAdminUpdatePlanConfig    = sasosCore.sasosAdminUpdatePlanConfig;
+exports.sasosExpireTrials             = sasosCore.sasosExpireTrials;
+exports.sasosProcessRenewals          = sasosCore.sasosProcessRenewals;
+exports.sasosSyncLegacy               = sasosCore.sasosSyncLegacy;
+
+/* ── SASOS Billing — Invoices, VAT, dunning, proration, refunds ── */
+const sasosBilling = require("./sasos-billing");
+exports.sasosCreateInvoice            = sasosBilling.sasosCreateInvoice;
+exports.sasosGetInvoices              = sasosBilling.sasosGetInvoices;
+exports.sasosGetBillingHistory        = sasosBilling.sasosGetBillingHistory;
+exports.sasosAdminRefund              = sasosBilling.sasosAdminRefund;
+exports.sasosCalculateProration       = sasosBilling.sasosCalculateProration;
+exports.sasosDunningCycle             = sasosBilling.sasosDunningCycle;
+exports.sasosRecordFailedPayment      = sasosBilling.sasosRecordFailedPayment;
+exports.sasosDailyRevenue             = sasosBilling.sasosDailyRevenue;
+exports.sasosGetRevenueSummary        = sasosBilling.sasosGetRevenueSummary;
+
+/* ── SASOS Usage — Metering, quotas, credits, storage ── */
+const sasosUsage = require("./sasos-usage");
+exports.sasosRecordUsage              = sasosUsage.sasosRecordUsage;
+exports.sasosGetUsage                 = sasosUsage.sasosGetUsage;
+exports.sasosCheckQuota               = sasosUsage.sasosCheckQuota;
+exports.sasosDeductCredits            = sasosUsage.sasosDeductCredits;
+exports.sasosAllocateCredits          = sasosUsage.sasosAllocateCredits;
+exports.sasosGetCredits               = sasosUsage.sasosGetCredits;
+exports.sasosAllocateStorage          = sasosUsage.sasosAllocateStorage;
+exports.sasosGetStorageUsage          = sasosUsage.sasosGetStorageUsage;
+exports.sasosResetMonthlyUsage        = sasosUsage.sasosResetMonthlyUsage;
+
+/* ── SASOS Fraud — Risk scoring, trust engine, behavioral analysis ── */
+const sasosFraud = require("./sasos-fraud");
+exports.sasosUpdateRiskScore          = sasosFraud.sasosUpdateRiskScore;
+exports.sasosGetRiskProfile           = sasosFraud.sasosGetRiskProfile;
+exports.sasosReportFraud              = sasosFraud.sasosReportFraud;
+exports.sasosResolveRisk              = sasosFraud.sasosResolveRisk;
+exports.sasosFraudScan                = sasosFraud.sasosFraudScan;
+exports.sasosGetFraudQueue            = sasosFraud.sasosGetFraudQueue;
+
+/* ── SASOS Brain — AI churn prediction, LTV, forecasting, recommendations ── */
+const sasosBrain = require("./sasos-brain");
+exports.sasosRunBrain                 = sasosBrain.sasosRunBrain;
+exports.sasosGetInsights              = sasosBrain.sasosGetInsights;
+exports.sasosGetRecommendations       = sasosBrain.sasosGetRecommendations;
+exports.sasosGetForecast              = sasosBrain.sasosGetForecast;
+exports.sasosGetChurnRisk             = sasosBrain.sasosGetChurnRisk;
+exports.sasosGetSegmentInsights       = sasosBrain.sasosGetSegmentInsights;
+
+/* ── SASOS Enterprise — Orgs, seats, licenses, multi-tenant ── */
+const sasosEnterprise = require("./sasos-enterprise");
+exports.sasosCreateOrg                = sasosEnterprise.sasosCreateOrg;
+exports.sasosGetOrg                   = sasosEnterprise.sasosGetOrg;
+exports.sasosInviteSeat               = sasosEnterprise.sasosInviteSeat;
+exports.sasosAcceptSeatInvite         = sasosEnterprise.sasosAcceptSeatInvite;
+exports.sasosRemoveSeat               = sasosEnterprise.sasosRemoveSeat;
+exports.sasosGetOrgSeats              = sasosEnterprise.sasosGetOrgSeats;
+exports.sasosCreateLicense            = sasosEnterprise.sasosCreateLicense;
+exports.sasosActivateLicense          = sasosEnterprise.sasosActivateLicense;
+exports.sasosRevokeLicense            = sasosEnterprise.sasosRevokeLicense;
+exports.sasosGetLicense               = sasosEnterprise.sasosGetLicense;

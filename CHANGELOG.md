@@ -1,4 +1,51 @@
-﻿## [2026-06-21] — WAP Production Readiness Audit & Certification (v1.1.0)
+﻿## [2026-06-21] — SASOS v1.0 — Universal AI Subscription Operating System
+
+### Summary
+Production-grade Universal AI Subscription Operating System covering all 13 SOKONI product verticals. 46 plans across marketplace, smartpos, ai, delivery, logistics, events, property, vehicles, advertising, business, warehousing, finance, and analytics. Zero-trust entitlement, AI brain, fraud engine, billing engine with Kenya VAT (16%), dunning cycle, proration, usage metering, enterprise licensing, and a full admin dashboard.
+
+### New Files (8)
+- **`functions/sasos-core.js`** — Universal plan registry (46 plans), subscription lifecycle CFs (subscribe/cancel/get), Firestore override pattern, trial management, daily renewal queue, legacy migration
+- **`functions/sasos-billing.js`** — Immutable ledger, VAT (16%), invoice with KRA PIN, proration, dunning ([1,3,7,14] days), grace period (7 days), admin refund with credit note, daily revenue aggregation
+- **`functions/sasos-usage.js`** — Atomic usage metering via Firestore transactions, quota enforcement, transactional credit deduction, storage quota management, monthly reset scheduler
+- **`functions/sasos-fraud.js`** — 40-signal risk scoring engine, trust score, behavioral analysis, automated response actions (allow/monitor/step-up/restrict/suspend), daily fraud scan scheduler
+- **`functions/sasos-brain.js`** — AI subscription brain: deterministic churn risk scoring, upgrade probability, LTV calculation, Anthropic-powered plan recommendations, 12-month revenue forecasting
+- **`functions/sasos-enterprise.js`** — Organization management, seat invitations, role-based seat control, enterprise license contracts (8 types), dual-admin approval for custom pricing
+- **`sokoni-sasos.js`** — Zero-trust client SDK: all CF calls, fraud signal reporting, usage recording, credit management, entitlement gate UI, subscription overview renderer
+- **`sasos-admin.html`** — 10-tab master SASOS admin dashboard: Overview, Revenue, Subscribers, Billing, Fraud & Risk, AI Brain, Enterprise, Plans, Usage, Actions
+
+### Updated Files (5)
+- **`functions/index.js`** — 50 new SASOS CF exports (core/billing/usage/fraud/brain/enterprise)
+- **`firestore.indexes.json`** — 24 new composite indexes for all SASOS collections
+- **`firestore.rules`** — Security rules for 20 new SASOS collections; admin-only writes, user-scoped reads, zero client writes on financial/audit collections
+- **`service-worker.js`** — Added `sokoni-sasos.js` and `sasos-admin.html` to precache (already at v250)
+- **`CHANGELOG.md`** — This entry
+
+### Database Changes
+New Firestore collections: `sasosSubscriptions`, `sasosBillingLedger`, `sasosInvoices`, `sasosUsage`, `sasosDunning`, `sasosRiskProfiles`, `sasosRiskEvents`, `sasosManualReview`, `sasosInsights`, `sasosAuditLog`, `sasosPlans`, `sasosRenewalQueue`, `sasosRevenueAggregates`, `sasosPaymentRefs`, `aiCredits`, `sasosCreditLedger`, `sasosStorageUsage`, `entitlements`, `sasosOrgs`, `sasosSeats`, `sasosSeatInvites`, `sasosLicenses`
+
+### API Changes
+50 new Cloud Functions — all use Firebase Functions v2 calling convention (`req.auth`, `req.data`). See [functions/index.js](functions/index.js) for full export list.
+
+### Security Changes
+- Zero-trust entitlement: every `checkFeature` call triggers a fresh server read — no client cache trusted
+- Dual-admin approval required for all financial field changes (price, billing period)
+- `sasosPaymentRefs` idempotency collection prevents double-charge on payment retry
+- All audit and ledger collections: no client writes (`allow write: if false`)
+- Risk profiles: automated suspension at risk score ≥ 95; manual review queue at ≥ 85
+- 40 fraud signal types tracked; behavioral anomaly detection runs daily via `sasosFraudScan`
+
+### Breaking Changes
+None. SASOS is additive alongside existing `aiSubscriptions` and `subscriptions` collections. Use `sasosSyncLegacy` CF to migrate existing data.
+
+### Deployment Requirements
+1. Deploy Cloud Functions: `firebase deploy --only functions`
+2. Deploy Firestore indexes: `firebase deploy --only firestore:indexes`
+3. Deploy Firestore rules: `firebase deploy --only firestore:rules`
+4. `SUB_OS_SIGNING_SECRET` must be in Firebase Secret Manager (existing from Sub-OS v1.0)
+
+---
+
+## [2026-06-21] — WAP Production Readiness Audit & Certification (v1.1.0)
 
 ### Summary
 Full 13-phase production hardening audit and certification of the Workflow Automation Platform. 9 critical bugs fixed across 4 files. 4 new Cloud Functions added. Platform certified safe for million-workflow scale operations.

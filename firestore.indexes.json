@@ -2933,7 +2933,48 @@
           "order": "DESCENDING"
         }
       ]
-    }
+    },
+
+    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosInvoices", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "issuedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosInvoices", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "issuedAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosDunning", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "nextAttemptAt", "order": "ASCENDING" }] },
+    { "collectionGroup": "sasosDunning", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosRiskProfiles", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "action", "order": "ASCENDING" }, { "fieldPath": "riskScore", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosRiskProfiles", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "riskScore", "order": "DESCENDING" }, { "fieldPath": "lastSignalAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosRiskEvents", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosRiskEvents", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "resolved", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosManualReview", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "queuedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosManualReview", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "priority", "order": "ASCENDING" }, { "fieldPath": "queuedAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosAuditLog", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosAuditLog", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosAuditLog", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosInsights", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "topChurnRisk", "order": "DESCENDING" }, { "fieldPath": "computedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "sasosInsights", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "topUpgradeProb", "order": "DESCENDING" }, { "fieldPath": "computedAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosCreditLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosSubscriptions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosSeats", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+    { "collectionGroup": "sasosSeats", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+
+    { "collectionGroup": "sasosSeatInvites", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosLicenses", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+    { "collectionGroup": "sasosLicenses", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "product", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "activatedAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "sasosRevenueAggregates", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "date", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }

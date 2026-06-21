@@ -2727,6 +2727,161 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       SASOS — Universal AI Subscription Operating System
+       Collections: sasosSubscriptions, sasosBillingLedger,
+         sasosInvoices, sasosUsage, sasosDunning, sasosRiskProfiles,
+         sasosRiskEvents, sasosManualReview, sasosInsights,
+         sasosAuditLog, sasosPlans, sasosRenewalQueue,
+         sasosRevenueAggregates, sasosPaymentRefs, aiCredits,
+         sasosCreditLedger, sasosStorageUsage, entitlements,
+         sasosOrgs, sasosSeats, sasosSeatInvites, sasosLicenses
+    ══════════════════════════════════════════════════════════════ */
+
+    /* sasosSubscriptions — master subscription state, one doc per uid
+       User reads their own doc (server refreshed on every feature gate).
+       All writes are server-only via Cloud Functions. */
+    match /sasosSubscriptions/{uid} {
+      allow read:   if isAuthed() && request.auth.uid == uid;
+      allow write:  if false;  /* CF only */
+    }
+
+    /* sasosBillingLedger — immutable billing records
+       User reads their own; admin reads all. No client writes. */
+    match /sasosBillingLedger/{entryId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write:  if false;  /* CF only */
+    }
+
+    /* sasosInvoices — user can read their own invoices; admin reads all */
+    match /sasosInvoices/{invoiceId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write:  if false;
+    }
+
+    /* sasosUsage — user reads their own usage counters */
+    match /sasosUsage/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && docId.matches(request.auth.uid + '_.*'));
+      allow write:  if false;
+    }
+
+    /* sasosDunning — admin only; user reads their own grace-period record */
+    match /sasosDunning/{uid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write:  if false;
+    }
+
+    /* sasosRiskProfiles — admin reads all; users read their own (limited) */
+    match /sasosRiskProfiles/{uid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write:  if false;
+    }
+
+    /* sasosRiskEvents — admin only */
+    match /sasosRiskEvents/{eventId} {
+      allow read, write: if isAdmin();
+    }
+
+    /* sasosManualReview — admin only */
+    match /sasosManualReview/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    /* sasosInsights — user reads their own; admin reads all */
+    match /sasosInsights/{uid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write:  if false;
+    }
+
+    /* sasosAuditLog — admin reads; no client writes */
+    match /sasosAuditLog/{logId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* sasosPlans — public read (pricing page); admin writes */
+    match /sasosPlans/{planId} {
+      allow read:   if true;
+      allow write:  if isAdmin();
+    }
+
+    /* sasosRenewalQueue — admin only */
+    match /sasosRenewalQueue/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    /* sasosRevenueAggregates — admin only */
+    match /sasosRevenueAggregates/{dateId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* sasosPaymentRefs — idempotency keys; no client reads or writes */
+    match /sasosPaymentRefs/{refId} {
+      allow read, write: if false;
+    }
+
+    /* aiCredits — user reads their own balance; CF writes */
+    match /aiCredits/{uid} {
+      allow read:   if isAuthed() && request.auth.uid == uid;
+      allow write:  if false;
+    }
+
+    /* sasosCreditLedger — user reads their own; admin reads all */
+    match /sasosCreditLedger/{entryId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write:  if false;
+    }
+
+    /* sasosStorageUsage — user reads their own; CF writes */
+    match /sasosStorageUsage/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && docId.matches(request.auth.uid + '_.*'));
+      allow write:  if false;
+    }
+
+    /* entitlements — user reads their own; CF writes; admin reads all */
+    match /entitlements/{uid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write:  if false;
+    }
+
+    /* ── SASOS Enterprise ── */
+
+    /* sasosOrgs — org member reads; owner writes limited fields; CF manages */
+    match /sasosOrgs/{orgId} {
+      allow read:  if isAdmin()
+                   || (isAuthed()
+                       && exists(/databases/$(database)/documents/sasosSeats/$(orgId + '_' + request.auth.uid)));
+      allow write: if false;
+    }
+
+    /* sasosSeats — member reads their own seat; owner reads all seats in org */
+    match /sasosSeats/{seatId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && seatId.matches('.*_' + request.auth.uid));
+      allow write: if false;
+    }
+
+    /* sasosSeatInvites — invitee reads their invite (by inviteId); admin reads all */
+    match /sasosSeatInvites/{inviteId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.invitee == request.auth.uid);
+      allow write:  if false;
+    }
+
+    /* sasosLicenses — org member reads; admin writes */
+    match /sasosLicenses/{licenseId} {
+      allow read:   if isAdmin()
+                    || (isAuthed()
+                        && exists(/databases/$(database)/documents/sasosSeats/$(resource.data.orgId + '_' + request.auth.uid)));
+      allow write:  if false;
+    }
+
   }
 }
 
