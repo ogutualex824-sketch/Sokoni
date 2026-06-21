@@ -147,7 +147,7 @@ const consumeAICredit = onCall(
       const newBalance = await db().runTransaction(async tx => {
         const snap = await tx.get(credRef);
         const curr = snap.exists ? (snap.data().balance || 0) : 0;
-        if (curr < amount) throw new Error(`Insufficient credits. Balance: ${curr}, Required: ${amount}`);
+        if (curr < amount) throw new HttpsError('resource-exhausted', `Insufficient credits. Balance: ${curr}, Required: ${amount}`);
         tx.set(credRef, {
           uid,
           balance:       admin.firestore.FieldValue.increment(-amount),
@@ -161,7 +161,7 @@ const consumeAICredit = onCall(
       });
       return { success: true, newBalance };
     } catch (e) {
-      if (e.message.startsWith('Insufficient')) throw e;
+      if (e.code === 'resource-exhausted') throw e;
       throw new HttpsError('internal', 'Credit deduction failed.');
     }
   }
@@ -332,7 +332,7 @@ const updateAIPlan = onCall(
     assertAdmin(context);
 
     const planId = sanitize(data.planId, 30);
-    if (!PLANS[planId]) throw new Error(`Unknown plan: ${planId}`);
+    if (!PLANS[planId]) throw new HttpsError('invalid-argument', `Unknown plan: ${planId}`);
 
     /* Only allow safe numeric/boolean fields — never allow writing uid-level data */
     const ALLOWED_FIELDS = new Set([

@@ -105,7 +105,7 @@ exports.inventoryRegisterWebhook = onCall(CF_OPTS, async req => {
   try { new URL(url); } catch { throw new HttpsError('invalid-argument', 'Invalid webhook URL'); }
   /* Validate events */
   const invalidEvents = (events || []).filter(e => e !== '*' && !VALID_EVENTS.includes(e));
-  if (invalidEvents.length) throw new Error(`Unknown events: ${invalidEvents.join(', ')}`);
+  if (invalidEvents.length) throw new HttpsError('invalid-argument', `Unknown events: ${invalidEvents.join(', ')}`);
 
   const secret = 'whsec_' + crypto.randomBytes(24).toString('hex');
   const ref = await db.collection(`tenants/${resolvedTenant}/inventory_webhooks`).add({
