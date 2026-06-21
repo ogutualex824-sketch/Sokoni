@@ -117,6 +117,14 @@ jobs:
           fi
           echo "✅ No duplicate exports"
 
+      - name: Start Firebase emulators
+        # Emulators run locally — no Firebase auth token required.
+        run: |
+          npx -y firebase-tools emulators:start \
+            --only firestore,auth \
+            --project sokoni-aeb26 &
+          npx -y wait-on tcp:8080 tcp:9099 --timeout 30000
+
       - name: Run Cloud Function unit tests
         run: cd functions && npm test
         env:
@@ -179,8 +187,15 @@ jobs:
       - name: Install CF deps
         run: cd functions && npm ci
 
+      - name: Write GCP credentials to temp file
+        # Secret name matches deploy.yml — "Context access might be invalid" is a
+        # false-positive from the VS Code extension; it fires on all secrets.* refs.
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: echo "$GCP_SA_KEY" > /tmp/gcp-key.json
+
       - name: Run scale test at 1k
         run: node test-scale.js --users=1000
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY_PATH }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
           SOKONI_PROJECT_ID: sokoni-aeb26
