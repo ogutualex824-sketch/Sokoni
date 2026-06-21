@@ -697,34 +697,6 @@
       ]
     },
     {
-      "collectionGroup": "entVenueBookings",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "entArtistBookings",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "entArtistBookings",
       "queryScope": "COLLECTION",
       "fields": [
@@ -748,24 +720,6 @@
         },
         {
           "fieldPath": "approved",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "entContent",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "type",
           "order": "ASCENDING"
         },
         {
@@ -1131,34 +1085,6 @@
         {
           "fieldPath": "eventDate",
           "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "communityRecommendations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "communityReports",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -1771,20 +1697,6 @@
       ]
     },
     {
-      "collectionGroup": "inventory_levels",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "warehouseId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "available",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "inventory_movements",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1859,76 +1771,6 @@
       ]
     },
     {
-      "collectionGroup": "inventory_suppliers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "name",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_warehouses",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "name",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_audits",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "warehouseId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "startedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_alerts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "resolved",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "severity",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_batches",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "expiryDate",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "available",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "inventory_batches",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1939,62 +1781,6 @@
         {
           "fieldPath": "expiryDate",
           "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_serials",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "serialNo",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timestamp",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_forecasts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "productId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_reservations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "productId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "reservedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_health_history",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "tenantId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "calculatedAt",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -2023,132 +1809,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_simulations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "tenantId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_recalls",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_import_jobs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_webhooks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_workflows",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "trigger",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_workflow_runs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "workflowId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "ts",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_pricing_rules",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "productId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_digital_twin",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "warehouseId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_sustainability",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "tenantId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "period",
-          "order": "ASCENDING"
         }
       ]
     },
@@ -2335,34 +1995,6 @@
       ]
     },
     {
-      "collectionGroup": "gipGeofences",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "module",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gipGeofenceEvents",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "geofenceId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timestamp",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "drivers",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -2473,20 +2105,6 @@
       ]
     },
     {
-      "collectionGroup": "mediaAnalytics",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "ts",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "inventory_variants",
       "queryScope": "COLLECTION",
       "fields": [
@@ -2515,20 +2133,6 @@
       ]
     },
     {
-      "collectionGroup": "inventory_bom",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "parentProductId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "inventory_work_orders",
       "queryScope": "COLLECTION",
       "fields": [
@@ -2543,45 +2147,9 @@
       ]
     },
     {
-      "collectionGroup": "inventory_work_orders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "tenantId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "inventory_transfers",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "requestedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_transfers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "tenantId",
-          "order": "ASCENDING"
-        },
         {
           "fieldPath": "status",
           "order": "ASCENDING"
@@ -2616,24 +2184,6 @@
       "fields": [
         {
           "fieldPath": "purchaseOrderId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_grn",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "supplierId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
           "order": "ASCENDING"
         },
         {
@@ -2713,59 +2263,9 @@
       ]
     },
     {
-      "collectionGroup": "inventory_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "requestedBy",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "requestedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_supplier_contracts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "supplierId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "inventory_shelf_scans",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_shelf_scans",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "warehouseId",
-          "order": "ASCENDING"
-        },
         {
           "fieldPath": "status",
           "order": "ASCENDING"
@@ -2921,7 +2421,103 @@
       ]
     },
     {
-      "collectionGroup": "financialProposals",
+      "collectionGroup": "sasosBillingLedger",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosBillingLedger",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "productId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosBillingLedger",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosBillingLedger",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "issuedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "productId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "issuedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosDunning",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -2929,52 +2525,439 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "proposedAt",
+          "fieldPath": "nextAttemptAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosDunning",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
           "order": "DESCENDING"
         }
       ]
     },
-
-    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosBillingLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosInvoices", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "issuedAt", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosInvoices", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "issuedAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosDunning", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "nextAttemptAt", "order": "ASCENDING" }] },
-    { "collectionGroup": "sasosDunning", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosRiskProfiles", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "action", "order": "ASCENDING" }, { "fieldPath": "riskScore", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosRiskProfiles", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "riskScore", "order": "DESCENDING" }, { "fieldPath": "lastSignalAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosRiskEvents", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosRiskEvents", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "resolved", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosManualReview", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "queuedAt", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosManualReview", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "priority", "order": "ASCENDING" }, { "fieldPath": "queuedAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosAuditLog", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosAuditLog", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosAuditLog", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosInsights", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "topChurnRisk", "order": "DESCENDING" }, { "fieldPath": "computedAt", "order": "DESCENDING" }] },
-    { "collectionGroup": "sasosInsights", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "topUpgradeProb", "order": "DESCENDING" }, { "fieldPath": "computedAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosCreditLedger", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosSubscriptions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "updatedAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosSeats", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
-    { "collectionGroup": "sasosSeats", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
-
-    { "collectionGroup": "sasosSeatInvites", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosLicenses", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
-    { "collectionGroup": "sasosLicenses", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "product", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "activatedAt", "order": "DESCENDING" }] },
-
-    { "collectionGroup": "sasosRevenueAggregates", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "date", "order": "DESCENDING" }] }
+    {
+      "collectionGroup": "sasosRiskProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "action",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "riskScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosRiskProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "riskScore",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "lastSignalAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosRiskEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosRiskEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "resolved",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosManualReview",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "queuedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosManualReview",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priority",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "queuedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosAuditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosAuditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosAuditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosInsights",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "topChurnRisk",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "computedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosInsights",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "topUpgradeProb",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "computedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosCreditLedger",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSeats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSeats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSeatInvites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosLicenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosLicenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "product",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosRevenueAggregates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "domain",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "publisherUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "serviceId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "eventPattern",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "active",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformFanOut",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "serviceId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformFanOut",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "eventId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformServices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformServices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "platformHealth",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastHeartbeat",
+          "order": "DESCENDING"
+        }
+      ]
+    }
   ],
   "fieldOverrides": []
 }

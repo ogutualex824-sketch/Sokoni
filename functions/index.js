@@ -5420,3 +5420,22 @@ exports.sasosCreateLicense            = sasosEnterprise.sasosCreateLicense;
 exports.sasosActivateLicense          = sasosEnterprise.sasosActivateLicense;
 exports.sasosRevokeLicense            = sasosEnterprise.sasosRevokeLicense;
 exports.sasosGetLicense               = sasosEnterprise.sasosGetLicense;
+
+/* ── Platform Registry + Event Bus ── */
+const platformRegistry = require("./platform-registry");
+exports.platformRegisterService    = platformRegistry.platformRegisterService;
+exports.platformGetRegistry        = platformRegistry.platformGetRegistry;
+exports.platformUpdateHealth       = platformRegistry.platformUpdateHealth;
+exports.platformGetHealth          = platformRegistry.platformGetHealth;
+exports.platformDeregisterService  = platformRegistry.platformDeregisterService;
+exports.platformGetDependencies    = platformRegistry.platformGetDependencies;
+exports.platformGetCapabilityMatrix = platformRegistry.platformGetCapabilityMatrix;
+exports.platformHealthSweep        = platformRegistry.platformHealthSweep;
+
+const platformEvents = require("./platform-events");
+exports.platformPublishEvent       = platformEvents.platformPublishEvent;
+exports.platformGetEventLog        = platformEvents.platformGetEventLog;
+exports.platformRegisterSub        = platformEvents.platformRegisterSub;
+exports.platformGetSubscriptions   = platformEvents.platformGetSubscriptions;
+exports.platformReplayEvents       = platformEvents.platformReplayEvents;
+exports.onPlatformEventCreated     = platformEvents.onPlatformEventCreated;

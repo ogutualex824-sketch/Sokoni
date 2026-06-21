@@ -502,7 +502,7 @@ window.SokoniSearchPro = SokoniSearchPro;
       },
       typesense: c.typesenseHost ? {
         host:   (c.typesenseProtocol || 'https') + '://' + c.typesenseHost + ':' + (c.typesensePort || 443),
-        apiKey: c.typesenseKey || '',
+        apiKey: c.typesenseSearchKey || '',   /* fixed: was c.typesenseKey (wrong key name) */
       } : {},
     });
   }

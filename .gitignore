@@ -64,6 +64,10 @@ node_modules/
 
 # dotenv environment variables file
 .env
+.env.local
+# functions/.env contains only non-secret config (ALGOLIA_APP_ID, TYPESENSE_NODES)
+# — keep it tracked so Firebase deploy picks it up
+!functions/.env
 
 # dataconnect generated files
 .dataconnect

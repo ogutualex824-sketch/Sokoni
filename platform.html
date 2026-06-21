@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#71ff00">
+  <title>Platform Operations Center — SOKONI</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/mobile.css">
+
+  <style>
+    :root{
+      --g:#71ff00;--g2:#4fc800;--r:#ef4444;--o:#f59e0b;--b:#3b82f6;--p:#a78bfa;
+      --bg:#050505;--bg2:#0d0d0d;--bg3:#111;--bg4:#181818;
+      --border:rgba(255,255,255,.07);--text:#fff;--muted:rgba(255,255,255,.4);--rad:14px
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh}
+
+    /* ── Header ── */
+    .poc-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.8);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px)}
+    .poc-logo{font-size:16px;font-weight:800;color:var(--g);flex:1;letter-spacing:-.3px}
+    .poc-logo span{color:var(--muted);font-weight:400;font-size:10px;display:block;margin-top:-2px;letter-spacing:.4px;text-transform:uppercase}
+    .poc-badge{background:linear-gradient(135deg,#7c3aed,#1d4ed8);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px}
+    .platform-status{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700}
+    .ps-dot{width:9px;height:9px;border-radius:50%;animation:pulse 2s infinite}
+    .ps-dot.healthy{background:var(--g)}.ps-dot.degraded{background:var(--o)}.ps-dot.unknown{background:var(--muted)}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+    /* ── Tabs ── */
+    .poc-tabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:var(--bg2);padding:0 16px;position:sticky;top:52px;z-index:99}
+    .poc-tabs::-webkit-scrollbar{display:none}
+    .poc-tab{flex-shrink:0;padding:13px 16px;font-size:13px;font-weight:700;color:var(--muted);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:.15s;white-space:nowrap}
+    .poc-tab.active{color:var(--g);border-color:var(--g)}
+
+    /* ── Pages ── */
+    .poc-page{display:none;padding:24px 20px 120px;max-width:1400px;margin:0 auto}
+    .poc-page.active{display:block}
+
+    /* ── KPI grid ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:28px}
+    @media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
+    @media(min-width:1000px){.kpi-grid{grid-template-columns:repeat(6,1fr)}}
+    .kpi{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rad);padding:16px}
+    .kpi-val{font-size:26px;font-weight:900;color:var(--g)}
+    .kpi-label{font-size:10px;color:var(--muted);margin-top:4px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    .kpi-sub{font-size:11px;margin-top:3px}
+    .kpi-sub.ok{color:rgba(113,255,0,.6)}.kpi-sub.warn{color:#f59e0b}.kpi-sub.err{color:#ef4444}
+
+    /* ── Section head ── */
+    .s-head{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin:28px 0 14px;display:flex;align-items:center;gap:10px}
+    .s-head::after{content:'';flex:1;height:1px;background:var(--border)}
+    .s-head:first-child{margin-top:0}
+
+    /* ── Service Card ── */
+    .svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px}
+    .svc-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rad);padding:18px;position:relative;transition:border-color .15s}
+    .svc-card:hover{border-color:rgba(113,255,0,.3)}
+    .svc-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
+    .svc-name{font-size:14px;font-weight:700}
+    .svc-type{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.3px}
+    .svc-health{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px}
+    .sh-healthy{background:#22c55e}.sh-degraded{background:#f59e0b}.sh-unhealthy,.sh-stale{background:#ef4444}.sh-unknown{background:var(--muted)}
+    .svc-uses{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+    .svc-cap{font-size:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;padding:2px 7px;color:rgba(255,255,255,.55)}
+    .svc-url{font-size:11px;color:var(--muted);margin-top:8px;word-break:break-all}
+    .svc-ver{font-size:10px;color:rgba(113,255,0,.5);position:absolute;bottom:12px;right:14px}
+
+    /* ── Event Stream ── */
+    .event-stream{display:flex;flex-direction:column;gap:6px;max-height:560px;overflow-y:auto;padding:2px 0}
+    .event-stream::-webkit-scrollbar{width:4px}.event-stream::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:4px}
+    .evt-row{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;animation:fadeIn .25s}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+    .evt-dot{width:8px;height:8px;border-radius:50%;background:var(--g);flex-shrink:0}
+    .evt-type{font-size:12px;font-weight:700;font-family:monospace;color:var(--g)}
+    .evt-domain{font-size:10px;color:var(--muted);margin-top:1px}
+    .evt-ts{font-size:10px;color:var(--muted);white-space:nowrap}
+
+    /* ── Health Matrix ── */
+    .health-matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+    .hm-cell{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px}
+    .hm-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .hm-name{font-size:12px;font-weight:700;flex:1}
+    .hm-lat{font-size:10px;color:var(--muted)}
+
+    /* ── Capability matrix ── */
+    .cap-table{width:100%;border-collapse:collapse;font-size:12px}
+    .cap-table th{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+    .cap-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .cap-table tr:hover td{background:rgba(255,255,255,.02)}
+    .cap-pill{display:inline-flex;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;margin:2px}
+    .cp-ok{background:rgba(34,197,94,.12);color:#22c55e}
+    .cp-miss{background:rgba(239,68,68,.1);color:#ef4444}
+
+    /* ── Event log table ── */
+    .tbl-wrap{overflow-x:auto}
+    .tbl{width:100%;border-collapse:collapse;font-size:12px}
+    .tbl th{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+    .tbl td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+
+    /* ── Badge ── */
+    .badge{display:inline-flex;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:800}
+    .b-green{background:rgba(34,197,94,.12);color:#22c55e}
+    .b-yellow{background:rgba(245,158,11,.12);color:#f59e0b}
+    .b-red{background:rgba(239,68,68,.12);color:#ef4444}
+    .b-blue{background:rgba(59,130,246,.12);color:#60a5fa}
+    .b-purple{background:rgba(167,139,250,.12);color:#a78bfa}
+    .b-gray{background:rgba(255,255,255,.06);color:var(--muted)}
+
+    /* ── Inputs ── */
+    .p-input,.p-select{background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:#fff;font-size:13px;width:100%;outline:none;transition:border-color .15s}
+    .p-input:focus,.p-select:focus{border-color:var(--g)}
+    .p-select option{background:#1a1a1a}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:.15s}
+    .btn-primary{background:var(--g);color:#000}.btn-primary:hover{background:var(--g2)}
+    .btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid var(--border)}.btn-ghost:hover{background:rgba(255,255,255,.1)}
+    .fr{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+    .fr label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.3px}
+
+    /* ── Dep graph ── */
+    .dep-node{display:inline-flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;margin:4px}
+    .dep-arrow{color:var(--muted);font-size:12px;margin:0 2px}
+
+    /* ── Toast ── */
+    #poc-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:11px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:99999;opacity:0;transition:opacity .3s;pointer-events:none;border:1px solid var(--border)}
+    #poc-toast.show{opacity:1}
+
+    /* ── Skeleton ── */
+    .skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.04) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;height:18px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    /* ── Arch diagram ── */
+    .arch-layer{margin-bottom:20px}
+    .arch-layer-label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+    .arch-modules{display:flex;flex-wrap:wrap;gap:8px}
+    .arch-mod{display:inline-flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:border-color .15s}
+    .arch-mod:hover{border-color:rgba(113,255,0,.4)}
+    .arch-mod-dot{width:7px;height:7px;border-radius:50%;background:var(--g)}
+  </style>
+</head>
+<body>
+
+<!-- ── Splash ── -->
+<div id="splash" style="position:fixed;inset:0;background:#050505;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999">
+  <div style="font-size:11px;color:rgba(255,255,255,.3);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px">SOKONI</div>
+  <div style="font-size:28px;font-weight:900;color:#71ff00;letter-spacing:-1px">Platform Ops</div>
+  <div style="width:160px;height:2px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden;margin-top:24px">
+    <div id="splash-bar" style="width:0%;height:100%;background:#71ff00;transition:width .4s"></div>
+  </div>
+</div>
+
+<!-- ── Header ── -->
+<header class="poc-header">
+  <div class="poc-logo">Platform Ops Center <span>sokoni unified platform</span></div>
+  <div class="platform-status"><div class="ps-dot unknown" id="ps-dot"></div><span id="ps-label">Loading…</span></div>
+  <span class="poc-badge">ADMIN</span>
+</header>
+
+<!-- ── Tabs ── -->
+<nav class="poc-tabs" role="tablist">
+  <button class="poc-tab active" data-tab="overview">Overview</button>
+  <button class="poc-tab" data-tab="registry">Service Registry</button>
+  <button class="poc-tab" data-tab="health">Health Matrix</button>
+  <button class="poc-tab" data-tab="events">Event Stream</button>
+  <button class="poc-tab" data-tab="capabilities">Capability Audit</button>
+  <button class="poc-tab" data-tab="dependencies">Dependencies</button>
+  <button class="poc-tab" data-tab="architecture">Architecture</button>
+  <button class="poc-tab" data-tab="register">Register Service</button>
+</nav>
+
+<!-- ════════════════════════════════════ OVERVIEW ══════════════════════════════ -->
+<main id="tab-overview" class="poc-page active">
+  <div class="kpi-grid" id="overview-kpis">
+    <div class="kpi"><div class="kpi-val" id="k-total">—</div><div class="kpi-label">Services</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-healthy" style="color:#22c55e">—</div><div class="kpi-label">Healthy</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-degraded" style="color:#f59e0b">—</div><div class="kpi-label">Degraded</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-stale" style="color:#ef4444">—</div><div class="kpi-label">Stale / Down</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-products">—</div><div class="kpi-label">Products</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-platform">—</div><div class="kpi-label">Platform Svcs</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      <div class="s-head">Service Mesh Overview</div>
+      <div id="arch-preview" class="svc-grid" style="grid-template-columns:1fr"></div>
+    </div>
+    <div>
+      <div class="s-head">Live Event Feed</div>
+      <div id="live-event-feed" class="event-stream"></div>
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════ REGISTRY ══════════════════════════════ -->
+<main id="tab-registry" class="poc-page">
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+    <select id="reg-type-filter" class="p-select" style="width:160px">
+      <option value="">All Types</option>
+      <option value="platform">Platform</option><option value="product">Product</option>
+      <option value="integration">Integration</option><option value="ai">AI</option>
+    </select>
+    <select id="reg-status-filter" class="p-select" style="width:160px">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option><option value="degraded">Degraded</option>
+      <option value="deprecated">Deprecated</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadRegistry()">Refresh</button>
+  </div>
+  <div class="svc-grid" id="registry-grid"></div>
+</main>
+
+<!-- ════════════════════════════════════ HEALTH ════════════════════════════════ -->
+<main id="tab-health" class="poc-page">
+  <div id="health-kpis" class="kpi-grid" style="margin-bottom:20px"></div>
+  <div class="health-matrix" id="health-matrix"></div>
+</main>
+
+<!-- ════════════════════════════════════ EVENTS ════════════════════════════════ -->
+<main id="tab-events" class="poc-page">
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <input id="evt-type-filter" class="p-input" placeholder="Event type (e.g. Subscription.Created)" style="max-width:300px;flex:1">
+    <select id="evt-domain-filter" class="p-select" style="width:160px">
+      <option value="">All Domains</option>
+      <option>Order</option><option>Payment</option><option>Subscription</option>
+      <option>Fraud</option><option>Risk</option><option>User</option>
+      <option>Platform</option><option>AI</option><option>Entitlement</option>
+      <option>License</option><option>Seat</option><option>Organization</option>
+    </select>
+    <select id="evt-since-filter" class="p-select" style="width:150px">
+      <option value="3600000">Last 1 hour</option>
+      <option value="86400000" selected>Last 24 hours</option>
+      <option value="604800000">Last 7 days</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadEventLog()">Load</button>
+    <button class="btn btn-ghost" onclick="startLiveStream()">&#x25CF; Live</button>
+  </div>
+
+  <div id="event-log-stream" class="event-stream" style="max-height:unset"></div>
+
+  <div class="s-head" style="margin-top:28px">Event Replay</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <input id="replay-cid" class="p-input" placeholder="Correlation ID to replay…" style="max-width:360px;flex:1">
+    <input id="replay-reason" class="p-input" placeholder="Reason…" style="max-width:240px">
+    <button class="btn btn-ghost" onclick="replayEvents()">Replay</button>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════ CAPABILITIES ══════════════════════════ -->
+<main id="tab-capabilities" class="poc-page">
+  <p style="color:var(--muted);font-size:13px;margin-bottom:20px">
+    Audit which product modules are integrated with each platform capability.
+    Missing integrations indicate potential duplication or architectural gaps.
+  </p>
+  <div id="cap-missing" style="margin-bottom:24px"></div>
+  <div class="tbl-wrap">
+    <table class="cap-table">
+      <thead><tr><th>Capability</th><th>Integrated Services</th></tr></thead>
+      <tbody id="cap-matrix-body"></tbody>
+    </table>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════ DEPENDENCIES ══════════════════════════ -->
+<main id="tab-dependencies" class="poc-page">
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <input id="dep-service-filter" class="p-input" placeholder="Filter by service ID…" style="max-width:280px;flex:1">
+    <button class="btn btn-primary" onclick="loadDependencies()">Load Graph</button>
+  </div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>From</th><th></th><th>To (Dependency)</th></tr></thead>
+      <tbody id="dep-table-body"></tbody>
+    </table>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════ ARCHITECTURE ══════════════════════════ -->
+<main id="tab-architecture" class="poc-page">
+  <div class="arch-layer">
+    <div class="arch-layer-label">Core Platform Services</div>
+    <div class="arch-modules" id="arch-platform"></div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-label">Product Modules</div>
+    <div class="arch-modules" id="arch-products"></div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-label">Integration Services</div>
+    <div class="arch-modules" id="arch-integrations"></div>
+  </div>
+  <div class="arch-layer">
+    <div class="arch-layer-label">AI Services</div>
+    <div class="arch-modules" id="arch-ai"></div>
+  </div>
+
+  <div class="s-head">Registered Capabilities</div>
+  <div id="arch-caps" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+</main>
+
+<!-- ════════════════════════════════════ REGISTER ══════════════════════════════ -->
+<main id="tab-register" class="poc-page">
+  <p style="color:var(--muted);font-size:13px;margin-bottom:20px">
+    Register a new service with the SOKONI Platform Registry. Once registered, the service
+    will appear in the health matrix, dependency graph, and capability audit.
+  </p>
+  <div style="max-width:600px">
+    <div class="fr"><label>Service ID *</label><input id="r-id" class="p-input" placeholder="e.g. healthcare-hub"></div>
+    <div class="fr"><label>Display Name *</label><input id="r-name" class="p-input" placeholder="e.g. Healthcare Hub"></div>
+    <div class="fr"><label>Type</label>
+      <select id="r-type" class="p-select"><option value="product">Product</option><option value="platform">Platform Service</option><option value="integration">Integration</option><option value="ai">AI</option></select>
+    </div>
+    <div class="fr"><label>Version</label><input id="r-ver" class="p-input" placeholder="1.0.0"></div>
+    <div class="fr"><label>Description</label><input id="r-desc" class="p-input" placeholder="One-line description…"></div>
+    <div class="fr"><label>URL / Path</label><input id="r-url" class="p-input" placeholder="e.g. /healthcare.html"></div>
+    <div class="fr"><label>Platform Capabilities Used (comma-separated)</label>
+      <input id="r-uses" class="p-input" placeholder="authentication,subscriptions,billing,audit_logs…"></div>
+    <div class="fr"><label>Publishes Events (comma-separated)</label>
+      <input id="r-pub" class="p-input" placeholder="Healthcare.AppointmentBooked,Healthcare.ReferralCreated…"></div>
+    <div class="fr"><label>Subscribes To (comma-separated)</label>
+      <input id="r-sub" class="p-input" placeholder="Payment.Failed,Subscription.Expired…"></div>
+    <div class="fr"><label>Depends On (serviceIds, comma-separated)</label>
+      <input id="r-deps" class="p-input" placeholder="sasos,wap,notifications…"></div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button class="btn btn-primary" onclick="registerService()">Register Service</button>
+      <button class="btn btn-ghost" onclick="prefillDemo()">Demo Fill</button>
+    </div>
+    <div id="r-result" style="margin-top:14px"></div>
+  </div>
+</main>
+
+<!-- ── Toast ── -->
+<div id="poc-toast"></div>
+
+<!-- ── Firebase + Platform ── -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="/firebase.js"></script>
+<script src="/sokoni-platform.js"></script>
+<script src="/sw-register.js"></script>
+
+<script>
+'use strict';
+
+/* ── Splash ── */
+window.addEventListener('load', () => {
+  const bar = document.getElementById('splash-bar');
+  let p = 0; const iv = setInterval(() => { p += 25; bar.style.width = p + '%'; if (p >= 100) { clearInterval(iv); setTimeout(() => document.getElementById('splash').remove(), 280); } }, 100);
+});
+
+/* ── Toast ── */
+function toast(msg, err = false) {
+  const el = document.getElementById('poc-toast');
+  el.textContent = msg; el.style.borderColor = err ? '#ef4444' : 'rgba(255,255,255,.1)';
+  el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+/* ── CF caller ── */
+const CF = name => firebase.functions().httpsCallable(name);
+
+/* ── Formatters ── */
+const fmtDate = ts => ts ? new Date(ts).toLocaleString('en-KE', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '—';
+const csv     = s => (s || '').split(',').map(x => x.trim()).filter(Boolean);
+
+/* ── Tab router ── */
+let _loaded = {};
+document.querySelectorAll('.poc-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.poc-tab,.poc-page').forEach(el => el.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (!_loaded[btn.dataset.tab]) { _loaded[btn.dataset.tab] = true; loadTab(btn.dataset.tab); }
+  });
+});
+
+function loadTab(tab) {
+  if (tab === 'registry')    loadRegistry();
+  if (tab === 'health')      loadHealth();
+  if (tab === 'events')      loadEventLog();
+  if (tab === 'capabilities') loadCapabilities();
+  if (tab === 'dependencies') loadDependencies();
+  if (tab === 'architecture') loadArchitecture();
+}
+
+/* ════════════════════════════════════ OVERVIEW ════════════════════════════════ */
+async function loadOverview() {
+  try {
+    const res = await CF('platformGetHealth')({});
+    const d   = res.data;
+
+    document.getElementById('k-total').textContent   = d.total || 0;
+    document.getElementById('k-healthy').textContent = d.healthy || 0;
+    document.getElementById('k-degraded').textContent = d.degraded || 0;
+    document.getElementById('k-stale').textContent   = d.stale || 0;
+
+    const byType = {};
+    (d.services || []).forEach(s => { byType[s.type] = (byType[s.type] || 0) + 1; });
+    document.getElementById('k-products').textContent  = byType.product || 0;
+    document.getElementById('k-platform').textContent  = byType.platform || 0;
+
+    /* Update header status */
+    const dot = document.getElementById('ps-dot');
+    const lbl = document.getElementById('ps-label');
+    dot.className = `ps-dot ${d.overallStatus}`;
+    lbl.textContent = d.overallStatus === 'healthy' ? 'All Systems Operational' : 'Degraded';
+
+    /* Arch preview cards */
+    const prev = document.getElementById('arch-preview');
+    prev.innerHTML = (d.services || []).slice(0, 6).map(s => `
+      <div class="svc-card" style="padding:12px 14px">
+        <div class="svc-card-header">
+          <div><div class="svc-name" style="font-size:12px">${esc(s.name)}</div><div class="svc-type">${s.type}</div></div>
+          <div class="svc-health sh-${s.healthStatus}"></div>
+        </div>
+      </div>`).join('') || '<p style="color:var(--muted);font-size:13px">No services registered yet.</p>';
+
+  } catch (e) { toast('Overview load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════ REGISTRY ════════════════════════════════ */
+async function loadRegistry() {
+  const type   = document.getElementById('reg-type-filter')?.value || '';
+  const status = document.getElementById('reg-status-filter')?.value || '';
+  try {
+    const res  = await CF('platformGetRegistry')({ type: type || undefined, status: status || undefined });
+    const svcs = res.data.services || [];
+
+    document.getElementById('registry-grid').innerHTML = svcs.map(s => `
+      <div class="svc-card">
+        <div class="svc-card-header">
+          <div>
+            <div class="svc-name">${esc(s.name)}</div>
+            <div class="svc-type">${esc(s.type)} &nbsp;•&nbsp; v${esc(s.version||'?')}</div>
+          </div>
+          <div class="svc-health sh-${s.status === 'active' ? 'healthy' : s.status}"></div>
+        </div>
+        ${s.description ? `<p style="font-size:12px;color:var(--muted);margin-bottom:8px">${esc(s.description)}</p>` : ''}
+        <div class="svc-uses">
+          ${(s.uses||[]).slice(0,8).map(c=>`<span class="svc-cap">${esc(c)}</span>`).join('')}
+          ${(s.uses||[]).length > 8 ? `<span class="svc-cap">+${(s.uses||[]).length - 8}</span>` : ''}
+        </div>
+        ${s.url ? `<div class="svc-url"><a href="${esc(s.url)}" style="color:rgba(113,255,0,.6)">${esc(s.url)}</a></div>` : ''}
+        <div class="svc-ver">${esc(s.serviceId)}</div>
+      </div>`).join('') || '<p style="color:var(--muted)">No services found.</p>';
+  } catch (e) { toast('Registry load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════ HEALTH ══════════════════════════════════ */
+async function loadHealth() {
+  try {
+    const res = await CF('platformGetHealth')({});
+    const d   = res.data;
+
+    document.getElementById('health-kpis').innerHTML = `
+      <div class="kpi"><div class="kpi-val" style="color:#22c55e">${d.healthy||0}</div><div class="kpi-label">Healthy</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#f59e0b">${d.degraded||0}</div><div class="kpi-label">Degraded</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#ef4444">${d.stale||0}</div><div class="kpi-label">Stale</div></div>
+      <div class="kpi"><div class="kpi-val">${d.total||0}</div><div class="kpi-label">Total Services</div></div>`;
+
+    document.getElementById('health-matrix').innerHTML = (d.services||[]).map(s => `
+      <div class="hm-cell">
+        <div class="hm-dot sh-${s.healthStatus}"></div>
+        <div class="hm-name">${esc(s.name)}</div>
+        ${s.latencyMs ? `<div class="hm-lat">${s.latencyMs}ms</div>` : ''}
+      </div>`).join('') || '<p style="color:var(--muted)">No health data.</p>';
+
+  } catch (e) { toast('Health load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════ EVENTS ══════════════════════════════════ */
+async function loadEventLog() {
+  const type   = document.getElementById('evt-type-filter')?.value.trim() || '';
+  const domain = document.getElementById('evt-domain-filter')?.value || '';
+  const since  = Number(document.getElementById('evt-since-filter')?.value || 86400000);
+
+  try {
+    const res    = await CF('platformGetEventLog')({
+      type:   type   || undefined,
+      domain: domain || undefined,
+      since:  Date.now() - since,
+      pageSize: 50,
+    });
+    const events = res.data.events || [];
+    renderEventRows(document.getElementById('event-log-stream'), events);
+  } catch (e) { toast('Event log failed: ' + e.message, true); }
+}
+
+function renderEventRows(container, events) {
+  container.innerHTML = events.map(e => `
+    <div class="evt-row">
+      <div class="evt-dot"></div>
+      <div>
+        <div class="evt-type">${esc(e.type)}</div>
+        <div class="evt-domain">${esc(e.sourceService||e.publisherUid||'—')}</div>
+      </div>
+      <div class="evt-ts">${fmtDate(e.publishedAt)}</div>
+    </div>`).join('') || '<p style="color:var(--muted);font-size:13px;padding:12px 0">No events found.</p>';
+}
+
+/* Live stream via Firestore real-time */
+let _liveUnsub = null;
+function startLiveStream() {
+  if (_liveUnsub) { _liveUnsub(); _liveUnsub = null; toast('Live stream stopped.'); return; }
+  const feed = document.getElementById('event-log-stream');
+  feed.innerHTML = '<p style="color:#22c55e;font-size:12px;padding:8px 0">&#x25CF; Live stream started…</p>';
+  const since = Date.now() - 5000;
+  _liveUnsub = firebase.firestore().collection('platformEvents')
+    .where('publishedAt', '>=', since)
+    .orderBy('publishedAt', 'desc').limit(30)
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(c => {
+        if (c.type !== 'added') return;
+        const e = c.doc.data();
+        const row = document.createElement('div');
+        row.className = 'evt-row';
+        row.innerHTML = `<div class="evt-dot"></div><div><div class="evt-type">${esc(e.type)}</div><div class="evt-domain">${esc(e.sourceService||'—')}</div></div><div class="evt-ts">${fmtDate(e.publishedAt)}</div>`;
+        feed.insertAdjacentElement('afterbegin', row);
+        if (feed.children.length > 50) feed.lastElementChild?.remove();
+      });
+    });
+  toast('Live stream started. Click "Live" again to stop.');
+}
+
+async function replayEvents() {
+  const cid    = document.getElementById('replay-cid').value.trim();
+  const reason = document.getElementById('replay-reason').value.trim();
+  if (!cid) return toast('Correlation ID required.', true);
+  try {
+    const res = await CF('platformReplayEvents')({ correlationId: cid, reason });
+    toast(`Replayed ${res.data.replayed} events.`);
+  } catch (e) { toast('Replay failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════ CAPABILITIES ═══════════════════════════ */
+async function loadCapabilities() {
+  try {
+    const res = await CF('platformGetCapabilityMatrix')({});
+    const d   = res.data;
+
+    /* Missing integrations warning */
+    const missing = Object.entries(d.missingIntegrations || {});
+    const missingEl = document.getElementById('cap-missing');
+    if (missing.length) {
+      missingEl.innerHTML = `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:800;color:#ef4444;margin-bottom:10px">⚠ Missing Integrations (${missing.length} services)</div>
+        ${missing.slice(0,5).map(([svc, caps]) => `
+          <div style="margin-bottom:6px;font-size:12px"><strong>${esc(svc)}:</strong> ${caps.slice(0,4).map(c=>`<span class="badge b-red" style="margin:1px">${esc(c)}</span>`).join('')}${caps.length>4?` +${caps.length-4}`:''}</div>`).join('')}
+      </div>`;
+    } else {
+      missingEl.innerHTML = '<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.15);border-radius:10px;padding:12px;font-size:12px;color:#22c55e;margin-bottom:16px">&#10003; All product services have declared their platform integrations.</div>';
+    }
+
+    const matrix = d.matrix || {};
+    document.getElementById('cap-matrix-body').innerHTML = Object.entries(matrix).map(([cap, svcs]) => `
+      <tr>
+        <td><code style="font-size:11px;color:#a78bfa">${esc(cap)}</code></td>
+        <td>${svcs.length ? svcs.map(s=>`<span class="cap-pill cp-ok">${esc(s)}</span>`).join('') : '<span style="color:var(--muted);font-size:11px">None declared</span>'}</td>
+      </tr>`).join('');
+  } catch (e) { toast('Capability matrix failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════ DEPENDENCIES ═══════════════════════════ */
+async function loadDependencies() {
+  const svc = document.getElementById('dep-service-filter')?.value.trim() || '';
+  try {
+    const res   = await CF('platformGetDependencies')({ serviceId: svc || undefined });
+    const edges = res.data.edges || [];
+    document.getElementById('dep-table-body').innerHTML = edges.map(e => `
+      <tr>
+        <td><span class="dep-node">${esc(e.from)}</span></td>
+        <td class="dep-arrow">&#x2192;</td>
+        <td><span class="dep-node" style="border-color:rgba(59,130,246,.4)">${esc(e.to)}</span></td>
+      </tr>`).join('') || '<tr><td colspan="3" style="color:var(--muted);padding:20px;text-align:center">No dependency edges found. Services must declare dependsOn during registration.</td></tr>';
+  } catch (e) { toast('Dependencies load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════ ARCHITECTURE ═══════════════════════════ */
+async function loadArchitecture() {
+  try {
+    const res  = await CF('platformGetRegistry')({ pageSize: 200 });
+    const svcs = res.data.services || [];
+    const byType = { platform: [], product: [], integration: [], ai: [] };
+    svcs.forEach(s => { (byType[s.type] || byType.product).push(s); });
+
+    Object.entries(byType).forEach(([type, list]) => {
+      const el = document.getElementById(`arch-${type}s`) || document.getElementById(`arch-${type}`);
+      if (!el) return;
+      el.innerHTML = list.map(s => `
+        <div class="arch-mod" onclick="toast('${esc(s.serviceId)} — ${esc(s.version||'')}')">
+          <div class="arch-mod-dot" style="background:${s.type==='platform'?'#71ff00':s.type==='ai'?'#a78bfa':'#60a5fa'}"></div>
+          ${esc(s.name||s.serviceId)}
+        </div>`).join('') || `<span style="color:var(--muted);font-size:12px">None registered</span>`;
+    });
+
+    /* Known platform capabilities */
+    const caps = [
+      'authentication','rbac','abac','subscriptions','entitlements','billing',
+      'payments','escrow','ledger','commission','tax','notifications',
+      'ai_platform','ai_credits','fraud_detection','risk_engine','search',
+      'workflow_automation','storage','usage_metering','analytics','audit_logs',
+      'monitoring','logging','feature_flags','configuration','api_gateway',
+      'event_bus','queue_system','secrets_management','device_trust','geo_intelligence',
+    ];
+    document.getElementById('arch-caps').innerHTML = caps.map(c =>
+      `<span class="badge b-purple" style="font-size:11px">${c}</span>`).join('');
+
+  } catch (e) { toast('Architecture load failed: ' + e.message, true); }
+}
+
+/* ════════════════════════════════════ REGISTER SERVICE ═══════════════════════ */
+async function registerService() {
+  const serviceId = document.getElementById('r-id').value.trim();
+  const name      = document.getElementById('r-name').value.trim();
+  const type      = document.getElementById('r-type').value;
+  const version   = document.getElementById('r-ver').value.trim() || '1.0.0';
+  const desc      = document.getElementById('r-desc').value.trim();
+  const url       = document.getElementById('r-url').value.trim();
+  const uses      = csv(document.getElementById('r-uses').value);
+  const pubEvts   = csv(document.getElementById('r-pub').value);
+  const subEvts   = csv(document.getElementById('r-sub').value);
+  const deps      = csv(document.getElementById('r-deps').value);
+
+  if (!serviceId || !name) return toast('Service ID and Name are required.', true);
+
+  try {
+    const res = await CF('platformRegisterService')({
+      serviceId, name, type, version, description: desc, url,
+      uses, publishesEvents: pubEvts, subscribesEvents: subEvts, dependsOn: deps,
+    });
+    document.getElementById('r-result').innerHTML = `<div class="badge b-green">Registered: ${esc(res.data.serviceId)}</div>`;
+    toast(`Service "${name}" registered successfully.`);
+    _loaded['registry'] = false;
+  } catch (e) { toast('Registration failed: ' + e.message, true); }
+}
+
+function prefillDemo() {
+  document.getElementById('r-id').value    = 'healthcare-hub';
+  document.getElementById('r-name').value  = 'Healthcare Hub';
+  document.getElementById('r-type').value  = 'product';
+  document.getElementById('r-ver').value   = '1.0.0';
+  document.getElementById('r-desc').value  = 'Doctor appointments, lab tests, pharmacy, teleconsultation';
+  document.getElementById('r-url').value   = '/healthcare.html';
+  document.getElementById('r-uses').value  = 'authentication,subscriptions,billing,payments,notifications,audit_logs,analytics,fraud_detection,workflow_automation,search';
+  document.getElementById('r-pub').value   = 'Healthcare.AppointmentBooked,Healthcare.ReferralCreated,Healthcare.LabResultReady';
+  document.getElementById('r-sub').value   = 'Payment.Failed,Subscription.Expired,User.Banned';
+  document.getElementById('r-deps').value  = 'sasos,wap,notifications,search';
+}
+
+function esc(str) {
+  const d = document.createElement('div'); d.textContent = String(str||''); return d.innerHTML;
+}
+
+/* ── Live feed on overview tab ── */
+let _overviewFeedUnsub = null;
+function startOverviewFeed() {
+  const feed = document.getElementById('live-event-feed');
+  const since = Date.now() - 3000;
+  _overviewFeedUnsub = firebase.firestore().collection('platformEvents')
+    .where('publishedAt', '>=', since).orderBy('publishedAt','desc').limit(10)
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(c => {
+        if (c.type !== 'added') return;
+        const e = c.doc.data();
+        const row = document.createElement('div');
+        row.className = 'evt-row';
+        row.innerHTML = `<div class="evt-dot"></div><div><div class="evt-type">${esc(e.type)}</div><div class="evt-domain">${esc(e.sourceService||'—')}</div></div><div class="evt-ts">${fmtDate(e.publishedAt)}</div>`;
+        feed.insertAdjacentElement('afterbegin', row);
+        if (feed.children.length > 10) feed.lastElementChild?.remove();
+      });
+    });
+}
+
+/* ── Auth guard + init ── */
+firebase.auth().onAuthStateChanged(user => {
+  if (!user) { window.location.href = '/login.html?redirect=platform.html'; return; }
+  user.getIdTokenResult().then(tok => {
+    if (!tok.claims.admin && !tok.claims.superAdmin) {
+      window.location.href = '/index.html'; return;
+    }
+    loadOverview();
+    startOverviewFeed();
+    SokoniPlatform.init({
+      serviceId: 'platform-ops-center',
+      name:      'Platform Operations Center',
+      type:      'platform',
+      uses:      ['authentication','rbac','analytics','audit_logs','monitoring'],
+    });
+  });
+});
+</script>
+</body>
+</html>

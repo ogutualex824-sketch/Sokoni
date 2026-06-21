@@ -696,3 +696,131 @@ Every architectural decision in SOKONI must improve at least one of:
 * Maintainability — every engineer should understand every module
 
 If a proposed solution weakens these principles without strong justification, it must be reconsidered before implementation.
+
+---
+
+# Platform Registry + Event Bus — Unified Platform Enforcement (Added 2026-06-21)
+
+## Architectural Mandate
+
+SOKONI is **ONE platform** composed of many products. No product module may implement its own subscription engine, billing logic, payment processor, entitlement system, permission system, analytics engine, audit system, notification system, or fraud system. Every product inherits these from the 33 declared platform capabilities.
+
+## Server-Side Platform Registry
+
+**File:** `functions/platform-registry.js`
+**Collections:** `platformServices`, `platformHealth`, `platformDependencies`
+
+Every service self-registers on boot via `platformRegisterService`. The registry persists across browser sessions, Cloud Functions, and Firestore triggers — unlike `sokoni-service-mesh.js` which is in-memory client-side only.
+
+### Service Registration Schema
+```
+serviceId    — unique key (e.g. 'marketplace', 'sasos', 'gip')
+name         — display name
+type         — platform | product | integration | ai | infrastructure
+version      — semantic version
+uses[]       — platform capability keys this service consumes
+publishesEvents[] — domain events this service emits
+subscribesEvents[] — domain events this service handles
+dependsOn[]  — other serviceIds this depends on
+```
+
+### 33 Platform Capability Keys
+authentication, rbac, abac, subscriptions, entitlements, billing, payments, escrow, ledger, commission, tax, notifications, ai_platform, ai_credits, fraud_detection, risk_engine, search, workflow_automation, storage, usage_metering, analytics, audit_logs, monitoring, logging, feature_flags, configuration, api_gateway, event_bus, queue_system, secrets_management, device_trust, geo_intelligence, media
+
+### Health Monitoring
+- Services call `platformUpdateHealth` with `{status, latencyMs, errorRate}`
+- `platformHealthSweep` scheduled every 10 min marks stale services (no heartbeat >5 min)
+- `platformGetHealth` aggregates: total/healthy/degraded/stale counts
+
+### Capability Audit Matrix
+`platformGetCapabilityMatrix` (admin-only) compares each product service's declared `uses[]` against all 33 capability keys and surfaces missing integrations. This enforces the "no duplicate platform services" rule structurally.
+
+## Server-Side Event Bus
+
+**File:** `functions/platform-events.js`
+**Collections:** `platformEvents`, `platformSubscriptions`, `platformFanOut`
+
+Bridges the gap between the browser-only `sokoni-event-bus.js` and server-side Cloud Functions that need to react to domain events without tight coupling.
+
+### Event Flow
+```
+Publisher → platformPublishEvent CF
+           → writes to platformEvents (immutable)
+           → onPlatformEventCreated Firestore trigger fires
+           → looks up exact + wildcard subscribers in platformSubscriptions
+           → creates fan-out tasks in platformFanOut per subscriber
+```
+
+### 35 Valid Event Domains
+Order, Payment, Escrow, Wallet, Commission, Settlement, Delivery, Ride, Ticket, SmartPOS, User, Business, Fraud, Subscription, System, AI, Platform, Entitlement, Risk, License, Seat, Organization, Invoice, Credit, Storage, Feature, Workflow, Search, Analytics, Media, Property, Vehicle, Event, Healthcare, Education
+
+### Event Idempotency
+Publishers supply an `idempotencyKey`; the system rejects duplicates by querying `platformEvents.where('idempotencyKey','==',key)`. `correlationId` is auto-generated per request for distributed tracing.
+
+### Event Replay
+Admin `platformReplayEvents` copies event documents with `replayOf` field, resetting `fanOutStatus:'pending'`, causing `onPlatformEventCreated` to re-trigger fan-out. Used for debugging failed event handlers.
+
+## Universal Platform Bootstrap
+
+**File:** `sokoni-platform.js`
+**Exposes:** `window.SokoniPlatform`
+
+Single script that every HTML page includes. Replaces per-page auth wiring with a unified `SokoniPlatform.init()` call.
+
+### Boot Sequence (ordered)
+1. Firebase Auth state resolution (3s timeout)
+2. `SokoniServiceMesh.registerService()` (if loaded)
+3. `SokoniObservability.startTransaction()` (if loaded)
+4. `SokoniGateway.init()` (if loaded)
+5. `sasosGetRiskProfile` — zero-trust trust score
+6. `platformRegisterService` — self-registration
+7. Subscribe to server-side event stream for declared domains
+8. Start health heartbeat (every 2 min)
+9. Start risk profile refresh (every 5 min)
+
+### Unified Public API
+| Method | Description |
+|---|---|
+| `SokoniPlatform.init(opts)` | Boot the platform for the current page |
+| `SokoniPlatform.checkFeature(product, featureKey)` | Zero-trust entitlement gate (30s cache) |
+| `SokoniPlatform.recordUsage(product, key, amount)` | Usage metering via SASOS |
+| `SokoniPlatform.publish(type, payload, opts)` | Emit domain event (local + server) |
+| `SokoniPlatform.subscribe(type, handler)` | Subscribe to event type |
+| `SokoniPlatform.reportSignal(signalType, ctx)` | Fraud signal reporter |
+| `SokoniPlatform.triggerWorkflow(workflowId, input)` | WAP workflow trigger |
+| `SokoniPlatform.getFlag(flagKey)` | Feature flag lookup |
+| `SokoniPlatform.getUser()` | Current user + trustScore + riskAction |
+| `SokoniPlatform.getHealth()` | Platform health snapshot |
+
+### Auto-init from Data Attributes
+Pages can omit the JavaScript call by setting:
+```html
+<div data-sokoni-service="marketplace" data-sokoni-product="marketplace"></div>
+```
+`sokoni-platform.js` detects this on `DOMContentLoaded` and calls `init()` automatically.
+
+## Platform Operations Center
+
+**File:** `platform.html`
+**Access:** Admin / SuperAdmin only
+
+8-tab administrative dashboard:
+1. **Overview** — KPI grid (total/healthy/degraded/stale), service preview, live event feed
+2. **Service Registry** — filterable card grid of all registered services
+3. **Health Matrix** — real-time health dots with latency data
+4. **Event Stream** — paginated + live Firestore real-time event log; event replay tool
+5. **Capability Audit** — matrix of capabilities vs services; missing integration warnings
+6. **Dependencies** — dependency edge table with service→service arrows
+7. **Architecture** — services grouped by type (platform/product/integration/ai), capability chip list
+8. **Register Service** — admin self-registration form for new modules
+
+## Integration Enforcement
+
+The combination of:
+- **Registry** — knows what's running and what capabilities it claims
+- **Capability Matrix audit** — surfaces what it's missing
+- **Bootstrap** — enforces single init path
+- **Event Bus** — replaces point-to-point CF calls with domain events
+
+...makes architectural drift visible and measurable. A product that bypasses a platform capability shows up as a "missing integration" in the audit matrix.
+

@@ -2882,6 +2882,49 @@ service cloud.firestore {
       allow write:  if false;
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       PLATFORM REGISTRY + EVENT BUS  (platform-registry.js / platform-events.js)
+       All writes are CF-only (allow write: if false on every doc collection).
+       Reads are role-gated: services are semi-public; events are owner/admin.
+    ══════════════════════════════════════════════════════════════ */
+
+    /* platformServices — any authed user can browse the service catalog */
+    match /platformServices/{serviceId} {
+      allow read:  if isAuthed();
+      allow write: if false;
+    }
+
+    /* platformHealth — any authed user can see health status */
+    match /platformHealth/{serviceId} {
+      allow read:  if isAuthed();
+      allow write: if false;
+    }
+
+    /* platformDependencies — any authed user can see the dependency graph */
+    match /platformDependencies/{edgeId} {
+      allow read:  if isAuthed();
+      allow write: if false;
+    }
+
+    /* platformEvents — publishers read their own events; admins see all */
+    match /platformEvents/{eventId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.publisherUid == request.auth.uid);
+      allow write: if false;
+    }
+
+    /* platformSubscriptions — any authed service can read subscriptions */
+    match /platformSubscriptions/{subId} {
+      allow read:  if isAuthed();
+      allow write: if false;
+    }
+
+    /* platformFanOut — admin only; CF-written delivery tasks */
+    match /platformFanOut/{taskId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
   }
 }
 

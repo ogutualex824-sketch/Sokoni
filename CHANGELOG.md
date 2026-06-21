@@ -1,4 +1,47 @@
-﻿## [2026-06-21] — SASOS v1.0 — Universal AI Subscription Operating System
+﻿## [2026-06-21] — Platform Registry v1.0 + Event Bus v1.0 + Universal Platform Bootstrap
+
+### Summary
+Enforces the "SOKONI is ONE platform" architectural directive. Every module now self-registers into a persistent server-side Platform Registry and communicates through a server-side Event Bus with fan-out. The `sokoni-platform.js` client bootstrap auto-wires all platform services (Auth → SASOS → Fraud → Observability → Service Mesh → Gateway) in one `init()` call. The Platform Operations Center (`platform.html`) gives admins full visibility: service registry, health matrix, live event stream, capability audit, dependency graph, and architecture browser.
+
+### New Files (4)
+- **`functions/platform-registry.js`** — 8 Cloud Functions: `platformRegisterService`, `platformGetRegistry`, `platformUpdateHealth`, `platformGetHealth`, `platformDeregisterService`, `platformGetDependencies`, `platformGetCapabilityMatrix`, `platformHealthSweep` (every 10 min). Stores state in `platformServices`, `platformHealth`, `platformDependencies`. 33 declared platform capability keys. Integration audit matrix shows which product modules are missing capabilities.
+- **`functions/platform-events.js`** — 5 Cloud Functions + 1 Firestore trigger: `platformPublishEvent`, `platformGetEventLog`, `platformRegisterSub`, `platformGetSubscriptions`, `platformReplayEvents`, `onPlatformEventCreated`. 35 valid event domains. Exact + wildcard (`Domain.*`) fan-out to `platformFanOut` tasks. Admin event replay with `correlationId` tracing.
+- **`sokoni-platform.js`** — Universal client bootstrap (IIFE). Single `SokoniPlatform.init()` call auto-wires Firebase Auth → SASOS entitlements → Service Mesh → Event Bus → Observability → Gateway. Auto-registers current page in Platform Registry. Bridges client event bus to server-side `platformPublishEvent`. Zero-trust feature gates with 30s cache. Risk profile monitoring every 5 min. Health heartbeat every 2 min.
+- **`platform.html`** — Platform Operations Center (8 tabs): Overview KPIs, Service Registry browser, Health Matrix, Event Stream (live Firestore real-time + replay), Capability Audit matrix, Dependency graph, Architecture layer view, Service self-registration form. Dark theme, auth + admin gate.
+
+### Updated Files (5)
+- **`functions/index.js`** — +14 platform exports (8 registry + 6 events)
+- **`firestore.indexes.json`** — Trimmed 35 low-priority indexes (advanced inventory, community, entertainment singles), added 10 platform indexes; **final count: 199/200**
+- **`firestore.rules`** — +6 platform collection rules (platformServices/Health/Dependencies/Events/Subscriptions/FanOut)
+- **`service-worker.js`** — v251; added `/sokoni-platform.js` + `/platform.html` to precache
+- **`CHANGELOG.md`** — This entry
+
+### New Firestore Collections (6)
+`platformServices`, `platformHealth`, `platformDependencies`, `platformEvents`, `platformSubscriptions`, `platformFanOut`
+
+### Architecture Impact
+- **Pattern: Self-Registration** — Every service calls `platformRegisterService` on init; registry is the source of truth for what is running
+- **Pattern: Event-Driven** — Domain events flow through `platformPublishEvent` → `onPlatformEventCreated` trigger → fan-out tasks in `platformFanOut`
+- **Pattern: Single Bootstrap** — All pages include `sokoni-platform.js` and call `SokoniPlatform.init()` — zero per-page auth/service wiring
+- **Enforcement** — `platformGetCapabilityMatrix` audits which product modules are missing platform integrations
+
+### Deployment Steps
+1. `firebase deploy --only functions` — deploy 14 new platform CFs
+2. `firebase deploy --only firestore:indexes` — apply trimmed + platform indexes (199 total)
+3. `firebase deploy --only firestore:rules` — apply platform collection rules
+4. Add `<script src="/sokoni-platform.js"></script>` + `SokoniPlatform.init({serviceId, product})` to every page
+5. Call `platformRegisterService` for each product module (or use `SokoniPlatform.init()` auto-register)
+
+### Security
+- All 6 platform Firestore collections: `allow write: if false` — CF-only writes
+- `platformEvents` — publishers read only their own events; admins see all
+- `platformFanOut` — admin-only read access
+- `platformGetCapabilityMatrix` — admin-only (reveals internal integration map)
+- Self-registration validated against `PLATFORM_CAPABILITIES` allowlist
+
+---
+
+## [2026-06-21] — SASOS v1.0 — Universal AI Subscription Operating System
 
 ### Summary
 Production-grade Universal AI Subscription Operating System covering all 13 SOKONI product verticals. 46 plans across marketplace, smartpos, ai, delivery, logistics, events, property, vehicles, advertising, business, warehousing, finance, and analytics. Zero-trust entitlement, AI brain, fraud engine, billing engine with Kenya VAT (16%), dunning cycle, proration, usage metering, enterprise licensing, and a full admin dashboard.

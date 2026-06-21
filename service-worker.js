@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v250";
+const CACHE_VERSION = "sokoni-v251";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -133,6 +133,8 @@ const PRECACHE_STATIC = [
   "/sokoni-ecc.js", "/ecc.html",
   /* SASOS — Universal AI Subscription Operating System */
   "/sokoni-sasos.js", "/sasos-admin.html",
+  /* Platform Registry + Event Bus + Operations Center */
+  "/sokoni-platform.js", "/platform.html",
   /* Commerce — Orders, Notifications, Subscriptions, Vouchers */
   "/sokoni-orders.js", "/sokoni-notifications.js",
   "/sokoni-subscriptions.js", "/sokoni-vouchers.js", "/sokoni-intasend.js",
