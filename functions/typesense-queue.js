@@ -483,4 +483,5 @@ exports.typesenseQueueMonitor = onSchedule(
   }
 );
 
-module.exports.enqueue = enqueue;
+module.exports.enqueue  = enqueue;
+module.exports.PRIORITY = PRIORITY;
