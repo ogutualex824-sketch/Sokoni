@@ -64,17 +64,24 @@ wap.register('inventory.release', async ({ orderId, items }, ctx) => {
   const db = await _getDB();
   if (!db) return { released: true, mock: true };
 
-  const { writeBatch, doc } = await import(
+  const { doc, runTransaction, deleteField } = await import(
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
   );
-  const batch = writeBatch(db);
+  /* Per-item transaction: restore exact reserved qty and delete reservation.
+     Idempotent: if reservation already cleared, transaction no-ops. */
   for (const item of (items ?? [])) {
-    const ref = doc(db, 'products', item.productId);
-    batch.update(ref, {
-      [`reservations.${orderId}`]: null,
+    await runTransaction(db, async (txn) => {
+      const ref  = doc(db, 'products', item.productId);
+      const snap = await txn.get(ref);
+      if (!snap.exists()) return;
+      const reservedQty = snap.data()?.reservations?.[orderId];
+      if (!reservedQty) return;  /* Already released */
+      txn.update(ref, {
+        stock: (snap.data().stock ?? 0) + reservedQty,
+        [`reservations.${orderId}`]: deleteField(),
+      });
     });
   }
-  await batch.commit();
   return { released: true };
 });
 
@@ -86,16 +93,26 @@ wap.register('payment.authorize', async ({ orderId, amount, paymentMethod, phone
   const db = await _getDB();
   if (!db) return { authorized: true, authRef: 'MOCK-AUTH', mock: true };
 
-  const { doc, setDoc, serverTimestamp } = await import(
+  /* FIXED: stable key AUTH-{instanceId} — idempotent on retry, no duplicate auths */
+  const authRef = `AUTH-${ctx.instanceId}`;
+  const { doc, runTransaction, serverTimestamp } = await import(
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
   );
-  const authRef = 'AUTH-' + Date.now().toString(36).toUpperCase();
-  await setDoc(doc(db, 'paymentAuthorizations', authRef), {
-    orderId, amount, paymentMethod, phone, uid,
-    status:    'authorized',
-    createdAt: Date.now(),
-    serverTs:  serverTimestamp(),
-    wf:        ctx.instanceId,
+  await runTransaction(db, async (txn) => {
+    const ref  = doc(db, 'paymentAuthorizations', authRef);
+    const snap = await txn.get(ref);
+    if (snap.exists()) {
+      const d = snap.data();
+      if (d.status === 'authorized' || d.status === 'captured') return;  /* Idempotent */
+      if (d.status === 'voided' || d.status === 'failed') throw new Error(`Payment already ${d.status}`);
+    }
+    txn.set(ref, {
+      orderId, amount, paymentMethod, phone, uid,
+      status:    'authorized',
+      createdAt: Date.now(),
+      serverTs:  serverTimestamp(),
+      wf:        ctx.instanceId,
+    });
   });
   return { authorized: true, authRef };
 });
@@ -141,20 +158,25 @@ wap.register('payment.refund', async ({ orderId, amount, reason, uid }, ctx) => 
 /* ── Commission + payout handlers ───────────────────────────── */
 
 wap.register('commission.calculate', async ({ orderId, total, category, sellerUid }, ctx) => {
-  const rates     = { food: 0.15, delivery: 0.12, marketplace: 0.08, services: 0.10, default: 0.08 };
-  const pct       = rates[category] ?? rates.default;
+  const rates      = { food: 0.15, delivery: 0.12, marketplace: 0.08, services: 0.10, default: 0.08 };
+  const pct        = rates[category] ?? rates.default;
   const commission = Math.round(total * pct * 100) / 100;
   const sellerNet  = Math.round((total - commission) * 100) / 100;
 
   const db = await _getDB();
   if (db) {
-    const { collection, addDoc, serverTimestamp } = await import(
+    /* FIXED: use orderId as doc ID — idempotent, no duplicate commission records */
+    const { doc, getDoc, setDoc, serverTimestamp } = await import(
       'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
     );
-    await addDoc(collection(db, 'commissions'), {
-      orderId, sellerUid, total, pct, commission, sellerNet,
-      status: 'pending', createdAt: Date.now(), serverTs: serverTimestamp()
-    });
+    const ref      = doc(db, 'commissions', orderId);
+    const existing = await getDoc(ref);
+    if (!existing.exists() || existing.data().status === 'error') {
+      await setDoc(ref, {
+        orderId, sellerUid, total, pct, commission, sellerNet,
+        status: 'pending', createdAt: Date.now(), serverTs: serverTimestamp(), wf: ctx.instanceId,
+      });
+    }
   }
   return { commission, sellerNet, pct };
 });
@@ -258,29 +280,45 @@ wap.register('order.updateStatus', async ({ orderId, status, metadata }, ctx) =>
 wap.register('invoice.generate', async ({ orderId, uid, sellerUid, items, total, commission }, ctx) => {
   const db = await _getDB();
   if (!db) return { generated: true, mock: true };
-  const { collection, addDoc, serverTimestamp } = await import(
+  /* FIXED: use orderId as doc ID — idempotent, no duplicate invoices on retry */
+  const { doc, getDoc, setDoc, serverTimestamp } = await import(
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
   );
-  const ref = await addDoc(collection(db, 'invoices'), {
+  const ref      = doc(db, 'invoices', orderId);
+  const existing = await getDoc(ref);
+  if (existing.exists()) return { generated: true, invoiceId: orderId };
+  await setDoc(ref, {
     orderId, uid, sellerUid, items, total, commission,
-    status: 'issued', issuedAt: Date.now(), serverTs: serverTimestamp()
+    status: 'issued', issuedAt: Date.now(), serverTs: serverTimestamp(), wf: ctx.instanceId,
   });
-  return { generated: true, invoiceId: ref.id };
+  return { generated: true, invoiceId: orderId };
 });
 
 /* ── Loyalty handler ─────────────────────────────────────────── */
 
 wap.register('loyalty.award', async ({ uid, orderId, amount }, ctx) => {
-  const points  = Math.floor(amount * 0.01);   /* 1 point per KES 100 */
+  const points = Math.floor(amount * 0.01);  /* 1 point per KES 100 */
   const db = await _getDB();
   if (!db || !uid || points <= 0) return { awarded: 0 };
-  const { doc, setDoc, serverTimestamp, increment } = await import(
+
+  const { doc, runTransaction, increment, serverTimestamp } = await import(
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
   );
-  await setDoc(doc(db, 'loyaltyAccounts', uid), {
-    points: increment(points), lastAwardedAt: Date.now(), serverTs: serverTimestamp()
-  }, { merge: true });
-  return { awarded: points };
+  /* FIXED: loyaltyAwards/{uid}_{orderId} guard prevents double-awarding on retry */
+  const awardRef   = doc(db, 'loyaltyAwards', `${uid}_${orderId}`);
+  const accountRef = doc(db, 'loyaltyAccounts', uid);
+  let awarded = 0;
+
+  await runTransaction(db, async (txn) => {
+    const snap = await txn.get(awardRef);
+    if (snap.exists()) { awarded = snap.data().points; return; }  /* Idempotent */
+    txn.set(awardRef, { uid, orderId, points, awardedAt: Date.now(), serverTs: serverTimestamp(), wf: ctx.instanceId });
+    txn.set(accountRef, {
+      points: increment(points), lastAwardedAt: Date.now(), serverTs: serverTimestamp(),
+    }, { merge: true });
+    awarded = points;
+  });
+  return { awarded };
 });
 
 /* ── Analytics handler ───────────────────────────────────────── */
@@ -303,18 +341,25 @@ wap.register('ticket.generate', async ({ eventId, orderId, uid, qty, tierName },
   const db = await _getDB();
   if (!db) return { generated: true, tickets: [{ code: 'MOCK-TICKET' }], mock: true };
 
-  const { collection, addDoc, serverTimestamp } = await import(
+  /* FIXED: deterministic doc IDs ${orderId}_tkt_${i} — idempotent on retry */
+  const { doc, getDoc, setDoc, serverTimestamp } = await import(
     'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
   );
-
   const tickets = [];
   for (let i = 0; i < (qty ?? 1); i++) {
+    const ticketId = `${orderId}_tkt_${i + 1}`;
+    const ref      = doc(db, 'eventTickets', ticketId);
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      tickets.push({ ticketId, code: existing.data().code });
+      continue;
+    }
     const code = _genTicketCode();
-    const ref  = await addDoc(collection(db, 'eventTickets'), {
+    await setDoc(ref, {
       eventId, orderId, uid, tierName, code, seq: i + 1,
-      status: 'valid', issuedAt: Date.now(), serverTs: serverTimestamp(), wf: ctx.instanceId
+      status: 'valid', issuedAt: Date.now(), serverTs: serverTimestamp(), wf: ctx.instanceId,
     });
-    tickets.push({ ticketId: ref.id, code });
+    tickets.push({ ticketId, code });
   }
   return { generated: true, tickets, count: tickets.length };
 });

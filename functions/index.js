@@ -5334,6 +5334,10 @@ exports.wapScheduledResume      = wap.wapScheduledResume;
 exports.wapGetInstance          = wap.wapGetInstance;
 exports.wapGetPendingApprovals  = wap.wapGetPendingApprovals;
 exports.wapSaveDefinition       = wap.wapSaveDefinition;
+exports.wapEscalateApprovals    = wap.wapEscalateApprovals;
+exports.wapWatchdog             = wap.wapWatchdog;
+exports.wapDLQSweep             = wap.wapDLQSweep;
+exports.wapGetDLQ               = wap.wapGetDLQ;
 
 /* ── Enterprise Control Center (ECC) ── */
 const ecc = require("./ecc");

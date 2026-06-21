@@ -1,4 +1,20 @@
-﻿ *{
+﻿/* ── SHARED HEADER: ZERO-FLASH PRE-HIDE ─────────────────────────────────
+   style.css is a blocking stylesheet, so these rules apply BEFORE the
+   browser renders any of the body — eliminating the flash-of-original-
+   header (FOSH) that occurs when shared-header.js is loaded with defer.
+   Pages that opt out of the shared header add class="sk-no-header" to
+   their <html> tag; that class overrides every rule here so their own
+   navs remain visible.
+   The shared header itself (#sk-top-nav) and the bottom nav are excluded. */
+html:not(.sk-no-header) body > nav:not(.bottom-nav):not(#sk-top-nav),
+html:not(.sk-no-header) body > header:not(#sk-top-nav) { display: none !important; }
+
+/* Hide home-page floating orphans (hamburger + bell) that belong to the
+   original .navbar design and are not caught by the nav selector above. */
+html:not(.sk-no-header) .menu-toggle,
+html:not(.sk-no-header) #sokoni-bell-btn    { display: none !important; }
+
+ *{
     margin:0;
     padding:0;
     box-sizing:border-box;

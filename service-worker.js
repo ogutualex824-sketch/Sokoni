@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v248";
+const CACHE_VERSION = "sokoni-v250";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -121,11 +121,11 @@ const PRECACHE_STATIC = [
   "/sokoni-gip.js", "/sokoni-gip-dispatch.js", "/sokoni-gip-analytics.js",
   "/sokoni-gip-router.js", "/sokoni-gip-fleet.js", "/sokoni-gip-api.js",
   "/gip.html",
-  /* AI Policy Engine + Enterprise Intelligence Platform + ECC */
+  /* AI Policy Engine + Enterprise Intelligence Platform */
   "/sokoni-ai-policy.js",
   "/sokoni-decision-engine.js", "/sokoni-data-quality.js",
   "/sokoni-feature-flags.js", "/sokoni-intelligence-log.js",
-  "/sokoni-eip.js", "/sokoni-ecc.js",
+  "/sokoni-eip.js",
   /* Workflow Automation Platform */
   "/sokoni-wap.js", "/sokoni-wap-definitions.js",
   "/wap.html",

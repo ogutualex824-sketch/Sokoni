@@ -43,6 +43,14 @@
     /* ── Hide the page's own top nav (keep bottom-nav and inner navs) ── */
     body > nav:not(#sk-top-nav):not(.bottom-nav),
     body > header { display: none !important; }
+
+    /* ── Hide home-page orphaned floating elements (hamburger + bell) ──
+       These are <div> elements so the nav rule above doesn't catch them.
+       style.css already pre-hides them, but this JS-injected rule provides
+       the same guarantee on pages where style.css loads after this script. */
+    .menu-toggle,
+    #sokoni-bell-btn { display: none !important; }
+
     /* ── Ensure content is never hidden under the fixed header ── */
     body { padding-top: max(64px, calc(64px + env(safe-area-inset-top, 0px))) !important; }
 

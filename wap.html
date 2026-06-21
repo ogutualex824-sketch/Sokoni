@@ -164,9 +164,14 @@ label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; 
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Responsive ──────────────────────────────────────────────── */
+/* ── Hamburger button (mobile only) ──────────────────────────── */
+.wap-ham { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 6px 8px; line-height: 1; }
+
 @media (max-width: 768px) {
+  .wap-ham { display: flex; align-items: center; }
   .wap-shell { grid-template-columns: 1fr; grid-template-rows: 56px 1fr; }
-  .wap-sidebar { display: none; }
+  .wap-sidebar { display: none; position: fixed; top: 56px; left: 0; bottom: 0; width: 240px; z-index: 50; }
+  .wap-sidebar.open { display: block; box-shadow: 4px 0 20px #0009; }
   .two-col, .three-col { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
 }
@@ -177,7 +182,8 @@ label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; 
 
   <!-- Header -->
   <header class="wap-header">
-    <div class="wap-logo">SOKONI <span>WAP</span> <span class="wap-version">v1.0</span></div>
+    <button class="wap-ham" aria-label="Menu" onclick="toggleSidebar()">☰</button>
+    <div class="wap-logo">SOKONI <span>WAP</span> <span class="wap-version">v1.1</span></div>
     <span class="wap-badge live">● Live</span>
     <div class="wap-header-actions">
       <span id="hdr-clock" style="font-size:12px;color:var(--muted)"></span>
@@ -365,8 +371,8 @@ label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; 
       </div>
       <div class="table-wrap">
         <table class="wap-table">
-          <thead><tr><th>Workflow</th><th>Total</th><th>Completed</th><th>Failed</th><th>Waiting</th><th>Avg Duration</th><th>P95 Duration</th></tr></thead>
-          <tbody id="metrics-tbody"><tr><td colspan="7" style="color:var(--muted);text-align:center;padding:40px">Loading metrics…</td></tr></tbody>
+          <thead><tr><th>Workflow</th><th>Total</th><th>Completed</th><th>Failed</th><th>Waiting</th><th>Avg Duration</th><th>P95 Duration</th><th>P99 Duration</th></tr></thead>
+          <tbody id="metrics-tbody"><tr><td colspan="8" style="color:var(--muted);text-align:center;padding:40px">Loading metrics…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -472,12 +478,18 @@ setInterval(() => {
 }, 1000);
 
 /* ── Page navigation ─────────────────────────────────────────── */
+window.toggleSidebar = function() {
+  document.querySelector('.wap-sidebar')?.classList.toggle('open');
+};
+
 window.showPage = function(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const page = document.getElementById('page-' + name);
   if (page) page.classList.add('active');
   if (el)   el.classList.add('active');
+  /* Close sidebar on mobile when a page is selected */
+  if (window.innerWidth <= 768) document.querySelector('.wap-sidebar')?.classList.remove('open');
 
   if (name === 'instances')   loadInstances();
   if (name === 'definitions') loadDefinitions();
@@ -688,8 +700,16 @@ window.loadApprovals = async function() {
             ${a.deadline ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:10px">⏰ Deadline: ${new Date(a.deadline).toLocaleString()}</div>` : ''}
             <div class="approval-actions">
               <button class="btn-success" onclick="decideApproval('${_esc(a.id)}','approved')">✓ Approve</button>
-              <button class="btn-danger" onclick="decideApproval('${_esc(a.id)}','rejected')">✗ Reject</button>
+              <button class="btn-danger" onclick="showRejectForm('${_esc(a.id)}')">✗ Reject</button>
               <button class="btn-secondary btn-sm" onclick="viewInstance('${_esc(a.instanceId)}')">View Workflow</button>
+            </div>
+            <div id="reject-form-${_esc(a.id)}" style="display:none;margin-top:10px;display:none">
+              <textarea id="reject-reason-${_esc(a.id)}" placeholder="Rejection reason (required)…"
+                style="width:100%;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:13px;resize:vertical;min-height:56px"></textarea>
+              <div style="display:flex;gap:8px;margin-top:6px">
+                <button class="btn-danger btn-sm" onclick="submitReject('${_esc(a.id)}')">Confirm Rejection</button>
+                <button class="btn-secondary btn-sm" onclick="hideRejectForm('${_esc(a.id)}')">Cancel</button>
+              </div>
             </div>
           </div>`)
         .join('')
@@ -697,9 +717,21 @@ window.loadApprovals = async function() {
   } catch (e) { console.error('Approvals error:', e); }
 };
 
-window.decideApproval = async function(approvalId, decision) {
-  const reason = decision === 'rejected' ? (prompt('Rejection reason (required):') ?? '') : '';
-  if (decision === 'rejected' && !reason.trim()) return;
+window.showRejectForm = function(approvalId) {
+  const el = document.getElementById('reject-form-' + approvalId);
+  if (el) { el.style.display = 'block'; el.querySelector('textarea')?.focus(); }
+};
+window.hideRejectForm = function(approvalId) {
+  const el = document.getElementById('reject-form-' + approvalId);
+  if (el) el.style.display = 'none';
+};
+window.submitReject = async function(approvalId) {
+  const reason = document.getElementById('reject-reason-' + approvalId)?.value?.trim();
+  if (!reason) { alert('A rejection reason is required'); return; }
+  await decideApproval(approvalId, 'rejected', reason);
+};
+
+window.decideApproval = async function(approvalId, decision, reason = '') {
   try {
     await wap.decide(approvalId, decision, currentUser?.uid ?? 'admin', reason);
     loadApprovals();
@@ -815,9 +847,16 @@ window.saveDesignerWorkflow = async function() {
   if (!id || !name) return alert('ID and Name are required');
   if (!_designerSteps.length) return alert('Add at least one step');
   try {
-    const def = { id, name, module: mod, version: '1.0', steps: _designerSteps };
+    /* Detect existing version and bump the minor number instead of resetting to 1.0 */
+    const existing = wap._definitions.get(id);
+    let version = '1.0';
+    if (existing?.version) {
+      const [maj, min] = existing.version.split('.').map(Number);
+      version = `${maj}.${(min ?? 0) + 1}`;
+    }
+    const def = { id, name, module: mod, version, steps: _designerSteps };
     await wap.saveDefinition(def, currentUser?.uid ?? 'admin');
-    alert('Workflow saved to Firestore!');
+    alert(`Workflow saved to Firestore! (v${version})`);
     showPage('definitions');
     loadDefinitions();
   } catch (e) { alert('Save error: ' + e.message); }
@@ -856,8 +895,11 @@ window.loadMetrics = async function() {
       .sort((a, b) => (b[1].completed + b[1].failed) - (a[1].completed + a[1].failed))
       .map(([id, m]) => {
         const total = m.completed + m.failed;
-        const avgMs = m.durations.length ? Math.round(m.durations.reduce((s,d) => s+d, 0) / m.durations.length) : 0;
-        const p95   = m.durations.length >= 5 ? m.durations.sort((a,b)=>a-b)[Math.floor(m.durations.length * 0.95)] : 0;
+        const avgMs  = m.durations.length ? Math.round(m.durations.reduce((s,d) => s+d, 0) / m.durations.length) : 0;
+        /* Non-mutating sort — spread prevents corrupting the accumulated array */
+        const sorted = [...m.durations].sort((a, b) => a - b);
+        const p95    = sorted.length >= 5 ? sorted[Math.floor(sorted.length * 0.95)] : 0;
+        const p99    = sorted.length >= 5 ? sorted[Math.floor(sorted.length * 0.99)] : 0;
         return `<tr>
           <td><strong>${_esc(id)}</strong></td>
           <td>${total}</td>
@@ -866,8 +908,9 @@ window.loadMetrics = async function() {
           <td>—</td>
           <td style="font-family:var(--mono);font-size:12px">${avgMs ? _fmtDuration(avgMs) : '—'}</td>
           <td style="font-family:var(--mono);font-size:12px">${p95 ? _fmtDuration(p95) : '—'}</td>
+          <td style="font-family:var(--mono);font-size:12px;color:${p99 > p95 * 2 ? 'var(--yellow)' : 'inherit'}">${p99 ? _fmtDuration(p99) : '—'}</td>
         </tr>`;
-      }).join('') || `<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:40px">No data for last 24 hours</td></tr>`;
+      }).join('') || `<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:40px">No data for last 24 hours</td></tr>`;
   } catch (e) { console.error('Metrics error:', e); }
 };
 

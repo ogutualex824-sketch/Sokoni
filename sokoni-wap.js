@@ -264,28 +264,27 @@ class SokoniWorkflowEngine {
     }
 
     const db = await this._getDB();
-    const { doc, getDoc, setDoc, serverTimestamp } = await import(
+    const { doc, runTransaction, serverTimestamp } = await import(
       'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
     );
 
-    const approvalSnap = await getDoc(doc(db, COLL.APPROVALS, approvalId));
-    if (!approvalSnap.exists()) throw new Error(`Approval '${approvalId}' not found`);
-
-    const approval = approvalSnap.data();
-    if (approval.status !== 'pending') throw new Error(`Approval is already ${approval.status}`);
-
-    /* Check deadline */
-    if (approval.deadline && Date.now() > approval.deadline) {
-      throw new Error('Approval deadline has passed');
-    }
-
-    await setDoc(doc(db, COLL.APPROVALS, approvalId), {
-      status:   decision,
-      decidedBy:  actorUid,
-      decidedAt:  Date.now(),
-      reason,
-      serverTs: serverTimestamp(),
-    }, { merge: true });
+    /* ATOMIC: read-check-write in a single transaction to prevent race conditions
+       when two approvers click simultaneously. */
+    let approval;
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(doc(db, COLL.APPROVALS, approvalId));
+      if (!snap.exists()) throw new Error(`Approval '${approvalId}' not found`);
+      approval = snap.data();
+      if (approval.status !== 'pending') throw new Error(`Approval is already ${approval.status}`);
+      if (approval.deadline && Date.now() > approval.deadline) throw new Error('Approval deadline has passed');
+      txn.update(doc(db, COLL.APPROVALS, approvalId), {
+        status:    decision,
+        decidedBy: actorUid,
+        decidedAt: Date.now(),
+        reason,
+        serverTs:  serverTimestamp(),
+      });
+    });
 
     /* Load instance and advance */
     const instance = await this._load(approval.instanceId);
@@ -628,17 +627,28 @@ class SokoniWorkflowEngine {
   }
 
   async _runWebhook(stepDef, input, instance) {
-    const url     = _interpolate(stepDef.url ?? input.url, instance.variables);
-    const method  = (stepDef.method ?? input.method ?? 'POST').toUpperCase();
-    const headers = { 'Content-Type': 'application/json', ...(stepDef.headers ?? {}) };
-    const body    = JSON.stringify({ ...input, _instanceId: instance.id, _stepId: stepDef.id });
+    const url       = _interpolate(stepDef.url ?? input.url, instance.variables);
+    const method    = (stepDef.method ?? input.method ?? 'POST').toUpperCase();
+    const headers   = { 'Content-Type': 'application/json', ...(stepDef.headers ?? {}) };
+    const body      = JSON.stringify({ ...input, _instanceId: instance.id, _stepId: stepDef.id });
+    const timeoutMs = stepDef.timeout ?? 30_000;
 
-    const res = await fetch(url, { method, headers, body, signal: AbortSignal.timeout?.(stepDef.timeout ?? 30_000) });
-    if (!res.ok) throw new Error(`Webhook ${stepDef.id} failed: ${res.status} ${res.statusText}`);
-
-    let data;
-    try { data = await res.json(); } catch (_) { data = { status: 'ok' }; }
-    return data;
+    /* Use AbortController for reliable timeout across all environments
+       (AbortSignal.timeout() is not available in all browsers/runtimes) */
+    const controller = new AbortController();
+    const timer      = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { method, headers, body, signal: controller.signal });
+      if (!res.ok) throw new Error(`Webhook ${stepDef.id} failed: ${res.status} ${res.statusText}`);
+      let data;
+      try { data = await res.json(); } catch (_) { data = { status: 'ok' }; }
+      return data;
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error(`Webhook '${stepDef.id}' timed out after ${timeoutMs}ms`);
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async _runSubworkflow(stepDef, input, instance) {
@@ -889,7 +899,11 @@ function _interpolate(template, variables) {
 }
 
 function _resolvePath(obj, path) {
-  return path.split('.').reduce((cur, key) => cur?.[key], obj);
+  return path.split('.').reduce((cur, key) => {
+    /* Block prototype chain traversal (prevents prototype pollution in expressions) */
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') return undefined;
+    return cur?.[key];
+  }, obj);
 }
 
 function _parseDuration(s) {
