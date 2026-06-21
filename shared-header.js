@@ -23,7 +23,7 @@
   const CSS = `
     /* ── Skip navigation link (keyboard / screen-reader users) ── */
     #sk-skip-nav {
-      position: absolute; top: -100%; left: 0; z-index: 9999;
+      position: absolute; top: -100%; left: 0; z-index: var(--sk-z-emergency, 999);
       background: #71ff00; color: #000; padding: 10px 20px;
       font-weight: 800; font-size: 14px; text-decoration: none;
       border-radius: 0 0 8px 0; transition: top .15s;
@@ -237,6 +237,30 @@
     polishLink.href = 'sokoni-polish.css';
     (document.head || document.documentElement).appendChild(polishLink);
   }
+
+  /* ── ARCHITECTURE LAYER: Design tokens + component library ──────────────
+     These three files form the shared infrastructure for all 130+ pages.
+     sokoni-tokens.css  — CSS custom properties (colors, spacing, z-index…)
+     sokoni-ui.js       — Shared UI components (toast, modal, spinner, etc.)
+     sokoni-layout.js   — Layout manager (floating elements, safe areas)
+     sokoni-bootstrap.js — Deterministic app startup sequence
+  ─────────────────────────────────────────────────────────────────────── */
+  function _injectAsset(tag, attrs, id) {
+    if (document.getElementById(id)) return;
+    const el = document.createElement(tag);
+    el.id = id;
+    Object.assign(el, attrs);
+    (document.head || document.documentElement).appendChild(el);
+  }
+
+  /* Design tokens (CSS) — load first, tokens are referenced by all CSS */
+  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-tokens.css' }, 'sk-tokens-link');
+
+  /* UI library — provides shared toast / modal / spinner / skeleton */
+  _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
+
+  /* Layout manager — resolves floating element overlaps, sets CSS vars */
+  _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
 
   /* ── Pages where search bar is hidden (no benefit) ── */
   const NO_SEARCH = [
@@ -632,6 +656,29 @@
 
     /* Let pages call window.skNavRefresh() when they update the cart inline */
     window.skNavRefresh = _refresh;
+
+    /* ── Register with Layout Manager so it knows the header height ── */
+    function _registerWithLayout() {
+      if (window.SokoniLayout) {
+        window.SokoniLayout.register('header', document.getElementById('sk-top-nav'));
+        /* Also auto-register bottom nav if present on this page */
+        const bnav = document.getElementById('bottomNav') ||
+                     document.querySelector('.bottom-nav, nav.bottom-nav');
+        if (bnav) window.SokoniLayout.register('bottom-nav', bnav);
+        /* Trigger a layout update so CSS vars are set correctly */
+        window.SokoniLayout.measure();
+      }
+    }
+    /* Layout Manager may not be loaded yet (it's deferred) — retry */
+    if (window.SokoniLayout) {
+      _registerWithLayout();
+    } else {
+      setTimeout(function() {
+        _registerWithLayout();
+        /* Second attempt in case layout.js was slow */
+        setTimeout(_registerWithLayout, 500);
+      }, 100);
+    }
   }
 
   if (document.readyState === 'loading') {

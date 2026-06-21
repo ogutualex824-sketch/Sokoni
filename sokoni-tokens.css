@@ -1,0 +1,373 @@
+/*
+ * SOKONI DESIGN TOKENS v1.0
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Single source of truth for every visual decision on the platform.
+ * All components, pages, and utilities MUST derive values from these tokens.
+ * Never hardcode a color, spacing, shadow, radius, z-index, or animation value.
+ *
+ * Usage:   var(--sk-green)   var(--sk-space-4)   var(--sk-z-modal)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+
+  /* ══════════════════════════════════════════════════════════════
+     BRAND PALETTE — Primary
+  ══════════════════════════════════════════════════════════════ */
+  --sk-green:           #71ff00;
+  --sk-green-light:     #8fff2a;
+  --sk-green-dark:      #4fc800;
+  --sk-green-dim:       rgba(113,255,0,0.15);
+  --sk-green-border:    rgba(113,255,0,0.25);
+  --sk-green-glow:      0 0 24px rgba(113,255,0,0.3);
+
+  /* ══════════════════════════════════════════════════════════════
+     BRAND PALETTE — Backgrounds
+  ══════════════════════════════════════════════════════════════ */
+  --sk-bg-base:         #050f05;
+  --sk-bg-surface:      #0a1a0a;
+  --sk-bg-raised:       #0f200f;
+  --sk-bg-overlay:      #162416;
+  --sk-bg-card:         #111e11;
+  --sk-bg-input:        rgba(255,255,255,0.05);
+  --sk-bg-hover:        rgba(113,255,0,0.06);
+  --sk-bg-active:       rgba(113,255,0,0.12);
+  --sk-bg-scrim:        rgba(5,15,5,0.85);
+
+  /* ══════════════════════════════════════════════════════════════
+     BRAND PALETTE — Text
+  ══════════════════════════════════════════════════════════════ */
+  --sk-text-primary:    rgba(255,255,255,0.95);
+  --sk-text-secondary:  rgba(255,255,255,0.6);
+  --sk-text-tertiary:   rgba(255,255,255,0.35);
+  --sk-text-disabled:   rgba(255,255,255,0.2);
+  --sk-text-inverse:    #050f05;
+  --sk-text-brand:      #71ff00;
+
+  /* ══════════════════════════════════════════════════════════════
+     BRAND PALETTE — Borders
+  ══════════════════════════════════════════════════════════════ */
+  --sk-border:          rgba(255,255,255,0.08);
+  --sk-border-subtle:   rgba(255,255,255,0.04);
+  --sk-border-strong:   rgba(255,255,255,0.16);
+  --sk-border-brand:    rgba(113,255,0,0.3);
+  --sk-border-focus:    rgba(113,255,0,0.6);
+
+  /* ══════════════════════════════════════════════════════════════
+     SEMANTIC COLOURS
+  ══════════════════════════════════════════════════════════════ */
+  --sk-success:         #71ff00;
+  --sk-success-bg:      rgba(113,255,0,0.12);
+  --sk-success-border:  rgba(113,255,0,0.3);
+
+  --sk-error:           #ff4444;
+  --sk-error-bg:        rgba(255,68,68,0.12);
+  --sk-error-border:    rgba(255,68,68,0.3);
+
+  --sk-warning:         #ff9500;
+  --sk-warning-bg:      rgba(255,149,0,0.12);
+  --sk-warning-border:  rgba(255,149,0,0.3);
+
+  --sk-info:            #3b82f6;
+  --sk-info-bg:         rgba(59,130,246,0.12);
+  --sk-info-border:     rgba(59,130,246,0.3);
+
+  /* ══════════════════════════════════════════════════════════════
+     SPACING SCALE (4px base unit)
+     --sk-space-N = N × 4px
+  ══════════════════════════════════════════════════════════════ */
+  --sk-space-1:  4px;
+  --sk-space-2:  8px;
+  --sk-space-3:  12px;
+  --sk-space-4:  16px;
+  --sk-space-5:  20px;
+  --sk-space-6:  24px;
+  --sk-space-7:  28px;
+  --sk-space-8:  32px;
+  --sk-space-10: 40px;
+  --sk-space-12: 48px;
+  --sk-space-16: 64px;
+  --sk-space-20: 80px;
+
+  /* ══════════════════════════════════════════════════════════════
+     BORDER RADIUS SCALE
+  ══════════════════════════════════════════════════════════════ */
+  --sk-radius-sm:   6px;
+  --sk-radius-md:   10px;
+  --sk-radius-lg:   14px;
+  --sk-radius-xl:   20px;
+  --sk-radius-2xl:  28px;
+  --sk-radius-pill: 999px;
+  --sk-radius-card: 16px;
+  --sk-radius-modal: 24px;
+
+  /* ══════════════════════════════════════════════════════════════
+     TYPOGRAPHY SCALE
+  ══════════════════════════════════════════════════════════════ */
+  --sk-font-family:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --sk-font-mono:    "SF Mono", Consolas, "Liberation Mono", monospace;
+
+  --sk-text-xs:    11px;
+  --sk-text-sm:    13px;
+  --sk-text-base:  15px;
+  --sk-text-md:    16px;   /* iOS minimum to prevent auto-zoom */
+  --sk-text-lg:    18px;
+  --sk-text-xl:    20px;
+  --sk-text-2xl:   24px;
+  --sk-text-3xl:   28px;
+  --sk-text-4xl:   34px;
+
+  --sk-font-normal:  400;
+  --sk-font-medium:  500;
+  --sk-font-semibold:600;
+  --sk-font-bold:    700;
+  --sk-font-black:   900;
+
+  --sk-leading-tight:  1.2;
+  --sk-leading-normal: 1.5;
+  --sk-leading-loose:  1.7;
+
+  /* ══════════════════════════════════════════════════════════════
+     SHADOW SCALE
+  ══════════════════════════════════════════════════════════════ */
+  --sk-shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
+  --sk-shadow-md:  0 4px 12px rgba(0,0,0,0.5);
+  --sk-shadow-lg:  0 8px 28px rgba(0,0,0,0.6);
+  --sk-shadow-xl:  0 16px 48px rgba(0,0,0,0.7);
+  --sk-shadow-brand: 0 4px 24px rgba(113,255,0,0.2);
+  --sk-shadow-card:  0 2px 8px rgba(0,0,0,0.4), 0 0 0 1px var(--sk-border);
+
+  /* ══════════════════════════════════════════════════════════════
+     Z-INDEX HIERARCHY
+     Every layer is documented.  Never use an arbitrary z-index.
+  ══════════════════════════════════════════════════════════════ */
+
+  /* Content layers */
+  --sk-z-below:    -1;
+  --sk-z-base:      0;
+  --sk-z-raised:   10;
+  --sk-z-dropdown: 50;
+
+  /* Navigation */
+  --sk-z-sticky:   100;   /* sticky section headers, in-page navs */
+  --sk-z-header:   200;   /* top app bar / hub nav */
+  --sk-z-tab-bar:  300;   /* horizontal tab strips below header */
+  --sk-z-bottom-nav: 400; /* bottom navigation bar */
+
+  /* Floating interactive elements */
+  --sk-z-fab:      500;   /* floating action buttons */
+  --sk-z-chat-btn: 510;   /* chat / support bubble */
+  --sk-z-scroll-top: 520; /* scroll-to-top button */
+
+  /* Overlays */
+  --sk-z-drawer:   600;   /* side drawers / sheets */
+  --sk-z-modal:    700;   /* modal dialogs */
+  --sk-z-modal-overlay: 690; /* modal backdrop scrim */
+
+  /* Notifications & alerts */
+  --sk-z-toast:    800;   /* toast / snackbar notifications */
+  --sk-z-alert:    810;   /* inline system alerts */
+
+  /* Critical */
+  --sk-z-splash:   900;   /* splash / loading screen */
+  --sk-z-cookie:   850;   /* cookie / GDPR banner */
+  --sk-z-emergency: 999;  /* auth timeout, maintenance banners */
+
+  /* ══════════════════════════════════════════════════════════════
+     TRANSITION / ANIMATION TOKENS
+  ══════════════════════════════════════════════════════════════ */
+  --sk-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --sk-ease-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --sk-ease-accelerate: cubic-bezier(0.4, 0.0, 1, 1);
+  --sk-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --sk-duration-instant:  80ms;
+  --sk-duration-fast:    150ms;
+  --sk-duration-normal:  250ms;
+  --sk-duration-slow:    400ms;
+  --sk-duration-enter:   300ms;
+  --sk-duration-exit:    200ms;
+
+  --sk-transition: var(--sk-duration-normal) var(--sk-ease-standard);
+
+  /* ══════════════════════════════════════════════════════════════
+     LAYOUT — LAYOUT MANAGER VARIABLES
+     These are set/overridden dynamically by sokoni-layout.js
+  ══════════════════════════════════════════════════════════════ */
+
+  /* Safe-area insets (iOS notch / home indicator) */
+  --sk-safe-top:    env(safe-area-inset-top,    0px);
+  --sk-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --sk-safe-left:   env(safe-area-inset-left,   0px);
+  --sk-safe-right:  env(safe-area-inset-right,  0px);
+
+  /* Component dimensions (updated by Layout Manager) */
+  --sk-header-h:     56px;
+  --sk-bottom-nav-h: 0px;    /* set to 60px on pages with bottom nav */
+  --sk-tab-bar-h:    0px;    /* set per page */
+
+  /* Derived offsets — floating elements must use these */
+  --sk-fab-bottom:   calc(var(--sk-bottom-nav-h) + var(--sk-safe-bottom) + var(--sk-space-4));
+  --sk-fab-right:    calc(var(--sk-safe-right) + var(--sk-space-4));
+  --sk-chat-bottom:  calc(var(--sk-fab-bottom) + 60px + var(--sk-space-2));
+  --sk-scroll-bottom:calc(var(--sk-chat-bottom) + 44px + var(--sk-space-2));
+
+  /* Viewport tracking (updated by JS) */
+  --sk-viewport-h:   100dvh;  /* dynamic viewport height */
+  --sk-keyboard-h:   0px;     /* set when software keyboard is open */
+
+  /* ══════════════════════════════════════════════════════════════
+     BREAKPOINTS (used in CSS container queries and JS)
+     Do not use arbitrary px values in media queries — reference these.
+  ══════════════════════════════════════════════════════════════ */
+  --sk-bp-xs:  360px;
+  --sk-bp-sm:  480px;
+  --sk-bp-md:  768px;
+  --sk-bp-lg:  1024px;
+  --sk-bp-xl:  1280px;
+  --sk-bp-2xl: 1440px;
+
+  /* ══════════════════════════════════════════════════════════════
+     FORM TOKENS
+  ══════════════════════════════════════════════════════════════ */
+  --sk-input-h:        48px;    /* height of all text inputs */
+  --sk-input-h-sm:     40px;
+  --sk-input-h-lg:     56px;
+  --sk-input-font:     var(--sk-text-md);   /* 16px → prevents iOS auto-zoom */
+  --sk-input-radius:   var(--sk-radius-lg);
+  --sk-input-bg:       var(--sk-bg-input);
+  --sk-input-border:   var(--sk-border);
+  --sk-input-focus:    var(--sk-border-focus);
+  --sk-input-pad-x:    var(--sk-space-4);
+  --sk-input-pad-y:    var(--sk-space-3);
+
+  --sk-btn-h:          48px;
+  --sk-btn-h-sm:       36px;
+  --sk-btn-h-lg:       56px;
+  --sk-btn-radius:     var(--sk-radius-lg);
+  --sk-btn-font:       var(--sk-text-base);
+  --sk-btn-font-weight:var(--sk-font-bold);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BASE RESET — applied via token system
+   Only reset what's needed.  Do not duplicate normalize.css.
+══════════════════════════════════════════════════════════════ */
+
+/* Smooth scrolling and font rendering */
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  box-sizing: border-box;
+}
+*, *::before, *::after { box-sizing: inherit; }
+
+/* Focus visible — keyboard navigability */
+:focus-visible {
+  outline: 2px solid var(--sk-green);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Selection color */
+::selection {
+  background: var(--sk-green-dim);
+  color: var(--sk-text-primary);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UTILITY CLASSES — consumed everywhere
+   Kept minimal — not a utility-class framework.
+══════════════════════════════════════════════════════════════ */
+
+/* Visually hide but keep in a11y tree */
+.sk-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Prevent interaction without hiding */
+.sk-inert { pointer-events: none; user-select: none; }
+
+/* Text truncation */
+.sk-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sk-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sk-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   STANDARDISED ANIMATIONS
+   Used by sokoni-ui.js component library.
+══════════════════════════════════════════════════════════════ */
+
+@keyframes sk-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes sk-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes sk-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sk-slide-down {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sk-scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sk-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sk-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes sk-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* Skeleton shimmer base */
+.sk-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--sk-bg-surface) 25%,
+    var(--sk-bg-raised)  50%,
+    var(--sk-bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.6s var(--sk-ease-standard) infinite;
+  border-radius: var(--sk-radius-md);
+}

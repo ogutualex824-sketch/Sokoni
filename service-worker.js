@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v253";
+const CACHE_VERSION = "sokoni-v254";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -151,6 +151,8 @@ const PRECACHE_STATIC = [
   /* Utilities */
   "/realtime.js", "/wishlist.js", "/provider-status.js",
   "/sports-hub.js", "/management-init.js",
+  /* ── Architecture Layer v1.0 ── */
+  "/sokoni-tokens.css", "/sokoni-ui.js", "/sokoni-layout.js", "/sokoni-bootstrap.js",
 ];
 
 const CDN_ORIGINS = [
