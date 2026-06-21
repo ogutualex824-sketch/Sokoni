@@ -5093,7 +5093,7 @@ window._sellerConfirmReady = async function(dRef) {
 
 <script type="module">
 import SokoniOrders        from './sokoni-orders.js';
-import SokoniNotifications from './sokoni-notifications.js';
+/* SokoniNotifications import removed — bell now handled by SokoniNotifCenter via shared infrastructure */
 
 /* ── UID helper ── */
 function _uid() {
@@ -5383,7 +5383,8 @@ function _mountNotifBell() {
     const nav = document.querySelector('.seller-navbar') || document.querySelector('nav') || document.body;
     nav.prepend(bellSlot);
   }
-  SokoniNotifications.mountBell(bellSlot, uid);
+  /* Bell is now managed by SokoniNotifCenter which is injected by shared-header.js */
+  if (window.SokoniNotifCenter) { window.SokoniNotifCenter.attachBell(bellSlot); }
 }
 
 /* ─────────────────────────────────────

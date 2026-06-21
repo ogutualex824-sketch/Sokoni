@@ -1,17 +1,55 @@
 /* ================================================================
    SOKONI Shared Header  —  shared-header.js
-   Injects a consistent fixed top bar into every page.
-   Hides the page's own top-nav so there's no duplicate.
-   Pages excluded: pos.html, seller.html, login/signup/register,
-                   success.html, offline.html, admin.html
+   Phase 1 (ALL pages): inject design tokens + component library
+   Phase 2 (non-excluded pages): inject fixed top nav
+   Pages excluded from nav: pos, seller, login, signup, register,
+     success, offline, admin, and any page with data-no-header="true"
+     (enterprise dashboards that have their own full-screen nav)
 ================================================================ */
 (function () {
   'use strict';
 
-  /* ── Skip pages that have their own specialized nav ── */
+  /* ── PHASE 1: Infrastructure injection — runs on EVERY page ──────────
+     All pages get tokens/UI/layout/notif regardless of nav exclusion.
+     This gives every page: design tokens, toast system, layout manager,
+     notification engine, and notification center bell/panel.         */
+
+  function _injectAsset(tag, attrs, id) {
+    if (document.getElementById(id)) return;
+    const el = document.createElement(tag);
+    el.id = id;
+    Object.assign(el, attrs);
+    (document.head || document.documentElement).appendChild(el);
+  }
+
+  /* Design tokens (CSS) — load first; tokens referenced by all CSS */
+  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-tokens.css' }, 'sk-tokens-link');
+  /* UI library — shared toast / modal / spinner / skeleton */
+  _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
+  /* Layout manager — resolves floating element overlaps, sets CSS vars */
+  _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
+  /* Notification engine — real-time engine, preferences, grouping */
+  _injectAsset('script', { src: 'sokoni-notif-engine.js', defer: true }, 'sk-notif-engine-script');
+  /* Notification center — bell UI, slide-in panel, inline actions */
+  _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
+
+  /* Global polish stylesheet (once) */
+  if (!document.getElementById('sk-polish-link')) {
+    const polishLink = document.createElement('link');
+    polishLink.rel = 'stylesheet';
+    polishLink.id = 'sk-polish-link';
+    polishLink.href = 'sokoni-polish.css';
+    (document.head || document.documentElement).appendChild(polishLink);
+  }
+
+  /* ── PHASE 2: Nav injection — excluded pages stop here ──────────── */
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',
     'register.html', 'success.html', 'offline.html', 'admin.html',
+    /* Enterprise full-screen dashboards — have their own specialized nav */
+    'ecc.html', 'wap.html', 'gip.html', 'platform.html',
+    'sasos-admin.html', 'pos-kiosk.html', 'superadmin.html',
+    'monitor.html', 'moderation.html', 'verification-admin.html',
   ];
   const page = location.pathname.split('/').pop().split('?')[0] || 'index.html';
   if (EXCLUDED.includes(page)) return;
@@ -228,45 +266,6 @@
   styleEl.id = 'sk-header-styles';
   styleEl.textContent = CSS;
   (document.head || document.documentElement).appendChild(styleEl);
-
-  /* Inject global polish stylesheet if not already present */
-  if (!document.getElementById('sk-polish-link')) {
-    const polishLink = document.createElement('link');
-    polishLink.rel = 'stylesheet';
-    polishLink.id = 'sk-polish-link';
-    polishLink.href = 'sokoni-polish.css';
-    (document.head || document.documentElement).appendChild(polishLink);
-  }
-
-  /* ── ARCHITECTURE LAYER: Design tokens + component library ──────────────
-     These three files form the shared infrastructure for all 130+ pages.
-     sokoni-tokens.css  — CSS custom properties (colors, spacing, z-index…)
-     sokoni-ui.js       — Shared UI components (toast, modal, spinner, etc.)
-     sokoni-layout.js   — Layout manager (floating elements, safe areas)
-     sokoni-bootstrap.js — Deterministic app startup sequence
-  ─────────────────────────────────────────────────────────────────────── */
-  function _injectAsset(tag, attrs, id) {
-    if (document.getElementById(id)) return;
-    const el = document.createElement(tag);
-    el.id = id;
-    Object.assign(el, attrs);
-    (document.head || document.documentElement).appendChild(el);
-  }
-
-  /* Design tokens (CSS) — load first, tokens are referenced by all CSS */
-  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-tokens.css' }, 'sk-tokens-link');
-
-  /* UI library — provides shared toast / modal / spinner / skeleton */
-  _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
-
-  /* Layout manager — resolves floating element overlaps, sets CSS vars */
-  _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
-
-  /* Notification engine — core real-time engine, preferences, grouping */
-  _injectAsset('script', { src: 'sokoni-notif-engine.js', defer: true }, 'sk-notif-engine-script');
-
-  /* Notification center — bell UI, slide-in panel, inline actions */
-  _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
 
   /* ── Pages where search bar is hidden (no benefit) ── */
   const NO_SEARCH = [
