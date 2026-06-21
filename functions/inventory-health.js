@@ -105,7 +105,6 @@ async function _calcHealthScore(tenantId) {
 exports.inventoryCalculateHealth = onCall(CF_OPTS, async req => {
   const { tenantId } = req.data;
   const uid = assertAuth(req);
-  const uid = uid;
   const resolvedTenant = tenantId || uid;
 
   const health = await _calcHealthScore(resolvedTenant);
