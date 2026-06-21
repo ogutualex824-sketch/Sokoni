@@ -1,4 +1,55 @@
-﻿## [2026-06-21] — Firestore Index Architecture v1.0 + WAP v1.1.0 Production Certification
+﻿## [2026-06-21] — Phase 34–40: Production Certification v1.0.0
+
+### Summary
+40-phase SOKONI Master Implementation Directive complete.
+
+**Certification Test Suite** (`functions/test/certification.test.js`) — 79 regulatory
+and platform-invariant tests covering Kenya KRA tax math, payment limits, billing periods,
+auth guard contracts, XSS sanitization idempotency, SASOS product registry, tier ordering,
+Firestore index limits, pagination limits, and HttpsError gRPC code coverage.
+
+**Resilience Test Suite** (`functions/test/resilience.test.js`) — 80 tests covering SASOS
+fraud signal registry, risk action thresholds (full 0-100 coverage), risk score decay,
+trust score inversion, and all 10 inventory fraud rules with pass/fail scenarios.
+
+**Financial Integrity Verified (KRA compliant):**
+- VAT: 16% ✓ | WHT: 5% above KES 24,000 ✓ | DST: 1.5% ✓
+- Platform fee: 10% ✓ | M-Pesa STK cap: ≤ KES 150,000 ✓
+- `withVat(1000)` → 1160 ✓ | `whtAmount(30000)` → 1500 ✓
+
+**Security Verified:**
+- 0 inline assertAuth/sanitize definitions across all CF files
+- 0 plain `new Error()` for auth, permission, or operational checks
+- All financial constants exclusively from `functions/shared/constants.js`
+- All auth guards exclusively from `functions/shared/errors.js`
+
+### Test Summary
+- **Total tests:** 480 passing, 0 failing across 10 test suites
+- **Test files:** constants, helpers, errors, auth-claims, sasos-core, fraud, webhook,
+  wap-inventory, resilience, certification
+
+### Files Added
+- **`functions/test/certification.test.js`** (NEW) — 79 regulatory/invariant certification tests
+- **`functions/test/resilience.test.js`** (NEW) — 80 fraud engine + resilience tests
+
+### Files Fixed (Phase 26–33 HttpsError normalization)
+- **`functions/inventory-webhooks.js:108`** — `throw new Error('Unknown events')` → `HttpsError('invalid-argument',...)`
+- **`functions/ai-subscriptions.js:150`** — `throw new Error('Insufficient credits')` inside Firestore transaction → `HttpsError('resource-exhausted',...)`; catch guard changed from `e.message.startsWith()` → `e.code === 'resource-exhausted'`
+- **`functions/ai-subscriptions.js:335`** — `throw new Error('Unknown plan')` in updateAIPlan → `HttpsError('invalid-argument',...)`
+
+### Security
+- All 480 tests enforce platform security contracts — failures block release.
+- KRA financial constants are tested as regulatory requirements (VAT, WHT, DST).
+- Auth guard contracts: `assertAuth` throws `unauthenticated`; `assertAdmin` throws
+  `permission-denied`; `assertSuperAdmin` requires superAdmin claim.
+- Sanitize is verified idempotent (double-sanitize = same result).
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-21] — Firestore Index Architecture v1.0 + WAP v1.1.0 Production Certification
 
 ### Summary
 **WAP v1.1.0** — Full 13-phase production audit of the Workflow Automation Platform. 9 critical bugs fixed across 4 files. Certified production-ready for million-workflow scale.

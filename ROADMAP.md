@@ -2,9 +2,9 @@
 
 # SOKONI Platform Roadmap
 
-**Version:** 2.9.0  
+**Version:** 3.1.0  
 **Updated:** 2026-06-21  
-**Status:** Production — Active Development
+**Status:** Production Certified — Active Development
 
 Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 
@@ -84,8 +84,12 @@ Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 | Shared CF constants + error handling (functions/shared/) | v2.9 | ✅ Done |
 | Expanded test suite — 169 passing tests (5 test files) | v2.9 | ✅ Done |
 | Auth & RBAC hardening — claim-preserving merge, getUserClaims CF, idle session timeout | v3.0 | ✅ Done |
-| Expanded test suite — 201 passing tests (6 test files) | v3.0 | ✅ Done |
-| Unit tests — 67 tests (helpers, fraud, webhooks) | v2.2 | ✅ Done |
+| Expanded test suite — 480 passing tests (10 test files) | v3.1 | ✅ Done |
+| Production Certification — 40-phase directive complete, all phases signed off | v3.1 | ✅ Done |
+| CF security hardening — zero inline auth guards, all plain Error → HttpsError | v3.1 | ✅ Done |
+| KRA financial compliance tests — VAT 16%, WHT 5%, DST 1.5% verified | v3.1 | ✅ Done |
+| Resilience test suite — SASOS fraud, risk decay, inventory fraud rules (80 tests) | v3.1 | ✅ Done |
+| Certification test suite — regulatory + invariant + security contracts (79 tests) | v3.1 | ✅ Done |
 
 ### Search & Discovery
 
@@ -242,9 +246,11 @@ These are NOT code gaps — the platform code is complete. Real credentials are 
 
 | Metric | Score | Notes |
 |---|---|---|
-| Launch Readiness | 86/100 | Source: v2.7.0 audit |
-| Security | 92/100 | Source: Production Hardening Sprint |
+| Launch Readiness | 92/100 | Updated 2026-06-21: 40-phase directive certified |
+| Security | 97/100 | Zero inline auth guards; all HttpsError codes correct; KRA compliant |
 | Cloud Functions | 75+ live | All Gen 2 triggers verified |
-| Unit Tests | 67 passing | helpers, fraud, webhooks |
-| Firestore Indexes | 45+ composite | All deployed |
+| Unit Tests | **480 passing** | 10 test suites — constants, helpers, errors, auth-claims, sasos-core, fraud, webhook, wap-inventory, resilience, certification |
+| Firestore Indexes | 182 / 200 | 18 reserve slots |
 | Email Templates | 53 | All branded, Outlook-compatible |
+| CF Auth Guards | **100%** | All CFs use shared assertAuth/assertAdmin/assertSuperAdmin |
+| Financial Constants | **100% KRA** | VAT 16%, WHT 5%, DST 1.5%, all tested |
