@@ -2,7 +2,7 @@
 
 # SOKONI Platform Roadmap
 
-**Version:** 2.8.0  
+**Version:** 2.9.0  
 **Updated:** 2026-06-21  
 **Status:** Production — Active Development
 
@@ -77,6 +77,12 @@ Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 | RBAC — 8-role system (sokoni-permissions.js) | v1.4 | ✅ Done |
 | Firestore security rules (full coverage) | v1.4 | ✅ Done |
 | CI/CD pipeline (GitHub Actions) | v2.2 | ✅ Done |
+| SASOS — Universal AI Subscription OS (50 CFs, 22 collections, 46 plans × 13 products) | v2.8 | ✅ Done |
+| Platform Registry + Event Bus (14 CFs, 6 collections, 35 event domains) | v2.8 | ✅ Done |
+| Universal Platform Bootstrap (sokoni-platform.js) | v2.8 | ✅ Done |
+| Platform Operations Center (platform.html — 8-tab admin) | v2.8 | ✅ Done |
+| Shared CF constants + error handling (functions/shared/) | v2.9 | ✅ Done |
+| Expanded test suite — 169 passing tests (5 test files) | v2.9 | ✅ Done |
 | Unit tests — 67 tests (helpers, fraud, webhooks) | v2.2 | ✅ Done |
 
 ### Search & Discovery

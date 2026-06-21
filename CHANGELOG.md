@@ -1,4 +1,31 @@
-﻿## [2026-06-21] — Platform Registry v1.0 + Event Bus v1.0 + Universal Platform Bootstrap
+﻿## [2026-06-21] — Platform Foundation v2.9.0 — Shared Constants, Error Handling, Expanded Tests
+
+### Summary
+Phase 2 of the Master Implementation Directive. Establishes the shared platform foundation that all CFs must build on: single-source-of-truth constants, standardized error handling, and a comprehensive test suite expanded from 3 to 5 files (143 → 169 passing tests). Identifies and documents the localStorage auth pattern as a safe UI optimization (not a security risk). CI/CD pipeline was already present and comprehensive.
+
+### New Files (3)
+- **`functions/shared/constants.js`** — Platform-wide constants: PLATFORM_FEE (10%), VAT_RATE (16%), WHT_RATE (5%), WHT_THRESHOLD (KES 24k), DUNNING_DAYS [1,3,7,14], GRACE_PERIOD_DAYS (7), TIER_ORDER, SASOS_PRODUCTS (13), ROLE_LEVELS (8 roles), RISK_THRESHOLDS (6 tiers), STORAGE_QUOTAS (6 tiers), timing constants, locale defaults.
+- **`functions/test/constants.test.js`** — 40 tests covering all platform constants: financial calculations, role hierarchy monotonicity, tier ordering, risk threshold continuity, storage quota ordering, timing relationships.
+- **`functions/test/errors.test.js`** — 44 tests covering AppError, assertAuth, assertAdmin, assertSuperAdmin, assertOwner, assertInput, assertRequired, assertRange, sanitize, sanitizePhone, sanitizeAmount, wrapCF.
+
+### Updated Files (3)
+- **`functions/shared/errors.js`** — NEW: Standard error factory for all CFs. `AppError` class with `toHttpsError()`. Auth guards: `assertAuth`, `assertAdmin`, `assertSuperAdmin`, `assertMinRole`, `assertOwner`. Input validators: `assertInput`, `assertRequired`, `assertRange`, `sanitize`, `sanitizePhone`, `sanitizeAmount`. `wrapCF` handler.
+- **`ROADMAP.md`** — Updated to v2.9.0; added SASOS, Platform Registry, Event Bus, shared constants, test suite milestones.
+- **`CHANGELOG.md`** — This entry.
+
+### Quality Gate Results
+- Tests: **169 passing, 0 failing** (5 test files)
+- Security: localStorage auth pattern audited — confirmed safe (UI-only sync optimization; `_claimsVerified` flag, Firestore rules + CF guards are authoritative)
+- CI/CD: GitHub Actions pipeline already present and comprehensive (no gaps)
+
+### Architecture Notes
+- All new CFs MUST import financial constants from `functions/shared/constants.js`, not define them inline
+- All new CFs MUST use `assertAuth`, `assertAdmin`, etc. from `functions/shared/errors.js` instead of ad-hoc checks
+- `wrapCF(req, fn)` wraps the entire CF body for consistent error handling
+
+---
+
+## [2026-06-21] — Platform Registry v1.0 + Event Bus v1.0 + Universal Platform Bootstrap
 
 ### Summary
 Enforces the "SOKONI is ONE platform" architectural directive. Every module now self-registers into a persistent server-side Platform Registry and communicates through a server-side Event Bus with fan-out. The `sokoni-platform.js` client bootstrap auto-wires all platform services (Auth → SASOS → Fraud → Observability → Service Mesh → Gateway) in one `init()` call. The Platform Operations Center (`platform.html`) gives admins full visibility: service registry, health matrix, live event stream, capability audit, dependency graph, and architecture browser.
