@@ -22,6 +22,7 @@
 <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s)"></script>
+<script src="sokoni-geo.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;}
@@ -3326,16 +3327,19 @@ window.initMap = function(){
       a.href='#'; a.title='My Location'; a.innerHTML='📍';
       L.DomEvent.on(a,'click',function(e){
         L.DomEvent.stopPropagation(e); L.DomEvent.preventDefault(e);
-        if(!navigator.geolocation)return;
-        navigator.geolocation.getCurrentPosition(function(pos){
-          var ll=L.latLng(pos.coords.latitude,pos.coords.longitude);
-          if(_userMarker) _userMarker.remove();
-          _userMarker=L.marker(ll,{
-            icon:L.divIcon({className:'',html:'<div class="sk-user-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]}),
-            zIndexOffset:1000
-          }).bindPopup('<b style="color:#00aaff">📍 Your Location</b>').addTo(_map);
-          _map.setView(ll,15,{animate:true});
-        },null,{enableHighAccuracy:true,timeout:8000});
+        if(!SokoniGeo.isSupported())return;
+        SokoniGeo.getLocation({
+          onSuccess:function(pos){
+            var ll=L.latLng(pos.coords.latitude,pos.coords.longitude);
+            if(_userMarker) _userMarker.remove();
+            _userMarker=L.marker(ll,{
+              icon:L.divIcon({className:'',html:'<div class="sk-user-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]}),
+              zIndexOffset:1000
+            }).bindPopup('<b style="color:#00aaff">📍 Your Location</b>').addTo(_map);
+            _map.setView(ll,15,{animate:true});
+          },
+          options:{enableHighAccuracy:true,timeout:8000}
+        });
       });
       return a;
     };
@@ -3349,22 +3353,35 @@ window.initMap = function(){
   /* Force size recalc at multiple intervals — fixes grey tiles on mobile */
   [100,350,800,1500,3000].forEach(function(ms){ setTimeout(function(){ if(_map) _map.invalidateSize(true); }, ms); });
 
-  /* Auto-locate user on open */
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(function(pos){
-      var lat=pos.coords.latitude, lng=pos.coords.longitude;
-      if(_userMarker) _userMarker.remove();
-      _userMarker=L.marker([lat,lng],{
-        icon:L.divIcon({className:'',html:'<div class="sk-user-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]}),
-        zIndexOffset:1000
-      }).bindPopup('<b style="color:#00aaff">📍 Your Location</b>').addTo(_map);
-      _map.setView([lat,lng],14,{animate:true});
-    },null,{enableHighAccuracy:true,timeout:8000});
+  /* Auto-locate user on open — GPS is secondary; map is already live at this point */
+  if(SokoniGeo.isSupported()){
+    /* One-shot: pan to user's current position */
+    SokoniGeo.getLocation({
+      onSuccess:function(pos){
+        var lat=pos.coords.latitude, lng=pos.coords.longitude;
+        if(_userMarker) _userMarker.remove();
+        _userMarker=L.marker([lat,lng],{
+          icon:L.divIcon({className:'',html:'<div class="sk-user-dot"></div>',iconSize:[14,14],iconAnchor:[7,7]}),
+          zIndexOffset:1000
+        }).bindPopup('<b style="color:#00aaff">📍 Your Location</b>').addTo(_map);
+        _map.setView([lat,lng],14,{animate:true});
+      },
+      /* onError omitted intentionally — default handler logs a console warning.
+         The map stays on the Nairobi CBD default view when GPS is unavailable. */
+      options:{enableHighAccuracy:true,timeout:8000}
+    });
 
-    navigator.geolocation.watchPosition(function(pos){
-      if(!_userMarker) return;
-      _userMarker.setLatLng([pos.coords.latitude, pos.coords.longitude]);
-    },{enableHighAccuracy:true,maximumAge:5000});
+    /* Continuous watch: update user dot while map is open.
+       FIXED: previously passed options object as arg2, causing
+       "Argument 2 ('errorCallback') to Geolocation.watchPosition
+        must be a function" on iPhone Safari — crashing the entire map. */
+    SokoniGeo.startLocationTracking({
+      onSuccess:function(pos){
+        if(!_userMarker) return;
+        _userMarker.setLatLng([pos.coords.latitude, pos.coords.longitude]);
+      },
+      options:{enableHighAccuracy:true,maximumAge:5000}
+    });
   }
 
   /* Animate rented cars every 3s */

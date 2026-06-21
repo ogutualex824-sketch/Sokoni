@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v251";
+const CACHE_VERSION = "sokoni-v252";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -93,6 +93,7 @@ const PRECACHE_STATIC = [
   "/sokoni-beta.js", "/beta-widget.js", "/sokoni-launch.js",
   "/sokoni-alerts.js", "/sokoni-upload.js", "/sokoni-share.js", "/sokoni-recommendations.js", "/sokoni-init.js",
   /* AI Creative Studio + AI Subscriptions + Subscription OS */
+  "/sokoni-geo.js",
   "/sokoni-media.js", "/sokoni-creative.js", "/sokoni-ai-subscriptions.js",
   "/sokoni-entitlement.js", "/sokoni-subscription-brain.js",
   /* Enterprise v2.0 modules */
