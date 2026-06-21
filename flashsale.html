@@ -93,9 +93,6 @@
 
 <nav class="navbar">
   <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
-  <div class="search-bar">
-    <input type="text" id="fsSearch" placeholder="Search flash deals..." oninput="searchFS()">
-  </div>
   <div class="nav-actions">
     <a href="wishlist.html" class="wishlist-nav-btn">❤️ Wishlist</a>
     <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 Cart</a>
@@ -127,8 +124,12 @@
   <div style="flex:1;min-width:130px;padding:14px 0;text-align:center;"><div style="font-size:18px;font-weight:900;color:#00aaff;">M-PESA</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">Pay on Delivery</div></div>
 </div>
 
-<!-- CATEGORY FILTER -->
-<div style="display:flex;gap:8px;padding:16px 20px 0;overflow-x:auto;scrollbar-width:none;">
+<!-- SEARCH + CATEGORY FILTER -->
+<div style="padding:16px 20px 0;">
+  <input type="text" id="fsSearch" placeholder="🔍 Search flash deals…" oninput="searchFS()"
+    style="width:100%;box-sizing:border-box;padding:11px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:14px;font-family:inherit;outline:none;margin-bottom:12px;">
+</div>
+<div style="display:flex;gap:8px;padding:0 20px 0;overflow-x:auto;scrollbar-width:none;">
   <button type="button" onclick="filterFS('',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.15);background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;" id="fsf-all">⚡ All Deals</button>
   <button type="button" onclick="filterFS('electronics',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">📱 Electronics</button>
   <button type="button" onclick="filterFS('fashion',this)" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">👗 Fashion</button>

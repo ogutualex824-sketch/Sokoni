@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Products — SOKONI Inventory</title>
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-inv-shell.css">
+<style>
+/* Products page */
+.products-layout{display:flex;gap:14px;align-items:flex-start}
+.products-main{flex:1;min-width:0}
+.filter-sidebar-wrap{width:210px;flex-shrink:0;position:sticky;top:0}
+@media(max-width:900px){.products-layout{flex-direction:column}.filter-sidebar-wrap{width:100%;position:static;display:none}.filter-sidebar-wrap.visible{display:block}}
+
+/* Pagination */
+.inv-pagination{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px 0}
+.inv-page-num{width:32px;height:32px;border-radius:7px;display:grid;place-items:center;font-size:13px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--muted);transition:background 100ms,color 100ms}
+.inv-page-num:hover,.inv-page-num.active{background:rgba(113,255,0,.12);color:var(--accent);border-color:rgba(113,255,0,.3)}
+
+/* Table extras */
+.inv-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.margin-pill{font-size:11px;font-weight:600;padding:2px 6px;border-radius:4px}
+.margin-good{background:rgba(0,232,122,.12);color:var(--success)}
+.margin-ok{background:rgba(255,184,0,.12);color:var(--warn)}
+.margin-bad{background:rgba(255,59,59,.12);color:var(--danger)}
+
+/* Sort header arrow */
+th.asc .inv-sort-icon::before{content:'↑';opacity:1}
+th.desc .inv-sort-icon::before{content:'↓';opacity:1}
+th .inv-sort-icon::before{content:'↕'}
+
+/* Column visibility picker */
+.col-picker{position:absolute;right:0;top:36px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:400;min-width:160px;box-shadow:var(--shadow)}
+
+/* Kanban add button */
+.kanban-add-btn{width:100%;padding:8px;background:none;border:1px dashed var(--border);border-radius:7px;color:var(--muted);font-size:12px;cursor:pointer;transition:border-color 100ms,color 100ms;font-family:inherit}
+.kanban-add-btn:hover{border-color:rgba(113,255,0,.3);color:var(--accent)}
+
+/* Product modal overlay */
+.inv-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);z-index:7000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 180ms}
+.inv-modal-overlay.open{opacity:1;pointer-events:all}
+.inv-modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.6);transform:scale(.96);transition:transform 200ms cubic-bezier(.34,1.56,.64,1)}
+.inv-modal-overlay.open .inv-modal{transform:scale(1)}
+.inv-modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.inv-modal-title{font-size:16px;font-weight:700;flex:1}
+.inv-modal-body{flex:1;overflow-y:auto;padding:20px}
+.inv-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;justify-content:flex-end}
+
+/* Step wizard progress */
+.wizard-steps{display:flex;align-items:center;gap:0;margin-bottom:20px}
+.wizard-step{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted)}
+.wizard-step.active{color:var(--accent)}
+.wizard-step.done{color:var(--success)}
+.wizard-step-num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:var(--bg3);border:1.5px solid var(--border)}
+.wizard-step.active .wizard-step-num{background:rgba(113,255,0,.15);border-color:var(--accent);color:var(--accent)}
+.wizard-step.done .wizard-step-num{background:rgba(0,232,122,.15);border-color:var(--success);color:var(--success)}
+.wizard-step-line{flex:1;height:1px;background:var(--border);margin:0 4px}
+.wizard-step.done + .wizard-step-line{background:var(--success)}
+
+/* Scan strip */
+.scan-strip{background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--accent);margin-bottom:12px;display:none;align-items:center;gap:8px}
+.scan-strip.visible{display:flex}
+.scan-spinner{width:14px;height:14px;border:2px solid rgba(113,255,0,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Image upload zone */
+.img-zone{width:100%;height:120px;border:2px dashed var(--border);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:border-color 150ms,background 150ms;font-size:28px;color:var(--muted)}
+.img-zone:hover{border-color:rgba(113,255,0,.4);background:rgba(113,255,0,.04)}
+.img-zone.has-img{border-style:solid;border-color:rgba(113,255,0,.3);background:var(--bg3)}
+</style>
+</head>
+<body>
+
+<!-- CMD PALETTE -->
+<div class="inv-cmd-overlay" id="cmdOverlay" onclick="closeCmdPalette(event)">
+  <div class="inv-cmd-box">
+    <div class="inv-cmd-input-wrap">
+      <span style="color:var(--muted)">⌕</span>
+      <input class="inv-cmd-input" id="cmdInput" placeholder="Search products or commands…" oninput="filterCmdResults()" autocomplete="off">
+      <kbd style="font-size:11px;color:var(--muted);background:var(--bg3);padding:2px 6px;border-radius:4px;border:1px solid var(--border)">ESC</kbd>
+    </div>
+    <div class="inv-cmd-results" id="cmdResults"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="inv-toast-container" id="toastContainer"></div>
+
+<!-- MOBILE OVERLAY -->
+<div class="inv-sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+<!-- SHELL -->
+<div class="inv-shell">
+
+  <!-- SIDEBAR (same nav as dashboard) -->
+  <nav class="inv-sidebar" id="invSidebar">
+    <div class="inv-sidebar-header">
+      <div class="inv-sidebar-logo">S</div>
+      <div class="inv-sidebar-title">Inventory</div>
+      <div class="inv-collapse-btn" onclick="toggleSidebar()">◀</div>
+    </div>
+    <div class="inv-sidebar-nav">
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Overview</div>
+        <a class="inv-nav-item" href="inv-dashboard.html" data-tooltip="Dashboard"><span class="inv-nav-icon">📦</span><span class="inv-nav-label">Dashboard</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Catalogue</div>
+        <a class="inv-nav-item active" href="inv-products.html" data-tooltip="Products"><span class="inv-nav-icon">📋</span><span class="inv-nav-label">Products</span></a>
+        <a class="inv-nav-item" href="inv-products.html?view=categories" data-tooltip="Categories"><span class="inv-nav-icon">🏷</span><span class="inv-nav-label">Categories</span></a>
+        <a class="inv-nav-item" href="inv-products.html?view=brands" data-tooltip="Brands"><span class="inv-nav-icon">🏭</span><span class="inv-nav-label">Brands</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Stock</div>
+        <a class="inv-nav-item" href="inventory.html#warehouse" data-tooltip="Warehouses"><span class="inv-nav-icon">🏗</span><span class="inv-nav-label">Warehouses</span></a>
+        <a class="inv-nav-item" href="inventory.html#transfers" data-tooltip="Transfers"><span class="inv-nav-icon">🚚</span><span class="inv-nav-label">Transfers</span></a>
+        <a class="inv-nav-item" href="inventory.html#stock" data-tooltip="Adjustments"><span class="inv-nav-icon">⚡</span><span class="inv-nav-label">Adjustments</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Procurement</div>
+        <a class="inv-nav-item" href="inventory.html#purchases" data-tooltip="Purchase Orders"><span class="inv-nav-icon">📑</span><span class="inv-nav-label">Purchase Orders</span></a>
+        <a class="inv-nav-item" href="inventory.html#purchases" data-tooltip="Goods Receiving"><span class="inv-nav-icon">📥</span><span class="inv-nav-label">Goods Receiving</span></a>
+        <a class="inv-nav-item" href="inventory.html#suppliers" data-tooltip="Suppliers"><span class="inv-nav-icon">🚛</span><span class="inv-nav-label">Suppliers</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Alerts</div>
+        <a class="inv-nav-item" href="inv-products.html?filter=low" data-tooltip="Low Stock"><span class="inv-nav-icon">⚠</span><span class="inv-nav-label">Low Stock</span><span class="inv-nav-badge" id="navLowBadge" style="display:none">0</span></a>
+        <a class="inv-nav-item" href="inventory.html#batches" data-tooltip="Expiring"><span class="inv-nav-icon">⌛</span><span class="inv-nav-label">Expiring</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Insights</div>
+        <a class="inv-nav-item" href="inventory.html#analytics" data-tooltip="Analytics"><span class="inv-nav-icon">📈</span><span class="inv-nav-label">Analytics</span></a>
+        <a class="inv-nav-item" href="inventory.html#audit" data-tooltip="Audit Log"><span class="inv-nav-icon">🔍</span><span class="inv-nav-label">Audit Log</span></a>
+        <a class="inv-nav-item" href="inv-ai.html" data-tooltip="AI Assistant"><span class="inv-nav-icon">🤖</span><span class="inv-nav-label">AI Assistant</span></a>
+      </div>
+    </div>
+    <div class="inv-sidebar-footer">
+      <a class="inv-nav-item" href="seller.html" data-tooltip="Back to Seller"><span class="inv-nav-icon">←</span><span class="inv-nav-label">Back to Seller</span></a>
+      <a class="inv-nav-item" href="inventory.html#settings" data-tooltip="Settings"><span class="inv-nav-icon">⚙</span><span class="inv-nav-label">Settings</span></a>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="inv-main">
+
+    <!-- HEADER -->
+    <header class="inv-header">
+      <button class="inv-mobile-menu-btn" onclick="openMobileSidebar()">☰</button>
+      <nav class="inv-breadcrumb">
+        <a href="inv-dashboard.html">Inventory</a>
+        <span class="inv-breadcrumb-sep">/</span>
+        <span class="inv-breadcrumb-current" id="pageLabel">Products</span>
+      </nav>
+      <div class="inv-search-wrap">
+        <div class="inv-search">
+          <span class="inv-search-icon">⌕</span>
+          <input type="text" id="productSearch" placeholder="Search by name, SKU, barcode…" oninput="handleSearch(this.value)">
+          <kbd class="inv-search-kbd">⌘K</kbd>
+        </div>
+      </div>
+      <div class="inv-header-actions">
+        <div class="inv-header-btn" id="themeBtn" onclick="toggleTheme()">☀</div>
+        <div class="inv-header-btn" onclick="toggleNotifications()">🔔<div class="inv-notif-dot" id="notifDot" style="display:none"></div></div>
+        <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="showImportModal()">⬆ Import</button>
+        <button class="inv-btn inv-btn-primary" onclick="openAddProductModal()">+ Add Product</button>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="inv-content">
+
+      <div class="inv-page-header">
+        <div class="inv-page-title-group">
+          <div class="inv-page-title" id="mainTitle">Products</div>
+          <div class="inv-page-subtitle"><span id="productCount">—</span> products · <span id="filteredCount">—</span> shown</div>
+        </div>
+        <div class="inv-page-actions">
+          <!-- View toggle -->
+          <div class="inv-view-toggle" title="Switch view">
+            <button class="inv-view-btn active" id="vb-table"   onclick="setView('table',this)"   title="Table">☰</button>
+            <button class="inv-view-btn"         id="vb-grid"    onclick="setView('grid',this)"    title="Grid">⊞</button>
+            <button class="inv-view-btn"         id="vb-compact" onclick="setView('compact',this)" title="Compact">≡</button>
+            <button class="inv-view-btn"         id="vb-kanban"  onclick="setView('kanban',this)"  title="Kanban">▦</button>
+          </div>
+          <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="exportProducts()">⬇ Export</button>
+          <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="toggleFilterPanel()">⚙ Filters</button>
+        </div>
+      </div>
+
+      <!-- Active filter chips -->
+      <div class="inv-filter-bar" id="filterChips" style="display:none"></div>
+
+      <!-- ── MAIN LAYOUT: filter sidebar + products area ── -->
+      <div class="products-layout">
+
+        <!-- Filter Sidebar -->
+        <div class="filter-sidebar-wrap" id="filterSidebarWrap">
+          <div class="inv-filter-panel">
+            <div class="inv-filter-panel-title">Filters <button class="inv-btn inv-btn-ghost" style="padding:0;border:none;font-size:11px;color:var(--accent)" onclick="clearAllFilters()">Clear all</button></div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Status</div>
+              <label class="inv-filter-option"><input type="checkbox" value="active" onchange="applyFilters()"> Active <span class="inv-filter-option-count" id="fc-active">—</span></label>
+              <label class="inv-filter-option"><input type="checkbox" value="low_stock" onchange="applyFilters()"> Low Stock <span class="inv-filter-option-count" id="fc-low">—</span></label>
+              <label class="inv-filter-option"><input type="checkbox" value="out_of_stock" onchange="applyFilters()"> Out of Stock <span class="inv-filter-option-count" id="fc-oos">—</span></label>
+              <label class="inv-filter-option"><input type="checkbox" value="inactive" onchange="applyFilters()"> Inactive <span class="inv-filter-option-count" id="fc-inactive">—</span></label>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Category</div>
+              <div id="categoryFilters"></div>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Supplier</div>
+              <div id="supplierFilters"></div>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Warehouse</div>
+              <div id="warehouseFilters"></div>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Price Range (KES)</div>
+              <div class="inv-filter-range">
+                <input type="number" id="priceMin" placeholder="Min" oninput="applyFilters()" style="font-size:13px">
+                <span style="color:var(--muted);font-size:12px">–</span>
+                <input type="number" id="priceMax" placeholder="Max" oninput="applyFilters()" style="font-size:13px">
+              </div>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Margin</div>
+              <label class="inv-filter-option"><input type="checkbox" value="margin_high" onchange="applyFilters()"> &gt; 30%</label>
+              <label class="inv-filter-option"><input type="checkbox" value="margin_med"  onchange="applyFilters()"> 10–30%</label>
+              <label class="inv-filter-option"><input type="checkbox" value="margin_low"  onchange="applyFilters()"> &lt; 10%</label>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Stock Quantity</div>
+              <div class="inv-filter-range">
+                <input type="number" id="stockMin" placeholder="Min" min="0" oninput="applyFilters()" style="font-size:13px">
+                <span style="color:var(--muted);font-size:12px">–</span>
+                <input type="number" id="stockMax" placeholder="Max" min="0" oninput="applyFilters()" style="font-size:13px">
+              </div>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Date Added</div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <input type="date" id="dateFrom" oninput="applyFilters()" style="font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:inherit;width:100%">
+                <input type="date" id="dateTo"   oninput="applyFilters()" style="font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:inherit;width:100%">
+              </div>
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Tags / Labels</div>
+              <input type="text" id="tagFilter" placeholder="e.g. organic, imported" oninput="applyFilters()" style="font-size:13px;width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:inherit;box-sizing:border-box">
+            </div>
+
+            <div class="inv-filter-group">
+              <div class="inv-filter-group-label">Search In</div>
+              <select class="inv-select" id="searchField" onchange="applyFilters()" style="font-size:13px">
+                <option value="all">All fields</option>
+                <option value="name">Name</option>
+                <option value="sku">SKU</option>
+                <option value="barcode">Barcode</option>
+                <option value="brand">Brand</option>
+                <option value="category">Category</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Products Area -->
+        <div class="products-main">
+
+          <!-- Bulk actions bar -->
+          <div class="inv-bulk-bar" id="bulkBar">
+            <span class="inv-bulk-count"><span id="selectedCount">0</span> selected</span>
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="bulkExport()">⬇ Export</button>
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="bulkPrintLabels()">🏷 Labels</button>
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="bulkTransfer()">🚚 Transfer</button>
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="bulkDiscount()">% Price</button>
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="bulkCreatePO()">📑 Create PO</button>
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="bulkDuplicate()">⎘ Duplicate</button>
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="bulkArchive()">📦 Archive</button>
+            <button class="inv-btn inv-btn-danger inv-btn-sm"    onclick="bulkDelete()">✕ Delete</button>
+            <button class="inv-btn inv-btn-ghost inv-btn-sm" style="margin-left:auto" onclick="clearSelection()">✕ Cancel</button>
+          </div>
+
+          <!-- ── TABLE VIEW ── -->
+          <div id="view-table">
+            <div class="inv-table-wrap">
+              <div class="inv-table-toolbar">
+                <input type="checkbox" id="selectAll" class="inv-row-check" onchange="toggleSelectAll(this)" title="Select all">
+                <div class="inv-view-toggle" style="scale:.9">
+                  <button class="inv-view-btn" onclick="sortTable('name')" title="Sort by name">Az</button>
+                  <button class="inv-view-btn" onclick="sortTable('stockLevel')" title="Sort by stock">📦</button>
+                  <button class="inv-view-btn" onclick="sortTable('sellingPrice')" title="Sort by price">KES</button>
+                  <button class="inv-view-btn" onclick="sortTable('margin')" title="Sort by margin">%</button>
+                </div>
+                <span style="flex:1"></span>
+                <span style="font-size:12px;color:var(--muted)" id="tableStatus">Loading…</span>
+              </div>
+              <div class="inv-table-container">
+                <table class="inv-table" id="prodTable">
+                  <thead><tr>
+                    <th class="no-sort" style="width:36px"><input type="checkbox" class="inv-row-check" id="thSelectAll" onchange="toggleSelectAll(this)"></th>
+                    <th onclick="sortTable('name')">Product <span class="inv-sort-icon"></span></th>
+                    <th onclick="sortTable('category')">Category <span class="inv-sort-icon"></span></th>
+                    <th onclick="sortTable('sku')" style="width:110px">SKU <span class="inv-sort-icon"></span></th>
+                    <th onclick="sortTable('stockLevel')">Stock <span class="inv-sort-icon"></span></th>
+                    <th onclick="sortTable('buyingPrice')">Cost <span class="inv-sort-icon"></span></th>
+                    <th onclick="sortTable('sellingPrice')">Price <span class="inv-sort-icon"></span></th>
+                    <th onclick="sortTable('margin')">Margin <span class="inv-sort-icon"></span></th>
+                    <th class="no-sort" style="width:90px">Status</th>
+                    <th class="no-sort" style="width:40px"></th>
+                  </tr></thead>
+                  <tbody id="tableBody">
+                    <tr><td colspan="10" style="padding:32px;text-align:center"><div class="inv-skeleton" style="height:32px;border-radius:6px;width:80%;margin:auto"></div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="inv-pagination" id="tablePagination"></div>
+            </div>
+          </div>
+
+          <!-- ── GRID VIEW ── -->
+          <div id="view-grid" style="display:none">
+            <div class="inv-product-grid" id="gridBody"></div>
+            <div class="inv-pagination" id="gridPagination"></div>
+          </div>
+
+          <!-- ── COMPACT VIEW ── -->
+          <div id="view-compact" style="display:none">
+            <div class="inv-compact-list" id="compactBody"></div>
+            <div class="inv-pagination" id="compactPagination"></div>
+          </div>
+
+          <!-- ── KANBAN VIEW ── -->
+          <div id="view-kanban" style="display:none">
+            <div class="inv-kanban" id="kanbanBody"></div>
+          </div>
+
+          <!-- Empty state -->
+          <div id="emptyState" class="inv-empty" style="display:none">
+            <div class="inv-empty-icon">📦</div>
+            <div class="inv-empty-title">No products found</div>
+            <div class="inv-empty-desc">Try adjusting your filters or add your first product.</div>
+            <button class="inv-btn inv-btn-primary" style="margin-top:16px" onclick="openAddProductModal()">+ Add Product</button>
+          </div>
+
+        </div><!-- /products-main -->
+      </div><!-- /products-layout -->
+
+    </div><!-- /inv-content -->
+  </div><!-- /inv-main -->
+</div><!-- /inv-shell -->
+
+<!-- Notifications Panel -->
+<div class="inv-notif-panel" id="notifPanel">
+  <div class="inv-notif-header">🔔 Notifications<button class="inv-btn inv-btn-ghost inv-btn-sm" style="margin-left:auto" onclick="markAllRead()">Mark all read</button></div>
+  <div id="notifList"></div>
+</div>
+
+<!-- FAB -->
+<button class="inv-fab" onclick="openAddProductModal()" title="Add product">+</button>
+
+<!-- ── ADD PRODUCT MODAL ── -->
+<div class="inv-modal-overlay" id="addProductModal" onclick="closeProductModal(event)">
+  <div class="inv-modal" onclick="event.stopPropagation()">
+    <div class="inv-modal-header">
+      <div class="inv-modal-title">Add Product</div>
+      <button class="inv-btn inv-btn-ghost inv-btn-sm inv-btn-icon" onclick="closeProductModal()">✕</button>
+    </div>
+    <div class="inv-modal-body">
+      <!-- Wizard steps -->
+      <div class="wizard-steps">
+        <div class="wizard-step active" id="wz1"><div class="wizard-step-num">1</div><span class="inv-nav-label">Details</span></div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" id="wz2"><div class="wizard-step-num">2</div><span class="inv-nav-label">Stock</span></div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" id="wz3"><div class="wizard-step-num">3</div><span class="inv-nav-label">Pricing</span></div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" id="wz4"><div class="wizard-step-num">4</div><span class="inv-nav-label">Images</span></div>
+      </div>
+
+      <!-- AI scan strip -->
+      <div class="scan-strip" id="scanStrip">
+        <div class="scan-spinner"></div>
+        <span id="scanMsg">Scanning barcode…</span>
+      </div>
+      <input type="file" id="scanInput" accept="image/*" capture="environment" style="display:none" onchange="processScanImage(event)">
+
+      <!-- Barcode / AI fill buttons -->
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="document.getElementById('scanInput').click()">📷 Scan Barcode (AI fill)</button>
+        <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="openBarcodeCamera()">🎥 Camera Scan</button>
+        <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="generateSKU()"># Generate SKU</button>
+      </div>
+
+      <!-- Step 1: Details (always visible) -->
+      <div id="step1">
+        <div class="inv-form-row">
+          <div class="inv-form-group">
+            <label class="inv-label">Product Name *</label>
+            <input class="inv-input" id="pm-name" placeholder="e.g. Unga Pembe 2kg" required>
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">SKU</label>
+            <input class="inv-input" id="pm-sku" placeholder="Auto-generated">
+          </div>
+        </div>
+        <div class="inv-form-row">
+          <div class="inv-form-group">
+            <label class="inv-label">Category</label>
+            <select class="inv-select" id="pm-category">
+              <option value="">Select category</option>
+            </select>
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Brand</label>
+            <input class="inv-input" id="pm-brand" placeholder="Brand name">
+          </div>
+        </div>
+        <div class="inv-form-group">
+          <label class="inv-label">Description</label>
+          <textarea class="inv-textarea" id="pm-desc" placeholder="Short product description…" rows="2"></textarea>
+        </div>
+        <div class="inv-form-row">
+          <div class="inv-form-group">
+            <label class="inv-label">Barcode (EAN/UPC)</label>
+            <input class="inv-input" id="pm-barcode" placeholder="8712566393398">
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Unit of Measure</label>
+            <select class="inv-select" id="pm-unit">
+              <option>pcs</option><option>kg</option><option>g</option><option>l</option><option>ml</option><option>pack</option><option>box</option><option>carton</option><option>pair</option><option>set</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 2: Stock -->
+        <div class="inv-divider"></div>
+        <div class="inv-form-row-3">
+          <div class="inv-form-group">
+            <label class="inv-label">Opening Stock</label>
+            <input class="inv-input" id="pm-stock" type="number" min="0" placeholder="0" oninput="updateMargin()">
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Reorder Point</label>
+            <input class="inv-input" id="pm-reorder" type="number" min="0" placeholder="10">
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Max Stock</label>
+            <input class="inv-input" id="pm-maxstock" type="number" min="0" placeholder="500">
+          </div>
+        </div>
+        <div class="inv-form-row">
+          <div class="inv-form-group">
+            <label class="inv-label">Warehouse</label>
+            <select class="inv-select" id="pm-warehouse"></select>
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Supplier</label>
+            <select class="inv-select" id="pm-supplier">
+              <option value="">Select supplier</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 3: Pricing -->
+        <div class="inv-divider"></div>
+        <div class="inv-form-row">
+          <div class="inv-form-group">
+            <label class="inv-label">Buying Price (KES)</label>
+            <input class="inv-input" id="pm-buy" type="number" min="0" step="0.01" placeholder="0.00" oninput="updateMargin()">
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Selling Price (KES)</label>
+            <input class="inv-input" id="pm-sell" type="number" min="0" step="0.01" placeholder="0.00" oninput="updateMargin()">
+          </div>
+        </div>
+        <div class="inv-form-row-3">
+          <div class="inv-form-group">
+            <label class="inv-label">Tax Rate</label>
+            <select class="inv-select" id="pm-tax">
+              <option value="0">0% (Exempt)</option>
+              <option value="8">8% (VAT)</option>
+              <option value="16" selected>16% (VAT)</option>
+            </select>
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Wholesale Price</label>
+            <input class="inv-input" id="pm-wholesale" type="number" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="inv-form-group">
+            <label class="inv-label">Margin</label>
+            <div class="inv-input" id="pm-margin" style="background:var(--bg3);color:var(--accent);font-weight:700">—</div>
+          </div>
+        </div>
+
+        <!-- Step 4: Image -->
+        <div class="inv-divider"></div>
+        <div class="inv-form-group">
+          <label class="inv-label">Product Image</label>
+          <div class="img-zone" id="imgZone" onclick="document.getElementById('pm-img-input').click()">
+            <span id="imgZoneIcon">🖼</span>
+            <span style="font-size:12px;color:var(--muted)" id="imgZoneLabel">Click to upload or drag &amp; drop</span>
+            <img id="imgPreview" style="display:none;width:80px;height:80px;object-fit:cover;border-radius:8px;margin:0 auto">
+          </div>
+          <input type="file" id="pm-img-input" accept="image/*" style="display:none" onchange="previewImage(event)">
+        </div>
+      </div>
+
+    </div>
+    <div class="inv-modal-footer">
+      <div style="flex:1;font-size:12px;color:var(--muted)" id="pmSaveStatus">All fields auto-saved as draft</div>
+      <button class="inv-btn inv-btn-ghost" onclick="closeProductModal()">Cancel</button>
+      <button class="inv-btn inv-btn-secondary" onclick="saveProductDraft()">Save Draft</button>
+      <button class="inv-btn inv-btn-primary" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK TRANSFER MODAL -->
+<div class="inv-modal-overlay" id="bulkTransferModal" onclick="closeBulkTransferModal(event)">
+  <div class="inv-modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="inv-modal-header">
+      <div class="inv-modal-title">Transfer Selected Products</div>
+      <button class="inv-btn inv-btn-ghost inv-btn-sm inv-btn-icon" onclick="closeBulkTransferModal()">✕</button>
+    </div>
+    <div class="inv-modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Creates a transfer request for each selected product between warehouses.</p>
+      <div class="inv-form-row">
+        <div class="inv-form-group">
+          <label class="inv-label">From Warehouse</label>
+          <select class="inv-select" id="btm-from"></select>
+        </div>
+        <div class="inv-form-group">
+          <label class="inv-label">To Warehouse</label>
+          <select class="inv-select" id="btm-to"></select>
+        </div>
+      </div>
+      <div class="inv-form-row">
+        <div class="inv-form-group">
+          <label class="inv-label">Quantity per Product</label>
+          <input class="inv-input" id="btm-qty" type="number" min="1" value="1" style="font-size:16px">
+        </div>
+        <div class="inv-form-group">
+          <label class="inv-label">Note (optional)</label>
+          <input class="inv-input" id="btm-note" placeholder="Reason for transfer" style="font-size:16px">
+        </div>
+      </div>
+    </div>
+    <div class="inv-modal-footer">
+      <button class="inv-btn inv-btn-ghost" onclick="closeBulkTransferModal()">Cancel</button>
+      <button class="inv-btn inv-btn-primary" onclick="confirmBulkTransfer()">Queue Transfers</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK PRICE ADJUST MODAL -->
+<div class="inv-modal-overlay" id="bulkPriceModal" onclick="closeBulkPriceModal(event)">
+  <div class="inv-modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="inv-modal-header">
+      <div class="inv-modal-title">Adjust Prices</div>
+      <button class="inv-btn inv-btn-ghost inv-btn-sm inv-btn-icon" onclick="closeBulkPriceModal()">✕</button>
+    </div>
+    <div class="inv-modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Applying to <strong id="bpm-count">0</strong> selected product(s).</p>
+      <div class="inv-form-group">
+        <label class="inv-label">Adjustment Type</label>
+        <select class="inv-select" id="bpm-type" style="font-size:16px">
+          <option value="pct_increase">Increase by %</option>
+          <option value="pct_decrease">Decrease by %</option>
+          <option value="flat_set">Set fixed price (KES)</option>
+          <option value="flat_add">Add flat amount (KES)</option>
+          <option value="flat_sub">Subtract flat amount (KES)</option>
+        </select>
+      </div>
+      <div class="inv-form-row">
+        <div class="inv-form-group">
+          <label class="inv-label">Value</label>
+          <input class="inv-input" id="bpm-value" type="number" min="0" step="0.01" placeholder="0" style="font-size:16px">
+        </div>
+        <div class="inv-form-group">
+          <label class="inv-label">Apply to</label>
+          <select class="inv-select" id="bpm-field" style="font-size:16px">
+            <option value="sellingPrice">Selling Price</option>
+            <option value="buyingPrice">Buying Price</option>
+            <option value="both">Both Prices</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="inv-modal-footer">
+      <button class="inv-btn inv-btn-ghost" onclick="closeBulkPriceModal()">Cancel</button>
+      <button class="inv-btn inv-btn-primary" onclick="confirmBulkPrice()">Apply to All</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="firebase.js"></script>
+<script src="auth.js"></script>
+<script src="sokoni-inventory.js"></script>
+<script src="sokoni-inventory-v2.js"></script>
+<script src="sw-register.js"></script>
+<script src="sokoni-inv-shell.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ── STATE ── */
+  let _allProducts  = [];
+  let _filtered     = [];
+  let _selected     = new Set();
+  let _view         = localStorage.getItem('inv-products-view') || 'table';
+  let _sortKey      = 'name';
+  let _sortDir      = 1;  // 1=asc, -1=desc
+  let _page         = 1;
+  const PAGE_SIZE   = 50;
+  let _searchQ      = '';
+  let _categories   = [];
+  let _suppliers    = [];
+  let _warehouses   = [];
+
+  const $ = id => document.getElementById(id);
+
+  /* ── VIEW SWITCHING ── */
+  function setView(v, btn) {
+    _view = v;
+    localStorage.setItem('inv-products-view', v);
+    ['table','grid','compact','kanban'].forEach(id => {
+      const el = $(`view-${id}`);
+      if (el) el.style.display = id === v ? '' : 'none';
+      const vb = $(`vb-${id}`);
+      if (vb) vb.classList.toggle('active', id === v);
+    });
+    _page = 1;
+    renderCurrentView();
+  }
+  window.setView = setView;
+
+  /* ── SEARCH & FILTER ── */
+  let _searchTimer;
+  function handleSearch(q) {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => { _searchQ = q.toLowerCase(); _page = 1; applyFilters(); }, 200);
+  }
+  window.handleSearch = handleSearch;
+
+  function applyFilters() {
+    const statusBoxes = document.querySelectorAll('#filterSidebarWrap input[type=checkbox]');
+    const activeStatuses = [];
+    statusBoxes.forEach(cb => { if (cb.checked) activeStatuses.push(cb.value); });
+
+    const priceMin  = parseFloat($('priceMin')?.value);
+    const priceMax  = parseFloat($('priceMax')?.value);
+    const stockMin  = parseFloat($('stockMin')?.value);
+    const stockMax  = parseFloat($('stockMax')?.value);
+    const dateFrom  = $('dateFrom')?.value;   // 'YYYY-MM-DD' or ''
+    const dateTo    = $('dateTo')?.value;
+    const tagQ      = ($('tagFilter')?.value || '').trim().toLowerCase();
+    const searchField = $('searchField')?.value || 'all';
+
+    _filtered = _allProducts.filter(p => {
+      // ── Search (field-aware) ──
+      if (_searchQ) {
+        let hay = '';
+        if      (searchField === 'name')     hay = (p.name     || '').toLowerCase();
+        else if (searchField === 'sku')      hay = (p.sku      || '').toLowerCase();
+        else if (searchField === 'barcode')  hay = (p.barcode  || '').toLowerCase();
+        else if (searchField === 'brand')    hay = (p.brand    || '').toLowerCase();
+        else if (searchField === 'category') hay = (p.category || '').toLowerCase();
+        else hay = `${p.name} ${p.sku} ${p.barcode} ${p.category} ${p.brand}`.toLowerCase();
+        if (!hay.includes(_searchQ)) return false;
+      }
+
+      // ── Status / margin checkboxes ──
+      if (activeStatuses.length) {
+        const stock  = p.stockLevel  || 0;
+        const rp     = p.reorderPoint || 5;
+        const inStock = stock > rp;
+        const low     = stock > 0 && stock <= rp;
+        const oos     = stock <= 0;
+        const ok = activeStatuses.some(s => {
+          if (s === 'active')       return p.active !== false && inStock;
+          if (s === 'low_stock')    return low;
+          if (s === 'out_of_stock') return oos;
+          if (s === 'inactive')     return p.active === false;
+          if (s === 'margin_high')  return _margin(p) > 30;
+          if (s === 'margin_med')   return _margin(p) >= 10 && _margin(p) <= 30;
+          if (s === 'margin_low')   return _margin(p) < 10;
+          // Dynamic category filters registered as 'cat_<Category>'
+          if (s.startsWith('cat_')) return (p.category || '').replace(/\s/g,'_') === s.slice(4);
+          return true;
+        });
+        if (!ok) return false;
+      }
+
+      // ── Price range ──
+      const price = p.sellingPrice || 0;
+      if (!isNaN(priceMin) && price < priceMin) return false;
+      if (!isNaN(priceMax) && price > priceMax) return false;
+
+      // ── Stock quantity range ──
+      const stock = p.stockLevel || 0;
+      if (!isNaN(stockMin) && stock < stockMin) return false;
+      if (!isNaN(stockMax) && stock > stockMax) return false;
+
+      // ── Date added range ──
+      if (dateFrom || dateTo) {
+        let pDate = null;
+        if (p.createdAt) {
+          pDate = typeof p.createdAt.toDate === 'function'
+            ? p.createdAt.toDate()
+            : new Date(p.createdAt);
+        }
+        if (pDate) {
+          if (dateFrom && pDate < new Date(dateFrom))               return false;
+          if (dateTo   && pDate > new Date(dateTo + 'T23:59:59'))   return false;
+        }
+      }
+
+      // ── Tags / labels ──
+      if (tagQ) {
+        const tags = ((p.tags || []).join(' ') + ' ' + (p.name || '') + ' ' + (p.description || '')).toLowerCase();
+        if (!tags.includes(tagQ)) return false;
+      }
+
+      return true;
+    });
+
+    // URL filter from query string
+    const urlFilter = new URLSearchParams(window.location.search).get('filter');
+    if (urlFilter === 'low') _filtered = _allProducts.filter(p => (p.stockLevel||0) <= (p.reorderPoint||5) && (p.stockLevel||0) > 0);
+
+    _page = 1;
+    $('filteredCount').textContent = _filtered.length;
+    updateFilterChips(activeStatuses);
+    renderCurrentView();
+  }
+
+  function _margin(p) {
+    const buy  = p.buyingPrice  || 0;
+    const sell = p.sellingPrice || 0;
+    if (!buy || !sell) return 0;
+    return ((sell - buy) / sell) * 100;
+  }
+
+  function updateFilterChips(statuses) {
+    const bar = $('filterChips');
+    if (!bar) return;
+    bar.style.display = statuses.length || _searchQ ? 'flex' : 'none';
+    bar.innerHTML = statuses.map(s => `
+      <span class="inv-filter-chip active">${escHtml(s.replace(/_/g,' '))} <span class="inv-filter-chip-x" onclick="removeFilter('${escHtml(s)}')">✕</span></span>
+    `).join('') + (_searchQ ? `<span class="inv-filter-chip active">Search: "${escHtml(_searchQ)}" <span class="inv-filter-chip-x" onclick="clearSearch()">✕</span></span>` : '');
+  }
+
+  function removeFilter(val) {
+    const cb = document.querySelector(`#filterSidebarWrap input[value="${val}"]`);
+    if (cb) { cb.checked = false; applyFilters(); }
+  }
+  function clearSearch()   { $('productSearch').value = ''; _searchQ = ''; applyFilters(); }
+  function clearAllFilters() {
+    document.querySelectorAll('#filterSidebarWrap input[type=checkbox]').forEach(cb => cb.checked = false);
+    ['priceMin','priceMax','stockMin','stockMax','dateFrom','dateTo','tagFilter'].forEach(id => {
+      const el = $(id); if (el) el.value = '';
+    });
+    const sf = $('searchField'); if (sf) sf.value = 'all';
+    clearSearch();
+  }
+  window.removeFilter = removeFilter; window.clearSearch = clearSearch; window.clearAllFilters = clearAllFilters;
+
+  /* ── SORT ── */
+  function sortTable(key) {
+    if (_sortKey === key) _sortDir *= -1;
+    else { _sortKey = key; _sortDir = 1; }
+    _filtered.sort((a, b) => {
+      let av = key === 'margin' ? _margin(a) : (a[key] ?? '');
+      let bv = key === 'margin' ? _margin(b) : (b[key] ?? '');
+      if (typeof av === 'string') return av.localeCompare(bv) * _sortDir;
+      return (av - bv) * _sortDir;
+    });
+    _page = 1;
+    renderCurrentView();
+  }
+  window.sortTable = sortTable;
+
+  /* ── PAGINATION ── */
+  function paginated() {
+    const start = (_page - 1) * PAGE_SIZE;
+    return _filtered.slice(start, start + PAGE_SIZE);
+  }
+
+  function renderPagination(containerId) {
+    const el = $(containerId);
+    if (!el) return;
+    const total = Math.ceil(_filtered.length / PAGE_SIZE);
+    if (total <= 1) { el.innerHTML = ''; return; }
+    const pages = [];
+    for (let i = 1; i <= Math.min(total, 7); i++) pages.push(i);
+    el.innerHTML = `
+      <button class="inv-page-num" ${_page<=1?'disabled':''} onclick="goPage(${_page-1})">‹</button>
+      ${pages.map(p => `<button class="inv-page-num${_page===p?' active':''}" onclick="goPage(${p})">${p}</button>`).join('')}
+      ${total > 7 ? `<span style="color:var(--muted);font-size:13px">… ${total}</span>` : ''}
+      <button class="inv-page-num" ${_page>=total?'disabled':''} onclick="goPage(${_page+1})">›</button>
+    `;
+  }
+
+  function goPage(p) { _page = p; renderCurrentView(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  window.goPage = goPage;
+
+  /* ── RENDER: TABLE ── */
+  function renderTable() {
+    const body = $('tableBody');
+    if (!body) return;
+    const items = paginated();
+    $('tableStatus').textContent = `${_filtered.length} products`;
+    if (!items.length) { body.innerHTML = ''; $('emptyState').style.display = 'flex'; return; }
+    $('emptyState').style.display = 'none';
+
+    body.innerHTML = items.map(p => {
+      const stock   = p.stockLevel || 0;
+      const margin  = _margin(p);
+      const mClass  = margin >= 30 ? 'margin-good' : margin >= 10 ? 'margin-ok' : 'margin-bad';
+      const sClass  = stockClass(stock, p.reorderPoint);
+      const sLabel  = stockLabel(stock, p.reorderPoint);
+      const badgeCls= stock <= 0 ? 'inv-badge-danger' : stock <= (p.reorderPoint||5) ? 'inv-badge-warn' : 'inv-badge-success';
+      const chk     = _selected.has(p.id) ? 'checked' : '';
+      return `<tr class="${_selected.has(p.id)?'selected':''}" onclick="rowClick(event,'${escHtml(p.id)}')">
+        <td onclick="event.stopPropagation()"><input type="checkbox" class="inv-row-check" ${chk} onchange="toggleSelect('${escHtml(p.id)}',this)"></td>
+        <td>
+          <div class="inv-prod-name-cell">
+            <div class="inv-prod-thumb">${p.imageUrl ? `<img src="${escHtml(p.imageUrl)}" alt="" loading="lazy">` : '📦'}</div>
+            <div><div class="inv-prod-name-primary">${escHtml(p.name)}</div><div class="inv-prod-name-sku">${escHtml(p.sku||'')}</div></div>
+          </div>
+        </td>
+        <td style="color:var(--muted);font-size:12px">${escHtml(p.category||'—')}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--muted)">${escHtml(p.sku||'—')}</td>
+        <td class="num"><span class="${sClass}" style="font-weight:700">${stock.toLocaleString()}</span></td>
+        <td class="num" style="color:var(--muted)">${fmtCurrency(p.buyingPrice||0)}</td>
+        <td class="num" style="font-weight:600">${fmtCurrency(p.sellingPrice||0)}</td>
+        <td class="num"><span class="margin-pill ${mClass}">${margin.toFixed(1)}%</span></td>
+        <td><span class="inv-badge ${badgeCls}">${sLabel}</span></td>
+        <td onclick="event.stopPropagation()">
+          <div style="display:flex;gap:4px">
+            <button class="inv-btn inv-btn-ghost inv-btn-sm inv-btn-icon" onclick="editProduct('${escHtml(p.id)}')" title="Edit">✎</button>
+            <button class="inv-btn inv-btn-ghost inv-btn-sm inv-btn-icon" onclick="deleteProduct('${escHtml(p.id)}')" title="Delete">✕</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+    renderPagination('tablePagination');
+  }
+
+  /* ── RENDER: GRID ── */
+  function renderGrid() {
+    const el = $('gridBody');
+    if (!el) return;
+    const items = paginated();
+    if (!items.length) { el.innerHTML = ''; $('emptyState').style.display = 'flex'; return; }
+    $('emptyState').style.display = 'none';
+    el.innerHTML = items.map(p => {
+      const stock  = p.stockLevel || 0;
+      const margin = _margin(p);
+      const badgeCls= stock <= 0 ? 'inv-badge-danger' : stock <= (p.reorderPoint||5) ? 'inv-badge-warn' : 'inv-badge-success';
+      const sLabel  = stockLabel(stock, p.reorderPoint);
+      const chk     = _selected.has(p.id);
+      return `<div class="inv-product-card" onclick="rowClick(event,'${escHtml(p.id)}')">
+        <div class="inv-product-card-img">
+          ${p.imageUrl ? `<img src="${escHtml(p.imageUrl)}" alt="" loading="lazy">` : '📦'}
+          <span class="inv-card-badge inv-badge ${badgeCls}">${sLabel}</span>
+          <div class="inv-card-check ${chk?'checked':''}" onclick="event.stopPropagation();toggleSelect('${escHtml(p.id)}',{checked:!${chk}})">
+            ${chk?'✓':''}
+          </div>
+        </div>
+        <div class="inv-product-card-body">
+          <div class="inv-product-card-name">${escHtml(p.name)}</div>
+          <div class="inv-product-card-sku">${escHtml(p.sku||'')}</div>
+          <div class="inv-product-card-footer">
+            <div class="inv-product-card-stock ${stockClass(stock,p.reorderPoint)}">${stock.toLocaleString()}</div>
+            <div class="inv-product-card-price">${fmtCurrency(p.sellingPrice||0)}</div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">${escHtml(p.category||'')}</div>
+        </div>
+      </div>`;
+    }).join('');
+    renderPagination('gridPagination');
+  }
+
+  /* ── RENDER: COMPACT ── */
+  function renderCompact() {
+    const el = $('compactBody');
+    if (!el) return;
+    const items = paginated();
+    if (!items.length) { el.innerHTML = ''; $('emptyState').style.display = 'flex'; return; }
+    $('emptyState').style.display = 'none';
+    el.innerHTML = items.map(p => `
+      <div class="inv-compact-row" onclick="rowClick(event,'${escHtml(p.id)}')">
+        <input type="checkbox" class="inv-row-check" ${_selected.has(p.id)?'checked':''} onchange="toggleSelect('${escHtml(p.id)}',this)" onclick="event.stopPropagation()">
+        <div class="inv-prod-thumb" style="width:28px;height:28px;border-radius:6px">${p.imageUrl?`<img src="${escHtml(p.imageUrl)}" alt="">` : '📦'}</div>
+        <div class="inv-compact-name">${escHtml(p.name)}</div>
+        <div class="inv-compact-sku">${escHtml(p.sku||'—')}</div>
+        <div class="inv-compact-stock ${stockClass(p.stockLevel,p.reorderPoint)}">${(p.stockLevel||0).toLocaleString()}</div>
+        <div class="inv-compact-price">${fmtCurrency(p.sellingPrice||0)}</div>
+        <span class="inv-badge ${p.stockLevel<=0?'inv-badge-danger':p.stockLevel<=(p.reorderPoint||5)?'inv-badge-warn':'inv-badge-success'}" style="font-size:10px">${stockLabel(p.stockLevel,p.reorderPoint)}</span>
+      </div>
+    `).join('');
+    renderPagination('compactPagination');
+  }
+
+  /* ── RENDER: KANBAN ── */
+  function renderKanban() {
+    const el = $('kanbanBody');
+    if (!el) return;
+    const cols = [
+      { key:'in_stock',    label:'In Stock',    color:'var(--success)', filter: p => (p.stockLevel||0) > (p.reorderPoint||5) },
+      { key:'low_stock',   label:'Low Stock',   color:'var(--warn)',    filter: p => (p.stockLevel||0) > 0 && (p.stockLevel||0) <= (p.reorderPoint||5) },
+      { key:'out_stock',   label:'Out of Stock',color:'var(--danger)',  filter: p => (p.stockLevel||0) <= 0 },
+      { key:'inactive',    label:'Inactive',    color:'var(--muted)',   filter: p => p.active === false },
+    ];
+    el.innerHTML = cols.map(col => {
+      const items = _allProducts.filter(col.filter);
+      return `<div class="inv-kanban-col">
+        <div class="inv-kanban-header" style="color:${col.color}">
+          <span style="width:8px;height:8px;border-radius:50%;background:${col.color};flex-shrink:0"></span>
+          ${escHtml(col.label)}
+          <span class="inv-kanban-count">${items.length}</span>
+        </div>
+        <div class="inv-kanban-body">
+          ${items.slice(0, 20).map(p => `
+            <div class="inv-kanban-card" onclick="window.location.href='inv-product.html?id=${escHtml(p.id)}'">
+              <div class="inv-kanban-card-name">${escHtml(p.name)}</div>
+              <div class="inv-kanban-card-meta">
+                <span style="font-family:monospace">${escHtml(p.sku||'—')}</span>
+                <span style="font-weight:700;color:${col.color}">${(p.stockLevel||0).toLocaleString()} ${escHtml(p.unit||'pcs')}</span>
+              </div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between">
+                <span>${escHtml(p.category||'')}</span>
+                <span style="color:var(--accent)">${fmtCurrency(p.sellingPrice||0)}</span>
+              </div>
+            </div>
+          `).join('')}
+          ${items.length === 0 ? `<div style="text-align:center;padding:16px;font-size:12px;color:var(--muted)">No products</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderCurrentView() {
+    if (_view === 'table')   renderTable();
+    if (_view === 'grid')    renderGrid();
+    if (_view === 'compact') renderCompact();
+    if (_view === 'kanban')  renderKanban();
+  }
+
+  /* ── SELECTION ── */
+  function toggleSelect(id, el) {
+    if (el.checked) _selected.add(id); else _selected.delete(id);
+    updateBulkBar();
+    const row = el.closest ? el.closest('tr') : null;
+    if (row) row.classList.toggle('selected', el.checked);
+  }
+  window.toggleSelect = toggleSelect;
+
+  function toggleSelectAll(cb) {
+    const checked = cb.checked;
+    _filtered.forEach(p => checked ? _selected.add(p.id) : _selected.delete(p.id));
+    document.querySelectorAll('.inv-row-check:not(#selectAll):not(#thSelectAll)').forEach(c => c.checked = checked);
+    document.querySelectorAll('.inv-table tbody tr').forEach(r => r.classList.toggle('selected', checked));
+    updateBulkBar();
+  }
+  window.toggleSelectAll = toggleSelectAll;
+
+  function updateBulkBar() {
+    const bar = $('bulkBar');
+    const cnt = $('selectedCount');
+    if (bar) bar.classList.toggle('visible', _selected.size > 0);
+    if (cnt) cnt.textContent = _selected.size;
+  }
+
+  function clearSelection() { _selected.clear(); updateBulkBar(); renderCurrentView(); }
+  window.clearSelection = clearSelection;
+
+  /* ── ROW CLICK ── */
+  function rowClick(e, id) {
+    if (e.target.type === 'checkbox' || e.target.tagName === 'BUTTON') return;
+    if (_selected.size > 0) {
+      const isSelected = _selected.has(id);
+      if (isSelected) _selected.delete(id); else _selected.add(id);
+      updateBulkBar();
+      renderCurrentView();
+    } else {
+      window.location.href = `inv-product.html?id=${id}`;
+    }
+  }
+  window.rowClick = rowClick;
+
+  /* ── BULK ACTIONS ── */
+
+  function _productsForSelected() {
+    return _allProducts.filter(p => _selected.has(p.id));
+  }
+
+  function _toCsvRow(vals) {
+    return vals.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',');
+  }
+
+  function _downloadCsv(rows, filename) {
+    const csv  = rows.map(_toCsvRow).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  function _buildProductCsvRows(products) {
+    const headers = ['Name','SKU','Barcode','Category','Brand','Stock','Reorder Pt','Buying Price KES','Selling Price KES','Margin %','Unit','Status','Tags'];
+    const rows = [headers];
+    products.forEach(p => {
+      rows.push([
+        p.name, p.sku, p.barcode, p.category, p.brand,
+        p.stockLevel ?? 0, p.reorderPoint ?? '',
+        p.buyingPrice ?? 0, p.sellingPrice ?? 0,
+        _margin(p).toFixed(1),
+        p.unit || 'pcs',
+        p.active === false ? 'Inactive' : 'Active',
+        (p.tags || []).join('; '),
+      ]);
+    });
+    return rows;
+  }
+
+  function bulkExport() {
+    if (!_selected.size) return;
+    const products = _productsForSelected();
+    _downloadCsv(_buildProductCsvRows(products), `products-selected-${new Date().toISOString().slice(0,10)}.csv`);
+    showToast(`Exported ${products.length} product(s)`, 'success');
+  }
+
+  function bulkPrintLabels() {
+    if (!_selected.size) return;
+    const products = _productsForSelected();
+    const win = window.open('', '_blank', 'width=750,height=650');
+    if (!win) { showToast('Enable popups to print labels', 'warn'); return; }
+    const _esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const labels = products.map(p => `
+      <div style="display:inline-block;width:180px;height:95px;border:1.5px solid #888;border-radius:6px;margin:4px;padding:8px 10px;font-family:monospace;page-break-inside:avoid;vertical-align:top;overflow:hidden">
+        <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.name)}</div>
+        <div style="font-size:10px;color:#666">${_esc(p.sku)}</div>
+        <div style="font-size:15px;font-weight:700;margin-top:6px">KES ${Number(p.sellingPrice||0).toLocaleString()}</div>
+        <div style="font-size:9px;color:#999;margin-top:3px">${_esc(p.barcode)}</div>
+      </div>`).join('');
+    win.document.write(`<!DOCTYPE html><html><head><title>Product Labels</title>
+      <style>body{background:#fff;color:#000;font-family:monospace}@media print{.no-print{display:none}}</style>
+      </head><body>
+      <div class="no-print" style="margin-bottom:10px">
+        <button onclick="window.print()" style="padding:8px 16px;cursor:pointer;margin-right:8px">🖨 Print</button>
+        <button onclick="window.close()" style="padding:8px 16px;cursor:pointer">✕ Close</button>
+        <span style="margin-left:12px;color:#666;font-size:12px">${products.length} label(s)</span>
+      </div>
+      <div>${labels}</div></body></html>`);
+    win.document.close();
+  }
+
+  function bulkTransfer() {
+    if (!_selected.size) return;
+    const modal = $('bulkTransferModal');
+    if (!modal) { showToast('Transfer modal not found', 'error'); return; }
+    const opts = _warehouses.length
+      ? _warehouses.map(w => `<option value="${escHtml(w.id)}">${escHtml(w.name)}</option>`).join('')
+      : '<option value="main">Main Warehouse</option>';
+    $('btm-from').innerHTML = opts;
+    $('btm-to').innerHTML   = opts;
+    $('btm-qty').value  = '1';
+    $('btm-note').value = '';
+    modal.classList.add('open');
+  }
+
+  function closeBulkTransferModal(e) {
+    if (e && e.target !== $('bulkTransferModal')) return;
+    $('bulkTransferModal')?.classList.remove('open');
+  }
+  window.closeBulkTransferModal = closeBulkTransferModal;
+
+  async function confirmBulkTransfer() {
+    const from = $('btm-from')?.value;
+    const to   = $('btm-to')?.value;
+    const qty  = Math.max(1, parseFloat($('btm-qty')?.value) || 1);
+    const note = $('btm-note')?.value.trim();
+    if (!from || !to || from === to) { showToast('Select two different warehouses', 'error'); return; }
+    let done = 0;
+    for (const id of _selected) {
+      try {
+        if (typeof SokoniInventory?.createTransfer === 'function') {
+          await SokoniInventory.createTransfer({ productId: id, fromWarehouseId: from, toWarehouseId: to, qty, note, status: 'pending' });
+        } else {
+          const db = firebase.firestore();
+          const tenantId = localStorage.getItem('pos_tenant_id') || localStorage.getItem('inv_tenant') || 'default';
+          await db.collection('tenants').doc(tenantId).collection('inventory_transfers').add({
+            productId: id, fromWarehouseId: from, toWarehouseId: to, qty, note,
+            status: 'pending', tenantId,
+            requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            requestedBy: firebase.auth().currentUser?.uid || null,
+          });
+        }
+        done++;
+      } catch (_) {}
+    }
+    showToast(`Queued ${done} transfer request(s)`, 'success');
+    closeBulkTransferModal();
+    clearSelection();
+  }
+  window.confirmBulkTransfer = confirmBulkTransfer;
+
+  function bulkDiscount() {
+    if (!_selected.size) return;
+    const modal = $('bulkPriceModal');
+    if (!modal) { showToast('Price modal not found', 'error'); return; }
+    $('bpm-count').textContent = _selected.size;
+    $('bpm-value').value = '';
+    modal.classList.add('open');
+  }
+
+  function closeBulkPriceModal(e) {
+    if (e && e.target !== $('bulkPriceModal')) return;
+    $('bulkPriceModal')?.classList.remove('open');
+  }
+  window.closeBulkPriceModal = closeBulkPriceModal;
+
+  async function confirmBulkPrice() {
+    const type  = $('bpm-type')?.value;
+    const val   = parseFloat($('bpm-value')?.value);
+    const field = $('bpm-field')?.value || 'sellingPrice';
+    if (!val || isNaN(val) || val < 0) { showToast('Enter a valid positive value', 'error'); return; }
+
+    const computeNew = (price) => {
+      price = price || 0;
+      if (type === 'pct_increase') return +Math.max(0, price * (1 + val / 100)).toFixed(2);
+      if (type === 'pct_decrease') return +Math.max(0, price * (1 - val / 100)).toFixed(2);
+      if (type === 'flat_set')     return +val.toFixed(2);
+      if (type === 'flat_add')     return +(price + val).toFixed(2);
+      if (type === 'flat_sub')     return +Math.max(0, price - val).toFixed(2);
+      return price;
+    };
+
+    let done = 0;
+    for (const p of _productsForSelected()) {
+      const update = {};
+      if (field === 'sellingPrice' || field === 'both') update.sellingPrice = computeNew(p.sellingPrice);
+      if (field === 'buyingPrice'  || field === 'both') update.buyingPrice  = computeNew(p.buyingPrice);
+      try { await SokoniInventory.updateProduct(p.id, update); done++; } catch (_) {}
+    }
+    showToast(`Updated prices for ${done} product(s)`, 'success');
+    closeBulkPriceModal();
+    clearSelection();
+    await loadProducts();
+  }
+  window.confirmBulkPrice = confirmBulkPrice;
+
+  async function bulkDuplicate() {
+    if (!_selected.size) return;
+    if (!confirm(`Duplicate ${_selected.size} product(s)? Copies will be created as inactive drafts with zero stock.`)) return;
+    let done = 0;
+    for (const p of _productsForSelected()) {
+      try {
+        const clone = Object.assign({}, p);
+        delete clone.id;
+        clone.name       = `${p.name} (Copy)`;
+        clone.sku        = `${p.sku || 'COPY'}-${Math.random().toString(36).toUpperCase().slice(2,5)}`;
+        clone.stockLevel = 0;
+        clone.active     = false;
+        clone.createdAt  = firebase.firestore.FieldValue.serverTimestamp();
+        await SokoniInventory.addProduct(clone);
+        done++;
+      } catch (_) {}
+    }
+    showToast(`Created ${done} draft copy/copies`, 'success');
+    clearSelection();
+    await loadProducts();
+  }
+
+  async function bulkArchive() {
+    if (!_selected.size) return;
+    if (!confirm(`Archive ${_selected.size} product(s)? They will be hidden from active views but not deleted.`)) return;
+    let done = 0;
+    for (const id of _selected) {
+      try { await SokoniInventory.updateProduct(id, { active: false }); done++; } catch (_) {}
+    }
+    showToast(`Archived ${done} product(s)`, 'warn');
+    clearSelection();
+    await loadProducts();
+  }
+
+  async function bulkDelete() {
+    if (!confirm(`Delete ${_selected.size} products? This cannot be undone.`)) return;
+    let done = 0;
+    for (const id of _selected) {
+      try { await SokoniInventory.deleteProduct(id); done++; } catch (_) {}
+    }
+    showToast(`Deleted ${done} product(s)`, 'success');
+    _selected.clear(); updateBulkBar(); await loadProducts();
+  }
+
+  function bulkCreatePO() {
+    if (!_selected.size) return;
+    const ids = [..._selected].join(',');
+    // Navigate to the requisitions tab, passing selected product IDs as a URL param
+    window.location.href = `inventory.html?prProducts=${encodeURIComponent(ids)}#purchases`;
+  }
+
+  window.bulkExport = bulkExport; window.bulkPrintLabels = bulkPrintLabels; window.bulkTransfer = bulkTransfer;
+  window.bulkDiscount = bulkDiscount; window.bulkDuplicate = bulkDuplicate; window.bulkArchive = bulkArchive;
+  window.bulkDelete = bulkDelete; window.bulkCreatePO = bulkCreatePO;
+
+  /* ── PRODUCT ACTIONS ── */
+  function editProduct(id) { openAddProductModal(id); }
+  async function deleteProduct(id) {
+    if (!confirm('Delete this product?')) return;
+    try { await SokoniInventory.deleteProduct(id); showToast('Product deleted', 'success'); loadProducts(); }
+    catch (e) { showToast('Delete failed: ' + e.message, 'error'); }
+  }
+  window.editProduct = editProduct; window.deleteProduct = deleteProduct;
+
+  function exportProducts() {
+    const products = _filtered.length ? _filtered : _allProducts;
+    if (!products.length) { showToast('No products to export', 'info'); return; }
+    _downloadCsv(_buildProductCsvRows(products), `products-all-${new Date().toISOString().slice(0,10)}.csv`);
+    showToast(`Exported ${products.length} product(s)`, 'success');
+  }
+  window.exportProducts = exportProducts;
+
+  function toggleFilterPanel() {
+    const wrap = $('filterSidebarWrap');
+    if (!wrap) return;
+    wrap.classList.toggle('visible');
+    if (window.innerWidth > 900) {
+      wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+    }
+  }
+  window.toggleFilterPanel = toggleFilterPanel;
+
+  function showImportModal() { showToast('Import modal — connect to bulk import engine', 'info'); }
+  window.showImportModal = showImportModal;
+
+  /* ── ADD/EDIT MODAL ── */
+  let _editId = null;
+
+  function openAddProductModal(id) {
+    _editId = id || null;
+    const modal = $('addProductModal');
+    if (!modal) return;
+    modal.classList.add('open');
+    if (id) loadProductForEdit(id);
+    else clearProductForm();
+  }
+  window.openAddProductModal = openAddProductModal;
+
+  function closeProductModal(e) {
+    if (e && e.target !== $('addProductModal')) return;
+    $('addProductModal')?.classList.remove('open');
+    _editId = null;
+  }
+  window.closeProductModal = closeProductModal;
+
+  function clearProductForm() {
+    ['pm-name','pm-sku','pm-brand','pm-desc','pm-barcode','pm-stock','pm-reorder','pm-maxstock','pm-buy','pm-sell','pm-wholesale'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    $('pm-margin').textContent = '—';
+  }
+
+  async function loadProductForEdit(id) {
+    try {
+      const p = _allProducts.find(x => x.id === id) || await SokoniInventory.getProduct(id);
+      if (!p) return;
+      $('pm-name').value      = p.name        || '';
+      $('pm-sku').value       = p.sku          || '';
+      $('pm-brand').value     = p.brand        || '';
+      $('pm-desc').value      = p.description  || '';
+      $('pm-barcode').value   = p.barcode      || '';
+      $('pm-stock').value     = p.stockLevel   || 0;
+      $('pm-reorder').value   = p.reorderPoint || '';
+      $('pm-buy').value       = p.buyingPrice  || '';
+      $('pm-sell').value      = p.sellingPrice || '';
+      updateMargin();
+    } catch (e) { showToast('Error loading product', 'error'); }
+  }
+
+  function generateSKU() {
+    const name  = $('pm-name').value.trim().toUpperCase().replace(/\s+/g,'').slice(0, 4) || 'PROD';
+    const rand  = Math.random().toString(36).toUpperCase().slice(2, 6);
+    $('pm-sku').value = `${name}-${rand}`;
+  }
+  window.generateSKU = generateSKU;
+
+  function updateMargin() {
+    const buy  = parseFloat($('pm-buy')?.value)  || 0;
+    const sell = parseFloat($('pm-sell')?.value) || 0;
+    const el   = $('pm-margin');
+    if (!el) return;
+    if (!buy || !sell) { el.textContent = '—'; return; }
+    const m = ((sell - buy) / sell * 100).toFixed(1);
+    el.textContent = m + '%';
+    el.style.color = m >= 30 ? 'var(--success)' : m >= 10 ? 'var(--warn)' : 'var(--danger)';
+  }
+  window.updateMargin = updateMargin;
+
+  function previewImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      $('imgPreview').src = ev.target.result;
+      $('imgPreview').style.display = 'block';
+      $('imgZoneIcon').style.display = 'none';
+      $('imgZoneLabel').style.display = 'none';
+      $('imgZone').classList.add('has-img');
+    };
+    reader.readAsDataURL(file);
+  }
+  window.previewImage = previewImage;
+
+  async function processScanImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const strip = $('scanStrip');
+    strip.classList.add('visible');
+    $('scanMsg').textContent = 'Detecting barcode…';
+    try {
+      if ('BarcodeDetector' in window) {
+        const bd  = new BarcodeDetector({ formats: ['ean_13','ean_8','qr_code','code_128','upc_a','upc_e'] });
+        const img = await createImageBitmap(file);
+        const codes = await bd.detect(img);
+        if (codes.length) {
+          $('pm-barcode').value = codes[0].rawValue;
+          $('scanMsg').textContent = `Barcode: ${codes[0].rawValue} — looking up product…`;
+          await aiLookupBarcode(codes[0].rawValue);
+          strip.classList.remove('visible');
+          return;
+        }
+      }
+      $('scanMsg').textContent = 'No barcode found — using AI image recognition…';
+      const b64 = await fileToB64(file);
+      await aiLookupImage(b64);
+    } catch (_) {
+      showToast('Scan failed — enter details manually', 'warn');
+    }
+    strip.classList.remove('visible');
+  }
+  window.processScanImage = processScanImage;
+
+  async function aiLookupBarcode(code) {
+    try {
+      const fn = firebase.functions().httpsCallable('inventoryAiQuery');
+      const { data } = await fn({ query: `Look up product with barcode ${code}. Return JSON: {name,brand,category,description,unit}` });
+      if (data?.result) applyAIProduct(JSON.parse(data.result));
+    } catch (_) {}
+  }
+
+  async function aiLookupImage(b64) {
+    try {
+      const fn = firebase.functions().httpsCallable('inventoryAiQuery');
+      const { data } = await fn({ query: 'Identify this product and return JSON: {name,brand,category,description,unit}', imageDataUrl: `data:image/jpeg;base64,${b64}` });
+      if (data?.result) applyAIProduct(JSON.parse(data.result));
+    } catch (_) {}
+  }
+
+  function applyAIProduct(obj) {
+    if (obj.name)        $('pm-name').value  = obj.name;
+    if (obj.brand)       $('pm-brand').value = obj.brand;
+    if (obj.description) $('pm-desc').value  = obj.description;
+    if (obj.unit && $('pm-unit')) {
+      const opt = Array.from($('pm-unit').options).find(o => o.value === obj.unit);
+      if (opt) $('pm-unit').value = obj.unit;
+    }
+    if (!$('pm-sku').value) generateSKU();
+    showToast('AI filled product details', 'success');
+  }
+
+  function openBarcodeCamera() { document.getElementById('scanInput').click(); }
+  window.openBarcodeCamera = openBarcodeCamera;
+
+  function fileToB64(file) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result.split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function saveProduct() {
+    const name = $('pm-name').value.trim();
+    if (!name) { showToast('Product name is required', 'error'); return; }
+    const data = {
+      name,
+      sku:          $('pm-sku').value.trim()    || generateSkuStr(name),
+      brand:        $('pm-brand').value.trim(),
+      description:  $('pm-desc').value.trim(),
+      barcode:      $('pm-barcode').value.trim(),
+      stockLevel:   parseFloat($('pm-stock').value)     || 0,
+      reorderPoint: parseFloat($('pm-reorder').value)   || 10,
+      maxStock:     parseFloat($('pm-maxstock').value)  || 500,
+      buyingPrice:  parseFloat($('pm-buy').value)       || 0,
+      sellingPrice: parseFloat($('pm-sell').value)      || 0,
+      unit:         $('pm-unit')?.value || 'pcs',
+      active:       true,
+    };
+    try {
+      $('pmSaveStatus').textContent = 'Saving…';
+      if (_editId) await SokoniInventory.updateProduct(_editId, data);
+      else         await SokoniInventory.addProduct(data);
+      showToast(_editId ? 'Product updated' : 'Product added', 'success');
+      $('addProductModal').classList.remove('open');
+      loadProducts();
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error');
+      $('pmSaveStatus').textContent = 'Save failed';
+    }
+  }
+  window.saveProduct = saveProduct;
+
+  function saveProductDraft() { showToast('Saved as draft', 'info'); }
+  window.saveProductDraft = saveProductDraft;
+
+  function generateSkuStr(name) {
+    return name.toUpperCase().replace(/\s+/g,'').slice(0,4) + '-' + Math.random().toString(36).toUpperCase().slice(2,6);
+  }
+
+  /* ── POPULATE DROPDOWNS ── */
+  function populateDropdowns() {
+    // Categories filter
+    const catUniq = [...new Set(_allProducts.map(p => p.category).filter(Boolean))].sort();
+    _categories = catUniq;
+    const catEl = $('categoryFilters');
+    if (catEl) catEl.innerHTML = catUniq.slice(0,8).map(c => `
+      <label class="inv-filter-option"><input type="checkbox" value="cat_${c.replace(/\s/g,'_')}" onchange="applyFilters()"> ${escHtml(c)}</label>
+    `).join('');
+
+    // Product modal category dropdown
+    const pmCat = $('pm-category');
+    if (pmCat) pmCat.innerHTML = `<option value="">Select category</option>` + catUniq.map(c => `<option>${escHtml(c)}</option>`).join('');
+
+    // Warehouse dropdown in modal
+    const pmWh = $('pm-warehouse');
+    if (pmWh && _warehouses.length) pmWh.innerHTML = _warehouses.map(w => `<option value="${escHtml(w.id)}">${escHtml(w.name)}</option>`).join('');
+
+    // Filter counts
+    const low = _allProducts.filter(p => (p.stockLevel||0) > 0 && (p.stockLevel||0) <= (p.reorderPoint||5)).length;
+    const oos = _allProducts.filter(p => (p.stockLevel||0) <= 0).length;
+    const act = _allProducts.filter(p => p.active !== false && (p.stockLevel||0) > (p.reorderPoint||5)).length;
+    if ($('fc-active'))   $('fc-active').textContent   = act;
+    if ($('fc-low'))      $('fc-low').textContent      = low;
+    if ($('fc-oos'))      $('fc-oos').textContent      = oos;
+    if ($('fc-inactive')) $('fc-inactive').textContent = _allProducts.filter(p => p.active === false).length;
+  }
+
+  /* ── LOAD ── */
+  async function loadProducts() {
+    try {
+      const [products, warehouses] = await Promise.all([
+        SokoniInventory.getProducts({ active: true }).catch(() => []),
+        SokoniInventory.getWarehouses().catch(() => []),
+      ]);
+      _allProducts = products;
+      _warehouses  = warehouses;
+      _filtered    = [...products];
+      $('productCount').textContent = products.length;
+      $('filteredCount').textContent = products.length;
+
+      // Apply URL query filter
+      const urlFilter = new URLSearchParams(window.location.search).get('filter');
+      if (urlFilter === 'low') {
+        _filtered = products.filter(p => (p.stockLevel||0) <= (p.reorderPoint||5) && (p.stockLevel||0) > 0);
+        $('mainTitle').textContent = 'Low Stock Products';
+        $('pageLabel').textContent = 'Low Stock';
+        $('filteredCount').textContent = _filtered.length;
+      }
+
+      populateDropdowns();
+      setView(_view, $(`vb-${_view}`) || $('vb-table'));
+
+      window.dispatchEvent(new Event('invReady'));
+    } catch (err) {
+      console.error('[products]', err);
+      showToast('Failed to load products', 'error');
+    }
+  }
+
+  /* ── INIT ── */
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user) { window.location.href = 'index.html'; return; }
+      SokoniInventory.init?.().then(loadProducts).catch(() => loadProducts());
+    });
+  } else {
+    SokoniInventory?.init?.().then(loadProducts).catch(() => loadProducts());
+  }
+
+  // Keyboard shortcut: N = new product
+  document.addEventListener('keydown', e => {
+    if (!document.querySelector('.inv-modal-overlay.open') && e.key === 'n' && !e.ctrlKey && !e.metaKey) {
+      const tag = document.activeElement?.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') openAddProductModal();
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

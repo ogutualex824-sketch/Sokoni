@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="description" content="SOKONI AI Creative Studio — AI-powered media creation, editing, and upload for your business">
+  <title>AI Creative Studio — SOKONI</title>
+
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/mobile.css">
+
+  <style>
+    /* ─── Layout ─────────────────────────────────────── */
+    :root {
+      --green:   #71ff00;
+      --green2:  #4fc800;
+      --bg:      #0d0d0d;
+      --bg2:     #111111;
+      --bg3:     #181818;
+      --border:  rgba(255,255,255,.07);
+      --text:    #ffffff;
+      --muted:   rgba(255,255,255,.42);
+      --radius:  14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui,-apple-system,sans-serif; overflow-x: hidden; }
+
+    /* ─── Header ─────────────────────────────────────── */
+    .cs-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,.6); position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    }
+    .cs-back { background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: .15s; }
+    .cs-back:hover { color: var(--text); background: rgba(255,255,255,.07); }
+    .cs-logo { font-size: 17px; font-weight: 800; color: var(--green); letter-spacing: -.3px; flex: 1; }
+    .cs-logo span { color: rgba(255,255,255,.5); font-weight: 400; font-size: 13px; display: block; margin-top: -2px; }
+    .cs-badge { background: var(--green); color: #000; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 20px; letter-spacing: .3px; }
+
+    /* ─── Tab bar ─────────────────────────────────────── */
+    .cs-tabs {
+      display: flex; overflow-x: auto; scrollbar-width: none;
+      border-bottom: 1px solid var(--border); background: var(--bg2);
+      padding: 0 16px; gap: 2px;
+    }
+    .cs-tabs::-webkit-scrollbar { display: none; }
+    .cs-tab {
+      flex-shrink: 0; padding: 14px 16px; font-size: 13px; font-weight: 700;
+      color: var(--muted); background: none; border: none; cursor: pointer;
+      border-bottom: 2px solid transparent; transition: .15s; letter-spacing: .2px;
+    }
+    .cs-tab:hover { color: var(--text); }
+    .cs-tab.active { color: var(--green); border-color: var(--green); }
+
+    /* ─── Pages ──────────────────────────────────────── */
+    .cs-page { display: none; padding: 24px 20px 100px; }
+    .cs-page.active { display: block; }
+    @media (min-width: 768px) { .cs-page { max-width: 1200px; margin: 0 auto; padding: 32px 32px 80px; } }
+
+    /* ─── Section headings ───────────────────────────── */
+    .cs-section-title { font-size: 13px; font-weight: 800; color: var(--muted); letter-spacing: .8px; text-transform: uppercase; margin-bottom: 14px; margin-top: 28px; }
+    .cs-section-title:first-child { margin-top: 0; }
+
+    /* ─── Upload zone ────────────────────────────────── */
+    .cs-drop-zone {
+      border: 2px dashed rgba(113,255,0,.28); border-radius: var(--radius);
+      padding: 48px 24px; text-align: center; cursor: pointer;
+      transition: .2s; background: rgba(113,255,0,.03); margin-bottom: 20px;
+    }
+    .cs-drop-zone:hover, .cs-drop-zone.drag { border-color: var(--green); background: rgba(113,255,0,.07); }
+    .cs-drop-ico { font-size: 44px; margin-bottom: 14px; }
+    .cs-drop-zone h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    .cs-drop-zone p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+    .cs-drop-zone p b { color: var(--green); }
+    .cs-drop-zone small { font-size: 11px; color: rgba(255,255,255,.25); }
+
+    /* ─── Upload queue ───────────────────────────────── */
+    .cs-queue { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .cs-q-item {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 11px; padding: 12px 14px;
+    }
+    .cs-q-thumb { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; background: #222; flex-shrink: 0; }
+    .cs-q-info { flex: 1; min-width: 0; }
+    .cs-q-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+    .cs-q-meta { font-size: 11px; color: var(--muted); }
+    .cs-q-bar { height: 3px; background: rgba(255,255,255,.08); border-radius: 2px; margin-top: 7px; overflow: hidden; }
+    .cs-q-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--green2)); border-radius: 2px; width: 0; transition: width .25s; }
+    .cs-q-status { font-size: 11px; font-weight: 700; flex-shrink: 0; }
+
+    /* ─── Buttons ────────────────────────────────────── */
+    .cs-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 13px 22px; border-radius: 11px; border: none; cursor: pointer;
+      font-size: 14px; font-weight: 800; letter-spacing: .3px; transition: .15s;
+    }
+    .cs-btn-primary { background: var(--green); color: #000; width: 100%; }
+    .cs-btn-primary:hover { background: #5de600; }
+    .cs-btn-primary:disabled { background: rgba(113,255,0,.22); color: rgba(0,0,0,.4); cursor: not-allowed; }
+    .cs-btn-sec { background: rgba(255,255,255,.07); color: var(--text); border: 1px solid var(--border); }
+    .cs-btn-sec:hover { background: rgba(255,255,255,.12); }
+    .cs-btn-sm { padding: 9px 16px; font-size: 12px; }
+
+    /* ─── Card grid ──────────────────────────────────── */
+    .cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .cs-card {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; cursor: pointer; transition: .2s;
+    }
+    .cs-card:hover { border-color: rgba(113,255,0,.35); transform: translateY(-2px); }
+    .cs-card-img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #1a1a1a; display: block; }
+    .cs-card-body { padding: 10px 12px; }
+    .cs-card-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cs-card-meta { font-size: 11px; color: var(--muted); }
+
+    /* ─── Tool panels ────────────────────────────────── */
+    .cs-tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .cs-tool-card {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px; text-align: center; cursor: pointer; transition: .2s;
+    }
+    .cs-tool-card:hover { border-color: var(--green); background: rgba(113,255,0,.05); }
+    .cs-tool-card .ico { font-size: 28px; margin-bottom: 8px; }
+    .cs-tool-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+    .cs-tool-card p { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+    /* ─── Form controls ──────────────────────────────── */
+    .cs-form { display: flex; flex-direction: column; gap: 14px; }
+    .cs-field label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .6px; text-transform: uppercase; margin-bottom: 6px; }
+    .cs-field input, .cs-field textarea, .cs-field select {
+      width: 100%; background: var(--bg3); color: var(--text);
+      border: 1px solid var(--border); border-radius: 9px;
+      padding: 11px 14px; font-size: 14px; font-family: inherit; outline: none; transition: .15s;
+    }
+    .cs-field input:focus, .cs-field textarea:focus, .cs-field select:focus { border-color: var(--green); }
+    .cs-field textarea { resize: vertical; min-height: 88px; }
+    .cs-field select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,.3)'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+    /* ─── Color picker row ───────────────────────────── */
+    .cs-color-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+    .cs-color-swatch { width: 36px; height: 36px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: .15s; }
+    .cs-color-swatch.active, .cs-color-swatch:hover { border-color: var(--green); transform: scale(1.12); }
+    .cs-color-input { width: 50px; height: 36px; border: none; padding: 2px; cursor: pointer; border-radius: 8px; background: none; }
+
+    /* ─── Brand Kit ──────────────────────────────────── */
+    .cs-kit-preview {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; margin-bottom: 20px;
+    }
+    .cs-kit-palette { display: flex; gap: 8px; margin-top: 10px; }
+    .cs-kit-swatch { width: 44px; height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.1); }
+
+    /* ─── Analytics cards ────────────────────────────── */
+    .cs-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+    @media (min-width: 600px) { .cs-stats-grid { grid-template-columns: repeat(4, 1fr); } }
+    .cs-stat-card {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px 14px;
+    }
+    .cs-stat-value { font-size: 26px; font-weight: 800; color: var(--green); }
+    .cs-stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 600; letter-spacing: .3px; }
+
+    /* ─── AI result panel ────────────────────────────── */
+    .cs-ai-result {
+      background: rgba(113,255,0,.05); border: 1px solid rgba(113,255,0,.2);
+      border-radius: var(--radius); padding: 18px; margin-top: 16px; display: none;
+    }
+    .cs-ai-result.show { display: block; }
+    .cs-ai-badge { display: inline-flex; align-items: center; gap: 5px; background: rgba(113,255,0,.12); color: var(--green); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 12px; }
+    .cs-ai-field { margin-bottom: 10px; }
+    .cs-ai-field-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 4px; }
+    .cs-ai-field-value { font-size: 14px; color: var(--text); line-height: 1.6; }
+    .cs-ai-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .cs-ai-tag { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--muted); }
+
+    /* ─── Story preview ──────────────────────────────── */
+    .cs-story-preview { width: 220px; aspect-ratio: 9/16; border-radius: 16px; overflow: hidden; background: #1a1a1a; border: 1px solid var(--border); margin: 0 auto 20px; }
+    .cs-story-preview canvas { width: 100%; height: 100%; display: block; }
+
+    /* ─── Offline banner ─────────────────────────────── */
+    #cs-offline-banner {
+      display: none; background: #222; padding: 10px 20px;
+      text-align: center; font-size: 13px; color: rgba(255,165,0,.9);
+      border-bottom: 1px solid rgba(255,165,0,.2);
+    }
+
+    /* ─── Processing overlay ─────────────────────────── */
+    #cs-processing {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.85); z-index: 9999;
+      align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+    }
+    #cs-processing.show { display: flex; }
+    .cs-spinner { width: 44px; height: 44px; border: 3px solid rgba(113,255,0,.15); border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .cs-proc-label { font-size: 15px; font-weight: 600; color: rgba(255,255,255,.7); }
+
+    /* ─── Canvas preview area ────────────────────────── */
+    .cs-canvas-wrap {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; display: flex; align-items: center; justify-content: center;
+      min-height: 280px; margin-bottom: 16px; overflow: hidden;
+    }
+    .cs-canvas-wrap canvas { max-width: 100%; max-height: 380px; border-radius: 6px; }
+
+    /* ─── Responsive two-column ──────────────────────── */
+    @media (min-width: 900px) {
+      .cs-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Offline indicator -->
+  <div id="cs-offline-banner">You're offline. Files will be queued and uploaded when you reconnect.</div>
+
+  <!-- Processing overlay -->
+  <div id="cs-processing">
+    <div class="cs-spinner"></div>
+    <div class="cs-proc-label" id="cs-proc-label">Processing…</div>
+  </div>
+
+  <!-- Header -->
+  <header class="cs-header">
+    <button class="cs-back" onclick="history.back()" aria-label="Back">&#8592;</button>
+    <div class="cs-logo">
+      AI Creative Studio
+      <span>SOKONI Media Engine</span>
+    </div>
+    <span class="cs-badge">AI</span>
+  </header>
+
+  <!-- Tab bar -->
+  <nav class="cs-tabs" role="tablist" aria-label="Studio sections">
+    <button class="cs-tab active" data-page="upload"    role="tab">Upload</button>
+    <button class="cs-tab"        data-page="studio"    role="tab">Studio</button>
+    <button class="cs-tab"        data-page="create"    role="tab">Create</button>
+    <button class="cs-tab"        data-page="stories"   role="tab">Stories</button>
+    <button class="cs-tab"        data-page="brandkit"  role="tab">Brand Kit</button>
+    <button class="cs-tab"        data-page="assistant" role="tab">AI Assistant</button>
+    <button class="cs-tab"        data-page="analytics" role="tab">Analytics</button>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE: Upload
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cs-page active" id="page-upload" role="tabpanel">
+    <!-- Drag-and-drop zone -->
+    <div class="cs-drop-zone" id="cs-drop-zone">
+      <div class="cs-drop-ico">&#128247;</div>
+      <h3>Drop files here or tap to browse</h3>
+      <p>Product images &bull; Store banners &bull; Event posters &bull; Videos &bull; Documents<br>
+         <b>Auto-compressed to WebP</b> &bull; Duplicate detection &bull; Offline queue</p>
+      <small>Images up to 15 MB &bull; Videos up to 150 MB &bull; Documents up to 20 MB</small>
+      <input type="file" id="cs-file-input" multiple accept="image/*,video/*,application/pdf,.doc,.docx" style="display:none">
+    </div>
+
+    <!-- Destination selector -->
+    <div class="cs-field" style="margin-bottom:16px">
+      <label for="cs-dest">Upload Destination</label>
+      <select id="cs-dest">
+        <option value="product">Product Images</option>
+        <option value="banner">Store Banners</option>
+        <option value="story">Stories</option>
+        <option value="logo">Logos &amp; Brand</option>
+        <option value="poster">Promotional Posters</option>
+        <option value="event">Events</option>
+        <option value="property">Property Photos</option>
+        <option value="vehicle">Vehicle Photos</option>
+        <option value="menu">Restaurant Menus</option>
+        <option value="receipt">Receipts</option>
+        <option value="document">Documents &amp; Certificates</option>
+        <option value="delivery">Delivery Proof</option>
+        <option value="community">Community</option>
+        <option value="ai">AI Generated</option>
+      </select>
+    </div>
+
+    <!-- Queue -->
+    <div class="cs-queue" id="cs-queue"></div>
+
+    <button class="cs-btn cs-btn-primary" id="cs-upload-btn" disabled>Upload Files</button>
+
+    <!-- History -->
+    <div class="cs-section-title" style="margin-top:36px">Recent Uploads</div>
+    <div class="cs-grid" id="cs-history-grid">
+      <div style="color:var(--muted);font-size:13px">Loading history…</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE: Studio (Quick Editor)
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cs-page" id="page-studio" role="tabpanel">
+    <div class="cs-two-col">
+      <!-- Left: Canvas + source image -->
+      <div>
+        <div class="cs-section-title">Source Image</div>
+        <div class="cs-drop-zone" id="studio-drop" style="padding:28px 16px;margin-bottom:14px">
+          <div class="cs-drop-ico" style="font-size:28px">&#128247;</div>
+          <p style="font-size:13px">Tap to load an image</p>
+          <input type="file" id="studio-file" accept="image/*" style="display:none">
+        </div>
+        <div class="cs-section-title">Preview</div>
+        <div class="cs-canvas-wrap" id="studio-canvas-wrap">
+          <canvas id="studio-canvas" width="600" height="400" style="opacity:.3"></canvas>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="cs-btn cs-btn-sec cs-btn-sm" id="studio-download" style="flex:1">Download</button>
+          <button class="cs-btn cs-btn-primary cs-btn-sm" id="studio-save" style="flex:1">Save to Library</button>
+        </div>
+      </div>
+
+      <!-- Right: Tools -->
+      <div>
+        <div class="cs-section-title">Tool</div>
+        <div class="cs-tool-grid" style="margin-bottom:16px">
+          <div class="cs-tool-card active" data-tool="enhance" id="t-enhance">
+            <div class="ico">&#10024;</div>
+            <h4>Enhance</h4>
+            <p>Brightness, contrast, saturation</p>
+          </div>
+          <div class="cs-tool-card" data-tool="rmbg" id="t-rmbg">
+            <div class="ico">&#9999;</div>
+            <h4>Remove BG</h4>
+            <p>One-click background cutout</p>
+          </div>
+          <div class="cs-tool-card" data-tool="crop" id="t-crop">
+            <div class="ico">&#9986;</div>
+            <h4>Smart Crop</h4>
+            <p>Rule-of-thirds crop</p>
+          </div>
+          <div class="cs-tool-card" data-tool="wm" id="t-wm">
+            <div class="ico">&#128204;</div>
+            <h4>Watermark</h4>
+            <p>Brand protection</p>
+          </div>
+        </div>
+
+        <div class="cs-form">
+          <div class="cs-field" id="ctrl-brightness">
+            <label>Brightness <span id="lbl-b">1.08</span></label>
+            <input type="range" min="0.5" max="1.8" step="0.01" value="1.08" id="rng-brightness">
+          </div>
+          <div class="cs-field" id="ctrl-contrast">
+            <label>Contrast <span id="lbl-c">1.12</span></label>
+            <input type="range" min="0.5" max="1.8" step="0.01" value="1.12" id="rng-contrast">
+          </div>
+          <div class="cs-field" id="ctrl-saturation">
+            <label>Saturation <span id="lbl-s">1.10</span></label>
+            <input type="range" min="0.0" max="2.0" step="0.01" value="1.10" id="rng-saturation">
+          </div>
+          <div class="cs-field" id="ctrl-crop-ratio" style="display:none">
+            <label>Crop Ratio</label>
+            <select id="crop-ratio">
+              <option value="square">Square (1:1)</option>
+              <option value="story">Story (9:16)</option>
+              <option value="portrait">Portrait (4:5)</option>
+              <option value="landscape">Landscape (16:9)</option>
+              <option value="banner">Banner (3:1)</option>
+              <option value="thumbnail">Thumbnail (4:3)</option>
+            </select>
+          </div>
+          <div class="cs-field" id="ctrl-wm-text" style="display:none">
+            <label>Watermark Text</label>
+            <input type="text" id="wm-text" placeholder="Your Store Name">
+          </div>
+          <div class="cs-field" id="ctrl-wm-pos" style="display:none">
+            <label>Position</label>
+            <select id="wm-pos">
+              <option value="bottom-right">Bottom Right</option>
+              <option value="bottom-left">Bottom Left</option>
+              <option value="top-right">Top Right</option>
+              <option value="center">Center</option>
+            </select>
+          </div>
+          <button class="cs-btn cs-btn-primary" id="studio-apply">Apply</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE: Create (Banners, Posters, Logos)
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cs-page" id="page-create" role="tabpanel">
+    <div class="cs-section-title">Choose Template Type</div>
+    <div class="cs-tool-grid">
+      <div class="cs-tool-card" data-creator="banner-homepage">
+        <div class="ico">&#127384;</div>
+        <h4>Homepage Banner</h4>
+        <p>1200×400 hero banner</p>
+      </div>
+      <div class="cs-tool-card" data-creator="banner-flashsale">
+        <div class="ico">&#128293;</div>
+        <h4>Flash Sale</h4>
+        <p>Sale banner with discount</p>
+      </div>
+      <div class="cs-tool-card" data-creator="banner-restaurant">
+        <div class="ico">&#127829;</div>
+        <h4>Restaurant</h4>
+        <p>Food delivery banner</p>
+      </div>
+      <div class="cs-tool-card" data-creator="banner-event">
+        <div class="ico">&#127881;</div>
+        <h4>Event Poster</h4>
+        <p>Event promotion</p>
+      </div>
+      <div class="cs-tool-card" data-creator="banner-property">
+        <div class="ico">&#127968;</div>
+        <h4>Property Listing</h4>
+        <p>Real estate banner</p>
+      </div>
+      <div class="cs-tool-card" data-creator="poster">
+        <div class="ico">&#128722;</div>
+        <h4>Product Poster</h4>
+        <p>Price + info + QR</p>
+      </div>
+    </div>
+
+    <!-- Creator form -->
+    <div id="creator-form" style="display:none">
+      <div class="cs-section-title" id="creator-form-title">Banner Details</div>
+      <div class="cs-two-col">
+        <div class="cs-form" id="creator-inputs">
+          <div class="cs-field">
+            <label>Title / Headline</label>
+            <input type="text" id="cr-title" placeholder="e.g. Summer Sale">
+          </div>
+          <div class="cs-field">
+            <label>Subtitle / Tagline</label>
+            <input type="text" id="cr-subtitle" placeholder="e.g. Up to 50% off everything">
+          </div>
+          <div class="cs-field">
+            <label>Price (KES)</label>
+            <input type="number" id="cr-price" placeholder="e.g. 2500">
+          </div>
+          <div class="cs-field" id="cr-discount-wrap">
+            <label>Discount Label</label>
+            <input type="text" id="cr-discount" placeholder="e.g. 30%">
+          </div>
+          <div class="cs-field">
+            <label>CTA Button Text</label>
+            <input type="text" id="cr-cta" placeholder="e.g. Shop Now">
+          </div>
+          <div class="cs-field">
+            <label>Product Image (optional)</label>
+            <div class="cs-drop-zone" id="cr-img-drop" style="padding:20px">
+              <input type="file" id="cr-img-input" accept="image/*" style="display:none">
+              <p style="font-size:13px">Tap to add product image</p>
+            </div>
+          </div>
+          <button class="cs-btn cs-btn-primary" id="creator-generate">Generate</button>
+          <button class="cs-btn cs-btn-sec cs-btn-sm" id="creator-cancel">Choose Different Template</button>
+        </div>
+        <div>
+          <div class="cs-section-title">Preview</div>
+          <div class="cs-canvas-wrap" id="creator-canvas-wrap">
+            <canvas id="creator-canvas" width="600" height="200"></canvas>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <button class="cs-btn cs-btn-sec cs-btn-sm" id="creator-download" style="flex:1">Download</button>
+            <button class="cs-btn cs-btn-primary cs-btn-sm" id="creator-save" style="flex:1">Save to Library</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE: Stories
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cs-page" id="page-stories" role="tabpanel">
+    <div class="cs-two-col">
+      <div>
+        <div class="cs-section-title">Story Settings</div>
+        <div class="cs-form">
+          <div class="cs-field">
+            <label>Template</label>
+            <select id="story-template">
+              <option value="dark">Dark</option>
+              <option value="gradient">Gradient</option>
+              <option value="brand">Brand Color</option>
+              <option value="minimal">Minimal</option>
+            </select>
+          </div>
+          <div class="cs-field">
+            <label>Product Image</label>
+            <div class="cs-drop-zone" id="story-img-drop" style="padding:20px">
+              <input type="file" id="story-img-input" accept="image/*" style="display:none">
+              <p style="font-size:13px">Tap to add product image</p>
+            </div>
+          </div>
+          <div class="cs-field">
+            <label>Title</label>
+            <input type="text" id="story-title" placeholder="Product or promotion name">
+          </div>
+          <div class="cs-field">
+            <label>Price (KES)</label>
+            <input type="number" id="story-price" placeholder="e.g. 1500">
+          </div>
+          <div class="cs-field">
+            <label>CTA Button</label>
+            <input type="text" id="story-cta" value="Buy Now">
+          </div>
+          <button class="cs-btn cs-btn-sec" id="story-preview-btn">Preview Story</button>
+          <button class="cs-btn cs-btn-primary" id="story-save-btn">Save Story</button>
+        </div>
+      </div>
+      <div>
+        <div class="cs-section-title">Story Preview</div>
+        <div class="cs-story-preview" id="story-preview">
+          <canvas id="story-canvas" width="1080" height="1920" style="width:100%;height:100%"></canvas>
+        </div>
+        <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">9:16 &bull; Shoppable story format</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE: Brand Kit
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cs-page" id="page-brandkit" role="tabpanel">
+    <div class="cs-section-title">Your Brand Preview</div>
+    <div class="cs-kit-preview" id="kit-preview">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px" id="kit-company-preview">Company Name</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px" id="kit-tagline-preview">Your tagline here</div>
+      <div class="cs-kit-palette" id="kit-palette">
+        <div class="cs-kit-swatch" id="kit-sw-primary" style="background:#71ff00"></div>
+        <div class="cs-kit-swatch" id="kit-sw-secondary" style="background:#222"></div>
+        <div class="cs-kit-swatch" id="kit-sw-bg" style="background:#111"></div>
+        <div class="cs-kit-swatch" id="kit-sw-text" style="background:#ffffff"></div>
+        <div class="cs-kit-swatch" id="kit-sw-accent" style="background:#4fc800"></div>
+      </div>
+    </div>
+
+    <div class="cs-two-col">
+      <div class="cs-form">
+        <div class="cs-section-title">Identity</div>
+        <div class="cs-field">
+          <label>Company / Store Name</label>
+          <input type="text" id="kit-company" placeholder="My Store">
+        </div>
+        <div class="cs-field">
+          <label>Tagline</label>
+          <input type="text" id="kit-tagline" placeholder="Quality you can trust">
+        </div>
+        <div class="cs-field">
+          <label>Watermark Text</label>
+          <input type="text" id="kit-watermark" placeholder="@mystore">
+        </div>
+        <div class="cs-field">
+          <label>Logo URL (or upload via Upload tab)</label>
+          <input type="url" id="kit-logo" placeholder="https://...">
+        </div>
+      </div>
+      <div>
+        <div class="cs-section-title">Colours</div>
+        <div class="cs-form">
+          <div class="cs-field">
+            <label>Primary</label>
+            <input type="color" id="kit-primary" value="#71ff00" class="cs-color-input" style="width:100%;height:44px">
+          </div>
+          <div class="cs-field">
+            <label>Secondary</label>
+            <input type="color" id="kit-secondary" value="#222222" class="cs-color-input" style="width:100%;height:44px">
+          </div>
+          <div class="cs-field">
+            <label>Background</label>
+            <input type="color" id="kit-bg" value="#111111" class="cs-color-input" style="width:100%;height:44px">
+          </div>
+          <div class="cs-field">
+            <label>Text</label>
+            <input type="color" id="kit-text-color" value="#ffffff" class="cs-color-input" style="width:100%;height:44px">
+          </div>
+          <div class="cs-field">
+            <label>Accent</label>
+            <input type="color" id="kit-accent" value="#4fc800" class="cs-color-input" style="width:100%;height:44px">
+          </div>
+          <div class="cs-field">
+            <label>Font Family</label>
+            <select id="kit-font">
+              <option value="system-ui,-apple-system,sans-serif">System Default</option>
+              <option value="'Inter',sans-serif">Inter</option>
+              <option value="'Roboto',sans-serif">Roboto</option>
+              <option value="'Poppins',sans-serif">Poppins</option>
+              <option value="Georgia,serif">Georgia (Serif)</option>
+            </select>
+          </div>
+          <div class="cs-field">
+            <label>Extract colors from Logo</label>
+            <div class="cs-drop-zone" id="kit-extract-drop" style="padding:16px">
+              <input type="file" id="kit-extract-input" accept="image/*" style="display:none">
+              <p style="font-size:12px">Upload logo to auto-extract brand colors</p>
+            </div>
+            <div class="cs-color-row" id="kit-extracted-colors" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="cs-btn cs-btn-primary" id="kit-save-btn" style="margin-top:20px">Save Brand Kit</button>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE: AI Product Assistant
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cs-page" id="page-assistant" role="tabpanel">
+    <div class="cs-section-title">AI Product Metadata Generator</div>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.7">
+      Upload a product image. The AI will generate a title, description, category, tags,
+      SEO keywords, alt text, and suggested pricing. Review and approve before publishing.
+    </p>
+
+    <div class="cs-two-col">
+      <div>
+        <div class="cs-drop-zone" id="assist-drop">
+          <div class="cs-drop-ico">&#129302;</div>
+          <h3>Upload Product Image</h3>
+          <p>The AI analyses the image to generate all product metadata</p>
+          <input type="file" id="assist-input" accept="image/*" style="display:none">
+        </div>
+        <div id="assist-preview-wrap" style="display:none;margin-top:14px">
+          <img id="assist-preview-img" src="" alt="Product" style="width:100%;border-radius:var(--radius);max-height:280px;object-fit:contain;background:var(--bg3)">
+        </div>
+        <div class="cs-field" style="margin-top:14px">
+          <label>Category Hint (optional)</label>
+          <select id="assist-category">
+            <option value="">Auto-detect</option>
+            <option value="electronics">Electronics</option>
+            <option value="fashion">Fashion &amp; Clothing</option>
+            <option value="food">Food &amp; Beverages</option>
+            <option value="beauty">Beauty &amp; Health</option>
+            <option value="home">Home &amp; Garden</option>
+            <option value="sports">Sports &amp; Fitness</option>
+            <option value="automotive">Automotive</option>
+            <option value="books">Books &amp; Education</option>
+            <option value="toys">Toys &amp; Kids</option>
+            <option value="property">Property</option>
+          </select>
+        </div>
+        <button class="cs-btn cs-btn-primary" id="assist-generate-btn" disabled>Generate with AI</button>
+      </div>
+
+      <div>
+        <div class="cs-ai-result" id="assist-result">
+          <div class="cs-ai-badge">&#129302; AI Prediction &bull; <span id="assist-confidence">medium confidence</span></div>
+
+          <div class="cs-ai-field">
+            <div class="cs-ai-field-label">Product Title</div>
+            <input type="text" id="assist-r-title" class="cs-field input" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:14px">
+          </div>
+          <div class="cs-ai-field">
+            <div class="cs-ai-field-label">Description</div>
+            <textarea id="assist-r-desc" rows="4" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:14px;resize:vertical;font-family:inherit"></textarea>
+          </div>
+          <div class="cs-ai-field">
+            <div class="cs-ai-field-label">Category</div>
+            <input type="text" id="assist-r-category" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:14px">
+          </div>
+          <div class="cs-ai-field">
+            <div class="cs-ai-field-label">Tags</div>
+            <div class="cs-ai-tags" id="assist-r-tags"></div>
+          </div>
+          <div class="cs-ai-field">
+            <div class="cs-ai-field-label">SEO Keywords</div>
+            <input type="text" id="assist-r-keywords" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:14px">
+          </div>
+          <div class="cs-ai-field">
+            <div class="cs-ai-field-label">Alt Text</div>
+            <input type="text" id="assist-r-alt" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:14px">
+          </div>
+          <div class="cs-ai-field">
+            <div class="cs-ai-field-label">Suggested Price (KES)</div>
+            <input type="number" id="assist-r-price" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:14px">
+          </div>
+
+          <button class="cs-btn cs-btn-primary" id="assist-copy-btn" style="margin-top:10px">Copy to Clipboard</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PAGE: Analytics
+  ═══════════════════════════════════════════════════════════ -->
+  <section class="cs-page" id="page-analytics" role="tabpanel">
+    <div class="cs-section-title">Media Performance</div>
+    <div class="cs-stats-grid">
+      <div class="cs-stat-card">
+        <div class="cs-stat-value" id="stat-uploads">—</div>
+        <div class="cs-stat-label">Total Uploads</div>
+      </div>
+      <div class="cs-stat-card">
+        <div class="cs-stat-value" id="stat-savings">—</div>
+        <div class="cs-stat-label">Avg Compression</div>
+      </div>
+      <div class="cs-stat-card">
+        <div class="cs-stat-value" id="stat-saved-mb">—</div>
+        <div class="cs-stat-label">Storage Saved</div>
+      </div>
+      <div class="cs-stat-card">
+        <div class="cs-stat-value" id="stat-types">—</div>
+        <div class="cs-stat-label">Asset Types</div>
+      </div>
+    </div>
+
+    <div class="cs-section-title">Storage Breakdown</div>
+    <div id="analytics-breakdown" style="display:flex;flex-direction:column;gap:10px">
+      <div style="color:var(--muted);font-size:13px">Loading analytics…</div>
+    </div>
+
+    <div class="cs-section-title" style="margin-top:28px">Recent Assets</div>
+    <div class="cs-grid" id="analytics-library-grid">
+      <div style="color:var(--muted);font-size:13px">Loading library…</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Scripts
+  ═══════════════════════════════════════════════════════════ -->
+  <script type="module" src="/firebase.js"></script>
+  <script src="/sokoni-upload.js" type="module"></script>
+  <script src="/sokoni-media.js" defer></script>
+  <script src="/sokoni-creative.js" defer></script>
+  <script src="/sw-register.js" defer></script>
+
+  <script>
+    /* ─── Helpers ─────────────────────────────────────── */
+    function esc(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function fmtBytes(b) {
+      if (!b) return '0 B';
+      if (b < 1024)    return b + ' B';
+      if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+      return (b / 1048576).toFixed(1) + ' MB';
+    }
+    function showProc(label = 'Processing…') {
+      document.getElementById('cs-proc-label').textContent = label;
+      document.getElementById('cs-processing').classList.add('show');
+    }
+    function hideProc() { document.getElementById('cs-processing').classList.remove('show'); }
+
+    /* ─── Offline banner ──────────────────────────────── */
+    function updateOnlineStatus() {
+      document.getElementById('cs-offline-banner').style.display = navigator.onLine ? 'none' : 'block';
+    }
+    window.addEventListener('online',  updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+
+    /* ─── Tab navigation ──────────────────────────────── */
+    document.querySelectorAll('.cs-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.cs-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.cs-page').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('page-' + tab.dataset.page)?.classList.add('active');
+        if (tab.dataset.page === 'analytics') loadAnalytics();
+        if (tab.dataset.page === 'brandkit')  loadBrandKit();
+        if (tab.dataset.page === 'upload')    loadHistory();
+      });
+    });
+
+    /* ═══════════════════════════════════════════════════
+       UPLOAD PAGE
+    ═══════════════════════════════════════════════════ */
+    let _uploadFiles = [];
+    const dropZone  = document.getElementById('cs-drop-zone');
+    const fileInput  = document.getElementById('cs-file-input');
+    const queueEl   = document.getElementById('cs-queue');
+    const uploadBtn = document.getElementById('cs-upload-btn');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault(); dropZone.classList.remove('drag');
+      addToQueue(Array.from(e.dataTransfer.files));
+    });
+    fileInput.addEventListener('change', () => addToQueue(Array.from(fileInput.files)));
+
+    function addToQueue(files) {
+      files.forEach(f => {
+        if (_uploadFiles.some(x => x.name === f.name && x.size === f.size)) return;
+        const idx = _uploadFiles.length;
+        _uploadFiles.push(f);
+        const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : '';
+        const row = document.createElement('div');
+        row.className = 'cs-q-item';
+        row.id        = `qi-${idx}`;
+        row.innerHTML = `
+          <img class="cs-q-thumb" src="${esc(preview)}" alt="" onerror="this.style.opacity='.15'">
+          <div class="cs-q-info">
+            <div class="cs-q-name">${esc(f.name)}</div>
+            <div class="cs-q-meta">${fmtBytes(f.size)} &bull; ${f.type || 'file'}</div>
+            <div class="cs-q-bar"><div class="cs-q-fill" id="qf-${idx}"></div></div>
+          </div>
+          <div class="cs-q-status" id="qs-${idx}" style="color:var(--muted)">Ready</div>`;
+        queueEl.appendChild(row);
+      });
+      uploadBtn.disabled = _uploadFiles.length === 0;
+    }
+
+    uploadBtn.addEventListener('click', async () => {
+      const media = window.SokoniMedia;
+      if (!media) { alert('Media engine not loaded yet. Please refresh.'); return; }
+      const dest = document.getElementById('cs-dest').value;
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Uploading…';
+      let done = 0;
+
+      for (let i = 0; i < _uploadFiles.length; i++) {
+        const st = document.getElementById(`qs-${i}`);
+        const fl = document.getElementById(`qf-${i}`);
+        if (st) { st.textContent = '…'; st.style.color = 'var(--green)'; }
+        try {
+          await media.upload(_uploadFiles[i], dest, {
+            onProgress: pct => { if (fl) fl.style.width = pct + '%'; },
+          });
+          if (fl) fl.style.width = '100%';
+          if (st) st.textContent = 'Done';
+          done++;
+        } catch (err) {
+          if (st) { st.textContent = 'Error'; st.style.color = '#ff4444'; }
+        }
+      }
+
+      uploadBtn.textContent = `Done (${done}/${_uploadFiles.length})`;
+      setTimeout(() => {
+        uploadBtn.textContent = 'Upload Files';
+        uploadBtn.disabled = true;
+        _uploadFiles = [];
+        queueEl.innerHTML = '';
+        loadHistory();
+      }, 3000);
+    });
+
+    async function loadHistory() {
+      const media = window.SokoniMedia;
+      if (!media) return;
+      const grid = document.getElementById('cs-history-grid');
+      grid.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+      const assets = await media.getAssets({ limit: 12 });
+      if (!assets.length) {
+        grid.innerHTML = '<div style="color:var(--muted);font-size:13px">No uploads yet.</div>';
+        return;
+      }
+      grid.innerHTML = assets.map(a => `
+        <div class="cs-card">
+          <img class="cs-card-img" src="${esc(a.thumbUrl || a.url)}" alt="${esc(a.fileName)}" loading="lazy" onerror="this.style.opacity='.1'">
+          <div class="cs-card-body">
+            <div class="cs-card-title">${esc(a.fileName || 'Asset')}</div>
+            <div class="cs-card-meta">${esc(a.dest)} &bull; ${a.savings ? a.savings + '% saved' : fmtBytes(a.storedSize)}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    /* ═══════════════════════════════════════════════════
+       STUDIO PAGE
+    ═══════════════════════════════════════════════════ */
+    let _studioFile    = null;
+    let _studioCanvas  = null;
+    let _studioTool    = 'enhance';
+
+    const studioCanvas = document.getElementById('studio-canvas');
+
+    document.getElementById('studio-drop').addEventListener('click', () => document.getElementById('studio-file').click());
+    document.getElementById('studio-file').addEventListener('change', async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      _studioFile = f;
+      showProc('Loading image…');
+      try {
+        const c = await SokoniCreative.enhanceProduct(f, {
+          brightness: 1.08, contrast: 1.12, saturation: 1.1, shadow: true,
+        });
+        _studioCanvas = c;
+        _renderStudio(c);
+      } catch (err) { alert('Load failed: ' + err.message); }
+      hideProc();
+    });
+
+    document.querySelectorAll('.cs-tool-card[data-tool]').forEach(card => {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.cs-tool-card[data-tool]').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        _studioTool = card.dataset.tool;
+        /* Show/hide relevant controls */
+        document.getElementById('ctrl-brightness').style.display = _studioTool === 'enhance' ? '' : 'none';
+        document.getElementById('ctrl-contrast').style.display   = _studioTool === 'enhance' ? '' : 'none';
+        document.getElementById('ctrl-saturation').style.display = _studioTool === 'enhance' ? '' : 'none';
+        document.getElementById('ctrl-crop-ratio').style.display = _studioTool === 'crop'    ? '' : 'none';
+        document.getElementById('ctrl-wm-text').style.display    = _studioTool === 'wm'      ? '' : 'none';
+        document.getElementById('ctrl-wm-pos').style.display     = _studioTool === 'wm'      ? '' : 'none';
+      });
+    });
+
+    ['brightness', 'contrast', 'saturation'].forEach(id => {
+      document.getElementById(`rng-${id}`).addEventListener('input', e => {
+        document.getElementById(`lbl-${id[0]}`).textContent = parseFloat(e.target.value).toFixed(2);
+      });
+    });
+
+    document.getElementById('studio-apply').addEventListener('click', async () => {
+      if (!_studioFile && !_studioCanvas) { alert('Load an image first.'); return; }
+      const src = _studioFile || _studioCanvas;
+      showProc('Applying ' + _studioTool + '…');
+      try {
+        let result;
+        if (_studioTool === 'rmbg') {
+          result = await SokoniCreative.removeBackground(src);
+        } else if (_studioTool === 'crop') {
+          result = await SokoniCreative.smartCrop(src, document.getElementById('crop-ratio').value);
+        } else if (_studioTool === 'wm') {
+          result = _studioCanvas || await _loadCanvasFromFile(src);
+          result = await SokoniCreative.applyWatermark(result, {
+            text:     document.getElementById('wm-text').value || 'SOKONI',
+            position: document.getElementById('wm-pos').value,
+            opacity:  0.28,
+          });
+        } else {
+          result = await SokoniCreative.enhanceProduct(src, {
+            brightness: parseFloat(document.getElementById('rng-brightness').value),
+            contrast:   parseFloat(document.getElementById('rng-contrast').value),
+            saturation: parseFloat(document.getElementById('rng-saturation').value),
+            shadow: true,
+          });
+        }
+        _studioCanvas = result;
+        _renderStudio(result);
+      } catch (e) { alert('Processing failed: ' + e.message); }
+      hideProc();
+    });
+
+    function _renderStudio(c) {
+      const maxW = 700, maxH = 400;
+      const aspect = c.width / c.height;
+      let w = maxW, h = Math.round(w / aspect);
+      if (h > maxH) { h = maxH; w = Math.round(h * aspect); }
+      studioCanvas.width  = w;
+      studioCanvas.height = h;
+      studioCanvas.style.opacity = '1';
+      studioCanvas.getContext('2d').drawImage(c, 0, 0, w, h);
+    }
+
+    async function _loadCanvasFromFile(f) {
+      const c = SokoniCreative.enhanceProduct(f, { brightness: 1, contrast: 1, saturation: 1, shadow: false });
+      return c;
+    }
+
+    document.getElementById('studio-download').addEventListener('click', () => {
+      if (!_studioCanvas) { alert('Nothing to download.'); return; }
+      SokoniCreative.downloadCanvas(_studioCanvas, 'sokoni-studio');
+    });
+
+    document.getElementById('studio-save').addEventListener('click', async () => {
+      if (!_studioCanvas) { alert('Nothing to save.'); return; }
+      showProc('Saving to library…');
+      try {
+        await SokoniCreative.exportAndUpload(_studioCanvas, 'ai', 'sokoni-studio');
+        alert('Saved to media library!');
+      } catch (e) { alert('Save failed: ' + e.message); }
+      hideProc();
+    });
+
+    /* ═══════════════════════════════════════════════════
+       CREATE PAGE
+    ═══════════════════════════════════════════════════ */
+    let _activeCreator = null;
+    let _crProductImg  = null;
+    let _creatorCanvas = null;
+
+    document.querySelectorAll('.cs-tool-card[data-creator]').forEach(card => {
+      card.addEventListener('click', () => {
+        _activeCreator = card.dataset.creator;
+        document.getElementById('creator-form-title').textContent =
+          card.querySelector('h4').textContent + ' Details';
+        document.getElementById('creator-form').style.display = '';
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        /* Show/hide discount field */
+        document.getElementById('cr-discount-wrap').style.display =
+          _activeCreator === 'banner-flashsale' ? '' : 'none';
+      });
+    });
+
+    document.getElementById('creator-cancel').addEventListener('click', () => {
+      document.getElementById('creator-form').style.display = 'none';
+      _activeCreator = null;
+    });
+
+    document.getElementById('cr-img-drop').addEventListener('click', () =>
+      document.getElementById('cr-img-input').click());
+    document.getElementById('cr-img-input').addEventListener('change', e => {
+      _crProductImg = e.target.files[0];
+      document.getElementById('cr-img-drop').innerHTML =
+        `<p style="font-size:13px;color:var(--green)">&#10003; ${esc(_crProductImg.name)}</p>
+         <input type="file" id="cr-img-input" accept="image/*" style="display:none">`;
+    });
+
+    document.getElementById('creator-generate').addEventListener('click', async () => {
+      if (!_activeCreator) return;
+      showProc('Generating ' + _activeCreator + '…');
+      try {
+        const kit = await SokoniCreative.getBrandKit();
+        const opts = {
+          title:      document.getElementById('cr-title').value,
+          subtitle:   document.getElementById('cr-subtitle').value,
+          price:      document.getElementById('cr-price').value,
+          discount:   document.getElementById('cr-discount').value,
+          cta:        document.getElementById('cr-cta').value || 'Shop Now',
+          brandKit:   kit,
+          productImg: _crProductImg,
+        };
+
+        let canvas;
+        if (_activeCreator === 'poster') {
+          canvas = await SokoniCreative.generatePoster(opts);
+        } else {
+          const template = _activeCreator.replace('banner-', '');
+          canvas = await SokoniCreative.generateBanner({ ...opts, template });
+        }
+        _creatorCanvas = canvas;
+
+        /* Render preview */
+        const preview = document.getElementById('creator-canvas');
+        const maxW = 560, maxH = 300;
+        const aspect = canvas.width / canvas.height;
+        let w = maxW, h = Math.round(w / aspect);
+        if (h > maxH) { h = maxH; w = Math.round(h * aspect); }
+        preview.width  = w;
+        preview.height = h;
+        preview.getContext('2d').drawImage(canvas, 0, 0, w, h);
+      } catch (e) { alert('Generation failed: ' + e.message); }
+      hideProc();
+    });
+
+    document.getElementById('creator-download').addEventListener('click', () => {
+      if (!_creatorCanvas) { alert('Generate something first.'); return; }
+      SokoniCreative.downloadCanvas(_creatorCanvas, _activeCreator || 'sokoni-creative');
+    });
+
+    document.getElementById('creator-save').addEventListener('click', async () => {
+      if (!_creatorCanvas) { alert('Generate something first.'); return; }
+      showProc('Saving…');
+      try {
+        await SokoniCreative.exportAndUpload(_creatorCanvas, 'ai', _activeCreator || 'creative');
+        alert('Saved to your media library!');
+      } catch (e) { alert('Save failed: ' + e.message); }
+      hideProc();
+    });
+
+    /* ═══════════════════════════════════════════════════
+       STORIES PAGE
+    ═══════════════════════════════════════════════════ */
+    let _storyImg    = null;
+    let _storyCanvas = null;
+
+    document.getElementById('story-img-drop').addEventListener('click', () =>
+      document.getElementById('story-img-input').click());
+    document.getElementById('story-img-input').addEventListener('change', e => {
+      _storyImg = e.target.files[0];
+      document.querySelector('#story-img-drop p').textContent = '✓ ' + _storyImg.name;
+    });
+
+    document.getElementById('story-preview-btn').addEventListener('click', async () => {
+      showProc('Composing story…');
+      try {
+        const kit = await SokoniCreative.getBrandKit();
+        const c   = await SokoniCreative.createStory({
+          productImg: _storyImg,
+          title:      document.getElementById('story-title').value,
+          price:      document.getElementById('story-price').value,
+          cta:        document.getElementById('story-cta').value,
+          template:   document.getElementById('story-template').value,
+          brandKit:   kit,
+        });
+        _storyCanvas = c;
+        const preview = document.getElementById('story-canvas');
+        preview.width  = c.width;
+        preview.height = c.height;
+        preview.getContext('2d').drawImage(c, 0, 0);
+      } catch (e) { alert('Story creation failed: ' + e.message); }
+      hideProc();
+    });
+
+    document.getElementById('story-save-btn').addEventListener('click', async () => {
+      if (!_storyCanvas) {
+        document.getElementById('story-preview-btn').click();
+        await new Promise(r => setTimeout(r, 2000));
+        if (!_storyCanvas) return;
+      }
+      showProc('Saving story…');
+      try {
+        await SokoniCreative.exportAndUpload(_storyCanvas, 'story', 'sokoni-story');
+        alert('Story saved to library!');
+      } catch (e) { alert('Save failed: ' + e.message); }
+      hideProc();
+    });
+
+    /* ═══════════════════════════════════════════════════
+       BRAND KIT PAGE
+    ═══════════════════════════════════════════════════ */
+    async function loadBrandKit() {
+      const kit = await SokoniCreative.getBrandKit();
+      document.getElementById('kit-company').value   = kit.companyName   || '';
+      document.getElementById('kit-tagline').value   = kit.tagline       || '';
+      document.getElementById('kit-watermark').value = kit.watermarkText || '';
+      document.getElementById('kit-logo').value      = kit.logoUrl       || '';
+      document.getElementById('kit-primary').value   = kit.primaryColor  || '#71ff00';
+      document.getElementById('kit-secondary').value = kit.secondaryColor|| '#222222';
+      document.getElementById('kit-bg').value        = kit.bgColor       || '#111111';
+      document.getElementById('kit-text-color').value= kit.textColor     || '#ffffff';
+      document.getElementById('kit-accent').value    = kit.accentColor   || '#4fc800';
+      updateKitPreview(kit);
+    }
+
+    function updateKitPreview(kit) {
+      document.getElementById('kit-company-preview').textContent   = kit.companyName || 'Company Name';
+      document.getElementById('kit-tagline-preview').textContent   = kit.tagline     || 'Your tagline here';
+      document.getElementById('kit-sw-primary').style.background   = kit.primaryColor   || '#71ff00';
+      document.getElementById('kit-sw-secondary').style.background = kit.secondaryColor || '#222';
+      document.getElementById('kit-sw-bg').style.background        = kit.bgColor        || '#111';
+      document.getElementById('kit-sw-text').style.background      = kit.textColor      || '#fff';
+      document.getElementById('kit-sw-accent').style.background    = kit.accentColor    || '#4fc800';
+    }
+
+    ['primary', 'secondary', 'bg', 'text-color', 'accent'].forEach(id => {
+      document.getElementById(`kit-${id}`).addEventListener('input', () => {
+        updateKitPreview({
+          primaryColor:   document.getElementById('kit-primary').value,
+          secondaryColor: document.getElementById('kit-secondary').value,
+          bgColor:        document.getElementById('kit-bg').value,
+          textColor:      document.getElementById('kit-text-color').value,
+          accentColor:    document.getElementById('kit-accent').value,
+          companyName:    document.getElementById('kit-company').value,
+          tagline:        document.getElementById('kit-tagline').value,
+        });
+      });
+    });
+
+    document.getElementById('kit-save-btn').addEventListener('click', async () => {
+      showProc('Saving brand kit…');
+      try {
+        await SokoniCreative.saveBrandKit({
+          companyName:    document.getElementById('kit-company').value,
+          tagline:        document.getElementById('kit-tagline').value,
+          watermarkText:  document.getElementById('kit-watermark').value,
+          logoUrl:        document.getElementById('kit-logo').value,
+          primaryColor:   document.getElementById('kit-primary').value,
+          secondaryColor: document.getElementById('kit-secondary').value,
+          bgColor:        document.getElementById('kit-bg').value,
+          textColor:      document.getElementById('kit-text-color').value,
+          accentColor:    document.getElementById('kit-accent').value,
+          fontFamily:     document.getElementById('kit-font').value,
+        });
+        alert('Brand kit saved!');
+      } catch (e) { alert('Save failed: ' + e.message); }
+      hideProc();
+    });
+
+    document.getElementById('kit-extract-drop').addEventListener('click', () =>
+      document.getElementById('kit-extract-input').click());
+    document.getElementById('kit-extract-input').addEventListener('change', async e => {
+      const f = e.target.files[0]; if (!f) return;
+      showProc('Extracting colours…');
+      try {
+        const colors = await SokoniCreative.extractBrandColors(f);
+        const el = document.getElementById('kit-extracted-colors');
+        el.innerHTML = colors.map(c =>
+          `<div class="cs-kit-swatch" style="background:${esc(c)};cursor:pointer;width:36px;height:36px;border-radius:50%;border:2px solid rgba(255,255,255,.1)" title="${esc(c)}" onclick="document.getElementById('kit-primary').value='${esc(c)}';document.getElementById('kit-primary').dispatchEvent(new Event('input'))"></div>`
+        ).join('');
+      } catch (e) { alert('Extraction failed: ' + e.message); }
+      hideProc();
+    });
+
+    /* ═══════════════════════════════════════════════════
+       AI ASSISTANT PAGE
+    ═══════════════════════════════════════════════════ */
+    let _assistFile = null;
+
+    const assistDrop = document.getElementById('assist-drop');
+    const assistInput = document.getElementById('assist-input');
+    assistDrop.addEventListener('click', () => assistInput.click());
+    assistDrop.addEventListener('dragover', e => { e.preventDefault(); assistDrop.classList.add('drag'); });
+    assistDrop.addEventListener('dragleave', () => assistDrop.classList.remove('drag'));
+    assistDrop.addEventListener('drop', e => {
+      e.preventDefault(); assistDrop.classList.remove('drag');
+      loadAssistFile(e.dataTransfer.files[0]);
+    });
+    assistInput.addEventListener('change', () => loadAssistFile(assistInput.files[0]));
+
+    function loadAssistFile(f) {
+      if (!f || !f.type.startsWith('image/')) return;
+      _assistFile = f;
+      const preview = document.getElementById('assist-preview-img');
+      preview.src = URL.createObjectURL(f);
+      document.getElementById('assist-preview-wrap').style.display = '';
+      document.getElementById('assist-generate-btn').disabled = false;
+    }
+
+    document.getElementById('assist-generate-btn').addEventListener('click', async () => {
+      if (!_assistFile) return;
+      showProc('Analysing product image…');
+      try {
+        /* Upload image first to get URL */
+        const asset = await window.SokoniMedia.upload(_assistFile, 'product', {
+          onProgress: () => {},
+        });
+        const result = await SokoniCreative.generateProductMetadata(asset.url, {
+          category: document.getElementById('assist-category').value,
+        });
+        const v = result.value;
+
+        document.getElementById('assist-r-title').value     = v.title       || '';
+        document.getElementById('assist-r-desc').value      = v.description || '';
+        document.getElementById('assist-r-category').value  = v.category    || '';
+        document.getElementById('assist-r-keywords').value  = (v.keywords   || []).join(', ');
+        document.getElementById('assist-r-alt').value       = v.altText     || '';
+        document.getElementById('assist-r-price').value     = v.suggestedPrice || '';
+        document.getElementById('assist-confidence').textContent = result.confidence + ' confidence';
+
+        const tagsEl = document.getElementById('assist-r-tags');
+        tagsEl.innerHTML = (v.tags || []).map(t =>
+          `<span class="cs-ai-tag">${esc(t)}</span>`).join('');
+
+        document.getElementById('assist-result').classList.add('show');
+      } catch (e) { alert('AI analysis failed: ' + e.message); }
+      hideProc();
+    });
+
+    document.getElementById('assist-copy-btn').addEventListener('click', () => {
+      const data = {
+        title:       document.getElementById('assist-r-title').value,
+        description: document.getElementById('assist-r-desc').value,
+        category:    document.getElementById('assist-r-category').value,
+        keywords:    document.getElementById('assist-r-keywords').value,
+        altText:     document.getElementById('assist-r-alt').value,
+        price:       document.getElementById('assist-r-price').value,
+      };
+      navigator.clipboard?.writeText(JSON.stringify(data, null, 2))
+        .then(() => alert('Copied to clipboard!'))
+        .catch(() => alert('Copy failed — select text manually.'));
+    });
+
+    /* ═══════════════════════════════════════════════════
+       ANALYTICS PAGE
+    ═══════════════════════════════════════════════════ */
+    async function loadAnalytics() {
+      const media = window.SokoniMedia;
+      if (!media) return;
+      const stats = await media.getStats();
+
+      document.getElementById('stat-uploads').textContent  = stats.uploads   || 0;
+      document.getElementById('stat-savings').textContent  = (stats.avgSavings || 0) + '%';
+      document.getElementById('stat-saved-mb').textContent = fmtBytes(stats.storageSaved || 0);
+      document.getElementById('stat-types').textContent    = Object.keys(stats.byType || {}).length;
+
+      const breakdown = document.getElementById('analytics-breakdown');
+      const types     = stats.byType || {};
+      const total     = Object.values(types).reduce((a, b) => a + b, 0) || 1;
+      breakdown.innerHTML = Object.entries(types).map(([type, count]) => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px">
+          <div style="width:90px;font-size:12px;font-weight:700;color:var(--muted)">${esc(type)}</div>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
+            <div style="height:100%;background:var(--green);border-radius:3px;width:${Math.round(count/total*100)}%"></div>
+          </div>
+          <div style="font-size:12px;font-weight:700;color:var(--green);width:36px;text-align:right">${count}</div>
+        </div>`).join('') || '<div style="color:var(--muted);font-size:13px">No analytics data yet.</div>';
+
+      const grid   = document.getElementById('analytics-library-grid');
+      const assets = await media.getAssets({ limit: 12 });
+      grid.innerHTML = assets.map(a => `
+        <div class="cs-card">
+          <img class="cs-card-img" src="${esc(a.thumbUrl || a.url)}" alt="" loading="lazy" onerror="this.style.opacity='.1'">
+          <div class="cs-card-body">
+            <div class="cs-card-title">${esc(a.fileName || 'Asset')}</div>
+            <div class="cs-card-meta">${esc(a.dest)} &bull; ${a.savings ? a.savings+'% saved' : ''}</div>
+          </div>
+        </div>`).join('') || '<div style="color:var(--muted);font-size:13px">No assets yet.</div>';
+    }
+
+    /* ─── Bootstrap on media ready ────────────────────── */
+    window.addEventListener('sokoniMediaReady',  () => { loadHistory(); });
+    window.addEventListener('sokoniCreativeReady', () => { /* ready */ });
+
+    /* Try immediately in case scripts already loaded */
+    if (window.SokoniMedia)  loadHistory();
+    if (window.SokoniCreative && document.querySelector('.cs-tab[data-page="brandkit"].active')) loadBrandKit();
+  </script>
+</body>
+</html>

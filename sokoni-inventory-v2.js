@@ -16,6 +16,94 @@ const SokoniInventoryV2 = (() => {
   const L1          = new Map();
   const EVT         = new EventTarget();
 
+  /* ── V2 IndexedDB — offline-first stores for Variants, Batches, Serials, etc. ── */
+  let _db2    = null;
+  let _online = navigator.onLine;
+  window.addEventListener('online',  () => { _online = true;  setTimeout(_flushQ2, 1000); });
+  window.addEventListener('offline', () => { _online = false; });
+
+  function _openDB2() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('sokoni_inv_v2', 1);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        const STORES = {
+          variants:      [['productId', false], ['sku', false]],
+          batches:       [['productId', false], ['batchNumber', false], ['expiryDate', false], ['warehouseId', false]],
+          serials:       [['productId', false], ['serialNumber', true], ['status', false], ['warehouseId', false]],
+          serialHistory: [['serialId', false]],
+          bom:           [['productId', true]],
+          workOrders:    [['status', false], ['productId', false]],
+          transfers:     [['status', false], ['fromWarehouse', false], ['toWarehouse', false]],
+          forecastData:  [['productId', false]],
+          reorderRules:  [['productId', true]],
+          notifications: [['status', false], ['createdAt', false]],
+          syncQueue2:    [],
+        };
+        for (const [name, indexes] of Object.entries(STORES)) {
+          if (db.objectStoreNames.contains(name)) continue;
+          const store = db.createObjectStore(name, { keyPath: 'id' });
+          for (const [field, unique] of indexes) store.createIndex(field, field, { unique });
+        }
+      };
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  function _iGet(store, key) {
+    return new Promise((res, rej) => {
+      const r = _db2.transaction(store, 'readonly').objectStore(store).get(key);
+      r.onsuccess = () => res(r.result || null);
+      r.onerror   = () => rej(r.error);
+    });
+  }
+  function _iPut(store, val) {
+    return new Promise((res, rej) => {
+      const r = _db2.transaction(store, 'readwrite').objectStore(store).put(val);
+      r.onsuccess = () => res(r.result);
+      r.onerror   = () => rej(r.error);
+    });
+  }
+  function _iDel(store, key) {
+    return new Promise((res, rej) => {
+      const r = _db2.transaction(store, 'readwrite').objectStore(store).delete(key);
+      r.onsuccess = () => res();
+      r.onerror   = () => rej(r.error);
+    });
+  }
+  function _iAll(store, idx, range) {
+    return new Promise((res, rej) => {
+      const os  = _db2.transaction(store, 'readonly').objectStore(store);
+      const src = idx ? os.index(idx) : os;
+      const r   = src.getAll(range || null);
+      r.onsuccess = () => res(r.result || []);
+      r.onerror   = () => rej(r.error);
+    });
+  }
+
+  const _uid6      = () => Math.random().toString(36).slice(2, 8);
+  const _nowISO    = () => new Date().toISOString();
+  const _curUid    = () => window._firebaseAuth?.currentUser?.uid
+                        || window.firebase?.auth?.()?.currentUser?.uid
+                        || 'anon';
+  /* Small secondary cache for IDB results */
+  const _iC = new Map();
+  const _cG = k => { const e = _iC.get(k); return (!e || Date.now() > e.exp) ? (_iC.delete(k), null) : e.v; };
+  const _cS = (k, v, t = 3e4) => _iC.set(k, { v, exp: Date.now() + t });
+  const _cD = p => { for (const k of _iC.keys()) if (k.startsWith(p)) _iC.delete(k); };
+
+  async function _flushQ2() {
+    if (!_db2) return;
+    const items = await _iAll('syncQueue2');
+    for (const item of items) {
+      try { await _cf(item.fn, item.data); await _iDel('syncQueue2', item.id); } catch (_) { break; }
+    }
+  }
+  async function _enqueueQ2(fn, data) {
+    await _iPut('syncQueue2', { id: `sq_${_uid6()}`, fn, data, queuedAt: _nowISO() });
+  }
+
   /* ── Call Cloud Function (callable or HTTP fallback) ─────────────── */
   async function _cf(name, data = {}) {
     try {
@@ -771,6 +859,607 @@ const SokoniInventoryV2 = (() => {
   }
 
   /* ══════════════════════════════════════════════════════════════════
+     20. INIT — opens V2 IDB and starts background jobs
+  ══════════════════════════════════════════════════════════════════ */
+
+  async function initV2({ tenantId, industry = 'general' } = {}) {
+    if (tenantId) _activeCompany = tenantId;
+    _db2 = await _openDB2();
+    setTimeout(_runExpiryAlerts, 6000);
+    setInterval(_runExpiryAlerts, 3_600_000);
+    EVT.dispatchEvent(new CustomEvent('v2:ready', { detail: { tenantId: _tenantId(), industry } }));
+    return { tenantId: _tenantId(), industry };
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     21. PRODUCT VARIANTS
+     Unlimited attribute dimensions: Color × Size × Material × etc.
+     Each variant gets its own SKU, barcode, and stock level.
+  ══════════════════════════════════════════════════════════════════ */
+
+  async function saveVariant(variant) {
+    if (!variant.productId) throw new Error('productId required');
+    if (!variant.attributes || !Object.keys(variant.attributes).length)
+      throw new Error('At least one variant attribute required e.g. { Color: "Red", Size: "M" }');
+
+    const isNew = !variant.id;
+    if (isNew) { variant.id = `var_${_uid6()}`; variant.createdAt = _nowISO(); variant.createdBy = _curUid(); }
+    variant.updatedAt = _nowISO();
+    variant.tenantId  = _tenantId();
+    if (!variant.sku) {
+      const attr = Object.values(variant.attributes).join('-').toUpperCase().replace(/\s+/g, '').slice(0, 12);
+      variant.sku = `${variant.productId.slice(-5)}-${attr}`;
+    }
+
+    await _iPut('variants', variant);
+    _cD(`var:${variant.productId}`);
+
+    if (_online) {
+      try { await _cf('inventorySaveVariant', { variant, tenantId: _tenantId() }); }
+      catch (_) { await _enqueueQ2('inventorySaveVariant', { variant, tenantId: _tenantId() }); }
+    }
+
+    EVT.dispatchEvent(new CustomEvent('variantSaved', { detail: { variant, isNew } }));
+    return variant;
+  }
+
+  async function getVariants(productId) {
+    const k = `var:${productId}`;
+    const h = _cG(k);
+    if (h) return h;
+
+    let variants = [];
+    if (_online) {
+      try {
+        const res = await _cf('inventoryGetVariants', { productId, tenantId: _tenantId() });
+        variants = res?.variants || [];
+        await Promise.all(variants.map(v => _iPut('variants', v)));
+      } catch (_) { variants = await _iAll('variants', 'productId', IDBKeyRange.only(productId)); }
+    } else {
+      variants = await _iAll('variants', 'productId', IDBKeyRange.only(productId));
+    }
+
+    _cS(k, variants);
+    return variants;
+  }
+
+  async function deleteVariant(id) {
+    const v = await _iGet('variants', id);
+    if (v) _cD(`var:${v.productId}`);
+    await _iDel('variants', id);
+    if (_online) _cf('inventoryDeleteVariant', { id, tenantId: _tenantId() }).catch(() => {});
+    EVT.dispatchEvent(new CustomEvent('variantDeleted', { detail: { id } }));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     22. BATCH / LOT TRACKING
+     FIFO, FEFO (nearest expiry first), LIFO rotation.
+     Required for: pharmacy, grocery, restaurant, beauty, medical.
+  ══════════════════════════════════════════════════════════════════ */
+
+  const COSTING_METHODS = Object.freeze({ WAC: 'wac', FIFO: 'fifo', FEFO: 'fefo', LIFO: 'lifo' });
+
+  async function createBatch(batch) {
+    if (!batch.productId)   throw new Error('productId required');
+    if (!batch.batchNumber) throw new Error('batchNumber required');
+
+    batch.id           = `bat_${_uid6()}`;
+    batch.warehouseId  = batch.warehouseId || 'main';
+    batch.quantity     = Number(batch.quantity) || 0;
+    batch.remainingQty = batch.quantity;
+    batch.costPrice    = Number(batch.costPrice) || 0;
+    batch.status       = 'active';
+    batch.createdAt    = _nowISO();
+    batch.createdBy    = _curUid();
+    batch.tenantId     = _tenantId();
+
+    await _iPut('batches', batch);
+    _cD(`bat:${batch.productId}`);
+
+    if (_online) {
+      try { await _cf('inventoryCreateBatch', { batch, tenantId: _tenantId() }); }
+      catch (_) { await _enqueueQ2('inventoryCreateBatch', { batch, tenantId: _tenantId() }); }
+    }
+
+    EVT.dispatchEvent(new CustomEvent('batchCreated', { detail: { batch } }));
+    return batch;
+  }
+
+  async function getBatches(productId, { warehouseId, includeEmpty = false, costingMethod = COSTING_METHODS.FEFO } = {}) {
+    const k = `bat:${productId}:${warehouseId}:${includeEmpty}`;
+    const h = _cG(k);
+    if (h) return h;
+
+    let rows = await _iAll('batches', 'productId', IDBKeyRange.only(productId));
+    if (warehouseId)    rows = rows.filter(b => b.warehouseId === warehouseId);
+    if (!includeEmpty)  rows = rows.filter(b => b.status === 'active' && b.remainingQty > 0);
+
+    if (costingMethod === COSTING_METHODS.FEFO) {
+      rows.sort((a, b) => {
+        if (!a.expiryDate) return 1;
+        if (!b.expiryDate) return -1;
+        return new Date(a.expiryDate) - new Date(b.expiryDate);
+      });
+    } else if (costingMethod === COSTING_METHODS.FIFO || costingMethod === COSTING_METHODS.WAC) {
+      rows.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    } else {
+      rows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // LIFO
+    }
+
+    _cS(k, rows, 15_000);
+    return rows;
+  }
+
+  async function getAllBatches({ warehouseId } = {}) {
+    const all = await _iAll('batches');
+    return warehouseId ? all.filter(b => b.warehouseId === warehouseId) : all;
+  }
+
+  async function deductBatch({ productId, warehouseId = 'main', quantity, costingMethod }) {
+    const batches  = await getBatches(productId, { warehouseId, costingMethod: costingMethod || COSTING_METHODS.FEFO });
+    if (!batches.length) throw new Error(`No available batches for product ${productId}`);
+
+    let remaining = Math.abs(quantity);
+    const deducted = [];
+
+    for (const b of batches) {
+      if (remaining <= 0) break;
+      const take = Math.min(b.remainingQty, remaining);
+      b.remainingQty -= take;
+      if (b.remainingQty <= 0) b.status = 'depleted';
+      remaining -= take;
+      deducted.push({ batchId: b.id, batchNumber: b.batchNumber, qty: take, unitCost: b.costPrice });
+      await _iPut('batches', b);
+      _cD(`bat:${productId}`);
+    }
+
+    if (remaining > 0) throw new Error(`Insufficient batch stock — short by ${remaining} units`);
+    return deducted;
+  }
+
+  async function getExpiringBatches(days = 30) {
+    const cutoff = new Date(Date.now() + days * 86400000);
+    const all    = await _iAll('batches');
+    return all.filter(b =>
+      b.status === 'active' && b.remainingQty > 0 && b.expiryDate &&
+      new Date(b.expiryDate) <= cutoff
+    ).sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     23. SERIAL NUMBER TRACKING
+     Full lifecycle: received → available → sold → returned/repaired/scrapped.
+     Required for: electronics, medical, automotive.
+  ══════════════════════════════════════════════════════════════════ */
+
+  const SERIAL_STATES = Object.freeze({
+    AVAILABLE:  'available',
+    SOLD:       'sold',
+    RETURNED:   'returned',
+    REPAIRED:   'repaired',
+    SCRAPPED:   'scrapped',
+    LOST:       'lost',
+    WARRANTY:   'under_warranty',
+    QUARANTINE: 'quarantine',
+  });
+
+  async function registerSerials({ productId, variantId, warehouseId, serials, batchId, unitCost, supplierId }) {
+    if (!productId)      throw new Error('productId required');
+    if (!serials?.length) throw new Error('At least one serial number required');
+
+    const created = [];
+    for (const sn of serials) {
+      const exists = await _iAll('serials', 'serialNumber', IDBKeyRange.only(String(sn).trim()));
+      if (exists.length) continue;
+      const serial = {
+        id: `ser_${_uid6()}`, serialNumber: String(sn).trim(),
+        productId, variantId: variantId || null, warehouseId: warehouseId || 'main',
+        batchId: batchId || null, status: SERIAL_STATES.AVAILABLE,
+        unitCost: Number(unitCost) || 0, supplierId: supplierId || null,
+        receivedAt: _nowISO(), soldAt: null, soldTo: null,
+        warrantyDays: 0, warrantyExpiry: null, notes: '',
+        createdAt: _nowISO(), createdBy: _curUid(), tenantId: _tenantId(),
+      };
+      await _iPut('serials', serial);
+      created.push(serial);
+    }
+
+    if (_online && created.length) {
+      _cf('inventoryRegisterSerials', { serials: created, tenantId: _tenantId() }).catch(() => {});
+    }
+    EVT.dispatchEvent(new CustomEvent('serialsRegistered', { detail: { productId, count: created.length } }));
+    return created;
+  }
+
+  async function getSerial(serialNumber) {
+    const rows = await _iAll('serials', 'serialNumber', IDBKeyRange.only(serialNumber));
+    return rows[0] || null;
+  }
+
+  async function getSerialsByProduct(productId, { status, warehouseId } = {}) {
+    let rows = await _iAll('serials', 'productId', IDBKeyRange.only(productId));
+    if (status)      rows = rows.filter(s => s.status === status);
+    if (warehouseId) rows = rows.filter(s => s.warehouseId === warehouseId);
+    return rows;
+  }
+
+  async function getAllSerials({ status, warehouseId } = {}) {
+    let rows = await _iAll('serials');
+    if (status)      rows = rows.filter(s => s.status === status);
+    if (warehouseId) rows = rows.filter(s => s.warehouseId === warehouseId);
+    return rows;
+  }
+
+  async function updateSerialStatus(serialId, { status, soldTo, orderId, warrantyDays, notes } = {}) {
+    const serial = await _iGet('serials', serialId);
+    if (!serial) throw new Error('Serial not found');
+
+    const prev = serial.status;
+    serial.status    = status;
+    serial.updatedAt = _nowISO();
+    if (soldTo)      serial.soldTo  = soldTo;
+    if (orderId)     serial.orderId = orderId;
+    if (notes)       serial.notes   = notes;
+    if (status === SERIAL_STATES.SOLD) serial.soldAt = _nowISO();
+    if (warrantyDays) {
+      serial.warrantyDays   = warrantyDays;
+      const exp = new Date();
+      exp.setDate(exp.getDate() + warrantyDays);
+      serial.warrantyExpiry = exp.toISOString();
+    }
+
+    await _iPut('serials', serial);
+
+    const hist = { id: `sh_${_uid6()}`, serialId, fromStatus: prev, toStatus: status, changedBy: _curUid(), changedAt: _nowISO(), notes: notes || '' };
+    await _iPut('serialHistory', hist);
+
+    if (_online) _cf('inventoryUpdateSerial', { serialId, patch: { status, soldAt: serial.soldAt, soldTo, warrantyExpiry: serial.warrantyExpiry }, tenantId: _tenantId() }).catch(() => {});
+
+    EVT.dispatchEvent(new CustomEvent('serialUpdated', { detail: { serial, history: hist } }));
+    return serial;
+  }
+
+  async function getSerialHistory2(serialId) {
+    const rows = await _iAll('serialHistory', 'serialId', IDBKeyRange.only(serialId));
+    return rows.sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     24. MANUFACTURING — BILL OF MATERIALS + WORK ORDERS
+  ══════════════════════════════════════════════════════════════════ */
+
+  const WO_STATUS = Object.freeze({ DRAFT: 'draft', IN_PROGRESS: 'in_progress', COMPLETED: 'completed', CANCELLED: 'cancelled' });
+
+  async function saveBOM(bom) {
+    if (!bom.productId)          throw new Error('productId required');
+    if (!bom.components?.length) throw new Error('BOM requires at least one component');
+
+    bom.id       = bom.id || `bom_${_uid6()}`;
+    bom.yieldQty = bom.yieldQty || 1;
+    bom.updatedAt = _nowISO();
+    bom.tenantId  = _tenantId();
+    if (!bom.createdAt) { bom.createdAt = _nowISO(); bom.createdBy = _curUid(); }
+
+    await _iPut('bom', bom);
+    if (_online) _cf('inventorySaveBOM', { bom, tenantId: _tenantId() }).catch(() => {});
+    EVT.dispatchEvent(new CustomEvent('bomSaved', { detail: { bom } }));
+    return bom;
+  }
+
+  async function getBOM2(productId) {
+    const rows = await _iAll('bom', 'productId', IDBKeyRange.only(productId));
+    return rows[0] || null;
+  }
+
+  async function createWorkOrder({ productId, quantity, warehouseId = 'main', scheduledDate, notes }) {
+    if (!productId || !quantity) throw new Error('productId and quantity required');
+    const bom = await getBOM2(productId);
+    if (!bom) throw new Error('No Bill of Materials defined for this product. Create a BOM first.');
+
+    const v1 = window.SokoniInventory;
+    const shortages = [];
+    for (const comp of bom.components) {
+      const needed = (comp.quantity * quantity) / bom.yieldQty;
+      let available = 0;
+      try { available = (await v1?.getStockLevel?.(comp.productId, warehouseId))?.available || 0; } catch (_) {}
+      if (available < needed) shortages.push({ productId: comp.productId, needed, available, shortfall: needed - available });
+    }
+
+    const wo = {
+      id: `wo_${_uid6()}`, productId, quantity, warehouseId,
+      bomId: bom.id, status: WO_STATUS.DRAFT,
+      scheduledDate: scheduledDate || null, notes: notes || '',
+      shortages, createdAt: _nowISO(), createdBy: _curUid(), tenantId: _tenantId(),
+    };
+
+    await _iPut('workOrders', wo);
+    if (_online) _cf('inventoryCreateWorkOrder', { wo, tenantId: _tenantId() }).catch(() => {});
+    EVT.dispatchEvent(new CustomEvent('workOrderCreated', { detail: { wo } }));
+    return wo;
+  }
+
+  async function updateWorkOrderStatus(workOrderId, status, { notes, actualQty } = {}) {
+    const wo = await _iGet('workOrders', workOrderId);
+    if (!wo) throw new Error('Work order not found');
+    wo.status = status;
+    wo.updatedAt = _nowISO();
+    if (notes)     wo.notes     = notes;
+    if (actualQty) wo.actualQty = actualQty;
+    if (status === WO_STATUS.COMPLETED) wo.completedAt = _nowISO();
+    await _iPut('workOrders', wo);
+    if (_online) _cf('inventoryUpdateWorkOrder', { workOrderId, status, tenantId: _tenantId() }).catch(() => {});
+    EVT.dispatchEvent(new CustomEvent('workOrderUpdated', { detail: { wo } }));
+    return wo;
+  }
+
+  async function getWorkOrders2({ status, productId } = {}) {
+    let rows = await _iAll('workOrders', status ? 'status' : null, status ? IDBKeyRange.only(status) : null);
+    if (productId) rows = rows.filter(w => w.productId === productId);
+    return rows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     25. WAREHOUSE TRANSFER WORKFLOW
+     4-stage: pending → approved → shipped → received
+  ══════════════════════════════════════════════════════════════════ */
+
+  const TRANSFER_STATUS = Object.freeze({ PENDING: 'pending', APPROVED: 'approved', SHIPPED: 'shipped', RECEIVED: 'received', CANCELLED: 'cancelled' });
+
+  async function requestTransfer2({ productId, variantId, fromWarehouse, toWarehouse, quantity, notes, priority = 'normal' }) {
+    if (!productId || !fromWarehouse || !toWarehouse || !quantity) throw new Error('productId, fromWarehouse, toWarehouse, quantity required');
+    const tr = {
+      id: `tr_${_uid6()}`, productId, variantId: variantId || null,
+      fromWarehouse, toWarehouse, quantity: Number(quantity),
+      status: TRANSFER_STATUS.PENDING, priority, notes: notes || '',
+      requestedBy: _curUid(), requestedAt: _nowISO(),
+      approvedBy: null, approvedAt: null, shippedBy: null, shippedAt: null,
+      receivedBy: null, receivedAt: null, receivedQty: null,
+      tenantId: _tenantId(),
+    };
+    await _iPut('transfers', tr);
+    if (_online) {
+      try { await _cf('inventoryRequestTransfer', { tr, tenantId: _tenantId() }); }
+      catch (_) { await _enqueueQ2('inventoryRequestTransfer', { tr, tenantId: _tenantId() }); }
+    }
+    EVT.dispatchEvent(new CustomEvent('transferRequested', { detail: { transfer: tr } }));
+    return tr;
+  }
+
+  async function _patchTransfer(id, patch) {
+    const tr = await _iGet('transfers', id);
+    if (!tr) throw new Error('Transfer not found');
+    Object.assign(tr, patch);
+    await _iPut('transfers', tr);
+    if (_online) _cf('inventoryPatchTransfer', { id, patch, tenantId: _tenantId() }).catch(() => {});
+    return tr;
+  }
+
+  async function approveTransfer2(id) {
+    const tr = await _patchTransfer(id, { status: TRANSFER_STATUS.APPROVED, approvedBy: _curUid(), approvedAt: _nowISO() });
+    EVT.dispatchEvent(new CustomEvent('transferApproved', { detail: { transfer: tr } }));
+    return tr;
+  }
+
+  async function shipTransfer2(id) {
+    const tr = await _iGet('transfers', id);
+    if (tr?.status !== TRANSFER_STATUS.APPROVED) throw new Error('Transfer must be approved before shipping');
+    const updated = await _patchTransfer(id, { status: TRANSFER_STATUS.SHIPPED, shippedBy: _curUid(), shippedAt: _nowISO() });
+    EVT.dispatchEvent(new CustomEvent('transferShipped', { detail: { transfer: updated } }));
+    return updated;
+  }
+
+  async function receiveTransfer2(id, { receivedQty, notes } = {}) {
+    const tr = await _iGet('transfers', id);
+    if (tr?.status !== TRANSFER_STATUS.SHIPPED) throw new Error('Transfer must be in-transit before receiving');
+    const patch = { status: TRANSFER_STATUS.RECEIVED, receivedBy: _curUid(), receivedAt: _nowISO(), receivedQty: receivedQty ?? tr.quantity };
+    if (notes) patch.receiveNotes = notes;
+    const updated = await _patchTransfer(id, patch);
+    EVT.dispatchEvent(new CustomEvent('transferReceived', { detail: { transfer: updated } }));
+    return updated;
+  }
+
+  async function cancelTransfer2(id, reason) {
+    const tr = await _iGet('transfers', id);
+    if (tr?.status === TRANSFER_STATUS.RECEIVED) throw new Error('Cannot cancel a completed transfer');
+    const updated = await _patchTransfer(id, { status: TRANSFER_STATUS.CANCELLED, cancelReason: reason || '', cancelledAt: _nowISO(), cancelledBy: _curUid() });
+    EVT.dispatchEvent(new CustomEvent('transferCancelled', { detail: { transfer: updated } }));
+    return updated;
+  }
+
+  async function getTransfers2({ status, fromWarehouse, toWarehouse } = {}) {
+    let rows = await _iAll('transfers', status ? 'status' : null, status ? IDBKeyRange.only(status) : null);
+    if (fromWarehouse) rows = rows.filter(t => t.fromWarehouse === fromWarehouse);
+    if (toWarehouse)   rows = rows.filter(t => t.toWarehouse   === toWarehouse);
+    return rows.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     26. IN-BROWSER DEMAND FORECASTING
+     Exponential smoothing + 7-day moving average.
+     No external API call — works offline.
+  ══════════════════════════════════════════════════════════════════ */
+
+  function _expSmooth(series, alpha = 0.3) {
+    if (!series.length) return [];
+    const out = [series[0]];
+    for (let i = 1; i < series.length; i++) out.push(alpha * series[i] + (1 - alpha) * out[i - 1]);
+    return out;
+  }
+  function _movAvg(series, w = 7) {
+    return series.map((_, i) => {
+      const sl = series.slice(Math.max(0, i - w + 1), i + 1);
+      return sl.reduce((s, v) => s + v, 0) / sl.length;
+    });
+  }
+
+  async function forecastDemandLocal({ productId, warehouseId = 'main', forecastDays = 30 } = {}) {
+    const v1 = window.SokoniInventory;
+    if (!v1) return { forecast: [], dailyAvg: 0, suggestedReorderQty: 0 };
+
+    const movements = await v1.getMovements({ productId, type: 'sale', limit: 500 }).catch(() => []);
+    const byDay = {};
+    for (const m of movements) {
+      const d = m.timestamp?.slice(0, 10);
+      if (d) byDay[d] = (byDay[d] || 0) + Math.abs(m.quantity);
+    }
+    const today = new Date();
+    const series = Array.from({ length: 90 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (89 - i));
+      return byDay[d.toISOString().slice(0, 10)] || 0;
+    });
+
+    const smoothed = _expSmooth(series, 0.3);
+    const ma7      = _movAvg(series, 7);
+    const dailyAvg = ((smoothed.at(-1) || 0) + (ma7.at(-1) || 0)) / 2;
+
+    const forecast = Array.from({ length: forecastDays }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i + 1);
+      return { date: d.toISOString().slice(0, 10), predicted: Math.max(0, Math.round(dailyAvg * (0.85 + Math.random() * 0.3))) };
+    });
+
+    let currentStock = 0, reorderPoint = 0;
+    try {
+      const lvl = await v1.getStockLevel(productId, warehouseId);
+      currentStock = lvl.available || 0;
+      reorderPoint = lvl.reorderPoint || 0;
+    } catch (_) {}
+
+    const result = {
+      id: `fc_${productId}_${warehouseId}`,
+      productId, warehouseId,
+      dailyAvg:            parseFloat(dailyAvg.toFixed(2)),
+      forecast,
+      daysOfStock:         dailyAvg > 0 ? Math.floor(currentStock / dailyAvg) : 999,
+      suggestedReorderQty: Math.ceil(dailyAvg * 30),
+      currentStock, reorderPoint,
+      needsReorder: currentStock <= reorderPoint,
+      generatedAt:  _nowISO(),
+    };
+
+    await _iPut('forecastData', result);
+    EVT.dispatchEvent(new CustomEvent('forecastGenerated', { detail: result }));
+    return result;
+  }
+
+  async function getAllForecasts() {
+    return _iAll('forecastData');
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     27. AUTO REORDER RULES — client-side rule engine
+  ══════════════════════════════════════════════════════════════════ */
+
+  async function saveReorderRule(rule) {
+    if (!rule.productId) throw new Error('productId required');
+    const existing = await _iAll('reorderRules', 'productId', IDBKeyRange.only(rule.productId));
+    rule.id       = existing[0]?.id || `rr_${_uid6()}`;
+    rule.active   = rule.active !== false;
+    rule.updatedAt = _nowISO();
+    rule.tenantId  = _tenantId();
+    await _iPut('reorderRules', rule);
+    EVT.dispatchEvent(new CustomEvent('reorderRuleSaved', { detail: { rule } }));
+    return rule;
+  }
+
+  async function getReorderRules2({ activeOnly = true } = {}) {
+    const all = await _iAll('reorderRules');
+    return activeOnly ? all.filter(r => r.active) : all;
+  }
+
+  async function deleteReorderRule(id) {
+    await _iDel('reorderRules', id);
+    EVT.dispatchEvent(new CustomEvent('reorderRuleDeleted', { detail: { id } }));
+  }
+
+  async function runReorderCheck() {
+    const v1    = window.SokoniInventory;
+    if (!v1) return [];
+    const rules = await getReorderRules2({ activeOnly: true });
+    const triggered = [];
+    for (const rule of rules) {
+      try {
+        const lvl = await v1.getStockLevel(rule.productId, rule.warehouseId || 'main');
+        if (lvl.available > (rule.reorderPoint || lvl.reorderPoint || 5)) continue;
+        if (!rule.supplierId) continue;
+        const po = await v1.createPO({
+          supplierId:  rule.supplierId,
+          warehouseId: rule.warehouseId || 'main',
+          notes:       'Auto-generated by reorder rule engine',
+          items: [{ productId: rule.productId, name: rule.productName || rule.productId, qty: rule.orderQty || 50, unitCost: rule.lastCost || 0 }],
+        });
+        triggered.push(po);
+        rule.lastTriggeredAt = _nowISO();
+        await _iPut('reorderRules', rule);
+      } catch (_) {}
+    }
+    if (triggered.length) EVT.dispatchEvent(new CustomEvent('reordersGenerated', { detail: { count: triggered.length, orders: triggered } }));
+    return triggered;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     28. SMART NOTIFICATIONS — in-app + push
+  ══════════════════════════════════════════════════════════════════ */
+
+  async function pushNotif({ type, title, message, severity = 'info', productId, data = {} }) {
+    const n = {
+      id: `notif_${_uid6()}`, type, title, message, severity,
+      productId: productId || null, data, status: 'unread', createdAt: _nowISO(),
+    };
+    await _iPut('notifications', n);
+    EVT.dispatchEvent(new CustomEvent('notification', { detail: { notification: n } }));
+    if (Notification?.permission === 'granted') {
+      try { new Notification(`SOKONI Inventory: ${title}`, { body: message, icon: '/assets/logo/icon-192.png' }); } catch (_) {}
+    }
+    return n;
+  }
+
+  async function getNotifs({ unreadOnly = false, limit = 50 } = {}) {
+    const all = await _iAll('notifications');
+    return all
+      .filter(n => !unreadOnly || n.status === 'unread')
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, limit);
+  }
+
+  async function markNotifRead(id) {
+    const n = await _iGet('notifications', id);
+    if (n) { n.status = 'read'; n.readAt = _nowISO(); await _iPut('notifications', n); }
+  }
+
+  async function markAllNotifsRead() {
+    const unread = await _iAll('notifications', 'status', IDBKeyRange.only('unread'));
+    await Promise.all(unread.map(n => { n.status = 'read'; n.readAt = _nowISO(); return _iPut('notifications', n); }));
+  }
+
+  async function requestPushPermission() {
+    if (!('Notification' in window)) return 'unsupported';
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    return Notification.permission;
+  }
+
+  /* Background expiry alert runner */
+  async function _runExpiryAlerts() {
+    if (!_db2) return;
+    try {
+      const expiring = await getExpiringBatches(30);
+      for (const b of expiring) {
+        const daysLeft = Math.ceil((new Date(b.expiryDate) - new Date()) / 86400000);
+        if (daysLeft <= 0) {
+          await pushNotif({ type: 'expired', title: 'Product Expired',
+            message: `Batch ${b.batchNumber} has expired. ${b.remainingQty} units unsold.`,
+            severity: 'critical', productId: b.productId, data: { batchId: b.id } });
+        } else if (daysLeft <= 7) {
+          await pushNotif({ type: 'expiry_warning', title: 'Expiry Alert',
+            message: `Batch ${b.batchNumber} expires in ${daysLeft} day(s). Stock: ${b.remainingQty} units.`,
+            severity: 'warning', productId: b.productId, data: { batchId: b.id, daysLeft } });
+        }
+      }
+    } catch (_) {}
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
      19. HELPERS & UTILITIES
   ══════════════════════════════════════════════════════════════════ */
 
@@ -809,7 +1498,32 @@ const SokoniInventoryV2 = (() => {
     /* Intelligence */   getMarketIntelligence, getTrendingProducts,
     /* Events */         on, off, emit,
     /* Utils */          tenantId: _tenantId,
+
+    /* Init V2 */        init: initV2,
+
+    /* Variants */       saveVariant, getVariants, deleteVariant,
+
+    /* Batches */        createBatch, getBatches, getAllBatches, deductBatch, getExpiringBatches,
+                         COSTING_METHODS,
+
+    /* Serials */        registerSerials, getSerial, getSerialsByProduct, getAllSerials,
+                         updateSerialStatus, getSerialHistory: getSerialHistory2, SERIAL_STATES,
+
+    /* Manufacturing */  saveBOM, getBOM: getBOM2, createWorkOrder, updateWorkOrderStatus,
+                         getWorkOrders: getWorkOrders2, WO_STATUS,
+
+    /* Transfers */      requestTransfer: requestTransfer2, approveTransfer: approveTransfer2,
+                         shipTransfer: shipTransfer2, receiveTransfer: receiveTransfer2,
+                         cancelTransfer: cancelTransfer2, getTransfers: getTransfers2,
+                         TRANSFER_STATUS,
+
+    /* Forecasting */    forecastDemandLocal, getAllForecasts,
+
+    /* Reorder Rules */  saveReorderRule, getReorderRules: getReorderRules2, deleteReorderRule, runReorderCheck,
+
+    /* Notifications */  pushNotif, getNotifs, markNotifRead, markAllNotifsRead, requestPushPermission,
   });
 })();
 
 if (typeof module !== 'undefined') module.exports = SokoniInventoryV2;
+window.SokoniInventoryV2 = SokoniInventoryV2;

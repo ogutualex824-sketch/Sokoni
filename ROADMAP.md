@@ -2,8 +2,8 @@
 
 # SOKONI Platform Roadmap
 
-**Version:** 2.7.0  
-**Updated:** 2026-06-20  
+**Version:** 2.8.0  
+**Updated:** 2026-06-21  
 **Status:** Production — Active Development
 
 Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
@@ -126,6 +126,35 @@ Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 |---|---|---|
 | KASS — Admin AI assistant (Claude claude-sonnet-4-6, 16 tools) | v2.0 | ✅ Done |
 | sokoniChat — Customer AI assistant | v2.0 | ✅ Done |
+| AI Creative Studio (media generation, brand kits, analytics) | v2.8 | ✅ Done |
+| AI Subscriptions (4 plans, credits, boosts, storage) | v2.8 | ✅ Done |
+| AI Policy Engine (confidence badges, fuel guard) | v2.8 | ✅ Done |
+
+### Enterprise Intelligence
+
+| Feature | Version | Status |
+|---|---|---|
+| Enterprise Intelligence Platform — EIP (decision engine, data quality, feature flags) | v2.8 | ✅ Done |
+| Workflow Automation Platform — WAP (7 workflows, 20 handlers) | v2.8 | ✅ Done |
+| GIP — Geo Intelligence Platform (analytics, fleet, routing command center) | v2.8 | ✅ Done |
+
+### Inventory V2
+
+| Feature | Version | Status |
+|---|---|---|
+| Inventory V2 engine (sokoni-inventory-v2.js) — offline-first, multi-warehouse | v2.8 | ✅ Done |
+| Inventory shell UI (inv-dashboard, inv-products, inv-product) | v2.8 | ✅ Done |
+| Firestore security rules + 35 composite indexes for all V2 collections | v2.8 | ✅ Done |
+| Analytics V2 — 6 KPIs + 5 sub-tabs (Movements, Aging, Margin, Branch, Forecast) | v2.8 | ✅ Done |
+| GRN / partial delivery workflow | v2.8 | ✅ Done |
+| Stock Count full workflow (session → count sheet → variance → approve/reject) | v2.8 | ✅ Done |
+| Sustainability dashboard (waste rate, carbon, spoilage, recommendations) | v2.8 | ✅ Done |
+| Business Simulation tab (demand/price factor model) | v2.8 | ✅ Done |
+| Supplier detail modal (tabs: overview, orders, price list, contracts) | v2.8 | ✅ Done |
+| Purchase Requisitions (create → approve → convert to PO) | v2.8 | ✅ Done |
+| AI Shelf Counting (camera → inventoryAiQuery CF → variance table → apply/export) | v2.8 | ✅ Done |
+| Bulk Operations (export, labels, transfer, price adjust, duplicate, archive, create PO) | v2.8 | ✅ Done |
+| Advanced Search (stock range, date range, tags, search-field selector) | v2.8 | ✅ Done |
 
 ---
 

@@ -1688,7 +1688,7 @@ html {
 /* ─── 2. MENU TOGGLE: Below all navbar rows, LEFT side ── */
 @media (max-width: 767px) {
   .menu-toggle {
-    top: 110px !important;
+    top: 170px !important;
     left: 12px !important;
     right: auto !important;
     width: 40px !important;
@@ -1711,12 +1711,12 @@ html {
 
   /* Floating bell: RIGHT side — mirrors menu toggle */
   #sokoni-bell-btn {
-    top: 110px !important;
+    top: 170px !important;
     right: 12px !important;
     left: auto !important;
   }
   #sokoni-notif-drawer {
-    top: 158px !important;
+    top: 218px !important;
     right: 12px !important;
   }
   /* Login button out of navbar on mobile — it lives in the mobile menu drawer */

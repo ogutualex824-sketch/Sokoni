@@ -2445,6 +2445,180 @@ service cloud.firestore {
         allow read:   if isAuthed();
         allow write:  if false;
       }
+
+      /* ══════════════════════════════════════════════════════════════
+         INVENTORY V2 — ADVANCED PROCUREMENT & OPERATIONS COLLECTIONS
+      ══════════════════════════════════════════════════════════════ */
+
+      /* ── Product Variants (V2): size / colour / batch variants ── */
+      match /inventory_variants/{variantId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.productId is string
+                      && request.resource.data.productId.size() > 0
+                      && request.resource.data.sku is string;
+        allow update: if isTenantMember()
+                      && resource.data.tenantId == tenantId
+                      && !request.resource.data.diff(resource.data)
+                         .affectedKeys().hasAny(['tenantId', 'productId']);
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Bill of Materials (V2): recipe / assembly definitions ── */
+      match /inventory_bom/{bomId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.parentProductId is string
+                      && request.resource.data.active == true;
+        allow update: if isTenantAdmin()
+                      && resource.data.tenantId == tenantId;
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Work Orders (V2): manufacturing / assembly jobs ── */
+      match /inventory_work_orders/{woId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.status == 'draft'
+                      && request.resource.data.bomId is string
+                      && request.resource.data.quantity is number
+                      && request.resource.data.quantity > 0;
+        /* Members update in-progress orders (add output serial, qty); admins update any status */
+        allow update: if isTenantAdmin()
+                      || (isTenantMember()
+                          && resource.data.tenantId == tenantId
+                          && resource.data.status in ['draft', 'in_progress']
+                          && !request.resource.data.diff(resource.data)
+                             .affectedKeys().hasAny(['tenantId', 'bomId', 'completedAt', 'cancelledAt']));
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Inter-Warehouse Transfers (V2): stock movement between locations ── */
+      match /inventory_transfers/{transferId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.fromWarehouseId is string
+                      && request.resource.data.toWarehouseId is string
+                      && request.resource.data.status == 'pending'
+                      /* Prevent self-transfers */
+                      && request.resource.data.fromWarehouseId != request.resource.data.toWarehouseId;
+        /* Members confirm receipt; admins manage all transitions */
+        allow update: if isTenantAdmin()
+                      || (isTenantMember()
+                          && resource.data.tenantId == tenantId
+                          && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status', 'receivedAt', 'receivedBy',
+                                                      'receivedQty', 'note', 'updatedAt']));
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Goods Received Notes (V2): GRN / partial delivery receipts ── */
+      match /inventory_grn/{grnId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.purchaseOrderId is string
+                      && request.resource.data.supplierId is string
+                      && request.resource.data.status == 'draft';
+        /* Draft GRNs can be edited; confirmed GRNs are immutable except admin */
+        allow update: if isTenantAdmin()
+                      || (isTenantMember()
+                          && resource.data.tenantId == tenantId
+                          && resource.data.status == 'draft'
+                          && !request.resource.data.diff(resource.data)
+                             .affectedKeys().hasAny(['tenantId', 'purchaseOrderId', 'postedAt', 'postedBy']));
+        /* GRNs cannot be deleted once confirmed — protects receiving audit trail */
+        allow delete: if isTenantAdmin()
+                      && resource.data.status == 'draft';
+      }
+
+      /* ── Stock Count Sessions (V2): physical inventory cycle counts ── */
+      match /inventory_stockcounts/{countId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.warehouseId is string
+                      && request.resource.data.status == 'open'
+                      && request.resource.data.keys().hasAll(['startedBy', 'startedAt']);
+        /* Open sessions: counters add scan lines; only admins approve/finalise */
+        allow update: if isTenantAdmin()
+                      || (isTenantMember()
+                          && resource.data.tenantId == tenantId
+                          && resource.data.status == 'open'
+                          && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['note', 'updatedAt']));
+        allow delete: if isTenantAdmin()
+                      && resource.data.status == 'open';
+
+        /* Count lines sub-collection — scan entries during the count */
+        match /lines/{lineId} {
+          allow read:   if isTenantMember();
+          allow create: if isTenantMember()
+                        && get(/databases/$(database)/documents/tenants/$(tenantId)/inventory_stockcounts/$(countId))
+                             .data.status == 'open'
+                        && request.resource.data.keys().hasAll(['productId', 'counted', 'countedBy', 'countedAt'])
+                        && request.resource.data.counted is number
+                        && request.resource.data.counted >= 0;
+          allow update: if isTenantMember()
+                        && get(/databases/$(database)/documents/tenants/$(tenantId)/inventory_stockcounts/$(countId))
+                             .data.status == 'open'
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['counted', 'note', 'updatedAt', 'updatedBy']);
+          allow delete: if isTenantAdmin();
+        }
+      }
+
+      /* ── Purchase Requisitions (V2): internal request → PO approval chain ── */
+      match /inventory_requisitions/{reqId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.status == 'pending'
+                      && request.resource.data.requestedBy == request.auth.uid
+                      && request.resource.data.keys().hasAll(['items', 'requestedBy', 'requestedAt'])
+                      && request.resource.data.items is list
+                      && request.resource.data.items.size() > 0;
+        /* Requester may cancel own pending requisition; managers approve/reject */
+        allow update: if isTenantAdmin()
+                      || (isTenantMember()
+                          && resource.data.requestedBy == request.auth.uid
+                          && resource.data.status == 'pending'
+                          && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status', 'cancelNote', 'updatedAt'])
+                          && request.resource.data.status == 'cancelled');
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Supplier Contracts (V2): contract terms, price lists, SLAs ── */
+      match /inventory_supplier_contracts/{contractId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantAdmin()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.supplierId is string;
+        allow update: if isTenantAdmin()
+                      && resource.data.tenantId == tenantId;
+        allow delete: if isTenantAdmin();
+      }
+
+      /* ── Shelf Count AI Jobs (V2): AI-assisted shelf scanning sessions ── */
+      match /inventory_shelf_scans/{scanId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.tenantId == tenantId
+                      && request.resource.data.warehouseId is string
+                      && request.resource.data.status == 'pending';
+        allow update: if isTenantAdmin()
+                      || (isTenantMember()
+                          && resource.data.tenantId == tenantId
+                          && resource.data.status == 'pending'
+                          && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status', 'imageRef', 'updatedAt']));
+        allow delete: if isTenantAdmin();
+      }
     }
 
     /* ══════════════════════════════════════════════════════════

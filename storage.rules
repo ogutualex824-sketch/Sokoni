@@ -118,6 +118,25 @@ service firebase.storage {
                    );
     }
 
+    /* ── AI Creative Studio — generated assets, banners, posters,
+          logos, brand kits, stories, receipts, menus, events,
+          property, vehicle, delivery proof, and AI-generated output.
+          Max 15 MB images / 150 MB videos per file.             ── */
+    match /creative-assets/{uid}/{allPaths=**} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && (
+                        (request.resource.contentType.matches('image/.*')
+                          && request.resource.size < 15 * 1024 * 1024)
+                     || (request.resource.contentType.matches('video/.*')
+                          && request.resource.size < 150 * 1024 * 1024)
+                     || (request.resource.contentType == 'application/pdf'
+                          && request.resource.size < 20 * 1024 * 1024)
+                   );
+    }
+
     /* ── Default: deny everything else ── */
     match /{allPaths=**} {
       allow read, write: if false;

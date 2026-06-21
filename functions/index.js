@@ -5267,3 +5267,70 @@ exports.inventoryGetPricingRecommendations = inventoryPricing.inventoryGetPricin
 exports.inventorySetPricingRule            = inventoryPricing.inventorySetPricingRule;
 exports.inventorySimulatePriceChange       = inventoryPricing.inventorySimulatePriceChange;
 exports.inventoryPricingScheduler          = inventoryPricing.inventoryPricingScheduler;
+
+/* ── Inventory V2 — Variants / Batches / Serials / BOM / Transfers ── */
+const inventoryV2 = require("./inventory-v2");
+exports.inventorySaveVariant              = inventoryV2.inventorySaveVariant;
+exports.inventoryGetVariants              = inventoryV2.inventoryGetVariants;
+exports.inventoryDeleteVariant            = inventoryV2.inventoryDeleteVariant;
+exports.inventoryCreateBatch              = inventoryV2.inventoryCreateBatch;
+exports.inventoryDeductBatch              = inventoryV2.inventoryDeductBatch;
+exports.inventoryGetBatches               = inventoryV2.inventoryGetBatches;
+exports.inventoryGetExpiringBatches       = inventoryV2.inventoryGetExpiringBatches;
+exports.inventoryRegisterSerials          = inventoryV2.inventoryRegisterSerials;
+exports.inventoryUpdateSerialStatus       = inventoryV2.inventoryUpdateSerialStatus;
+exports.inventoryGetSerials               = inventoryV2.inventoryGetSerials;
+exports.inventorySaveBOM                  = inventoryV2.inventorySaveBOM;
+exports.inventoryGetBOM                   = inventoryV2.inventoryGetBOM;
+exports.inventoryCreateWorkOrder          = inventoryV2.inventoryCreateWorkOrder;
+exports.inventoryUpdateWorkOrderStatus    = inventoryV2.inventoryUpdateWorkOrderStatus;
+exports.inventoryGetWorkOrders            = inventoryV2.inventoryGetWorkOrders;
+exports.inventoryRequestTransfer          = inventoryV2.inventoryRequestTransfer;
+exports.inventoryPatchTransfer            = inventoryV2.inventoryPatchTransfer;
+exports.inventoryGetTransfers             = inventoryV2.inventoryGetTransfers;
+exports.inventoryScoreSupplier            = inventoryV2.inventoryScoreSupplier;
+exports.inventoryFlushSyncQueue           = inventoryV2.inventoryFlushSyncQueue;
+exports.inventoryGetAuditLog              = inventoryV2.inventoryGetAuditLog;
+
+/* ── Media Engine — AI Creative Studio ── */
+const mediaEngine = require("./media-engine");
+exports.generateProductMetadata = mediaEngine.generateProductMetadata;
+exports.moderateMediaContent    = mediaEngine.moderateMediaContent;
+exports.deleteMediaAsset        = mediaEngine.deleteMediaAsset;
+exports.onMediaUploaded         = mediaEngine.onMediaUploaded;
+exports.aggregateMediaStats     = mediaEngine.aggregateMediaStats;
+
+
+
+/* ── AI Subscriptions ── */
+const aiSubs = require("./ai-subscriptions");
+exports.activateAIPlan          = aiSubs.activateAIPlan;
+exports.consumeAICredit         = aiSubs.consumeAICredit;
+exports.topupAICredits          = aiSubs.topupAICredits;
+exports.resetAIUsage            = aiSubs.resetAIUsage;
+exports.getAISubscriptionStats  = aiSubs.getAISubscriptionStats;
+exports.updateAIPlan            = aiSubs.updateAIPlan;
+
+/* ── Subscription OS — Universal Entitlement & Self-Healing Platform ── */
+const subOS = require("./subscription-os");
+exports.generateEntitlementToken  = subOS.generateEntitlementToken;
+exports.verifyEntitlement         = subOS.verifyEntitlement;
+exports.processSubscriptionChange = subOS.processSubscriptionChange;
+exports.detectFraud               = subOS.detectFraud;
+exports.proposeFinancialChange    = subOS.proposeFinancialChange;
+exports.approveFinancialChange    = subOS.approveFinancialChange;
+exports.forecastRevenue           = subOS.forecastRevenue;
+exports.runSubscriptionBrain      = subOS.runSubscriptionBrain;
+exports.selfHealSubscriptions     = subOS.selfHealSubscriptions;
+exports.sendBillingReminders      = subOS.sendBillingReminders;
+exports.reconcileBilling          = subOS.reconcileBilling;
+
+/* ── Workflow Automation Platform (WAP) ── */
+const wap = require("./wap");
+exports.wapTriggerWorkflow      = wap.wapTriggerWorkflow;
+exports.wapAdvanceWorkflow      = wap.wapAdvanceWorkflow;
+exports.wapApproveStep          = wap.wapApproveStep;
+exports.wapScheduledResume      = wap.wapScheduledResume;
+exports.wapGetInstance          = wap.wapGetInstance;
+exports.wapGetPendingApprovals  = wap.wapGetPendingApprovals;
+exports.wapSaveDefinition       = wap.wapSaveDefinition;

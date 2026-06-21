@@ -191,11 +191,6 @@
   <div class="logo-section">
     <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="Sokoni"></a>
   </div>
-  <div class="search-bar">
-    <div class="search-suggestions" id="searchSuggestions"></div>
-    <input type="text" id="catSearch" placeholder="Search products..." oninput="searchCatProducts()"
-      onkeydown="if(event.key==='Enter'&&this.value.trim()){event.preventDefault();location.href='search.html?q='+encodeURIComponent(this.value.trim());}">
-  </div>
   <div class="nav-actions">
     <a href="wishlist.html" class="wishlist-nav-btn">❤️</a>
     <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 <span id="catCartCount">0</span></a>
@@ -249,7 +244,10 @@
 <!-- SORT + PRODUCTS -->
 <section class="cat-page-body">
   <div class="cat-sort-bar">
-    <span class="sort-label">Sort by:</span>
+    <input type="text" id="catSearch" placeholder="🔍 Search products…" oninput="searchCatProducts()"
+      style="flex:1;min-width:140px;padding:8px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;font-family:inherit;outline:none;"
+      onkeydown="if(event.key==='Enter'&&this.value.trim()){event.preventDefault();location.href='search.html?q='+encodeURIComponent(this.value.trim());}">
+    <span class="sort-label">Sort:</span>
     <button type="button" class="cat-filter-btn active-filter" onclick="sortProducts('default',this)">Newest</button>
     <button type="button" class="cat-filter-btn" onclick="sortProducts('low',this)">Price ↑</button>
     <button type="button" class="cat-filter-btn" onclick="sortProducts('high',this)">Price ↓</button>

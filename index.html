@@ -392,25 +392,7 @@
 
 
 
-    <div class="search-bar">
-
-      <div class="search-suggestions" id="searchSuggestions">
-
-      </div>
-
-      <input type="search" placeholder="Search products, services..." id="searchInput" autocomplete="new-password"
-        oninput="searchProducts()" onkeyup="showSuggestions()"
-        onkeydown="if(event.key==='Enter'&&this.value.trim()){event.preventDefault();location.href='search.html?q='+encodeURIComponent(this.value.trim());}">
-
-    </div>
-
-
-
     <div class="nav-actions">
-
-      <a href="messages.html" class="nav-messages-btn">
-        💬 <span id="unreadBadge" class="unread-dot" style="display:none;"></span>
-      </a>
 
       <!-- ── NOTIFICATION BELL ── -->
       <div class="n-bell-wrap" id="nBellWrap">
@@ -2213,14 +2195,12 @@
         style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
         <div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <h2 style="font-size:17px;font-weight:900;color:white;margin:0;">📌 For You</h2>
-            <span
-              style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;text-transform:uppercase;letter-spacing:.06em;">InspIQ</span>
+            <h2 style="font-size:17px;font-weight:900;color:white;margin:0;">✨ Picked For You</h2>
             <span
               style="width:7px;height:7px;border-radius:50%;background:#71ff00;box-shadow:0 0 6px #71ff00;animation:pulse-iq 2s infinite;flex-shrink:0;"></span>
           </div>
           <p style="font-size:11px;color:rgba(255,255,255,0.35);margin:3px 0 0;font-weight:400;" id="inspiqSubline">
-            Personalised deals &amp; ads based on what you love</p>
+            Personalised picks &amp; trending deals just for you</p>
         </div>
         <button type="button"
           onclick="document.getElementById('inspiqPicker').style.display=document.getElementById('inspiqPicker').style.display==='none'?'':'none';InspIQ.renderPicker('inspiqPicker')"
@@ -2234,6 +2214,9 @@
 
     <!-- Personalized content feed — capped at 20 on home page -->
     <div id="inspiqFeed" style="padding:0 28px 8px;"></div>
+
+    <!-- SokoniRecs picks — merged into same section -->
+    <div id="sk-recs-foryou" style="margin:0;padding:0 28px 8px;"></div>
 
     <!-- Browse all button -->
     <div id="inspiqBrowseMore" style="display:none;text-align:center;padding:0 28px 24px;">
@@ -2266,19 +2249,6 @@
       }
     }
   </style>
-
-  <!-- RECOMMENDED -->
-
-  <section class="recommended-section" id="recommendedSection" style="display:none;">
-    <div class="section-title new-arrivals-title-row">
-      <div>
-        <h2>✨ Recommended For You</h2>
-        <p class="section-sub">Picked based on what's trending on Sokoni</p>
-      </div>
-      <a href="category.html?cat=all" class="see-all-link">Browse all ›</a>
-    </div>
-    <div id="recommendedContainer" class="recommended-grid"></div>
-  </section>
 
   <!-- MARKETPLACE STATS STRIP -->
 
@@ -2367,9 +2337,6 @@
     </div>
     <div id="homepageReviews" class="rt-right"></div>
   </section>
-
-  <!-- PERSONALISED RECOMMENDATIONS — Picked For You -->
-  <div id="sk-recs-foryou" style="margin:0 0 8px;"></div>
 
   <!-- PREMIUM FOOTER -->
   <footer class="footer">
@@ -3053,7 +3020,7 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
 /* ── Phone: floating menu + bell below navbar, never on header buttons ── */
 @media(max-width:767px){
   .menu-toggle{
-    top:130px !important;
+    top:180px !important;
     left:12px !important;
     right:auto !important;
     width:44px !important;
@@ -3069,13 +3036,13 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
     justify-content:center !important;
   }
   #sokoni-bell-btn{
-    top:130px !important;
+    top:180px !important;
     right:12px !important;
     left:auto !important;
     width:44px !important;
     height:44px !important;
   }
-  #sokoni-notif-drawer{top:182px !important;right:12px !important;}
+  #sokoni-notif-drawer{top:232px !important;right:12px !important;}
   /* Navbar bell hidden on mobile — floating bell takes over */
   #nBellWrap{display:none !important;}
   /* Login button: move out of navbar on mobile — it's in the mobile menu drawer */
@@ -3786,6 +3753,9 @@ document.addEventListener('DOMContentLoaded',function(){
 })();
 </script>
 
+<!-- ── AI POLICY ENGINE (must load before recommendations) ── -->
+<script type="module" src="sokoni-ai-policy.js"></script>
+
 <!-- ── PERSONALISED RECOMMENDATIONS ── -->
 <script src="sokoni-recommendations.js" defer></script>
 <script>
@@ -3793,7 +3763,10 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!window.SokoniRecs) return;
   SokoniRecs.init().then(function () {
     SokoniRecs.getForYou(8).then(function (items) {
-      SokoniRecs.renderWidget('sk-recs-foryou', items, 'Picked For You');
+      /* pass viewCount so the policy engine can score confidence correctly */
+      var viewHist = [];
+      try { viewHist = JSON.parse(localStorage.getItem('sokoni_recs_views') || '[]'); } catch(e){}
+      SokoniRecs.renderWidget('sk-recs-foryou', items, 'Picked For You', { viewCount: viewHist.length });
     });
   });
 });

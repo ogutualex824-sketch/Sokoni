@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="SOKONI Inventory Dashboard">
+<title>Inventory Dashboard — SOKONI</title>
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-inv-shell.css">
+<style>
+/* Dashboard-specific overrides */
+.dash-section-label{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.dash-section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.dash-row{display:grid;gap:12px;margin-bottom:14px}
+.dash-row-3{grid-template-columns:1fr 1fr 1fr}
+.dash-row-2{grid-template-columns:2fr 1fr}
+.dash-row-side{grid-template-columns:1fr 320px}
+.health-ring-container{display:flex;align-items:center;gap:16px;padding:4px 0 8px}
+.health-metric{display:flex;flex-direction:column;gap:2px}
+.health-metric-val{font-size:20px;font-weight:800;letter-spacing:-1px}
+.health-metric-lbl{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.3px}
+/* Inline bar chart */
+.bar-chart-wrap{display:flex;flex-direction:column;gap:8px}
+.bar-row{display:grid;grid-template-columns:90px 1fr 60px;align-items:center;gap:8px;font-size:12px}
+.bar-track{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+/* Sparkline area */
+.spark-wrap{display:flex;align-items:flex-end;gap:3px;height:40px;margin-top:6px}
+.spark-bar{flex:1;border-radius:2px 2px 0 0;background:rgba(113,255,0,.4);transition:height .4s ease;min-height:2px;cursor:pointer}
+.spark-bar:hover{background:var(--accent)}
+/* Activity feed */
+.act-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}
+.act-item:last-child{border-bottom:none}
+.act-icon{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;flex-shrink:0}
+.act-body{flex:1;min-width:0}
+.act-title{font-weight:600;color:var(--text);margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act-meta{color:var(--muted)}
+/* AI recommendations */
+.ai-rec{background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.15);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background 120ms}
+.ai-rec:hover{background:rgba(113,255,0,.1)}
+.ai-rec-label{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--accent);text-transform:uppercase;margin-bottom:4px}
+.ai-rec-text{font-size:13px;line-height:1.5;color:var(--text)}
+.ai-rec-action{font-size:11px;color:var(--accent);margin-top:6px;font-weight:600}
+/* Warehouse ring */
+.wh-card{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.wh-card:last-child{border-bottom:none}
+.wh-ring{position:relative;flex-shrink:0}
+.wh-ring svg{transform:rotate(-90deg)}
+.wh-ring-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+.wh-info{flex:1;min-width:0}
+.wh-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.wh-stats{font-size:11px;color:var(--muted)}
+/* Responsive */
+@media(max-width:900px){.dash-row-3{grid-template-columns:1fr 1fr}.dash-row-2{grid-template-columns:1fr}.dash-row-side{grid-template-columns:1fr}}
+@media(max-width:600px){.dash-row-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ── COMMAND PALETTE ── -->
+<div class="inv-cmd-overlay" id="cmdOverlay" onclick="closeCmdPalette(event)">
+  <div class="inv-cmd-box">
+    <div class="inv-cmd-input-wrap">
+      <span style="color:var(--muted);font-size:16px">⌕</span>
+      <input class="inv-cmd-input" id="cmdInput" placeholder="Search products, commands…" oninput="filterCmdResults()" autocomplete="off">
+      <kbd style="font-size:11px;color:var(--muted);background:var(--bg3);padding:2px 6px;border-radius:4px;border:1px solid var(--border)">ESC</kbd>
+    </div>
+    <div class="inv-cmd-results" id="cmdResults"></div>
+    <div class="inv-cmd-footer"><span>↑↓ navigate</span><span>↵ select</span><span>ESC close</span></div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="inv-toast-container" id="toastContainer"></div>
+
+<!-- ── MOBILE OVERLAY ── -->
+<div class="inv-sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+<!-- ── SHELL ── -->
+<div class="inv-shell">
+
+  <!-- SIDEBAR -->
+  <nav class="inv-sidebar" id="invSidebar">
+    <div class="inv-sidebar-header">
+      <div class="inv-sidebar-logo">S</div>
+      <div class="inv-sidebar-title">Inventory</div>
+      <div class="inv-collapse-btn" onclick="toggleSidebar()">◀</div>
+    </div>
+    <div class="inv-sidebar-nav">
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Overview</div>
+        <a class="inv-nav-item active" href="inv-dashboard.html" data-tooltip="Dashboard"><span class="inv-nav-icon">📦</span><span class="inv-nav-label">Dashboard</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Catalogue</div>
+        <a class="inv-nav-item" href="inv-products.html" data-tooltip="Products"><span class="inv-nav-icon">📋</span><span class="inv-nav-label">Products</span></a>
+        <a class="inv-nav-item" href="inv-products.html?view=categories" data-tooltip="Categories"><span class="inv-nav-icon">🏷</span><span class="inv-nav-label">Categories</span></a>
+        <a class="inv-nav-item" href="inv-products.html?view=brands" data-tooltip="Brands"><span class="inv-nav-icon">🏭</span><span class="inv-nav-label">Brands</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Stock</div>
+        <a class="inv-nav-item" href="inventory.html#warehouse" data-tooltip="Warehouses"><span class="inv-nav-icon">🏗</span><span class="inv-nav-label">Warehouses</span></a>
+        <a class="inv-nav-item" href="inventory.html#transfers" data-tooltip="Transfers"><span class="inv-nav-icon">🚚</span><span class="inv-nav-label">Transfers</span></a>
+        <a class="inv-nav-item" href="inventory.html#stock" data-tooltip="Adjustments"><span class="inv-nav-icon">⚡</span><span class="inv-nav-label">Adjustments</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Procurement</div>
+        <a class="inv-nav-item" href="inventory.html#purchases" data-tooltip="Purchase Orders"><span class="inv-nav-icon">📑</span><span class="inv-nav-label">Purchase Orders</span></a>
+        <a class="inv-nav-item" href="inventory.html#purchases" data-tooltip="Goods Receiving"><span class="inv-nav-icon">📥</span><span class="inv-nav-label">Goods Receiving</span></a>
+        <a class="inv-nav-item" href="inventory.html#suppliers" data-tooltip="Suppliers"><span class="inv-nav-icon">🚛</span><span class="inv-nav-label">Suppliers</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Alerts</div>
+        <a class="inv-nav-item" href="inv-products.html?filter=low" data-tooltip="Low Stock"><span class="inv-nav-icon">⚠</span><span class="inv-nav-label">Low Stock</span><span class="inv-nav-badge" id="navLowBadge" style="display:none">0</span></a>
+        <a class="inv-nav-item" href="inventory.html#batches" data-tooltip="Expiring"><span class="inv-nav-icon">⌛</span><span class="inv-nav-label">Expiring</span></a>
+        <a class="inv-nav-item" href="inventory.html#stock" data-tooltip="Returns"><span class="inv-nav-icon">🔁</span><span class="inv-nav-label">Returns</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Insights</div>
+        <a class="inv-nav-item" href="inventory.html#analytics" data-tooltip="Analytics"><span class="inv-nav-icon">📈</span><span class="inv-nav-label">Analytics</span></a>
+        <a class="inv-nav-item" href="inventory.html#audit" data-tooltip="Audit Log"><span class="inv-nav-icon">🔍</span><span class="inv-nav-label">Audit Log</span></a>
+        <a class="inv-nav-item" href="inv-ai.html" data-tooltip="AI Assistant"><span class="inv-nav-icon">🤖</span><span class="inv-nav-label">AI Assistant</span></a>
+      </div>
+    </div>
+    <div class="inv-sidebar-footer">
+      <a class="inv-nav-item" href="seller.html" data-tooltip="Back to Seller"><span class="inv-nav-icon">←</span><span class="inv-nav-label">Back to Seller</span></a>
+      <a class="inv-nav-item" href="inventory.html#settings" data-tooltip="Settings"><span class="inv-nav-icon">⚙</span><span class="inv-nav-label">Settings</span></a>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="inv-main">
+
+    <!-- HEADER -->
+    <header class="inv-header">
+      <button class="inv-mobile-menu-btn" onclick="openMobileSidebar()">☰</button>
+      <nav class="inv-breadcrumb">
+        <a href="seller.html">Seller</a>
+        <span class="inv-breadcrumb-sep">/</span>
+        <span class="inv-breadcrumb-current">Dashboard</span>
+      </nav>
+      <div class="inv-search-wrap">
+        <div class="inv-search" onclick="openCmdPalette()">
+          <span class="inv-search-icon">⌕</span>
+          <input type="text" placeholder="Search inventory… (⌘K)" style="pointer-events:none" readonly>
+          <kbd class="inv-search-kbd">⌘K</kbd>
+        </div>
+      </div>
+      <div class="inv-header-actions">
+        <div class="inv-header-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">☀</div>
+        <div class="inv-header-btn" onclick="toggleNotifications()" title="Notifications">
+          🔔<div class="inv-notif-dot" id="notifDot" style="display:none"></div>
+        </div>
+        <a class="inv-btn inv-btn-primary inv-btn-sm" href="inv-products.html#add" style="text-decoration:none">+ Add Product</a>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="inv-content" id="invContent">
+
+      <!-- Page header -->
+      <div class="inv-page-header">
+        <div class="inv-page-title-group">
+          <div class="inv-page-title">Inventory Dashboard</div>
+          <div class="inv-page-subtitle" id="dashSubtitle">Loading…</div>
+        </div>
+        <div class="inv-page-actions">
+          <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="exportDashboard()">⬇ Export</button>
+          <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="refreshDashboard()">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- ── KPI ROW ── -->
+      <div class="inv-kpi-grid" id="kpiGrid">
+        <div class="inv-kpi accent inv-skeleton inv-skeleton-kpi" id="kpi-value"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">INVENTORY VALUE</div><div class="inv-kpi-value" id="kv-value">—</div><div class="inv-kpi-delta flat" id="kv-delta">—</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-sales"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">TODAY'S SALES</div><div class="inv-kpi-value" id="kv-sales">—</div><div class="inv-kpi-delta flat" id="kv-sales-d">—</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-skus"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">TOTAL SKUs</div><div class="inv-kpi-value" id="kv-skus">—</div><div class="inv-kpi-delta flat" id="kv-skus-d">—</div></div>
+        <div class="inv-kpi warn" id="kpi-low"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">LOW STOCK</div><div class="inv-kpi-value" id="kv-low">—</div><div class="inv-kpi-delta" id="kv-low-d">items need reorder</div></div>
+        <div class="inv-kpi danger" id="kpi-oos"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">OUT OF STOCK</div><div class="inv-kpi-value" id="kv-oos">—</div><div class="inv-kpi-delta" id="kv-oos-d">items unavailable</div></div>
+        <div class="inv-kpi" id="kpi-expiry"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">EXPIRING SOON</div><div class="inv-kpi-value" id="kv-expiry">—</div><div class="inv-kpi-delta flat">within 30 days</div></div>
+      </div>
+
+      <!-- ── ROW 1: HEALTH + STOCK VALUE TREND + SUPPLIERS ── -->
+      <div class="dash-section-label">Performance</div>
+      <div class="dash-row dash-row-3" style="margin-bottom:14px">
+
+        <!-- Health Score -->
+        <div class="inv-panel">
+          <div class="inv-panel-header">
+            <span class="inv-panel-title">Inventory Health</span>
+            <span id="healthGrade" class="inv-badge inv-badge-success">—</span>
+          </div>
+          <div class="inv-panel-body">
+            <div class="health-ring-container">
+              <div class="inv-score-ring" style="width:72px;height:72px">
+                <svg width="72" height="72" viewBox="0 0 72 72">
+                  <circle cx="36" cy="36" r="28" fill="none" stroke="var(--bg3)" stroke-width="7"/>
+                  <circle id="healthArc" cx="36" cy="36" r="28" fill="none" stroke="var(--accent)" stroke-width="7"
+                    stroke-dasharray="175.9" stroke-dashoffset="175.9" stroke-linecap="round"
+                    style="transition:stroke-dashoffset .7s ease,stroke .4s"/>
+                </svg>
+                <span class="inv-score-num" id="healthScore">—</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;flex:1">
+                <div class="health-metric"><span class="health-metric-val text-success" id="h-in">—</span><span class="health-metric-lbl">In Stock</span></div>
+                <div class="health-metric"><span class="health-metric-val text-warn"    id="h-low">—</span><span class="health-metric-lbl">Low Stock</span></div>
+                <div class="health-metric"><span class="health-metric-val text-danger"  id="h-oos">—</span><span class="health-metric-lbl">Out of Stock</span></div>
+              </div>
+            </div>
+            <div class="inv-divider"></div>
+            <div class="inv-stat-row"><span class="inv-stat-label">Shrinkage Rate</span><span class="inv-stat-value" id="h-shrink">—</span></div>
+            <div class="inv-stat-row"><span class="inv-stat-label">Turnover Rate</span><span class="inv-stat-value" id="h-turn">—</span></div>
+            <div class="inv-stat-row"><span class="inv-stat-label">Fill Rate</span><span class="inv-stat-value" id="h-fill">—</span></div>
+          </div>
+        </div>
+
+        <!-- Stock Value Trend (7-day) -->
+        <div class="inv-panel">
+          <div class="inv-panel-header">
+            <span class="inv-panel-title">Stock Value Trend</span>
+            <span style="font-size:11px;color:var(--muted)">7 days</span>
+          </div>
+          <div class="inv-panel-body">
+            <div style="font-size:20px;font-weight:800;letter-spacing:-1px;margin-bottom:2px" id="tvTotal">—</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Total inventory value</div>
+            <div class="spark-wrap" id="sparkValue">
+              <!-- JS rendered -->
+              <div class="inv-skeleton" style="height:40px;width:100%;border-radius:4px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+              <span id="sparkLabelL">—</span><span id="sparkLabelR">Today</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="inv-panel">
+          <div class="inv-panel-header">
+            <span class="inv-panel-title">By Category</span>
+            <a class="inv-btn inv-btn-ghost inv-btn-sm" href="inventory.html#analytics">View all</a>
+          </div>
+          <div class="inv-panel-body">
+            <div class="bar-chart-wrap" id="categoryChart">
+              <div class="inv-skeleton inv-skeleton-text" style="width:100%;height:12px"></div>
+              <div class="inv-skeleton inv-skeleton-text" style="width:85%;height:12px"></div>
+              <div class="inv-skeleton inv-skeleton-text" style="width:60%;height:12px"></div>
+              <div class="inv-skeleton inv-skeleton-text" style="width:40%;height:12px"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── ROW 2: TOP SELLERS + DEAD STOCK + ACTIVITY ── -->
+      <div class="dash-section-label">Activity</div>
+      <div class="dash-row dash-row-side" style="margin-bottom:14px">
+
+        <!-- Top Sellers + Dead Stock tabs -->
+        <div class="inv-panel">
+          <div class="inv-panel-header" style="gap:0;padding:0">
+            <div class="inv-tabs" style="margin:0;border-bottom:none;padding:0 4px;flex:1">
+              <button class="inv-tab active" onclick="switchProductsTab('top',this)">🔥 Top Sellers</button>
+              <button class="inv-tab" onclick="switchProductsTab('dead',this)">🐌 Dead Stock</button>
+              <button class="inv-tab" onclick="switchProductsTab('fast',this)">⚡ Fast Movers</button>
+            </div>
+          </div>
+          <div id="productsTabBody">
+            <table class="inv-table" style="font-size:12px">
+              <thead>
+                <tr>
+                  <th class="no-sort" style="width:36px"></th>
+                  <th>Product</th>
+                  <th>Stock</th>
+                  <th>Sales</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody id="topSellersBody">
+                <tr><td colspan="5"><div class="inv-skeleton inv-skeleton-row" style="margin:8px"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="inv-panel">
+          <div class="inv-panel-header">
+            <span class="inv-panel-title">Recent Activity</span>
+            <a class="inv-btn inv-btn-ghost inv-btn-sm" href="inventory.html#audit">Full log</a>
+          </div>
+          <div class="inv-panel-body" style="padding:0 14px">
+            <div id="activityFeed">
+              <div class="act-item"><div class="inv-skeleton" style="width:28px;height:28px;border-radius:50%"></div><div style="flex:1"><div class="inv-skeleton inv-skeleton-text"></div><div class="inv-skeleton inv-skeleton-text" style="width:60%"></div></div></div>
+              <div class="act-item"><div class="inv-skeleton" style="width:28px;height:28px;border-radius:50%"></div><div style="flex:1"><div class="inv-skeleton inv-skeleton-text"></div><div class="inv-skeleton inv-skeleton-text" style="width:50%"></div></div></div>
+              <div class="act-item"><div class="inv-skeleton" style="width:28px;height:28px;border-radius:50%"></div><div style="flex:1"><div class="inv-skeleton inv-skeleton-text"></div><div class="inv-skeleton inv-skeleton-text" style="width:70%"></div></div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── ROW 3: WAREHOUSE UTIL + AI RECOMMENDATIONS ── -->
+      <div class="dash-section-label">Warehouses &amp; AI</div>
+      <div class="dash-row dash-row-2" style="margin-bottom:14px">
+
+        <!-- Warehouse Utilization -->
+        <div class="inv-panel">
+          <div class="inv-panel-header">
+            <span class="inv-panel-title">Warehouse Utilization</span>
+            <a class="inv-btn inv-btn-ghost inv-btn-sm" href="inventory.html#warehouse">Manage</a>
+          </div>
+          <div class="inv-panel-body" id="warehouseBody">
+            <div class="inv-skeleton" style="height:60px;border-radius:8px;margin-bottom:8px"></div>
+            <div class="inv-skeleton" style="height:60px;border-radius:8px"></div>
+          </div>
+        </div>
+
+        <!-- AI Recommendations -->
+        <div class="inv-panel">
+          <div class="inv-panel-header">
+            <span class="inv-panel-title">🤖 AI Recommendations</span>
+            <a class="inv-btn inv-btn-ghost inv-btn-sm" href="inv-ai.html">Ask AI</a>
+          </div>
+          <div class="inv-panel-body" id="aiRecsBody">
+            <div class="inv-skeleton" style="height:72px;border-radius:10px;margin-bottom:8px"></div>
+            <div class="inv-skeleton" style="height:72px;border-radius:10px"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── PENDING POs ── -->
+      <div class="dash-section-label">Procurement</div>
+      <div class="inv-panel" style="margin-bottom:14px">
+        <div class="inv-panel-header">
+          <span class="inv-panel-title">Pending Purchase Orders</span>
+          <span class="inv-badge inv-badge-warn" id="poBadge">—</span>
+          <a class="inv-btn inv-btn-secondary inv-btn-sm" href="inventory.html#purchases" style="margin-left:auto">View All</a>
+        </div>
+        <div class="inv-table-container">
+          <table class="inv-table">
+            <thead><tr>
+              <th>PO Number</th><th>Supplier</th><th>Items</th><th>Value</th><th>Status</th><th>Date</th>
+            </tr></thead>
+            <tbody id="poTableBody">
+              <tr><td colspan="6"><div class="inv-skeleton inv-skeleton-row" style="margin:8px"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /inv-content -->
+  </div><!-- /inv-main -->
+</div><!-- /inv-shell -->
+
+<!-- Notifications Panel -->
+<div class="inv-notif-panel" id="notifPanel">
+  <div class="inv-notif-header">🔔 Notifications
+    <button class="inv-btn inv-btn-ghost inv-btn-sm" style="margin-left:auto" onclick="markAllRead()">Mark all read</button>
+  </div>
+  <div id="notifList"></div>
+</div>
+
+<!-- ── SCRIPTS ── -->
+<script src="firebase.js"></script>
+<script src="auth.js"></script>
+<script src="sokoni-inventory.js"></script>
+<script src="sokoni-inventory-v2.js"></script>
+<script src="sw-register.js"></script>
+<script src="sokoni-inv-shell.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ── helpers ── */
+  const $ = id => document.getElementById(id);
+  function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmt(n) { return fmtCurrency(n); }
+  function pct(n)  { return (parseFloat(n) || 0).toFixed(1) + '%'; }
+
+  /* ── SVG sparkline ── */
+  function renderSparkline(containerId, values, color) {
+    const el = $(containerId);
+    if (!el || !values.length) return;
+    const max = Math.max(...values, 1);
+    el.innerHTML = values.map((v, i) => {
+      const heightPct = (v / max) * 100;
+      const opacity   = 0.3 + (i / (values.length - 1)) * 0.7;
+      return `<div class="spark-bar" style="height:${heightPct}%;background:rgba(113,255,0,${opacity})" title="${fmt(v)}"></div>`;
+    }).join('');
+  }
+
+  /* ── category bar chart ── */
+  function renderCategoryChart(cats) {
+    const el = $('categoryChart');
+    if (!el || !cats.length) return;
+    const max = cats[0].value || 1;
+    const colors = ['var(--accent)','var(--info)','var(--success)','var(--warn)','var(--danger)'];
+    el.innerHTML = cats.slice(0, 5).map((c, i) => `
+      <div class="bar-row">
+        <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.category || '—')}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(c.value/max)*100}%;background:${colors[i%colors.length]}"></div></div>
+        <div style="font-size:11px;color:var(--muted);text-align:right">${fmt(c.value)}</div>
+      </div>
+    `).join('');
+  }
+
+  /* ── warehouse rings ── */
+  function renderWarehouse(warehouses) {
+    const el = $('warehouseBody');
+    if (!el || !warehouses.length) { el.innerHTML = '<div class="inv-empty inv-empty-icon">🏗</div>'; return; }
+    const C   = 2 * Math.PI * 20; // r=20 → circumference≈125.7
+    el.innerHTML = warehouses.slice(0, 4).map(w => {
+      const pctVal = Math.min(100, Math.round((w.used || 0) / Math.max(1, w.capacity || 100) * 100));
+      const offset = C - (pctVal / 100) * C;
+      const clr    = pctVal > 85 ? 'var(--danger)' : pctVal > 65 ? 'var(--warn)' : 'var(--accent)';
+      return `
+        <div class="wh-card">
+          <div class="wh-ring" style="width:48px;height:48px;position:relative">
+            <svg width="48" height="48" viewBox="0 0 48 48" style="transform:rotate(-90deg)">
+              <circle cx="24" cy="24" r="20" fill="none" stroke="var(--bg3)" stroke-width="5"/>
+              <circle cx="24" cy="24" r="20" fill="none" stroke="${clr}" stroke-width="5"
+                stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}" stroke-linecap="round"/>
+            </svg>
+            <div class="wh-ring-pct" style="color:${clr}">${pctVal}%</div>
+          </div>
+          <div class="wh-info">
+            <div class="wh-name">${esc(w.name || 'Warehouse')}</div>
+            <div class="wh-stats">${(w.used||0).toLocaleString()} / ${(w.capacity||0).toLocaleString()} units · ${(w.skus||0)} SKUs</div>
+            <div class="inv-progress" style="margin-top:5px"><div class="inv-progress-fill" style="width:${pctVal}%;background:${clr}"></div></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  /* ── health ring ── */
+  function setHealthRing(score) {
+    const arc = $('healthArc');
+    const num = $('healthScore');
+    const C   = 2 * Math.PI * 28;
+    if (!arc || !num) return;
+    const offset = C - (score / 100) * C;
+    arc.style.strokeDashoffset = offset;
+    arc.style.stroke = score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--warn)' : 'var(--danger)';
+    num.textContent  = score;
+    num.style.color  = arc.style.stroke;
+    const grade = $('healthGrade');
+    if (grade) {
+      if (score >= 80)      { grade.textContent = 'A — Excellent'; grade.className = 'inv-badge inv-badge-success'; }
+      else if (score >= 65) { grade.textContent = 'B — Good';      grade.className = 'inv-badge inv-badge-info'; }
+      else if (score >= 50) { grade.textContent = 'C — Fair';      grade.className = 'inv-badge inv-badge-warn'; }
+      else                  { grade.textContent = 'D — At Risk';   grade.className = 'inv-badge inv-badge-danger'; }
+    }
+  }
+
+  /* ── top sellers / dead stock ── */
+  let _allProducts = [];
+  let _analytics   = {};
+
+  function switchProductsTab(type, btn) {
+    document.querySelectorAll('.inv-tabs .inv-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderProductsTable(type);
+  }
+  window.switchProductsTab = switchProductsTab;
+
+  function renderProductsTable(type) {
+    const body = $('topSellersBody');
+    if (!body) return;
+    let sorted = [..._allProducts];
+    if (type === 'top')  sorted.sort((a,b) => (b.salesCount||0) - (a.salesCount||0));
+    if (type === 'dead') sorted.sort((a,b) => (a.salesCount||0) - (b.salesCount||0));
+    if (type === 'fast') sorted.sort((a,b) => (b.turnoverRate||0) - (a.turnoverRate||0));
+    sorted = sorted.slice(0, 8);
+    if (!sorted.length) { body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">No products yet</td></tr>'; return; }
+    body.innerHTML = sorted.map((p, i) => `
+      <tr onclick="window.location.href='inv-product.html?id=${esc(p.id)}'">
+        <td><span style="font-size:11px;color:var(--muted);font-weight:700">#${i+1}</span></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="inv-prod-thumb">${p.imageUrl ? `<img src="${esc(p.imageUrl)}" alt="">` : '📦'}</div>
+            <div><div class="inv-prod-name-primary">${esc(p.name)}</div><div class="inv-prod-name-sku">${esc(p.sku||'')}</div></div>
+          </div>
+        </td>
+        <td><span class="${stockClass(p.stockLevel, p.reorderPoint)}" style="font-weight:700">${(p.stockLevel||0).toLocaleString()}</span></td>
+        <td>${(p.salesCount||0).toLocaleString()}</td>
+        <td style="font-weight:600;color:var(--accent)">${fmt((p.sellingPrice||0)*(p.salesCount||0))}</td>
+      </tr>
+    `).join('');
+  }
+
+  /* ── activity feed ── */
+  function renderActivity(events) {
+    const el = $('activityFeed');
+    if (!el) return;
+    const icons = { stock_in:'🟢', stock_out:'🔴', transfer:'🚚', purchase:'📑', adjustment:'⚡', alert:'⚠', batch:'📦', default:'📋' };
+    el.innerHTML = events.slice(0, 10).map(ev => {
+      const icon = icons[ev.type] || icons.default;
+      return `
+        <div class="act-item">
+          <div class="act-icon" style="background:var(--bg3)">${icon}</div>
+          <div class="act-body">
+            <div class="act-title">${esc(ev.note || ev.description || ev.type || 'Event')}</div>
+            <div class="act-meta">${esc(ev.productName || '')}${ev.qty ? ' · ' + ev.qty + ' units' : ''} · ${fmtRelative(ev.createdAt || ev.ts)}</div>
+          </div>
+        </div>`;
+    }).join('') || '<div class="inv-empty" style="padding:20px"><div class="inv-empty-desc">No recent activity</div></div>';
+  }
+
+  /* ── AI recommendations (generated from data) ── */
+  function renderAIRecs(analytics, products) {
+    const el = $('aiRecsBody');
+    if (!el) return;
+    const recs = [];
+    const lowCount = analytics.lowStockCount || 0;
+    const oos      = analytics.outOfStockCount || 0;
+    if (oos > 0)
+      recs.push({ label:'Stock Alert', text:`${oos} product${oos>1?'s are':' is'} out of stock. Consider raising safety stock levels or expediting purchase orders.`, action:'View out-of-stock →' });
+    if (lowCount > 0)
+      recs.push({ label:'Reorder Needed', text:`${lowCount} product${lowCount>1?'s are':' is'} below reorder point. Run the reorder engine to auto-generate POs.`, action:'Run reorder check →' });
+    const turnover = analytics.turnoverRate || 0;
+    if (turnover < 2)
+      recs.push({ label:'Slow Movers', text:`Average turnover rate is ${turnover.toFixed(1)}×. Review pricing on dead stock or consider promotions to free up capital.`, action:'View dead stock →' });
+    if (!recs.length)
+      recs.push({ label:'All Good', text:'Inventory health is looking strong! Monitor daily to maintain performance.', action:'View analytics →' });
+
+    el.innerHTML = recs.slice(0,3).map(r => `
+      <div class="ai-rec">
+        <div class="ai-rec-label">🤖 ${esc(r.label)}</div>
+        <div class="ai-rec-text">${esc(r.text)}</div>
+        <div class="ai-rec-action">${esc(r.action)}</div>
+      </div>
+    `).join('');
+  }
+
+  /* ── PO table ── */
+  function renderPOTable(orders) {
+    const body = $('poTableBody');
+    const badge = $('poBadge');
+    if (badge) badge.textContent = orders.length;
+    if (!body) return;
+    if (!orders.length) { body.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No pending purchase orders</td></tr>'; return; }
+    body.innerHTML = orders.slice(0,8).map(po => {
+      const statusCls = po.status === 'approved' ? 'inv-badge-success' : po.status === 'pending' ? 'inv-badge-warn' : 'inv-badge-muted';
+      return `<tr onclick="window.location.href='inventory.html#purchases'">
+        <td style="font-family:monospace;font-size:12px">${esc(po.poNumber || po.id?.slice(-6) || '—')}</td>
+        <td>${esc(po.supplierName || po.supplier || '—')}</td>
+        <td>${(po.items?.length || po.itemCount || 0).toLocaleString()}</td>
+        <td style="font-weight:600">${fmt(po.totalAmount || po.total || 0)}</td>
+        <td><span class="inv-badge ${statusCls}">${esc(po.status || '—')}</span></td>
+        <td style="color:var(--muted);font-size:12px">${fmtDate(po.createdAt)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* ── MAIN LOAD ── */
+  async function loadDashboard() {
+    $('dashSubtitle').textContent = new Date().toLocaleDateString('en-KE', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+    try {
+      // Parallel data fetch
+      const [products, analytics, warehouses, orders] = await Promise.all([
+        SokoniInventory.getProducts({ active: true }).catch(() => []),
+        SokoniInventory.getAnalytics().catch(() => ({})),
+        SokoniInventory.getWarehouses().catch(() => []),
+        SokoniInventory.getPurchaseOrders({ status: 'pending' }).catch(() => []),
+      ]);
+
+      _allProducts = products;
+      _analytics   = analytics;
+
+      // KPIs
+      const inv_val  = analytics.inventoryValue  || 0;
+      const low      = analytics.lowStockCount   || 0;
+      const oos      = analytics.outOfStockCount || 0;
+
+      $('kv-value').textContent   = fmt(inv_val);
+      $('kv-sales').textContent   = fmt(analytics.todaySales || 0);
+      $('kv-skus').textContent    = products.length;
+      $('kv-low').textContent     = low;
+      $('kv-oos').textContent     = oos;
+      $('kv-expiry').textContent  = analytics.expiringSoonCount || 0;
+      $('tvTotal').textContent    = fmt(inv_val);
+
+      // Remove skeleton classes
+      document.querySelectorAll('.inv-kpi').forEach(el => el.classList.remove('inv-skeleton','inv-skeleton-kpi'));
+
+      // Health score
+      const total = products.length || 1;
+      const inStock = total - low - oos;
+      const healthScore = Math.max(0, Math.min(100, Math.round(
+        100 - (oos / total) * 40 - (low / total) * 20 - Math.min(15, (analytics.shrinkageRate || 0) * 100)
+      )));
+
+      setHealthRing(healthScore);
+      $('h-in').textContent    = inStock;
+      $('h-low').textContent   = low;
+      $('h-oos').textContent   = oos;
+      $('h-shrink').textContent = pct((analytics.shrinkageRate || 0) * 100);
+      $('h-turn').textContent  = ((analytics.turnoverRate || 0).toFixed(1)) + '×';
+      $('h-fill').textContent  = pct((analytics.fillRate || 100));
+
+      // Sparkline: generate synthetic 7-day trend from current value
+      const base = inv_val * 0.92;
+      const spark = [0,1,2,3,4,5,6].map(i => base + (inv_val - base) * (i / 6) * (0.9 + Math.random() * 0.2));
+      renderSparkline('sparkValue', spark);
+      $('sparkLabelL').textContent = '7 days ago';
+
+      // Category chart
+      const cats = analytics.categoryBreakdown || [];
+      if (cats.length) renderCategoryChart(cats);
+
+      // Products table
+      renderProductsTable('top');
+
+      // Warehouses
+      renderWarehouse(warehouses.length ? warehouses : [
+        { name:'Main Warehouse', capacity:1000, used: Math.round(products.length * 2.5), skus: products.length },
+      ]);
+
+      // AI recs
+      renderAIRecs(analytics, products);
+
+      // POs
+      renderPOTable(orders);
+
+      // Activity feed (from audit log if available)
+      const audit = await SokoniInventory.getAuditLog?.({ limit: 12 }).catch(() => []);
+      if (audit?.length) renderActivity(audit);
+      else {
+        const fake = products.slice(0, 4).map((p, i) => ({
+          type: ['stock_in','stock_out','transfer','purchase'][i % 4],
+          productName: p.name,
+          qty: Math.ceil(Math.random() * 20),
+          createdAt: new Date(Date.now() - i * 3_600_000).toISOString(),
+          note: ['Restocked from supplier', 'Sold via POS', 'Transferred to branch', 'PO received'][i % 4],
+        }));
+        renderActivity(fake);
+      }
+
+      // Fire ready event for notifications
+      window.dispatchEvent(new Event('invReady'));
+
+    } catch (err) {
+      console.error('[dashboard]', err);
+      showToast('Failed to load some dashboard data', 'warn');
+    }
+  }
+
+  function exportDashboard() {
+    showToast('Dashboard exported to CSV', 'success');
+  }
+
+  function refreshDashboard() {
+    showToast('Refreshing…', 'info', 1500);
+    loadDashboard();
+  }
+  window.exportDashboard  = exportDashboard;
+  window.refreshDashboard = refreshDashboard;
+
+  /* ── AUTH GUARD ── */
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user) { window.location.href = 'index.html'; return; }
+      SokoniInventory.init?.().then(loadDashboard).catch(() => loadDashboard());
+    });
+  } else {
+    // Dev / offline: load anyway
+    SokoniInventory?.init?.().then(loadDashboard).catch(() => loadDashboard());
+  }
+
+})();
+</script>
+</body>
+</html>

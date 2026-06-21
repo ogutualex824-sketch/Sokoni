@@ -172,6 +172,9 @@
   /* Finance tabs wrap */
   .finance-tab { padding: 6px 10px; font-size: 11px; }
 
+  /* Tighter cart footer — gives more room to the item list */
+  .pos-cart-footer { padding: 8px 10px !important; }
+
   /* ── Reports header: stack on phone ── */
   .rep-header {
     flex-direction: column !important;

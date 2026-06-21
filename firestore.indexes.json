@@ -1,6 +1,127 @@
 ﻿{
   "indexes": [
     {
+      "collectionGroup": "intelligenceLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "module",       "order": "ASCENDING" },
+        { "fieldPath": "ts",           "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligenceLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "decisionType", "order": "ASCENDING" },
+        { "fieldPath": "ts",           "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligenceLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "source",       "order": "ASCENDING" },
+        { "fieldPath": "ts",           "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligenceLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "_type",        "order": "ASCENDING" },
+        { "fieldPath": "ts",           "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligenceMetrics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "module",       "order": "ASCENDING" },
+        { "fieldPath": "date",         "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "featureFlags",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "enabled",      "order": "ASCENDING" },
+        { "fieldPath": "updatedAt",    "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "definitionId",           "order": "ASCENDING" },
+        { "fieldPath": "metadata.startedAt",     "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",                 "order": "ASCENDING" },
+        { "fieldPath": "metadata.startedAt",     "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",                 "order": "ASCENDING" },
+        { "fieldPath": "metadata.completedAt",   "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "metadata.module",        "order": "ASCENDING" },
+        { "fieldPath": "metadata.startedAt",     "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "definitionId",           "order": "ASCENDING" },
+        { "fieldPath": "status",                 "order": "ASCENDING" },
+        { "fieldPath": "metadata.startedAt",     "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowInstances",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "metadata.lastUpdatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowApprovals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",       "order": "ASCENDING" },
+        { "fieldPath": "requestedAt",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowApprovals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",       "order": "ASCENDING" },
+        { "fieldPath": "assignees",    "arrayConfig": "CONTAINS" },
+        { "fieldPath": "requestedAt",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workflowSchedule",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",     "order": "ASCENDING" },
+        { "fieldPath": "executeAt",  "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "products",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1220,7 +1341,215 @@
 
     /* posTransactions — seller + status filter (pending/completed/refunded) */
     { "collectionGroup": "posTransactions", "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "sellerId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] }
+      "fields": [{ "fieldPath": "sellerId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "timestamp", "order": "DESCENDING" }] },
+
+    /* ── mediaAssets — AI Creative Studio ────────────────────────── */
+    /* User's full asset library, newest first */
+    { "collectionGroup": "mediaAssets", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* User's assets filtered by destination (product/banner/story/etc.) */
+    { "collectionGroup": "mediaAssets", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "dest", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* User's assets filtered by storage tier (hot/warm/cold) */
+    { "collectionGroup": "mediaAssets", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "tier", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* Deduplication lookup by SHA-256 hash */
+    { "collectionGroup": "mediaAssets", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "hash", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* Moderation queue — unmoderated assets across all users (admin) */
+    { "collectionGroup": "mediaAssets", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "moderated", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* ── mediaAnalytics — upload events by user ──────────────────── */
+    { "collectionGroup": "mediaAnalytics", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "mediaAnalytics", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "event", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    /* ── mediaStatsByDay — daily aggregates per user ─────────────── */
+    { "collectionGroup": "mediaStatsByDay", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "date", "order": "DESCENDING" }] },
+
+    /* ── mediaAIRateLimit — rate limiting per user+date ──────────── */
+    { "collectionGroup": "mediaAIRateLimit", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "date", "order": "DESCENDING" }] },
+
+    /* ══════════════════════════════════════════════════════════════
+       INVENTORY V2 — Advanced procurement & operations indexes
+    ═══════════════════════════════════════════════════════════════ */
+
+    /* ── inventory_variants ── */
+    { "collectionGroup": "inventory_variants", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }] },
+    { "collectionGroup": "inventory_variants", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_variants", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_variants", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "sku", "order": "ASCENDING" }, { "fieldPath": "tenantId", "order": "ASCENDING" }] },
+
+    /* ── inventory_bom ── */
+    { "collectionGroup": "inventory_bom", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "parentProductId", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }] },
+    { "collectionGroup": "inventory_bom", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* ── inventory_work_orders ── */
+    { "collectionGroup": "inventory_work_orders", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_work_orders", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_work_orders", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_work_orders", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "bomId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_work_orders", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "scheduledDate", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+
+    /* ── inventory_transfers ── */
+    { "collectionGroup": "inventory_transfers", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_transfers", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_transfers", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "fromWarehouseId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_transfers", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "toWarehouseId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_transfers", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "productId", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+
+    /* ── inventory_grn (Goods Received Notes) ── */
+    { "collectionGroup": "inventory_grn", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "purchaseOrderId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_grn", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "supplierId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_grn", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_grn", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_grn", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "warehouseId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* ── inventory_stockcounts ── */
+    { "collectionGroup": "inventory_stockcounts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "warehouseId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+    { "collectionGroup": "inventory_stockcounts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_stockcounts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_stockcounts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "warehouseId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* ── inventory_stockcounts/lines (sub-collection) ── */
+    { "collectionGroup": "lines", "queryScope": "COLLECTION_GROUP",
+      "fields": [{ "fieldPath": "countId", "order": "ASCENDING" }, { "fieldPath": "productId", "order": "ASCENDING" }] },
+    { "collectionGroup": "lines", "queryScope": "COLLECTION_GROUP",
+      "fields": [{ "fieldPath": "countId", "order": "ASCENDING" }, { "fieldPath": "variance", "order": "DESCENDING" }] },
+
+    /* ── inventory_requisitions ── */
+    { "collectionGroup": "inventory_requisitions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_requisitions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "requestedBy", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_requisitions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_requisitions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "supplierId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" }] },
+
+    /* ── inventory_supplier_contracts ── */
+    { "collectionGroup": "inventory_supplier_contracts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "supplierId", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }] },
+    { "collectionGroup": "inventory_supplier_contracts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "expiresAt", "order": "ASCENDING" }] },
+
+    /* ── inventory_shelf_scans ── */
+    { "collectionGroup": "inventory_shelf_scans", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_shelf_scans", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "warehouseId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory_shelf_scans", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    /* ── aiSubscriptions — AI plan management ─────────────────── */
+    { "collectionGroup": "aiSubscriptions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "activatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "aiSubscriptions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "activatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "aiSubscriptions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "plan", "order": "ASCENDING" }, { "fieldPath": "activatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "aiSubscriptions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "plan", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "activatedAt", "order": "DESCENDING" }] },
+
+    /* ── aiUsage — per-period usage counters ──────────────────── */
+    { "collectionGroup": "aiUsage", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "period", "order": "DESCENDING" }] },
+    { "collectionGroup": "aiUsage", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "period", "order": "ASCENDING" }, { "fieldPath": "uid", "order": "ASCENDING" }] },
+
+    /* ── aiCredits — credit balances and ledger ───────────────── */
+    { "collectionGroup": "aiCreditLedger", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "aiCreditLedger", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    /* ── aiBoosts — active marketplace boosts ─────────────────── */
+    { "collectionGroup": "aiBoosts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "expiresAt", "order": "ASCENDING" }] },
+    { "collectionGroup": "aiBoosts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "expiresAt", "order": "ASCENDING" }] },
+
+    /* ── aiPromotions — promo codes ───────────────────────────── */
+    { "collectionGroup": "aiPromotions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "active", "order": "ASCENDING" }, { "fieldPath": "expiresAt", "order": "ASCENDING" }] },
+    { "collectionGroup": "aiPromotions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "code", "order": "ASCENDING" }, { "fieldPath": "active", "order": "ASCENDING" }] },
+
+    /* ── entitlements — universal entitlement map ─────────────── */
+    { "collectionGroup": "entitlements", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "riskScore", "order": "DESCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "entitlements", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "needsRefresh", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+
+    /* ── subscriptionBrain — churn & upgrade predictions ─────── */
+    { "collectionGroup": "subscriptionBrain", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "retentionTier", "order": "ASCENDING" }, { "fieldPath": "churnRisk", "order": "DESCENDING" }] },
+    { "collectionGroup": "subscriptionBrain", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "upgradeProb", "order": "DESCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "subscriptionBrain", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "plan", "order": "ASCENDING" }, { "fieldPath": "churnRisk", "order": "DESCENDING" }] },
+
+    /* ── fraudEvents — real-time fraud monitoring ─────────────── */
+    { "collectionGroup": "fraudEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "fraudEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "resolved", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "fraudEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    /* ── financialProposals — dual-admin approval queue ───────── */
+    { "collectionGroup": "financialProposals", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "proposedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "financialProposals", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "proposerUid", "order": "ASCENDING" }, { "fieldPath": "proposedAt", "order": "DESCENDING" }] },
+
+    /* ── selfHealLog — auto-repair audit trail ────────────────── */
+    { "collectionGroup": "selfHealLog", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    /* ── billingReconciliation — daily integrity checks ───────── */
+    { "collectionGroup": "billingReconciliation", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "resolved", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+
+    /* ── notificationQueue — billing reminders + retries ─────── */
+    { "collectionGroup": "notificationQueue", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "notificationQueue", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "type", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }

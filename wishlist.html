@@ -246,9 +246,6 @@
   <div class="logo-section">
     <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></a>
   </div>
-  <div class="search-bar">
-    <input type="text" id="wishSearch" placeholder="Search wishlist..." oninput="searchWishlist()">
-  </div>
   <div class="wish-nav-actions" style="display:flex;gap:8px;align-items:center;">
     <div class="cart-badge-wrap">
       <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 <span id="cartBadge">0</span></a>
@@ -409,7 +406,8 @@ function buyNowWish(index){
 }
 
 function searchWishlist(){
-  var val = document.getElementById("wishSearch").value.toLowerCase();
+  var el = document.getElementById("wishSearchHero") || document.getElementById("wishSearch");
+  var val = el ? el.value.toLowerCase() : "";
   renderWishlist(val ? _wishData.filter(function(p){ return p.name.toLowerCase().includes(val); }) : _wishData);
 }
 

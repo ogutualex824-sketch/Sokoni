@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="description" content="SOKONI AI Subscriptions — choose your AI plan, manage credits, and unlock AI-powered creative tools">
+  <title>AI Subscriptions — SOKONI</title>
+
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/mobile.css">
+
+  <style>
+    :root {
+      --g:  #71ff00; --g2: #4fc800;
+      --bg: #0d0d0d; --bg2: #111; --bg3: #181818;
+      --border: rgba(255,255,255,.07);
+      --text: #fff; --muted: rgba(255,255,255,.42);
+      --r: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui,-apple-system,sans-serif; }
+
+    /* Header */
+    .s-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.6);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+    .s-back{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px 8px;border-radius:8px}
+    .s-back:hover{color:var(--text)}
+    .s-title{font-size:17px;font-weight:800;color:var(--g);flex:1}
+    .s-title span{color:var(--muted);font-size:12px;font-weight:400;display:block;margin-top:-2px}
+
+    /* Billing toggle */
+    .billing-toggle{display:flex;align-items:center;justify-content:center;gap:12px;margin:32px 0 8px;font-size:14px}
+    .billing-toggle label{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted)}
+    .billing-toggle label.active{color:var(--text);font-weight:700}
+    .toggle-pill{position:relative;width:48px;height:26px;background:#222;border-radius:13px;cursor:pointer;transition:.2s}
+    .toggle-pill::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;background:var(--g);border-radius:50%;transition:.2s}
+    .toggle-pill.annual::after{left:25px}
+    .save-badge{background:rgba(113,255,0,.12);color:var(--g);font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+
+    /* Pricing grid */
+    .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;padding:0 20px 20px;max-width:1200px;margin:0 auto}
+    .plan-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:24px;position:relative;transition:.2s}
+    .plan-card.featured{border-color:var(--g);box-shadow:0 0 0 1px var(--g),0 8px 40px rgba(113,255,0,.1)}
+    .plan-card:hover{border-color:rgba(113,255,0,.3)}
+    .plan-badge{position:absolute;top:16px;right:16px;background:var(--g);color:#000;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.4px}
+    .plan-badge.ent{background:#7c3aed;color:#fff}
+    .plan-name{font-size:20px;font-weight:800;margin-bottom:4px}
+    .plan-tagline{font-size:12px;color:var(--muted);margin-bottom:20px}
+    .plan-price{font-size:36px;font-weight:800;color:var(--g);line-height:1}
+    .plan-price span{font-size:14px;color:var(--muted);font-weight:400}
+    .plan-annual{font-size:12px;color:rgba(113,255,0,.6);margin-top:4px;min-height:18px}
+    .plan-credits{font-size:12px;color:var(--muted);margin-top:6px;margin-bottom:16px}
+    .plan-divider{height:1px;background:var(--border);margin:16px 0}
+    .plan-features{display:flex;flex-direction:column;gap:8px;font-size:13px;margin-bottom:20px}
+    .plan-feature{display:flex;align-items:flex-start;gap:8px;color:rgba(255,255,255,.75)}
+    .plan-feature .ico{color:var(--g);flex-shrink:0;font-weight:700;font-size:14px;margin-top:1px}
+    .plan-feature .ico.no{color:rgba(255,255,255,.2)}
+    .plan-cta{display:block;width:100%;padding:13px;border-radius:11px;border:none;font-size:14px;font-weight:800;cursor:pointer;transition:.15s;text-align:center}
+    .plan-cta-primary{background:var(--g);color:#000}
+    .plan-cta-primary:hover{background:#5de600}
+    .plan-cta-outline{background:transparent;color:var(--g);border:1px solid var(--g)}
+    .plan-cta-outline:hover{background:rgba(113,255,0,.07)}
+    .plan-cta:disabled{background:rgba(255,255,255,.08);color:var(--muted);cursor:default;border:none}
+
+    /* Section title */
+    .s-section{max-width:1200px;margin:0 auto;padding:40px 20px 0}
+    .s-section-title{font-size:13px;font-weight:800;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:18px}
+
+    /* Current plan card */
+    .current-plan{background:var(--bg2);border:1px solid rgba(113,255,0,.2);border-radius:var(--r);padding:20px;margin:24px 20px 0;max-width:1200px;margin-left:auto;margin-right:auto;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center}
+    .cp-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:4px}
+    .cp-plan{font-size:20px;font-weight:800;color:var(--g)}
+    .cp-status{font-size:12px;color:rgba(255,255,255,.5);margin-top:2px}
+    .cp-meters{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+    .cp-meter{display:flex;align-items:center;gap:10px}
+    .cp-meter-label{font-size:12px;color:var(--muted);width:140px;flex-shrink:0}
+    .cp-meter-bar{flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden}
+    .cp-meter-fill{height:100%;border-radius:3px;background:var(--g);transition:width .4s}
+    .cp-meter-fill.warn{background:#ff9500}
+    .cp-meter-fill.full{background:#ff4444}
+    .cp-meter-count{font-size:11px;color:var(--muted);width:60px;text-align:right;flex-shrink:0}
+
+    /* Credits panel */
+    .credits-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+    .credits-balance{font-size:36px;font-weight:800;color:var(--g)}
+    .credits-label{font-size:12px;color:var(--muted);margin-top:2px}
+    .credits-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px}
+    .credit-pack{background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:.2s}
+    .credit-pack:hover{border-color:var(--g);background:rgba(113,255,0,.04)}
+    .cp-tag{font-size:10px;font-weight:700;background:var(--g);color:#000;padding:2px 7px;border-radius:20px}
+    .cp-pack-name{font-size:14px;font-weight:700;margin-bottom:2px}
+    .cp-pack-price{font-size:12px;color:var(--muted)}
+
+    /* Boost cards */
+    .boosts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+    .boost-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:18px;transition:.2s}
+    .boost-card:hover{border-color:rgba(113,255,0,.3)}
+    .boost-name{font-size:14px;font-weight:700;margin-bottom:6px}
+    .boost-desc{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px}
+    .boost-price{font-size:18px;font-weight:800;color:var(--g)}
+    .boost-price span{font-size:12px;color:var(--muted);font-weight:400}
+
+    /* Storage cards */
+    .storage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+    .storage-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:18px;text-align:center;transition:.2s}
+    .storage-card:hover{border-color:rgba(113,255,0,.3)}
+    .storage-gb{font-size:32px;font-weight:800;color:var(--g);margin-bottom:4px}
+    .storage-name{font-size:14px;font-weight:700;margin-bottom:8px}
+    .storage-features{font-size:12px;color:var(--muted);line-height:2}
+    .storage-price{font-size:18px;font-weight:800;margin-top:12px}
+    .storage-price span{font-size:12px;color:var(--muted);font-weight:400}
+
+    /* Buttons */
+    .s-btn{display:inline-flex;align-items:center;justify-content:center;padding:11px 20px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:800;transition:.15s}
+    .s-btn-primary{background:var(--g);color:#000}
+    .s-btn-primary:hover{background:#5de600}
+    .s-btn-sec{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--border)}
+    .s-btn-sm{padding:8px 14px;font-size:12px}
+    @media(max-width:768px){.plans-grid{grid-template-columns:1fr}.current-plan{grid-template-columns:1fr}.s-section{padding:32px 16px 0}}
+  </style>
+</head>
+
+<body>
+  <header class="s-header">
+    <button class="s-back" onclick="history.back()">&#8592;</button>
+    <div class="s-title">AI Subscriptions <span>Separate from marketplace commissions</span></div>
+  </header>
+
+  <!-- Current Plan Status -->
+  <div class="current-plan" id="current-plan-card">
+    <div>
+      <div class="cp-label">Current AI Plan</div>
+      <div class="cp-plan" id="cp-plan-name">Loading…</div>
+      <div class="cp-status" id="cp-status"></div>
+      <div class="cp-meters" id="cp-meters"></div>
+    </div>
+    <div>
+      <div style="font-size:24px;font-weight:800;color:var(--g)" id="cp-credits">—</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">AI Credits</div>
+      <button class="s-btn s-btn-primary s-btn-sm" style="margin-top:10px;width:100%" id="cp-top-up-btn">Top Up Credits</button>
+    </div>
+  </div>
+
+  <!-- Billing toggle -->
+  <div class="billing-toggle">
+    <label class="active" id="lbl-monthly">Monthly</label>
+    <div class="toggle-pill" id="billing-pill"></div>
+    <label id="lbl-annual">Annual <span class="save-badge">2 months free</span></label>
+  </div>
+
+  <!-- Pricing Plans -->
+  <div class="plans-grid" id="plans-grid"><!-- Rendered by JS --></div>
+
+  <!-- Usage Meters -->
+  <div class="s-section">
+    <div class="s-section-title">Monthly Usage</div>
+    <div class="current-plan" style="margin:0">
+      <div style="width:100%">
+        <div class="cp-meters" id="usage-meters"><div style="color:var(--muted);font-size:13px">Loading usage…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Credits -->
+  <div class="s-section">
+    <div class="s-section-title">AI Credits — Pay As You Go</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.7">
+      Credits unlock compute-intensive AI tasks: image generation, video AI, voiceovers, and generative design.
+      They are only consumed for premium operations — standard features use your monthly plan quota.
+    </p>
+    <div class="credits-panel">
+      <div>
+        <div class="credits-balance" id="credits-balance">—</div>
+        <div class="credits-label">Credits available</div>
+      </div>
+      <div style="flex:1">
+        <table style="font-size:12px;color:var(--muted);border-collapse:collapse;width:100%">
+          <tr><td style="padding:4px 0">AI Image Generation</td><td style="text-align:right;color:var(--text);font-weight:700">10 credits</td></tr>
+          <tr><td style="padding:4px 0">AI Video Generation</td><td style="text-align:right;color:var(--text);font-weight:700">50 credits</td></tr>
+          <tr><td style="padding:4px 0">AI Voiceover (per minute)</td><td style="text-align:right;color:var(--text);font-weight:700">5 credits</td></tr>
+          <tr><td style="padding:4px 0">Video Editing (per minute)</td><td style="text-align:right;color:var(--text);font-weight:700">20 credits</td></tr>
+          <tr><td style="padding:4px 0">Generative Design</td><td style="text-align:right;color:var(--text);font-weight:700">15 credits</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="credits-grid" id="credits-grid"><!-- Rendered by JS --></div>
+  </div>
+
+  <!-- AI Marketplace Boosts -->
+  <div class="s-section">
+    <div class="s-section-title">AI Marketplace Boosts — Optional Growth Tools</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.7">
+      Optional AI-powered marketing services. These are separate from marketplace commissions —
+      commissions apply only when a sale is completed.
+    </p>
+    <div class="boosts-grid" id="boosts-grid"><!-- Rendered by JS --></div>
+  </div>
+
+  <!-- Storage Packages -->
+  <div class="s-section" style="padding-bottom:100px">
+    <div class="s-section-title">Storage Packages — Expand Your Library</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.7">
+      Your AI plan includes a base storage allocation. Need more? Add a storage package below.
+      All plans include automatic backup and version history.
+    </p>
+    <div class="storage-grid" id="storage-grid"><!-- Rendered by JS --></div>
+  </div>
+
+  <script type="module" src="/firebase.js"></script>
+  <script src="/sokoni-pay.js" defer></script>
+  <script src="/sokoni-ai-subscriptions.js" defer></script>
+  <script src="/sw-register.js" defer></script>
+
+  <script>
+    /* ── Helpers ──────────────────────────────────────────────── */
+    function esc(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function fmtKES(n) { return 'KES ' + Number(n).toLocaleString(); }
+
+    let _billing = 'monthly';
+    let _currentPlan = null;
+
+    const pill = document.getElementById('billing-pill');
+    pill.addEventListener('click', () => {
+      _billing = _billing === 'monthly' ? 'annual' : 'monthly';
+      pill.classList.toggle('annual', _billing === 'annual');
+      document.getElementById('lbl-monthly').classList.toggle('active', _billing === 'monthly');
+      document.getElementById('lbl-annual').classList.toggle('active', _billing === 'annual');
+      renderPlans();
+    });
+
+    /* ── Render pricing cards ──────────────────────────────────── */
+    function renderPlans() {
+      const subs = window.SokoniAISubs;
+      if (!subs) return;
+      const grid = document.getElementById('plans-grid');
+      const PLANS = subs.PLANS;
+
+      /* Check URL params for pre-selected plan */
+      const urlPlan = new URLSearchParams(location.search).get('plan');
+
+      grid.innerHTML = Object.values(PLANS).map(p => {
+        const price    = _billing === 'annual' ? Math.round(p.annualPrice / 12) : p.price;
+        const isOwned  = _currentPlan === p.id;
+        const isFree   = p.price === 0;
+        const annual   = _billing === 'annual' && !isFree ? `${fmtKES(p.annualPrice)}/yr (${fmtKES(Math.round(p.annualPrice / 12))}/mo)` : '';
+        const featured = p.id === 'ai_pro';
+
+        const features = [
+          p.quotas.removeBackground === -1 ? 'Unlimited background removal' : p.quotas.removeBackground > 0 ? `${p.quotas.removeBackground} background removals/mo` : null,
+          p.quotas.generateBanner === -1 ? 'Unlimited banner generation' : p.quotas.generateBanner > 0 ? `${p.quotas.generateBanner} banners/mo` : null,
+          p.quotas.generatePoster === -1 ? 'Unlimited poster generation' : p.quotas.generatePoster > 0 ? `${p.quotas.generatePoster} posters/mo` : null,
+          p.quotas.createStory > 0 || p.quotas.createStory === -1 ? (p.quotas.createStory === -1 ? 'Unlimited stories' : `${p.quotas.createStory} stories/mo`) : null,
+          p.storageGB >= 500 ? `${p.storageGB} GB storage` : `${p.storageGB} GB storage`,
+          p.aiCreditsIncluded > 0 ? `${p.aiCreditsIncluded} AI credits/mo included` : null,
+          p.features.priorityProcessing ? 'Priority AI processing' : null,
+          p.features.teamCollaboration  ? `Team collaboration (${p.teamMembers === -1 ? 'unlimited' : p.teamMembers} members)` : null,
+          p.features.apiAccess          ? 'API access (50K calls/mo)' : null,
+          p.features.customBrandAI      ? 'Custom brand-trained AI' : null,
+          p.features.whiteLabel         ? 'White-label capabilities' : null,
+          p.features.enterpriseSLA      ? 'Enterprise SLA + dedicated support' : null,
+        ].filter(Boolean);
+
+        const ctaLabel = isOwned ? 'Current Plan' : isFree ? 'Get Started Free' : `Upgrade to ${p.name}`;
+        const ctaClass = isOwned ? 'plan-cta plan-cta-outline' : 'plan-cta plan-cta-primary';
+        const ctaDisabled = isOwned ? 'disabled' : '';
+
+        return `
+          <div class="plan-card${featured ? ' featured' : ''}${isOwned ? ' featured' : ''}" data-plan="${esc(p.id)}">
+            ${p.badge ? `<div class="plan-badge${p.id === 'ai_enterprise' ? ' ent' : ''}">${esc(p.badge)}</div>` : ''}
+            <div class="plan-name">${esc(p.name)}</div>
+            <div class="plan-tagline">${esc(p.tagline)}</div>
+            <div class="plan-price">${isFree ? 'Free' : fmtKES(price)}<span>${isFree ? '' : '/mo'}</span></div>
+            <div class="plan-annual">${esc(annual)}</div>
+            <div class="plan-credits">${p.aiCreditsIncluded > 0 ? `${p.aiCreditsIncluded} credits included/mo` : '&nbsp;'}</div>
+            <div class="plan-divider"></div>
+            <div class="plan-features">${features.map(f => `<div class="plan-feature"><span class="ico">✓</span>${esc(f)}</div>`).join('')}</div>
+            <button class="${ctaClass}" data-plan-id="${esc(p.id)}" ${ctaDisabled}>${esc(ctaLabel)}</button>
+          </div>`;
+      }).join('');
+
+      grid.querySelectorAll('[data-plan-id]').forEach(btn => {
+        if (btn.disabled) return;
+        btn.addEventListener('click', () => handleSubscribe(btn.dataset.planId));
+      });
+
+      /* Highlight pre-selected plan */
+      if (urlPlan) {
+        const card = grid.querySelector(`[data-plan="${urlPlan}"]`);
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    /* ── Subscribe flow ────────────────────────────────────────── */
+    async function handleSubscribe(planId) {
+      const subs = window.SokoniAISubs;
+      if (!subs) { alert('Please refresh and try again.'); return; }
+      try {
+        const result = await subs.subscribe(planId, _billing);
+        alert(`Successfully activated ${subs.PLANS[result.plan]?.name} plan!`);
+        await loadCurrentPlan();
+        renderPlans();
+      } catch (e) {
+        if (e.message !== 'Payment cancelled.') alert('Subscription failed: ' + e.message);
+      }
+    }
+
+    /* ── Load current plan and usage ──────────────────────────── */
+    async function loadCurrentPlan() {
+      const subs = window.SokoniAISubs;
+      if (!subs) return;
+
+      const [sub, usage, credits] = await Promise.all([
+        subs.getSubscription(), subs.getUsage(), subs.getCredits(),
+      ]);
+      _currentPlan = sub.plan;
+      const plan   = subs.PLANS[sub.plan] || subs.PLANS.ai_free;
+
+      document.getElementById('cp-plan-name').textContent = plan.name;
+      document.getElementById('cp-status').textContent =
+        sub.status === 'active' ? `Active · renews ${new Date(sub.currentPeriodEnd).toLocaleDateString()}` :
+        sub.status === 'trial'  ? 'Trial active' : 'Subscription expired';
+      document.getElementById('cp-credits').textContent = credits.balance;
+      document.getElementById('credits-balance').textContent = credits.balance;
+
+      /* Usage meters */
+      const metered = [
+        ['Background Removal', 'removeBackground'],
+        ['Image Enhancement',  'enhanceProduct'],
+        ['Banners',            'generateBanner'],
+        ['Posters',            'generatePoster'],
+        ['Stories',            'createStory'],
+        ['SEO Optimization',   'seoOptimization'],
+        ['Marketing Copy',     'marketingCopy'],
+      ];
+      const meters  = metered.map(([label, key]) => {
+        const limit = plan.quotas[key];
+        if (limit === 0) return '';
+        const used  = usage.counters?.[key] || 0;
+        if (limit === -1) {
+          return `<div class="cp-meter">
+            <div class="cp-meter-label" style="font-size:12px;color:var(--muted);width:160px">${esc(label)}</div>
+            <div style="font-size:12px;color:var(--g);font-weight:700">Unlimited</div>
+          </div>`;
+        }
+        const pct   = Math.round((used / limit) * 100);
+        const cls   = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
+        return `<div class="cp-meter">
+          <div class="cp-meter-label">${esc(label)}</div>
+          <div class="cp-meter-bar"><div class="cp-meter-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
+          <div class="cp-meter-count">${used}/${limit}</div>
+        </div>`;
+      }).join('');
+      document.getElementById('cp-meters').innerHTML      = meters || '<div style="color:var(--muted);font-size:13px">No usage this period.</div>';
+      document.getElementById('usage-meters').innerHTML   = meters || '<div style="color:var(--muted);font-size:13px">No usage this period.</div>';
+    }
+
+    /* ── Credits grid ─────────────────────────────────────────── */
+    function renderCredits() {
+      const subs  = window.SokoniAISubs;
+      if (!subs) return;
+      document.getElementById('credits-grid').innerHTML = subs.CREDIT_PACKS.map(p => `
+        <div class="credit-pack" data-pack-id="${esc(p.id)}">
+          <div>
+            <div class="cp-pack-name">${esc(p.label)}</div>
+            <div class="cp-pack-price">${fmtKES(p.price)}</div>
+          </div>
+          ${p.tag ? `<div class="cp-tag">${esc(p.tag)}</div>` : ''}
+        </div>`).join('');
+
+      document.querySelectorAll('.credit-pack').forEach(card => {
+        card.addEventListener('click', async () => {
+          try {
+            const result = await subs.purchaseCredits(card.dataset.packId);
+            alert(`${result.credits} credits added to your balance!`);
+            loadCurrentPlan();
+          } catch (e) {
+            if (e.message !== 'Payment cancelled.') alert('Failed: ' + e.message);
+          }
+        });
+      });
+
+      document.getElementById('cp-top-up-btn').addEventListener('click', () => {
+        document.getElementById('credits-grid').scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    /* ── Boosts grid ──────────────────────────────────────────── */
+    function renderBoosts() {
+      const subs = window.SokoniAISubs;
+      if (!subs) return;
+      document.getElementById('boosts-grid').innerHTML = Object.entries(subs.AI_BOOSTS).map(([id, b]) => `
+        <div class="boost-card">
+          <div class="boost-name">${esc(b.label)}</div>
+          <div class="boost-desc">${esc(b.desc)}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div>
+              <div class="boost-price">${fmtKES(b.price)}<span>/${b.duration} days</span></div>
+            </div>
+            <button class="s-btn s-btn-primary s-btn-sm boost-cta" data-boost-id="${esc(id)}">Activate</button>
+          </div>
+        </div>`).join('');
+
+      document.querySelectorAll('.boost-cta').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            const result = await subs.purchaseBoost(btn.dataset.boostId);
+            alert(`Boost activated for ${result.expiresIn}!`);
+          } catch (e) {
+            if (e.message !== 'Payment cancelled.') alert('Failed: ' + e.message);
+          }
+        });
+      });
+    }
+
+    /* ── Storage grid ─────────────────────────────────────────── */
+    function renderStorage() {
+      const subs = window.SokoniAISubs;
+      if (!subs) return;
+      document.getElementById('storage-grid').innerHTML = subs.STORAGE_PACKAGES.map(p => `
+        <div class="storage-card">
+          <div class="storage-gb">${p.gb >= 1000 ? (p.gb/1000)+'TB' : p.gb+'GB'}</div>
+          <div class="storage-name">${esc(p.label)}</div>
+          <div class="storage-features">
+            Backup: ${esc(p.backup)}<br>
+            Versions: ${p.versions === -1 ? 'Unlimited' : p.versions}
+          </div>
+          <div class="storage-price">${fmtKES(p.price)}<span>/yr</span></div>
+          <button class="s-btn s-btn-primary" style="width:100%;margin-top:12px" data-storage-id="${esc(p.id)}">Add Storage</button>
+        </div>`).join('');
+
+      document.querySelectorAll('[data-storage-id]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            const result = await subs.purchaseStorage(btn.dataset.storageId);
+            alert(`${result.gb} GB storage added!`);
+            loadCurrentPlan();
+          } catch (e) {
+            if (e.message !== 'Payment cancelled.') alert('Failed: ' + e.message);
+          }
+        });
+      });
+    }
+
+    /* ── Bootstrap ─────────────────────────────────────────────── */
+    async function init() {
+      await loadCurrentPlan();
+      renderPlans();
+      renderCredits();
+      renderBoosts();
+      renderStorage();
+    }
+
+    window.addEventListener('sokoniAISubsReady', init);
+    if (window.SokoniAISubs) init();
+  </script>
+</body>
+</html>

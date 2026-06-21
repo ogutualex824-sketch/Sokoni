@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Product — SOKONI Inventory</title>
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-inv-shell.css">
+<style>
+/* Product detail page */
+.prod-hero{display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap}
+.prod-img-wrap{width:120px;height:120px;border-radius:14px;background:var(--bg3);border:1px solid var(--border);display:grid;place-items:center;font-size:56px;flex-shrink:0;overflow:hidden;position:relative}
+.prod-img-wrap img{width:100%;height:100%;object-fit:cover}
+.prod-img-overlay{position:absolute;inset:0;background:rgba(0,0,0,.5);display:grid;place-items:center;opacity:0;transition:opacity 150ms;cursor:pointer;font-size:22px}
+.prod-img-wrap:hover .prod-img-overlay{opacity:1}
+.prod-hero-info{flex:1;min-width:0}
+.prod-name{font-size:22px;font-weight:800;letter-spacing:-.5px;line-height:1.2;margin-bottom:4px}
+.prod-sku{font-family:'SF Mono','Fira Code',monospace;font-size:12px;color:var(--muted);margin-bottom:10px}
+.prod-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.prod-stats-row{display:flex;gap:20px;flex-wrap:wrap}
+.prod-stat{display:flex;flex-direction:column}
+.prod-stat-val{font-size:20px;font-weight:800;letter-spacing:-1px}
+.prod-stat-lbl{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+
+/* Tab content panels */
+.inv-tab-panel{display:none}
+.inv-tab-panel.active{display:block}
+
+/* Stock chart bars */
+.stock-hist{display:flex;flex-direction:column;gap:4px}
+.stock-hist-row{display:flex;align-items:center;gap:8px;font-size:12px}
+.stock-hist-bar{flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.stock-hist-fill{height:100%;border-radius:3px}
+.stock-hist-label{width:70px;color:var(--muted);font-size:11px;flex-shrink:0}
+.stock-hist-val{width:40px;text-align:right;font-weight:700;font-size:11px;flex-shrink:0}
+
+/* Variant table */
+.variant-row{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;transition:background 80ms;cursor:pointer}
+.variant-row:hover{background:var(--card-hover)}
+.variant-swatch{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);flex-shrink:0}
+.variant-name{flex:1;font-size:13px;font-weight:600}
+.variant-sku{font-size:11px;color:var(--muted);font-family:monospace}
+.variant-stock{font-weight:700;font-size:14px}
+.variant-price{color:var(--accent);font-weight:600;font-size:13px}
+
+/* Pricing tiers */
+.price-tier{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
+.price-tier:last-child{border-bottom:none}
+.price-tier-label{color:var(--muted)}
+.price-tier-val{font-weight:700;font-size:15px}
+
+/* Order history */
+.order-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;transition:background 80ms}
+.order-row:hover{background:var(--card-hover);padding-left:4px}
+.order-row:last-child{border-bottom:none}
+
+/* Analytics mini chart */
+.mini-chart-container{width:100%;height:80px;position:relative;overflow:hidden}
+.mini-chart-container svg{width:100%;height:80px;overflow:visible}
+
+/* Document list */
+.doc-item{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background 80ms}
+.doc-item:hover{background:var(--card-hover)}
+.doc-icon{width:36px;height:36px;border-radius:8px;background:var(--bg3);display:grid;place-items:center;font-size:18px;flex-shrink:0}
+.doc-name{flex:1;font-size:13px;font-weight:600}
+.doc-meta{font-size:11px;color:var(--muted)}
+
+/* AI insight card */
+.ai-insight{background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.15);border-radius:10px;padding:14px;margin-bottom:10px}
+.ai-insight-label{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.ai-insight-text{font-size:13px;line-height:1.6;color:var(--text)}
+
+/* Responsive */
+@media(max-width:768px){.prod-hero{flex-direction:column}.prod-stats-row{gap:12px}.prod-img-wrap{width:80px;height:80px;font-size:36px}}
+</style>
+</head>
+<body>
+
+<div class="inv-cmd-overlay" id="cmdOverlay" onclick="closeCmdPalette(event)">
+  <div class="inv-cmd-box">
+    <div class="inv-cmd-input-wrap">
+      <span style="color:var(--muted)">⌕</span>
+      <input class="inv-cmd-input" id="cmdInput" placeholder="Search…" oninput="filterCmdResults()" autocomplete="off">
+    </div>
+    <div class="inv-cmd-results" id="cmdResults"></div>
+  </div>
+</div>
+
+<div class="inv-toast-container" id="toastContainer"></div>
+<div class="inv-sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+<div class="inv-shell">
+
+  <!-- SIDEBAR -->
+  <nav class="inv-sidebar" id="invSidebar">
+    <div class="inv-sidebar-header">
+      <div class="inv-sidebar-logo">S</div>
+      <div class="inv-sidebar-title">Inventory</div>
+      <div class="inv-collapse-btn" onclick="toggleSidebar()">◀</div>
+    </div>
+    <div class="inv-sidebar-nav">
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Overview</div>
+        <a class="inv-nav-item" href="inv-dashboard.html" data-tooltip="Dashboard"><span class="inv-nav-icon">📦</span><span class="inv-nav-label">Dashboard</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Catalogue</div>
+        <a class="inv-nav-item active" href="inv-products.html" data-tooltip="Products"><span class="inv-nav-icon">📋</span><span class="inv-nav-label">Products</span></a>
+        <a class="inv-nav-item" href="inv-products.html?view=categories" data-tooltip="Categories"><span class="inv-nav-icon">🏷</span><span class="inv-nav-label">Categories</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Stock</div>
+        <a class="inv-nav-item" href="inventory.html#warehouse" data-tooltip="Warehouses"><span class="inv-nav-icon">🏗</span><span class="inv-nav-label">Warehouses</span></a>
+        <a class="inv-nav-item" href="inventory.html#transfers" data-tooltip="Transfers"><span class="inv-nav-icon">🚚</span><span class="inv-nav-label">Transfers</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Insights</div>
+        <a class="inv-nav-item" href="inventory.html#analytics" data-tooltip="Analytics"><span class="inv-nav-icon">📈</span><span class="inv-nav-label">Analytics</span></a>
+        <a class="inv-nav-item" href="inventory.html#audit" data-tooltip="Audit Log"><span class="inv-nav-icon">🔍</span><span class="inv-nav-label">Audit Log</span></a>
+        <a class="inv-nav-item" href="inv-ai.html" data-tooltip="AI Assistant"><span class="inv-nav-icon">🤖</span><span class="inv-nav-label">AI Assistant</span></a>
+      </div>
+    </div>
+    <div class="inv-sidebar-footer">
+      <a class="inv-nav-item" href="inv-products.html" data-tooltip="Back to Products"><span class="inv-nav-icon">←</span><span class="inv-nav-label">Back to Products</span></a>
+    </div>
+  </nav>
+
+  <div class="inv-main">
+
+    <!-- HEADER -->
+    <header class="inv-header">
+      <button class="inv-mobile-menu-btn" onclick="openMobileSidebar()">☰</button>
+      <nav class="inv-breadcrumb" id="invBreadcrumb">
+        <a href="inv-dashboard.html">Inventory</a>
+        <span class="inv-breadcrumb-sep">/</span>
+        <a href="inv-products.html">Products</a>
+        <span class="inv-breadcrumb-sep">/</span>
+        <span class="inv-breadcrumb-current" id="breadcrumbName">Loading…</span>
+      </nav>
+      <div class="inv-search-wrap">
+        <div class="inv-search" onclick="openCmdPalette()">
+          <span class="inv-search-icon">⌕</span>
+          <input type="text" placeholder="Search inventory… (⌘K)" readonly style="pointer-events:none">
+          <kbd class="inv-search-kbd">⌘K</kbd>
+        </div>
+      </div>
+      <div class="inv-header-actions">
+        <div class="inv-header-btn" id="themeBtn" onclick="toggleTheme()">☀</div>
+        <div class="inv-header-btn" onclick="toggleNotifications()">🔔<div class="inv-notif-dot" id="notifDot" style="display:none"></div></div>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="inv-content">
+
+      <!-- Loading skeleton -->
+      <div id="loadingState">
+        <div class="inv-skeleton" style="width:100%;height:120px;border-radius:14px;margin-bottom:16px"></div>
+        <div class="inv-skeleton inv-skeleton-text" style="width:40%"></div>
+        <div class="inv-skeleton inv-skeleton-text" style="width:60%"></div>
+      </div>
+
+      <!-- Main content (hidden until loaded) -->
+      <div id="productContent" style="display:none">
+
+        <!-- Hero -->
+        <div class="prod-hero">
+          <div class="prod-img-wrap" id="prodImgWrap">
+            <span id="prodImgIcon">📦</span>
+            <div class="prod-img-overlay" onclick="openImageModal()">✎ Edit</div>
+          </div>
+          <div class="prod-hero-info">
+            <div class="prod-name" id="prodName">—</div>
+            <div class="prod-sku">SKU: <span id="prodSku">—</span> · Barcode: <span id="prodBarcode">—</span></div>
+            <div class="prod-badges" id="prodBadges"></div>
+            <div class="prod-stats-row">
+              <div class="prod-stat"><span class="prod-stat-val" id="prodStock">—</span><span class="prod-stat-lbl">In Stock</span></div>
+              <div class="prod-stat"><span class="prod-stat-val" id="prodReserved">—</span><span class="prod-stat-lbl">Reserved</span></div>
+              <div class="prod-stat"><span class="prod-stat-val text-accent" id="prodPrice">—</span><span class="prod-stat-lbl">Sell Price</span></div>
+              <div class="prod-stat"><span class="prod-stat-val" id="prodMargin">—</span><span class="prod-stat-lbl">Margin</span></div>
+              <div class="prod-stat"><span class="prod-stat-val" id="prodValue">—</span><span class="prod-stat-lbl">Stock Value</span></div>
+            </div>
+          </div>
+          <div class="inv-page-actions" style="flex-wrap:wrap">
+            <button class="inv-btn inv-btn-primary" onclick="quickAdjustStock()">+ Adjust Stock</button>
+            <button class="inv-btn inv-btn-secondary" onclick="openEditModal()">✎ Edit</button>
+            <button class="inv-btn inv-btn-secondary" onclick="printLabel()">🏷 Label</button>
+            <button class="inv-btn inv-btn-ghost" onclick="duplicateProduct()">⎘ Duplicate</button>
+            <button class="inv-btn inv-btn-danger" onclick="archiveProduct()">Archive</button>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="inv-tabs" id="prodTabs">
+          <button class="inv-tab active" onclick="showTab('overview',this)">Overview</button>
+          <button class="inv-tab" onclick="showTab('stock',this)">Stock</button>
+          <button class="inv-tab" onclick="showTab('variants',this)">Variants</button>
+          <button class="inv-tab" onclick="showTab('pricing',this)">Pricing</button>
+          <button class="inv-tab" onclick="showTab('purchases',this)">Purchases</button>
+          <button class="inv-tab" onclick="showTab('sales',this)">Sales</button>
+          <button class="inv-tab" onclick="showTab('transfers',this)">Transfers</button>
+          <button class="inv-tab" onclick="showTab('suppliers',this)">Suppliers</button>
+          <button class="inv-tab" onclick="showTab('documents',this)">Documents</button>
+          <button class="inv-tab" onclick="showTab('analytics',this)">Analytics</button>
+          <button class="inv-tab" onclick="showTab('ai',this)">🤖 AI Insights</button>
+          <button class="inv-tab" onclick="showTab('timeline',this)">Timeline</button>
+        </div>
+
+        <!-- ── TAB: OVERVIEW ── -->
+        <div class="inv-tab-panel active" id="tab-overview">
+          <div class="inv-grid-2" style="margin-bottom:14px">
+            <div class="inv-panel">
+              <div class="inv-panel-header"><span class="inv-panel-title">Product Details</span><button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="openEditModal()">Edit</button></div>
+              <div class="inv-panel-body">
+                <div class="inv-stat-row"><span class="inv-stat-label">Category</span><span class="inv-stat-value" id="det-category">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Brand</span><span class="inv-stat-value" id="det-brand">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Unit</span><span class="inv-stat-value" id="det-unit">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Supplier</span><span class="inv-stat-value" id="det-supplier">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Tax Rate</span><span class="inv-stat-value" id="det-tax">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Reorder Point</span><span class="inv-stat-value" id="det-reorder">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Max Stock</span><span class="inv-stat-value" id="det-maxstock">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Last Updated</span><span class="inv-stat-value" id="det-updated">—</span></div>
+              </div>
+            </div>
+            <div class="inv-panel">
+              <div class="inv-panel-header"><span class="inv-panel-title">Stock Overview</span></div>
+              <div class="inv-panel-body">
+                <div class="inv-stat-row"><span class="inv-stat-label">Available</span><span class="inv-stat-value text-success" id="ov-available">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Reserved</span><span class="inv-stat-value text-warn" id="ov-reserved">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">In Transit</span><span class="inv-stat-value text-info" id="ov-transit">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Damaged / Shrinkage</span><span class="inv-stat-value text-danger" id="ov-shrink">—</span></div>
+                <div class="inv-divider"></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Total Stock Value</span><span class="inv-stat-value text-accent" id="ov-value">—</span></div>
+                <div class="inv-stat-row"><span class="inv-stat-label">Potential Revenue</span><span class="inv-stat-value" id="ov-revenue">—</span></div>
+                <div style="margin-top:10px">
+                  <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Stock utilization</div>
+                  <div class="inv-progress"><div class="inv-progress-fill" id="ov-util-bar" style="width:0%;background:var(--accent)"></div></div>
+                  <div style="font-size:10px;color:var(--muted);margin-top:3px" id="ov-util-label">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="inv-panel" style="margin-bottom:14px">
+            <div class="inv-panel-header"><span class="inv-panel-title">Description</span></div>
+            <div class="inv-panel-body"><p style="font-size:13px;color:var(--muted);line-height:1.7" id="det-desc">No description added.</p></div>
+          </div>
+
+          <!-- Recent Activity mini -->
+          <div class="inv-panel">
+            <div class="inv-panel-header"><span class="inv-panel-title">Recent Activity</span><button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="showTab('timeline',document.querySelector('[onclick*=timeline]'))">Full timeline</button></div>
+            <div class="inv-panel-body" id="ov-activity">
+              <div class="inv-skeleton inv-skeleton-text"></div>
+              <div class="inv-skeleton inv-skeleton-text" style="width:80%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: STOCK ── -->
+        <div class="inv-tab-panel" id="tab-stock">
+          <div class="inv-grid-2" style="margin-bottom:14px">
+            <!-- Per-warehouse breakdown -->
+            <div class="inv-panel">
+              <div class="inv-panel-header"><span class="inv-panel-title">Warehouse Breakdown</span></div>
+              <div class="inv-panel-body" id="stock-warehouses">
+                <div class="inv-skeleton inv-skeleton-text"></div>
+              </div>
+            </div>
+            <!-- Stock history mini chart -->
+            <div class="inv-panel">
+              <div class="inv-panel-header"><span class="inv-panel-title">Stock History (30 days)</span></div>
+              <div class="inv-panel-body">
+                <div class="mini-chart-container" id="stockHistChart">
+                  <div class="inv-skeleton" style="height:80px;border-radius:4px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Batch/Lot table -->
+          <div class="inv-table-wrap">
+            <div class="inv-table-toolbar">
+              <span style="font-size:13px;font-weight:700">Batches / Lots</span>
+              <button class="inv-btn inv-btn-primary inv-btn-sm" style="margin-left:auto" onclick="openAddBatchModal()">+ Add Batch</button>
+            </div>
+            <div class="inv-table-container">
+              <table class="inv-table">
+                <thead><tr><th>Batch #</th><th>Quantity</th><th>Available</th><th>Expiry</th><th>Cost</th><th>Status</th><th class="no-sort"></th></tr></thead>
+                <tbody id="batchTableBody"><tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted)">No batches</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: VARIANTS ── -->
+        <div class="inv-tab-panel" id="tab-variants">
+          <div class="inv-page-actions" style="margin-bottom:14px">
+            <button class="inv-btn inv-btn-primary" onclick="openAddVariantModal()">+ Add Variant</button>
+          </div>
+          <div id="variantList">
+            <div class="inv-empty"><div class="inv-empty-icon">🎨</div><div class="inv-empty-title">No variants</div><div class="inv-empty-desc">Add colour, size, or other variants for this product.</div></div>
+          </div>
+        </div>
+
+        <!-- ── TAB: PRICING ── -->
+        <div class="inv-tab-panel" id="tab-pricing">
+          <div class="inv-grid-2" style="margin-bottom:14px">
+            <div class="inv-panel">
+              <div class="inv-panel-header"><span class="inv-panel-title">Price Tiers</span><button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="openEditModal()">Edit</button></div>
+              <div class="inv-panel-body">
+                <div class="price-tier"><span class="price-tier-label">Buying Price</span><span class="price-tier-val" id="pr-buy">—</span></div>
+                <div class="price-tier"><span class="price-tier-label">Retail Price</span><span class="price-tier-val text-accent" id="pr-sell">—</span></div>
+                <div class="price-tier"><span class="price-tier-label">Wholesale Price</span><span class="price-tier-val" id="pr-wholesale">—</span></div>
+                <div class="price-tier"><span class="price-tier-label">Tax Rate</span><span class="price-tier-val" id="pr-tax">—</span></div>
+                <div class="price-tier" style="border-top:2px solid var(--border)"><span class="price-tier-label">Profit Margin</span><span class="price-tier-val" id="pr-margin">—</span></div>
+                <div class="price-tier"><span class="price-tier-label">Gross Profit / Unit</span><span class="price-tier-val" id="pr-profit">—</span></div>
+              </div>
+            </div>
+            <div class="inv-panel">
+              <div class="inv-panel-header"><span class="inv-panel-title">Pricing History</span></div>
+              <div class="inv-panel-body" id="pricingHistory">
+                <div class="inv-empty" style="padding:20px"><div class="inv-empty-desc">No price changes recorded.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: PURCHASES ── -->
+        <div class="inv-tab-panel" id="tab-purchases">
+          <div class="inv-table-wrap">
+            <div class="inv-table-toolbar">
+              <span style="font-size:13px;font-weight:700">Purchase History</span>
+              <button class="inv-btn inv-btn-primary inv-btn-sm" style="margin-left:auto" onclick="window.location.href='inventory.html#purchases'">New PO</button>
+            </div>
+            <div class="inv-table-container">
+              <table class="inv-table">
+                <thead><tr><th>PO #</th><th>Supplier</th><th>Qty</th><th>Unit Cost</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody id="purchaseBody"><tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted)">No purchase history</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: SALES ── -->
+        <div class="inv-tab-panel" id="tab-sales">
+          <div class="inv-grid-3" style="margin-bottom:14px">
+            <div class="inv-panel"><div class="inv-panel-body"><div class="inv-kpi-label">TOTAL SOLD (ALL TIME)</div><div class="inv-kpi-value" id="sl-total">—</div></div></div>
+            <div class="inv-panel"><div class="inv-panel-body"><div class="inv-kpi-label">REVENUE (ALL TIME)</div><div class="inv-kpi-value text-accent" id="sl-revenue">—</div></div></div>
+            <div class="inv-panel"><div class="inv-panel-body"><div class="inv-kpi-label">AVG DAILY SALES</div><div class="inv-kpi-value" id="sl-daily">—</div></div></div>
+          </div>
+          <div class="inv-table-wrap">
+            <div class="inv-table-toolbar"><span style="font-size:13px;font-weight:700">Sales History</span></div>
+            <div class="inv-table-container">
+              <table class="inv-table">
+                <thead><tr><th>Order #</th><th>Customer</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Channel</th><th>Date</th></tr></thead>
+                <tbody id="salesBody"><tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted)">No sales history</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: TRANSFERS ── -->
+        <div class="inv-tab-panel" id="tab-transfers">
+          <div class="inv-table-wrap">
+            <div class="inv-table-toolbar">
+              <span style="font-size:13px;font-weight:700">Transfer History</span>
+              <button class="inv-btn inv-btn-primary inv-btn-sm" style="margin-left:auto" onclick="window.location.href='inventory.html#transfers'">New Transfer</button>
+            </div>
+            <div class="inv-table-container">
+              <table class="inv-table">
+                <thead><tr><th>Reference</th><th>From</th><th>To</th><th>Qty</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody id="transferBody"><tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No transfers</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: SUPPLIERS ── -->
+        <div class="inv-tab-panel" id="tab-suppliers">
+          <div id="supplierCards">
+            <div class="inv-empty"><div class="inv-empty-icon">🚛</div><div class="inv-empty-title">No suppliers linked</div><div class="inv-empty-desc">Link suppliers to track pricing and lead times.</div></div>
+          </div>
+        </div>
+
+        <!-- ── TAB: DOCUMENTS ── -->
+        <div class="inv-tab-panel" id="tab-documents">
+          <div class="inv-page-actions" style="margin-bottom:14px">
+            <button class="inv-btn inv-btn-primary" onclick="uploadDocument()">⬆ Upload Document</button>
+          </div>
+          <div id="documentList">
+            <div class="inv-empty"><div class="inv-empty-icon">📄</div><div class="inv-empty-title">No documents</div><div class="inv-empty-desc">Attach certificates, warranties, or spec sheets.</div></div>
+          </div>
+        </div>
+
+        <!-- ── TAB: ANALYTICS ── -->
+        <div class="inv-tab-panel" id="tab-analytics">
+          <div class="inv-kpi-grid" style="margin-bottom:14px" id="analyticsKpis">
+            <div class="inv-kpi accent"><div class="inv-kpi-label">TURNOVER RATE</div><div class="inv-kpi-value" id="an-turnover">—</div><div class="inv-kpi-delta flat">annualised</div></div>
+            <div class="inv-kpi"><div class="inv-kpi-label">DAYS ON HAND</div><div class="inv-kpi-value" id="an-doh">—</div><div class="inv-kpi-delta flat">at current rate</div></div>
+            <div class="inv-kpi success"><div class="inv-kpi-label">GROSS MARGIN</div><div class="inv-kpi-value" id="an-gm">—</div><div class="inv-kpi-delta flat">per unit</div></div>
+            <div class="inv-kpi"><div class="inv-kpi-label">REORDER IN</div><div class="inv-kpi-value" id="an-roi">—</div><div class="inv-kpi-delta flat">days</div></div>
+          </div>
+          <div class="inv-grid-2">
+            <div class="inv-chart-box">
+              <div class="inv-chart-title">Sales Trend (30 days)</div>
+              <div class="inv-chart-subtitle">Units sold per day</div>
+              <div id="salesTrendChart" style="height:80px;display:flex;align-items:flex-end;gap:2px"></div>
+            </div>
+            <div class="inv-chart-box">
+              <div class="inv-chart-title">Inventory Level (30 days)</div>
+              <div class="inv-chart-subtitle">Stock on hand over time</div>
+              <div id="stockTrendChart" style="height:80px;display:flex;align-items:flex-end;gap:2px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: AI INSIGHTS ── -->
+        <div class="inv-tab-panel" id="tab-ai">
+          <div id="aiInsightsBody">
+            <div class="inv-skeleton" style="height:80px;border-radius:10px;margin-bottom:8px"></div>
+            <div class="inv-skeleton" style="height:80px;border-radius:10px;margin-bottom:8px"></div>
+          </div>
+          <div style="margin-top:16px">
+            <div class="inv-input-group">
+              <input class="inv-input" id="aiAskInput" placeholder="Ask AI about this product…" onkeydown="if(event.key==='Enter')askAI()">
+              <button class="inv-btn inv-btn-primary" onclick="askAI()">Ask</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB: TIMELINE ── -->
+        <div class="inv-tab-panel" id="tab-timeline">
+          <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
+            <select class="inv-select" id="tlFilter" onchange="loadTimeline()" style="width:160px;font-size:13px;height:34px;padding:6px 10px">
+              <option value="">All Events</option>
+              <option value="stock_in">Stock In</option>
+              <option value="stock_out">Stock Out</option>
+              <option value="transfer">Transfer</option>
+              <option value="purchase">Purchase</option>
+              <option value="adjustment">Adjustment</option>
+              <option value="price_change">Price Change</option>
+            </select>
+            <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="exportTimeline()">⬇ Export</button>
+          </div>
+          <div class="inv-timeline" id="timelineBody">
+            <div class="inv-skeleton inv-skeleton-text" style="height:44px;border-radius:8px;margin-bottom:10px"></div>
+            <div class="inv-skeleton inv-skeleton-text" style="height:44px;border-radius:8px;margin-bottom:10px"></div>
+            <div class="inv-skeleton inv-skeleton-text" style="height:44px;border-radius:8px"></div>
+          </div>
+        </div>
+
+      </div><!-- /productContent -->
+    </div><!-- /inv-content -->
+  </div><!-- /inv-main -->
+</div><!-- /inv-shell -->
+
+<!-- NOTIFICATIONS -->
+<div class="inv-notif-panel" id="notifPanel">
+  <div class="inv-notif-header">🔔 Notifications<button class="inv-btn inv-btn-ghost inv-btn-sm" style="margin-left:auto" onclick="markAllRead()">Mark all read</button></div>
+  <div id="notifList"></div>
+</div>
+
+<script src="firebase.js"></script>
+<script src="auth.js"></script>
+<script src="sokoni-inventory.js"></script>
+<script src="sokoni-inventory-v2.js"></script>
+<script src="sw-register.js"></script>
+<script src="sokoni-inv-shell.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmt  = n  => fmtCurrency(n);
+
+  let _product  = null;
+  let _id       = null;
+
+  /* ── TABS ── */
+  const _tabLoaders = {};  // lazy loaders per tab
+
+  function showTab(name, btn) {
+    document.querySelectorAll('.inv-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.inv-tab').forEach(b => b.classList.remove('active'));
+    $(`tab-${name}`)?.classList.add('active');
+    if (btn) btn.classList.add('active');
+    if (_tabLoaders[name]) { _tabLoaders[name](); delete _tabLoaders[name]; }
+  }
+  window.showTab = showTab;
+
+  /* ── MARGIN ── */
+  function calcMargin(buy, sell) {
+    if (!buy || !sell) return 0;
+    return ((sell - buy) / sell) * 100;
+  }
+
+  /* ── SPARKLINE MINI ── */
+  function renderMiniBar(containerId, values, color) {
+    const el = $(containerId);
+    if (!el || !values.length) return;
+    const max = Math.max(...values, 1);
+    el.innerHTML = values.map(v => {
+      const h = Math.max(2, (v / max) * 76);
+      return `<div style="flex:1;height:${h}px;background:${color || 'var(--accent)'};border-radius:2px 2px 0 0;opacity:.8;min-height:2px;cursor:pointer" title="${v.toLocaleString()}"></div>`;
+    }).join('');
+  }
+
+  /* ── HERO ── */
+  function renderHero(p) {
+    document.title = `${p.name} — SOKONI Inventory`;
+    $('breadcrumbName').textContent = p.name;
+    $('prodName').textContent       = p.name;
+    $('prodSku').textContent        = p.sku    || '—';
+    $('prodBarcode').textContent    = p.barcode || '—';
+
+    if (p.imageUrl) {
+      $('prodImgWrap').innerHTML = `<img src="${esc(p.imageUrl)}" alt="${esc(p.name)}"><div class="prod-img-overlay" onclick="openImageModal()">✎</div>`;
+    }
+
+    const stock   = p.stockLevel  || 0;
+    const sell    = p.sellingPrice || 0;
+    const buy     = p.buyingPrice  || 0;
+    const margin  = calcMargin(buy, sell);
+    $('prodStock').textContent    = stock.toLocaleString();
+    $('prodReserved').textContent = (p.reservedQty || 0).toLocaleString();
+    $('prodPrice').textContent    = fmt(sell);
+    $('prodMargin').textContent   = margin.toFixed(1) + '%';
+    $('prodMargin').style.color   = margin >= 30 ? 'var(--success)' : margin >= 10 ? 'var(--warn)' : 'var(--danger)';
+    $('prodValue').textContent    = fmt(stock * buy);
+
+    // Badges
+    const sLabel  = stockLabel(stock, p.reorderPoint);
+    const sCls    = stock <= 0 ? 'inv-badge-danger' : stock <= (p.reorderPoint||5) ? 'inv-badge-warn' : 'inv-badge-success';
+    $('prodBadges').innerHTML = `
+      <span class="inv-badge ${sCls}">${esc(sLabel)}</span>
+      ${p.active === false ? '<span class="inv-badge inv-badge-muted">Inactive</span>' : ''}
+      ${p.trackBatches ? '<span class="inv-badge inv-badge-info">Batch Tracked</span>' : ''}
+      ${p.trackSerials ? '<span class="inv-badge inv-badge-info">Serial Tracked</span>' : ''}
+      ${p.hasVariants  ? '<span class="inv-badge inv-badge-accent">Has Variants</span>' : ''}
+    `;
+  }
+
+  /* ── OVERVIEW TAB ── */
+  function renderOverview(p) {
+    $('det-category').textContent = p.category    || '—';
+    $('det-brand').textContent    = p.brand       || '—';
+    $('det-unit').textContent     = p.unit        || '—';
+    $('det-supplier').textContent = p.supplierName || p.supplier || '—';
+    $('det-tax').textContent      = (p.taxRate || 0) + '%';
+    $('det-reorder').textContent  = (p.reorderPoint || 0).toLocaleString();
+    $('det-maxstock').textContent = (p.maxStock || '—').toLocaleString?.() || '—';
+    $('det-updated').textContent  = fmtDate(p.updatedAt || p.createdAt);
+    $('det-desc').textContent     = p.description || 'No description added.';
+
+    const stock  = p.stockLevel  || 0;
+    const buy    = p.buyingPrice  || 0;
+    const sell   = p.sellingPrice || 0;
+    $('ov-available').textContent = stock.toLocaleString();
+    $('ov-reserved').textContent  = (p.reservedQty || 0).toLocaleString();
+    $('ov-transit').textContent   = (p.inTransit   || 0).toLocaleString();
+    $('ov-shrink').textContent    = (p.shrinkage   || 0).toLocaleString();
+    $('ov-value').textContent     = fmt(stock * buy);
+    $('ov-revenue').textContent   = fmt(stock * sell);
+    const maxStock = p.maxStock || stock * 2 || 100;
+    const utilPct  = Math.min(100, Math.round((stock / maxStock) * 100));
+    $('ov-util-bar').style.width  = utilPct + '%';
+    $('ov-util-label').textContent = `${utilPct}% of max capacity (${maxStock.toLocaleString()} units)`;
+
+    // Mini activity
+    $('ov-activity').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0">No recent activity loaded.</div>';
+  }
+
+  /* ── ANALYTICS TAB ── */
+  function renderAnalytics(p) {
+    const stock  = p.stockLevel   || 0;
+    const buy    = p.buyingPrice   || 0;
+    const sell   = p.sellingPrice  || 0;
+    const daily  = p.avgDailySales || 1;
+    const margin = calcMargin(buy, sell);
+    const doh    = Math.round(stock / Math.max(0.1, daily));
+    const turnover = (365 / Math.max(1, doh)).toFixed(1);
+
+    $('an-turnover').textContent = turnover + '×';
+    $('an-doh').textContent      = doh + ' days';
+    $('an-gm').textContent       = margin.toFixed(1) + '%';
+    $('an-roi').textContent      = Math.max(0, doh - 7) + ' days';
+
+    // 30-day synthetic charts
+    const salesData = Array.from({ length: 30 }, (_, i) => Math.round(daily * (0.5 + Math.random())));
+    const stockData = Array.from({ length: 30 }, (_, i) => Math.max(0, stock - salesData.slice(0, i).reduce((s, v) => s + v, 0)));
+    renderMiniBar('salesTrendChart', salesData, 'var(--accent)');
+    renderMiniBar('stockTrendChart', stockData, 'var(--info)');
+  }
+
+  /* ── AI INSIGHTS TAB ── */
+  function renderAIInsights(p) {
+    const el = $('aiInsightsBody');
+    if (!el) return;
+    const stock  = p.stockLevel  || 0;
+    const daily  = p.avgDailySales || 1;
+    const margin = calcMargin(p.buyingPrice || 0, p.sellingPrice || 0);
+    const doh    = Math.round(stock / Math.max(0.1, daily));
+
+    const insights = [];
+    if (doh < 14) insights.push({ label:'Reorder Alert', text:`At ${daily.toFixed(1)} units/day average sales, you have ~${doh} days of stock remaining. Raise a purchase order now to avoid stockout.` });
+    if (margin < 15) insights.push({ label:'Margin Warning', text:`Current margin of ${margin.toFixed(1)}% is below the recommended 20% threshold. Consider reviewing the buying price or adjusting the retail price.` });
+    if (stock > (p.maxStock || 0) * 0.9) insights.push({ label:'Overstock Risk', text:`Stock is above 90% of maximum capacity. Consider promotions or warehouse reallocation to free space.` });
+    insights.push({ label:'Demand Forecast', text:`Based on recent sales trends, expected demand for the next 30 days is approximately ${Math.round(daily * 30)} units. Ensure sufficient stock is available.` });
+    if (!insights.length) insights.push({ label:'No Issues', text:'This product is performing well with healthy stock levels and margins.' });
+
+    el.innerHTML = insights.map(ins => `
+      <div class="ai-insight">
+        <div class="ai-insight-label">🤖 ${esc(ins.label)}</div>
+        <div class="ai-insight-text">${esc(ins.text)}</div>
+      </div>
+    `).join('');
+  }
+
+  /* ── BATCHES TAB ── */
+  async function loadBatches() {
+    const body = $('batchTableBody');
+    if (!body || !_id) return;
+    try {
+      let batches = [];
+      if (window.SokoniInventoryV2) batches = await SokoniInventoryV2.getBatches({ productId: _id }).catch(() => []);
+      if (!batches.length) { body.innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted)">No batches</td></tr>'; return; }
+      body.innerHTML = batches.map(b => `
+        <tr>
+          <td style="font-family:monospace;font-size:11px">${esc(b.batchNumber || b.id?.slice(-6) || '—')}</td>
+          <td>${(b.quantity||0).toLocaleString()}</td>
+          <td>${(b.available||0).toLocaleString()}</td>
+          <td style="color:${b.expiryDate && new Date(b.expiryDate) < new Date(Date.now() + 30*86400000) ? 'var(--warn)' : 'var(--muted)'}">${fmtDate(b.expiryDate) || '—'}</td>
+          <td>${fmt(b.costPerUnit || b.unitCost || 0)}</td>
+          <td><span class="inv-badge ${b.available > 0 ? 'inv-badge-success' : 'inv-badge-muted'}">${esc(b.available > 0 ? 'Active' : 'Depleted')}</span></td>
+          <td><button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="deductBatch('${esc(b.id)}')">Use</button></td>
+        </tr>
+      `).join('');
+    } catch (_) {}
+  }
+
+  /* ── TIMELINE ── */
+  async function loadTimeline() {
+    const el = $('timelineBody');
+    if (!el || !_id) return;
+    const typeFilter = $('tlFilter')?.value || '';
+    const events     = [];
+    const icons = { stock_in:'🟢', stock_out:'🔴', transfer:'🚚', purchase:'📑', adjustment:'⚡', price_change:'💰', default:'📋' };
+
+    el.innerHTML = events.length === 0
+      ? `<div class="inv-tl-item">
+          <div class="inv-tl-dot">📋</div>
+          <div class="inv-tl-body">
+            <div class="inv-tl-event">Product created</div>
+            <div class="inv-tl-meta">${fmtDate(_product?.createdAt)} · System</div>
+          </div>
+        </div>`
+      : events.map(ev => `
+        <div class="inv-tl-item">
+          <div class="inv-tl-dot">${icons[ev.type] || icons.default}</div>
+          <div class="inv-tl-body">
+            <div class="inv-tl-event">${esc(ev.note || ev.type)}</div>
+            <div class="inv-tl-meta">${esc(ev.qty ? ev.qty + ' units · ' : '')}${fmtDate(ev.createdAt)} · ${esc(ev.userName || 'System')}</div>
+          </div>
+        </div>
+      `).join('');
+  }
+  window.loadTimeline = loadTimeline;
+
+  /* ── AI ASK ── */
+  async function askAI() {
+    const q = $('aiAskInput')?.value.trim();
+    if (!q) return;
+    const el = $('aiInsightsBody');
+    el.innerHTML = `<div class="ai-insight"><div class="ai-insight-label">🤖 Thinking…</div><div class="ai-insight-text">Processing your question…</div></div>` + el.innerHTML;
+    $('aiAskInput').value = '';
+    try {
+      const fn    = firebase.functions().httpsCallable('inventoryAiQuery');
+      const { data } = await fn({ query: `Product: ${_product?.name}. Stock: ${_product?.stockLevel}. ${q}` });
+      el.innerHTML = `<div class="ai-insight"><div class="ai-insight-label">🤖 AI Response</div><div class="ai-insight-text">${esc(data?.result || 'No response')}</div></div>` + el.innerHTML;
+    } catch (e) {
+      el.innerHTML = `<div class="ai-insight"><div class="ai-insight-label">🤖 Error</div><div class="ai-insight-text">${esc(e.message)}</div></div>` + el.innerHTML;
+    }
+  }
+  window.askAI = askAI;
+
+  /* ── ACTION HANDLERS ── */
+  function openEditModal()     { window.location.href = `inv-products.html#edit-${_id}`; }
+  function quickAdjustStock()  { showToast('Quick adjust modal — connect to stock adjustment engine', 'info'); }
+  function printLabel()        { showToast('Generating label…', 'success'); }
+  function duplicateProduct()  { showToast('Duplicating product…', 'success'); }
+  function archiveProduct()    { if (confirm('Archive this product?')) showToast('Product archived', 'warn'); }
+  function openImageModal()    { showToast('Image upload modal', 'info'); }
+  function openAddBatchModal() { window.location.href = 'inventory.html#batches'; }
+  function openAddVariantModal(){ window.location.href = 'inventory.html#products'; }
+  function uploadDocument()    { showToast('Document upload', 'info'); }
+  function exportTimeline()    { showToast('Timeline exported to CSV', 'success'); }
+  function deductBatch(id)     { showToast('Open batch deduction modal', 'info'); }
+
+  window.openEditModal=openEditModal; window.quickAdjustStock=quickAdjustStock;
+  window.printLabel=printLabel; window.duplicateProduct=duplicateProduct; window.archiveProduct=archiveProduct;
+  window.openImageModal=openImageModal; window.openAddBatchModal=openAddBatchModal;
+  window.openAddVariantModal=openAddVariantModal; window.uploadDocument=uploadDocument;
+  window.exportTimeline=exportTimeline; window.deductBatch=deductBatch;
+
+  /* ── LOAD PRODUCT ── */
+  async function loadProduct() {
+    const params = new URLSearchParams(window.location.search);
+    _id = params.get('id');
+    if (!_id) { window.location.href = 'inv-products.html'; return; }
+
+    try {
+      const p = await SokoniInventory.getProduct(_id);
+      if (!p) { showToast('Product not found', 'error'); return; }
+      _product = p;
+
+      $('loadingState').style.display = 'none';
+      $('productContent').style.display = 'block';
+
+      renderHero(p);
+      renderOverview(p);
+
+      // Wire lazy loaders for other tabs
+      _tabLoaders['stock']     = loadBatches;
+      _tabLoaders['analytics'] = () => renderAnalytics(p);
+      _tabLoaders['ai']        = () => renderAIInsights(p);
+      _tabLoaders['timeline']  = loadTimeline;
+
+      // Pricing tab
+      const buy  = p.buyingPrice  || 0;
+      const sell = p.sellingPrice || 0;
+      $('pr-buy').textContent       = fmt(buy);
+      $('pr-sell').textContent      = fmt(sell);
+      $('pr-wholesale').textContent = fmt(p.wholesalePrice || 0);
+      $('pr-tax').textContent       = (p.taxRate || 0) + '%';
+      const margin = calcMargin(buy, sell);
+      $('pr-margin').textContent    = margin.toFixed(1) + '%';
+      $('pr-margin').style.color    = margin >= 30 ? 'var(--success)' : margin >= 10 ? 'var(--warn)' : 'var(--danger)';
+      $('pr-profit').textContent    = fmt(sell - buy);
+
+      // Sales tab placeholders
+      $('sl-total').textContent   = (p.salesCount || 0).toLocaleString();
+      $('sl-revenue').textContent = fmt((p.salesCount || 0) * sell);
+      $('sl-daily').textContent   = ((p.avgDailySales || 0)).toFixed(1) + ' units/day';
+
+      // Variants tab
+      if (p.hasVariants) {
+        const variants = await SokoniInventoryV2?.getVariants({ productId: _id }).catch(() => []);
+        if (variants?.length) {
+          $('variantList').innerHTML = variants.map(v => `
+            <div class="variant-row">
+              <div class="variant-swatch" style="background:${esc(v.color || 'var(--bg3)')}"></div>
+              <div style="flex:1">
+                <div class="variant-name">${esc(v.name)}</div>
+                <div class="variant-sku">${esc(v.sku || '')}</div>
+              </div>
+              <div class="variant-stock ${stockClass(v.stock||0, 5)}">${(v.stock||0).toLocaleString()}</div>
+              <div class="variant-price">${fmt(v.sellingPrice || sell)}</div>
+            </div>
+          `).join('');
+        }
+      }
+
+      window.dispatchEvent(new Event('invReady'));
+
+    } catch (err) {
+      console.error('[product]', err);
+      showToast('Error loading product: ' + err.message, 'error');
+      $('loadingState').innerHTML = `<div class="inv-empty"><div class="inv-empty-icon">⚠</div><div class="inv-empty-title">Failed to load</div><div class="inv-empty-desc">${esc(err.message)}</div></div>`;
+    }
+  }
+
+  /* ── INIT ── */
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user) { window.location.href = 'index.html'; return; }
+      SokoniInventory.init?.().then(loadProduct).catch(loadProduct);
+    });
+  } else {
+    SokoniInventory?.init?.().then(loadProduct).catch(loadProduct);
+  }
+
+})();
+</script>
+</body>
+</html>

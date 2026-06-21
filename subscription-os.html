@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#71ff00">
+  <title>Subscription OS — SOKONI Super Admin</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/mobile.css">
+
+  <style>
+    :root{--g:#71ff00;--g2:#4fc800;--r:#ff4444;--o:#ff9500;--p:#a78bfa;
+          --bg:#0d0d0d;--bg2:#111;--bg3:#181818;--border:rgba(255,255,255,.07);
+          --text:#fff;--muted:rgba(255,255,255,.42);--rad:14px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh}
+
+    /* ── Header ── */
+    .os-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.7);position:sticky;top:0;z-index:100;backdrop-filter:blur(14px)}
+    .os-logo{font-size:16px;font-weight:800;color:var(--g);flex:1}
+    .os-logo span{color:var(--muted);font-weight:400;font-size:11px;display:block;margin-top:-2px}
+    .os-badge{background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;letter-spacing:.4px}
+    .os-health{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
+    .health-dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    /* ── Tabs ── */
+    .os-tabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:var(--bg2);padding:0 16px;gap:2px;position:sticky;top:52px;z-index:99}
+    .os-tabs::-webkit-scrollbar{display:none}
+    .os-tab{flex-shrink:0;padding:13px 16px;font-size:13px;font-weight:700;color:var(--muted);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:.15s}
+    .os-tab.active{color:var(--g);border-color:var(--g)}
+    .os-tab:hover:not(.active){color:var(--text)}
+
+    /* ── Pages ── */
+    .os-page{display:none;padding:24px 20px 100px;max-width:1280px;margin:0 auto}
+    .os-page.active{display:block}
+
+    /* ── KPI grid ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px}
+    @media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
+    .kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:16px}
+    .kpi-val{font-size:28px;font-weight:800;color:var(--g)}
+    .kpi-label{font-size:11px;color:var(--muted);margin-top:4px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+    .kpi-sub{font-size:11px;color:rgba(113,255,0,.55);margin-top:2px}
+
+    /* ── Section heading ── */
+    .s-head{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin:28px 0 14px}
+    .s-head:first-child{margin-top:0}
+
+    /* ── Table ── */
+    .os-table-wrap{overflow-x:auto}
+    .os-table{width:100%;border-collapse:collapse;font-size:13px}
+    .os-table th{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap}
+    .os-table td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .os-table tr:hover td{background:rgba(255,255,255,.02)}
+
+    /* ── Risk badges ── */
+    .risk-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+    .rb-healthy{background:rgba(113,255,0,.12);color:var(--g)}
+    .rb-monitor{background:rgba(255,149,0,.12);color:var(--o)}
+    .rb-at_risk{background:rgba(255,68,68,.15);color:var(--r)}
+    .rb-critical{background:var(--r);color:#fff}
+
+    /* ── Status dots ── */
+    .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+    .dot-g{background:var(--g)}.dot-r{background:var(--r)}.dot-o{background:var(--o)}.dot-p{background:var(--p)}
+
+    /* ── Brain forecast ── */
+    .forecast-bars{display:flex;align-items:flex-end;gap:6px;height:120px;margin-bottom:8px}
+    .f-bar{flex:1;background:rgba(113,255,0,.2);border-radius:4px 4px 0 0;min-height:4px;transition:height .4s;position:relative}
+    .f-bar:hover{background:rgba(113,255,0,.4)}
+    .f-bar .tip{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--g);white-space:nowrap;opacity:0;transition:.2s}
+    .f-bar:hover .tip{opacity:1}
+    .forecast-labels{display:flex;gap:6px}
+    .forecast-labels span{flex:1;font-size:10px;color:var(--muted);text-align:center}
+
+    /* ── Cards ── */
+    .os-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:18px;margin-bottom:14px}
+    .os-card.warn{border-color:rgba(255,149,0,.3)}
+    .os-card.danger{border-color:rgba(255,68,68,.3)}
+    .os-card.approved{border-color:rgba(113,255,0,.25)}
+
+    /* ── Buttons ── */
+    .os-btn{display:inline-flex;align-items:center;padding:9px 16px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:.15s;gap:6px}
+    .os-btn-primary{background:var(--g);color:#000}
+    .os-btn-primary:hover{background:#5de600}
+    .os-btn-sec{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--border)}
+    .os-btn-sec:hover{background:rgba(255,255,255,.12)}
+    .os-btn-danger{background:rgba(255,68,68,.1);color:var(--r);border:1px solid rgba(255,68,68,.2)}
+    .os-btn-danger:hover{background:rgba(255,68,68,.18)}
+    .os-btn-approve{background:rgba(113,255,0,.1);color:var(--g);border:1px solid rgba(113,255,0,.2)}
+    .os-btn-approve:hover{background:rgba(113,255,0,.18)}
+    .os-btn-sm{padding:6px 12px;font-size:12px}
+
+    /* ── Entitlement map ── */
+    .ent-product{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
+    .ent-product:last-child{border-bottom:none}
+    .ent-prod-name{font-size:13px;font-weight:700;min-width:140px}
+    .ent-plan{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(113,255,0,.1);color:var(--g)}
+    .ent-status{font-size:12px;color:var(--muted)}
+
+    /* ── Self-heal log ── */
+    .heal-event{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+    .heal-event:last-child{border-bottom:none}
+    .heal-ico{font-size:18px;flex-shrink:0;margin-top:2px}
+    .heal-body{flex:1}
+    .heal-title{font-size:13px;font-weight:700;margin-bottom:2px}
+    .heal-meta{font-size:11px;color:var(--muted)}
+
+    /* ── Proposal cards ── */
+    .proposal-meta{font-size:12px;color:var(--muted);margin:6px 0 12px;line-height:1.7}
+    .proposal-hash{font-size:10px;font-family:monospace;color:rgba(255,255,255,.3);margin-top:4px}
+    .approval-pips{display:flex;gap:6px;margin:8px 0}
+    .pip{width:24px;height:24px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px}
+    .pip.filled{background:var(--g);border-color:var(--g);color:#000}
+
+    /* ── Fraud event ── */
+    .fraud-event{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+    .fraud-event:last-child{border-bottom:none}
+    .fraud-type{font-size:12px;font-weight:700;background:rgba(255,68,68,.1);color:var(--r);padding:3px 9px;border-radius:20px}
+    .fraud-uid{font-family:monospace;font-size:11px;color:var(--muted)}
+
+    /* ── Form inputs ── */
+    .os-input{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;font-family:inherit;width:100%;transition:.15s}
+    .os-input:focus{border-color:var(--g)}
+    .os-select{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;font-family:inherit;transition:.15s}
+    .os-select:focus{border-color:var(--g)}
+
+    @media(max-width:768px){.os-page{padding:16px 14px 100px}}
+  </style>
+</head>
+<body>
+
+<header class="os-header">
+  <button style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px 8px;border-radius:8px" onclick="history.back()">&#8592;</button>
+  <div class="os-logo">Subscription OS <span>SOKONI Universal Platform — Super Admin</span></div>
+  <div class="os-health"><span class="health-dot"></span><span id="health-label">System Healthy</span></div>
+  <div class="os-badge">SUPER ADMIN</div>
+</header>
+
+<nav class="os-tabs">
+  <button class="os-tab active" data-page="overview">Overview</button>
+  <button class="os-tab" data-page="brain">AI Brain</button>
+  <button class="os-tab" data-page="fraud">Fraud Center</button>
+  <button class="os-tab" data-page="approvals">Financial Approvals</button>
+  <button class="os-tab" data-page="entitlements">Entitlements</button>
+  <button class="os-tab" data-page="selfheal">Self-Heal</button>
+  <button class="os-tab" data-page="settings">Settings</button>
+</nav>
+
+<!-- ═══ OVERVIEW ═══════════════════════════════════════════════ -->
+<section class="os-page active" id="page-overview">
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-val" id="ov-mrr">—</div><div class="kpi-label">MRR (KES)</div></div>
+    <div class="kpi"><div class="kpi-val" id="ov-arr">—</div><div class="kpi-label">ARR (KES)</div></div>
+    <div class="kpi"><div class="kpi-val" id="ov-active">—</div><div class="kpi-label">Active Subs</div><div class="kpi-sub" id="ov-trial"></div></div>
+    <div class="kpi"><div class="kpi-val" id="ov-risk">—</div><div class="kpi-label">High-Risk Users</div></div>
+  </div>
+
+  <div class="s-head">Platform Status</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px" id="product-status">
+    <!-- Rendered by JS -->
+  </div>
+
+  <div class="s-head">Plan Distribution</div>
+  <div id="plan-dist" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px"></div>
+
+  <div class="s-head">Quick Actions</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="os-btn os-btn-primary" onclick="showTab('brain')">Open Brain</button>
+    <button class="os-btn os-btn-sec" onclick="showTab('fraud')">Fraud Center</button>
+    <button class="os-btn os-btn-sec" onclick="showTab('approvals')">Approval Queue</button>
+    <button class="os-btn os-btn-sec" onclick="runSelfHeal()">Run Self-Heal Now</button>
+  </div>
+</section>
+
+<!-- ═══ AI BRAIN ════════════════════════════════════════════════ -->
+<section class="os-page" id="page-brain">
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-val" id="br-critical">—</div><div class="kpi-label">Critical Churn Risk</div></div>
+    <div class="kpi"><div class="kpi-val" id="br-at-risk">—</div><div class="kpi-label">At Risk</div></div>
+    <div class="kpi"><div class="kpi-val" id="br-upgrade">—</div><div class="kpi-label">Upgrade Candidates</div></div>
+    <div class="kpi"><div class="kpi-val" id="br-ltv">—</div><div class="kpi-label">Avg LTV (KES)</div></div>
+  </div>
+
+  <div class="s-head">Revenue Forecast</div>
+  <div class="os-card" style="margin-bottom:24px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+      <select class="os-select" id="fc-months" style="width:auto">
+        <option value="3">3 Months</option>
+        <option value="6" selected>6 Months</option>
+        <option value="12">12 Months</option>
+      </select>
+      <button class="os-btn os-btn-sec" onclick="loadForecast()">Refresh</button>
+      <span style="font-size:12px;color:var(--muted)">5% monthly churn · 8% growth model</span>
+    </div>
+    <div class="forecast-bars" id="fc-bars"></div>
+    <div class="forecast-labels" id="fc-labels"></div>
+  </div>
+
+  <div class="s-head">At-Risk Users</div>
+  <div class="os-table-wrap">
+    <table class="os-table">
+      <thead><tr><th>User ID</th><th>Plan</th><th>Churn Risk</th><th>Tier</th><th>Upgrade Signal</th><th>LTV (KES)</th><th>Actions</th></tr></thead>
+      <tbody id="risk-users-tbody"><tr><td colspan="7" style="color:var(--muted);padding:16px;text-align:center">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══ FRAUD CENTER ════════════════════════════════════════════ -->
+<section class="os-page" id="page-fraud">
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-val" id="fr-total">—</div><div class="kpi-label">Total Fraud Events</div></div>
+    <div class="kpi"><div class="kpi-val" id="fr-critical">—</div><div class="kpi-label">Critical Accounts</div></div>
+    <div class="kpi"><div class="kpi-val" id="fr-unresolved">—</div><div class="kpi-label">Unresolved</div></div>
+    <div class="kpi"><div class="kpi-val" id="fr-blocked">—</div><div class="kpi-label">Blocked</div></div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <input type="search" class="os-input" id="fr-search" placeholder="Search by user ID or event type…" style="max-width:340px">
+    <select class="os-select" id="fr-filter">
+      <option value="">All Types</option>
+      <option value="token_uid_mismatch">Token Mismatch</option>
+      <option value="quota_tamper">Quota Tampering</option>
+      <option value="client_signals">Client Signals</option>
+      <option value="storage_write">Storage Spoof</option>
+    </select>
+    <button class="os-btn os-btn-sec" onclick="loadFraud()">Refresh</button>
+  </div>
+
+  <div id="fraud-events">
+    <div style="color:var(--muted);font-size:13px">Loading fraud events…</div>
+  </div>
+</section>
+
+<!-- ═══ FINANCIAL APPROVALS ═════════════════════════════════════ -->
+<section class="os-page" id="page-approvals">
+  <div class="s-head">Pending Approvals</div>
+  <div id="proposals-list">
+    <div style="color:var(--muted);font-size:13px">Loading proposals…</div>
+  </div>
+
+  <div class="s-head" style="margin-top:36px">Propose New Change</div>
+  <div class="os-card">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;display:block;margin-bottom:6px">Change Type</label>
+        <select class="os-select" id="fc-type" style="width:100%">
+          <option value="pricing_change">Pricing Change</option>
+          <option value="commission_change">Commission Change</option>
+          <option value="plan_creation">Plan Creation</option>
+          <option value="plan_deletion">Plan Deletion</option>
+          <option value="tax_configuration">Tax Configuration</option>
+          <option value="revenue_share_modification">Revenue Share</option>
+          <option value="payment_routing_change">Payment Routing</option>
+          <option value="enterprise_contract">Enterprise Contract</option>
+        </select>
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;display:block;margin-bottom:6px">Summary</label>
+        <input type="text" class="os-input" id="fc-summary" placeholder="Describe the change…">
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;display:block;margin-bottom:6px">Payload (JSON)</label>
+        <input type="text" class="os-input" id="fc-payload" placeholder='{"planId":"ai_pro","price":1299}'>
+      </div>
+    </div>
+    <button class="os-btn os-btn-primary" style="margin-top:14px" id="fc-propose-btn">Propose Change</button>
+    <p style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6">
+      Critical change types (pricing, commission, revenue share, payment routing) require approval from a DIFFERENT admin before taking effect.
+    </p>
+  </div>
+
+  <div class="s-head" style="margin-top:24px">Recent Applied Changes</div>
+  <div id="applied-proposals" style="color:var(--muted);font-size:13px">Loading…</div>
+</section>
+
+<!-- ═══ ENTITLEMENTS ════════════════════════════════════════════ -->
+<section class="os-page" id="page-entitlements">
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+    <input type="text" class="os-input" id="ent-uid-input" placeholder="Enter user UID to look up entitlements…" style="max-width:400px">
+    <button class="os-btn os-btn-primary" onclick="lookupEntitlement()">Look Up</button>
+    <button class="os-btn os-btn-danger" id="ent-suspend-btn" style="display:none" onclick="suspendUser()">Suspend User</button>
+  </div>
+  <div id="ent-result">
+    <div style="color:var(--muted);font-size:13px">Enter a user UID above to see their full entitlement state across all Sokoni products.</div>
+  </div>
+
+  <div class="s-head">Recently Updated Entitlements</div>
+  <div class="os-table-wrap">
+    <table class="os-table">
+      <thead><tr><th>User</th><th>AI Plan</th><th>Marketplace</th><th>Risk Score</th><th>Updated</th><th>Needs Refresh</th></tr></thead>
+      <tbody id="ent-recent-tbody"><tr><td colspan="6" style="color:var(--muted);padding:16px;text-align:center">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══ SELF-HEAL ═══════════════════════════════════════════════ -->
+<section class="os-page" id="page-selfheal">
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-val" id="sh-healed">—</div><div class="kpi-label">Events Healed (24h)</div></div>
+    <div class="kpi"><div class="kpi-val" id="sh-recon">—</div><div class="kpi-label">Billing Issues Found</div></div>
+    <div class="kpi"><div class="kpi-val" id="sh-reminders">—</div><div class="kpi-label">Reminders Queued</div></div>
+    <div class="kpi"><div class="kpi-val" id="sh-retry">—</div><div class="kpi-label">Payment Retries</div></div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+    <button class="os-btn os-btn-primary" onclick="runSelfHeal()">Run Self-Heal Now</button>
+    <button class="os-btn os-btn-sec" onclick="loadSelfHeal()">Refresh Log</button>
+  </div>
+
+  <div class="s-head">Auto-Repair Log</div>
+  <div id="selfheal-log">
+    <div style="color:var(--muted);font-size:13px">Loading self-heal log…</div>
+  </div>
+
+  <div class="s-head" style="margin-top:28px">Billing Reconciliation</div>
+  <div id="reconcile-log">
+    <div style="color:var(--muted);font-size:13px">Loading reconciliation records…</div>
+  </div>
+</section>
+
+<!-- ═══ SETTINGS ════════════════════════════════════════════════ -->
+<section class="os-page" id="page-settings">
+  <div class="s-head">Anti-Fraud Thresholds</div>
+  <div class="os-card" style="margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Token Block Threshold</label>
+        <input type="number" class="os-input" value="90" id="st-token-block" min="50" max="100"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Fraud Alert Threshold</label>
+        <input type="number" class="os-input" value="60" id="st-alert" min="30" max="90"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Max Concurrent IPs</label>
+        <input type="number" class="os-input" value="3" id="st-ips" min="1" max="10"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px">Session Idle Timeout (min)</label>
+        <input type="number" class="os-input" value="30" id="st-idle" min="5" max="120"></div>
+    </div>
+    <button class="os-btn os-btn-primary" style="margin-top:14px" onclick="saveFraudSettings()">Save Settings</button>
+  </div>
+
+  <div class="s-head">Self-Heal Automation</div>
+  <div class="os-card" style="margin-bottom:20px">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${['Auto-expire past-due subscriptions', 'Auto-apply pending downgrades', 'Auto-queue billing reminders', 'Auto-retry failed payments', 'Auto-update brain scores daily', 'Auto-reconcile billing daily'].map((label, i) => `
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px">${label}</span>
+          <label style="position:relative;width:44px;height:24px;cursor:pointer">
+            <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-heal="${i}">
+            <span style="position:absolute;inset:0;background:var(--g);border-radius:12px"></span>
+            <span style="position:absolute;top:3px;left:25px;width:18px;height:18px;background:#000;border-radius:50%"></span>
+          </label>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="s-head">Danger Zone</div>
+  <div style="background:rgba(255,68,68,.04);border:1px solid rgba(255,68,68,.15);border-radius:var(--rad);padding:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">Global Subscription Service Suspend</div>
+      <div style="font-size:12px;color:var(--muted)">Pauses all active subscriptions globally. No charges. All entitlement tokens invalidated.</div>
+    </div>
+    <button class="os-btn os-btn-danger" onclick="suspendGlobal()">Suspend All</button>
+  </div>
+</section>
+
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-ai-subscriptions.js" defer></script>
+<script src="/sokoni-subscription-brain.js" defer></script>
+<script src="/sokoni-entitlement.js" defer></script>
+<script src="/sokoni-permissions.js" defer></script>
+<script src="/sw-register.js" defer></script>
+
+<script>
+/* ── Helpers ──────────────────────────────────────────────────── */
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtKES(n){ return 'KES '+Number(n||0).toLocaleString(); }
+function fmtDate(ts){ return ts ? new Date(ts).toLocaleString() : '—'; }
+function fmtAgo(ts){ const s=Math.round((Date.now()-ts)/1000); return s<60?`${s}s ago`:s<3600?`${Math.round(s/60)}m ago`:`${Math.round(s/3600)}h ago`; }
+
+const RISK_CLASS = { healthy:'rb-healthy', monitor:'rb-monitor', at_risk:'rb-at_risk', critical:'rb-critical' };
+
+/* ── Firebase Firestore ───────────────────────────────────────── */
+async function fs() {
+  return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+}
+const db = () => window.firebaseDB;
+
+/* ── Cloud Function caller ────────────────────────────────────── */
+async function callFn(name, data) {
+  const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+  const fn = httpsCallable(getFunctions(window.firebaseApp,'us-central1'), name, { timeout: 30000 });
+  return (await fn(data)).data;
+}
+
+/* ── Tab switching ────────────────────────────────────────────── */
+function showTab(id) {
+  document.querySelectorAll('.os-tab').forEach(t => t.classList.toggle('active', t.dataset.page === id));
+  document.querySelectorAll('.os-page').forEach(p => p.classList.toggle('active', p.id === 'page-' + id));
+  const loaders = { brain: loadBrain, fraud: loadFraud, approvals: loadApprovals, entitlements: loadRecentEntitlements, selfheal: loadSelfHeal };
+  if (loaders[id]) loaders[id]();
+}
+document.querySelectorAll('.os-tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.page)));
+
+/* ── Admin guard ─────────────────────────────────────────────── */
+async function checkAdmin() {
+  const auth = window.firebaseAuth;
+  if (!auth?.currentUser) { location.href='/login.html?redirect='+encodeURIComponent(location.pathname); return false; }
+  const tok = await auth.currentUser.getIdTokenResult(true).catch(()=>null);
+  if (!tok?.claims?.admin && !tok?.claims?.superAdmin) { alert('Super admin access required.'); history.back(); return false; }
+  return true;
+}
+
+/* ── Overview ─────────────────────────────────────────────────── */
+async function loadOverview() {
+  try {
+    const data = await callFn('forecastRevenue', { months: 1 });
+    document.getElementById('ov-mrr').textContent = fmtKES(data.currentMRR);
+    document.getElementById('ov-arr').textContent = fmtKES(data.currentARR);
+
+    /* Plan distribution */
+    const dist = data.planDistribution || {};
+    const total = Object.values(dist).reduce((a,b)=>a+b,0)||1;
+    document.getElementById('ov-active').textContent = total;
+    const distEl = document.getElementById('plan-dist');
+    const PLAN_NAMES = { ai_free:'Free',ai_starter:'Starter',ai_pro:'Professional',ai_enterprise:'Enterprise' };
+    distEl.innerHTML = Object.entries(dist).map(([id,n])=>`
+      <div style="display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 14px">
+        <div style="width:120px;font-size:13px;font-weight:700">${esc(PLAN_NAMES[id]||id)}</div>
+        <div style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
+          <div style="height:100%;background:var(--g);border-radius:3px;width:${Math.round(n/total*100)}%"></div>
+        </div>
+        <div style="font-size:14px;font-weight:800;color:var(--g);width:36px;text-align:right">${n}</div>
+        <div style="font-size:11px;color:var(--muted);width:40px;text-align:right">${Math.round(n/total*100)}%</div>
+      </div>`).join('');
+
+    /* Product status cards */
+    const prods = ['Marketplace','AI Studio','SmartPOS','Logistics','Events','Property','Vehicles'];
+    document.getElementById('product-status').innerHTML = prods.map(p=>`
+      <div style="background:var(--bg2);border:1px solid rgba(113,255,0,.15);border-radius:10px;padding:14px;display:flex;align-items:center;gap:10px">
+        <span class="dot dot-g"></span>
+        <span style="font-size:13px;font-weight:700">${esc(p)}</span>
+        <span style="font-size:11px;color:rgba(113,255,0,.6);margin-left:auto">Operational</span>
+      </div>`).join('');
+  } catch(e) { console.warn('[OS] Overview load error:', e); }
+
+  /* High-risk count */
+  try {
+    const { collection, query, where, getDocs } = await fs();
+    const snap = await getDocs(query(collection(db(),'entitlements'), where('riskScore','>',60)));
+    document.getElementById('ov-risk').textContent = snap.size;
+  } catch { document.getElementById('ov-risk').textContent = '—'; }
+}
+
+/* ── Brain ────────────────────────────────────────────────────── */
+async function loadBrain() {
+  try {
+    const users = await window.SokoniSubsBrain?.admin?.getAtRiskUsers('at_risk') || [];
+    const critical = users.filter(u=>u.churnTier==='critical').length;
+    const atRisk   = users.filter(u=>u.churnTier==='at_risk').length;
+    const upgrade  = users.filter(u=>u.upgradeProb>=60).length;
+    const avgLtv   = users.length ? Math.round(users.reduce((a,u)=>a+(u.ltv||0),0)/users.length) : 0;
+
+    document.getElementById('br-critical').textContent = critical;
+    document.getElementById('br-at-risk').textContent  = atRisk;
+    document.getElementById('br-upgrade').textContent  = upgrade;
+    document.getElementById('br-ltv').textContent      = fmtKES(avgLtv);
+
+    document.getElementById('risk-users-tbody').innerHTML = users.slice(0,40).map(u=>`
+      <tr>
+        <td style="font-family:monospace;font-size:11px;max-width:110px;overflow:hidden;text-overflow:ellipsis">${esc(u.id)}</td>
+        <td style="font-size:12px;color:var(--g)">${esc(u.plan||'—')}</td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <div style="width:60px;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
+            <div style="height:100%;border-radius:3px;width:${u.churnRisk||0}%;background:${u.churnRisk>65?'#ff4444':u.churnRisk>35?'#ff9500':'#71ff00'}"></div>
+          </div>
+          <span style="font-size:12px;font-weight:700">${u.churnRisk||0}</span>
+        </div></td>
+        <td><span class="risk-badge ${RISK_CLASS[u.churnTier]||'rb-monitor'}">${esc(u.churnTier||'—')}</span></td>
+        <td style="color:var(--g);font-weight:700">${u.upgradeProb||0}%</td>
+        <td>${fmtKES(u.ltv)}</td>
+        <td>
+          <button class="os-btn os-btn-sec os-btn-sm" onclick="lookupEntitlementById('${esc(u.id)}')">View</button>
+        </td>
+      </tr>`).join('')||'<tr><td colspan="7" style="color:var(--muted);padding:16px;text-align:center">No at-risk users found.</td></tr>';
+  } catch(e) { console.warn('[OS] Brain load error:', e); }
+  loadForecast();
+}
+
+async function loadForecast() {
+  const months = Number(document.getElementById('fc-months').value)||6;
+  try {
+    const data = await callFn('forecastRevenue', { months });
+    const fc   = data.forecast || [];
+    if (!fc.length) return;
+    const maxMRR = Math.max(...fc.map(f=>f.mrr), data.currentMRR, 1);
+    document.getElementById('fc-bars').innerHTML = fc.map(f=>`
+      <div class="f-bar" style="height:${Math.round(f.mrr/maxMRR*100)}%">
+        <div class="tip">${fmtKES(f.mrr)}</div>
+      </div>`).join('');
+    document.getElementById('fc-labels').innerHTML = fc.map(f=>`<span>M${f.month}</span>`).join('');
+  } catch(e) { document.getElementById('fc-bars').innerHTML = '<div style="color:var(--muted);font-size:13px">Forecast unavailable.</div>'; }
+}
+document.getElementById('fc-months').addEventListener('change', loadForecast);
+
+/* ── Fraud ────────────────────────────────────────────────────── */
+async function loadFraud() {
+  try {
+    const { collection, query, orderBy, limit, getDocs, where } = await fs();
+    const typeFilter = document.getElementById('fr-filter').value;
+    let q = query(collection(db(),'fraudEvents'), orderBy('ts','desc'), limit(50));
+    if (typeFilter) q = query(collection(db(),'fraudEvents'), where('type','==',typeFilter), orderBy('ts','desc'), limit(50));
+    const snap = await getDocs(q);
+    const events = snap.docs.map(d=>d.data());
+
+    const total      = snap.size;
+    const unresolved = events.filter(e=>!e.resolved).length;
+    document.getElementById('fr-total').textContent      = total;
+    document.getElementById('fr-unresolved').textContent = unresolved;
+    document.getElementById('fr-critical').textContent   = '—';
+    document.getElementById('fr-blocked').textContent    = '—';
+
+    const container = document.getElementById('fraud-events');
+    if (!events.length) { container.innerHTML = '<div style="color:var(--muted);font-size:13px">No fraud events found.</div>'; return; }
+    container.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:16px 20px">
+      ${events.map(e=>`
+        <div class="fraud-event">
+          <span class="fraud-type">${esc(e.type)}</span>
+          <div style="flex:1">
+            <div class="fraud-uid">${esc(e.uid)}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtAgo(e.ts)}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${e.resolved?'#71ff00':'#ff4444'}">${e.resolved?'Resolved':'Open'}</span>
+        </div>`).join('')}
+    </div>`;
+  } catch(e) { console.warn('[OS] Fraud load error:', e); }
+}
+document.getElementById('fr-filter').addEventListener('change', loadFraud);
+document.getElementById('fr-search').addEventListener('input', loadFraud);
+
+/* ── Financial Approvals ─────────────────────────────────────── */
+async function loadApprovals() {
+  try {
+    const { collection, query, where, orderBy, limit, getDocs } = await fs();
+    const [pending, applied] = await Promise.all([
+      getDocs(query(collection(db(),'financialProposals'), where('status','==','pending_approval'), orderBy('proposedAt','desc'), limit(20))),
+      getDocs(query(collection(db(),'financialProposals'), where('status','==','approved'), orderBy('proposedAt','desc'), limit(10))),
+    ]);
+
+    const listEl = document.getElementById('proposals-list');
+    if (pending.empty) { listEl.innerHTML = '<div style="color:rgba(113,255,0,.6);font-size:13px">No pending approvals. ✓</div>'; }
+    else {
+      listEl.innerHTML = pending.docs.map(d=>{
+        const p = d.data();
+        const pips = Array.from({length: p.requiredApprovals}, (_,i)=>`<div class="pip${i<(p.approvals?.length||0)?' filled':''}">✓</div>`).join('');
+        return `
+          <div class="os-card warn">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:15px;font-weight:800">${esc(p.type?.replace(/_/g,' ').toUpperCase())}</div>
+                <div class="proposal-meta">${esc(p.summary)}<br>Proposed by: <code>${esc(p.proposerUid?.slice(0,16))}…</code> · ${fmtDate(p.proposedAt)}</div>
+                <div class="approval-pips">${pips}<span style="font-size:11px;color:var(--muted);align-self:center;margin-left:4px">${(p.approvals||[]).length}/${p.requiredApprovals} approvals</span></div>
+                <div class="proposal-hash">SHA-256: ${esc(p.changeHash?.slice(0,32))}…</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap">
+                <button class="os-btn os-btn-approve os-btn-sm" onclick="approveProposal('${esc(d.id)}')">Approve</button>
+                <button class="os-btn os-btn-sec os-btn-sm" onclick="rejectProposal('${esc(d.id)}')">Reject</button>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    const applEl = document.getElementById('applied-proposals');
+    applEl.innerHTML = applied.empty ? '<div style="color:var(--muted);font-size:13px">No applied changes yet.</div>' :
+      applied.docs.map(d=>{const p=d.data(); return `
+        <div class="os-card approved" style="padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:700">${esc(p.type?.replace(/_/g,' ').toUpperCase())}</span>
+          <span style="font-size:12px;color:var(--muted)">${esc(p.summary)}</span>
+          <span style="font-size:11px;color:rgba(113,255,0,.6);margin-left:auto">${fmtDate(p.approvedAt)}</span>
+        </div>`}).join('');
+  } catch(e) { console.warn('[OS] Approvals load error:', e); }
+}
+
+async function approveProposal(id) {
+  if (!confirm('Approve this financial change?')) return;
+  try {
+    const r = await callFn('approveFinancialChange', { proposalId: id });
+    alert(r.status === 'approved_and_applied' ? 'Change approved and applied!' : `Partial approval (${r.approvals.length}/${r.approvals.length+1} done)`);
+    loadApprovals();
+  } catch(e) { alert('Failed: '+e.message); }
+}
+
+async function rejectProposal(id) {
+  if (!confirm('Reject this proposal?')) return;
+  try {
+    const { doc, updateDoc } = await fs();
+    await updateDoc(doc(db(),'financialProposals',id), { status:'rejected', rejectedAt:Date.now() });
+    loadApprovals();
+  } catch(e) { alert('Failed: '+e.message); }
+}
+
+document.getElementById('fc-propose-btn').addEventListener('click', async () => {
+  const type    = document.getElementById('fc-type').value;
+  const summary = document.getElementById('fc-summary').value.trim();
+  const payloadStr = document.getElementById('fc-payload').value.trim();
+  if (!summary) { alert('Please enter a summary.'); return; }
+  let payload = {};
+  if (payloadStr) { try { payload = JSON.parse(payloadStr); } catch { alert('Payload must be valid JSON.'); return; } }
+  try {
+    const r = await callFn('proposeFinancialChange', { type, payload, summary });
+    alert(`Proposal created (ID: ${r.proposalId}). Awaiting ${r.required} approval(s).`);
+    document.getElementById('fc-summary').value = '';
+    document.getElementById('fc-payload').value = '';
+    loadApprovals();
+  } catch(e) { alert('Failed: '+e.message); }
+});
+
+/* ── Entitlements ─────────────────────────────────────────────── */
+let _lookedUpUid = null;
+
+async function lookupEntitlementById(uid) {
+  document.getElementById('ent-uid-input').value = uid;
+  lookupEntitlement();
+  showTab('entitlements');
+}
+
+async function lookupEntitlement() {
+  const targetUid = document.getElementById('ent-uid-input').value.trim();
+  if (!targetUid) return;
+  _lookedUpUid = targetUid;
+  document.getElementById('ent-suspend-btn').style.display = 'inline-flex';
+  const el = document.getElementById('ent-result');
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px">Looking up…</div>';
+  try {
+    const { doc, getDoc } = await fs();
+    const [entSnap, aiSnap, mktSnap, brainSnap] = await Promise.all([
+      getDoc(doc(db(),'entitlements',targetUid)),
+      getDoc(doc(db(),'aiSubscriptions',targetUid)),
+      getDoc(doc(db(),'subscriptions',targetUid)),
+      getDoc(doc(db(),'subscriptionBrain',targetUid)),
+    ]);
+    const ent   = entSnap.exists  ? entSnap.data()  : {};
+    const ai    = aiSnap.exists   ? aiSnap.data()   : { plan:'ai_free',  status:'active' };
+    const mkt   = mktSnap.exists  ? mktSnap.data()  : { plan:'free',     status:'active' };
+    const brain = brainSnap.exists? brainSnap.data(): {};
+    const PRODS = window.SokoniEntitlement?.PRODUCTS || {};
+    const prodHtml = Object.entries(PRODS).map(([id,p])=>`
+      <div class="ent-product">
+        <div class="ent-prod-name">${esc(p.name)}</div>
+        <span class="ent-plan">${esc(id==='ai'?ai.plan||'ai_free':id==='marketplace'?mkt.plan||'free':'—')}</span>
+        <span class="ent-status">${esc(id==='ai'?ai.status||'active':id==='marketplace'?mkt.status||'active':'—')}</span>
+      </div>`).join('');
+    el.innerHTML = `
+<div class="os-card">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+    <div><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Risk Score</div><div style="font-size:24px;font-weight:800;color:${(ent.riskScore||0)>60?'#ff4444':(ent.riskScore||0)>30?'#ff9500':'#71ff00'}">${ent.riskScore||0}/100</div></div>
+    <div><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Churn Risk</div><div style="font-size:24px;font-weight:800;color:var(--g)">${brain.churnRisk||'—'}</div></div>
+    <div><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Upgrade Signal</div><div style="font-size:20px;font-weight:800">${brain.upgradeProb||0}%</div></div>
+    <div><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Retention Tier</div><span class="risk-badge ${RISK_CLASS[brain.retentionTier]||'rb-monitor'}">${esc(brain.retentionTier||'unknown')}</span></div>
+  </div>
+  <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px">Product Entitlements</div>
+  ${prodHtml}
+  <div style="font-size:11px;color:rgba(255,255,255,.25);margin-top:10px">Last updated: ${fmtDate(ent.updatedAt)} ${ent.needsRefresh?'· Token refresh needed':'·  Token valid'}</div>
+</div>`;
+  } catch(e) { el.innerHTML = `<div style="color:var(--muted);font-size:13px">Error: ${esc(e.message)}</div>`; }
+}
+
+async function suspendUser() {
+  if (!_lookedUpUid) return;
+  if (!confirm(`Suspend user ${_lookedUpUid}? They will lose access to all features immediately.`)) return;
+  try {
+    const { doc, updateDoc } = await fs();
+    await updateDoc(doc(db(),'entitlements',_lookedUpUid), { suspended: true, suspendedAt: Date.now() });
+    await updateDoc(doc(db(),'aiSubscriptions',_lookedUpUid), { status:'suspended' }).catch(()=>{});
+    alert('User suspended.');
+    lookupEntitlement();
+  } catch(e) { alert('Failed: '+e.message); }
+}
+
+async function loadRecentEntitlements() {
+  try {
+    const { collection, query, orderBy, limit, getDocs } = await fs();
+    const snap = await getDocs(query(collection(db(),'entitlements'), orderBy('updatedAt','desc'), limit(25)));
+    const tbody = document.getElementById('ent-recent-tbody');
+    tbody.innerHTML = snap.docs.map(d=>{
+      const e=d.data();
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px">${esc(d.id.slice(0,14))}…</td>
+        <td style="color:var(--g);font-size:12px;font-weight:700">${esc(e.products?.ai?.plan||'—')}</td>
+        <td style="font-size:12px">${esc(e.products?.marketplace?.plan||'—')}</td>
+        <td><span style="font-weight:800;color:${(e.riskScore||0)>60?'#ff4444':(e.riskScore||0)>30?'#ff9500':'#71ff00'}">${e.riskScore||0}</span></td>
+        <td style="font-size:11px;color:var(--muted)">${fmtAgo(e.updatedAt)}</td>
+        <td>${e.needsRefresh?'<span style="color:#ff9500;font-size:11px;font-weight:700">Yes</span>':'<span style="color:rgba(255,255,255,.25);font-size:11px">No</span>'}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="6" style="color:var(--muted);padding:16px;text-align:center">No entitlement records found.</td></tr>';
+  } catch(e) { console.warn('[OS] Entitlement load error:', e); }
+}
+
+/* ── Self-Heal ────────────────────────────────────────────────── */
+async function loadSelfHeal() {
+  try {
+    const { collection, query, orderBy, limit, getDocs } = await fs();
+    const [healSnap, reconSnap] = await Promise.all([
+      getDocs(query(collection(db(),'selfHealLog'), orderBy('ts','desc'), limit(20))),
+      getDocs(query(collection(db(),'billingReconciliation'), orderBy('ts','desc'), limit(10))),
+    ]);
+
+    const healed24h = healSnap.docs.filter(d=>d.data().ts > Date.now()-86400000).reduce((a,d)=>a+(d.data().issueCount||0),0);
+    const reconIssues = reconSnap.docs.reduce((a,d)=>a+(d.data().issueCount||0),0);
+    document.getElementById('sh-healed').textContent  = healed24h;
+    document.getElementById('sh-recon').textContent   = reconIssues;
+    document.getElementById('sh-reminders').textContent = '—';
+    document.getElementById('sh-retry').textContent   = '—';
+
+    const HEAL_ICONS = { expired_to_past_due:'⏰', downgrade_applied:'⬇', payment_retry_queued:'💳', token_refresh:'🔄' };
+    document.getElementById('selfheal-log').innerHTML = healSnap.empty ?
+      '<div style="color:rgba(113,255,0,.6);font-size:13px">No issues found recently. System is healthy.</div>' :
+      `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:16px 20px">
+        ${healSnap.docs.map(d=>{
+          const e=d.data();
+          return (e.issues||[]).map(iss=>`
+            <div class="heal-event">
+              <span class="heal-ico">${HEAL_ICONS[iss.type]||'🔧'}</span>
+              <div class="heal-body">
+                <div class="heal-title">${esc(iss.type?.replace(/_/g,' '))}</div>
+                <div class="heal-meta">uid: ${esc(iss.uid?.slice(0,16)||'—')} · plan: ${esc(iss.plan||iss.newPlan||'—')} · ${fmtAgo(e.ts)}</div>
+              </div>
+            </div>`).join('');
+        }).join('')}
+      </div>`;
+
+    document.getElementById('reconcile-log').innerHTML = reconSnap.empty ?
+      '<div style="color:rgba(113,255,0,.6);font-size:13px">All billing records clean.</div>' :
+      `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:16px 20px">
+        ${reconSnap.docs.map(d=>{const r=d.data(); return `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:13px;font-weight:700;color:${r.issueCount?'#ff4444':'#71ff00'}">${r.issueCount||0} issues</span>
+            <span style="font-size:12px;color:var(--muted)">${fmtDate(r.ts)}</span>
+            <span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${r.resolved?'rgba(113,255,0,.1)':'rgba(255,68,68,.1)'};color:${r.resolved?'#71ff00':'#ff4444'}">${r.resolved?'Clean':'Flagged'}</span>
+          </div>`}).join('')}
+      </div>`;
+  } catch(e) { console.warn('[OS] SelfHeal load error:', e); }
+}
+
+async function runSelfHeal() {
+  const btn = event?.target;
+  if (btn) btn.disabled = true;
+  try {
+    await callFn('selfHealSubscriptions', {});  // not directly callable as scheduler; placeholder
+    alert('Self-heal triggered. Check the Self-Heal log in a few minutes.');
+    loadSelfHeal();
+  } catch { alert('Self-heal is a scheduled function. Check Firestore selfHealLog for last run.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+/* ── Settings ─────────────────────────────────────────────────── */
+async function saveFraudSettings() {
+  try {
+    const { doc, setDoc } = await fs();
+    await setDoc(doc(db(),'aiSettings','fraudConfig'), {
+      tokenBlockThreshold: Number(document.getElementById('st-token-block').value),
+      alertThreshold:      Number(document.getElementById('st-alert').value),
+      maxConcurrentIps:    Number(document.getElementById('st-ips').value),
+      sessionIdleMinutes:  Number(document.getElementById('st-idle').value),
+      updatedAt:           Date.now(),
+    }, { merge:true });
+    alert('Fraud settings saved.');
+  } catch(e) { alert('Failed: '+e.message); }
+}
+
+async function suspendGlobal() {
+  if (!confirm('CAUTION: This will suspend ALL active subscriptions globally. Are you absolutely sure?')) return;
+  if (!confirm('Second confirmation required. Suspend all subscriptions NOW?')) return;
+  try {
+    const { doc, setDoc } = await fs();
+    await setDoc(doc(db(),'aiSettings','globalToggles'), { aiServiceActive:false, suspendedAt:Date.now() }, { merge:true });
+    alert('Global subscription service suspended. Update aiSettings/globalToggles to restore.');
+  } catch(e) { alert('Failed: '+e.message); }
+}
+
+/* ── Bootstrap ────────────────────────────────────────────────── */
+async function init() {
+  const ok = await checkAdmin();
+  if (!ok) return;
+  await loadOverview();
+}
+
+window.addEventListener('firebaseReady',  init);
+window.addEventListener('sokoniSubsBrainReady', () => {});
+if (window.firebaseDB) init();
+</script>
+</body>
+</html>

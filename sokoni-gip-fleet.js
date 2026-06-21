@@ -18,6 +18,7 @@ import {
   collection, query, where, orderBy, limit,
   serverTimestamp, Timestamp, deleteField,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import policy from './sokoni-ai-policy.js';
 
 /* ── Vehicle type config ──────────────────────────────────────── */
 
@@ -215,6 +216,9 @@ export default class FleetManager {
     score = Math.max(0, Math.min(100, score));
     const { grade, label } = _healthGrade(score);
 
+    /* AI Policy: health score is CALCULATED — deterministic math from verified DB fields.
+       Fuel/battery uses whatever is in Firestore — never defaults to a number if absent. */
+    const fuelIsVerified = fuelLevel !== null && fuelLevel !== undefined;
     return {
       assetId:          vehicle.assetId,
       healthScore:      score,
@@ -223,6 +227,15 @@ export default class FleetManager {
       issues,
       requiresAttention: issues.some(i => i.severity === 'high'),
       requiresImmediate: issues.some(i => i.severity === 'critical'),
+      /* Policy-wrapped fuel reading — null means no sensor, hide from UI */
+      fuelPv: fuelIsVerified
+        ? policy.verified(fuelLevel, { source: `${vehicle.fuelType === 'electric' ? 'battery' : 'fuel'}_sensor` })
+        : null,
+      _policy: policy.calculated(score, {
+        inputs: ['gipAssets (odometer, insurance, inspection, updatedAt)',
+                 'currentFuelLevel or currentBatteryLevel (if present)'],
+        formula: 'Service overdue 25% + Fuel/battery 20% + Insurance 20% + Inspection 20% + Tracker 15%',
+      }),
     };
   }
 

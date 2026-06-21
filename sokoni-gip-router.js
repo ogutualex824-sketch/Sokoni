@@ -29,6 +29,7 @@ import { db } from './firebase.js';
 import {
   doc, setDoc, updateDoc, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import policy, { CONFIDENCE } from './sokoni-ai-policy.js';
 
 /* ── Constants ──────────────────────────────────────────────── */
 
@@ -477,14 +478,19 @@ export default class RouteEngine {
     const speed = ROAD_SPEED[vehicleType] ?? 35;
     const factor= TRAFFIC_FACTOR[hour] ?? 0.85;
     const durationMin = Math.ceil((dist / (speed * factor)) * 60);
-    const confidence  = 0.70;   /* Quick haversine estimate */
 
+    /* AI Policy: quickETA uses haversine (straight-line) distance, not real roads.
+       It is a CALCULATED estimate — transparent about using straight-line fallback. */
     return {
       distanceKm:  Math.round(dist * 100) / 100,
       durationMin,
-      confidence,
       eta:         new Date(Date.now() + durationMin * 60_000).toISOString(),
       trafficFactor: factor,
+      _policy: policy.calculated(durationMin, {
+        formula: `Haversine distance (${Math.round(dist * 100) / 100} km) ÷ `
+               + `${vehicleType} speed (${speed} km/h) × traffic factor (${factor}) `
+               + `— straight-line estimate, not actual road route`,
+      }),
     };
   }
 

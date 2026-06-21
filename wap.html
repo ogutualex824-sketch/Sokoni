@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' https://www.gstatic.com 'nonce-wap2026'; style-src 'self' https://fonts.googleapis.com 'nonce-wap2026';">
+  <title>Workflow Automation Platform · SOKONI Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style nonce="wap2026">
+/* ── Reset + tokens ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:        #0d0f14;
+  --surface:   #161a23;
+  --surface2:  #1e2330;
+  --border:    #2a3040;
+  --text:      #e2e8f0;
+  --muted:     #8896b0;
+  --accent:    #6366f1;
+  --accent2:   #4f46e5;
+  --green:     #10b981;
+  --yellow:    #f59e0b;
+  --red:       #ef4444;
+  --blue:      #3b82f6;
+  --orange:    #f97316;
+  --radius:    10px;
+  --font:      'Inter', sans-serif;
+  --mono:      'JetBrains Mono', monospace;
+}
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+/* ── Layout ──────────────────────────────────────────────────── */
+.wap-shell { display: grid; grid-template-columns: 240px 1fr; grid-template-rows: 56px 1fr; height: 100vh; }
+.wap-header { grid-column: 1/-1; display: flex; align-items: center; gap: 12px; padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--border); z-index: 10; }
+.wap-logo { font-size: 14px; font-weight: 700; color: var(--accent); letter-spacing: .5px; }
+.wap-logo span { color: var(--muted); font-weight: 400; }
+.wap-version { font-size: 11px; background: var(--surface2); color: var(--muted); padding: 2px 8px; border-radius: 20px; margin-left: 4px; }
+.wap-header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.wap-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+.wap-badge.live { background: #10b98120; color: var(--green); }
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+.wap-sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px 0; }
+.nav-section { padding: 0 12px; margin-bottom: 4px; }
+.nav-label { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; padding: 10px 8px 4px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--muted); transition: all .15s; user-select: none; }
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: #6366f115; color: var(--accent); font-weight: 600; }
+.nav-item .icon { width: 16px; text-align: center; flex-shrink: 0; }
+.nav-item .badge { margin-left: auto; font-size: 11px; background: var(--accent); color: #fff; border-radius: 20px; padding: 1px 7px; }
+
+/* ── Main content ────────────────────────────────────────────── */
+.wap-main { overflow-y: auto; padding: 24px; }
+.page { display: none; }
+.page.active { display: block; }
+.page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.page-title { font-size: 20px; font-weight: 700; }
+.page-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.page-actions { margin-left: auto; display: flex; gap: 8px; }
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px; }
+
+/* ── Stats row ───────────────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+.stat-value { font-size: 28px; font-weight: 700; }
+.stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.stat-delta { font-size: 11px; margin-top: 6px; }
+.stat-delta.up { color: var(--green); }
+.stat-delta.down { color: var(--red); }
+
+/* ── Table ───────────────────────────────────────────────────── */
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.wap-table { width: 100%; border-collapse: collapse; }
+.wap-table th { background: var(--surface2); font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+.wap-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #1e243040; vertical-align: middle; }
+.wap-table tr:last-child td { border-bottom: none; }
+.wap-table tr:hover td { background: #ffffff04; }
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+button { font-family: var(--font); cursor: pointer; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; transition: all .15s; }
+.btn-primary { background: var(--accent); color: #fff; padding: 8px 18px; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary { background: var(--surface2); color: var(--text); padding: 8px 14px; border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger { background: #ef444415; color: var(--red); padding: 6px 12px; border: 1px solid #ef444430; }
+.btn-success { background: #10b98115; color: var(--green); padding: 6px 12px; border: 1px solid #10b98130; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* ── Status pills ────────────────────────────────────────────── */
+.status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+.status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status.running     { background: #3b82f615; color: var(--blue); }
+.status.completed   { background: #10b98115; color: var(--green); }
+.status.failed      { background: #ef444415; color: var(--red); }
+.status.waiting     { background: #f59e0b15; color: var(--yellow); }
+.status.paused      { background: #f9731615; color: var(--orange); }
+.status.cancelled   { background: #8896b015; color: var(--muted); }
+.status.compensating { background: #ef444415; color: var(--orange); }
+.status.compensated { background: #8896b015; color: var(--muted); }
+.status.pending     { background: var(--surface2); color: var(--muted); }
+
+/* ── Step timeline ───────────────────────────────────────────── */
+.step-timeline { display: flex; flex-direction: column; gap: 0; }
+.step-node { display: grid; grid-template-columns: 32px 1fr; gap: 0 14px; position: relative; }
+.step-node::before { content: ''; position: absolute; left: 15px; top: 32px; bottom: -1px; width: 2px; background: var(--border); }
+.step-node:last-child::before { display: none; }
+.step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; border: 2px solid var(--border); margin-top: 2px; z-index: 1; }
+.step-dot.completed { background: #10b98120; border-color: var(--green); color: var(--green); }
+.step-dot.running   { background: #3b82f620; border-color: var(--blue); color: var(--blue); animation: pulse-ring 1.5s infinite; }
+.step-dot.failed    { background: #ef444420; border-color: var(--red); color: var(--red); }
+.step-dot.waiting   { background: #f59e0b20; border-color: var(--yellow); color: var(--yellow); }
+.step-dot.pending   { background: var(--surface2); border-color: var(--border); color: var(--muted); }
+.step-dot.skipped   { background: var(--surface2); border-color: var(--border); color: var(--muted); opacity: .5; }
+.step-content { padding-bottom: 20px; }
+.step-name { font-size: 13px; font-weight: 600; margin-top: 5px; }
+.step-meta { font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+.step-meta span { display: flex; align-items: center; gap: 4px; }
+.step-output { font-family: var(--mono); font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-top: 8px; color: var(--muted); max-height: 120px; overflow: auto; }
+
+/* ── Approval panel ──────────────────────────────────────────── */
+.approval-card { background: var(--surface); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
+.approval-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.approval-title { font-size: 14px; font-weight: 600; }
+.approval-meta { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.approval-actions { display: flex; gap: 8px; }
+
+/* ── Grid layouts ────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+/* ── Form elements ───────────────────────────────────────────── */
+input, select, textarea { font-family: var(--font); background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 9px 12px; font-size: 13px; width: 100%; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+label { font-size: 12px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 6px; }
+.form-group { margin-bottom: 16px; }
+
+/* ── WF definition builder ───────────────────────────────────── */
+.def-steps { display: flex; flex-direction: column; gap: 8px; }
+.def-step { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+.def-step .step-handle { color: var(--muted); cursor: grab; flex-shrink: 0; }
+.def-step .step-type-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .5px; }
+.pill-task { background: #6366f115; color: var(--accent); }
+.pill-approval { background: #f59e0b15; color: var(--yellow); }
+.pill-notification { background: #10b98115; color: var(--green); }
+.pill-condition { background: #3b82f615; color: var(--blue); }
+.pill-delay { background: #f9731615; color: var(--orange); }
+.pill-webhook { background: #ef444415; color: var(--red); }
+.pill-subworkflow { background: #8b5cf615; color: #a78bfa; }
+.def-step .step-id { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* ── Metrics charts ──────────────────────────────────────────── */
+.mini-bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 60px; margin-top: 8px; }
+.bar { background: var(--accent); border-radius: 3px 3px 0 0; min-width: 8px; transition: height .3s; }
+.bar.green { background: var(--green); }
+.bar.red   { background: var(--red); }
+
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 #3b82f640; } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.spin { animation: spin .8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .wap-shell { grid-template-columns: 1fr; grid-template-rows: 56px 1fr; }
+  .wap-sidebar { display: none; }
+  .two-col, .three-col { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}
+  </style>
+</head>
+<body>
+<div class="wap-shell">
+
+  <!-- Header -->
+  <header class="wap-header">
+    <div class="wap-logo">SOKONI <span>WAP</span> <span class="wap-version">v1.0</span></div>
+    <span class="wap-badge live">● Live</span>
+    <div class="wap-header-actions">
+      <span id="hdr-clock" style="font-size:12px;color:var(--muted)"></span>
+      <button class="btn-primary btn-sm" onclick="showNewWorkflowModal()">+ New Workflow</button>
+      <button class="btn-secondary btn-sm" onclick="showPage('settings')">⚙</button>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <nav class="wap-sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="icon">◼</span> Dashboard</div>
+      <div class="nav-item" onclick="showPage('instances',this)"><span class="icon">⬡</span> All Instances <span class="badge" id="sb-running">0</span></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Approvals</div>
+      <div class="nav-item" onclick="showPage('approvals',this)"><span class="icon">✓</span> Pending Approvals <span class="badge" id="sb-approvals" style="background:var(--yellow);color:#000">0</span></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Workflows</div>
+      <div class="nav-item" onclick="showPage('definitions',this)"><span class="icon">⊞</span> Definitions</div>
+      <div class="nav-item" onclick="showPage('designer',this)"><span class="icon">✎</span> Designer</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Modules</div>
+      <div class="nav-item" onclick="filterModule('marketplace',this)"><span class="icon">🛒</span> Marketplace</div>
+      <div class="nav-item" onclick="filterModule('delivery',this)"><span class="icon">🚚</span> Delivery</div>
+      <div class="nav-item" onclick="filterModule('food',this)"><span class="icon">🍔</span> Food</div>
+      <div class="nav-item" onclick="filterModule('events',this)"><span class="icon">🎟</span> Events</div>
+      <div class="nav-item" onclick="filterModule('rentals',this)"><span class="icon">🔑</span> Rentals</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Observability</div>
+      <div class="nav-item" onclick="showPage('metrics',this)"><span class="icon">📊</span> Metrics</div>
+      <div class="nav-item" onclick="showPage('audit',this)"><span class="icon">📋</span> Audit Log</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Admin</div>
+      <div class="nav-item" onclick="showPage('settings',this)"><span class="icon">⚙</span> Settings</div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="wap-main">
+
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-header">
+        <div><div class="page-title">Workflow Dashboard</div><div class="page-subtitle">Real-time overview of all workflow executions</div></div>
+        <div class="page-actions"><button class="btn-secondary btn-sm" onclick="loadDashboard()">↻ Refresh</button></div>
+      </div>
+      <div class="stats-grid" id="dash-stats">
+        <div class="stat-card"><div class="stat-value" id="st-total">—</div><div class="stat-label">Total Instances</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--blue)" id="st-running">—</div><div class="stat-label">Running</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--green)" id="st-completed">—</div><div class="stat-label">Completed (24h)</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--red)" id="st-failed">—</div><div class="stat-label">Failed (24h)</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--yellow)" id="st-waiting">—</div><div class="stat-label">Waiting Approval</div></div>
+        <div class="stat-card"><div class="stat-value" id="st-avgms">—</div><div class="stat-label">Avg Step Duration</div></div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Recent Executions</div>
+          <div id="dash-recent-list"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">By Module (24h)</div>
+          <div id="dash-module-chart"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- All Instances -->
+    <div id="page-instances" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Workflow Instances</div><div class="page-subtitle">All workflow executions across the platform</div></div>
+        <div class="page-actions">
+          <select id="filter-status" onchange="loadInstances()" style="width:auto">
+            <option value="">All Status</option>
+            <option value="running">Running</option>
+            <option value="waiting">Waiting</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="paused">Paused</option>
+          </select>
+          <select id="filter-def" onchange="loadInstances()" style="width:auto">
+            <option value="">All Workflows</option>
+            <option value="marketplace_order">Marketplace Order</option>
+            <option value="delivery">Delivery</option>
+            <option value="food_delivery">Food Delivery</option>
+            <option value="event_ticket">Event Ticket</option>
+            <option value="rental">Rental</option>
+            <option value="seller_verification">Seller Verification</option>
+            <option value="refund">Refund</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="wap-table">
+          <thead><tr>
+            <th>Instance ID</th><th>Workflow</th><th>Module</th>
+            <th>Status</th><th>Progress</th><th>Started</th><th>Duration</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="instances-tbody"><tr><td colspan="8" style="color:var(--muted);text-align:center;padding:40px">Loading instances…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Approvals -->
+    <div id="page-approvals" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Pending Approvals</div><div class="page-subtitle">Workflow steps waiting for human decision</div></div>
+        <div class="page-actions"><button class="btn-secondary btn-sm" onclick="loadApprovals()">↻ Refresh</button></div>
+      </div>
+      <div id="approvals-list"><div style="color:var(--muted);font-size:13px">Loading approvals…</div></div>
+    </div>
+
+    <!-- Definitions -->
+    <div id="page-definitions" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Workflow Definitions</div><div class="page-subtitle">All registered workflow blueprints</div></div>
+        <div class="page-actions"><button class="btn-primary btn-sm" onclick="showPage('designer')">+ New Workflow</button></div>
+      </div>
+      <div id="definitions-list" class="def-steps"></div>
+    </div>
+
+    <!-- Designer -->
+    <div id="page-designer" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Workflow Designer</div><div class="page-subtitle">Build and modify workflows without code changes</div></div>
+        <div class="page-actions">
+          <button class="btn-secondary btn-sm" onclick="clearDesigner()">Clear</button>
+          <button class="btn-primary btn-sm" onclick="saveDesignerWorkflow()">Save to Firestore</button>
+        </div>
+      </div>
+      <div class="two-col">
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Workflow Meta</div>
+            <div class="form-group"><label>Workflow ID</label><input id="des-id" placeholder="e.g. my_custom_workflow"></div>
+            <div class="form-group"><label>Name</label><input id="des-name" placeholder="e.g. My Custom Workflow"></div>
+            <div class="form-group"><label>Module</label>
+              <select id="des-module">
+                <option>marketplace</option><option>delivery</option><option>food</option>
+                <option>events</option><option>rentals</option><option>healthcare</option>
+                <option>finance</option><option>admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Add Step <button class="btn-secondary btn-sm" style="float:right" onclick="addDesignerStep()">+</button></div>
+            <div id="des-steps" class="def-steps" style="margin-top:8px"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Step Inspector</div>
+          <div id="des-inspector">
+            <div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0">Select a step to inspect or add a new step using the button.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div id="page-metrics" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Metrics & Observability</div><div class="page-subtitle">Workflow performance and health</div></div>
+      </div>
+      <div class="three-col" style="margin-bottom:24px">
+        <div class="card">
+          <div class="card-title">Success Rate (24h)</div>
+          <div class="stat-value" id="met-success">—%</div>
+          <div class="mini-bar-chart" id="met-bar-success"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Avg Workflow Duration</div>
+          <div class="stat-value" id="met-duration">—</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">across all workflows</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Step Timeout Rate</div>
+          <div class="stat-value" id="met-timeout">—%</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">last 24 hours</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="wap-table">
+          <thead><tr><th>Workflow</th><th>Total</th><th>Completed</th><th>Failed</th><th>Waiting</th><th>Avg Duration</th><th>P95 Duration</th></tr></thead>
+          <tbody id="metrics-tbody"><tr><td colspan="7" style="color:var(--muted);text-align:center;padding:40px">Loading metrics…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Audit Log -->
+    <div id="page-audit" class="page">
+      <div class="page-header">
+        <div><div class="page-title">Audit Log</div><div class="page-subtitle">Immutable record of all workflow decisions and transitions</div></div>
+        <div class="page-actions">
+          <input id="audit-search" placeholder="Search by instance ID or event…" style="width:260px" oninput="filterAudit()">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="wap-table">
+          <thead><tr><th>Timestamp</th><th>Instance</th><th>Event</th><th>Step</th><th>Status</th><th>Actor</th><th>Duration</th></tr></thead>
+          <tbody id="audit-tbody"><tr><td colspan="7" style="color:var(--muted);text-align:center;padding:40px">Loading audit log…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Instance Detail (inline panel) -->
+    <div id="page-instance-detail" class="page">
+      <div class="page-header">
+        <div>
+          <button class="btn-secondary btn-sm" onclick="showPage('instances')" style="margin-bottom:8px">← Back to Instances</button>
+          <div class="page-title" id="detail-title">Instance Detail</div>
+          <div class="page-subtitle" id="detail-subtitle"></div>
+        </div>
+        <div class="page-actions" id="detail-actions"></div>
+      </div>
+      <div class="two-col">
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Variables</div>
+            <pre id="detail-vars" style="font-family:var(--mono);font-size:11px;color:var(--muted);white-space:pre-wrap;max-height:200px;overflow:auto"></pre>
+          </div>
+          <div class="card">
+            <div class="card-title">Step History</div>
+            <div id="detail-history" class="step-timeline"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Step Timeline</div>
+          <div id="detail-timeline" class="step-timeline"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="page-settings" class="page">
+      <div class="page-header"><div class="page-title">WAP Settings</div></div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">Engine Configuration</div>
+          <div class="form-group"><label>Max Parallel Steps</label><input type="number" value="10"></div>
+          <div class="form-group"><label>Default Step Timeout (ms)</label><input type="number" value="30000"></div>
+          <div class="form-group"><label>Default Retry Count</label><input type="number" value="3"></div>
+          <div class="form-group"><label>Default Approval Deadline</label><input value="24h"></div>
+          <button class="btn-primary" style="width:100%">Save Configuration</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Registered Handlers</div>
+          <div id="handlers-list" style="font-family:var(--mono);font-size:12px;color:var(--muted)">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- /wap-main -->
+</div><!-- /wap-shell -->
+
+<!-- ── Scripts ──────────────────────────────────────────────────── -->
+<script type="module" nonce="wap2026">
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, query, where, orderBy, limit, getDocs, onSnapshot, doc, getDoc }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { SOKONI_CONFIG } from './sokoni-config.js';
+import wap from './sokoni-wap.js';
+import './sokoni-wap-definitions.js';
+
+/* ── Firebase init ───────────────────────────────────────────── */
+let app, db, auth;
+try {
+  app  = getApps().length ? getApps()[0] : initializeApp(SOKONI_CONFIG.firebase);
+  db   = getFirestore(app);
+  auth = getAuth(app);
+} catch (e) { console.error('Firebase init failed:', e); }
+
+let currentUser = null;
+let _moduleFilter = '';
+let _designerSteps = [];
+
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+  if (user) { loadDashboard(); loadApprovals(); }
+});
+
+/* ── Clock ───────────────────────────────────────────────────── */
+setInterval(() => {
+  const now = new Date();
+  document.getElementById('hdr-clock').textContent =
+    now.toLocaleTimeString('en-KE', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}, 1000);
+
+/* ── Page navigation ─────────────────────────────────────────── */
+window.showPage = function(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const page = document.getElementById('page-' + name);
+  if (page) page.classList.add('active');
+  if (el)   el.classList.add('active');
+
+  if (name === 'instances')   loadInstances();
+  if (name === 'definitions') loadDefinitions();
+  if (name === 'metrics')     loadMetrics();
+  if (name === 'audit')       loadAudit();
+  if (name === 'settings')    loadSettings();
+};
+
+window.filterModule = function(mod, el) {
+  _moduleFilter = mod;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  showPage('instances');
+};
+
+/* ── Dashboard ───────────────────────────────────────────────── */
+window.loadDashboard = async function() {
+  if (!db) return;
+  try {
+    const [runSnap, doneSnap, failSnap, waitSnap] = await Promise.all([
+      getDocs(query(collection(db, 'workflowInstances'), where('status', '==', 'running'), limit(200))),
+      getDocs(query(collection(db, 'workflowInstances'), where('status', '==', 'completed'), where('metadata.completedAt', '>=', Date.now() - 86_400_000), limit(200))),
+      getDocs(query(collection(db, 'workflowInstances'), where('status', '==', 'failed'), where('metadata.completedAt', '>=', Date.now() - 86_400_000), limit(200))),
+      getDocs(query(collection(db, 'workflowInstances'), where('status', '==', 'waiting'), limit(200))),
+    ]);
+
+    const totalSnap = await getDocs(query(collection(db, 'workflowInstances'), limit(1)));
+
+    _setEl('st-running',   runSnap.size);
+    _setEl('st-completed', doneSnap.size);
+    _setEl('st-failed',    failSnap.size);
+    _setEl('st-waiting',   waitSnap.size);
+    _setEl('sb-running',   runSnap.size);
+    _setEl('sb-approvals', waitSnap.size);
+
+    /* Recent list */
+    const recent = runSnap.docs.slice(0, 8).map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById('dash-recent-list').innerHTML = recent.length
+      ? recent.map(i => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <span class="status ${i.status}">${i.status}</span>
+            <span style="font-size:12px;font-family:var(--mono)">${_esc(i.id)}</span>
+            <span style="font-size:12px;color:var(--muted);margin-left:auto">${_esc(i.definitionId)}</span>
+            <button class="btn-secondary btn-sm" onclick="viewInstance('${_esc(i.id)}')">View</button>
+          </div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px">No active workflows</div>';
+
+    /* Module breakdown */
+    const moduleCounts = {};
+    [...runSnap.docs, ...doneSnap.docs].forEach(d => {
+      const mod = d.data().metadata?.module ?? 'unknown';
+      moduleCounts[mod] = (moduleCounts[mod] ?? 0) + 1;
+    });
+    const maxCount = Math.max(...Object.values(moduleCounts), 1);
+    document.getElementById('dash-module-chart').innerHTML = Object.entries(moduleCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([mod, n]) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0">
+          <span style="width:90px;font-size:12px;color:var(--muted)">${_esc(mod)}</span>
+          <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${(n/maxCount*100).toFixed(0)}%;background:var(--accent);border-radius:4px"></div>
+          </div>
+          <span style="font-size:12px;font-weight:600;width:24px;text-align:right">${n}</span>
+        </div>`).join('') || '<div style="color:var(--muted);font-size:13px">No data</div>';
+
+    /* Avg duration */
+    const durations = doneSnap.docs.map(d => d.data().metadata?.duration).filter(Boolean);
+    const avg = durations.length ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
+    _setEl('st-avgms', avg ? _fmtDuration(avg) : '—');
+
+  } catch (e) { console.error('Dashboard error:', e); }
+};
+
+/* ── Instances ───────────────────────────────────────────────── */
+window.loadInstances = async function() {
+  if (!db) return;
+  const statusFilter = document.getElementById('filter-status')?.value;
+  const defFilter    = document.getElementById('filter-def')?.value;
+
+  try {
+    const constraints = [orderBy('metadata.startedAt', 'desc'), limit(50)];
+    if (statusFilter) constraints.unshift(where('status', '==', statusFilter));
+    if (defFilter)    constraints.unshift(where('definitionId', '==', defFilter));
+    if (_moduleFilter) constraints.unshift(where('metadata.module', '==', _moduleFilter));
+
+    const snap = await getDocs(query(collection(db, 'workflowInstances'), ...constraints));
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    document.getElementById('instances-tbody').innerHTML = rows.length
+      ? rows.map(i => {
+          const progress = _progress(i);
+          return `<tr>
+            <td><span style="font-family:var(--mono);font-size:11px">${_esc(i.id.slice(0, 20))}…</span></td>
+            <td>${_esc(i.definitionId ?? '—')}</td>
+            <td>${_esc(i.metadata?.module ?? '—')}</td>
+            <td><span class="status ${i.status}">${i.status}</span></td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:80px;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
+                  <div style="height:100%;width:${progress}%;background:${i.status==='failed'?'var(--red)':'var(--green)'};border-radius:2px"></div>
+                </div>
+                <span style="font-size:11px;color:var(--muted)">${progress}%</span>
+              </div>
+            </td>
+            <td style="font-size:11px;color:var(--muted)">${_timeAgo(i.metadata?.startedAt)}</td>
+            <td style="font-size:11px;color:var(--muted)">${i.metadata?.duration ? _fmtDuration(i.metadata.duration) : '—'}</td>
+            <td>
+              <button class="btn-secondary btn-sm" onclick="viewInstance('${_esc(i.id)}')">View</button>
+              ${i.status==='running'||i.status==='waiting' ? `<button class="btn-danger btn-sm" style="margin-left:4px" onclick="cancelInstance('${_esc(i.id)}')">Cancel</button>` : ''}
+              ${i.status==='paused' ? `<button class="btn-success btn-sm" style="margin-left:4px" onclick="resumeInstance('${_esc(i.id)}')">Resume</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:40px">No workflow instances found</td></tr>`;
+  } catch (e) { console.error('Instances error:', e); }
+};
+
+window.viewInstance = async function(instanceId) {
+  if (!db) return;
+  try {
+    const snap = await getDoc(doc(db, 'workflowInstances', instanceId));
+    if (!snap.exists()) return alert('Instance not found');
+    const i = { id: snap.id, ...snap.data() };
+    const def = await wap.loadDefinition(i.definitionId).catch(() => null);
+
+    _setEl('detail-title', i.id);
+    _setEl('detail-subtitle', `${i.definitionId} · ${i.metadata?.module} · Started ${_timeAgo(i.metadata?.startedAt)}`);
+
+    /* Variables */
+    const safeVars = Object.fromEntries(
+      Object.entries(i.variables ?? {}).map(([k, v]) => [k, typeof v === 'object' ? v : String(v)])
+    );
+    document.getElementById('detail-vars').textContent = JSON.stringify(safeVars, null, 2);
+
+    /* Actions */
+    document.getElementById('detail-actions').innerHTML = `
+      <span class="status ${i.status}" style="font-size:13px">${i.status}</span>
+      ${i.status==='running' ? `<button class="btn-secondary btn-sm" onclick="pauseInstance('${_esc(i.id)}')">Pause</button>` : ''}
+      ${i.status==='paused'  ? `<button class="btn-success btn-sm" onclick="resumeInstance('${_esc(i.id)}')">Resume</button>` : ''}
+      ${i.status==='failed'  ? `<button class="btn-primary btn-sm" onclick="restartInstance('${_esc(i.id)}')">Restart</button>` : ''}
+    `;
+
+    /* Timeline */
+    if (def) {
+      document.getElementById('detail-timeline').innerHTML = def.steps.map((s, idx) => {
+        const state  = i.steps?.[s.id] ?? {};
+        const status = i.completedSteps?.includes(s.id) ? 'completed'
+                     : i.failedSteps?.includes(s.id)    ? 'failed'
+                     : i.skippedSteps?.includes(s.id)   ? 'skipped'
+                     : state.status ?? 'pending';
+        const dot    = { completed: '✓', failed: '✗', running: '●', waiting: '⏳', skipped: '○', pending: String(idx+1) }[status] ?? (idx+1);
+        return `
+          <div class="step-node">
+            <div class="step-dot ${status}">${_esc(String(dot))}</div>
+            <div class="step-content">
+              <div class="step-name">${_esc(s.name)}</div>
+              <div class="step-meta">
+                <span>Type: ${_esc(s.type ?? 'task')}</span>
+                ${state.startedAt ? `<span>Started: ${_timeAgo(state.startedAt)}</span>` : ''}
+                ${state.duration  ? `<span>Duration: ${_fmtDuration(state.duration)}</span>` : ''}
+                ${state.error     ? `<span style="color:var(--red)">Error: ${_esc(state.error)}</span>` : ''}
+              </div>
+              ${state.output ? `<div class="step-output">${_esc(JSON.stringify(state.output))}</div>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    /* History */
+    document.getElementById('detail-history').innerHTML = (i.history ?? []).reverse().map(h => `
+      <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span style="color:var(--muted);width:120px;flex-shrink:0">${_timeAgo(h.ts)}</span>
+        <span style="font-family:var(--mono)">${_esc(h.stepId)}</span>
+        <span class="status ${h.status}" style="font-size:10px;padding:2px 6px">${_esc(h.status)}</span>
+      </div>`).join('') || '<div style="color:var(--muted);font-size:12px">No history</div>';
+
+    showPage('instance-detail');
+  } catch (e) { alert('Error loading instance: ' + e.message); }
+};
+
+window.pauseInstance   = async id => { await wap.pause(id);   loadInstances(); };
+window.resumeInstance  = async id => { await wap.unpause(id); loadInstances(); };
+window.cancelInstance  = async id => { if (confirm('Cancel this workflow?')) { await wap.cancel(id); loadInstances(); } };
+window.restartInstance = async id => { if (confirm('Restart this failed workflow?')) { await wap.restart(id); loadInstances(); } };
+
+/* ── Approvals ───────────────────────────────────────────────── */
+window.loadApprovals = async function() {
+  if (!db || !currentUser) return;
+  try {
+    const q    = query(collection(db, 'workflowApprovals'), where('status', '==', 'pending'), orderBy('requestedAt', 'desc'), limit(50));
+    const snap = await getDocs(q);
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    document.getElementById('sb-approvals').textContent = list.length;
+
+    document.getElementById('approvals-list').innerHTML = list.length
+      ? list.map(a => `
+          <div class="approval-card">
+            <div class="approval-header">
+              <span style="font-size:20px">⏳</span>
+              <div>
+                <div class="approval-title">${_esc(a.stepName ?? 'Approval Required')}</div>
+                <div style="font-size:11px;color:var(--muted)">Instance: ${_esc(a.instanceId)}</div>
+              </div>
+              <span style="margin-left:auto;font-size:11px;color:var(--muted)">${_timeAgo(a.requestedAt)}</span>
+            </div>
+            <div class="approval-meta">${_esc(a.message ?? '')}</div>
+            ${a.deadline ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:10px">⏰ Deadline: ${new Date(a.deadline).toLocaleString()}</div>` : ''}
+            <div class="approval-actions">
+              <button class="btn-success" onclick="decideApproval('${_esc(a.id)}','approved')">✓ Approve</button>
+              <button class="btn-danger" onclick="decideApproval('${_esc(a.id)}','rejected')">✗ Reject</button>
+              <button class="btn-secondary btn-sm" onclick="viewInstance('${_esc(a.instanceId)}')">View Workflow</button>
+            </div>
+          </div>`)
+        .join('')
+      : '<div style="color:var(--muted);font-size:14px;text-align:center;padding:60px">No pending approvals ✓</div>';
+  } catch (e) { console.error('Approvals error:', e); }
+};
+
+window.decideApproval = async function(approvalId, decision) {
+  const reason = decision === 'rejected' ? (prompt('Rejection reason (required):') ?? '') : '';
+  if (decision === 'rejected' && !reason.trim()) return;
+  try {
+    await wap.decide(approvalId, decision, currentUser?.uid ?? 'admin', reason);
+    loadApprovals();
+  } catch (e) { alert('Error: ' + e.message); }
+};
+
+/* ── Definitions ─────────────────────────────────────────────── */
+window.loadDefinitions = function() {
+  const defs = Array.from(wap._definitions.values());
+  document.getElementById('definitions-list').innerHTML = defs.length
+    ? defs.map(d => `
+        <div class="def-step" style="flex-direction:column;align-items:stretch">
+          <div style="display:flex;align-items:center;gap:10px">
+            <strong style="font-size:14px">${_esc(d.name)}</strong>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${_esc(d.id)}</span>
+            <span style="margin-left:auto;font-size:12px;color:var(--muted)">${d.steps.length} steps · v${d.version ?? '1.0'}</span>
+            <button class="btn-secondary btn-sm" onclick="triggerWorkflow('${_esc(d.id)}')">▶ Trigger</button>
+            <button class="btn-secondary btn-sm" onclick="editDefinition('${_esc(d.id)}')">✎ Edit</button>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+            ${d.steps.map(s => `<span class="step-type-pill pill-${s.type??'task'}">${_esc(s.name)}</span>`).join('')}
+          </div>
+        </div>`).join('')
+    : '<div style="color:var(--muted)">No definitions loaded</div>';
+};
+
+window.triggerWorkflow = async function(defId) {
+  const varsJson = prompt(`Trigger '${defId}'\nPaste variables JSON (or leave empty for test):`, '{"orderId":"test-001","uid":"user-123","total":1500,"requiresDelivery":false}');
+  if (varsJson === null) return;
+  try {
+    const vars = JSON.parse(varsJson || '{}');
+    const inst = await wap.start(defId, vars, { uid: currentUser?.uid, module: wap._definitions.get(defId)?.module });
+    alert(`Workflow started!\nInstance ID: ${inst.id}\nStatus: ${inst.status}`);
+    showPage('instances');
+    loadInstances();
+  } catch (e) { alert('Error: ' + e.message); }
+};
+
+window.editDefinition = function(defId) {
+  const def = wap._definitions.get(defId);
+  if (!def) return;
+  document.getElementById('des-id').value   = def.id;
+  document.getElementById('des-name').value = def.name;
+  document.getElementById('des-module').value = def.module ?? 'marketplace';
+  _designerSteps = def.steps.map(s => ({ ...s }));
+  renderDesignerSteps();
+  showPage('designer');
+};
+
+/* ── Designer ────────────────────────────────────────────────── */
+window.addDesignerStep = function() {
+  _designerSteps.push({
+    id:      'step_' + Date.now(),
+    name:    'New Step',
+    type:    'task',
+    handler: '',
+    after:   [],
+    retries: 0,
+    onFailure: 'fail',
+  });
+  renderDesignerSteps();
+};
+
+function renderDesignerSteps() {
+  document.getElementById('des-steps').innerHTML = _designerSteps.map((s, idx) => `
+    <div class="def-step" onclick="inspectStep(${idx})">
+      <span class="step-handle">⠿</span>
+      <span class="step-type-pill pill-${s.type??'task'}">${s.type??'task'}</span>
+      <span style="font-size:13px;font-weight:600">${_esc(s.name)}</span>
+      <span class="step-id">${_esc(s.id)}</span>
+      <button class="btn-danger btn-sm" style="margin-left:auto" onclick="event.stopPropagation();removeStep(${idx})">✕</button>
+    </div>`).join('');
+}
+
+window.removeStep = function(idx) { _designerSteps.splice(idx, 1); renderDesignerSteps(); };
+
+window.inspectStep = function(idx) {
+  const s = _designerSteps[idx];
+  document.getElementById('des-inspector').innerHTML = `
+    <div class="form-group"><label>Step ID</label><input id="si-id" value="${_esc(s.id)}" oninput="_designerSteps[${idx}].id=this.value;renderDesignerSteps()"></div>
+    <div class="form-group"><label>Name</label><input id="si-name" value="${_esc(s.name)}" oninput="_designerSteps[${idx}].name=this.value;renderDesignerSteps()"></div>
+    <div class="form-group"><label>Type</label>
+      <select onchange="_designerSteps[${idx}].type=this.value;renderDesignerSteps()">
+        ${['task','approval','notification','condition','delay','webhook','subworkflow'].map(t => `<option value="${t}" ${s.type===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Handler</label><input value="${_esc(s.handler??'')}" oninput="_designerSteps[${idx}].handler=this.value" placeholder="e.g. inventory.reserve"></div>
+    <div class="form-group"><label>After (step IDs, comma separated)</label><input value="${(s.after??[]).join(',')}" oninput="_designerSteps[${idx}].after=this.value.split(',').map(x=>x.trim()).filter(Boolean)"></div>
+    <div class="form-group"><label>Retries</label><input type="number" value="${s.retries??0}" oninput="_designerSteps[${idx}].retries=Number(this.value)"></div>
+    <div class="form-group"><label>Timeout (ms)</label><input type="number" value="${s.timeout??30000}" oninput="_designerSteps[${idx}].timeout=Number(this.value)"></div>
+    <div class="form-group"><label>On Failure</label>
+      <select onchange="_designerSteps[${idx}].onFailure=this.value">
+        ${['fail','continue','compensate'].map(v => `<option value="${v}" ${s.onFailure===v?'selected':''}>${v}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Compensation Handler</label><input value="${_esc(s.compensation??'')}" oninput="_designerSteps[${idx}].compensation=this.value||undefined" placeholder="e.g. inventory.release"></div>
+    <div class="form-group"><label>Condition (optional, e.g. {{amount}} &gt; 500)</label><input value="${_esc(s.condition??'')}" oninput="_designerSteps[${idx}].condition=this.value||undefined"></div>
+  `;
+};
+
+window.clearDesigner = function() {
+  _designerSteps = [];
+  document.getElementById('des-id').value = '';
+  document.getElementById('des-name').value = '';
+  document.getElementById('des-steps').innerHTML = '';
+  document.getElementById('des-inspector').innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0">Select a step to inspect</div>';
+};
+
+window.saveDesignerWorkflow = async function() {
+  const id   = document.getElementById('des-id').value.trim();
+  const name = document.getElementById('des-name').value.trim();
+  const mod  = document.getElementById('des-module').value;
+  if (!id || !name) return alert('ID and Name are required');
+  if (!_designerSteps.length) return alert('Add at least one step');
+  try {
+    const def = { id, name, module: mod, version: '1.0', steps: _designerSteps };
+    await wap.saveDefinition(def, currentUser?.uid ?? 'admin');
+    alert('Workflow saved to Firestore!');
+    showPage('definitions');
+    loadDefinitions();
+  } catch (e) { alert('Save error: ' + e.message); }
+};
+
+/* ── Metrics ─────────────────────────────────────────────────── */
+window.loadMetrics = async function() {
+  if (!db) return;
+  try {
+    const since24h = Date.now() - 86_400_000;
+    const [doneSnap, failSnap] = await Promise.all([
+      getDocs(query(collection(db, 'workflowInstances'), where('status', '==', 'completed'), where('metadata.completedAt', '>=', since24h), limit(500))),
+      getDocs(query(collection(db, 'workflowInstances'), where('status', '==', 'failed'), where('metadata.completedAt', '>=', since24h), limit(500))),
+    ]);
+
+    const total    = doneSnap.size + failSnap.size;
+    const succRate = total ? Math.round(doneSnap.size / total * 100) : 0;
+    _setEl('met-success', succRate + '%');
+
+    const durations = doneSnap.docs.map(d => d.data().metadata?.duration).filter(Boolean);
+    const avg = durations.length ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0;
+    _setEl('met-duration', avg ? _fmtDuration(avg) : '—');
+    _setEl('met-timeout', '—');  /* requires step-level metrics */
+
+    /* Per-definition breakdown */
+    const byDef = {};
+    [...doneSnap.docs, ...failSnap.docs].forEach(d => {
+      const data = d.data();
+      const id   = data.definitionId ?? 'unknown';
+      if (!byDef[id]) byDef[id] = { completed: 0, failed: 0, durations: [] };
+      if (data.status === 'completed') { byDef[id].completed++; if (data.metadata?.duration) byDef[id].durations.push(data.metadata.duration); }
+      else byDef[id].failed++;
+    });
+
+    document.getElementById('metrics-tbody').innerHTML = Object.entries(byDef)
+      .sort((a, b) => (b[1].completed + b[1].failed) - (a[1].completed + a[1].failed))
+      .map(([id, m]) => {
+        const total = m.completed + m.failed;
+        const avgMs = m.durations.length ? Math.round(m.durations.reduce((s,d) => s+d, 0) / m.durations.length) : 0;
+        const p95   = m.durations.length >= 5 ? m.durations.sort((a,b)=>a-b)[Math.floor(m.durations.length * 0.95)] : 0;
+        return `<tr>
+          <td><strong>${_esc(id)}</strong></td>
+          <td>${total}</td>
+          <td style="color:var(--green)">${m.completed}</td>
+          <td style="color:${m.failed?'var(--red)':'var(--muted)'}">${m.failed}</td>
+          <td>—</td>
+          <td style="font-family:var(--mono);font-size:12px">${avgMs ? _fmtDuration(avgMs) : '—'}</td>
+          <td style="font-family:var(--mono);font-size:12px">${p95 ? _fmtDuration(p95) : '—'}</td>
+        </tr>`;
+      }).join('') || `<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:40px">No data for last 24 hours</td></tr>`;
+  } catch (e) { console.error('Metrics error:', e); }
+};
+
+/* ── Audit Log ───────────────────────────────────────────────── */
+let _auditRows = [];
+window.loadAudit = async function() {
+  if (!db) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'workflowInstances'), orderBy('metadata.lastUpdatedAt', 'desc'), limit(100)));
+    _auditRows = snap.docs.flatMap(d => {
+      const inst = { id: d.id, ...d.data() };
+      return (inst.history ?? []).map(h => ({ ...h, instanceId: inst.id, definitionId: inst.definitionId }));
+    }).sort((a, b) => b.ts - a.ts).slice(0, 200);
+    renderAudit(_auditRows);
+  } catch (e) { console.error('Audit error:', e); }
+};
+
+window.filterAudit = function() {
+  const q = document.getElementById('audit-search').value.toLowerCase();
+  renderAudit(q ? _auditRows.filter(r => r.instanceId?.toLowerCase().includes(q) || r.stepId?.toLowerCase().includes(q) || r.status?.toLowerCase().includes(q)) : _auditRows);
+};
+
+function renderAudit(rows) {
+  document.getElementById('audit-tbody').innerHTML = rows.length
+    ? rows.map(r => `<tr>
+        <td style="font-size:11px;color:var(--muted)">${r.ts ? new Date(r.ts).toLocaleString() : '—'}</td>
+        <td style="font-family:var(--mono);font-size:11px">${_esc((r.instanceId ?? '—').slice(0, 24))}</td>
+        <td style="font-size:12px">${_esc(r.definitionId ?? '—')}</td>
+        <td style="font-family:var(--mono);font-size:11px">${_esc(r.stepId ?? '—')}</td>
+        <td><span class="status ${r.status ?? 'pending'}" style="font-size:10px;padding:2px 6px">${_esc(r.status ?? '—')}</span></td>
+        <td style="font-size:11px;color:var(--muted)">${_esc(r.actor ?? r.decidedBy ?? '—')}</td>
+        <td style="font-size:11px;font-family:var(--mono)">${r.duration ? _fmtDuration(r.duration) : '—'}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:40px">No audit events</td></tr>`;
+}
+
+/* ── Settings ────────────────────────────────────────────────── */
+window.loadSettings = function() {
+  const names = Array.from(wap._handlers.keys()).sort();
+  document.getElementById('handlers-list').innerHTML = names
+    .map(n => `<div style="padding:4px 0;border-bottom:1px solid var(--border)">✓ ${_esc(n)}</div>`)
+    .join('') || '<div style="color:var(--muted)">No handlers registered</div>';
+};
+
+window.showNewWorkflowModal = function() { showPage('designer'); };
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+function _setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+function _esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _timeAgo(ts) {
+  if (!ts) return '—';
+  const diff = Date.now() - ts;
+  if (diff < 60_000)    return Math.round(diff/1000) + 's ago';
+  if (diff < 3_600_000) return Math.round(diff/60_000) + 'm ago';
+  if (diff < 86_400_000) return Math.round(diff/3_600_000) + 'h ago';
+  return Math.round(diff/86_400_000) + 'd ago';
+}
+function _fmtDuration(ms) {
+  if (ms < 1_000)    return ms + 'ms';
+  if (ms < 60_000)   return (ms/1000).toFixed(1) + 's';
+  if (ms < 3_600_000) return Math.round(ms/60_000) + 'm';
+  return (ms/3_600_000).toFixed(1) + 'h';
+}
+function _progress(instance) {
+  const total = instance.metadata?.totalSteps ?? 1;
+  const done  = (instance.completedSteps?.length ?? 0) + (instance.skippedSteps?.length ?? 0);
+  return Math.min(100, Math.round(done / total * 100));
+}
+</script>
+</body>
+</html>

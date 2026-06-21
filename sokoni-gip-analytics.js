@@ -29,6 +29,7 @@ import {
   query, where, orderBy, limit, serverTimestamp,
   Timestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import policy, { DATA_TYPE, CONFIDENCE } from './sokoni-ai-policy.js';
 
 /* ── Constants ──────────────────────────────────────────────── */
 
@@ -163,6 +164,11 @@ export default class GIPAnalytics {
         periodDays:       days,
       },
       computedAt: new Date().toISOString(),
+      /* AI Policy: driver score is CALCULATED from verified job history, not predicted */
+      _policy: policy.calculated(overall, {
+        inputs: ['gipDispatch (completed jobs)', 'gipAlerts (speeding/geofence)', 'gipAssets (rating)'],
+        formula: 'Safety 30% + Efficiency 25% + Reliability 25% + Rating 20%',
+      }),
     };
 
     /* Persist to Firestore */
@@ -212,26 +218,45 @@ export default class GIPAnalytics {
 
   /**
    * Compute vehicle health score (0–100).
+   * All sensor readings pass through AI Policy guards —
+   * fabricated defaults are never used for fuel or battery.
    * @param {object} vehicle — from gipAssets or gipLocations
    */
   computeVehicleHealth(vehicle) {
     let score = 100;
     const issues = [];
+    const sensorReadings = {};   /* policy-wrapped sensor values */
 
-    /* ── Fuel ── */
-    const fuel = vehicle.fuelLevel ?? 100;
-    if (fuel < FUEL_CRITICAL_PCT) {
-      score -= 20; issues.push({ type: 'fuel_critical', value: fuel });
-    } else if (fuel < 30) {
-      score -= 8;  issues.push({ type: 'fuel_low', value: fuel });
+    /* ── Fuel — policy guard: never fabricate ── */
+    const fuelPv = policy.assertFuel(
+      vehicle.fuelLevel,
+      vehicle.hasFuelSensor ?? (vehicle.fuelLevel !== undefined && vehicle.fuelLevel !== null)
+    );
+    if (fuelPv !== null) {
+      const fuel = policy.unwrap(fuelPv);
+      sensorReadings.fuel = fuelPv;
+      if (fuel < FUEL_CRITICAL_PCT) {
+        score -= 20; issues.push({ type: 'fuel_critical', value: fuel, verified: true });
+      } else if (fuel < 30) {
+        score -= 8;  issues.push({ type: 'fuel_low', value: fuel, verified: true });
+      }
     }
+    /* fuelPv === null → no sensor; do not penalise and do not show a fuel reading */
 
-    /* ── Battery (EVs / GPS devices) ── */
-    const battery = vehicle.batteryLevel ?? 100;
-    if (battery < BATTERY_CRITICAL_PCT) {
-      score -= 15; issues.push({ type: 'battery_critical', value: battery });
-    } else if (battery < 40) {
-      score -= 5; issues.push({ type: 'battery_low', value: battery });
+    /* ── Battery (EVs / GPS devices) — policy guard ── */
+    const battPv = policy.assertSensor(
+      vehicle.batteryLevel,
+      vehicle.batteryLevel !== undefined && vehicle.batteryLevel !== null,
+      { source: 'gps_battery_sensor', unit: '%' }
+    );
+    const battery = battPv !== null ? policy.unwrap(battPv) : null;
+    if (battPv !== null) sensorReadings.battery = battPv;
+    if (battery !== null) {
+      if (battery < BATTERY_CRITICAL_PCT) {
+        score -= 15; issues.push({ type: 'battery_critical', value: battery, verified: true });
+      } else if (battery < 40) {
+        score -= 5; issues.push({ type: 'battery_low', value: battery, verified: true });
+      }
     }
 
     /* ── Mileage / service interval ── */
@@ -269,15 +294,24 @@ export default class GIPAnalytics {
     }
 
     const healthScore = _clamp(score, 0, 100);
-    return {
+    const result = {
       vehicleId: vehicle.id ?? vehicle.assetId,
       healthScore,
       grade: healthScore >= 85 ? 'A' : healthScore >= 70 ? 'B' : healthScore >= 55 ? 'C' : healthScore >= 40 ? 'D' : 'F',
       issues,
+      sensorReadings,  /* policy-wrapped sensor values — safe to display with badge() */
       requiresAttention: healthScore < 70,
       requiresImmediate: healthScore < 40,
       computedAt: new Date().toISOString(),
+      /* AI Policy metadata */
+      _policy: policy.calculated(healthScore, {
+        inputs: ['gipAssets.kmSinceService', 'gipAssets.insuranceExpiry',
+                 'gipAssets.inspectionExpiry', 'vehicle_fuel_sensor', 'gps_battery_sensor'],
+        formula: 'Composite deduction from service overdue, insurance/inspection expiry, '
+               + 'fuel level (verified sensor only), and GPS heartbeat',
+      }),
     };
+    return result;
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -436,7 +470,23 @@ export default class GIPAnalytics {
       suggestedCount: Math.max(1, Math.ceil((demand / maxDemand) * 20)),
     }));
 
-    return { region, module, days, suggestions };
+    const totalEvents = hourlyDemand.reduce((s, v) => s + v, 0);
+    const conf = policy.scoreConfidence({
+      dataPoints:  totalEvents,
+      hasRealTime: false,
+      ageMs:       86_400_000,   /* historic data — 1+ day old */
+    });
+
+    return {
+      region, module, days, suggestions,
+      /* AI Policy: shift suggestions are PREDICTED from historical demand patterns */
+      _policy: policy.predicted(suggestions, {
+        confidence: conf,
+        model:     'demand-weighted-shift-planner',
+        reason:    `Derived from ${totalEvents} demand events across ${days} days of heat data`,
+        dataPoints: totalEvents,
+      }),
+    };
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -450,7 +500,10 @@ export default class GIPAnalytics {
    */
   async generateOpsInsight(region, date = _yyyymmdd()) {
     if (!this._aiEnabled) {
-      return { error: 'AI analytics disabled. Enable via options.aiEnabled = true.' };
+      return {
+        error: 'AI analytics disabled. Enable via options.aiEnabled = true.',
+        _policy: null,
+      };
     }
 
     const [fleet, shifts] = await Promise.all([
@@ -466,9 +519,24 @@ export default class GIPAnalytics {
         body:    JSON.stringify({ region, date, fleet, shifts }),
       });
       if (!res.ok) throw new Error('AI endpoint returned ' + res.status);
-      return res.json();
+      const data = await res.json();
+
+      /* AI Policy: natural-language insights are PREDICTED — always medium confidence
+         because the AI synthesises patterns but cannot guarantee operational outcomes */
+      return {
+        ...data,
+        _policy: policy.predicted(data.insight ?? data, {
+          confidence: CONFIDENCE.MEDIUM,
+          model:      'claude-sonnet-4-6 via Cloud Function /api/gip/ai-insight',
+          reason:     'AI-generated operations briefing from fleet metrics and demand patterns. '
+                    + 'Review against live data before acting.',
+          dataPoints: fleet.total ?? 0,
+        }),
+        _disclaimer: 'This is an AI-generated prediction, not a verified measurement. '
+                   + 'Confirm key figures against live fleet data.',
+      };
     } catch (e) {
-      return { error: e.message };
+      return { error: e.message, _policy: null };
     }
   }
 

@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#71ff00">
+  <title>AI Subscriptions Admin — SOKONI</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/mobile.css">
+
+  <style>
+    :root{--g:#71ff00;--g2:#4fc800;--bg:#0d0d0d;--bg2:#111;--bg3:#181818;--border:rgba(255,255,255,.07);--text:#fff;--muted:rgba(255,255,255,.42);--r:14px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}
+    .a-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.6);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+    .a-back{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px 8px;border-radius:8px}
+    .a-back:hover{color:var(--text)}
+    .a-logo{font-size:16px;font-weight:800;color:var(--g);flex:1}
+    .a-logo span{color:var(--muted);font-size:11px;font-weight:400;display:block}
+    .a-badge{background:#7c3aed;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px}
+
+    /* Tabs */
+    .a-tabs{display:flex;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:var(--bg2);padding:0 16px;gap:2px}
+    .a-tabs::-webkit-scrollbar{display:none}
+    .a-tab{flex-shrink:0;padding:14px 16px;font-size:13px;font-weight:700;color:var(--muted);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:.15s}
+    .a-tab:hover{color:var(--text)}
+    .a-tab.active{color:var(--g);border-color:var(--g)}
+    .a-page{display:none;padding:24px 20px 100px;max-width:1200px;margin:0 auto}
+    .a-page.active{display:block}
+
+    /* KPI cards */
+    .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px}
+    @media(min-width:600px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
+    .kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:18px 16px}
+    .kpi-val{font-size:28px;font-weight:800;color:var(--g)}
+    .kpi-label{font-size:11px;color:var(--muted);margin-top:4px;font-weight:600;letter-spacing:.3px}
+    .kpi-sub{font-size:11px;color:rgba(113,255,0,.6);margin-top:2px}
+
+    /* Subscriber table */
+    .a-table-wrap{overflow-x:auto;margin-bottom:20px}
+    .a-table{width:100%;border-collapse:collapse;font-size:13px}
+    .a-table th{text-align:left;padding:12px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;white-space:nowrap}
+    .a-table td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .a-table tr:hover td{background:rgba(255,255,255,.02)}
+    .a-plan-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+    .pill-free{background:rgba(255,255,255,.07);color:var(--muted)}
+    .pill-starter{background:rgba(0,150,255,.15);color:#4db8ff}
+    .pill-pro{background:rgba(113,255,0,.12);color:var(--g)}
+    .pill-enterprise{background:rgba(124,58,237,.2);color:#a78bfa}
+    .a-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+    .dot-active{background:#71ff00}
+    .dot-expired{background:#ff4444}
+    .dot-trial{background:#ff9500}
+    .dot-cancelled{background:#666}
+
+    /* Plan editor */
+    .plan-editor{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:16px}
+    .plan-editor-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;cursor:pointer}
+    .plan-editor-title{font-size:15px;font-weight:800}
+    .plan-editor-price{font-size:13px;color:var(--g);font-weight:700}
+    .pe-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+    .pe-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px}
+    .pe-field input{width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;transition:.15s}
+    .pe-field input:focus{border-color:var(--g)}
+    .pe-save{background:var(--g);color:#000;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:800;cursor:pointer;margin-top:12px;transition:.15s}
+    .pe-save:hover{background:#5de600}
+    .pe-toggle-wrap{display:flex;align-items:center;gap:8px;margin-top:10px}
+    .pe-checkbox{width:16px;height:16px;accent-color:var(--g);cursor:pointer}
+
+    /* Promos */
+    .promo-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:16px}
+    .pf-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px}
+    .pf-field input,.pf-field select{width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;transition:.15s;font-family:inherit}
+    .pf-field input:focus,.pf-field select:focus{border-color:var(--g)}
+
+    /* Revenue chart placeholder */
+    .chart-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px;min-height:160px;display:flex;align-items:center;justify-content:center}
+
+    /* Buttons */
+    .a-btn{display:inline-flex;align-items:center;padding:9px 16px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:.15s;gap:6px}
+    .a-btn-primary{background:var(--g);color:#000}
+    .a-btn-primary:hover{background:#5de600}
+    .a-btn-sec{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--border)}
+    .a-btn-danger{background:rgba(255,68,68,.12);color:#ff4444;border:1px solid rgba(255,68,68,.2)}
+    .a-btn-danger:hover{background:rgba(255,68,68,.2)}
+
+    /* Section headings */
+    .a-sect{font-size:13px;font-weight:800;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:14px;margin-top:28px}
+    .a-sect:first-child{margin-top:0}
+
+    /* Search bar */
+    .a-search{display:flex;gap:10px;margin-bottom:16px}
+    .a-search input{flex:1;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:11px 14px;font-size:14px;outline:none}
+    .a-search input:focus{border-color:var(--g)}
+
+    /* Credit ledger */
+    .ledger-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+    .ledger-item:last-child{border-bottom:none}
+    .ledger-amount{font-size:15px;font-weight:800;min-width:64px;text-align:right}
+    .ledger-consume{color:#ff6b6b}
+    .ledger-topup{color:var(--g)}
+
+    @media(max-width:768px){.a-page{padding:16px 14px 100px}}
+  </style>
+</head>
+
+<body>
+  <header class="a-header">
+    <button class="a-back" onclick="history.back()">&#8592;</button>
+    <div class="a-logo">AI Subscriptions Admin <span>SOKONI Super Admin</span></div>
+    <div class="a-badge">ADMIN</div>
+  </header>
+
+  <nav class="a-tabs">
+    <button class="a-tab active" data-page="dashboard">Dashboard</button>
+    <button class="a-tab" data-page="subscribers">Subscribers</button>
+    <button class="a-tab" data-page="plans">Plan Editor</button>
+    <button class="a-tab" data-page="usage">Usage Analytics</button>
+    <button class="a-tab" data-page="credits">Credit Ledger</button>
+    <button class="a-tab" data-page="promos">Promotions</button>
+    <button class="a-tab" data-page="settings">Settings</button>
+  </nav>
+
+  <!-- ═══ DASHBOARD ═════════════════════════════════════════════ -->
+  <section class="a-page active" id="page-dashboard">
+    <div class="a-sect">Revenue Overview</div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-val" id="kpi-mrr">—</div><div class="kpi-label">MRR (KES)</div><div class="kpi-sub" id="kpi-mrr-sub"></div></div>
+      <div class="kpi"><div class="kpi-val" id="kpi-arr">—</div><div class="kpi-label">ARR (KES)</div><div class="kpi-sub"></div></div>
+      <div class="kpi"><div class="kpi-val" id="kpi-active">—</div><div class="kpi-label">Active Subscriptions</div><div class="kpi-sub" id="kpi-trial-sub"></div></div>
+      <div class="kpi"><div class="kpi-val" id="kpi-credits-sold">—</div><div class="kpi-label">Credits Sold</div><div class="kpi-sub"></div></div>
+    </div>
+
+    <div class="a-sect">Plan Distribution</div>
+    <div id="plan-distribution" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+      <div style="color:var(--muted);font-size:13px">Loading…</div>
+    </div>
+
+    <div class="a-sect">Revenue Chart (Last 6 Months)</div>
+    <div class="chart-box" id="revenue-chart">
+      <div style="font-size:13px;color:var(--muted)">Revenue chart — deploy Cloud Function aggregateAIRevenueHistory to populate</div>
+    </div>
+
+    <div class="a-sect">Quick Actions</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="a-btn a-btn-primary" onclick="showTab('subscribers')">View All Subscribers</button>
+      <button class="a-btn a-btn-sec"     onclick="showTab('plans')">Edit Plans</button>
+      <button class="a-btn a-btn-sec"     onclick="showTab('promos')">Create Promotion</button>
+      <button class="a-btn a-btn-sec"     onclick="exportSubscribers()">Export CSV</button>
+    </div>
+  </section>
+
+  <!-- ═══ SUBSCRIBERS ═══════════════════════════════════════════ -->
+  <section class="a-page" id="page-subscribers">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div class="a-sect" style="margin:0">All Subscribers</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="filter-plan" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:inherit">
+          <option value="">All Plans</option>
+          <option value="ai_free">Free</option>
+          <option value="ai_starter">Starter</option>
+          <option value="ai_pro">Professional</option>
+          <option value="ai_enterprise">Enterprise</option>
+        </select>
+        <select id="filter-status" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:inherit">
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="trial">Trial</option>
+          <option value="expired">Expired</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button class="a-btn a-btn-sec" style="font-size:12px;padding:8px 12px" onclick="loadSubscribers()">Refresh</button>
+      </div>
+    </div>
+
+    <div class="a-search">
+      <input type="search" id="sub-search" placeholder="Search by UID, email, or plan…">
+    </div>
+
+    <div class="a-table-wrap">
+      <table class="a-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Billing</th>
+            <th>Activated</th>
+            <th>Renews</th>
+            <th>Credits</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="subscribers-tbody">
+          <tr><td colspan="8" style="color:var(--muted);padding:20px;text-align:center">Loading subscribers…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="a-btn a-btn-sec" id="sub-load-more">Load More</button>
+      <span id="sub-count" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </section>
+
+  <!-- ═══ PLAN EDITOR ════════════════════════════════════════════ -->
+  <section class="a-page" id="page-plans">
+    <div class="a-sect">Plan Configuration</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.7">
+      Edit plan quotas, pricing, and feature flags. Changes take effect immediately.
+      Existing subscribers keep their current plan until renewal.
+    </p>
+    <div id="plan-editors"><!-- Rendered by JS --></div>
+  </section>
+
+  <!-- ═══ USAGE ANALYTICS ════════════════════════════════════════ -->
+  <section class="a-page" id="page-usage">
+    <div class="a-sect">Feature Usage This Month</div>
+    <div class="kpi-grid" id="usage-kpis"></div>
+    <div class="a-sect">Usage by Feature</div>
+    <div id="usage-breakdown" style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+      <div style="color:var(--muted);font-size:13px">Loading usage data…</div>
+    </div>
+    <div class="a-sect">Top Users by AI Consumption</div>
+    <div class="a-table-wrap">
+      <table class="a-table">
+        <thead><tr><th>User</th><th>Plan</th><th>BG Removals</th><th>Banners</th><th>Stories</th><th>Credits Used</th></tr></thead>
+        <tbody id="top-users-tbody"><tr><td colspan="6" style="color:var(--muted);padding:16px;text-align:center">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══ CREDIT LEDGER ══════════════════════════════════════════ -->
+  <section class="a-page" id="page-credits">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-val" id="cred-total-sold">—</div><div class="kpi-label">Total Credits Sold</div></div>
+      <div class="kpi"><div class="kpi-val" id="cred-total-consumed">—</div><div class="kpi-label">Credits Consumed</div></div>
+      <div class="kpi"><div class="kpi-val" id="cred-total-balance">—</div><div class="kpi-label">Outstanding Balance</div></div>
+      <div class="kpi"><div class="kpi-val" id="cred-revenue">—</div><div class="kpi-label">Credit Revenue (KES)</div></div>
+    </div>
+    <div class="a-sect">Recent Credit Transactions</div>
+    <div id="credit-ledger">
+      <div style="color:var(--muted);font-size:13px">Loading ledger…</div>
+    </div>
+  </section>
+
+  <!-- ═══ PROMOTIONS ════════════════════════════════════════════ -->
+  <section class="a-page" id="page-promos">
+    <div class="a-sect">Create Promotion</div>
+    <div class="promo-form">
+      <div class="pf-field">
+        <label>Promotion Name</label>
+        <input type="text" id="promo-name" placeholder="e.g. Black Friday 2026">
+      </div>
+      <div class="pf-field">
+        <label>Type</label>
+        <select id="promo-type">
+          <option value="discount">Discount (%)</option>
+          <option value="trial">Free Trial (days)</option>
+          <option value="credits">Bonus Credits</option>
+          <option value="flat">Flat Discount (KES)</option>
+        </select>
+      </div>
+      <div class="pf-field">
+        <label>Value</label>
+        <input type="number" id="promo-value" placeholder="e.g. 20">
+      </div>
+      <div class="pf-field">
+        <label>Target Plan</label>
+        <select id="promo-plan">
+          <option value="">All Plans</option>
+          <option value="ai_starter">Starter</option>
+          <option value="ai_pro">Professional</option>
+          <option value="ai_enterprise">Enterprise</option>
+        </select>
+      </div>
+      <div class="pf-field">
+        <label>Coupon Code</label>
+        <input type="text" id="promo-code" placeholder="e.g. SOKONI30">
+      </div>
+      <div class="pf-field">
+        <label>Max Uses</label>
+        <input type="number" id="promo-max-uses" placeholder="e.g. 500">
+      </div>
+      <div class="pf-field">
+        <label>Expires At</label>
+        <input type="date" id="promo-expires">
+      </div>
+    </div>
+    <button class="a-btn a-btn-primary" id="promo-create-btn">Create Promotion</button>
+
+    <div class="a-sect" style="margin-top:32px">Active Promotions</div>
+    <div id="promos-list">
+      <div style="color:var(--muted);font-size:13px">Loading promotions…</div>
+    </div>
+  </section>
+
+  <!-- ═══ SETTINGS ══════════════════════════════════════════════ -->
+  <section class="a-page" id="page-settings">
+    <div class="a-sect">AI Feature Toggles</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.7">
+      Enable or disable AI modules globally across all subscription tiers.
+      Disabling a module does not refund active subscriptions but suppresses the feature gracefully.
+    </p>
+    <div id="feature-toggles" style="display:flex;flex-direction:column;gap:12px;margin-bottom:28px">
+      <!-- Rendered by JS -->
+    </div>
+
+    <div class="a-sect">Regional Pricing</div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Configure regional price overrides. Base currency: KES. All prices shown to users in their regional currency.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
+        <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px">KES Multiplier</label><input type="number" value="1.0" style="width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none"></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px">UGX Multiplier</label><input type="number" value="28" style="width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none"></div>
+        <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:5px">TZS Multiplier</label><input type="number" value="24" style="width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;outline:none"></div>
+      </div>
+      <button class="a-btn a-btn-primary" style="margin-top:14px">Save Regional Pricing</button>
+    </div>
+
+    <div class="a-sect">Danger Zone</div>
+    <div style="background:rgba(255,68,68,.04);border:1px solid rgba(255,68,68,.15);border-radius:var(--r);padding:20px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">Suspend AI Service</div>
+        <div style="font-size:12px;color:var(--muted)">Globally disable all AI features. Active subscriptions are paused; no new charges.</div>
+      </div>
+      <button class="a-btn a-btn-danger" id="suspend-ai-btn">Suspend AI Service</button>
+    </div>
+  </section>
+
+  <script type="module" src="/firebase.js"></script>
+  <script src="/sokoni-ai-subscriptions.js" defer></script>
+  <script src="/sokoni-permissions.js" defer></script>
+  <script src="/sw-register.js" defer></script>
+
+  <script>
+    /* ── Helpers ──────────────────────────────────────────────── */
+    function esc(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function fmtKES(n) { return 'KES ' + Number(n || 0).toLocaleString(); }
+    function fmtDate(ts) { return ts ? new Date(ts).toLocaleDateString() : '—'; }
+
+    const PILL_CLASS = { ai_free:'pill-free', ai_starter:'pill-starter', ai_pro:'pill-pro', ai_enterprise:'pill-enterprise' };
+    const DOT_CLASS  = { active:'dot-active', trial:'dot-trial', expired:'dot-expired', cancelled:'dot-cancelled' };
+
+    /* ── Tab switching ────────────────────────────────────────── */
+    function showTab(id) {
+      document.querySelectorAll('.a-tab').forEach(t => t.classList.toggle('active', t.dataset.page === id));
+      document.querySelectorAll('.a-page').forEach(p => p.classList.toggle('active', p.id === 'page-' + id));
+      if (id === 'subscribers') loadSubscribers();
+      if (id === 'usage')       loadUsage();
+      if (id === 'credits')     loadCredits();
+      if (id === 'plans')       renderPlanEditors();
+      if (id === 'promos')      loadPromos();
+      if (id === 'settings')    renderSettings();
+    }
+
+    document.querySelectorAll('.a-tab').forEach(tab => {
+      tab.addEventListener('click', () => showTab(tab.dataset.page));
+    });
+
+    /* ── Admin auth guard ─────────────────────────────────────── */
+    async function checkAdminAccess() {
+      const auth = window.firebaseAuth;
+      if (!auth?.currentUser) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return false; }
+      const token = await auth.currentUser.getIdTokenResult(true).catch(() => null);
+      if (!token?.claims?.admin && !token?.claims?.superAdmin) {
+        alert('Admin access required.'); history.back(); return false;
+      }
+      return true;
+    }
+
+    /* ── Dashboard ────────────────────────────────────────────── */
+    async function loadDashboard() {
+      const subs = window.SokoniAISubs;
+      if (!subs) return;
+      try {
+        const stats = await subs.admin.getStats();
+        document.getElementById('kpi-mrr').textContent  = fmtKES(stats.mrr);
+        document.getElementById('kpi-arr').textContent  = fmtKES(stats.arr);
+        document.getElementById('kpi-active').textContent = stats.totalActive;
+        document.getElementById('kpi-trial-sub').textContent = stats.totalTrial > 0 ? `+${stats.totalTrial} trials` : '';
+        document.getElementById('kpi-credits-sold').textContent = '—';
+
+        const planCounts = stats.planCounts || {};
+        const plans      = subs.PLANS;
+        const total      = stats.totalActive || 1;
+        const dist = document.getElementById('plan-distribution');
+        dist.innerHTML = Object.entries(plans).map(([id, p]) => {
+          const count = planCounts[id] || 0;
+          const pct   = Math.round((count / total) * 100);
+          return `
+            <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px">
+              <div style="width:110px;font-size:13px;font-weight:700">${esc(p.name)}</div>
+              <div style="flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
+                <div style="height:100%;background:var(--g);border-radius:3px;width:${pct}%;transition:width .4s"></div>
+              </div>
+              <div style="font-size:13px;font-weight:800;color:var(--g);width:36px;text-align:right">${count}</div>
+              <div style="font-size:11px;color:var(--muted);width:36px;text-align:right">${pct}%</div>
+            </div>`;
+        }).join('');
+      } catch (e) {
+        console.warn('[AdminSubs] Dashboard error:', e);
+      }
+    }
+
+    /* ── Subscribers ──────────────────────────────────────────── */
+    let _allSubs = [];
+    async function loadSubscribers() {
+      const subs = window.SokoniAISubs;
+      if (!subs) return;
+      document.getElementById('subscribers-tbody').innerHTML =
+        '<tr><td colspan="8" style="color:var(--muted);padding:20px;text-align:center">Loading…</td></tr>';
+      _allSubs = await subs.admin.listSubscribers(100);
+      renderSubTable(_allSubs);
+    }
+
+    function renderSubTable(rows) {
+      const tbody = document.getElementById('subscribers-tbody');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);padding:20px;text-align:center">No subscribers found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.slice(0, 50).map(r => `
+        <tr>
+          <td style="font-family:monospace;font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.uid)}</td>
+          <td><span class="a-plan-pill ${PILL_CLASS[r.plan] || ''}">${esc(window.SokoniAISubs?.PLANS[r.plan]?.name || r.plan)}</span></td>
+          <td><span class="a-status-dot ${DOT_CLASS[r.status] || ''}"></span>${esc(r.status)}</td>
+          <td>${esc(r.billing || 'monthly')}</td>
+          <td>${fmtDate(r.activatedAt)}</td>
+          <td>${fmtDate(r.currentPeriodEnd)}</td>
+          <td>${r.aiCreditsBalance ?? '—'}</td>
+          <td>
+            <button class="a-btn a-btn-sec" style="font-size:11px;padding:5px 10px" onclick="viewSubscriber('${esc(r.uid)}')">View</button>
+          </td>
+        </tr>`).join('');
+      document.getElementById('sub-count').textContent = `Showing ${Math.min(rows.length, 50)} of ${rows.length} subscribers`;
+    }
+
+    document.getElementById('sub-search').addEventListener('input', e => {
+      const kw = e.target.value.toLowerCase().trim();
+      const filtered = kw ? _allSubs.filter(s => s.uid.toLowerCase().includes(kw) || s.plan.includes(kw) || s.status.includes(kw)) : _allSubs;
+      renderSubTable(filtered);
+    });
+
+    document.getElementById('filter-plan').addEventListener('change', () => filterSubs());
+    document.getElementById('filter-status').addEventListener('change', () => filterSubs());
+    function filterSubs() {
+      const plan   = document.getElementById('filter-plan').value;
+      const status = document.getElementById('filter-status').value;
+      const filtered = _allSubs.filter(s =>
+        (!plan || s.plan === plan) && (!status || s.status === status)
+      );
+      renderSubTable(filtered);
+    }
+
+    function viewSubscriber(uid) {
+      alert(`Open subscriber detail for: ${uid}\n(Wire to /profile.html?admin=1&uid=${uid})`);
+    }
+
+    function exportSubscribers() {
+      if (!_allSubs.length) { loadSubscribers().then(exportSubscribers); return; }
+      const rows = [['UID','Plan','Status','Billing','Activated','RenewsAt']].concat(
+        _allSubs.map(s => [s.uid, s.plan, s.status, s.billing || 'monthly', fmtDate(s.activatedAt), fmtDate(s.currentPeriodEnd)])
+      );
+      const csv  = rows.map(r => r.join(',')).join('\n');
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+      a.download = `ai-subscribers-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    }
+
+    /* ── Plan Editors ─────────────────────────────────────────── */
+    function renderPlanEditors() {
+      const subs = window.SokoniAISubs;
+      if (!subs) return;
+      const container = document.getElementById('plan-editors');
+      container.innerHTML = Object.values(subs.PLANS).map(p => {
+        const quotaFields = Object.entries(p.quotas).map(([key, val]) => `
+          <div class="pe-field">
+            <label>${key.replace(/([A-Z])/g,' $1').trim()}</label>
+            <input type="number" value="${val}" data-plan="${esc(p.id)}" data-quota="${esc(key)}" min="-1" placeholder="-1 = unlimited">
+          </div>`).join('');
+
+        const featureFields = Object.entries(p.features).map(([key, val]) => `
+          <div class="pe-toggle-wrap">
+            <input type="checkbox" class="pe-checkbox" id="feat-${esc(p.id)}-${esc(key)}" ${val ? 'checked' : ''} data-plan="${esc(p.id)}" data-feature="${esc(key)}">
+            <label for="feat-${esc(p.id)}-${esc(key)}" style="font-size:13px;cursor:pointer">${key.replace(/([A-Z])/g,' $1').trim()}</label>
+          </div>`).join('');
+
+        return `
+          <div class="plan-editor">
+            <div class="plan-editor-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+              <div class="plan-editor-title">${esc(p.name)} Plan</div>
+              <div class="plan-editor-price">KES ${p.price.toLocaleString()}/mo &bull; KES ${p.annualPrice.toLocaleString()}/yr</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px">Pricing</div>
+              <div class="pe-grid" style="margin-bottom:16px">
+                <div class="pe-field"><label>Monthly Price (KES)</label><input type="number" value="${p.price}" data-plan="${esc(p.id)}" data-field="price"></div>
+                <div class="pe-field"><label>Annual Price (KES)</label><input type="number" value="${p.annualPrice}" data-plan="${esc(p.id)}" data-field="annualPrice"></div>
+                <div class="pe-field"><label>Storage (GB)</label><input type="number" value="${p.storageGB}" data-plan="${esc(p.id)}" data-field="storageGB"></div>
+                <div class="pe-field"><label>Credits Included/mo</label><input type="number" value="${p.aiCreditsIncluded}" data-plan="${esc(p.id)}" data-field="aiCreditsIncluded"></div>
+                <div class="pe-field"><label>Team Members</label><input type="number" value="${p.teamMembers}" data-plan="${esc(p.id)}" data-field="teamMembers"></div>
+              </div>
+              <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px">Monthly Quotas (-1 = unlimited, 0 = blocked)</div>
+              <div class="pe-grid">${quotaFields}</div>
+              <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin:14px 0 10px">Feature Flags</div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px 20px">${featureFields}</div>
+              <button class="pe-save" data-plan="${esc(p.id)}">Save ${esc(p.name)} Plan</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      container.querySelectorAll('.pe-save').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const planId  = btn.dataset.plan;
+          const editor  = btn.closest('.plan-editor');
+          const config  = {};
+
+          editor.querySelectorAll('[data-field]').forEach(inp => {
+            config[inp.dataset.field] = isNaN(inp.value) ? inp.value : Number(inp.value);
+          });
+
+          const quotas = {};
+          editor.querySelectorAll('[data-quota]').forEach(inp => {
+            quotas[inp.dataset.quota] = Number(inp.value);
+          });
+          config.quotas = quotas;
+
+          const features = {};
+          editor.querySelectorAll('[data-feature]').forEach(cb => {
+            features[cb.dataset.feature] = cb.checked;
+          });
+          config.features = features;
+
+          try {
+            await subs.admin.updatePlanConfig(planId, config);
+            btn.textContent = 'Saved!';
+            setTimeout(() => { btn.textContent = `Save ${subs.PLANS[planId]?.name || ''} Plan`; }, 2000);
+          } catch (e) { alert('Save failed: ' + e.message); }
+        });
+      });
+    }
+
+    /* ── Usage Analytics ──────────────────────────────────────── */
+    async function loadUsage() {
+      try {
+        const { collection, query, where, getDocs, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const period = new Date().toISOString().slice(0,7);
+        const snap   = await getDocs(query(collection(window.firebaseDB, 'aiUsage'), where('period', '==', period), limit(100)));
+
+        const totals = {};
+        let   users  = 0;
+        snap.forEach(d => {
+          const c = d.data().counters || {};
+          users++;
+          Object.entries(c).forEach(([k, v]) => { totals[k] = (totals[k] || 0) + v; });
+        });
+
+        const total = Object.values(totals).reduce((a, b) => a + b, 0);
+        document.getElementById('usage-kpis').innerHTML = `
+          <div class="kpi"><div class="kpi-val">${users}</div><div class="kpi-label">Active Users</div></div>
+          <div class="kpi"><div class="kpi-val">${total.toLocaleString()}</div><div class="kpi-label">Total AI Ops</div></div>
+          <div class="kpi"><div class="kpi-val">${totals.removeBackground || 0}</div><div class="kpi-label">BG Removals</div></div>
+          <div class="kpi"><div class="kpi-val">${totals.generateBanner || 0}</div><div class="kpi-label">Banners Created</div></div>`;
+
+        const breakdown = document.getElementById('usage-breakdown');
+        const sorted    = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+        breakdown.innerHTML = sorted.map(([key, count]) => `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px">
+            <div style="width:180px;font-size:12px;font-weight:700;color:var(--muted)">${key.replace(/([A-Z])/g,' $1').trim()}</div>
+            <div style="flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden">
+              <div style="height:100%;background:var(--g);border-radius:3px;width:${Math.round(count/Math.max(...Object.values(totals))*100)}%"></div>
+            </div>
+            <div style="font-size:13px;font-weight:800;color:var(--g);width:54px;text-align:right">${count.toLocaleString()}</div>
+          </div>`).join('');
+      } catch (e) { console.warn('[AdminSubs] Usage error:', e); }
+    }
+
+    /* ── Credit Ledger ────────────────────────────────────────── */
+    async function loadCredits() {
+      try {
+        const { collection, query, orderBy, limit, getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const snap = await getDocs(query(collection(window.firebaseDB, 'aiCreditLedger'), orderBy('ts', 'desc'), limit(50)));
+        let sold = 0, consumed = 0, revenue = 0;
+        const rows = [];
+        snap.forEach(d => {
+          const r = d.data();
+          if (r.type === 'topup') { sold += r.credits || 0; revenue += r.price || 0; }
+          if (r.type === 'consume') consumed += r.amount || 0;
+          rows.push(r);
+        });
+        document.getElementById('cred-total-sold').textContent     = sold.toLocaleString();
+        document.getElementById('cred-total-consumed').textContent = consumed.toLocaleString();
+        document.getElementById('cred-total-balance').textContent  = (sold - consumed).toLocaleString();
+        document.getElementById('cred-revenue').textContent        = fmtKES(revenue);
+        document.getElementById('credit-ledger').innerHTML = rows.map(r => `
+          <div class="ledger-item">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${r.type === 'topup' ? `Purchased ${r.credits || 0} credits` : `Used ${r.amount || 0} credits — ${esc(r.reason || '')}`}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">${new Date(r.ts).toLocaleString()} &bull; ${esc(r.uid?.slice(0,12)+'…' || '')}</div>
+            </div>
+            <div class="ledger-amount ${r.type === 'topup' ? 'ledger-topup' : 'ledger-consume'}">
+              ${r.type === 'topup' ? '+' : '-'}${(r.credits || r.amount || 0).toLocaleString()}
+            </div>
+          </div>`).join('') || '<div style="color:var(--muted);font-size:13px">No credit transactions yet.</div>';
+      } catch (e) { console.warn('[AdminSubs] Credits error:', e); }
+    }
+
+    /* ── Promotions ────────────────────────────────────────────── */
+    async function loadPromos() {
+      try {
+        const { collection, query, orderBy, limit, getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const snap = await getDocs(query(collection(window.firebaseDB, 'aiPromotions'), orderBy('createdAt', 'desc'), limit(20)));
+        const list = document.getElementById('promos-list');
+        if (snap.empty) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">No promotions yet.</div>'; return; }
+        list.innerHTML = snap.docs.map(d => {
+          const p = d.data();
+          return `
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:14px;font-weight:700">${esc(p.name)} <code style="background:rgba(113,255,0,.1);color:var(--g);padding:2px 8px;border-radius:4px;font-size:11px">${esc(p.code)}</code></div>
+                <div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(p.type)} — ${esc(String(p.value))} &bull; Plan: ${esc(p.plan || 'All')} &bull; Uses: ${p.usesCount || 0}/${p.maxUses || '∞'} &bull; Expires: ${fmtDate(p.expiresAt)}</div>
+              </div>
+              <button class="a-btn a-btn-danger" style="font-size:12px;padding:6px 12px" onclick="deletePromo('${esc(d.id)}')">Delete</button>
+            </div>`;
+        }).join('');
+      } catch (e) { console.warn('[AdminSubs] Promos error:', e); }
+    }
+
+    document.getElementById('promo-create-btn').addEventListener('click', async () => {
+      const code = document.getElementById('promo-code').value.trim().toUpperCase();
+      if (!code) { alert('Please enter a coupon code.'); return; }
+      try {
+        const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        await addDoc(collection(window.firebaseDB, 'aiPromotions'), {
+          name:      document.getElementById('promo-name').value,
+          type:      document.getElementById('promo-type').value,
+          value:     Number(document.getElementById('promo-value').value),
+          plan:      document.getElementById('promo-plan').value,
+          code,
+          maxUses:   Number(document.getElementById('promo-max-uses').value) || null,
+          expiresAt: document.getElementById('promo-expires').value ? new Date(document.getElementById('promo-expires').value).getTime() : null,
+          usesCount: 0,
+          createdAt: Date.now(),
+          active:    true,
+        });
+        alert('Promotion created!');
+        loadPromos();
+        ['promo-name','promo-code','promo-value','promo-max-uses','promo-expires'].forEach(id => { document.getElementById(id).value = ''; });
+      } catch (e) { alert('Failed: ' + e.message); }
+    });
+
+    async function deletePromo(id) {
+      if (!confirm('Delete this promotion?')) return;
+      try {
+        const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        await deleteDoc(doc(window.firebaseDB, 'aiPromotions', id));
+        loadPromos();
+      } catch (e) { alert('Failed: ' + e.message); }
+    }
+
+    /* ── Settings ─────────────────────────────────────────────── */
+    function renderSettings() {
+      const toggles = [
+        { key: 'backgroundRemoval',  label: 'Background Removal',  desc: 'AI pixel-level background cutout' },
+        { key: 'productEnhancement', label: 'Product Enhancement', desc: 'Brightness, contrast, shadow, reflection' },
+        { key: 'bannerGenerator',    label: 'Banner Generator',    desc: '6 template types, Canvas 2D' },
+        { key: 'posterGenerator',    label: 'Poster Generator',    desc: 'Product poster with price + QR' },
+        { key: 'storyStudio',        label: 'Story Studio',        desc: 'Shoppable 9:16 stories' },
+        { key: 'productAssistant',   label: 'AI Product Assistant', desc: 'Gemini Pro Vision metadata generation' },
+        { key: 'videoStudio',        label: 'Video Studio',        desc: 'Trim, stabilize, subtitles' },
+        { key: 'creditPurchase',     label: 'Credit Purchases',    desc: 'Allow users to buy AI credits' },
+      ];
+      document.getElementById('feature-toggles').innerHTML = toggles.map(t => `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:14px;font-weight:700">${esc(t.label)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(t.desc)}</div>
+          </div>
+          <label style="position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer">
+            <input type="checkbox" checked style="opacity:0;width:0;height:0;position:absolute" data-toggle="${esc(t.key)}">
+            <span style="position:absolute;inset:0;background:#222;border-radius:12px;transition:.2s;cursor:pointer" class="tog-bg-${esc(t.key)}"></span>
+            <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:var(--g);border-radius:50%;transition:.2s" class="tog-dot-${esc(t.key)}"></span>
+          </label>
+        </div>`).join('');
+
+      document.querySelectorAll('[data-toggle]').forEach(cb => {
+        cb.addEventListener('change', async () => {
+          /* Persist to Firestore aiSettings/globalToggles */
+          try {
+            const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+            await setDoc(doc(window.firebaseDB, 'aiSettings', 'globalToggles'), {
+              [cb.dataset.toggle]: cb.checked, updatedAt: Date.now(),
+            }, { merge: true });
+          } catch (e) { console.warn('[AdminSubs] Toggle save failed:', e); }
+        });
+      });
+    }
+
+    document.getElementById('suspend-ai-btn').addEventListener('click', async () => {
+      if (!confirm('This will disable all AI features globally. Existing subscriptions are paused. Confirm?')) return;
+      try {
+        const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        await setDoc(doc(window.firebaseDB, 'aiSettings', 'globalToggles'), {
+          aiServiceActive: false, suspendedAt: Date.now(),
+        }, { merge: true });
+        alert('AI service suspended.');
+      } catch (e) { alert('Failed: ' + e.message); }
+    });
+
+    /* ── Bootstrap ─────────────────────────────────────────────── */
+    async function init() {
+      const isAdmin = await checkAdminAccess();
+      if (!isAdmin) return;
+      await loadDashboard();
+    }
+
+    window.addEventListener('sokoniAISubsReady', init);
+    if (window.SokoniAISubs) init();
+  </script>
+</body>
+</html>

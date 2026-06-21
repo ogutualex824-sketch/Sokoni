@@ -214,9 +214,6 @@
 
 <nav class="navbar">
   <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
-  <div class="search-bar">
-    <input type="text" id="propSearch" placeholder="Search by location, type or landlord..." oninput="searchProps()">
-  </div>
   <div class="nav-actions">
     <a href="landlord.html" class="prop-cta-btn" style="font-size:13px;">🔑 Landlord Portal</a>
     <a href="index.html" class="cart-btn" style="text-decoration:none;">← Sokoni</a>
@@ -257,7 +254,9 @@
 </div>
 
 <!-- FILTER ROW -->
-<div class="prop-filter-row" style="align-items:center;">
+<div class="prop-filter-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
+  <input type="text" id="propSearch" placeholder="🔍 Search by area, type or landlord…" oninput="searchProps()"
+    style="flex:1;min-width:200px;padding:9px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:13px;font-family:inherit;outline:none;">
   <select id="propLocation" class="prop-select" onchange="searchProps()">
     <option value="">📍 All Locations</option>
     <option value="nairobi">📍 Nairobi</option>

@@ -473,10 +473,11 @@
   };
 
   /**
-   * SokoniRecs.renderWidget(containerId, items, title)
+   * SokoniRecs.renderWidget(containerId, items, title, opts)
    * Renders a card grid into an element with the given id.
+   * opts.viewCount — number of items in view history (drives AI confidence badge)
    */
-  SokoniRecs.renderWidget = function (containerId, items, title) {
+  SokoniRecs.renderWidget = function (containerId, items, title, opts) {
     _injectCSS();
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -485,6 +486,26 @@
       container.innerHTML =
         '<div class="sk-recs-widget"><div class="sk-recs-empty">No recommendations yet — browse a few items to personalise your feed.</div></div>';
       return;
+    }
+
+    /* AI Policy: recommendations are PREDICTED — derive confidence from browse history */
+    let policyBadge = '';
+    if (window.SokoniAIPolicy) {
+      const p = window.SokoniAIPolicy;
+      const viewCount = (opts && opts.viewCount != null) ? opts.viewCount : _viewHist.length;
+      const conf = p.scoreConfidence({
+        dataPoints:  viewCount,
+        hasRealTime: false,
+        ageMs:       viewCount > 0 ? ((_now() - (_viewHist[0] && _viewHist[0].ts || _now())) * 1000) : Infinity,
+      });
+      const pv = p.predicted(null, {
+        confidence: conf,
+        model:      'sokoni-collab-filter',
+        reason:     viewCount
+          ? 'Based on your browsing, cart and search history (' + viewCount + ' interactions)'
+          : 'Based on trending items and location — browse more to personalise',
+      });
+      policyBadge = p.badge(pv);
     }
 
     const cards = items.map(function (item) {
@@ -515,7 +536,7 @@
 
     container.innerHTML =
       '<section class="sk-recs-widget">' +
-        '<h3 class="sk-recs-title">✨ ' + _esc(title || 'Recommended For You') + '</h3>' +
+        '<h3 class="sk-recs-title">✨ ' + _esc(title || 'Recommended For You') + policyBadge + '</h3>' +
         '<div class="sk-recs-grid">' + cards + '</div>' +
       '</section>';
   };

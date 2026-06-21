@@ -847,6 +847,10 @@ html, body {
   :root { --prod-w: 40%; --pay-w: 0px; }
   .pos-payment { display: none; }
   .pos-cart { border-right: none; }
+  /* Compact tab bar on tablet — hide text labels, keep icons */
+  .pos-tab span:not(.tab-icon) { display: none; }
+  .pos-tab .tab-icon { font-size: 20px; }
+  .pos-tab { max-width: 64px; padding: 8px 4px; }
 }
 
 @media (max-width: 640px) {

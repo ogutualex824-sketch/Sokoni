@@ -520,10 +520,12 @@ const [
   { default: GIPEngine },
   { default: DispatchEngine },
   { default: GIPAnalytics },
+  { default: aiPolicy },
 ] = await Promise.all([
   import('./sokoni-gip.js'),
   import('./sokoni-gip-dispatch.js'),
   import('./sokoni-gip-analytics.js'),
+  import('./sokoni-ai-policy.js'),
 ]);
 
 /* ── State ── */
@@ -643,7 +645,7 @@ function _renderJobs(jobs) {
       <div class="gip-job-row"><span class="gip-job-icon">📦</span><span class="gip-job-text">${j.module ?? '—'}</span></div>
       <div class="gip-job-row"><span class="gip-job-icon">📍</span><span class="gip-job-text">${j.pickupAddress || '—'}</span></div>
       <div class="gip-job-row"><span class="gip-job-icon">🏁</span><span class="gip-job-text">${j.dropoffAddress || '—'}</span></div>
-      ${j.estimatedETAMin ? `<div class="gip-job-row"><span class="gip-job-icon">⏱</span><span class="gip-job-text">ETA ~${j.estimatedETAMin} min · ${j.distanceKm ?? '—'} km</span></div>` : ''}
+      ${j.estimatedETAMin ? `<div class="gip-job-row"><span class="gip-job-icon">⏱</span><span class="gip-job-text">ETA ~${j.estimatedETAMin} min · ${j.distanceKm ?? '—'} km ${aiPolicy ? aiPolicy.badge(aiPolicy.calculated(j.estimatedETAMin, {formula:'OSRM distance ÷ vehicle speed × traffic factor'})) : ''}</span></div>` : ''}
       ${j.assignedAssetId ? `<div class="gip-job-row"><span class="gip-job-icon">🚗</span><span class="gip-job-text">${j.assignedAssetId}</span></div>` : ''}
     </div>`).join('');
 }
@@ -682,21 +684,31 @@ async function _renderAnalytics() {
   document.getElementById('gipRightBody').innerHTML = '<div style="padding:16px;font-size:11px;color:rgba(255,255,255,0.3);">Computing…</div>';
   const summary = await analytics.getFleetSummary('nairobi').catch(() => null);
   if (!summary) { document.getElementById('gipRightBody').innerHTML = '<div style="padding:16px;font-size:11px;color:rgba(255,255,255,0.3);">Could not load analytics.</div>'; return; }
+
+  /* AI Policy badges — fleet counts are real-time VERIFIED reads from Firestore */
+  const verifiedBdg   = aiPolicy ? aiPolicy.badge(aiPolicy.verified(summary.total, { source: 'gipAssets real-time Firestore query' })) : '';
+  const calculatedBdg = aiPolicy ? aiPolicy.badge(aiPolicy.calculated(summary.available, { formula: 'count of assets where status = available' })) : '';
+
   document.getElementById('gipRightBody').innerHTML = `
     <div class="gip-analytics-row">
-      <div class="gip-anlt-card"><div class="gip-anlt-val">${summary.total}</div><div class="gip-anlt-lbl">Online</div></div>
+      <div class="gip-anlt-card"><div class="gip-anlt-val">${summary.total}</div><div class="gip-anlt-lbl">Online ${verifiedBdg}</div></div>
       <div class="gip-anlt-card"><div class="gip-anlt-val" style="color:#71ff00;">${summary.available}</div><div class="gip-anlt-lbl">Available</div></div>
       <div class="gip-anlt-card"><div class="gip-anlt-val" style="color:#00aaff;">${summary.busy}</div><div class="gip-anlt-lbl">Busy</div></div>
       <div class="gip-anlt-card"><div class="gip-anlt-val" style="color:#ffc107;">${summary.en_route}</div><div class="gip-anlt-lbl">En Route</div></div>
     </div>
     <div style="padding:0 12px 12px;">
-      <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">By Module</div>
+      <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">By Module ${calculatedBdg}</div>
       ${Object.entries(summary.byModule ?? {}).map(([m,c]) =>
         `<div style="display:flex;justify-content:space-between;font-size:11px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
           <span>${MODULE_EMOJI[m]??'📍'} ${m}</span>
           <span style="font-weight:700;color:#71ff00;">${c}</span>
         </div>`
       ).join('')}
+    </div>
+    <div class="sk-ai-disclosure" style="margin:0 12px 12px;">
+      <strong>Data source</strong><br>
+      Counts are live Firestore reads (Verified). ETA values are road-distance calculations (Calculated).
+      AI-generated insights are labelled with confidence levels — they are predictions, not measurements.
     </div>`;
 }
 

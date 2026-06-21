@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v237";
+const CACHE_VERSION = "sokoni-v246";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -63,10 +63,17 @@ const PRECACHE_PAGES = [
   "/ride-book.html",
   "/jobs.html", "/education.html", "/superadmin.html", "/scan.html",
   "/inventory.html",
+  "/inv-dashboard.html",
+  "/inv-products.html",
+  "/inv-product.html",
+  "/creative-studio.html",
+  "/ai-subscriptions.html",
+  "/admin-subscriptions.html",
+  "/subscription-os.html",
 ];
 
 const PRECACHE_STATIC = [
-  "/style.css", "/mobile.css", "/script.js",
+  "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js",
   "/manifest.json", "/assets/logosokoni.png", "/assets/Sokonilogo2.png",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",
@@ -85,6 +92,9 @@ const PRECACHE_STATIC = [
   "/sokoni-permissions.js", "/access-control.js", "/monitor.js", "/sokoni-trust.js", "/sokoni-offers.js", "/sokoni-verifications.js",
   "/sokoni-beta.js", "/beta-widget.js", "/sokoni-launch.js",
   "/sokoni-alerts.js", "/sokoni-upload.js", "/sokoni-share.js", "/sokoni-recommendations.js", "/sokoni-init.js",
+  /* AI Creative Studio + AI Subscriptions + Subscription OS */
+  "/sokoni-media.js", "/sokoni-creative.js", "/sokoni-ai-subscriptions.js",
+  "/sokoni-entitlement.js", "/sokoni-subscription-brain.js",
   /* Enterprise v2.0 modules */
   "/sokoni-qr.js", "/sokoni-barcode.js", "/sokoni-receipt.js", "/sokoni-event-bus.js", "/sokoni-observability.js", "/sokoni-service-mesh.js", "/sokoni-gateway.js",
   "/sokoni-payment-engine.js", "/sokoni-fraud-engine.js", "/sokoni-webhook-engine.js", "/sokoni-search-pro.js",
@@ -111,6 +121,14 @@ const PRECACHE_STATIC = [
   "/sokoni-gip.js", "/sokoni-gip-dispatch.js", "/sokoni-gip-analytics.js",
   "/sokoni-gip-router.js", "/sokoni-gip-fleet.js", "/sokoni-gip-api.js",
   "/gip.html",
+  /* AI Policy Engine + Enterprise Intelligence Platform + ECC */
+  "/sokoni-ai-policy.js",
+  "/sokoni-decision-engine.js", "/sokoni-data-quality.js",
+  "/sokoni-feature-flags.js", "/sokoni-intelligence-log.js",
+  "/sokoni-eip.js", "/sokoni-ecc.js",
+  /* Workflow Automation Platform */
+  "/sokoni-wap.js", "/sokoni-wap-definitions.js",
+  "/wap.html",
   /* Commerce — Orders, Notifications, Subscriptions, Vouchers */
   "/sokoni-orders.js", "/sokoni-notifications.js",
   "/sokoni-subscriptions.js", "/sokoni-vouchers.js", "/sokoni-intasend.js",
