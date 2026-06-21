@@ -4101,3 +4101,99 @@ img { max-width: 100%; height: auto; }
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ════════════════════════════════════════
+   GLOBAL HUB NAV — RIGHT-SIDE OVERFLOW FIX
+   All hub pages share the pattern:  [logo][tabs][*-nav-right]
+   Without flex-shrink:0 on the right section, the logo or tabs
+   get compressed and buttons can clip outside the viewport.
+════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Every hub nav right section — stops it from shrinking into or
+     pushing past the logo on the left */
+  [class*="-nav-right"],
+  .nav-right,
+  .adm-nav-right {
+    flex-shrink: 0 !important;
+  }
+
+  /* Every hub logo — prevents it overflowing on ultra-narrow phones */
+  [class*="-nav-logo"],
+  [class*="-logo"] img,
+  .nav-logo img {
+    max-width: 140px !important;
+    height: auto !important;
+  }
+
+  /* All hub hero CTA button rows — wrap and centre on phone */
+  [class*="-hero-btns"],
+  [class*="-hero"] > div > div[style*="display:flex"][style*="gap"] {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+}
+
+/* ════════════════════════════════════════
+   CAR HUB — STICKY MOBILE TAB BAR
+   The mobile tab bar (visible ≤700px) is normally in flow and
+   scrolls away; making it sticky keeps tabs accessible at all times.
+════════════════════════════════════════ */
+@media (max-width: 700px) {
+  .ch-mobile-tab-bar {
+    position: sticky !important;
+    /* 50px ≈ car-hub nav height at mobile padding (10px top + 30px logo + 10px bottom) */
+    top: 50px !important;
+    z-index: 490 !important;
+  }
+  /* Prevent right nav from overflowing on car-hub */
+  .ch-nav-right { flex-shrink: 0 !important; }
+  .ch-nav-logo  { max-width: 130px !important; }
+  /* Car hub search row — stack inputs vertically to prevent min-width overflow */
+  .ch-search-row { flex-direction: column !important; gap: 8px !important; }
+  .ch-search-input { min-width: 0 !important; width: 100% !important; }
+  .ch-search-btn  { width: 100% !important; }
+}
+
+/* ════════════════════════════════════════
+   PROPERTY HUB — MOBILE FIXES
+════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* Property search row — same min-width pattern as car hub */
+  .prop-search-row, [class*="prop-search"] {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .prop-search-row input,
+  .prop-search-row select { min-width: 0 !important; width: 100% !important; }
+
+  /* Property type filter pills — horizontal scroll */
+  .prop-type-row, .prop-filter-bar {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    scrollbar-width: none !important;
+  }
+  .prop-type-row::-webkit-scrollbar,
+  .prop-filter-bar::-webkit-scrollbar { display: none; }
+  .prop-type-btn { flex-shrink: 0 !important; white-space: nowrap !important; }
+
+  /* Absolute-positioned badges inside cards don't escape containers */
+  [class*="-card"] { overflow: hidden !important; }
+}
+
+/* ════════════════════════════════════════
+   GLOBAL — ABSOLUTE-POSITIONED BADGES
+   Badges/overlays positioned top-right inside cards must not
+   escape their containing block on narrow screens.
+════════════════════════════════════════ */
+@media (max-width: 480px) {
+  /* Any inline-style absolute-right badge */
+  [style*="position:absolute"][style*="right:"] {
+    right: 8px !important;
+  }
+  /* Modal widths — never wider than viewport */
+  [class*="-modal"],
+  [class*="-overlay"] > div {
+    max-width: calc(100vw - 24px) !important;
+    box-sizing: border-box !important;
+  }
+}

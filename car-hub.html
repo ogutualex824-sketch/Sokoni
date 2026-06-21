@@ -340,9 +340,17 @@ input:checked+.ch-toggle-slider::before{transform:translateX(18px);background:#0
   .ch-nav{padding:10px 12px;}
   .ch-nav-tabs{display:none;}
   .ch-nav-right .ch-nav-btn:not(.green){display:none;}
-  .ch-mobile-tab-bar{display:flex;}
+  /* Prevent the "List My Car" button from pushing into the logo */
+  .ch-nav-right{flex-shrink:0;}
+  .ch-nav-logo{max-width:130px;}
+  /* Sticky mobile tab bar — stays pinned below the nav while scrolling */
+  .ch-mobile-tab-bar{display:flex;position:sticky;top:50px;z-index:490;}
   .ch-hero{padding:22px 14px 18px;}
   .ch-hero-title{font-size:22px;}
+  /* Search row: stack vertically so inputs don't overflow the viewport */
+  .ch-search-row{flex-direction:column;gap:8px;}
+  .ch-search-input{min-width:0!important;width:100%;}
+  .ch-search-btn{width:100%;}
   .ch-grid{grid-template-columns:1fr 1fr;}
   .ch-grid-wrap{padding:12px;}
   .ch-spec-grid{grid-template-columns:repeat(2,1fr);}
@@ -359,7 +367,9 @@ input:checked+.ch-toggle-slider::before{transform:translateX(18px);background:#0
   .ch-date-row{grid-template-columns:1fr;}
   .ch-bk-amounts{flex-direction:column;}
   .ch-car-img{height:160px;}
-  .ch-hero-title{font-size:20px;}
+  .ch-hero-title{font-size:18px;}
+  /* Shrink "List My Car" green button on very small phones */
+  .ch-nav-right .ch-nav-btn.green{padding:7px 10px;font-size:11px;}
   #fleetMap{height:60vh;min-height:280px;}
 }
 /* ── BOTTOM NAV ── */
@@ -1487,15 +1497,55 @@ body{padding-bottom:70px;}
     .trk-route-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
     .trk-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,0.2);}
     .trk-empty div:first-child{font-size:48px;margin-bottom:12px;}
-    @media(max-width:600px){.trk-live-stats{grid-template-columns:repeat(2,1fr);}}
+    /* Hero CTA buttons — stack on mobile */
+    .trk-hero-btns{display:flex;gap:10px;flex-wrap:wrap;}
+    /* Sign-in gate card */
+    .trk-auth-gate{padding:60px 20px;text-align:center;max-width:480px;margin:0 auto;}
+    .trk-auth-gate-icon{font-size:60px;margin-bottom:16px;}
+    .trk-auth-gate-title{font-size:22px;font-weight:900;color:white;margin-bottom:10px;}
+    .trk-auth-gate-sub{font-size:14px;color:rgba(255,255,255,0.45);line-height:1.6;margin-bottom:28px;}
+    .trk-auth-btn-primary{display:block;padding:15px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050f05;font-weight:900;font-size:15px;border-radius:14px;text-decoration:none;margin-bottom:12px;}
+    .trk-auth-btn-secondary{display:block;padding:15px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);font-weight:800;font-size:14px;border-radius:14px;text-decoration:none;margin-bottom:24px;}
+    .trk-auth-gate-footer{font-size:12px;color:rgba(255,255,255,0.2);}
+    @media(max-width:700px){
+      .trk-hero{padding:24px 14px 18px;}
+      .trk-hero-title{font-size:22px;}
+      .trk-sub-tabs{padding:10px 12px;}
+      .trk-panel{padding:14px;}
+      #trkLiveMap{height:260px;}
+      /* Stack section header + button vertically so button doesn't overflow right edge */
+      .trk-section-hd{flex-wrap:wrap;gap:8px;}
+      /* Stack hero buttons, each full width */
+      .trk-hero-btns{flex-direction:column;align-items:stretch;}
+      .trk-hero-btns button{width:100%!important;text-align:center;}
+      .trk-live-stats{grid-template-columns:repeat(2,1fr);}
+      .trk-plan-card{padding:16px;}
+      .trk-auth-gate{padding:40px 14px;}
+    }
+    @media(max-width:480px){
+      .trk-hero-title{font-size:19px;}
+      .trk-hero-badge{font-size:10px;}
+    }
   </style>
 
+  <!-- SIGN-IN GATE: shown when user is not logged in -->
+  <div id="trkAuthGate" class="trk-auth-gate" style="display:none;">
+    <div class="trk-auth-gate-icon">📡</div>
+    <h2 class="trk-auth-gate-title">Track Your Car</h2>
+    <p class="trk-auth-gate-sub">Sign in to access live GPS tracking, route history, geofences, speed alerts and theft recovery for your vehicles.</p>
+    <a href="login.html?return=car-hub.html%23tracking-hub" class="trk-auth-btn-primary">🔑 Sign In to Track</a>
+    <a href="signup.html?return=car-hub.html%23tracking-hub" class="trk-auth-btn-secondary">✨ Create Free Account</a>
+    <p class="trk-auth-gate-footer">Live GPS · Route history · Geofences · Speed alerts · Theft recovery</p>
+  </div>
+
+  <!-- TRACKING HUB CONTENT: hidden when user is not logged in -->
+  <div id="trkHubContent">
   <div class="trk-hero">
     <div style="max-width:900px;margin:0 auto;">
       <div class="trk-hero-badge">📡 SOKONI Vehicle Tracking</div>
       <h1 class="trk-hero-title">Track Any Vehicle <span>Anywhere in Kenya</span></h1>
       <p style="font-size:14px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Live GPS · Route history · Geofences · Speed alerts · Theft recovery · Fleet dashboard</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="trk-hero-btns">
         <button type="button" onclick="trkShowPanel('live')" style="padding:11px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050f05;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;">📡 Live Tracking</button>
         <button type="button" onclick="trkShowPanel('register-vehicle')" style="padding:11px 22px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.28);color:#71ff00;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:800;">+ Register Vehicle</button>
         <button type="button" onclick="trkShowPanel('alerts')" style="padding:11px 22px;background:rgba(255,50,50,0.08);border:1px solid rgba(255,50,50,0.25);color:#ff6666;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:800;">🚨 Alerts</button>
@@ -1755,6 +1805,7 @@ body{padding-bottom:70px;}
       <div id="trkRegMsg" style="font-size:12px;margin-top:10px;text-align:center;min-height:14px;color:#71ff00;"></div>
     </div>
   </div>
+  </div><!-- /trkHubContent -->
 </div>
 
 <!-- TAB: MY VEHICLES -->
@@ -2943,6 +2994,19 @@ function showTab(name,btn,skipHistory){
   if(name==="bookings")renderBookings();
   if(name==="browse")filterCars();
   if(name==="buysell")renderBuySellGrid();
+  if(name==="tracking-hub"){
+    var _trkUser=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    var _trkGate=document.getElementById('trkAuthGate');
+    var _trkHub=document.getElementById('trkHubContent');
+    if(!_trkUser){
+      if(_trkGate)_trkGate.style.display='block';
+      if(_trkHub)_trkHub.style.display='none';
+    } else {
+      if(_trkGate)_trkGate.style.display='none';
+      if(_trkHub)_trkHub.style.display='block';
+      if(typeof trkLoadMyVehicles==='function')trkLoadMyVehicles();
+    }
+  }
 }
 function _updateBottomNav(name){
   const map={browse:"bnav-browse",bookings:"bnav-bookings"};
