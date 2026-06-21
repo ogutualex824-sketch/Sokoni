@@ -17,10 +17,12 @@
 ================================================================ */
 'use strict';
 
-const { onCall, onSchedule } = require('firebase-functions/v2/https');
+const { onCall, onSchedule, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule: onSched  } = require('firebase-functions/v2/scheduler');
 const { logger }               = require('firebase-functions');
 const admin                    = require('firebase-admin');
+
+const { assertAuth, assertAdmin, sanitize } = require('./shared/errors');
 
 /* admin is already initialised in index.js — do not call initializeApp() here */
 const db = () => admin.firestore();
@@ -45,25 +47,7 @@ function periodEnd(billing) {
     : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).getTime();
 }
 
-/* ── Auth guard ───────────────────────────────────────────────── */
-function assertAuth(context) {
-  if (!context.auth) throw new Error('Authentication required.');
-  return context.auth.uid;
-}
-
-function assertAdmin(context) {
-  assertAuth(context);
-  if (!context.auth.token?.admin && !context.auth.token?.superAdmin) {
-    throw new Error('Admin access required.');
-  }
-  return context.auth.uid;
-}
-
-/* ── Input sanitisation ───────────────────────────────────────── */
-function sanitize(s, maxLen = 200) {
-  if (typeof s !== 'string') return '';
-  return s.replace(/<[^>]*>/g, '').trim().slice(0, maxLen);
-}
+/* assertAuth, assertAdmin, sanitize imported from shared/errors.js */
 
 /* ================================================================
    activateAIPlan

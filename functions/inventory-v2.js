@@ -30,10 +30,7 @@ function col(tenantId, sub) {
   return db.collection(`tenants/${tenantId}/${sub}`);
 }
 
-function assertAuth(req) {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Authentication required');
-  return req.auth.uid;
-}
+const { assertAuth } = require('./shared/errors');
 
 function assertTenant(data) {
   if (!data.tenantId) throw new HttpsError('invalid-argument', 'tenantId required');

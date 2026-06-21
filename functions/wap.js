@@ -30,6 +30,8 @@ const { onDocumentUpdated,
 const { onSchedule }                  = require("firebase-functions/v2/scheduler");
 const admin                           = require("firebase-admin");
 
+const { assertAuth, assertAdmin }     = require("./shared/errors");
+
 const db = admin.firestore();
 
 const COLL = {
@@ -58,8 +60,7 @@ const WS = {
    Called by client code to create and start a new workflow.
 ================================================================ */
 exports.wapTriggerWorkflow = onCall({ maxInstances: 100 }, async (req) => {
-  const uid = req.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+  const uid = assertAuth(req);
 
   /* Rate limit: 10 triggers per user per minute */
   await _checkRateLimit(uid);
@@ -297,8 +298,7 @@ exports.wapAdvanceWorkflow = onDocumentUpdated(
    Atomic approval decision — Firestore transaction prevents race conditions.
 ================================================================ */
 exports.wapApproveStep = onCall({ maxInstances: 50 }, async (req) => {
-  const uid = req.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+  const uid = assertAuth(req);
 
   const { approvalId, decision, reason = "" } = req.data;
   if (!approvalId) throw new HttpsError("invalid-argument", "approvalId is required");
@@ -612,8 +612,7 @@ exports.wapDLQSweep = onDocumentWritten(
    Callable (admin): list dead-letter queue items for ops recovery.
 ================================================================ */
 exports.wapGetDLQ = onCall({ maxInstances: 20 }, async (req) => {
-  const uid = req.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+  const uid = assertAuth(req);
 
   const userRecord = await admin.auth().getUser(uid).catch(() => null);
   const claims     = userRecord?.customClaims ?? {};
@@ -635,8 +634,7 @@ exports.wapGetDLQ = onCall({ maxInstances: 20 }, async (req) => {
    wapGetInstance — unchanged
 ================================================================ */
 exports.wapGetInstance = onCall({ maxInstances: 50 }, async (req) => {
-  const uid = req.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+  const uid = assertAuth(req);
 
   const { instanceId } = req.data;
   if (!instanceId) throw new HttpsError("invalid-argument", "instanceId required");
@@ -657,8 +655,7 @@ exports.wapGetInstance = onCall({ maxInstances: 50 }, async (req) => {
    wapGetPendingApprovals — unchanged
 ================================================================ */
 exports.wapGetPendingApprovals = onCall({ maxInstances: 20 }, async (req) => {
-  const uid = req.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+  const uid = assertAuth(req);
 
   const snap = await db.collection(COLL.APPROVALS)
     .where("status",    "==", "pending")
@@ -673,8 +670,7 @@ exports.wapGetPendingApprovals = onCall({ maxInstances: 20 }, async (req) => {
    wapSaveDefinition — enhanced with version bump
 ================================================================ */
 exports.wapSaveDefinition = onCall({ maxInstances: 10 }, async (req) => {
-  const uid = req.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+  const uid = assertAuth(req);
 
   const userRecord = await admin.auth().getUser(uid).catch(() => null);
   const claims     = userRecord?.customClaims ?? {};

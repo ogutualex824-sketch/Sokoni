@@ -1,4 +1,31 @@
-﻿## [2026-06-21] — Core Platform Services v4.0.0 — SASOS Shared Imports, Tax Helpers, Test Coverage
+﻿## [2026-06-21] — Phase 12–15: Automation & Commerce v5.0.0 — Shared Imports Sweep, WAP+Inventory Tests
+
+### Summary
+Phase 12–15. Eliminates every remaining inline `assertAuth` / `assertAdmin` / `sanitize` / `_period()` definition across 9 non-SASOS Cloud Function files. Single source of truth now enforced platform-wide. Adds 79 new tests (WAP state machine, step dependency DAG, retry backoff, inventory stock rules). Total: **321 tests passing, 0 failing**.
+
+### Bugs Fixed
+- **SECURITY (MEDIUM)** — `ai-subscriptions.js` auth guards threw plain `Error` instead of `HttpsError` — leaked internal stack traces to callers; now fixed via shared import.
+- **DUPLICATION (HIGH)** — 9 CF files each defined their own `assertAuth`; one also redefined `sanitize` and `_period()`; all eliminated.
+
+### Files Refactored (shared imports sweep)
+- **`functions/platform-events.js`** — Removed inline `assertAuth` + `assertAdmin` + `san`; now imports `assertAuth`, `assertAdmin`, `sanitize` from shared/errors.
+- **`functions/platform-registry.js`** — Same as above.
+- **`functions/subscription-os.js`** — Removed inline `assertAuth`, `assertAdmin`, `assertSuperAdmin`, `san`, `_period()`; imports all from shared.
+- **`functions/ai-subscriptions.js`** — Removed inline `assertAuth`, `assertAdmin`, `sanitize` (was using `Error`, not `HttpsError`); now imports from shared.
+- **`functions/media-engine.js`** — Removed inline `assertAuth` + `sanitizeStr`; `sanitizeStr` aliased to shared `sanitize`.
+- **`functions/inventory-engine.js`** — Removed inline `assertAuth`.
+- **`functions/inventory-ai.js`** — Removed inline `assertAuth`.
+- **`functions/inventory-v2.js`** — Removed inline `assertAuth`.
+- **`functions/wap.js`** — Added `assertAuth`/`assertAdmin` import; replaced 6 inline `const uid = req.auth?.uid; if (!uid) throw...` patterns with `assertAuth(req)`.
+
+### Tests Added
+- **`functions/test/wap-inventory.test.js`** (NEW, 79 tests): WAP state machine constants; `_findReadySteps` algorithm (8 DAG scenarios including diamond pattern); retry backoff math; workflow ID format; approval deadline logic; Inventory `slId` format; negative stock guard (6 unchecked types); `assertTenant`; field validation; multi-tenant path structure; stock math (onHand floor at zero, isFinite guard); structural shared-imports audit.
+
+### Tests: **321 passing, 0 failing** (8 test files)
+
+---
+
+## [2026-06-21] — Core Platform Services v4.0.0 — SASOS Shared Imports, Tax Helpers, Test Coverage
 
 ### Summary
 Phase 4–11. Eliminates duplicated auth guards/sanitizers across 6 SASOS modules; adds billing period/VAT/WHT helpers to shared constants; fixes `3pl_integration` syntax bug; 242 tests now passing.

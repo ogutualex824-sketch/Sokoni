@@ -43,32 +43,11 @@ const db = () => admin.firestore();
 /* ── Signing secret (stored in Firebase Secret Manager) ──────── */
 const SIGNING_SECRET = defineSecret('SUB_OS_SIGNING_SECRET');
 
-/* ── Auth helpers (v2: req.auth / req.auth.token) ────────────── */
-const assertAuth = req => {
-  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required.');
-  return req.auth.uid;
-};
-const assertAdmin = req => {
-  const uid = assertAuth(req);
-  if (!req.auth.token?.admin && !req.auth.token?.superAdmin)
-    throw new HttpsError('permission-denied', 'Admin access required.');
-  return uid;
-};
-const assertSuperAdmin = req => {
-  const uid = assertAuth(req);
-  if (!req.auth.token?.superAdmin)
-    throw new HttpsError('permission-denied', 'Super admin required.');
-  return uid;
-};
+const { assertAuth, assertAdmin, assertSuperAdmin, sanitize } = require('./shared/errors');
+const { currentPeriod } = require('./shared/constants');
 
-/* ── Input sanitisation ──────────────────────────────────────── */
-const san = (s, n = 200) => typeof s === 'string' ? s.replace(/<[^>]*>/g, '').trim().slice(0, n) : '';
-
-/* ── Period helper ───────────────────────────────────────────── */
-function _period() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+const san     = sanitize;
+const _period = () => currentPeriod();
 
 /* ── Server-authoritative plan registry ──────────────────────── */
 const AI_PLANS = {

@@ -25,10 +25,7 @@ function slId(productId, variantId, warehouseId) {
   return `${productId}:${variantId || 'base'}:${warehouseId}`;
 }
 
-function assertAuth(ctx) {
-  if (!ctx.auth) throw new HttpsError('unauthenticated', 'Authentication required');
-  return ctx.auth.uid;
-}
+const { assertAuth } = require('./shared/errors');
 
 function assertTenant(data) {
   if (!data.tenantId) throw new HttpsError('invalid-argument', 'tenantId required');

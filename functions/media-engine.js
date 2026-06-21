@@ -20,17 +20,9 @@ const admin = require('firebase-admin');
 /* Admin SDK is initialised in index.js — do not call initializeApp() again */
 const db = admin.firestore();
 
-/* ── Auth guard helper ─────────────────────────────────────── */
-function assertAuth(request) {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required.');
-  return request.auth.uid;
-}
+const { assertAuth, sanitize } = require('./shared/errors');
 
-/* ── Input sanitiser ───────────────────────────────────────── */
-function sanitizeStr(s, maxLen = 2000) {
-  if (typeof s !== 'string') return '';
-  return s.replace(/<[^>]*>/g, '').trim().slice(0, maxLen);
-}
+const sanitizeStr = sanitize;
 
 /* ================================================================
    generateProductMetadata
