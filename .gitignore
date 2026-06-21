@@ -86,3 +86,9 @@ tmp_*.png
 
 # Functions dependencies (checked per-platform; restored via npm install)
 functions/node_modules/
+
+# Firestore index backup files generated during migrations
+firestore.indexes.json.bak
+firestore.indexes.json.full_backup
+firestore.indexes.json.new-only
+*.json.phase*.json

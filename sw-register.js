@@ -121,9 +121,10 @@
 
   if (_isSecure && "serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      /* Register main SW — relative path works at any URL depth */
+      /* Register main SW — absolute path + updateViaCache:none so the SW
+         file is never served from HTTP cache, ensuring instant version pickup */
       navigator.serviceWorker
-        .register("./service-worker.js", { scope: "./" })
+        .register("/service-worker.js", { scope: "/", updateViaCache: "none" })
         .then(reg => {
           _swReg = reg;
           console.log("[SOKONI SW] Registered:", reg.scope);
@@ -154,10 +155,12 @@
           .catch(() => {});
       }
 
-      /* Reload ONLY when the user explicitly tapped "Update" — not on every SW activation */
+      /* Always reload when a new SW takes control — ensures the page HTML
+         and inline scripts are always in sync with the active SW version.
+         Without this, users run old page content under a new SW. */
       let refreshing = false;
       navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (_userRequestedUpdate && !refreshing) { refreshing = true; window.location.reload(); }
+        if (!refreshing) { refreshing = true; window.location.reload(); }
       });
     });
   }

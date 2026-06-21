@@ -76,10 +76,13 @@ button, a, [role="button"] {
 
 /* ── SMOOTH SCROLL PERFORMANCE ──
    GPU-composite sticky/fixed bars so the main thread doesn't repaint on every scroll frame.
-   contain:layout+style isolates product grids so browser can skip repainting siblings.
+   Apply only to composited layers — NOT `*` — to avoid Android WebView rendering corruption
+   on swipe and avoid breaking stacking contexts in modals and drawers.
+   contain:layout+style isolates grids so browser skips repainting siblings.
    will-change tells the compositor to keep these layers promoted. */
 .bottom-nav,
 .shared-header,
+.navbar,
 [class*="-nav"],
 [class*="sticky"],
 .pos-header,
@@ -108,16 +111,6 @@ main, .page-body, .pos-products-panel, .pos-cart-panel,
 .cat-body, .bk-body, .fd-body, .sv-body, .hc-body,
 section, article {
   -webkit-overflow-scrolling: touch;
-}
-
-/* Prevent scroll jank from heavy CSS during scroll */
-* {
-  -webkit-backface-visibility: hidden;
-}
-
-/* ── GLOBAL BODY PADDING BOTTOM for fixed bottom nav (phones only ≤767px) ── */
-@media (max-width: 767px) {
-  body { padding-bottom: max(80px, calc(62px + env(safe-area-inset-bottom, 0px))); }
 }
 
 /* bottom-nav hide rule moved to end of file to win all !important conflicts */
