@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v246";
+const CACHE_VERSION = "sokoni-v247";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -129,6 +129,8 @@ const PRECACHE_STATIC = [
   /* Workflow Automation Platform */
   "/sokoni-wap.js", "/sokoni-wap-definitions.js",
   "/wap.html",
+  /* Enterprise Control Center */
+  "/sokoni-ecc.js", "/ecc.html",
   /* Commerce — Orders, Notifications, Subscriptions, Vouchers */
   "/sokoni-orders.js", "/sokoni-notifications.js",
   "/sokoni-subscriptions.js", "/sokoni-vouchers.js", "/sokoni-intasend.js",
