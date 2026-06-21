@@ -253,7 +253,7 @@ exports.deleteMediaAsset = onCall(
    - Updates storage tier tracking
 ================================================================ */
 exports.onMediaUploaded = onObjectFinalized(
-  { memory: '256MiB', timeoutSeconds: 60 },
+  { bucket: 'sokoni-aeb26.firebasestorage.app', memory: '256MiB', timeoutSeconds: 60 },
   async (event) => {
     const object   = event.data;
     const filePath = object.name;             /* e.g. creative-assets/uid/banners/ts_hash.webp */
