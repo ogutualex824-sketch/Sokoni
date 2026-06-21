@@ -1,4 +1,93 @@
-﻿## [2026-06-21] — feat(search): Enterprise Search Platform v1.0 — Unified Orchestration Layer
+﻿## [2026-06-21] — fix(firestore): Notification Center rules + 2 new indexes
+
+### Summary
+Hardened Firestore rules and added composite indexes to support the Enterprise Notification Center.
+
+### Firestore Rules — /notifications
+- `allow delete` extended to authenticated users on their own notifications (SokoniNotifEngine.delete())
+- `allow update` affectedKeys expanded from `['read']` to `['read','archived','pinned']`
+- `allow create` targetUid now locked to `request.auth.uid` (prevents forged notifications targeting other users)
+- Create whitelist expanded: `booking`, `message`, `review`, `inventory_low`, `payment_reminder`, `support_reply`
+- Server-only types preserved: `wallet_credit`, `security_alert`, `platform_update`, `listing_approved`
+
+### New Collection — /userNotifPrefs/{userId}
+- `allow read, write: if request.auth.uid == userId`
+- Stores per-user DND config, quiet hours, category toggles, fatigue limits
+
+### New Indexes (+2, total 184/200)
+- `notifications`: targetUid(ASC) + read(ASC) + createdAt(DESC)
+- `notifications`: targetUid(ASC) + archived(ASC) + createdAt(DESC)
+
+### Deployed
+- Hosting ✅ | Firestore Rules ✅ | Firestore Indexes ✅
+
+---
+
+## [2026-06-21] — feat(notifications): Enterprise Notification Center v1.0
+
+### Summary
+Complete redesign of the notification architecture — from basic badge + drawer to a full enterprise notification platform deployed across all 130+ SOKONI pages.
+
+### New Files
+- **sokoni-notif-engine.js** — Core notification engine:
+  - 5 priority levels: CRITICAL → HIGH → NORMAL → LOW → SILENT
+  - 20 named categories with icons and labels
+  - `NotifPrefs`: per-user preferences (global toggle, pause timers, DND/quiet hours, per-category toggles), synced to Firestore `/userNotifPrefs/{userId}` with localStorage cache
+  - `NotifQueue`: offline localStorage queue with deduplication; syncs to Firestore on reconnect
+  - `NotifGrouper`: AI grouping — 3+ same-type notifications in 30 min → "3 New Orders"
+  - `FatigueDetector`: suppresses low/silent priority after 30/hour
+  - Real-time Firestore `onSnapshot`; BroadcastChannel cross-tab sync
+  - Only CRITICAL bypasses DND, pause, global disable, and fatigue
+  - Exposed as `window.SokoniNotifEngine`
+
+- **sokoni-notif-center.js** — Notification Center UI:
+  - Animated 🔔 bell; priority-colored badge (green/orange/red by highest-priority unread)
+  - 400px slide-in panel (100vw mobile) with backdrop blur
+  - 20 scrollable category tabs with per-tab unread counts
+  - Group cards ("3 New Orders" → expand) and individual notification cards
+  - Inline actions: View, Approve, Reject, Accept, Reply, Archive, Delete, Pin, Mark Read
+  - In-panel preferences sheet: category toggles, pause buttons, DND time picker
+  - Full ARIA + keyboard navigation
+  - Exposed as `window.SokoniNotifCenter`
+
+### Modified Files
+- **notifications.html** — Complete enterprise history page: left sidebar with all 20 categories by section (Commerce / Business / Account / Platform), sticky toolbar, date-grouped notification list, full Preferences page with per-category toggles + DND + pause controls
+- **shared-header.js** — Bell upgraded from `<a>` to `<button>`, injects notif-engine + notif-center on every page, calls `SokoniNotifCenter.attachBell()` after nav injection; old Firestore listener delegated to engine
+- **service-worker.js** — bumped v254 → v255; new files precached
+
+### Security
+- All dynamic HTML escaped via `esc()` — zero XSS vectors
+- No plaintext secrets
+- Notification IDs deduplicated by seen-set (prevents replay delivery)
+- Firestore writes still server-validated by updated rules
+
+---
+
+## [2026-06-21] — feat(arch): Frontend Architecture Layer v1.0
+
+### Summary
+Created 4 shared infrastructure files auto-injected into all 130+ SOKONI pages via shared-header.js.
+
+### New Files
+- **sokoni-tokens.css** — Single source of truth for all CSS custom properties: brand palette, spacing scale, named z-index tiers (20 tiers replacing 0–9,999,999 chaos), safe-area variables, standardised animations
+- **sokoni-ui.js** — Shared component library: toast/modal/confirm/spinner/skeleton/offline-banner/state-renderers/button-factory; backward-compat adapters for `showNotif()` and `showNotification()`
+- **sokoni-layout.js** — Layout manager: registers floating elements, stacks FABs without overlap, propagates CSS custom properties (`--sk-fab-bottom`, `--sk-bottom-nav-h`, `--sk-keyboard-h`), `_overlapCheck()` in dev mode
+- **sokoni-bootstrap.js** — Deterministic 10-phase startup sequence eliminating race conditions between Firebase Auth, Firestore, and UI rendering
+
+### Modified Files
+- **shared-header.js** — Injects all 4 infrastructure files; registers header and bottom-nav with Layout Manager
+- **service-worker.js** — bumped v253 → v254; new files precached
+
+---
+
+## [2026-06-21] — fix(mobile-css): remove 3 overly-broad selectors (regression audit)
+
+### Root Cause
+Three CSS wildcard selectors introduced in commit 18fc7fc caused: card overlays clipped (overflow:hidden on `[class*="-card"]`), absolute-positioned badges displaced right (inline `right:` style overridden), and modal max-width incorrectly constrained. Removed all three.
+
+---
+
+## [2026-06-21] — feat(search): Enterprise Search Platform v1.0 — Unified Orchestration Layer
 
 ### Summary
 Complete enterprise search platform for SOKONI. Builds a unified orchestration layer on top of the existing 20 engine-specific Algolia + Typesense files (~10,000 lines). All new files integrate with the existing `algolia-*.js` and `typesense-*.js` implementations without modifying them.
