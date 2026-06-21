@@ -5,10 +5,12 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall }       = require('firebase-functions/v2/https');
-const { defineSecret } = require('firebase-functions/params');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret }       = require('firebase-functions/params');
 const admin  = require('firebase-admin');
 const https  = require('https');
+
+const { assertAuth } = require('./shared/errors');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -65,7 +67,7 @@ function callAnthropic(apiKey, messages, system, maxTokens = 800) {
 
 /* ── AI column mapping ───────────────────────────────────────────── */
 exports.inventoryImportAiMap = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { headers, sampleRows } = req.data;
   if (!headers?.length) throw new Error('No headers provided');
 
@@ -101,9 +103,9 @@ Only map fields you're confident about. Skip ambiguous ones.`;
 
 /* ── Preview import (validate before commit) ─────────────────────── */
 exports.inventoryImportPreview = onCall({ region: 'us-central1', memory: '512MiB', timeoutSeconds: 60 }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, rows, mappings } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   if (!rows?.length) throw new Error('No rows provided');
 
@@ -163,7 +165,7 @@ exports.inventoryImportPreview = onCall({ region: 'us-central1', memory: '512MiB
     duplicates : results.duplicates.length,
     mappings,
     validRows  : results.valid,
-    userId     : req.auth.uid,
+    userId     : uid,
     createdAt  : admin.firestore.FieldValue.serverTimestamp(),
   });
 
@@ -172,9 +174,9 @@ exports.inventoryImportPreview = onCall({ region: 'us-central1', memory: '512MiB
 
 /* ── Commit import ───────────────────────────────────────────────── */
 exports.inventoryImportCommit = onCall({ region: 'us-central1', memory: '1GiB', timeoutSeconds: 300 }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { jobId, tenantId } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const jobRef  = db.collection(`tenants/${resolvedTenant}/inventory_import_jobs`).doc(jobId);
   const jobDoc  = await jobRef.get();
@@ -216,7 +218,7 @@ exports.inventoryImportCommit = onCall({ region: 'us-central1', memory: '1GiB', 
           qty         : row.qty,
           reason      : `Imported from ${job.filename}`,
           importJobId : jobId,
-          userId      : req.auth.uid,
+          userId      : uid,
           ts          : now,
         });
         /* Set opening stock level */
@@ -251,9 +253,9 @@ exports.inventoryImportCommit = onCall({ region: 'us-central1', memory: '1GiB', 
 
 /* ── Get Import Jobs ─────────────────────────────────────────────── */
 exports.inventoryGetImportJobs = onCall({ region: 'us-central1', memory: '256MiB' }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, limit = 10 } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const snap = await db.collection(`tenants/${resolvedTenant}/inventory_import_jobs`)
     .orderBy('createdAt', 'desc').limit(limit).get();

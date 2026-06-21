@@ -6,10 +6,12 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall }     = require('firebase-functions/v2/https');
-const { defineSecret } = require('firebase-functions/params');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret }       = require('firebase-functions/params');
 const admin  = require('firebase-admin');
 const https  = require('https');
+
+const { assertAuth } = require('./shared/errors');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -95,9 +97,9 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
 
 /* ── Run Simulation ─────────────────────────────────────────────── */
 exports.inventorySimulate = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, scenario } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const apiKey = ANTHROPIC_API_KEY.value();
   const ctx    = await _gatherContext(resolvedTenant);
@@ -139,7 +141,7 @@ Analyze this scenario and return detailed projections as JSON.`;
     scenario,
     result,
     tenantId   : resolvedTenant,
-    userId     : req.auth.uid,
+    userId     : uid,
     createdAt  : admin.firestore.FieldValue.serverTimestamp(),
   });
 
@@ -148,9 +150,9 @@ Analyze this scenario and return detailed projections as JSON.`;
 
 /* ── Get Simulation History ──────────────────────────────────────── */
 exports.inventoryGetSimulations = onCall({ region: 'us-central1', memory: '256MiB' }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, limit = 10 } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const snap = await db.collection(`tenants/${resolvedTenant}/inventory_simulations`)
     .orderBy('createdAt', 'desc').limit(limit).get();

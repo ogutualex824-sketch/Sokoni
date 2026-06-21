@@ -7,11 +7,13 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall }            = require('firebase-functions/v2/https');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
+
+const { assertAuth } = require('./shared/errors');
 
 const CF_OPTS = { region: 'us-central1', memory: '512MiB', timeoutSeconds: 120 };
 
@@ -219,9 +221,9 @@ exports.inventoryWorkflowOnStock = onDocumentUpdated(
 
 /* ── CRUD APIs ───────────────────────────────────────────────────── */
 exports.inventoryCreateWorkflow = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, workflow } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   if (!workflow.name || !workflow.trigger || !workflow.actions?.length) {
     throw new Error('Workflow requires name, trigger, and at least one action');
@@ -232,46 +234,46 @@ exports.inventoryCreateWorkflow = onCall(CF_OPTS, async req => {
     tenantId  : resolvedTenant,
     active    : workflow.active !== false,
     runCount  : 0,
-    createdBy : req.auth.uid,
+    createdBy : uid,
     createdAt : admin.firestore.FieldValue.serverTimestamp(),
   });
   return { workflowId: ref.id };
 });
 
 exports.inventoryGetWorkflows = onCall({ region: 'us-central1', memory: '256MiB' }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
   const snap = await db.collection(`tenants/${resolvedTenant}/inventory_workflows`).orderBy('createdAt', 'desc').limit(50).get();
   return { workflows: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
 });
 
 exports.inventoryToggleWorkflow = onCall({ region: 'us-central1', memory: '256MiB' }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { workflowId, active } = req.data;
   const snap = await db.collectionGroup('inventory_workflows')
     .where(admin.firestore.FieldPath.documentId(), '==', workflowId)
-    .where('createdBy', '==', req.auth.uid).limit(1).get();
+    .where('createdBy', '==', uid).limit(1).get();
   if (snap.empty) throw new Error('Workflow not found');
   await snap.docs[0].ref.update({ active });
   return { workflowId, active };
 });
 
 exports.inventoryDeleteWorkflow = onCall({ region: 'us-central1', memory: '256MiB' }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { workflowId } = req.data;
   const snap = await db.collectionGroup('inventory_workflows')
     .where(admin.firestore.FieldPath.documentId(), '==', workflowId)
-    .where('createdBy', '==', req.auth.uid).limit(1).get();
+    .where('createdBy', '==', uid).limit(1).get();
   if (snap.empty) throw new Error('Workflow not found');
   await snap.docs[0].ref.delete();
   return { workflowId, deleted: true };
 });
 
 exports.inventoryGetWorkflowRuns = onCall({ region: 'us-central1', memory: '256MiB' }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { workflowId, limit = 20, tenantId } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
   const snap = await db.collection(`tenants/${resolvedTenant}/inventory_workflow_runs`)
     .where('workflowId', '==', workflowId).orderBy('ts', 'desc').limit(limit).get();
   return { runs: snap.docs.map(d => ({ id: d.id, ...d.data() })) };

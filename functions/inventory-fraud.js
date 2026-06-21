@@ -6,12 +6,14 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall }            = require('firebase-functions/v2/https');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
-const { onSchedule }        = require('firebase-functions/v2/scheduler');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onDocumentCreated }  = require('firebase-functions/v2/firestore');
+const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
+
+const { assertAuth } = require('./shared/errors');
 
 const CF_OPTS = { region: 'us-central1', memory: '512MiB', timeoutSeconds: 120 };
 
@@ -166,9 +168,9 @@ exports.inventoryFraudScan = onSchedule({
 
 /* ── API: Get fraud events ───────────────────────────────────────── */
 exports.inventoryGetFraudEvents = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, status = 'pending', limit = 50 } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   let q = db.collection(`tenants/${resolvedTenant}/inventory_fraud_events`)
     .orderBy('createdAt', 'desc').limit(limit);
@@ -180,7 +182,7 @@ exports.inventoryGetFraudEvents = onCall(CF_OPTS, async req => {
 
 /* ── API: Review fraud event ─────────────────────────────────────── */
 exports.inventoryFraudReview = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { eventId, decision, notes } = req.data;
 
   const eventRef = (await db.collectionGroup('inventory_fraud_events')
@@ -189,7 +191,7 @@ exports.inventoryFraudReview = onCall(CF_OPTS, async req => {
 
   await eventRef.update({
     status      : decision,
-    reviewedBy  : req.auth.uid,
+    reviewedBy  : uid,
     reviewNotes : notes || '',
     reviewedAt  : admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -199,9 +201,9 @@ exports.inventoryFraudReview = onCall(CF_OPTS, async req => {
 
 /* ── API: Forensic report ────────────────────────────────────────── */
 exports.inventoryFraudReport = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, startDate, endDate } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 86_400_000);
   const end   = endDate   ? new Date(endDate)   : new Date();

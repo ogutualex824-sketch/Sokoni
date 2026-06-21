@@ -5,19 +5,21 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall }            = require('firebase-functions/v2/https');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onDocumentCreated }  = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
+
+const { assertAuth } = require('./shared/errors');
 
 const CF_OPTS = { region: 'us-central1', memory: '512MiB', timeoutSeconds: 180 };
 
 /* ── Initiate a Recall ───────────────────────────────────────────── */
 exports.inventoryInitiateRecall = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, batchId, productId, reason, affectedSkus = [], replaceWith, regulatoryRef } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const batch = db.batch();
 
@@ -32,7 +34,7 @@ exports.inventoryInitiateRecall = onCall(CF_OPTS, async req => {
     regulatoryRef: regulatoryRef || null,
     replaceWith  : replaceWith || null,
     status       : 'active',
-    initiatedBy  : req.auth.uid,
+    initiatedBy  : uid,
     affectedQty  : 0,
     locatedQty   : 0,
     retrievedQty : 0,
@@ -71,7 +73,7 @@ exports.inventoryInitiateRecall = onCall(CF_OPTS, async req => {
         qty        : -affected,
         reason     : `Recall: ${reason}`,
         recallId   : recallRef.id,
-        userId     : req.auth.uid,
+        userId     : uid,
         ts         : admin.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -105,9 +107,9 @@ exports.inventoryInitiateRecall = onCall(CF_OPTS, async req => {
 
 /* ── Get Recalls ─────────────────────────────────────────────────── */
 exports.inventoryGetRecalls = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, status, limit = 20 } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   let q = db.collection(`tenants/${resolvedTenant}/inventory_recalls`)
     .orderBy('createdAt', 'desc').limit(limit);
@@ -119,7 +121,7 @@ exports.inventoryGetRecalls = onCall(CF_OPTS, async req => {
 
 /* ── Update Recall Status ────────────────────────────────────────── */
 exports.inventoryUpdateRecallStatus = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { recallId, status, retrievedQty, notes } = req.data;
 
   const snap = await db.collectionGroup('inventory_recalls')
@@ -153,9 +155,9 @@ exports.inventoryUpdateRecallStatus = onCall(CF_OPTS, async req => {
 
 /* ── Generate Recall Report ──────────────────────────────────────── */
 exports.inventoryRecallReport = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { recallId, tenantId } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const [recallDoc, movementsSnap, alertsSnap] = await Promise.all([
     db.collection(`tenants/${resolvedTenant}/inventory_recalls`).doc(recallId).get(),

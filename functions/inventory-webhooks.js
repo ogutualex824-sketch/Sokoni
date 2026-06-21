@@ -6,12 +6,14 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall }            = require('firebase-functions/v2/https');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const admin  = require('firebase-admin');
 const https  = require('https');
 const crypto = require('crypto');
 const { URL } = require('url');
+
+const { assertAuth } = require('./shared/errors');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -95,9 +97,9 @@ exports.dispatchWebhookEvent = dispatchWebhookEvent;
 
 /* ── Register Webhook ────────────────────────────────────────────── */
 exports.inventoryRegisterWebhook = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId, url, events, description } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   /* Validate URL */
   try { new URL(url); } catch { throw new Error('Invalid webhook URL'); }
@@ -110,7 +112,7 @@ exports.inventoryRegisterWebhook = onCall(CF_OPTS, async req => {
     url, events: events || VALID_EVENTS, description: description || '',
     secret, active: true, tenantId: resolvedTenant,
     failCount : 0, deliveryCount: 0,
-    createdBy : req.auth.uid,
+    createdBy : uid,
     createdAt : admin.firestore.FieldValue.serverTimestamp(),
   });
 
@@ -119,9 +121,9 @@ exports.inventoryRegisterWebhook = onCall(CF_OPTS, async req => {
 
 /* ── List Webhooks ───────────────────────────────────────────────── */
 exports.inventoryListWebhooks = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { tenantId } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
   const snap = await db.collection(`tenants/${resolvedTenant}/inventory_webhooks`).get();
   return {
     webhooks: snap.docs.map(d => ({
@@ -136,11 +138,11 @@ exports.inventoryListWebhooks = onCall(CF_OPTS, async req => {
 
 /* ── Delete Webhook ──────────────────────────────────────────────── */
 exports.inventoryDeleteWebhook = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { webhookId } = req.data;
   /* Find across tenants owned by this user */
   const snap = await db.collectionGroup('inventory_webhooks')
-    .where('createdBy', '==', req.auth.uid)
+    .where('createdBy', '==', uid)
     .where(admin.firestore.FieldPath.documentId(), '==', webhookId).limit(1).get();
   if (snap.empty) throw new Error('Webhook not found');
   await snap.docs[0].ref.delete();
@@ -149,10 +151,10 @@ exports.inventoryDeleteWebhook = onCall(CF_OPTS, async req => {
 
 /* ── Test Webhook ────────────────────────────────────────────────── */
 exports.inventoryTestWebhook = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { webhookId } = req.data;
   const snap = await db.collectionGroup('inventory_webhooks')
-    .where('createdBy', '==', req.auth.uid).limit(20).get();
+    .where('createdBy', '==', uid).limit(20).get();
   const doc = snap.docs.find(d => d.id === webhookId);
   if (!doc) throw new Error('Webhook not found');
   const result = await _dispatch(doc, 'stock.low', {

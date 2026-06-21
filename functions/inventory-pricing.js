@@ -5,11 +5,13 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall }       = require('firebase-functions/v2/https');
-const { onSchedule }   = require('firebase-functions/v2/scheduler');
-const { defineSecret } = require('firebase-functions/params');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule }         = require('firebase-functions/v2/scheduler');
+const { defineSecret }       = require('firebase-functions/params');
 const admin  = require('firebase-admin');
 const https  = require('https');
+
+const { assertAuth } = require('./shared/errors');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -39,9 +41,9 @@ function callAnthropic(apiKey, messages, system, maxTokens = 1000) {
 
 /* ── Get pricing recommendations for a product ───────────────────── */
 exports.inventoryGetPricingRecommendations = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { productId, tenantId } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const [prodDoc, levelsSnap, movSnap, ruleDoc] = await Promise.all([
     db.collection(`tenants/${resolvedTenant}/inventory_products`).doc(productId).get(),
@@ -137,11 +139,11 @@ Recommend optimal pricing for this Kenyan market product.`;
 
 /* ── Set pricing rule ────────────────────────────────────────────── */
 exports.inventorySetPricingRule = onCall({ region: 'us-central1', memory: '256MiB' }, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { productId, tenantId, rule } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
   await db.doc(`tenants/${resolvedTenant}/inventory_pricing_rules/${productId}`).set({
-    ...rule, productId, updatedBy: req.auth.uid,
+    ...rule, productId, updatedBy: uid,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
   return { productId, rule };
@@ -149,9 +151,9 @@ exports.inventorySetPricingRule = onCall({ region: 'us-central1', memory: '256Mi
 
 /* ── Simulate price change impact ────────────────────────────────── */
 exports.inventorySimulatePriceChange = onCall(CF_OPTS, async req => {
-  if (!req.auth) throw new Error('Unauthenticated');
+  const uid = assertAuth(req);
   const { productId, newPrice, tenantId } = req.data;
-  const resolvedTenant = tenantId || req.auth.uid;
+  const resolvedTenant = tenantId || uid;
 
   const [prodDoc, movSnap, levSnap] = await Promise.all([
     db.collection(`tenants/${resolvedTenant}/inventory_products`).doc(productId).get(),

@@ -6,10 +6,12 @@
    ═══════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const { onCall, onSchedule } = require('firebase-functions/v2/https');
+const { onCall, onSchedule, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated }  = require('firebase-functions/v2/firestore');
 const { onSchedule: sched }  = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+
+const { assertAuth } = require('./shared/errors');
 
 const CF_OPTS = { region: 'us-central1', memory: '512MiB', timeoutSeconds: 120 };
 
@@ -102,8 +104,8 @@ async function _calcHealthScore(tenantId) {
 
 exports.inventoryCalculateHealth = onCall(CF_OPTS, async req => {
   const { tenantId } = req.data;
-  if (!req.auth) throw new Error('Unauthenticated');
-  const uid = req.auth.uid;
+  const uid = assertAuth(req);
+  const uid = uid;
   const resolvedTenant = tenantId || uid;
 
   const health = await _calcHealthScore(resolvedTenant);
@@ -121,8 +123,8 @@ exports.inventoryCalculateHealth = onCall(CF_OPTS, async req => {
 
 exports.inventoryGetHealthHistory = onCall(CF_OPTS, async req => {
   const { tenantId, days = 30 } = req.data;
-  if (!req.auth) throw new Error('Unauthenticated');
-  const resolvedTenant = tenantId || req.auth.uid;
+  const uid = assertAuth(req);
+  const resolvedTenant = tenantId || uid;
   const cutoff = new Date(Date.now() - days * 86_400_000);
 
   const snap = await db.collection(`tenants/${resolvedTenant}/inventory_health_history`)
