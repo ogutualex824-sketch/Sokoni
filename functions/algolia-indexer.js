@@ -1026,22 +1026,198 @@ const TRANSFORMERS = {
    COLLECTION → INDEX MAPPING
 ════════════════════════════════════════════════════════════════════════════ */
 
+/* ─── Global search transformer factory ────────────────────────────────────
+   Builds a flattened global_search record from any primary transformed record.
+   objectID is prefixed: "${collection}_${docId}" to prevent cross-type collisions.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+const _TYPE_LABELS = {
+  products: 'Product', stores: 'Store', services: 'Service', jobs: 'Job',
+  vehicles: 'Vehicle', real_estate: 'Property', events: 'Event',
+  brands: 'Brand', categories: 'Category', vendors: 'Vendor',
+  sellers: 'Store', cars: 'Vehicle', properties: 'Property',
+  providers: 'Service', digitalJobs: 'Job', foods: 'Product',
+};
+
+const _URL_PATTERNS = {
+  products: '/products/', stores: '/stores/', services: '/services/',
+  jobs: '/jobs/', vehicles: '/vehicles/', real_estate: '/properties/',
+  events: '/events/', brands: '/brands/', categories: '/categories/',
+  vendors: '/stores/', sellers: '/stores/', cars: '/vehicles/',
+  properties: '/properties/', providers: '/services/', digitalJobs: '/jobs/',
+  foods: '/products/',
+};
+
+function _globalTransformer(collection) {
+  return (id, data) => {
+    if (!data) return null;
+    const primary = TRANSFORMERS[collection]
+      ? TRANSFORMERS[collection](id.replace(`${collection}_`, ''), data)
+      : null;
+    if (!primary) return null;
+
+    const title       = _str(primary.name || primary.title || primary.displayName);
+    const description = _truncate(_str(primary.description || primary.bio), 300);
+    const image       = _str(primary.thumbnail || primary.logo || primary.image ||
+                             (primary.images && primary.images[0] && primary.images[0].url));
+    const city        = _str(primary.location?.city || primary.city);
+    const county      = _str(primary.location?.county || primary.county);
+    const price       = primary.price ?? null;
+    const verified    = Boolean(primary.verified || primary.seller?.verified ||
+                                primary.sellerVerified || primary.verifiedSeller);
+    const freshness   = _freshnessScore(data.createdAt, data.updatedAt);
+    const quality     = _aiQualityScore({ ...data, images: primary.images });
+
+    return {
+      objectID:        id,    // already ${collection}_${docId}
+      type:            collection,
+      typeLabel:       _TYPE_LABELS[collection] || collection,
+      title,
+      description,
+      image,
+      url:             (_URL_PATTERNS[collection] || '/') + id.replace(`${collection}_`, ''),
+      category:        _str(primary.category),
+      city,
+      county,
+      country:         _str(primary.location?.country || primary.country, 'Kenya'),
+      price,
+      priceFormatted:  price ? `KES ${Number(price).toLocaleString('en-KE')}` : null,
+      rating:          _num(primary.rating) || null,
+      verified,
+      _geoloc:         primary._geoloc || undefined,
+      _popularityScore: _num(primary._popularityScore),
+      _freshnessScore:  freshness,
+      _qualityScore:    quality,
+      createdAt:        _num(primary.createdAt),
+      updatedAt:        _num(primary.updatedAt),
+    };
+  };
+}
+
+/* ─── Freshness score (0-100) based on document age ────────────────────────
+   Prefers updatedAt over createdAt. Returns 50 for unknown age.
+   ─────────────────────────────────────────────────────────────────────────── */
+function _freshnessScore(createdAt, updatedAt) {
+  const ts = updatedAt || createdAt;
+  if (!ts) return 50;
+  const unixSec = (typeof ts === 'number') ? ts
+    : (ts.toMillis ? Math.floor(ts.toMillis() / 1000) : 0);
+  if (!unixSec) return 50;
+  const ageDays = (Date.now() / 1000 - unixSec) / 86400;
+  if (ageDays <=   7) return 100;
+  if (ageDays <=  30) return 85;
+  if (ageDays <=  90) return 65;
+  if (ageDays <= 180) return 40;
+  if (ageDays <= 365) return 20;
+  return 5;
+}
+
+/* ─── AI quality score (0-100, deterministic) ───────────────────────────────
+   Scores content completeness. No external API calls.
+   ─────────────────────────────────────────────────────────────────────────── */
+function _aiQualityScore(data) {
+  if (!data) return 0;
+  let score = 0;
+  const name = _str(data.name || data.title || data.displayName || data.shopName);
+  if (name.length > 5)   score += 15;
+  const desc = _str(data.description || data.bio);
+  if (desc.length > 50)  score += 20;
+  if (desc.length > 200) score += 10;
+  const imgs = data.images || data.photos || [];
+  if ((Array.isArray(imgs) && imgs.length > 0) || data.thumbnail || data.image || data.logo) score += 15;
+  if (data.category)     score += 10;
+  if (_num(data.price) > 0) score += 10;
+  if (data.city || data.location?.city) score += 10;
+  if (_num(data.rating) > 0) score += 5;
+  const tags = _arr(data.tags);
+  if (tags.length >= 2)  score += 5;
+  const allPresent = name.length > 5 && desc.length > 50 && imgs.length > 0 &&
+                     data.category && _num(data.price) > 0 &&
+                     (data.city || data.location?.city) && _num(data.rating) > 0 &&
+                     tags.length >= 2;
+  return Math.min(100, allPresent ? Math.max(80, score) : score);
+}
+
+/* ─── Vendor transformer (same schema as sellers / stores) ─────────────────
+   Vendors are B2B suppliers; the stores_index covers all B2C + B2B shops.
+   ─────────────────────────────────────────────────────────────────────────── */
+const _vendorAsStore = (id, data) => TRANSFORMERS.sellers(id, {
+  ...data,
+  shopName:     data.shopName || data.companyName || data.name,
+  businessType: data.businessType || data.vendorType || data.category,
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COLLECTION → INDEX MAPPING (Production)
+   Maps every Firestore collection to its Algolia index.
+
+   PRODUCTION INDEXES (must already exist in Algolia dashboard):
+     products_index  stores_index  services_index  jobs_index
+     vehicles_index  property_index  events_index  global_search
+
+   globalSearch: true  → document is ALSO written to global_search index
+   indexInGlobal: false → do NOT write a second global_search copy (used by
+                          the gs__ entries themselves to break infinite loop)
+════════════════════════════════════════════════════════════════════════════ */
+
 const COLLECTION_INDEX_MAP = {
-  products:    { index: 'sokoni_products',    transformer: TRANSFORMERS.products    },
-  sellers:     { index: 'sokoni_shops',       transformer: TRANSFORMERS.sellers     },
-  providers:   { index: 'sokoni_services',    transformer: TRANSFORMERS.services    },
-  services:    { index: 'sokoni_services',    transformer: TRANSFORMERS.services    },
-  events:      { index: 'sokoni_events',      transformer: TRANSFORMERS.events      },
-  properties:  { index: 'sokoni_properties',  transformer: TRANSFORMERS.properties  },
-  cars:        { index: 'sokoni_vehicles',    transformer: TRANSFORMERS.cars        },
-  digitalJobs: { index: 'sokoni_jobs',        transformer: TRANSFORMERS.digitalJobs },
-  jobs:        { index: 'sokoni_jobs',        transformer: TRANSFORMERS.digitalJobs },
-  users:       { index: 'sokoni_users',       transformer: TRANSFORMERS.users       },
-  categories:  { index: 'sokoni_categories',  transformer: TRANSFORMERS.categories  },
-  brands:      { index: 'sokoni_brands',      transformer: TRANSFORMERS.brands      },
-  collections: { index: 'sokoni_collections', transformer: TRANSFORMERS.collections },
-  coupons:     { index: 'sokoni_coupons',     transformer: TRANSFORMERS.coupons     },
-  foods:       { index: 'sokoni_products',    transformer: TRANSFORMERS.products    },
+  /* ── Products ── */
+  products:    { index: 'products_index',   transformer: TRANSFORMERS.products,    globalSearch: true  },
+  foods:       { index: 'products_index',   transformer: TRANSFORMERS.products,    globalSearch: true  },
+
+  /* ── Stores / Sellers ── */
+  sellers:     { index: 'stores_index',     transformer: TRANSFORMERS.sellers,     globalSearch: true  },
+  stores:      { index: 'stores_index',     transformer: TRANSFORMERS.sellers,     globalSearch: true  },
+  vendors:     { index: 'stores_index',     transformer: _vendorAsStore,           globalSearch: true  },
+
+  /* ── Services ── */
+  services:    { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
+  providers:   { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
+
+  /* ── Jobs ── */
+  jobs:        { index: 'jobs_index',       transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
+  digitalJobs: { index: 'jobs_index',       transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
+
+  /* ── Vehicles ── */
+  cars:        { index: 'vehicles_index',   transformer: TRANSFORMERS.cars,        globalSearch: true  },
+  vehicles:    { index: 'vehicles_index',   transformer: TRANSFORMERS.cars,        globalSearch: true  },
+
+  /* ── Real Estate ── */
+  properties:  { index: 'property_index',   transformer: TRANSFORMERS.properties,  globalSearch: true  },
+  real_estate: { index: 'property_index',   transformer: TRANSFORMERS.properties,  globalSearch: true  },
+
+  /* ── Events ── */
+  events:      { index: 'events_index',     transformer: TRANSFORMERS.events,      globalSearch: true  },
+
+  /* ── Supplementary (dedicated sub-indexes; also in global_search) ── */
+  brands:      { index: 'sokoni_brands',     transformer: TRANSFORMERS.brands,      globalSearch: true  },
+  categories:  { index: 'sokoni_categories', transformer: TRANSFORMERS.categories,  globalSearch: false },
+  collections: { index: 'sokoni_collections',transformer: TRANSFORMERS.collections, globalSearch: false },
+  coupons:     { index: 'sokoni_coupons',    transformer: TRANSFORMERS.coupons,     globalSearch: false },
+
+  /* ── Users (admin index — never in global_search) ── */
+  users:       { index: 'sokoni_users',      transformer: TRANSFORMERS.users,       globalSearch: false },
+
+  /* ── Global search shadow entries (one per globalSearch:true collection) ──
+     These are written by algolia-queue.js fanout.
+     objectID = "${collection}_${docId}"  (prefixed to avoid cross-type collisions)
+     indexInGlobal:false prevents a second-level fanout loop.
+  ── */
+  'gs__products':    { index: 'global_search', transformer: _globalTransformer('products'),    globalSearch: false },
+  'gs__foods':       { index: 'global_search', transformer: _globalTransformer('foods'),       globalSearch: false },
+  'gs__sellers':     { index: 'global_search', transformer: _globalTransformer('sellers'),     globalSearch: false },
+  'gs__stores':      { index: 'global_search', transformer: _globalTransformer('stores'),      globalSearch: false },
+  'gs__vendors':     { index: 'global_search', transformer: _globalTransformer('vendors'),     globalSearch: false },
+  'gs__services':    { index: 'global_search', transformer: _globalTransformer('services'),    globalSearch: false },
+  'gs__providers':   { index: 'global_search', transformer: _globalTransformer('providers'),   globalSearch: false },
+  'gs__jobs':        { index: 'global_search', transformer: _globalTransformer('jobs'),        globalSearch: false },
+  'gs__digitalJobs': { index: 'global_search', transformer: _globalTransformer('digitalJobs'), globalSearch: false },
+  'gs__cars':        { index: 'global_search', transformer: _globalTransformer('cars'),        globalSearch: false },
+  'gs__vehicles':    { index: 'global_search', transformer: _globalTransformer('vehicles'),    globalSearch: false },
+  'gs__properties':  { index: 'global_search', transformer: _globalTransformer('properties'),  globalSearch: false },
+  'gs__real_estate': { index: 'global_search', transformer: _globalTransformer('real_estate'), globalSearch: false },
+  'gs__events':      { index: 'global_search', transformer: _globalTransformer('events'),      globalSearch: false },
+  'gs__brands':      { index: 'global_search', transformer: _globalTransformer('brands'),      globalSearch: false },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1188,7 +1364,11 @@ module.exports = {
   TRANSFORMERS,
   COLLECTION_INDEX_MAP,
   buildPartialUpdate,
-  /* Exported utilities for use in other modules */
+  /* Scoring helpers */
+  _freshnessScore,
+  _aiQualityScore,
+  _globalTransformer,
+  /* Utility functions */
   _chunk,
   _sleep,
   _str,
@@ -1196,5 +1376,7 @@ module.exports = {
   _arr,
   _unix,
   _geoPoint,
+  _truncate,
+  _slugify,
   _buildHierarchicalCategories,
 };

@@ -4724,7 +4724,11 @@ exports.processAlgoliaQueue   = algoliaQueueModule.processAlgoliaQueue;
 exports.algoliaReprocessDLQ   = algoliaQueueModule.algoliaReprocessDLQ;
 exports.algoliaQueueMonitor   = algoliaQueueModule.algoliaQueueMonitor;
 
-/* ── Firestore sync triggers (15 collections × 3 = 45 functions) ─────── */
+/* ── Firestore sync triggers (19 collections × 3 = 57 functions) ─────── */
+/* Collections: products, sellers, providers, services, events, properties, cars,
+   digitalJobs, jobs, users, categories, brands, collections, coupons, foods
+   + stores, real_estate, vehicles, vendors (production aliases → real Algolia index names)
+   Each trigger with globalSearch:true also fans out to global_search index. */
 const algoliaSync = require("./algolia-sync");
 Object.assign(exports, algoliaSync);
 
@@ -4742,6 +4746,13 @@ exports.algoliaSetupDynamicReranking   = algoliaAdminModule.algoliaSetupDynamicR
 exports.algoliaCreateABTest            = algoliaAdminModule.algoliaCreateABTest;
 exports.algoliaGetABTestResults        = algoliaAdminModule.algoliaGetABTestResults;
 exports.algoliaStopABTest              = algoliaAdminModule.algoliaStopABTest;
+
+/* ── Index settings — configure existing Algolia indexes ──────────────── */
+const algoliaSettingsModule = require("./algolia-settings");
+exports.searchApplyIndexSettings = algoliaSettingsModule.searchApplyIndexSettings;
+exports.searchValidateIndexes    = algoliaSettingsModule.searchValidateIndexes;
+exports.searchApplySynonyms      = algoliaSettingsModule.searchApplySynonyms;
+exports.searchApplyRules         = algoliaSettingsModule.searchApplyRules;
 
 /* ── Secured keys ────────────────────────────────────────────────────── */
 const algoliaKeysModule = require("./algolia-secured-keys");

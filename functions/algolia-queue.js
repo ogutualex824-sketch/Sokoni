@@ -117,6 +117,36 @@ async function enqueue({ collection, docId, operation, data = null, beforeData =
   };
 
   await queueRef.set(item);
+
+  /* ── Global search fanout ────────────────────────────────────────────
+     When a collection has globalSearch:true, also write a shadow entry
+     to global_search index via a gs__{collection} queue item.
+     Queue ID: gs__{collection}_{docId}  (distinct from primary item)
+     objectID in global_search: {collection}_{docId}  (prefixed)
+  ──────────────────────────────────────────────────────────────────── */
+  if (mapping.globalSearch) {
+    const gsCollection = `gs__${collection}`;
+    const gsDocId      = `${collection}_${docId}`;   // prefixed objectID
+    const gsQueueId    = `gs__${collection}_${docId}`;
+    const gsRef        = _db().collection('algoliaQueue').doc(gsQueueId);
+
+    const gsItem = {
+      queueId:       gsQueueId,
+      collection:    gsCollection,
+      docId:         gsDocId,
+      indexName:     'global_search',
+      operation:     operation === 'delete' ? 'delete' : 'upsert',
+      data:          operation !== 'delete' ? (data || null) : null,
+      beforeData:    null,   // global writes are always full upserts — no partial
+      status:        'pending',
+      attempts:      0,
+      nextAttemptAt: admin.firestore.Timestamp.now(),
+      createdAt:     _now(),
+      updatedAt:     _now(),
+      error:         null,
+    };
+    await gsRef.set(gsItem);
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════

@@ -103,6 +103,7 @@ function _makeTriggers(col, { skipDraft = true } = {}) {
 ════════════════════════════════════════════════════════════════════════ */
 
 const triggers = {
+  /* ── Core collections ── */
   ..._makeTriggers('products'),
   ..._makeTriggers('sellers'),
   ..._makeTriggers('providers'),
@@ -118,6 +119,18 @@ const triggers = {
   ..._makeTriggers('collections'),
   ..._makeTriggers('coupons'),
   ..._makeTriggers('foods'),
+
+  /* ── Production aliases — Firestore collection names → Algolia index names ──
+     Each also automatically fans out to global_search via enqueue() in queue.js.
+     stores     → stores_index   (Firestore: 'stores', same data model as sellers)
+     real_estate→ property_index (Firestore: 'real_estate', same as properties)
+     vehicles   → vehicles_index (Firestore: 'vehicles', same as cars)
+     vendors    → stores_index   (B2B suppliers appear alongside stores)
+  ── */
+  ..._makeTriggers('stores'),
+  ..._makeTriggers('real_estate'),
+  ..._makeTriggers('vehicles'),
+  ..._makeTriggers('vendors'),
 };
 
 module.exports = triggers;
