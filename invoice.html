@@ -457,7 +457,6 @@ function downloadInvoice(){
     body{font-family:Arial,sans-serif;background:#fff;padding:20px;}
     ${Array.from(document.styleSheets).flatMap(s=>{try{return Array.from(s.cssRules).map(r=>r.cssText);}catch(e){return [];}}).join("\n")}
   </style>
-  <script src="shared-header.js" defer></script>
 </head><body>
 ${shell.outerHTML}<script>window.onload=()=>{setTimeout(()=>window.print(),400);}<\/script><nav class="bottom-nav">
   <a href="index.html" class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>

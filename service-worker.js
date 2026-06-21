@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v258";
+const CACHE_VERSION = "sokoni-v259";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
