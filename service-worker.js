@@ -1,5 +1,5 @@
 ﻿/* ============================================================
-   SOKONI SERVICE WORKER  v12.10
+   SOKONI SERVICE WORKER  v12.11
    Strategy:
      APP SHELL      â†’ Cache First  (index.html as app shell)
      STATIC ASSETS  â†’ Cache First  (CSS, JS â€” fast load)
@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v255";
+const CACHE_VERSION = "sokoni-v256";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;

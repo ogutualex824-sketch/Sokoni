@@ -4894,6 +4894,40 @@ exports.getTypesenseAnalytics        = tsAnalyticsModule.getTypesenseAnalytics;
 exports.getTsAutocompleteSuggestions = tsAnalyticsModule.getTsAutocompleteSuggestions;
 exports.typesenseAnalyticsCleanup    = tsAnalyticsModule.typesenseAnalyticsCleanup;
 
+/* ============================================================
+   UNIFIED SEARCH ORCHESTRATION LAYER
+   search-sync.js  — Master collection registry + NEW triggers (6 collections)
+   search-queue.js — Single control plane over algoliaQueue + typesenseQueue
+
+   New Firestore triggers (deals, auctions, vendors, companies,
+   inventory_products, orders) are registered here; all other collection
+   triggers remain in algolia-sync.js and typesense-sync.js.
+
+   Admin callables:
+     getQueueStats       — real-time queue depth for both engines
+     purgeCompleted      — delete old 'done' items
+     pauseQueue          — emergency halt (sets searchConfig/queueControl)
+     resumeQueue         — resume after pause
+     redriveFromDLQ      — re-drive dead-letter items to pending
+============================================================ */
+
+/* ── Search sync: master registry + new collection triggers ─────────── */
+const searchSyncModule = require("./search-sync");
+Object.assign(exports, searchSyncModule); /* spreads searchSync_*_on{Create,Update,Delete} triggers */
+exports.COLLECTION_REGISTRY = undefined;  /* not a CF — strip from function exports to avoid noise */
+delete exports.COLLECTION_REGISTRY;
+delete exports.syncDocument;
+delete exports._shouldSkip;
+delete exports._updateDecision;
+
+/* ── Search queue: unified queue control plane ───────────────────────── */
+const searchQueueModule = require("./search-queue");
+exports.getQueueStats      = searchQueueModule.getQueueStats;
+exports.purgeCompleted     = searchQueueModule.purgeCompleted;
+exports.pauseQueue         = searchQueueModule.pauseQueue;
+exports.resumeQueue        = searchQueueModule.resumeQueue;
+exports.redriveFromDLQ     = searchQueueModule.redriveFromDLQ;
+
 /* ═══════════════════════════════════════════════════════════
    previewEmailTemplate — admin onCall
    Called by Email Center to preview any of the 53 templates
@@ -5471,3 +5505,41 @@ exports.platformRegisterSub        = platformEvents.platformRegisterSub;
 exports.platformGetSubscriptions   = platformEvents.platformGetSubscriptions;
 exports.platformReplayEvents       = platformEvents.platformReplayEvents;
 exports.onPlatformEventCreated     = platformEvents.onPlatformEventCreated;
+
+/* ── Search Platform — Unified Orchestration Layer ────────────────────── */
+const searchAdmin = require('./search-admin');
+exports.searchSetup          = searchAdmin.searchSetup;
+exports.searchBackfillAll    = searchAdmin.searchBackfillAll;
+exports.searchSystemReport   = searchAdmin.searchSystemReport;
+exports.searchGetSecuredKeys = searchAdmin.searchGetSecuredKeys;
+exports.searchConfigUpdate   = searchAdmin.searchConfigUpdate;
+exports.searchGetStats       = searchAdmin.searchGetStats;
+
+const searchService = require('./search-service');
+exports.searchQuery          = searchService.searchQuery;
+exports.searchAutocomplete   = searchService.searchAutocomplete;
+exports.searchNearby         = searchService.searchNearby;
+exports.searchSimilar        = searchService.searchSimilar;
+exports.searchPersonalized   = searchService.searchPersonalized;
+exports.searchIntent         = searchService.searchIntent;
+
+const searchMonitor = require('./search-monitor');
+exports.searchGetUnifiedDashboard = searchMonitor.searchGetUnifiedDashboard;
+exports.searchSystemHealth        = searchMonitor.searchSystemHealth;
+exports.searchGetHealthHistory    = searchMonitor.searchGetHealthHistory;
+exports.searchResolveAlert        = searchMonitor.searchResolveAlert;
+
+const searchRepair = require('./search-repair');
+exports.searchRepairAll            = searchRepair.searchRepairAll;
+exports.searchVerifyDocument       = searchRepair.searchVerifyDocument;
+exports.searchFullReindex          = searchRepair.searchFullReindex;
+exports.searchRepairOrphanedDocs   = searchRepair.searchRepairOrphanedDocs;
+exports.searchScheduledReconcile   = searchRepair.searchScheduledReconcile;
+
+const searchWorker = require('./search-worker');
+exports.searchQueueCoordinator     = searchWorker.searchQueueCoordinator;
+exports.searchDLQSweep             = searchWorker.searchDLQSweep;
+exports.searchQueueRecovery        = searchWorker.searchQueueRecovery;
+
+const searchHealth = require('./search-health');
+exports.searchHealth               = searchHealth.searchHealth;

@@ -1,4 +1,96 @@
-﻿## [2026-06-21] — fix(geo): Safari Live Map Crash — Geolocation errorCallback TypeError
+﻿## [2026-06-21] — feat(search): Enterprise Search Platform v1.0 — Unified Orchestration Layer
+
+### Summary
+Complete enterprise search platform for SOKONI. Builds a unified orchestration layer on top of the existing 20 engine-specific Algolia + Typesense files (~10,000 lines). All new files integrate with the existing `algolia-*.js` and `typesense-*.js` implementations without modifying them.
+
+### New Server-Side Files (functions/)
+
+| File | Lines | Purpose |
+|---|---|---|
+| `search-sync.js` | 720 | Master collection registry (35 collections), unified `syncDocument()`, Firestore triggers for 6 new collections |
+| `search-queue.js` | 619 | Unified queue control plane — `getQueueStats`, `purgeCompleted`, `pauseQueue`, `resumeQueue`, `redriveFromDLQ` |
+| `search-health.js` | 297 | HTTP health endpoint — pings both engines, returns 200/206/503 with `{ status, engines, queues, lastSync }` |
+| `search-worker.js` | 368 | Unified queue coordinator — 2-min scheduled check, daily DLQ sweep, manual recovery CF |
+| `search-monitor.js` | 407 | Aggregated monitoring dashboard — unified view of both Algolia + Typesense health |
+| `search-repair.js` | 525 | Repair engine — full reindex (10k docs), reconcile, verify, scheduled Sunday reconcile |
+| `search-admin.js` | 994 | Master admin API — setup, backfill-all, system report, secured keys, config, stats |
+| `search-service.js` | 1,395 | Server-side search API — 6 callable CFs: search, autocomplete, nearby, similar, personalized, intent |
+
+### New Frontend: `sokoni-search-pro.js` (514 → 1,379 lines)
+
+10 new public methods added to `SokoniSearchPro`:
+- `voiceSearch(opts)` — Web Speech API, `en-KE` locale, graceful degradation
+- `nearby(lat, lng, radiusKm, index, opts)` — geo search with Kenya bounding-box validation
+- `suggestions(query, opts)` — localStorage recents + Firestore trending + Algolia suggestions
+- `recommendations(opts)` — personalized → Firestore profile → trending fallback
+- `similarProducts(itemId, index, opts)` — Algolia Recommend API → category fallback
+- `imageSearch()` — future-ready stub with upgrade path instructions
+- `detectIntent(query)` — deterministic NLP classifier (14 intents), 26-entry Swahili expansion map
+- `multiSearch(requests, opts)` — Algolia multi-query in one round-trip
+- `recentSearches(limit)` — localStorage history management
+- `clearHistory()` — localStorage clear
+
+Architecture upgrades:
+- LRU cache with 200-entry cap (down from 1,000) + true LRU eviction
+- Request deduplication via `_inflightRequests` Map (identical in-flight queries share one Promise)
+- Per-engine circuit breaker (3 failures → trip; exponential backoff 30s/60s/120s)
+- Sliding-window rate limiter (60 requests per 60s rolling window)
+- XSS sanitisation on all query strings (strips scripts, iframes, event handlers)
+- INDICES expanded from 10 to 21 (added DEALS, AUCTIONS, VENDORS, COMPANIES, BRANDS, CATEGORIES, BNB, FITNESS, EDUCATION, LAWYERS, HOTELS)
+
+### New Cloud Functions Exported (functions/index.js)
+
+**Unified search orchestration (22 new exports):**
+`searchSetup`, `searchBackfillAll`, `searchSystemReport`, `searchGetSecuredKeys`, `searchConfigUpdate`, `searchGetStats`, `searchQuery`, `searchAutocomplete`, `searchNearby`, `searchSimilar`, `searchPersonalized`, `searchIntent`, `searchGetUnifiedDashboard`, `searchSystemHealth`, `searchGetHealthHistory`, `searchResolveAlert`, `searchRepairAll`, `searchVerifyDocument`, `searchFullReindex`, `searchRepairOrphanedDocs`, `searchScheduledReconcile`, `searchQueueCoordinator`, `searchDLQSweep`, `searchQueueRecovery`, `searchHealth`
+
+**New Firestore triggers (6 new collections):**
+`searchSync_deals_onCreate/Update/Delete`, `searchSync_auctions_onCreate/Update/Delete`, `searchSync_vendors_onCreate/Update/Delete`, `searchSync_companies_onCreate/Update/Delete`, `searchSync_inventory_products_onCreate/Update/Delete`, `searchSync_orders_onCreate/Update/Delete`
+
+**Queue control plane (from search-queue.js):**
+`getQueueStats`, `purgeCompleted`, `pauseQueue`, `resumeQueue`, `redriveFromDLQ`
+
+### Database Changes
+New Firestore collections (auto-created on first write):
+- `searchConfig` — engine config, settings, queue control flags, system health, last sync
+- `searchHealthHistory` — time-series health snapshots (30-day retention)
+- `searchRepairJobs` — repair job queue
+- `searchSyncStatus` — per-collection last-sync metadata
+- `searchKeys/{uid}` — audit log of issued search API keys
+
+Collections now indexed by search (6 new triggers):
+- `deals`, `auctions`, `vendors`, `companies`, `inventory_products`, `orders`
+
+### Security
+- All Admin API keys in Firebase Secret Manager (`ALGOLIA_ADMIN_KEY`, `TYPESENSE_ADMIN_KEY`, `ALGOLIA_SEARCH_KEY`, `TYPESENSE_SEARCH_KEY`)
+- `orders` collection: `engine: 'none'` in registry — NOT indexed in search engines (admin query only)
+- Scoped search-only keys issued per-user via `searchGetSecuredKeys` with 1h TTL
+- Admin keys never exposed to frontend
+- XSS sanitisation on all server-side query inputs
+- Kenya geo bounding-box enforced on all `searchNearby` calls
+- Rate limiting enforced client-side (60 req/60s) and server-side
+
+### Performance
+- `searchQuery` CF target: <40ms for cached responses, <200ms cold
+- `searchHealth` endpoint: completes in <5s (4s engine timeout)
+- `searchBackfillAll`: 500 docs/batch, async fan-out to both engines
+- `searchFullReindex`: max 10,000 docs per call to prevent timeout
+- `sokoni-search-pro.js` adds zero synchronous blocking code at parse time
+
+### Deployment Requirements
+Before deploying Cloud Functions:
+1. Enable Firebase Blaze billing on `sokoni-aeb26`
+2. Set secrets: `firebase functions:secrets:set ALGOLIA_ADMIN_KEY`, `ALGOLIA_SEARCH_KEY`, `TYPESENSE_ADMIN_KEY`, `TYPESENSE_SEARCH_KEY`
+3. Set env: `ALGOLIA_APP_ID`, `TYPESENSE_HOST`, `TYPESENSE_PORT` in `functions/.env`
+4. Deploy functions: `firebase deploy --only functions`
+5. Run `searchSetup` callable to provision indexes and collections
+6. Run `searchBackfillAll` to populate search indexes
+
+### Files Affected
+`functions/search-sync.js` (NEW), `functions/search-queue.js` (NEW), `functions/search-health.js` (NEW), `functions/search-worker.js` (NEW), `functions/search-monitor.js` (NEW), `functions/search-repair.js` (NEW), `functions/search-admin.js` (NEW), `functions/search-service.js` (NEW), `sokoni-search-pro.js` (REWRITTEN), `functions/index.js` (UPDATED — +22 exports), `service-worker.js` (v255→v256)
+
+---
+
+## [2026-06-21] — fix(geo): Safari Live Map Crash — Geolocation errorCallback TypeError
 
 ### Root Cause
 `car-hub.html` passed an **options object** as arg2 to `watchPosition()`:
