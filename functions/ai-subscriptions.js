@@ -62,8 +62,8 @@ const activateAIPlan = onCall(
     const billing    = data.billing === 'annual' ? 'annual' : 'monthly';
     const paymentRef = sanitize(data.paymentRef, 120);
 
-    if (!PLANS[planId]) throw new Error(`Unknown plan: ${planId}`);
-    if (!paymentRef && PLANS[planId].price > 0) throw new Error('paymentRef required for paid plans.');
+    if (!PLANS[planId]) throw new HttpsError('invalid-argument', `Unknown plan: ${planId}`);
+    if (!paymentRef && PLANS[planId].price > 0) throw new HttpsError('invalid-argument', 'paymentRef required for paid plans.');
 
     /* Idempotency: if this paymentRef was already processed, return early */
     if (paymentRef) {
@@ -137,7 +137,7 @@ const consumeAICredit = onCall(
     const reason = sanitize(data.reason, 100);
 
     if (!Number.isInteger(amount) || amount <= 0 || amount > 10000) {
-      throw new Error('Invalid credit amount.');
+      throw new HttpsError('invalid-argument', 'Invalid credit amount.');
     }
 
     const credRef  = db().collection('aiCredits').doc(uid);
@@ -162,7 +162,7 @@ const consumeAICredit = onCall(
       return { success: true, newBalance };
     } catch (e) {
       if (e.message.startsWith('Insufficient')) throw e;
-      throw new Error('Credit deduction failed: ' + e.message);
+      throw new HttpsError('internal', 'Credit deduction failed.');
     }
   }
 );
@@ -186,8 +186,8 @@ const topupAICredits = onCall(
       credits_5000: { credits: 5000, price: 15000 },
     };
     const pack = CREDIT_PACKS[packId];
-    if (!pack) throw new Error(`Unknown credit pack: ${packId}`);
-    if (!paymentRef) throw new Error('paymentRef required.');
+    if (!pack) throw new HttpsError('invalid-argument', `Unknown credit pack: ${packId}`);
+    if (!paymentRef) throw new HttpsError('invalid-argument', 'paymentRef required.');
 
     /* Idempotency */
     const existing = await db().collection('aiPaymentRefs').doc(paymentRef).get();

@@ -187,7 +187,7 @@ exports.inventoryFraudReview = onCall(CF_OPTS, async req => {
 
   const eventRef = (await db.collectionGroup('inventory_fraud_events')
     .where(admin.firestore.FieldPath.documentId(), '==', eventId).limit(1).get()).docs[0]?.ref;
-  if (!eventRef) throw new Error('Fraud event not found');
+  if (!eventRef) throw new HttpsError('not-found', 'Fraud event not found');
 
   await eventRef.update({
     status      : decision,

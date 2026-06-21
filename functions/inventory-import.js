@@ -69,7 +69,7 @@ function callAnthropic(apiKey, messages, system, maxTokens = 800) {
 exports.inventoryImportAiMap = onCall(CF_OPTS, async req => {
   const uid = assertAuth(req);
   const { headers, sampleRows } = req.data;
-  if (!headers?.length) throw new Error('No headers provided');
+  if (!headers?.length) throw new HttpsError('invalid-argument', 'No headers provided');
 
   const apiKey = ANTHROPIC_API_KEY.value();
   const auto   = _autoMapColumns(headers);
@@ -107,7 +107,7 @@ exports.inventoryImportPreview = onCall({ region: 'us-central1', memory: '512MiB
   const { tenantId, rows, mappings } = req.data;
   const resolvedTenant = tenantId || uid;
 
-  if (!rows?.length) throw new Error('No rows provided');
+  if (!rows?.length) throw new HttpsError('invalid-argument', 'No rows provided');
 
   const results  = { valid: [], invalid: [], duplicates: [], total: rows.length };
 
@@ -180,9 +180,9 @@ exports.inventoryImportCommit = onCall({ region: 'us-central1', memory: '1GiB', 
 
   const jobRef  = db.collection(`tenants/${resolvedTenant}/inventory_import_jobs`).doc(jobId);
   const jobDoc  = await jobRef.get();
-  if (!jobDoc.exists) throw new Error('Import job not found');
+  if (!jobDoc.exists) throw new HttpsError('not-found', 'Import job not found');
   const job = jobDoc.data();
-  if (job.status !== 'preview') throw new Error('Job must be in preview state to commit');
+  if (job.status !== 'preview') throw new HttpsError('failed-precondition', 'Job must be in preview state to commit');
 
   await jobRef.update({ status: 'processing', startedAt: admin.firestore.FieldValue.serverTimestamp() });
 

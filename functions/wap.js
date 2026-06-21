@@ -823,7 +823,7 @@ async function _svcInventoryRelease({ orderId, items }, inst) {
 
 /* FIXED: idempotent — stable AUTH-{instanceId} key, transaction guard */
 async function _svcPaymentAuthorize({ orderId, amount, paymentMethod, phone, uid }, inst) {
-  if (!amount || Number(amount) <= 0) throw new Error("Invalid payment amount");
+  if (!amount || Number(amount) <= 0) throw new HttpsError("invalid-argument", "Invalid payment amount");
   const authRef = `AUTH-${inst.id}`;  /* Stable, unique per workflow instance */
 
   await db.runTransaction(async (txn) => {

@@ -54,7 +54,7 @@ exports.inventoryGetPricingRecommendations = onCall(CF_OPTS, async req => {
     db.collection(`tenants/${resolvedTenant}/inventory_pricing_rules`).doc(productId).get(),
   ]);
 
-  if (!prodDoc.exists) throw new Error('Product not found');
+  if (!prodDoc.exists) throw new HttpsError('not-found', 'Product not found');
   const prod  = { id: productId, ...prodDoc.data() };
   const stock = levelsSnap.docs.reduce((s, d) => s + (d.data().available || 0), 0);
   const sales = movSnap.docs.map(d => d.data());
@@ -163,7 +163,7 @@ exports.inventorySimulatePriceChange = onCall(CF_OPTS, async req => {
     db.collection(`tenants/${resolvedTenant}/inventory_levels`).where('productId', '==', productId).get(),
   ]);
 
-  if (!prodDoc.exists) throw new Error('Product not found');
+  if (!prodDoc.exists) throw new HttpsError('not-found', 'Product not found');
   const prod      = prodDoc.data();
   const oldPrice  = prod.sellingPrice || 0;
   const stock     = levSnap.docs.reduce((s, d) => s + (d.data().available || 0), 0);

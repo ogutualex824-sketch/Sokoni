@@ -226,7 +226,7 @@ exports.inventoryCreateWorkflow = onCall(CF_OPTS, async req => {
   const resolvedTenant = tenantId || uid;
 
   if (!workflow.name || !workflow.trigger || !workflow.actions?.length) {
-    throw new Error('Workflow requires name, trigger, and at least one action');
+    throw new HttpsError('invalid-argument', 'Workflow requires name, trigger, and at least one action');
   }
 
   const ref = await db.collection(`tenants/${resolvedTenant}/inventory_workflows`).add({
@@ -254,7 +254,7 @@ exports.inventoryToggleWorkflow = onCall({ region: 'us-central1', memory: '256Mi
   const snap = await db.collectionGroup('inventory_workflows')
     .where(admin.firestore.FieldPath.documentId(), '==', workflowId)
     .where('createdBy', '==', uid).limit(1).get();
-  if (snap.empty) throw new Error('Workflow not found');
+  if (snap.empty) throw new HttpsError('not-found', 'Workflow not found');
   await snap.docs[0].ref.update({ active });
   return { workflowId, active };
 });
@@ -265,7 +265,7 @@ exports.inventoryDeleteWorkflow = onCall({ region: 'us-central1', memory: '256Mi
   const snap = await db.collectionGroup('inventory_workflows')
     .where(admin.firestore.FieldPath.documentId(), '==', workflowId)
     .where('createdBy', '==', uid).limit(1).get();
-  if (snap.empty) throw new Error('Workflow not found');
+  if (snap.empty) throw new HttpsError('not-found', 'Workflow not found');
   await snap.docs[0].ref.delete();
   return { workflowId, deleted: true };
 });

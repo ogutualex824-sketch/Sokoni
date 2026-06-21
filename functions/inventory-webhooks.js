@@ -102,7 +102,7 @@ exports.inventoryRegisterWebhook = onCall(CF_OPTS, async req => {
   const resolvedTenant = tenantId || uid;
 
   /* Validate URL */
-  try { new URL(url); } catch { throw new Error('Invalid webhook URL'); }
+  try { new URL(url); } catch { throw new HttpsError('invalid-argument', 'Invalid webhook URL'); }
   /* Validate events */
   const invalidEvents = (events || []).filter(e => e !== '*' && !VALID_EVENTS.includes(e));
   if (invalidEvents.length) throw new Error(`Unknown events: ${invalidEvents.join(', ')}`);
@@ -144,7 +144,7 @@ exports.inventoryDeleteWebhook = onCall(CF_OPTS, async req => {
   const snap = await db.collectionGroup('inventory_webhooks')
     .where('createdBy', '==', uid)
     .where(admin.firestore.FieldPath.documentId(), '==', webhookId).limit(1).get();
-  if (snap.empty) throw new Error('Webhook not found');
+  if (snap.empty) throw new HttpsError('not-found', 'Webhook not found');
   await snap.docs[0].ref.delete();
   return { webhookId, deleted: true };
 });
@@ -156,7 +156,7 @@ exports.inventoryTestWebhook = onCall(CF_OPTS, async req => {
   const snap = await db.collectionGroup('inventory_webhooks')
     .where('createdBy', '==', uid).limit(20).get();
   const doc = snap.docs.find(d => d.id === webhookId);
-  if (!doc) throw new Error('Webhook not found');
+  if (!doc) throw new HttpsError('not-found', 'Webhook not found');
   const result = await _dispatch(doc, 'stock.low', {
     test     : true,
     productId: 'test_product',

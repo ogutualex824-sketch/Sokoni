@@ -126,7 +126,7 @@ exports.inventoryUpdateRecallStatus = onCall(CF_OPTS, async req => {
 
   const snap = await db.collectionGroup('inventory_recalls')
     .where(admin.firestore.FieldPath.documentId(), '==', recallId).limit(1).get();
-  if (snap.empty) throw new Error('Recall not found');
+  if (snap.empty) throw new HttpsError('not-found', 'Recall not found');
   const recallRef = snap.docs[0].ref;
   const recall    = snap.docs[0].data();
   const tenantId  = recallRef.path.split('/')[1];
@@ -167,7 +167,7 @@ exports.inventoryRecallReport = onCall(CF_OPTS, async req => {
       .where('recallId', '==', recallId).get(),
   ]);
 
-  if (!recallDoc.exists) throw new Error('Recall not found');
+  if (!recallDoc.exists) throw new HttpsError('not-found', 'Recall not found');
   const recall    = recallDoc.data();
   const movements = movementsSnap.docs.map(d => d.data());
 
