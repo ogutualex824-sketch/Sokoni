@@ -54,7 +54,8 @@ exports.bootstrapAdminClaim = onCall(
     }
 
     const uid = request.auth.uid;
-    await admin.auth().setCustomUserClaims(uid, { admin: true });
+    const existingClaims = await admin.auth().getUser(uid).then(u => u.customClaims || {}).catch(() => ({}));
+    await admin.auth().setCustomUserClaims(uid, { ...existingClaims, admin: true });
     await db.collection("users").doc(uid).set(
       { role: "admin", adminGrantedAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
@@ -79,13 +80,15 @@ exports.grantAdminClaim = onCall(
       throw new HttpsError("invalid-argument", "targetUid (string) is required.");
     }
 
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true });
+    const existClaims = await admin.auth().getUser(targetUid).then(u => u.customClaims || {}).catch(() => ({}));
+    await admin.auth().setCustomUserClaims(targetUid, { ...existClaims, admin: true });
 
     await db.collection("users").doc(targetUid).set(
-      { role: "admin", adminGrantedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { role: "admin", roles: admin.firestore.FieldValue.arrayUnion("admin"), adminGrantedAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
 
+    await db.collection("auditLogs").add({ action: "grantAdminClaim", targetUid, grantedBy: request.auth.uid, ts: admin.firestore.FieldValue.serverTimestamp() });
     return { success: true, uid: targetUid, message: "Admin claim granted. User must sign out and back in." };
   }
 );
@@ -106,13 +109,42 @@ exports.revokeAdminClaim = onCall(
       throw new HttpsError("invalid-argument", "Cannot revoke your own admin claim.");
     }
 
-    await admin.auth().setCustomUserClaims(targetUid, { admin: false });
+    /* Preserve other claims — only delete admin key */
+    const existClaims = await admin.auth().getUser(targetUid).then(u => u.customClaims || {}).catch(() => ({}));
+    delete existClaims.admin;
+    await admin.auth().setCustomUserClaims(targetUid, existClaims);
     await db.collection("users").doc(targetUid).set(
-      { role: "user" },
+      { roles: admin.firestore.FieldValue.arrayRemove("admin") },
       { merge: true }
     );
 
+    await db.collection("auditLogs").add({ action: "revokeAdminClaim", targetUid, revokedBy: request.auth.uid, ts: admin.firestore.FieldValue.serverTimestamp() });
     return { success: true, uid: targetUid };
+  }
+);
+
+/* ── GET USER CLAIMS — admin inspection of any user's current claims ── */
+exports.getUserClaims = onCall(
+  { timeoutSeconds: 15 },
+  async (request) => {
+    if (!request.auth?.token?.admin && !request.auth?.token?.superAdmin) {
+      throw new HttpsError("permission-denied", "Admin access required.");
+    }
+    const { targetUid } = request.data || {};
+    if (!targetUid || typeof targetUid !== "string") {
+      throw new HttpsError("invalid-argument", "targetUid (string) is required.");
+    }
+    const userRecord = await admin.auth().getUser(targetUid).catch(() => null);
+    if (!userRecord) throw new HttpsError("not-found", "User not found.");
+
+    const snap = await db.collection("users").doc(targetUid).get();
+    return {
+      uid:          targetUid,
+      email:        userRecord.email || null,
+      customClaims: userRecord.customClaims || {},
+      disabled:     userRecord.disabled,
+      firestoreRoles: snap.exists() ? (snap.data().roles || []) : [],
+    };
   }
 );
 
