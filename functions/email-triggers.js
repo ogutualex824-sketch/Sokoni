@@ -15,6 +15,7 @@ const admin = require("firebase-admin");
 const emailSvc = require("./email-service");
 const { getTemplate } = require("./email-templates");
 const { EMAIL_SECRETS } = emailSvc;
+const { assertAuth } = require("./shared/errors");
 
 /* ── Helper: render template + queue ──────────────────────── */
 async function trigger(templateName, data, extraPayload = {}) {
@@ -757,10 +758,10 @@ exports.emailWebhook = onRequest(async (req, res) => {
 exports.updateEmailPreferences = onCall(
   { secrets: EMAIL_SECRETS },
   async (req) => {
-    if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required");
+    const uid = assertAuth(req);
     const { prefs } = req.data || {};
     if (!prefs || typeof prefs !== "object") throw new HttpsError("invalid-argument", "prefs required");
-    await emailSvc.updatePreferences(req.auth.uid, prefs);
+    await emailSvc.updatePreferences(uid, prefs);
     return { success: true };
   }
 );
@@ -771,9 +772,9 @@ exports.updateEmailPreferences = onCall(
 exports.sendBroadcastEmail = onCall(
   { secrets: EMAIL_SECRETS },
   async (req) => {
-    if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required");
+    const uid = assertAuth(req);
     /* Verify admin */
-    const user = await admin.auth().getUser(req.auth.uid);
+    const user = await admin.auth().getUser(uid);
     const claims = user.customClaims || {};
     if (!claims.isAdmin && !claims.isSuperAdmin) throw new HttpsError("permission-denied", "Admin required");
     const { subject, html, to, category } = req.data || {};
@@ -794,8 +795,8 @@ exports.sendBroadcastEmail = onCall(
 exports.resendEmail = onCall(
   { secrets: EMAIL_SECRETS },
   async (req) => {
-    if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required");
-    const user = await admin.auth().getUser(req.auth.uid);
+    const uid = assertAuth(req);
+    const user = await admin.auth().getUser(uid);
     if (!user.customClaims?.isAdmin && !user.customClaims?.isSuperAdmin) throw new HttpsError("permission-denied", "Admin required");
     const { logId } = req.data || {};
     if (!logId) throw new HttpsError("invalid-argument", "logId required");
