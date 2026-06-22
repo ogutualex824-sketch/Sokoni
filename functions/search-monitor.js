@@ -260,7 +260,7 @@ exports.searchGetUnifiedDashboard = onCall(
 
 exports.searchSystemHealth = onSchedule(
   {
-    schedule:       'every 15 minutes',
+    schedule:       'every 2 hours',
     region:         'us-central1',
     timeZone:       'Africa/Nairobi',
     memory:         '256MiB',

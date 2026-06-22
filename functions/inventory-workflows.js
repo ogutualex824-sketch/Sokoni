@@ -40,13 +40,16 @@ function _evalConditions(conditions, context) {
 async function _executeAction(action, context, tenantId) {
   switch (action.type) {
     case 'notify': {
+      /* _workflowGenerated prevents inventoryWorkflowEvaluator from
+         picking up this alert and re-entering the workflow loop */
       await db.collection(`tenants/${tenantId}/inventory_alerts`).add({
-        type     : 'workflow_notification',
-        severity : action.severity || 'INFO',
-        title    : _interpolate(action.title, context),
-        body     : _interpolate(action.body, context),
-        resolved : false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        type              : 'workflow_notification',
+        severity          : action.severity || 'INFO',
+        title             : _interpolate(action.title, context),
+        body              : _interpolate(action.body, context),
+        resolved          : false,
+        _workflowGenerated: true,
+        createdAt         : admin.firestore.FieldValue.serverTimestamp(),
       });
       break;
     }
@@ -67,12 +70,13 @@ async function _executeAction(action, context, tenantId) {
     }
     case 'alert': {
       await db.collection(`tenants/${tenantId}/inventory_alerts`).add({
-        type     : action.alertType || 'workflow_alert',
-        severity : action.severity || 'MEDIUM',
-        title    : _interpolate(action.title, context),
-        body     : _interpolate(action.body || '', context),
-        resolved : false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        type              : action.alertType || 'workflow_alert',
+        severity          : action.severity || 'MEDIUM',
+        title             : _interpolate(action.title, context),
+        body              : _interpolate(action.body || '', context),
+        resolved          : false,
+        _workflowGenerated: true,
+        createdAt         : admin.firestore.FieldValue.serverTimestamp(),
       });
       break;
     }
@@ -122,6 +126,11 @@ exports.inventoryWorkflowEvaluator = onDocumentCreated(
     const alert    = event.data?.data();
     const tenantId = event.params?.tenantId;
     if (!alert || !tenantId) return;
+
+    /* Loop-breaker: alerts written by this function itself carry
+       _workflowGenerated=true. Processing them would create an infinite
+       chain (alert → workflow → alert → workflow ...). */
+    if (alert._workflowGenerated === true) return;
 
     /* Load active workflows */
     const wfSnap = await db.collection(`tenants/${tenantId}/inventory_workflows`)

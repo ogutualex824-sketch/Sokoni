@@ -84,7 +84,7 @@ function _percentile(sortedArr, p) {
 
 exports.typesenseMonitorHealth = onSchedule(
   {
-    schedule:       'every 5 minutes',
+    schedule:       'every 2 hours',
     timeoutSeconds: 60,
     memory:         '256MiB',
     secrets:        [TYPESENSE_ADMIN_KEY],
@@ -176,7 +176,7 @@ exports.typesenseMonitorHealth = onSchedule(
 
 exports.typesenseMonitorLatency = onSchedule(
   {
-    schedule:       'every 15 minutes',
+    schedule:       'every 2 hours',
     timeoutSeconds: 120,
     memory:         '256MiB',
     secrets:        [TYPESENSE_ADMIN_KEY],

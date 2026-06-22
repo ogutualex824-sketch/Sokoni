@@ -609,10 +609,10 @@ exports.emailOnOrderCancelled = onDocumentUpdated(
 );
 
 /* ═══════════════════════════════════════════════════════════
-   SCHEDULED: Process email queue every 2 minutes
+   SCHEDULED: Process email queue every 5 minutes
 ═══════════════════════════════════════════════════════════ */
 exports.processEmailQueue = onSchedule(
-  { schedule: "every 2 minutes", secrets: EMAIL_SECRETS },
+  { schedule: "every 5 minutes", secrets: EMAIL_SECRETS },
   async () => {
     const sent = await emailSvc.processQueue();
     console.log(`[EmailQueue] Processed ${sent} emails`);

@@ -4376,21 +4376,26 @@ exports.indexProductCreate = onDocumentCreated("products/{productId}", async (ev
   if (!event.data) return;
   const doc = event.data.data();
   if (!doc) return;
+  /* Skip if searchableTerms already set (prevents double-write on retry) */
+  if (doc.searchableTerms && doc.searchableTerms.length) return;
   await event.data.ref.update({
     searchableTerms: _buildSearchTerms(doc),
     nameLower: (doc.name || "").toLowerCase(),
-    indexedAt: admin.firestore.FieldValue.serverTimestamp(),
   }).catch(() => {});
 });
 
 exports.indexProductUpdate = onDocumentUpdated("products/{productId}", async (event) => {
   if (!event.data || !event.data.after) return;
-  const doc = event.data.after.data();
-  if (!doc) return;
+  const before = event.data.before.data() || {};
+  const after  = event.data.after.data()  || {};
+  /* Guard: only reindex when text content fields actually change.
+     Writing indexedAt back every update caused an infinite update loop. */
+  const TEXT_FIELDS = ["name", "title", "category", "description", "tags", "brand", "location", "county"];
+  const changed = TEXT_FIELDS.some(f => before[f] !== after[f]);
+  if (!changed) return;
   await event.data.after.ref.update({
-    searchableTerms: _buildSearchTerms(doc),
-    nameLower: (doc.name || "").toLowerCase(),
-    indexedAt: admin.firestore.FieldValue.serverTimestamp(),
+    searchableTerms: _buildSearchTerms(after),
+    nameLower: (after.name || "").toLowerCase(),
   }).catch(() => {});
 });
 
@@ -4398,10 +4403,10 @@ exports.indexProviderCreate = onDocumentCreated("providers/{providerId}", async 
   if (!event.data) return;
   const doc = event.data.data();
   if (!doc) return;
+  if (doc.searchableTerms && doc.searchableTerms.length) return;
   await event.data.ref.update({
     searchableTerms: _buildSearchTerms(doc),
     nameLower: (doc.name || doc.businessName || "").toLowerCase(),
-    indexedAt: admin.firestore.FieldValue.serverTimestamp(),
   }).catch(() => {});
 });
 
@@ -4524,7 +4529,7 @@ exports.cleanupIdempotencyStore = onSchedule(
 );
 
 exports.aggregateTrendingSearches = onSchedule(
-  { schedule: "every 60 minutes", timeoutSeconds: 120 },
+  { schedule: "0 */6 * * *", timeoutSeconds: 120 },
   async () => {
     const oneHour = admin.firestore.Timestamp.fromMillis(Date.now() - 3600000);
     const snap = await db.collection("searchAnalytics")

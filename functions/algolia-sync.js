@@ -125,12 +125,12 @@ const triggers = {
      stores     → stores_index   (Firestore: 'stores', same data model as sellers)
      real_estate→ property_index (Firestore: 'real_estate', same as properties)
      vehicles   → vehicles_index (Firestore: 'vehicles', same as cars)
-     vendors    → stores_index   (B2B suppliers appear alongside stores)
+     vendors    — REMOVED: vendors is already handled by search-sync.js to avoid
+                  duplicate triggers (each vendors write was firing 2× functions)
   ── */
   ..._makeTriggers('stores'),
   ..._makeTriggers('real_estate'),
   ..._makeTriggers('vehicles'),
-  ..._makeTriggers('vendors'),
 };
 
 module.exports = triggers;

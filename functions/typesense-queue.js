@@ -146,7 +146,7 @@ async function enqueue({ collection, docId, operation, data, beforeData, priorit
 
 exports.processTypesenseQueue = onSchedule(
   {
-    schedule:       'every 1 minutes',
+    schedule:       'every 5 minutes',
     timeoutSeconds: 540,
     memory:         '512MiB',
     secrets:        [TYPESENSE_ADMIN_KEY],

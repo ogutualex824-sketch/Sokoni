@@ -365,11 +365,11 @@ const platformGetCapabilityMatrix = onCall(
 );
 
 /* ================================================================
-   platformHealthSweep  [Scheduled — every 10 minutes]
+   platformHealthSweep  [Scheduled — every 1 hours]
    Marks services as 'stale' if no heartbeat in 5+ minutes.
 ================================================================ */
 const platformHealthSweep = onSchedule(
-  { schedule: 'every 10 minutes', region: 'us-central1', memory: '128MiB', timeoutSeconds: 60 },
+  { schedule: 'every 1 hours', region: 'us-central1', memory: '128MiB', timeoutSeconds: 60 },
   async () => {
     const staleThreshold = Date.now() - 300000; /* 5 min */
     const snap = await db().collection('platformHealth')

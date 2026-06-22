@@ -422,7 +422,7 @@ exports.inventoryProcessStockCount = onCall({ timeoutSeconds: 120, memory: '512M
 
 /* ─── AGGREGATE ANALYTICS (scheduled) ──────────────────────────── */
 exports.inventoryAggregateAnalytics = onSchedule(
-  { schedule: 'every 4 hours', timeZone: 'Africa/Nairobi', memory: '512MiB', timeoutSeconds: 300 },
+  { schedule: 'every day 03:00', timeZone: 'Africa/Nairobi', memory: '512MiB', timeoutSeconds: 300 },
   async () => {
     // Get all tenants
     const tenantsSnap = await db.collection('tenants').get();

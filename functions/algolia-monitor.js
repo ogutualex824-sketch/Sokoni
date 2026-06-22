@@ -89,12 +89,12 @@ async function _probeIndex(algolia, indexName) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   algoliaMonitorHealth  — scheduled every 15 minutes
+   algoliaMonitorHealth  — scheduled every 2 hours
 ══════════════════════════════════════════════════════════════════════ */
 
 const algoliaMonitorHealth = onSchedule(
   {
-    schedule:       'every 15 minutes',
+    schedule:       'every 2 hours',
     timeoutSeconds: 120,
     memory:         '256MiB',
     secrets:        [ALGOLIA_ADMIN_KEY],

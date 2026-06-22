@@ -177,7 +177,7 @@ async function _sweepDLQ(dlqCol, queueCol, limit, maxAttempts) {
 
 exports.searchQueueCoordinator = onSchedule(
   {
-    schedule:       'every 2 minutes',
+    schedule:       'every 5 minutes',
     region:         'us-central1',
     timeZone:       'Africa/Nairobi',
     memory:         '256MiB',

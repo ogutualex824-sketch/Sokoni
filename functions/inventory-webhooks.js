@@ -172,6 +172,11 @@ exports.inventoryAlertWebhook = onDocumentCreated(
     const alert    = event.data?.data();
     const tenantId = event.params?.tenantId;
     if (!alert || !tenantId) return;
+
+    /* Skip workflow-generated secondary alerts — only dispatch primary
+       business events (stock_low, fraud_detected, etc.) to external webhooks */
+    if (alert._workflowGenerated === true) return;
+
     const eventMap = {
       stock_low       : 'stock.low',
       stock_out       : 'stock.out',

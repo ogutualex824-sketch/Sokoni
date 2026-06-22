@@ -89,6 +89,11 @@ exports.inventoryFraudOnMovement = onDocumentCreated(
     const scorableTypes = ['adjustment', 'damage', 'write_off', 'theft', 'return_in', 'count_adjust'];
     if (!scorableTypes.includes(movement.type)) return;
 
+    /* Idempotency: skip if this movement was already scored (CF retry guard) */
+    const existingSnap = await db.collection(`tenants/${tenantId}/inventory_fraud_events`)
+      .where('movementId', '==', movId).limit(1).get();
+    if (!existingSnap.empty) return;
+
     try {
       const fraud = await _computeFraudScore(movement, tenantId);
       if (fraud.score < 15) return;
@@ -125,10 +130,10 @@ exports.inventoryFraudOnMovement = onDocumentCreated(
   }
 );
 
-/* ── Scheduled hourly: batch fraud scan for pattern detection ─────── */
+/* ── Scheduled: batch fraud scan for pattern detection ────────────── */
 exports.inventoryFraudScan = onSchedule({
   ...CF_OPTS,
-  schedule: 'every 1 hours',
+  schedule: 'every 6 hours',
   timeZone: 'Africa/Nairobi',
 }, async () => {
   const cutoff  = new Date(Date.now() - 7_200_000);

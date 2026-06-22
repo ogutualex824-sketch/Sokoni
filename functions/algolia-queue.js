@@ -150,12 +150,12 @@ async function enqueue({ collection, docId, operation, data = null, beforeData =
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   PROCESS QUEUE  — scheduled every 30 seconds
+   PROCESS QUEUE  — scheduled every 5 minutes
 ══════════════════════════════════════════════════════════════════════ */
 
 const processAlgoliaQueue = onSchedule(
   {
-    schedule:        'every 1 minutes',   // CF minimum is 1 minute; queue drains fast
+    schedule:        'every 5 minutes',   // 5-min latency is acceptable; saves 80% of invocations vs 1-min
     timeoutSeconds:  540,
     memory:          '512MiB',
     secrets:         [ALGOLIA_ADMIN_KEY],

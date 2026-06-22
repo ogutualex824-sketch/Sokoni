@@ -56,9 +56,9 @@ const SERVICES = [
   { id: 'notifications',name:'Notifications',    check: _checkNotifications },
 ];
 
-/* ── eccHealthCheck — every 5 minutes ────────────────────────── */
+/* ── eccHealthCheck — every 30 minutes ───────────────────────── */
 exports.eccHealthCheck = onSchedule(
-  { schedule: 'every 5 minutes', maxInstances: 1, timeoutSeconds: 120 },
+  { schedule: 'every 30 minutes', maxInstances: 1, timeoutSeconds: 120 },
   async () => {
     const results = await Promise.allSettled(
       SERVICES.map(async svc => {
