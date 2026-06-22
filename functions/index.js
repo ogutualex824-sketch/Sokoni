@@ -2593,7 +2593,9 @@ exports.posExtractProductsFromImage = onCall(
       throw new HttpsError("resource-exhausted", "Rate limit: 10 image extractions per hour.");
     }
 
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+    const _extractKey = ANTHROPIC_API_KEY.value();
+    if (!_extractKey) throw new HttpsError("failed-precondition", "AI image extraction not configured.");
+    const anthropic = new Anthropic({ apiKey: _extractKey });
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",

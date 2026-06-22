@@ -33,6 +33,30 @@
   /* Notification center — bell UI, slide-in panel, inline actions */
   _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
 
+  /* ── Offline development mock layer — lazy-loads ONLY when Firebase is
+     unavailable. Zero cost in production when Firebase is connected.
+     Force-activate at any time with URL param: ?offline=1             */
+  (function () {
+    const _forceOffline = location.search.includes('offline=1') || localStorage.getItem('sokoni_force_offline') === '1';
+    function _loadMock() {
+      if (document.getElementById('sk-mock-data')) return;
+      const d = document.createElement('script'); d.id = 'sk-mock-data'; d.src = 'sokoni-mock-data.js';
+      d.onload = function () {
+        const m = document.createElement('script'); m.id = 'sk-mock-engine'; m.src = 'sokoni-dev-mock.js';
+        document.head.appendChild(m);
+      };
+      document.head.appendChild(d);
+    }
+    if (_forceOffline) {
+      window.__sokoniForceOffline = true;
+      if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', _loadMock); } else { _loadMock(); }
+    } else {
+      window.addEventListener('load', function () {
+        setTimeout(function () { if (!window.firebaseDB) _loadMock(); }, 2500);
+      }, { once: true });
+    }
+  }());
+
   /* Global polish stylesheet (once) */
   if (!document.getElementById('sk-polish-link')) {
     const polishLink = document.createElement('link');

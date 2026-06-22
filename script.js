@@ -3475,11 +3475,14 @@ function showCurrentStory(){
         duration = Math.min(30000, (s.videoDuration || 15) * 1000 + 200);
     } else {
         /* promo type — rich gradient card with emoji + accent */
-        const accent = s.accentColor || "#71ff00";
+        const _rawAcc2 = String(s.accentColor || "");
+        const accent = /^(#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d,.\s%]+\)|[a-zA-Z]{2,30})$/.test(_rawAcc2.trim()) ? _rawAcc2.trim() : "#71ff00";
+        /* Sanitize emoji: strip HTML tags, allow only printable non-tag chars */
+        const safeEmoji = String(s.emoji||"📢").replace(/[<>"'&]/g, c => ({"<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","&":"&amp;"}[c]));
         const bg = document.createElement("div");
         bg.style.cssText = `position:absolute;inset:0;background:${s.bgGradient||"#111"};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;`;
         bg.innerHTML = `
-            <div style="font-size:90px;line-height:1;filter:drop-shadow(0 0 32px ${accent}88);animation:promoEmojiFloat 3s ease-in-out infinite;">${s.emoji||"📢"}</div>
+            <div style="font-size:90px;line-height:1;filter:drop-shadow(0 0 32px ${accent}88);animation:promoEmojiFloat 3s ease-in-out infinite;">${safeEmoji}</div>
             <div style="font-size:13px;font-weight:900;color:${accent};letter-spacing:0.12em;text-transform:uppercase;opacity:0.8;">${s.premium?"⭐ Premium Story":"Promoted"}</div>
             <div style="width:48px;height:3px;border-radius:2px;background:${accent};opacity:0.5;"></div>`;
         media.appendChild(bg);
@@ -3516,10 +3519,12 @@ function showCurrentStory(){
         /* Allow relative (internal) and absolute links; block javascript: protocol */
         const safeLink = /^javascript:/i.test(_rawLink) ? "#" : _rawLink.replace(/"/g,"&quot;").replace(/'/g,"&#39;");
         const label = (s.ctaLabel || "View Now").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-        const accent = s.accentColor || "#71ff00";
-        const accentDim = s.accentColor ? s.accentColor+"33" : "rgba(113,255,0,0.12)";
-        const accentBorder = s.accentColor ? s.accentColor+"55" : "rgba(113,255,0,0.3)";
-        const accentHover  = s.accentColor ? s.accentColor+"cc" : "rgba(113,255,0,0.7)";
+        /* Sanitize CSS color to prevent style-attribute injection */
+        const _rawAccent = String(s.accentColor || "");
+        const accent = /^(#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d,.\s%]+\)|[a-zA-Z]{2,30})$/.test(_rawAccent.trim()) ? _rawAccent.trim() : "#71ff00";
+        const accentDim    = accent + "33";
+        const accentBorder = accent + "55";
+        const accentHover  = accent + "cc";
         ctaEl.innerHTML = `<a href="${safeLink}" onclick="closeStoryViewer();"
           style="display:inline-flex;align-items:center;gap:6px;padding:11px 26px;background:${accentDim};border:1px solid ${accentBorder};
                  color:${accent};font-size:13px;font-weight:900;border-radius:12px;text-decoration:none;transition:border-color .18s,background .18s;"
