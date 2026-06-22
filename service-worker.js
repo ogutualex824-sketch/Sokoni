@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v260";
+const CACHE_VERSION = "sokoni-v261";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -103,7 +103,7 @@ const PRECACHE_STATIC = [
   "/inventory-manager.js", "/market-actions.js",
   "/seo.js", "/session-manager.js", "/scroll-memory.js",
   "/sw-register.js", "/pos-terminals.js",
-  "/demo-seed.js", "/etims.js", "/inspiq.js",
+  "/etims.js", "/inspiq.js",
   /* SmartPOS core modules */
   "/pos.html", "/pos.css", "/pos-bos.css", "/pos-mobile.css",
   "/pos.js", "/pos-db.js", "/pos-printer.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",

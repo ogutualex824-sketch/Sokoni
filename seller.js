@@ -852,9 +852,9 @@ function displaySellerProducts(){
 
                 <!-- Info — compact -->
                 <div style="padding:8px 9px 5px;flex:1;display:flex;flex-direction:column;gap:3px;">
-                    <div style="font-size:11.5px;font-weight:800;color:white;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${typeof escapeHTML==='function'?escapeHTML(product.name):product.name}</div>
+                    <div style="font-size:11.5px;font-weight:800;color:white;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${_esc(product.name)}</div>
                     <div style="font-size:13px;font-weight:900;color:#71ff00;line-height:1;">KES ${Number(product.price).toLocaleString()}</div>
-                    ${product.category ? `<div style="font-size:9px;color:rgba(255,255,255,0.28);font-weight:600;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${typeof escapeHTML==='function'?escapeHTML(product.category):product.category}</div>` : ""}
+                    ${product.category ? `<div style="font-size:9px;color:rgba(255,255,255,0.28);font-weight:600;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(product.category)}</div>` : ""}
                 </div>
 
                 <!-- Action row — Edit / Story / Boost / Delete -->
@@ -1484,13 +1484,13 @@ function renderSellerQa(){
     }
 
     el.innerHTML = pending.map(q => `
-        <div class="qa-seller-row" id="qa-row-${q.id}">
-            <div class="qa-product-tag">${q.productName}</div>
-            <div class="qa-question-text">❓ ${q.question}</div>
-            <div class="qa-asker-info">— ${q.asker||"Anonymous"} · ${q.date||""}</div>
+        <div class="qa-seller-row" id="qa-row-${_esc(q.id)}">
+            <div class="qa-product-tag">${_esc(q.productName)}</div>
+            <div class="qa-question-text">❓ ${_esc(q.question)}</div>
+            <div class="qa-asker-info">— ${_esc(q.asker||"Anonymous")} · ${_esc(q.date||"")}</div>
             <div class="qa-answer-area">
-                <textarea class="qa-answer-input" id="qa-ans-${q.id}" placeholder="Type your answer..."></textarea>
-                <button class="inv-btn inv-btn-save" onclick="submitSellerAnswer('${q.productId}','${q.id}')">✓ Post Answer</button>
+                <textarea class="qa-answer-input" id="qa-ans-${_esc(q.id)}" placeholder="Type your answer..."></textarea>
+                <button class="inv-btn inv-btn-save" onclick="submitSellerAnswer('${_esc(q.productId)}','${_esc(q.id)}')">✓ Post Answer</button>
             </div>
         </div>
     `).join("");
@@ -3213,13 +3213,13 @@ function loadSellerDMs(){
     }
 
     container.innerHTML = msgs.map(c => `
-        <div class="seller-dm-row" onclick="openSellerChat('${c.id}')">
-            <div class="sdm-avatar">${(c.productName||"S")[0].toUpperCase()}</div>
+        <div class="seller-dm-row" onclick="openSellerChat('${_esc(c.id)}')">
+            <div class="sdm-avatar">${_esc((c.productName||"S")[0].toUpperCase())}</div>
             <div class="sdm-info">
-                <div class="sdm-name">${c.productName || "General Inquiry"}</div>
-                <div class="sdm-preview">${c.messages&&c.messages.length>0 ? c.messages[c.messages.length-1].text.substring(0,50) : "—"}</div>
+                <div class="sdm-name">${_esc(c.productName || "General Inquiry")}</div>
+                <div class="sdm-preview">${c.messages&&c.messages.length>0 ? _esc(c.messages[c.messages.length-1].text.substring(0,50)) : "—"}</div>
             </div>
-            ${c.unread > 0 ? `<div class="sdm-badge">${c.unread}</div>` : ""}
+            ${c.unread > 0 ? `<div class="sdm-badge">${Number(c.unread)||0}</div>` : ""}
         </div>
     `).join("");
 }
@@ -3239,21 +3239,21 @@ function openSellerChat(convoId){
 
     panel.innerHTML = `
         <div class="sdm-chat-header">
-            <span class="sdm-chat-name">💬 ${convo.productName || "Inquiry"}</span>
+            <span class="sdm-chat-name">💬 ${_esc(convo.productName || "Inquiry")}</span>
             <button onclick="document.getElementById('sellerChatPanel').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:18px;">✕</button>
         </div>
         <div class="sdm-chat-messages" id="sdmMessages"></div>
         <div class="sdm-chat-input">
-            <input type="text" id="sdmInput" placeholder="Reply to customer..." onkeydown="if(event.key==='Enter')sellerReply('${convoId}')">
-            <button onclick="sellerReply('${convoId}')">Send</button>
+            <input type="text" id="sdmInput" placeholder="Reply to customer..." onkeydown="if(event.key==='Enter')sellerReply('${_esc(convoId)}')">
+            <button onclick="sellerReply('${_esc(convoId)}')">Send</button>
         </div>
     `;
 
     const area = document.getElementById("sdmMessages");
     area.innerHTML = (convo.messages||[]).map(m => `
         <div class="chat-bubble ${m.sender==="seller" ? "bubble-buyer" : "bubble-seller"}">
-            <div class="bubble-text">${m.text}</div>
-            <div class="bubble-time">${m.time}</div>
+            <div class="bubble-text">${_esc(m.text)}</div>
+            <div class="bubble-time">${_esc(m.time)}</div>
         </div>
     `).join("");
     area.scrollTop = area.scrollHeight;

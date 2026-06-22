@@ -625,7 +625,12 @@ exports.kass = onRequest(
       return;
     }
 
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+    const _aiKey = ANTHROPIC_API_KEY.value();
+    if (!_aiKey) {
+      res.status(503).json({ error: "AI assistant is not configured. Contact support." });
+      return;
+    }
+    const anthropic = new Anthropic({ apiKey: _aiKey });
 
     const systemPrompt = `You are Kass, the intelligent admin AI agent for SOKONI — Kenya's premier digital marketplace. You help the admin manage the platform efficiently and professionally.
 

@@ -3716,10 +3716,11 @@ if(document.readyState === "complete" || document.readyState === "interactive"){
 
     const seen    = new Set();
     const started = Date.now();
+    let _broadcastUnsub = null;
 
     function startListening(){
         if(!window.SokoniDB || typeof window.SokoniDB.listenSellerBroadcasts !== "function") return;
-        window.SokoniDB.listenSellerBroadcasts(sellerNames, function(broadcast){
+        _broadcastUnsub = window.SokoniDB.listenSellerBroadcasts(sellerNames, function(broadcast){
             /* Ignore broadcasts older than 5 minutes (stale from before page load) */
             const bTime = (broadcast.createdAt && typeof broadcast.createdAt.toMillis === "function")
                 ? broadcast.createdAt.toMillis()
@@ -3729,6 +3730,7 @@ if(document.readyState === "complete" || document.readyState === "interactive"){
             seen.add(broadcast._id);
             _showBroadcastToast(broadcast);
         });
+        window.addEventListener("pagehide", function(){ if(_broadcastUnsub) _broadcastUnsub(); }, { once: true });
     }
 
     if(window.SokoniDB){
