@@ -1,4 +1,76 @@
-﻿## [2026-06-21] — feat(search): Production Algolia Sync — Real Index Integration v1.0
+﻿## [2026-06-23] — fix(security): Phase 3 — Enterprise Reliability & Production Certification Sprint
+
+### Summary
+Three-phase hardening sprint: static audit remediation, offline runtime simulation, and production certification. 21 verified issues fixed across 16 files. Regression test suite (80+ assertions) and production certification dashboard added.
+
+### Files Affected
+
+**Security — XSS Fixes (6 vectors):**
+- `pos.js:71` — e.message in body.innerHTML replaced with DOM textContent
+- `pos-ai-engine.js:352` — result.error in innerHTML → textContent
+- `pos-finance.js:209` — data.error in innerHTML → textContent
+- `pos-modules.js:479,481` — result.expiresDate + result.message → textContent
+- `pos-terminals.js:558` — e.message in span innerHTML → textContent
+- `seller.js` (4 locations) — Q&A, DM inbox, chat, product cards wrapped with _esc()
+
+**Security — CSS Injection:**
+- `script.js` — s.accentColor sanitized with CSS color regex whitelist before style assignment
+
+**Firebase Stability — getApps Guards:**
+- `seller.html:234,240` — added getApps import + find() guard for "revSnap" named app
+- `businesses.html:457,470` — added getApps import + find() guard for "bizDir" named app
+- `business.html:654,668` — added getApps import + find() guard for "bizPage" named app
+- `revenue.html, ecc.html, email-center.html, b2b.html, home-services.html, legal-hub.html, tech-hub.html, launch-metrics.html` — canonical config + getApps guards (Phase 1 sprint)
+
+**Cloud Functions:**
+- `functions/index.js:628` — kassAIAssistant null guard for missing ANTHROPIC_API_KEY → 503
+- `functions/index.js:2596` — posExtractProductsFromImage null guard for missing ANTHROPIC_API_KEY
+- `functions/index.js:4425` — platformHealth CORS restricted from `true` to named domains
+
+**Timer Management:**
+- `sokoni-monitor.js:167,171` — captured setInterval IDs; clearInterval on pagehide
+
+**Memory:**
+- `script.js:1616` — _chatHistory capped at 40 entries (_CHAT_MAX constant)
+- `service-worker.js` — /demo-seed.js (142KB) removed from PRECACHE_STATIC
+
+**CSP:**
+- `firebase.json:81` — removed 'unsafe-eval' from script-src (no eval() calls exist)
+
+**Listener Leak:**
+- `script.js` — listenSellerBroadcasts() unsub captured and called on pagehide
+
+**New Files:**
+- `sokoni-dev-mock.js` — 650-line complete Firebase offline simulation (Auth, Firestore, Storage, Cloud Functions, SokoniDB — 87 methods, 29 CF stubs)
+- `sokoni-mock-data.js` — 280-line Kenyan test dataset (18 Firestore collections pre-populated)
+- `shared-header.js` — lazy mock loader (2.5s timeout check; zero production overhead)
+- `sokoni-test-suite.js` — 12 test suites, 80+ assertions (Auth, Buyer, Seller, Admin, Driver, Provider, Payments, Notifications, Firestore API, Resilience, Security, Stress)
+- `sokoni-cert.html` — production certification dashboard (10-phase status, score ring, fix audit, test runner, verdict)
+
+### Security Changes
+- 6 XSS vectors fixed in SmartPOS error rendering
+- 4 XSS vectors fixed in seller.js Q&A/DM/chat
+- 1 CSS injection vector fixed in story viewer
+- CSP 'unsafe-eval' directive removed
+- platformHealth CORS locked to known domains
+
+### Performance Changes
+- 142KB removed from Service Worker precache
+- _chatHistory memory bounded to 40 messages max
+
+### Breaking Changes
+None — all changes are backward-compatible. Mock layer only activates when Firebase is unavailable.
+
+### Open Items (Pre-Launch)
+1. Set ANTHROPIC_API_KEY in Firebase Secret Manager (AI assistant)
+2. Set INTASEND_PRIVATE_KEY in Firebase Secret Manager (M-Pesa live payments)
+3. Set SENDGRID_API_KEY in Firebase Secret Manager (transactional emails)
+4. Refactor onclick= handlers to addEventListener (enables removing CSP unsafe-inline)
+5. Restrict 12 admin Cloud Functions from cors:true to domain whitelist
+
+---
+
+## [2026-06-21] — feat(search): Production Algolia Sync — Real Index Integration v1.0
 
 ### Summary
 Complete production wiring of SOKONI's existing Algolia search infrastructure to the 8 real Algolia indexes (`products_index`, `stores_index`, `services_index`, `jobs_index`, `vehicles_index`, `property_index`, `events_index`, `global_search`). Firestore is the single source of truth. Every document change automatically syncs to Algolia within 60 seconds. No manual uploads. No duplicate indexing.
