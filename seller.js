@@ -476,6 +476,10 @@ window.processProductVideo = processProductVideo;
 ========================= */
 
 let _productImages = []; // {file:File, url:string}
+window.addEventListener('pagehide', () => {
+  _productImages.forEach(item => URL.revokeObjectURL(item.url));
+  _productImages = [];
+}, { once: true });
 
 function renderImageSlots() {
     const grid = document.getElementById('productImagesGrid');
@@ -894,6 +898,8 @@ function boostProduct(productId, productName){
         showNotification("Payment system loading. Try again in a moment.", "error");
         return;
     }
+    /* Remove any existing boost modal before creating a new one */
+    document.getElementById('_boostModal')?.remove();
     /* Show boost picker */
     const prices = SokoniPay.BOOST_PRICES;
     const opts = Object.entries(prices).map(([k,v])=>

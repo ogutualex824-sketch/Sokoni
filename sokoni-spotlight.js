@@ -205,6 +205,7 @@ window.SokoniSpotlight = (function(){
         }
       }
       _renderSellers();
+      clearInterval(_sellerTimer);
       _sellerTimer = setInterval(_renderSellers, 7000);
     }
 
@@ -219,10 +220,12 @@ window.SokoniSpotlight = (function(){
         prodH2.insertAdjacentHTML('beforeend',
           '<span id="_spLiveBadge"><span id="_spLiveDot2" style="width:7px;height:7px;border-radius:50%;background:#ff4444;display:inline-block;animation:_spPulse 1.2s ease-in-out infinite;"></span> LIVE <span id="_spPageBadge" style="opacity:.6;font-size:9px;">1/' + Math.ceil(_productPool.length/8) + '</span></span>');
       }
+      clearInterval(_productTimer);
       _productTimer = setInterval(_rotateProducts, 10000);
     }
 
     /* --- STORIES SECTION --- */
+    clearInterval(_storyTimer);
     _storyTimer = setInterval(_rotateStories, 4000);
 
     /* Pause rotation on user scroll/touch (resume after 15s idle) */
@@ -236,9 +239,17 @@ window.SokoniSpotlight = (function(){
     document.addEventListener('scroll',     _onInteract, { passive:true });
   }
 
+  function _destroy() {
+    clearInterval(_sellerTimer);  _sellerTimer  = null;
+    clearInterval(_productTimer); _productTimer = null;
+    clearInterval(_storyTimer);   _storyTimer   = null;
+  }
+  window.addEventListener('pagehide', _destroy, { once: true });
+
   return {
     init: init,
     togglePause: _togglePause,
-    refresh: function(pool){ _productPool = pool; _productPage = 0; }
+    refresh: function(pool){ _productPool = pool; _productPage = 0; },
+    destroy: _destroy
   };
 })();

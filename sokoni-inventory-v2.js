@@ -17,8 +17,9 @@ const SokoniInventoryV2 = (() => {
   const EVT         = new EventTarget();
 
   /* ── V2 IndexedDB — offline-first stores for Variants, Batches, Serials, etc. ── */
-  let _db2    = null;
-  let _online = navigator.onLine;
+  let _db2          = null;
+  let _online       = navigator.onLine;
+  let _expiryTimer  = null; /* managed — see initV2() */
   window.addEventListener('online',  () => { _online = true;  setTimeout(_flushQ2, 1000); });
   window.addEventListener('offline', () => { _online = false; });
 
@@ -866,7 +867,10 @@ const SokoniInventoryV2 = (() => {
     if (tenantId) _activeCompany = tenantId;
     _db2 = await _openDB2();
     setTimeout(_runExpiryAlerts, 6000);
-    setInterval(_runExpiryAlerts, 3_600_000);
+    if (!_expiryTimer) {
+      _expiryTimer = setInterval(_runExpiryAlerts, 3_600_000);
+      window.addEventListener('pagehide', () => { clearInterval(_expiryTimer); _expiryTimer = null; }, { once: true });
+    }
     EVT.dispatchEvent(new CustomEvent('v2:ready', { detail: { tenantId: _tenantId(), industry } }));
     return { tenantId: _tenantId(), industry };
   }

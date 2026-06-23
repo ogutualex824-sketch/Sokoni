@@ -412,7 +412,8 @@
       /* Monitor for DevTools open (fraud signal) */
       if (opts.monitorDevtools !== false) {
         const _dt = () => { const t = new Date(); debugger; return new Date() - t > 100; };
-        setInterval(() => { if (_dt()) this.reportSignal('devtools_open').catch(() => {}); }, 30000);
+        const _dtTimer = setInterval(() => { if (_dt()) this.reportSignal('devtools_open').catch(() => {}); }, 30000);
+        window.addEventListener('pagehide', () => clearInterval(_dtTimer), { once: true });
       }
     },
   };
