@@ -591,7 +591,7 @@ async function executeTool(name, input) {
    no extra Firestore read required.
 ══════════════════════════════════════════════════════════════ */
 exports.kass = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 60 },
+  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 60, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
@@ -707,7 +707,7 @@ Today's date: ${new Date().toLocaleDateString("en-KE", { weekday: "long", year: 
 const _chatRateMap = new Map(); /* ip → { count, resetAt } */
 
 exports.sokoniChat = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 30 },
+  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 30, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
@@ -980,6 +980,7 @@ exports.verifyIntasendPayment = onRequest(
     secrets:        [INTASEND_PRIVATE_KEY],
     cors:           ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app"],
     timeoutSeconds: 30,
+    invoker:        "public",
   },
   async (req, res) => {
     if (req.method !== "POST") {
@@ -1455,7 +1456,7 @@ exports.darajaSTKPush = onCall(
 
 /* ── darajaSTKCallback — Safaricom posts payment result here ── */
 exports.darajaSTKCallback = onRequest(
-  { timeoutSeconds: 30 },
+  { timeoutSeconds: 30, invoker: "public" },
   async (req, res) => {
     /* Respond 200 immediately — Safaricom retries if we delay */
     res.status(200).json({ ResultCode: 0, ResultDesc: "Success" });
@@ -3172,7 +3173,7 @@ exports.initiateSTKPush = onCall(
 
 /* IntaSend Webhook — called by IntaSend servers on payment state change */
 exports.intasendWebhook = onRequest(
-  { timeoutSeconds: 30, secrets: [INTASEND_PRIVATE_KEY] },
+  { timeoutSeconds: 30, secrets: [INTASEND_PRIVATE_KEY], invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
@@ -3368,7 +3369,7 @@ function _metricRateOk(ip) {
 }
 
 exports.recordMetric = onRequest(
-  { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 10 },
+  { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 10, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
@@ -3761,7 +3762,7 @@ async function _processWebhook(req, res, opts) {
 
 /* â”€â”€ IntaSend â”€â”€ */
 exports.webhookIntasend = onRequest(
-  { timeoutSeconds: 30, cors: false },
+  { timeoutSeconds: 30, cors: false, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") return res.status(405).end();
     await _processWebhook(req, res, {
@@ -3800,7 +3801,7 @@ const _DARAJA_IPS = new Set([
 ]);
 
 exports.webhookMpesa = onRequest(
-  { timeoutSeconds: 30, cors: false },
+  { timeoutSeconds: 30, cors: false, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") return res.status(405).end();
 
@@ -3852,7 +3853,7 @@ exports.webhookMpesa = onRequest(
 
 /* â”€â”€ Stripe â”€â”€ */
 exports.webhookStripe = onRequest(
-  { timeoutSeconds: 30, cors: false },
+  { timeoutSeconds: 30, cors: false, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") return res.status(405).end();
     await _processWebhook(req, res, {
@@ -3884,7 +3885,7 @@ exports.webhookStripe = onRequest(
 
 /* â”€â”€ SmartPOS â”€â”€ */
 exports.webhookSmartpos = onRequest(
-  { timeoutSeconds: 30, cors: ["https://mysokoni.co.ke"] },
+  { timeoutSeconds: 30, cors: ["https://mysokoni.co.ke"], invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") return res.status(405).end();
     await _processWebhook(req, res, {
@@ -3925,7 +3926,7 @@ exports.replayWebhookDLQ = onCall({ timeoutSeconds: 30 }, async (request) => {
 
 /* â”€â”€ Webhook health endpoint â”€â”€ */
 exports.webhookHealth = onRequest(
-  { timeoutSeconds: 10, cors: ["https://mysokoni.co.ke"] },
+  { timeoutSeconds: 10, cors: ["https://mysokoni.co.ke"], invoker: "public" },
   async (req, res) => {
     const [dlqSnap, retrySnap] = await Promise.all([
       db.collection("webhookDLQ").where("status", "!=", "replayed").limit(1000).get().catch(() => ({ size: -1 })),
@@ -4422,7 +4423,7 @@ exports.indexProviderCreate = onDocumentCreated("providers/{providerId}", async 
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 exports.platformHealth = onRequest(
-  { timeoutSeconds: 10, cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"] },
+  { timeoutSeconds: 10, cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], invoker: "public" },
   async (req, res) => {
     const checks = await Promise.allSettled([
       db.collection("_health").limit(1).get(),

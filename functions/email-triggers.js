@@ -737,7 +737,7 @@ exports.emailUnassignedDeliveryAlert = onSchedule(
    SendGrid Event Webhook  (track opens, clicks, bounces)
    Register: https://us-central1-sokoni-aeb26.cloudfunctions.net/emailWebhook
 ═══════════════════════════════════════════════════════════ */
-exports.emailWebhook = onRequest(async (req, res) => {
+exports.emailWebhook = onRequest({ invoker: "public" }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).end(); return; }
   const events = Array.isArray(req.body) ? req.body : [req.body];
   for (const event of events) {

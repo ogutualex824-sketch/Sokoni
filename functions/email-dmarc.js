@@ -257,7 +257,7 @@ exports.processDmarcReport = onCall(
    3. Forward dmarc@mysokoni.co.ke to dmarc@reports.mysokoni.co.ke in HostPinnacle
 */
 exports.dmarcReportWebhook = onRequest(
-  { cors: false },
+  { cors: false, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
