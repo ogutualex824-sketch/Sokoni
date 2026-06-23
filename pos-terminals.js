@@ -555,7 +555,8 @@ window.PosTerminals = (() => {
             onclick="PosTerminals.wizard._next({serialNumber:'${btDev.id}',btName:'${btDev.name||''}'})">Select This Device →</button>
         </div>`;
       } catch (e) {
-        el.innerHTML = `<span style="color:var(--red);font-size:13px">${e.name==='NotFoundError'?'No device selected.':e.message}</span>`;
+        el.innerHTML = '<span style="color:var(--red);font-size:13px"></span>';
+        el.firstChild.textContent = e.name === 'NotFoundError' ? 'No device selected.' : (e.message || 'Bluetooth error');
       }
     },
 

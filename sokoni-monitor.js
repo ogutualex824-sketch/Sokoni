@@ -164,11 +164,11 @@ const SokoniMonitor = (function () {
   });
 
   const _pageStart = Date.now();
-  setInterval(flush, FLUSH_MS);
+  const _flushTimer  = setInterval(flush, FLUSH_MS);
   _observeVitals();
 
   /* ── Periodic scale + queue snapshot (every 60 s) ───────── */
-  setInterval(() => {
+  const _statusTimer = setInterval(() => {
     if (typeof SOKONI_SCALE !== "undefined") {
       try { scaleStatus(SOKONI_SCALE.getStatus()); } catch {}
     }
@@ -179,6 +179,11 @@ const SokoniMonitor = (function () {
       SokoniPOSResilience.getStats().then(s => posHealth({ online: navigator.onLine, pending: s.pending, failed: s.failed })).catch(() => {});
     }
   }, 60000);
+
+  window.addEventListener("pagehide", () => {
+    clearInterval(_flushTimer);
+    clearInterval(_statusTimer);
+  }, { once: true });
 
   return { track, error, timing, paymentFunnel, firestoreRead, firestoreWrite, posHealth, queueDepth, scaleStatus, flush };
 })();

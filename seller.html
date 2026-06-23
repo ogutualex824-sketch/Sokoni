@@ -231,13 +231,13 @@
   </div>
 </div>
 <script type="module">
-import { initializeApp }               from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp, getApps }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, limit, orderBy }
                                         from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 (async () => {
   try {
-    const _a = initializeApp({ apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE", authDomain:"sokoni-aeb26.firebaseapp.com", projectId:"sokoni-aeb26", storageBucket:"sokoni-aeb26.firebasestorage.app", messagingSenderId:"24799054989", appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4" }, "revSnap");
+    const _a = getApps().find(a => a.name === "revSnap") || initializeApp({ apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE", authDomain:"sokoni-aeb26.firebaseapp.com", projectId:"sokoni-aeb26", storageBucket:"sokoni-aeb26.firebasestorage.app", messagingSenderId:"24799054989", appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4" }, "revSnap");
     const _db = getFirestore(_a);
     const _au = getAuth(_a);
     onAuthStateChanged(_au, async u => {

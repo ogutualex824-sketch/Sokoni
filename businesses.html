@@ -454,7 +454,7 @@
    Firestore: businesses collection (top 100), client-side filter/sort
 ================================================================ */
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getFirestore, collection, getDocs, query, orderBy, limit
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -467,7 +467,7 @@ const FB_CONFIG = {
   storageBucket: 'sokoni-aeb26.firebasestorage.app',
   messagingSenderId: '24799054989',
   appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
-const _fbApp = initializeApp(FB_CONFIG, 'bizDir');
+const _fbApp = getApps().find(a => a.name === 'bizDir') || initializeApp(FB_CONFIG, 'bizDir');
 const _db    = getFirestore(_fbApp);
 
 /* ── XSS helper ── */

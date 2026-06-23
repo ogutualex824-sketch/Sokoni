@@ -349,7 +349,7 @@ const PosAIEngine = (() => {
 
       const result = await this.forecast(30).catch(e => ({ error: e.message }));
       if (result.error) {
-        el.innerHTML = `<div class="bos-error">${result.error}</div>`; return;
+        el.innerHTML = '<div class="bos-error"></div>'; el.firstChild.textContent = result.error || 'Forecast failed'; return;
       }
 
       const { summary, projections } = result;

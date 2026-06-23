@@ -206,7 +206,7 @@ const PosFinance = (() => {
       el.innerHTML = '<div class="bos-loading">Generating P&L…</div>';
 
       const data = await this.generate(startTs, endTs).catch(e => ({ error: e.message }));
-      if (data.error) { el.innerHTML = `<div class="bos-error">${data.error}</div>`; return; }
+      if (data.error) { el.innerHTML = '<div class="bos-error"></div>'; el.firstChild.textContent = data.error || 'Report failed'; return; }
 
       const _fmt = n => `KES ${(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 0 })}`;
       const _color = n => n >= 0 ? 'var(--green)' : 'var(--red)';

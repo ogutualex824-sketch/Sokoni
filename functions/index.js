@@ -4422,7 +4422,7 @@ exports.indexProviderCreate = onDocumentCreated("providers/{providerId}", async 
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 exports.platformHealth = onRequest(
-  { timeoutSeconds: 10, cors: true },
+  { timeoutSeconds: 10, cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"] },
   async (req, res) => {
     const checks = await Promise.allSettled([
       db.collection("_health").limit(1).get(),

@@ -476,9 +476,9 @@ const PosSerial = (() => {
           <div>Expires: <span style="color:var(--green)">${result.expiresDate}</span> (${result.daysLeft} days left)</div>
         </div>`;
     } else if (result.expired) {
-      res.innerHTML = `<div class="bos-error">Warranty expired on ${result.expiresDate}</div>`;
+      res.innerHTML = '<div class="bos-error"></div>'; res.firstChild.textContent = 'Warranty expired on ' + (result.expiresDate || '');
     } else {
-      res.innerHTML = `<div class="bos-error">${result.message}</div>`;
+      res.innerHTML = '<div class="bos-error"></div>'; res.firstChild.textContent = result.message || 'Warranty not found';
     }
   }
 

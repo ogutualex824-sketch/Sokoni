@@ -1614,6 +1614,7 @@ function quickReply(text){
 
 const _CHAT_FN = "https://us-central1-sokoni-aeb26.cloudfunctions.net/sokoniChat";
 const _chatHistory = []; /* conversation history for multi-turn context */
+const _CHAT_MAX    = 40; /* 20 turns — cap prevents unbounded memory growth */
 
 function sendMessage(){
     const input = document.getElementById("chatInput");
@@ -1625,6 +1626,7 @@ function sendMessage(){
     addUserMessage(text);
     input.value = "";
     _chatHistory.push({ role: "user", content: text });
+    if (_chatHistory.length > _CHAT_MAX) _chatHistory.splice(0, _chatHistory.length - _CHAT_MAX);
 
     const msgs = document.getElementById("chatMessages");
     const thinking = document.createElement("div");

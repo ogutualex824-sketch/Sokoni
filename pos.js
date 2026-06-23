@@ -68,7 +68,11 @@ const SPos = (function () {
 
     } catch (e) {
       console.error('[SmartPOS] Boot error:', e);
-      document.body.innerHTML = `<div style="color:red;padding:40px;font-family:monospace">SmartPOS boot error: ${e.message}</div>`;
+      const _errDiv = document.createElement('div');
+      _errDiv.style.cssText = 'color:red;padding:40px;font-family:monospace';
+      _errDiv.textContent = 'SmartPOS boot error: ' + (e.message || 'Unknown error');
+      document.body.innerHTML = '';
+      document.body.appendChild(_errDiv);
     }
   }
 
