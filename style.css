@@ -22,9 +22,15 @@ html:not(.sk-no-header) #sokoni-bell-btn    { display: none !important; }
   position: fixed; top: 0; left: 0; right: 0; z-index: 600;
   height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 18px;
   background: rgba(10,10,10,0.97);
+  color: rgba(255,255,255,0.9);
   backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
   border-bottom: 1px solid rgba(255,255,255,0.07);
   box-shadow: 0 2px 24px rgba(0,0,0,0.5);
+}
+/* Ensure content starts below the fixed 64px nav on first paint — before
+   shared-header.js (defer) can inject its own padding-top rule. */
+html:not(.sk-no-header) body {
+  padding-top: max(64px, calc(64px + env(safe-area-inset-top, 0px)));
 }
 #sk-nav-logo {
   display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
