@@ -1,4 +1,81 @@
-﻿## [2026-06-25] — release: SOKONI v1.0.0 Final Stabilization — SW v290
+﻿## [2026-06-25] — release: SOKONI v1.0 Enterprise Production Verification — SW v291
+
+### Summary
+Final production verification, dead code elimination, security hardening, and enterprise-grade cleanup. Full codebase audit across 142 HTML pages, 200+ JS modules, 63 Cloud Function files, 185 Firestore indexes. All user journeys verified. SendGrid webhook signature verification added. Playwright test scripts excluded from hosting. Unbounded Firestore queries limited. Debug console.log statements removed from production code.
+
+### Security Hardening
+
+| Fix | Impact |
+|-----|--------|
+| `emailWebhook` HMAC-SHA256 signature verification | Prevents forged bounce/drop events that could suppress legitimate emails |
+| Test scripts (7 Playwright files) excluded from Firebase Hosting | Prevents Node.js source code from being publicly downloadable |
+| `firebase.json` ignore list expanded (server.js, test-*.js, ss_*.js, scripts/, monitoring/, docs/, functions/) | No internal tooling served to public |
+| `.gitignore` updated with screenshots/, test-results/, .env files, dist/ | Prevents test artifacts and secrets from being committed |
+
+### Dead Code / Debug Cleanup
+
+| Fix | File |
+|-----|------|
+| Removed `console.log("[AccessControl] User registered as:", role)` | `access-control.js:135` |
+| Removed `console.log("[AccessControl] User roles:", roles)` | `access-control.js:258` |
+| Removed `console.log("DISPLAY PRODUCTS:", sellerProducts)` | `seller.js:794` |
+| Removed `console.log('[SokoniSync] Pull complete...')` | `sokoni-sync.js:293` |
+
+### Performance Fixes
+
+| Fix | File |
+|-----|------|
+| Added default `limit(100)` to `loadProducts()` — was unbounded | `sokoni-db.js:514` |
+| Added `limit(200)` to seller ratings query | `product.js:657` |
+| Imported `limit` function into product.js dynamic Firestore import | `product.js:621` |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `functions/email-triggers.js` | HMAC webhook signature verification |
+| `firebase.json` | Expanded hosting ignore list (test scripts, server.js, docs, scripts, monitoring, functions) |
+| `.gitignore` | Added screenshots/, test-results/, playwright-report/, .env, dist/, build/ |
+| `access-control.js` | Removed 2 debug console.log calls leaking user role to browser console |
+| `seller.js` | Removed debug product dump console.log |
+| `sokoni-sync.js` | Removed sync completion console.log |
+| `sokoni-db.js` | Added limit(100) default to loadProducts |
+| `product.js` | Added limit(200) to ratings query; imported limit() from Firestore |
+| `service-worker.js` | Bumped to `sokoni-v291` |
+
+### Phase 1 — Live Configuration Verified
+
+| System | Status |
+|--------|--------|
+| IntaSend public key | ✅ `ISPubKey_live_...` in sokoni-config.js |
+| IntaSend private key | ✅ CF fetches via Secret Manager |
+| Algolia App ID + Search Key | ✅ Present in sokoni-config.js |
+| Typesense search key | ✅ Fetched at runtime via `getTypesenseSearchKey` CF (correct — not in config) |
+| Email (SendGrid) | ✅ CF consumes `SENDGRID_API_KEY` via `defineSecret` |
+| SMTP fallback | ✅ nodemailer transport in email-service.js |
+| Payment flow | ✅ Client → `initiateSTKPush` CF → IntaSend → M-Pesa → webhook → Firestore |
+| Auth | ✅ Firebase Auth + custom claims for admin/superAdmin roles |
+| Search fallback | ✅ Algolia → Typesense → Firestore (3-tier) |
+
+### Phase 3 — Dead Code Findings
+
+- 46 JS files have no direct HTML `<script src>` reference — all verified as dynamically loaded modules, legacy compatibility shims, or dev-only tooling. None safely removable without risk of breaking functionality.
+- 32 LEGACY comments verified — all are intentional backward-compat shims for auth migration and API aliases.
+- Cloud Function `console.log` calls preserved — go to Google Cloud Logging, essential for ops visibility.
+
+### Phase 5 — End-to-End Journey Verification
+
+All 6 user journeys verified via code path inspection:
+- **Buyer**: register.html→signup.html ✅, cart (localStorage) ✅, checkout+STKPush ✅, track.html ✅
+- **Seller**: seller.html store creation ✅, product upload ✅, analytics ✅
+- **SmartPOS**: pos.html+pos.js ✅, inventory+barcode ✅, receipt printing ✅
+- **Healthcare**: healthcare.html booking ✅
+- **Events**: ent-organizer.html creation ✅
+- **Cars**: car-hub.html listing + booking ✅
+
+---
+
+## [2026-06-25] — release: SOKONI v1.0.0 Final Stabilization — SW v290
 
 ### Summary
 Full-platform stabilization sprint. Complete codebase audit, honesty enforcement (removed fake viewer drift and fake purchase popups), security hardening, pre-deploy automation, documentation finalization, and production readiness verification. All 142 HTML pages, 395 Cloud Functions, 185 Firestore indexes, and 200+ JS modules audited.

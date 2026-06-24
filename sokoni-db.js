@@ -513,8 +513,10 @@ const SokoniDB = {
 
   async loadProducts(opts = {}) {
     let q = collection(db, 'products');
-    if (opts.category) q = query(q, where('category', '==', opts.category));
+    if (opts.category)  q = query(q, where('category', '==', opts.category));
     if (opts.sellerUid) q = query(q, where('sellerUid', '==', opts.sellerUid));
+    if (opts.status)    q = query(q, where('status', '==', opts.status));
+    q = query(q, limit(opts.limit || 100));
     const snap = await getDocs ? getDocs(q) : null;
     if (!snap) return [];
     return snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; });

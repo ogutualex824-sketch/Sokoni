@@ -100,3 +100,17 @@ firestore.indexes.json.new-only
 # Service account keys — never commit
 *firebase-adminsdk*.json
 *service-account*.json
+
+# Playwright screenshots and test artifacts
+screenshots/
+test-results/
+playwright-report/
+
+# Environment files
+.env
+.env.*
+*.env
+
+# Generated build artifacts
+dist/
+build/

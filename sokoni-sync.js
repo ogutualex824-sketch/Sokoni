@@ -290,7 +290,6 @@
         _origSet('sellerProducts', JSON.stringify(merged));
       }
 
-      console.log('[SokoniSync] Pull complete ✓ uid:', uid);
       // Dispatch event so pages can react
       window.dispatchEvent(new CustomEvent('sokoniSyncPulled', { detail: { uid } }));
 

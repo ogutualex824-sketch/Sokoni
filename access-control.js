@@ -132,7 +132,6 @@ const SokoniAccessControl = (() => {
     user.registeredAs = user.registeredAs || {};
     user.registeredAs[role] = true;
     safeSetJSON("sokoniUser", user);
-    console.log("[AccessControl] User registered as:", role);
     return true;
   }
 
@@ -251,12 +250,8 @@ const SokoniAccessControl = (() => {
       filterNavigationItems();
     }
 
-    // Log user role info
     const user = getCurrentUser();
-    if (user) {
-      const { roles } = getUserRoles();
-      console.log("[AccessControl] User roles:", roles);
-    }
+    if (user) { getUserRoles(); }
   }
 
   // Run init when DOM is ready

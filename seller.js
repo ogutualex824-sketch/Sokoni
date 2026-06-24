@@ -791,11 +791,6 @@ function displaySellerProducts(){
 
     ) || [];
 
-    console.log(
-        "DISPLAY PRODUCTS:",
-        sellerProducts
-    );
-
     if(sellerProducts.length === 0){
 
         sellerProductsContainer.innerHTML = `

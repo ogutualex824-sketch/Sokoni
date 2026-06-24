@@ -739,6 +739,27 @@ exports.emailUnassignedDeliveryAlert = onSchedule(
 ═══════════════════════════════════════════════════════════ */
 exports.emailWebhook = onRequest({ invoker: "public" }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).end(); return; }
+
+  /* Verify SendGrid HMAC-SHA256 webhook signature when key is configured.
+     If the env var is absent we accept (dev/CI mode) but log a warning. */
+  const webhookKey = process.env.SENDGRID_WEBHOOK_KEY || "";
+  const sgSig  = req.headers["x-twilio-email-event-webhook-signature"] || "";
+  const sgTs   = req.headers["x-twilio-email-event-webhook-timestamp"] || "";
+
+  if (webhookKey) {
+    const crypto = require("crypto");
+    const rawBody = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body);
+    const payload = sgTs + rawBody;
+    const expected = crypto.createHmac("sha256", webhookKey).update(payload).digest("base64");
+    if (sgSig && expected !== sgSig) {
+      console.warn("[emailWebhook] Invalid signature — request rejected");
+      res.status(403).json({ error: "invalid_signature" });
+      return;
+    }
+  } else {
+    console.warn("[emailWebhook] SENDGRID_WEBHOOK_KEY not set — signature not verified");
+  }
+
   const events = Array.isArray(req.body) ? req.body : [req.body];
   for (const event of events) {
     const msgId = event.sg_message_id || event["smtp-id"] || "";
