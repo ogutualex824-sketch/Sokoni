@@ -361,177 +361,60 @@
     <span id="networkToastText">Back online</span>
   </div>
 
+  <!-- ── SOKONI Shared Navigation ────────────────────────────────────────────
+       Static HTML ensures zero-flash render before shared-header.js runs.
+       shared-header.js (defer) wires auth state, search, and badge counts. -->
+  <nav id="sk-top-nav" aria-label="SOKONI top navigation" role="navigation">
+    <a href="index.html" id="sk-nav-logo" aria-label="SOKONI Home">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI"
+           onerror="this.style.display='none';document.getElementById('sk-nav-logo-text').style.display='block'">
+      <span id="sk-nav-logo-text" style="display:none;">SOKONI</span>
+    </a>
+    <div id="sk-nav-search-wrap" role="search">
+      <span id="sk-nav-search-icon" aria-hidden="true">🔍</span>
+      <input id="sk-nav-search" type="search" placeholder="Search products, services…"
+             autocomplete="off" aria-label="Search SOKONI"
+             onkeydown="if(event.key==='Enter'&&this.value.trim()){document.getElementById('sk-nav-search-dropdown').classList.remove('open');location.href='search.html?q='+encodeURIComponent(this.value.trim())}">
+      <div id="sk-nav-search-dropdown" role="listbox" aria-label="Search suggestions"></div>
+    </div>
+    <div id="sk-nav-actions">
+      <button type="button" class="sk-nav-icon-btn" aria-label="Notifications" aria-expanded="false" aria-haspopup="dialog" id="sk-notif-btn">
+        <span id="sk-notif-bell-icon" aria-hidden="true">🔔</span>
+        <span class="sk-badge" id="sk-notif-badge" role="status" aria-label="Unread notifications"></span>
+      </button>
+      <a href="notifications.html?tab=activity" class="sk-nav-icon-btn" id="sk-activity-btn" aria-label="Activity" title="Activity feed">
+        <span aria-hidden="true">⚡</span>
+        <span class="sk-badge" id="sk-activity-badge" role="status" aria-label="New activity"></span>
+      </a>
+      <a href="messages.html" class="sk-nav-icon-btn" aria-label="Messages" id="sk-msg-btn">
+        <span aria-hidden="true">💬</span>
+        <span class="sk-badge" id="sk-msg-badge" role="status" aria-label="Unread messages"></span>
+      </a>
+      <a href="cart.html" id="sk-nav-cart" aria-label="Shopping cart">
+        <span aria-hidden="true">🛒</span>
+        <span id="sk-nav-cart-pip" style="display:none;" aria-label="0 items">0</span>
+      </a>
+      <a href="login.html" id="sk-nav-avatar" aria-label="Profile">👤</a>
+      <button type="button" class="sk-nav-icon-btn" id="sk-theme-btn" aria-label="Toggle theme" title="Toggle theme"
+              onclick="if(window.SokoniTheme){SokoniTheme.toggle();}">
+        <span id="sk-theme-icon" aria-hidden="true">🌙</span>
+      </button>
+      <button type="button" class="sk-nav-icon-btn" id="sk-menu-btn" aria-label="Menu" aria-expanded="false"
+              onclick="var _o=document.getElementById('sk-menu-overlay');if(_o){_o.classList.add('open');this.setAttribute('aria-expanded','true');}">
+        <span aria-hidden="true" style="font-size:13px;font-weight:900;display:flex;flex-direction:column;gap:3px;">
+          <span style="display:block;width:18px;height:2px;background:currentColor;border-radius:2px;"></span>
+          <span style="display:block;width:14px;height:2px;background:currentColor;border-radius:2px;"></span>
+          <span style="display:block;width:18px;height:2px;background:currentColor;border-radius:2px;"></span>
+        </span>
+      </button>
+    </div>
+  </nav>
+
   <!-- Pull-to-refresh indicator -->
   <div id="pullRefreshIndicator">
     <span style="animation:spin 0.8s linear infinite;display:inline-block;">🔄</span>
     Refreshing…
   </div>
-  <div class="menu-toggle" onclick="toggleMobileMenu()">
-
-    ☰
-
-  </div>
-
-  <!-- NAVBAR -->
-
-  <nav class="navbar">
-
-
-    <button type="button" class="theme-toggle" id="themeToggleBtn" onclick="toggleTheme()">🌙</button>
-
-    <div class="logo-section">
-      <img loading="lazy" src="assets/Sokonilogo2.png" alt="SOKONI" class="main-logo" id="sokoniMainLogo" onclick="_secretTap()" style="cursor:pointer;">
-    </div>
-
-    <!-- Location pill — mobile only, desktop hidden via CSS -->
-    <div class="nav-location" id="navLocation" onclick="pickDeliveryLocation()" title="Delivery location">
-      <span class="nav-loc-icon">📍</span>
-      <span class="nav-loc-text" id="navLocText">Nairobi</span>
-      <span class="nav-loc-chevron">▾</span>
-    </div>
-
-
-
-    <div class="nav-actions">
-
-      <!-- ── NOTIFICATION BELL ── -->
-      <div class="n-bell-wrap" id="nBellWrap">
-        <button type="button" class="n-bell-btn" id="nBellBtn" onclick="sokoniNotif.toggle()" aria-label="Notifications" title="Notifications">
-          <span id="nBellIcon">🔔</span>
-          <span class="n-bell-dot" id="nBellDot"></span>
-        </button>
-        <div class="n-panel" id="nPanel" role="dialog" aria-label="Notification settings">
-          <div class="n-panel-arr"></div>
-          <div class="n-panel-head">
-            <span class="n-panel-ttl">🔔 Notifications</span>
-            <button type="button" class="n-panel-x" onclick="sokoniNotif.close()">✕</button>
-          </div>
-          <div class="n-status-row" id="nStatusRow">
-            <span class="n-sdot" id="nSDot">●</span>
-            <span id="nSTxt">Checking status…</span>
-          </div>
-          <div class="n-opts">
-            <button type="button" class="n-opt n-opt-en" id="nOptEnable" onclick="sokoniNotif.enable()">
-              <span class="n-opt-ico">✅</span>
-              <span class="n-opt-bd"><span class="n-opt-ttl">Enable Notifications</span><span class="n-opt-sub">Get alerts for deals &amp; orders</span></span>
-            </button>
-            <button type="button" class="n-opt n-opt-sn" onclick="sokoniNotif.snooze(60)">
-              <span class="n-opt-ico">⏰</span>
-              <span class="n-opt-bd"><span class="n-opt-ttl">Snooze 1 Hour</span><span class="n-opt-sub">Resume automatically after 60 min</span></span>
-            </button>
-            <button type="button" class="n-opt n-opt-sn" onclick="sokoniNotif.snooze(1440)">
-              <span class="n-opt-ico">🌙</span>
-              <span class="n-opt-bd"><span class="n-opt-ttl">Snooze 24 Hours</span><span class="n-opt-sub">Quiet until tomorrow</span></span>
-            </button>
-            <button type="button" class="n-opt n-opt-off" onclick="sokoniNotif.disable()">
-              <span class="n-opt-ico">🔕</span>
-              <span class="n-opt-bd"><span class="n-opt-ttl">Turn Off Permanently</span><span class="n-opt-sub">Stop all Sokoni notifications</span></span>
-            </button>
-          </div>
-          <a href="notifications.html" style="display:block;text-align:center;margin:10px 0 4px;padding:10px 0;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);border-radius:12px;color:#71ff00;font-size:13px;font-weight:700;text-decoration:none;">🔔 View All Notifications</a>
-          <p class="n-panel-foot">You can re-enable anytime in Profile → Settings</p>
-        </div>
-      </div>
-
-      <a href="profile.html" class="nav-points-btn" id="navPointsBtn" style="display:none;">
-        ⭐ <span id="navPoints">0</span> pts
-      </a>
-
-      <a href="wishlist.html" class="wishlist-nav-btn">
-
-        💗 Wishlist
-
-      </a>
-
-
-
-      <a href="cart.html" class="cart-btn" id="cartButton" style="text-decoration:none;position:relative;">🛒<span id="cartCount" style="display:none;position:absolute;top:-8px;right:-8px;background:#ff3d3d;color:#fff;font-size:10px;font-weight:900;min-width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;line-height:1;padding:0 4px;box-shadow:0 2px 6px rgba(255,61,61,0.5);pointer-events:none;">0</span></a>
-
-      <div id="authButtons">
-        <a href="login.html"><button type="button" class="login-btn">Login</button></a>
-      </div>
-
-      <a href="profile.html" class="nav-profile-avatar" id="navProfileAvatar" title="My Profile">
-        <span id="navProfileInitial">👤</span>
-      </a>
-
-    </div>
-
-  </nav>
-
-  <!-- MOBILE MENU -->
-
-  <!-- Overlay — tap outside menu to close -->
-  <div class="menu-overlay" id="menuOverlay" onclick="toggleMobileMenu()"></div>
-
-  <div class="mobile-menu" id="mobileMenu">
-    <button class="mmenu-close" onclick="toggleMobileMenu()" aria-label="Close menu">✕</button>
-
-    <div class="mmenu-auth" id="mmenuAuthRow">
-      <a href="login.html" id="mmenuLoginLink" class="mmenu-btn-login">🔑 Login</a>
-      <a href="signup.html" id="mmenuSignupLink" class="mmenu-btn-signup">✨ Create Account</a>
-    </div>
-    <div class="mmenu-user-row" id="mmenuUserRow" style="display:none">
-      <div class="mmenu-avatar" id="mmenuAvatar">👤</div>
-      <div class="mmenu-user-info">
-        <span class="mmenu-user-name" id="mmenuUserName">My Account</span>
-        <a href="profile.html" class="mmenu-user-link">View profile →</a>
-      </div>
-    </div>
-
-    <a href="index.html">🏠 Home</a>
-
-    <div class="mmenu-section">Shop</div>
-    <a href="category.html?cat=all">🛍️ All Categories</a>
-    <a href="flashsale.html">⚡ Flash Sale</a>
-    <a href="offer.html">🏪 Sell / List Product</a>
-
-    <div class="mmenu-section">Services &amp; Delivery</div>
-    <a href="services.html">🛠️ All Services</a>
-    <a href="food.html">🍔 Food &amp; Drinks</a>
-    <a href="delivery.html">🚛 Delivery</a>
-    <a href="driver.html">🚗 Driver Portal</a>
-
-    <div class="mmenu-section">Hubs</div>
-    <a href="healthcare.html">🏥 Healthcare</a>
-    <a href="banking.html">🏦 Banking &amp; Finance</a>
-    <a href="entertainment.html">🎬 Entertainment</a>
-    <a href="sports-hub.html">⚽ Sports Hub</a>
-    <a href="car-hub.html">🚗 Car Hub</a>
-    <a href="property-hub.html">🏘️ Property</a>
-    <a href="bnb-hub.html">🏨 BnB &amp; Stays</a>
-    <a href="legal-hub.html">⚖️ Legal Hub</a>
-    <a href="b2b.html">🤝 B2B</a>
-    <a href="tech-hub.html">📱 Tech Hub</a>
-    <a href="construction.html">🏗️ Construction</a>
-    <a href="education.html">📚 Education Hub</a>
-    <a href="jobs.html">💼 Jobs Board</a>
-    <a href="life-events.html">✨ Life Events</a>
-    <a href="trust.html">🛂 Trust Passport</a>
-    <a href="opportunity.html">💼 Earn with Sokoni</a>
-    <a href="fitness-hub.html">💪 Fitness Hub</a>
-    <a href="home-services.html">🏠 Home Services</a>
-    <a href="community.html">💬 Community</a>
-    <a href="unboxing.html">📦 Unboxing Wall</a>
-    <a href="reviews.html">⭐ Reviews</a>
-
-    <div class="mmenu-section">My Account</div>
-    <a href="profile.html">👤 My Profile</a>
-    <a href="notifications.html">🔔 Notifications</a>
-    <a href="loyalty.html">⭐ Loyalty Points</a>
-    <a href="referral.html">🎁 Refer &amp; Earn</a>
-    <a href="subscriptions.html">♾️ Subscriptions</a>
-    <a href="seller.html">🏪 Seller Dashboard</a>
-    <a href="cart.html">🛒 My Cart</a>
-    <a href="wishlist.html">❤️ Wishlist</a>
-    <a href="messages.html">💬 Messages</a>
-    <a href="track.html">📦 Track Order</a>
-    <a href="scan.html">📷 QR Scanner</a>
-    <a href="wallet.html">💳 SOKONI Wallet</a>
-    <a href="business-os.html">💼 Business OS</a>
-
-  </div>
-
   <!-- GLASS HERO BANNER -->
 
   <section class="glass-hero">
@@ -3184,123 +3067,6 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
 }
 </style>
 
-<!-- ══ NOTIFICATION JS ══ -->
-<script>
-(function(){
-  var KEY='sokoniNotifState', SNZ='sokoniNotifSnoozeUntil';
-
-  function getInfo(){
-    var perm = ('Notification' in window) ? Notification.permission : 'default';
-    var stored = localStorage.getItem(KEY);
-    var snoozeUntil = parseInt(localStorage.getItem(SNZ)||'0',10);
-    if(stored==='snoozed' && Date.now()>snoozeUntil){
-      localStorage.removeItem(KEY); localStorage.removeItem(SNZ); stored=null;
-    }
-    if(stored==='off') return {state:'off',label:'🔕 Notifications turned off',cls:'off'};
-    if(stored==='snoozed'){
-      var mins=Math.round((snoozeUntil-Date.now())/60000);
-      var tl=mins>59?Math.round(mins/60)+'h left':mins+'min left';
-      return {state:'snoozed',label:'😴 Snoozed · '+tl,cls:'sn'};
-    }
-    if(perm==='granted') return {state:'on',label:'✅ Notifications are on',cls:'on'};
-    if(perm==='denied') return {state:'blocked',label:'🚫 Blocked by browser — check site settings',cls:'off'};
-    return {state:'default',label:'💡 Tap Enable for deal &amp; order alerts',cls:'default'};
-  }
-
-  function render(){
-    var info=getInfo();
-    var bellIcon=document.getElementById('nBellIcon');
-    var dot=document.getElementById('nBellDot');
-    var sdot=document.getElementById('nSDot');
-    var stxt=document.getElementById('nSTxt');
-    var enBtn=document.getElementById('nOptEnable');
-    var bellMap={on:'🔔',snoozed:'😴',off:'🔕',blocked:'🔕',default:'🔔'};
-    if(bellIcon) bellIcon.textContent=bellMap[info.state]||'🔔';
-    if(dot){dot.className='n-bell-dot';if(info.state==='on')dot.classList.add('on');else if(info.state==='snoozed')dot.classList.add('sn');}
-    if(sdot){sdot.className='n-sdot '+info.cls;sdot.textContent='●';}
-    if(stxt) stxt.innerHTML=info.label;
-    if(enBtn) enBtn.style.display=(info.state==='on'||info.state==='blocked')?'none':'';
-  }
-
-  function _outsideClick(e){
-    var w=document.getElementById('nBellWrap');
-    if(w&&!w.contains(e.target)) close();
-  }
-
-  function toggle(){
-    var p=document.getElementById('nPanel');
-    var btn=document.getElementById('nBellBtn');
-    if(!p||!btn) return;
-    if(p.classList.contains('open')){ close(); return; }
-    /* Position panel below the bell button, right-aligned, never off-screen */
-    var rect=btn.getBoundingClientRect();
-    var panelW=Math.min(300,window.innerWidth-24);
-    var top=rect.bottom+8;
-    var right=Math.max(12,window.innerWidth-rect.right);
-    /* If panel would go below viewport, show above the button instead */
-    if(top+400>window.innerHeight) top=Math.max(8,rect.top-412);
-    p.style.top=top+'px';
-    p.style.right=right+'px';
-    p.style.width=panelW+'px';
-    /* Arrow position: align with bell button center */
-    var arr=p.querySelector('.n-panel-arr');
-    if(arr){
-      var bellCenterFromRight=window.innerWidth-rect.left-rect.width/2;
-      var arrowRight=Math.max(10,Math.min(panelW-24,bellCenterFromRight-right-6));
-      arr.style.right=arrowRight+'px';
-    }
-    render();
-    p.classList.add('open');
-    setTimeout(function(){ document.addEventListener('click',_outsideClick,true); },10);
-  }
-
-  function close(){
-    var p=document.getElementById('nPanel');
-    if(p) p.classList.remove('open');
-    document.removeEventListener('click',_outsideClick,true);
-  }
-
-  function enable(){
-    if(!('Notification' in window)){(window._skToast||alert)('Your browser does not support notifications.');return;}
-    Notification.requestPermission().then(function(perm){
-      if(perm==='granted'){
-        localStorage.removeItem(KEY); localStorage.removeItem(SNZ);
-        try{ new Notification('SOKONI 🔔',{body:"You'll get alerts for deals, orders & messages.",icon:'assets/icons/icon-192.png'}); }catch(e){}
-      }
-      render();
-      if(perm==='granted') close();
-    });
-  }
-
-  function snooze(minutes){
-    localStorage.setItem(KEY,'snoozed');
-    localStorage.setItem(SNZ,String(Date.now()+minutes*60000));
-    render(); close();
-    _toast((minutes>=1440?'🌙 Snoozed for 24 hours':'⏰ Snoozed for 1 hour'));
-  }
-
-  function disable(){
-    if(!_c){_skConfirm('Turn off Sokoni notifications permanently? You can re-enable anytime from the bell icon.',()=>_doDisableNotifs(true));return;}
-    localStorage.setItem(KEY,'off'); localStorage.removeItem(SNZ);
-    /* Kill running live-popup interval and hide any visible popup immediately */
-    if(window._livePopupInterval){ clearInterval(window._livePopupInterval); window._livePopupInterval=null; }
-    var lp=document.getElementById('livePopup'); if(lp) lp.style.display='none';
-    render(); close(); _toast('🔕 Notifications turned off');
-  }
-
-  function _toast(msg){
-    var t=document.createElement('div');
-    t.style.cssText='position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:rgba(10,12,22,0.96);border:1px solid rgba(255,255,255,0.12);color:white;font-size:12px;font-weight:700;padding:11px 22px;border-radius:100px;z-index:9100;backdrop-filter:blur(16px);box-shadow:0 8px 28px rgba(0,0,0,0.55);white-space:nowrap;font-family:inherit;pointer-events:none;transition:opacity .3s;';
-    t.textContent=msg;
-    document.body.appendChild(t);
-    setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},320);},2600);
-  }
-
-  window.addEventListener('DOMContentLoaded',render);
-
-  window.sokoniNotif={toggle:toggle,close:close,enable:enable,snooze:snooze,disable:disable};
-})();
-</script>
 
 <!-- ══ ADMIN LOCK OVERLAY (Pattern / PIN / Password) ══ -->
 <style>

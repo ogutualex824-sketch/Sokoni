@@ -14,6 +14,87 @@ html:not(.sk-no-header) body > header:not(#sk-top-nav) { display: none !importan
 html:not(.sk-no-header) .menu-toggle,
 html:not(.sk-no-header) #sokoni-bell-btn    { display: none !important; }
 
+/* ── SOKONI Shared Header — critical pre-render styles ───────────────────────
+   These mirror shared-header.js's injected CSS so the static #sk-top-nav in
+   index.html renders correctly before shared-header.js (defer) executes.
+   style.css is render-blocking, guaranteeing zero flash of unstyled content. */
+#sk-top-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 600;
+  height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 18px;
+  background: rgba(10,10,10,0.97);
+  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  box-shadow: 0 2px 24px rgba(0,0,0,0.5);
+}
+#sk-nav-logo {
+  display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
+}
+#sk-nav-logo img {
+  height: 42px; width: auto; object-fit: contain; display: block;
+}
+#sk-nav-logo-text {
+  font-size: 20px; font-weight: 900; color: #71ff00; letter-spacing: .03em;
+}
+#sk-nav-search-wrap {
+  flex: 1; min-width: 0; max-width: 520px; margin: 0 10px; position: relative;
+}
+#sk-nav-search {
+  width: 100%; padding: 10px 16px 10px 40px;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 28px; color: rgba(255,255,255,0.92); font-size: 14px;
+  font-family: 'Segoe UI', system-ui, sans-serif; outline: none;
+}
+#sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 13px; }
+#sk-nav-search-icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  font-size: 15px; pointer-events: none; opacity: .45;
+}
+#sk-nav-actions {
+  display: flex; align-items: center; gap: 3px; flex-shrink: 0; margin-left: auto;
+}
+.sk-nav-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: transparent; border: none; cursor: pointer;
+  font-size: 18px; text-decoration: none; color: inherit; position: relative;
+}
+#sk-nav-cart {
+  display: flex; align-items: center; gap: 5px; padding: 8px 14px;
+  border-radius: 22px; background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2);
+  color: #71ff00; font-size: 12px; font-weight: 800; text-decoration: none;
+}
+#sk-nav-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.28);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 900; color: #71ff00; text-decoration: none;
+}
+.sk-badge {
+  position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px;
+  border-radius: 10px; font-size: 9px; font-weight: 900; line-height: 16px;
+  padding: 0 4px; text-align: center; border: 2px solid #0a0a0a; display: none;
+}
+.sk-badge.visible { display: flex; align-items: center; justify-content: center; }
+#sk-notif-badge { background: #ff4d6d; color: #fff; }
+#sk-msg-badge   { background: #71ff00; color: #000; }
+#sk-activity-badge { background: #fbbf24; color: #000; }
+#sk-nav-cart-pip {
+  background: #71ff00; color: #000; border-radius: 20px;
+  min-width: 16px; height: 16px; font-size: 9px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center; padding: 0 3px;
+}
+@media (max-width: 600px) {
+  #sk-top-nav {
+    height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 6px;
+  }
+  #sk-nav-logo { order: 0; }
+  #sk-nav-logo img { height: 36px; }
+  #sk-nav-actions { order: 1; margin-left: auto; gap: 1px; }
+  #sk-nav-search-wrap { order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; }
+  #sk-msg-btn { display: none !important; }
+  #sk-theme-btn { display: none !important; }
+}
+
  *{
     margin:0;
     padding:0;

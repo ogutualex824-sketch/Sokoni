@@ -1,4 +1,20 @@
-﻿## [2026-06-24] — fix(deploy): Cloud Functions 429 Quota + Broken Image Recovery
+﻿## [2026-06-24] — fix(homepage): Header render, offline banner, SW cache bust — 6 issues fixed
+
+### Summary
+Six homepage defects resolved: (1) Static `#sk-top-nav` HTML added directly to `index.html` — nav now renders before any JS executes, eliminating the zero-header state caused by service-worker-cached old `index.html` being served without the shared header. (2) Old `<nav class="navbar">`, hamburger div, mobile menu drawer, and orphaned notification IIFE (~280 lines) removed from `index.html`. (3) `shared-header.js` `_inject()` refactored: no longer returns early when `#sk-top-nav` already exists; instead wires auth state, search, badges, and menu overlay onto the pre-existing element. (4) Critical `#sk-top-nav` CSS added to `style.css` (render-blocking) so the static nav is styled before deferred JS runs — eliminates flash of unstyled content. (5) `sokoni-ui.js` offline banner no longer fires a `/ping` fetch on page load (false-positive when SW intercepts); initial check trusts `navigator.onLine` only; fetch verification retained for subsequent `online` events. (6) Service worker bumped to `sokoni-v270` — forces all cached clients to reload and pick up the updated `index.html`, `style.css`, `shared-header.js`, and `sokoni-ui.js`.
+
+### Files Modified
+`index.html`, `style.css`, `shared-header.js`, `sokoni-ui.js`, `service-worker.js`
+
+### Security Changes
+None.
+
+### Breaking Changes
+None. The `shared-header.js` change is backward-compatible — pages without a static `#sk-top-nav` continue to use JS injection as before.
+
+---
+
+## [2026-06-24] — fix(deploy): Cloud Functions 429 Quota + Broken Image Recovery
 
 ### Summary
 Two deployment-blocking errors fixed. Root cause 1: `firebase.json` set `minInstances: 1` globally across all 565 functions, causing ~565 simultaneous Cloud Run API mutations on every deploy — immediately exceeding the 240/min quota. Root cause 2: The 429 cascade interrupted the `posPrint` and `searchQueueCoordinator` image builds mid-push, leaving Cloud Run services pointing to non-existent image tags. Fixes: (1) global `minInstances` set to 0 in `firebase.json`; (2) `minInstances: 1` added only to the 6 critical functions (`kass`, `verifyIntasendPayment`, `onOrderStatusChange`, `onNewOrderCreated`, `initiateSTKPush`, `intasendWebhook`); (3) `deploy-batches.ps1` script deploys all 378 functions in 16 batches of ≤25 with 30s cooldowns.

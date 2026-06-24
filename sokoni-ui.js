@@ -634,7 +634,8 @@
     /* navigator.onLine is unreliable on VPN/proxy/captive portal.
        Verify with a real fetch before showing the banner. */
     function _checkConnection(cb) {
-      fetch('/ping?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
+      /* Use manifest.json — guaranteed to exist; SW caches it so also works offline */
+      fetch('/manifest.json?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
         .then(function() { cb(true); })
         .catch(function() { cb(false); });
     }
@@ -643,13 +644,24 @@
       bar.classList.toggle('sk-offline--visible', !isOnline);
     }
 
+    /* _initialCheck: on page load trust navigator.onLine to avoid false-positive
+       banners caused by the SW intercepting the ping before network is ready. */
+    var _initialCheck = true;
+
     function update() {
       if (!navigator.onLine) {
-        /* Definitely offline per browser — show immediately */
         _applyState(false);
+        _initialCheck = false;
         return;
       }
-      /* Browser says online — verify with a real request (debounced 300 ms) */
+      if (_initialCheck) {
+        /* First check — trust the browser; do NOT fire a fetch that the SW
+           might intercept and fail before connectivity is confirmed. */
+        _applyState(true);
+        _initialCheck = false;
+        return;
+      }
+      /* Subsequent online events — verify with a real network request */
       clearTimeout(_offlineTimer);
       _offlineTimer = setTimeout(function() {
         _checkConnection(function(real) { _applyState(real); });

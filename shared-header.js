@@ -869,10 +869,15 @@
 
   /* ── Inject on DOM ready ── */
   function _inject() {
-    if (document.getElementById('sk-top-nav')) return;
-    const nav = _buildNav();
-    document.body.insertBefore(nav, document.body.firstChild);
+    /* If the page already has a static #sk-top-nav (e.g. index.html bakes it
+       in for zero-flash render), skip DOM insertion but still wire all events. */
+    const _navExists = !!document.getElementById('sk-top-nav');
+    if (!_navExists) {
+      const nav = _buildNav();
+      document.body.insertBefore(nav, document.body.firstChild);
+    }
     if (showSearch) document.body.classList.add('sk-has-search');
+    if (_navExists) _refresh(); /* sync avatar/cart from localStorage */
 
     /* Build full-screen menu overlay */
     _buildMenuOverlay();
