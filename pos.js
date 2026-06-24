@@ -137,6 +137,15 @@ const SPos = (function () {
     /* Check pending sync */
     sync.run(true);
 
+    /* Seed bell badge with initial low-stock count */
+    PosDB.products.getLowStock().then(low => {
+      const badge = document.getElementById('notify-badge');
+      if (badge && low.length > 0) {
+        badge.textContent = low.length > 9 ? '9+' : low.length;
+        badge.style.display = 'flex';
+      }
+    }).catch(() => {});
+
     /* Boot mobile controller (phone-first UI) */
     if (window.PosMobile) PosMobile.init();
 
@@ -377,13 +386,29 @@ const SPos = (function () {
 
     showAlerts() {
       PosDB.products.getLowStock().then(low => {
-        if (!low.length) { toast('No low-stock alerts', 'info'); return; }
-        confirm.show(
-          '⚠️ Low Stock Alert',
-          '<strong>' + low.length + ' products</strong> are low or out of stock:<br><br>' +
-          low.map(p => `• ${p.name} — ${p.stock} ${p.unit || 'units'} left`).join('<br>'),
-          () => ui.switchTab('inventory')
-        );
+        /* Update bell badge */
+        const badge = document.getElementById('notify-badge');
+        if (badge) {
+          if (low.length > 0) {
+            badge.textContent = low.length > 9 ? '9+' : low.length;
+            badge.style.display = 'flex';
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+        /* Delegate rendering to Phase 7 helper */
+        if (typeof _p7ShowAlertsModal === 'function') {
+          _p7ShowAlertsModal(low);
+        } else if (!low.length) {
+          toast('No low-stock alerts', 'info');
+        } else {
+          confirm.show(
+            '⚠️ Low Stock Alert',
+            '<strong>' + low.length + ' products</strong> are low or out of stock:<br><br>' +
+            low.map(p => `• ${p.name} — ${p.stock} ${p.unit || 'units'} left`).join('<br>'),
+            () => ui.switchTab('inventory')
+          );
+        }
       });
     },
 
@@ -508,6 +533,9 @@ const SPos = (function () {
       else state.cartItems.push({ id: p.id, name: p.name, price: p.price, cost: p.cost || 0, qty: 1, taxRate: p.taxRate || 0, unit: p.unit });
       cart.render();
     },
+
+    /* Used by Phase 7 long-press quick-add */
+    _addById(productId) { cart.addItem(productId); },
 
     updateQty(id, delta) {
       const item = state.cartItems.find(i => i.id === id);
@@ -909,6 +937,10 @@ const SPos = (function () {
 
         /* Step 3: Queue for cloud sync */
         await PosDB.syncQueue.add('transaction', txn);
+        /* Show offline queue count if not connected */
+        if (!navigator.onLine) {
+          PosDB.syncQueue.getPending().then(function(q){ _p7UpdateOfflineCount(q.length); }).catch(function(){});
+        }
 
         /* Step 4: Register idempotency key (prevent replay) */
         if (window.PosIdempotency) await PosIdempotency.recordKey(receiptNo, { txnId, total });
@@ -2101,6 +2133,9 @@ const SPos = (function () {
       };
     }
 
+    /* Pass receipt data to Phase 7 preview helper */
+    if (typeof _p7SetReceiptData === 'function') _p7SetReceiptData(receiptData);
+
     el.classList.add('open');
     setTimeout(() => el.classList.remove('open'), 8000);
   }
@@ -2552,9 +2587,28 @@ const SPos = (function () {
     const bar = document.getElementById('offline-bar');
     const dot = document.getElementById('pos-online-dot');
     if (bar) bar.classList.toggle('hidden', online);
-    if (dot) dot.classList.toggle('offline', !online);
-    dot.title = online ? 'Online' : 'Offline';
-    if (online) sync.run(true);
+    if (dot) { dot.classList.toggle('offline', !online); dot.title = online ? 'Online' : 'Offline'; }
+    if (online) {
+      sync.run(true);
+      /* Clear offline queue counter once back online */
+      _p7UpdateOfflineCount(0);
+    }
+  }
+
+  function _p7UpdateOfflineCount(n) {
+    const bar = document.getElementById('offline-bar');
+    if (!bar) return;
+    let badge = bar.querySelector('.offline-queue-count');
+    if (n <= 0) { if (badge) badge.remove(); return; }
+    if (!badge) { badge = document.createElement('span'); badge.className = 'offline-queue-count'; bar.appendChild(badge); }
+    badge.textContent = n + ' queued';
+    /* Update bell badge too */
+    const bell = document.getElementById('notify-badge');
+    if (bell && bell.style.display === 'none') {
+      bell.textContent = n; bell.style.display = 'flex';
+    }
+    /* Save sync timestamp when uploading */
+    if (navigator.onLine) localStorage.setItem('posLastSync', Date.now().toString());
   }
 
   /* ── IMEI / Serial capture dialog (called at checkout for electronics) ── */

@@ -607,7 +607,9 @@
   var _OFFLINE_CSS = [
     '#sk-offline-bar{',
       'position:fixed;',
-      'top:0;left:0;right:0;',
+      /* Sit directly below the fixed nav; --sk-header-h is written by
+         sokoni-layout.js once the nav is measured. Falls back to 64px. */
+      'top:var(--sk-header-h,64px);left:0;right:0;',
       'background:#1a0a00;',
       'border-bottom:1px solid rgba(255,149,0,0.3);',
       'color:#ff9500;',
@@ -615,7 +617,7 @@
       'font-weight:700;',
       'text-align:center;',
       'padding:8px 16px;',
-      'z-index:var(--sk-z-emergency,999);',
+      'z-index:999;',
       'transform:translateY(-100%);',
       'transition:transform var(--sk-duration-normal,250ms) ease;',
     '}',

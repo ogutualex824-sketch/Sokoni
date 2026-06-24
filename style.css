@@ -19,7 +19,7 @@ html:not(.sk-no-header) #sokoni-bell-btn    { display: none !important; }
    index.html renders correctly before shared-header.js (defer) executes.
    style.css is render-blocking, guaranteeing zero flash of unstyled content. */
 #sk-top-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 600;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100001;
   height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 18px;
   background: rgba(10,10,10,0.97);
   color: rgba(255,255,255,0.9);
@@ -27,6 +27,10 @@ html:not(.sk-no-header) #sokoni-bell-btn    { display: none !important; }
   border-bottom: 1px solid rgba(255,255,255,0.07);
   box-shadow: 0 2px 24px rgba(0,0,0,0.5);
 }
+/* Belt-and-suspenders: hide legacy floating nav buttons injected by sokoni-ui-extras.js
+   on pages that have the shared header — the shared header already covers these. */
+html:not(.sk-no-header) #sokoni-search-btn,
+html:not(.sk-no-header) #sokoni-inbox-btn  { display: none !important; }
 /* Ensure content starts below the fixed 64px nav on first paint — before
    shared-header.js (defer) can inject its own padding-top rule. */
 html:not(.sk-no-header) body {
@@ -15370,3 +15374,515 @@ label { font-size:12px !important; font-weight:700 !important; margin-bottom:4px
 .sk-badge-doctor    { background:rgba(239,68,68,0.12);  border:1px solid rgba(239,68,68,0.3);  color:#ef4444; }
 .sk-badge-lawyer    { background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3); color:#a855f7; }
 .sk-badge-agent     { background:rgba(234,179,8,0.12);  border:1px solid rgba(234,179,8,0.3);  color:#eab308; }
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 8 — PERFORMANCE (LCP · INP · CLS)
+═══════════════════════════════════════════════════════════ */
+
+/* ── CLS: Reserve space in product image containers before image loads.
+   Without this the container collapses to 0px, then jumps to full
+   height once the image arrives — causing cumulative layout shift. ── */
+.product-img-wrap {
+  aspect-ratio: 1 / 1;
+  /* Shimmer while image is in-flight */
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.03) 25%,
+    rgba(255,255,255,0.07) 50%,
+    rgba(255,255,255,0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: p8ImgShimmer 1.6s ease infinite;
+}
+.product-img-wrap.img-failed,
+.product-img-wrap:has(img[src]):not(:has(img.p8-loading)) {
+  animation: none;
+  background: none;
+}
+@keyframes p8ImgShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── LCP: signal browser to promote animated/interactive cards early ── */
+.product-card:hover { will-change: transform; }
+
+/* ── INP: content-visibility on hub/section rows far below fold ──
+   Skips style + layout for off-screen sections until scroll.
+   contain-intrinsic-size prevents scrollbar jump during lazy reveal. ── */
+.hub-section,
+.trending-section:not(:first-of-type),
+.section-wrap,
+.hub-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 480px;
+}
+
+/* ── Skeleton product cards (shown while JS populates the grid) ── */
+.p8-sk {
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  animation: p8Pulse 1.5s ease-in-out infinite;
+}
+@keyframes p8Pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .55; }
+}
+.p8-sk-img   { width:100%; aspect-ratio:1/1; background:rgba(255,255,255,0.06); border-radius:10px 10px 0 0; }
+.p8-sk-line  { height:10px; border-radius:6px; background:rgba(255,255,255,0.06); margin:10px 10px 6px; }
+.p8-sk-line.w70  { width:70%; }
+.p8-sk-line.w45  { width:45%; }
+.p8-sk-line.w85  { width:85%; }
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 9 — ANIMATIONS & MICRO-INTERACTIONS
+═══════════════════════════════════════════════════════════ */
+
+/* ── Skeleton: replace pulse with shimmer sweep ── */
+.p8-sk {
+  animation: none;
+  background: rgba(255,255,255,0.04);
+  overflow: hidden;
+  position: relative;
+}
+.p8-sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255,255,255,0.07) 50%,
+    transparent 65%
+  );
+  background-size: 200% 100%;
+  animation: p9SkSweep 1.4s ease-in-out infinite;
+}
+@keyframes p9SkSweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Page entrance: body fades in on load ── */
+body.p9-page-in {
+  animation: p9PageIn 0.38s ease both;
+}
+@keyframes p9PageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scroll reveal system ──
+   Sections start hidden and slide-up into view.
+   IntersectionObserver in script.js adds .p9-in to trigger. ── */
+.p9-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.52s cubic-bezier(0.22,1,0.36,1),
+              transform 0.52s cubic-bezier(0.22,1,0.36,1);
+}
+.p9-reveal.p9-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* stagger siblings inside a reveal parent */
+.p9-reveal.p9-in > .p9-child:nth-child(1) { transition-delay: 0s; }
+.p9-reveal.p9-in > .p9-child:nth-child(2) { transition-delay: 0.07s; }
+.p9-reveal.p9-in > .p9-child:nth-child(3) { transition-delay: 0.14s; }
+.p9-reveal.p9-in > .p9-child:nth-child(4) { transition-delay: 0.21s; }
+.p9-child {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.42s ease, transform 0.42s ease;
+}
+.p9-reveal.p9-in > .p9-child { opacity: 1; transform: translateY(0); }
+
+/* ── Product card: enhanced hover glow ── */
+.product-card:hover {
+  border-color: rgba(113,255,0,0.28) !important;
+  box-shadow:
+    0 6px 24px rgba(0,0,0,0.4),
+    0 0 0 1px rgba(113,255,0,0.18),
+    0 0 18px rgba(113,255,0,0.08) !important;
+}
+
+/* ── Product card: staggered entry when grid renders ── */
+.product-card {
+  animation: p9CardIn 0.38s cubic-bezier(0.22,1,0.36,1) both;
+}
+@keyframes p9CardIn {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+/* Each card in the grid gets a tiny stagger via --p9i custom property
+   (set by JS on each card element after render) */
+.product-card { animation-delay: var(--p9i, 0s); }
+
+/* ── Cart-add flash: lime ring flash on the product tile ── */
+@keyframes p9CartFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(113,255,0,0.6); border-color: rgba(113,255,0,0.8); }
+  60%  { box-shadow: 0 0 0 10px rgba(113,255,0,0); }
+  100% { box-shadow: 0 0 0 0 rgba(113,255,0,0); border-color: inherit; }
+}
+.p9-cart-flash {
+  animation: p9CartFlash 0.55s cubic-bezier(0.22,1,0.36,1) !important;
+}
+
+/* ── Wishlist heart pop ── */
+@keyframes p9HeartPop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.45); filter: drop-shadow(0 0 4px rgba(239,68,68,0.7)); }
+  60%  { transform: scale(0.88); }
+  100% { transform: scale(1); }
+}
+.p9-heart-pop {
+  animation: p9HeartPop 0.42s cubic-bezier(0.34,1.56,0.64,1) !important;
+}
+
+/* ── Input focus glow ── */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(113,255,0,0.18), 0 0 0 1px rgba(113,255,0,0.35) !important;
+  border-color: rgba(113,255,0,0.45) !important;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease !important;
+}
+
+/* ── Primary button press: subtle scale + glow flash ── */
+.pk-btn-primary:active,
+.wiz-btn-primary:active,
+.checkout-btn:active,
+.pos-pay-btn:active {
+  transform: scale(0.97) !important;
+  box-shadow: 0 0 0 4px rgba(113,255,0,0.25), 0 2px 8px rgba(113,255,0,0.35) !important;
+  transition: transform 0.08s, box-shadow 0.08s !important;
+}
+
+/* ── Hub icon bounce on hover ── */
+.hub-item:hover .hub-icon,
+.cat-card:hover .cat-icon,
+[class*="hub-"] [class*="-icon"]:hover {
+  animation: p9IconBounce 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes p9IconBounce {
+  0%   { transform: translateY(0) scale(1); }
+  40%  { transform: translateY(-5px) scale(1.1); }
+  70%  { transform: translateY(1px) scale(0.97); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* ── Notification toast: upgrade entrance to spring slide-up ── */
+.notification {
+  animation: p9ToastIn 0.42s cubic-bezier(0.34,1.56,0.64,1) !important;
+}
+@keyframes p9ToastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.93); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Cart count badge pop on update ── */
+@keyframes p9BadgePop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.5); }
+  70%  { transform: scale(0.88); }
+  100% { transform: scale(1); }
+}
+.p9-badge-pop { animation: p9BadgePop 0.38s cubic-bezier(0.34,1.56,0.64,1); }
+
+/* ── Reduce motion: respect user preference ── */
+@media (prefers-reduced-motion: reduce) {
+  .p9-reveal,
+  .product-card,
+  .p8-sk::after,
+  .notification,
+  .p9-cart-flash,
+  .p9-heart-pop,
+  .p9-badge-pop {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PHASE 10 — ENTERPRISE UX REVIEW
+   Typography tokens · Empty states · Form validation ·
+   Disabled patterns · Keyboard focus · Status chips ·
+   Inline loading · Dividers · Tooltips
+══════════════════════════════════════════════════════════════ */
+
+/* ── Type-scale & semantic colour tokens ── */
+:root {
+  /* Type scale */
+  --t-xs:   10px;
+  --t-sm:   11px;
+  --t-base: 13px;
+  --t-md:   15px;
+  --t-lg:   17px;
+  --t-xl:   20px;
+  --t-2xl:  24px;
+  --t-3xl:  30px;
+
+  /* Semantic status colours */
+  --c-error:      #ff4d4d;
+  --c-error-bg:   rgba(255,77,77,0.10);
+  --c-warn:       #ffb020;
+  --c-warn-bg:    rgba(255,176,32,0.10);
+  --c-info:       #4db8ff;
+  --c-info-bg:    rgba(77,184,255,0.10);
+  --c-success:    #71ff00;
+  --c-success-bg: rgba(113,255,0,0.10);
+  --c-muted:      rgba(255,255,255,0.35);
+  --c-subtle:     rgba(255,255,255,0.55);
+
+  /* Spacing scale */
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 16px;
+  --sp-lg: 24px;
+  --sp-xl: 40px;
+}
+
+/* ── Keyboard focus-visible ── */
+:focus-visible {
+  outline: 2px solid rgba(113,255,0,0.75) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 5px rgba(113,255,0,0.12) !important;
+}
+:focus:not(:focus-visible) { outline: none !important; }
+
+/* ── Global disabled state ── */
+button[disabled],
+input[disabled],
+textarea[disabled],
+select[disabled],
+.btn[disabled],
+[class*="-btn"][disabled],
+[class*="-cta"][disabled] {
+  opacity: 0.36 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  filter: grayscale(0.4) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Section divider ── */
+.p10-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 20%,
+              rgba(255,255,255,0.08) 80%, transparent 100%);
+  margin: 16px 0;
+}
+.p10-divider.g {
+  background: linear-gradient(90deg, transparent 0%, rgba(113,255,0,0.18) 20%,
+              rgba(113,255,0,0.18) 80%, transparent 100%);
+}
+
+/* ── Unified empty state ── */
+.p10-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px 48px;
+  text-align: center;
+  gap: 12px;
+  width: 100%;
+}
+.p10-empty-icon {
+  font-size: 56px;
+  line-height: 1;
+  filter: opacity(0.65);
+  animation: p10EmptyFloat 3.2s ease-in-out infinite;
+}
+.p10-empty h3 {
+  margin: 0 !important;
+  font-size: var(--t-xl) !important;
+  font-weight: 700 !important;
+  color: rgba(255,255,255,0.85) !important;
+  letter-spacing: -0.015em !important;
+  line-height: 1.25 !important;
+}
+.p10-empty p {
+  margin: 0;
+  font-size: var(--t-base);
+  color: var(--c-muted);
+  max-width: 280px;
+  line-height: 1.55;
+}
+.p10-empty-cta {
+  margin-top: 6px;
+  padding: 10px 24px;
+  background: var(--pk-green);
+  color: #080808;
+  border: none;
+  border-radius: 100px;
+  font-size: var(--t-base);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s var(--pk-ease), box-shadow 0.15s ease;
+}
+.p10-empty-cta:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(113,255,0,0.32) !important;
+}
+.p10-empty-cta:active { transform: scale(0.96) !important; }
+@keyframes p10EmptyFloat {
+  0%,100% { transform: translateY(0) scale(1); }
+  50%     { transform: translateY(-9px) scale(1.03); }
+}
+
+/* ── Form validation states ── */
+input.p10-invalid,
+textarea.p10-invalid,
+select.p10-invalid {
+  border-color: var(--c-error) !important;
+  box-shadow: 0 0 0 3px rgba(255,77,77,0.13) !important;
+}
+input.p10-valid,
+textarea.p10-valid,
+select.p10-valid {
+  border-color: rgba(113,255,0,0.55) !important;
+  box-shadow: 0 0 0 3px rgba(113,255,0,0.09) !important;
+}
+.p10-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--c-error);
+  margin-top: 4px;
+  animation: p10FadeSlide 0.18s ease both;
+}
+.p10-error-msg::before { content: '⚠'; font-size: 10px; flex-shrink: 0; }
+.p10-success-msg {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--c-success);
+  margin-top: 4px;
+  animation: p10FadeSlide 0.18s ease both;
+}
+.p10-success-msg::before { content: '✓'; font-size: 11px; flex-shrink: 0; }
+.p10-hint {
+  font-size: var(--t-sm);
+  color: var(--c-muted);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+@keyframes p10FadeSlide {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Status chip system ── */
+.p10-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 100px;
+  font-size: var(--t-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1.8;
+}
+.p10-status::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.p10-status.s-pending   { color: var(--c-warn);    background: var(--c-warn-bg); }
+.p10-status.s-active,
+.p10-status.s-delivered { color: var(--c-success);  background: var(--c-success-bg); }
+.p10-status.s-processing,
+.p10-status.s-shipped   { color: var(--c-info);     background: var(--c-info-bg); }
+.p10-status.s-cancelled,
+.p10-status.s-rejected  { color: var(--c-error);    background: var(--c-error-bg); }
+.p10-status.s-draft,
+.p10-status.s-inactive  { color: var(--c-muted);    background: rgba(255,255,255,0.06); }
+.p10-status.s-live      {
+  color: var(--c-success);
+  background: var(--c-success-bg);
+  box-shadow: 0 0 0 1px rgba(113,255,0,0.18);
+}
+.p10-status.s-live::before { animation: p10DotPulse 1.8s ease-in-out infinite; }
+@keyframes p10DotPulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: 0.5; transform: scale(0.65); }
+}
+
+/* ── Inline button loading spinner ── */
+.p10-loading {
+  position: relative !important;
+  pointer-events: none !important;
+  color: transparent !important;
+}
+.p10-loading::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 16px; height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid rgba(255,255,255,0.22);
+  border-top-color: rgba(255,255,255,0.85);
+  border-radius: 50%;
+  animation: p10Spin 0.6s linear infinite;
+}
+.p10-loading.pk-green::after {
+  border-color: rgba(0,0,0,0.18);
+  border-top-color: #080808;
+}
+@keyframes p10Spin { to { transform: rotate(360deg); } }
+
+/* ── Data-tip tooltips ── */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px) scale(0.9);
+  background: rgba(18,18,18,0.97);
+  color: rgba(255,255,255,0.92);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s var(--pk-ease);
+  z-index: 9999;
+  border: 1px solid rgba(255,255,255,0.07);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+  letter-spacing: 0.01em;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+[data-tip-right]::after { left: auto; right: 0; transform: translateY(4px) scale(0.9); }
+[data-tip-right]:hover::after { transform: translateY(0) scale(1); }
+
+/* ── Extend prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .p10-empty-icon,
+  .p10-status.s-live::before,
+  .p10-loading::after {
+    animation: none !important;
+  }
+  [data-tip]::after {
+    transition: none !important;
+  }
+}

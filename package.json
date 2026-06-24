@@ -4,9 +4,16 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
+    "predeploy": "node scripts/pre-deploy-check.js",
     "dev": "http-server . -p 3000 -o --cors -c-1",
     "dev:bs": "browser-sync start --config bs-config.js",
-    "deploy": "npx -y firebase-tools@latest deploy --only hosting"
+    "deploy": "npx -y firebase-tools@latest deploy --only hosting",
+    "deploy:all": "npx -y firebase-tools@latest deploy --project sokoni-aeb26",
+    "deploy:functions": "npx -y firebase-tools@latest deploy --only functions --project sokoni-aeb26",
+    "deploy:hosting": "npx -y firebase-tools@latest deploy --only hosting --project sokoni-aeb26",
+    "deploy:rules": "npx -y firebase-tools@latest deploy --only firestore,storage --project sokoni-aeb26",
+    "check": "node scripts/pre-deploy-check.js",
+    "monitor": "node scripts/setup-monitoring.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

@@ -2669,6 +2669,54 @@
           "order": "DESCENDING"
         }
       ]
+    },
+
+    {
+      "collectionGroup": "productPriceHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productId", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productStats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "viewsToday", "order": "DESCENDING" },
+        { "fieldPath": "updatedAt",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productStats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "salesTotal", "order": "DESCENDING" },
+        { "fieldPath": "updatedAt",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productStats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "trendingScore", "order": "DESCENDING" },
+        { "fieldPath": "updatedAt",     "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productViewDedup",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productId", "order": "ASCENDING" },
+        { "fieldPath": "lastAt",    "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "productViewDedup",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lastAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

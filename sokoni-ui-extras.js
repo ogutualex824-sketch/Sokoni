@@ -424,9 +424,15 @@
   function init() {
     injectNotificationBell();
     injectDesktopBellBadge();
-    injectSearchBtn();
-    injectInboxBtn();
-    injectMobileMenu();
+    /* Skip legacy floating nav buttons and the old mobile drawer when the
+       shared #sk-top-nav header is active — it handles search, inbox, and
+       the hamburger menu natively. Injecting them would create duplicate
+       fixed elements that cover and interfere with the shared header. */
+    if (!document.getElementById('sk-top-nav')) {
+      injectSearchBtn();
+      injectInboxBtn();
+      injectMobileMenu();
+    }
     /* Wallet balance injected after menu renders */
     setTimeout(injectWalletBalance, 100);
   }

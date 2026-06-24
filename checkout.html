@@ -11,10 +11,13 @@
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <meta name="color-scheme" content="dark">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdn.intasend.com" crossorigin>
   <link rel="preconnect" href="https://api.intasend.com" crossorigin>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
   <link rel="dns-prefetch" href="https://firestore.googleapis.com">
   <script src="sokoni-security.js" defer></script>
   <script src="sokoni-guards.js" defer></script>
@@ -757,6 +760,33 @@
       .co-input-row{ grid-template-columns:1fr; }
       .mpesa-modal-box,.card-modal-box{ padding:28px 20px; }
     }
+
+    /* ── Phase 5: Saved Addresses ── */
+    .co-addr-saved { margin-bottom:10px; }
+    .co-addr-saved-hd { font-size:10px; font-weight:800; color:rgba(255,255,255,0.28); text-transform:uppercase; letter-spacing:.1em; margin-bottom:7px; }
+    .co-addr-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .co-addr-chip {
+      padding:5px 12px; border-radius:20px;
+      border:1px solid rgba(255,255,255,0.1);
+      background:rgba(255,255,255,0.04);
+      color:rgba(255,255,255,0.55); font-size:11px; font-weight:600;
+      cursor:pointer; font-family:inherit;
+      max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      transition:all .15s;
+    }
+    .co-addr-chip:hover { border-color:rgba(113,255,0,0.35); background:rgba(113,255,0,0.06); color:rgba(113,255,0,0.9); }
+
+    /* ── Phase 5: Loyalty Widget ── */
+    .co-loyalty-widget {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      background:rgba(113,255,0,0.04);
+      border:1px solid rgba(113,255,0,0.15); border-radius:14px;
+      padding:12px 16px; margin-bottom:14px;
+    }
+    .co-loyalty-pts { font-size:20px; font-weight:900; color:#71ff00; line-height:1; }
+    .co-loyalty-earn { font-size:11px; color:rgba(255,255,255,0.4); margin-top:3px; }
+    .co-loyalty-link { font-size:11px; font-weight:800; color:#71ff00; text-decoration:none; white-space:nowrap; flex-shrink:0; opacity:.8; }
+    .co-loyalty-link:hover { opacity:1; }
   </style>
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -818,6 +848,11 @@
       <div class="co-card">
         <div class="co-card-title">📍 Delivery Details</div>
         <div id="locationStatus"></div>
+        <!-- Phase 5: Saved Addresses Picker -->
+        <div class="co-addr-saved" id="coSavedAddrWrap" style="display:none;">
+          <div class="co-addr-saved-hd">📍 Saved Addresses</div>
+          <div class="co-addr-chips" id="coAddrChips"></div>
+        </div>
         <div class="co-input-row">
           <input class="co-input" type="text" id="coName" placeholder="Full Name">
           <input class="co-input" type="tel" id="coPhone" placeholder="Phone — 07XXXXXXXX">
@@ -1034,6 +1069,18 @@
           <button type="button" onclick="applyDiscount()" style="padding:14px 20px;background:linear-gradient(135deg,rgba(113,255,0,0.15),rgba(79,200,0,0.1));border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;font-size:13px;border-radius:14px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;" onmouseenter="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.25),rgba(79,200,0,0.18))';this.style.boxShadow='0 4px 14px rgba(113,255,0,0.2)'" onmouseleave="this.style.background='linear-gradient(135deg,rgba(113,255,0,0.15),rgba(79,200,0,0.1))';this.style.boxShadow='none'">Apply</button>
         </div>
         <div id="discountMsg" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+
+      <!-- Phase 5: Loyalty Points Widget -->
+      <div class="co-loyalty-widget" id="coLoyaltyWidget" style="display:none;">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+          <span style="font-size:22px;flex-shrink:0;">⭐</span>
+          <div>
+            <div><span class="co-loyalty-pts" id="coLoyaltyPts">—</span><span style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:5px;">pts balance</span></div>
+            <div class="co-loyalty-earn" id="coLoyaltyEarn">+— pts from this order</div>
+          </div>
+        </div>
+        <a href="loyalty.html" class="co-loyalty-link">Manage →</a>
       </div>
 
       <!-- Place Order -->
@@ -2386,6 +2433,74 @@ window.processPaypalPayment = processPaypalPayment;
     var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
     if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
   }catch(e){}
+
+  /* ══ Phase 5: Saved Addresses Picker ══ */
+  (function _initSavedAddr() {
+    const ADDR_KEY = 'sokoniSavedAddresses';
+    const wrap  = document.getElementById('coSavedAddrWrap');
+    const chips = document.getElementById('coAddrChips');
+    const inp   = document.getElementById('coAddress');
+    if (!wrap || !chips || !inp) return;
+
+    function _load() { try { return JSON.parse(localStorage.getItem(ADDR_KEY)) || []; } catch(e) { return []; } }
+    function _persist(a) { try { localStorage.setItem(ADDR_KEY, JSON.stringify(a)); } catch(e) {} }
+
+    function _render() {
+      const list = _load();
+      if (!list.length) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      chips.innerHTML = list.slice(0, 4).map(function(a, i) {
+        const safe = String(a).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        const preview = safe.length > 38 ? safe.slice(0, 38) + '…' : safe;
+        return '<button class="co-addr-chip" type="button" data-i="' + i + '" title="' + safe + '">📍 ' + preview + '</button>';
+      }).join('');
+      chips.querySelectorAll('.co-addr-chip').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          inp.value = list[parseInt(btn.dataset.i, 10)];
+          inp.dispatchEvent(new Event('input'));
+        });
+      });
+    }
+
+    _render();
+
+    inp.addEventListener('blur', function() {
+      const val = inp.value.trim();
+      if (val.length < 5) return;
+      let list = _load();
+      list = [val, ...list.filter(function(a) { return a.toLowerCase() !== val.toLowerCase(); })].slice(0, 5);
+      _persist(list);
+      _render();
+    });
+  })();
+
+  /* ══ Phase 5: Loyalty Points Balance Widget ══ */
+  (function _initLoyaltyWidget() {
+    const widget = document.getElementById('coLoyaltyWidget');
+    const ptsEl  = document.getElementById('coLoyaltyPts');
+    const earnEl = document.getElementById('coLoyaltyEarn');
+    if (!widget || !ptsEl || !earnEl) return;
+    try {
+      const data = JSON.parse(localStorage.getItem('sokoniLoyalty') || '{}');
+      const pts  = typeof data.points === 'number' ? data.points : null;
+      if (pts === null) return;
+      widget.style.display = 'flex';
+      ptsEl.textContent = pts.toLocaleString();
+
+      function _updateEarn() {
+        const raw   = document.getElementById('btnTotal') ? document.getElementById('btnTotal').textContent : '';
+        const total = parseInt(raw.replace(/[^0-9]/g, ''), 10) || 0;
+        const earn  = Math.max(1, Math.floor(total / 100));
+        earnEl.textContent = '+' + earn + ' pts from this order';
+      }
+      _updateEarn();
+      const btnTotal = document.getElementById('btnTotal');
+      if (btnTotal) {
+        new MutationObserver(_updateEarn).observe(btnTotal, { childList: true, characterData: true, subtree: true });
+      }
+    } catch(e) {}
+  })();
+
 })();
 </script>
 <script type="module" src="firebase.js"></script>

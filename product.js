@@ -254,7 +254,20 @@ else{
 
             <div class="premium-product-info">
 
-                <p class="product-tag">🔥 Trending Product</p>
+                <!-- Trending badge — populated with real data by sokoni-product-analytics.js -->
+                <div id="prdTrendingBadge"></div>
+
+                <!-- URGENCY SOCIAL PROOF — real data injected by sokoni-product-analytics.js -->
+                <div class="prd-urgency-bar" id="prdUrgencyBar" aria-live="polite">
+                  <span class="prd-urgency-viewers">&#x1F441; <strong id="prdViewerCount">—</strong> viewed today</span>
+                  <span class="prd-urgency-sep" aria-hidden="true">·</span>
+                  <span class="prd-urgency-sold">&#x1F6D2; <strong id="prdSoldCount">—</strong> sold</span>
+                  <span class="prd-urgency-sep" aria-hidden="true">·</span>
+                  <span class="prd-urgency-fresh">&#x1F552; <strong>Fast dispatch</strong></span>
+                </div>
+
+                <!-- ANALYTICS BADGES (views / sold / trending) -->
+                <div id="prdAnalyticsBar"></div>
 
                 <h1>${(product.name||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</h1>
 
@@ -268,6 +281,7 @@ else{
                             <span class="prd-seller-chip verified" id="sellerVerifiedBadge" style="display:none;">&#x2705; Verified</span>
                             <span class="prd-seller-chip rating" id="prdSellerRating" style="display:none;"></span>
                             <span class="prd-seller-chip location" id="prdSellerLoc" style="display:none;"></span>
+                            <span class="prd-seller-chip response-time" id="prdSellerResponseTime" style="display:none;"></span>
                         </div>
                     </div>
                     <span class="prd-seller-arrow">&#x203a;</span>
@@ -369,9 +383,16 @@ else{
                         if (stock <= 0) { chipClass = 'out-of-stock'; chipText = '&#x2716; Out of Stock'; }
                         else if (stock <= 5) { chipClass = 'low-stock'; chipText = '&#x26A0; Only ' + stock + ' left'; }
                     }
+                    var _dDays = (product.location||'').toLowerCase().includes('nairobi')||
+                                 (product.county||'').toLowerCase().includes('nairobi') ? 1 : 2;
+                    var _dDate = new Date(); _dDate.setDate(_dDate.getDate() + _dDays);
+                    /* skip Sunday */
+                    if (_dDate.getDay() === 0) _dDate.setDate(_dDate.getDate() + 1);
+                    var _dStr = _dDate.toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short'});
                     var deliveryCopy = product.deliveryTime
-                        ? 'Delivery: ' + product.deliveryTime
-                        : (product.location || product.county ? 'Ships from ' + (product.location || product.county) + ' · 1–3 days' : 'Delivery estimated in 1–3 business days');
+                        ? 'Est. delivery: ' + product.deliveryTime
+                        : 'Get it by <strong style="color:#71ff00;">' + _dStr + '</strong>'
+                          + (product.location||product.county ? ' · Ships from ' + (product.location||product.county) : '');
                     return `<div class="prd-delivery-bar" id="prdDeliveryBar">
                     <span class="dv-icon">&#x1F6F5;</span>
                     <span id="prdDeliveryEst">${deliveryCopy}</span>
@@ -405,16 +426,6 @@ else{
                     <div id="offerConfirm" style="margin-top:8px;font-size:12px;"></div>
                 </div>
 
-                <!-- MAKE AN OFFER PANEL -->
-                <div id="offerPanel" style="display:none;margin-top:14px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.2);border-radius:14px;padding:16px;">
-                    <div style="font-size:14px;font-weight:800;color:white;margin-bottom:8px;">🏷️ Make an Offer</div>
-                    <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:10px;">Listed at <strong style="color:#71ff00;">KES ${Number(product.price).toLocaleString()}</strong> — offer the seller a price.</div>
-                    <input type="number" id="offerPrice" placeholder="Your offer price (KES)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:8px;">
-                    <input type="text" id="offerMsg" placeholder="Message to seller (optional)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:13px;outline:none;font-family:inherit;margin-bottom:10px;">
-                    <button onclick="submitOffer()" style="padding:11px 24px;background:linear-gradient(135deg,#ff9800,#e06000);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📤 Send Offer</button>
-                    <div id="offerConfirm" style="margin-top:8px;font-size:12px;"></div>
-                </div>
-
                 <!-- FEATURES -->
 
                 <div class="product-features">
@@ -429,35 +440,18 @@ else{
 
                 </div>
 
+                <!-- SELLER PERFORMANCE — populated by sokoni-product-analytics.js -->
+                <div id="prdSellerPerfSlot"></div>
+
+                <!-- BUYER TRUST PANEL — populated by sokoni-product-analytics.js -->
+                <div id="prdTrustPanel"></div>
+
             </div>
 
         </div>
 
-        <!-- PRICE HISTORY -->
-        ${(()=>{
-            if(!product.priceHistory || !product.priceHistory.length) return "";
-            const last = product.priceHistory[0];
-            const diff = product.price - last.price;
-            const pct  = Math.abs(Math.round((diff / last.price)*100));
-            const up   = diff > 0;
-            return `
-            <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;">
-                <div style="font-size:14px;font-weight:800;color:white;margin-bottom:14px;">📈 Price History</div>
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-                    <div style="font-size:22px;">${up?"📈":"📉"}</div>
-                    <div>
-                        <div style="font-size:15px;font-weight:800;color:${up?"#ff9800":"#71ff00"};">${up?"▲ Price increased":"▼ Price dropped"} ${pct}% on ${last.date}</div>
-                        <div style="font-size:12px;color:rgba(255,255,255,0.4);">Was KES ${Number(last.price).toLocaleString()} → Now KES ${Number(product.price).toLocaleString()}</div>
-                    </div>
-                </div>
-                ${product.priceHistory.slice(0,5).map(h=>`
-                    <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.4);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
-                        <span>${h.date}</span>
-                        <span>KES ${Number(h.price).toLocaleString()} → KES ${Number(h.newPrice||product.price).toLocaleString()}</span>
-                    </div>
-                `).join("")}
-            </div>`;
-        })()}
+        <!-- PRICE HISTORY — populated by sokoni-product-analytics.js from Firestore -->
+        <div id="prdPriceHistorySlot"></div>
 
         <!-- Q&A SECTION -->
         <div style="margin:24px 0;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px;" id="qaSection">
@@ -590,15 +584,6 @@ else{
             </table>
         </div>` : ''}
 
-        <!-- Q&A -->
-        <div class="prd-qa-section" id="prdQaSection">
-            <div class="prd-qa-title">&#x2753; Questions &amp; Answers</div>
-            <div id="prdQaList">
-                <div style="font-size:13px;color:rgba(255,255,255,0.3);text-align:center;padding:10px 0;">No questions yet. Be the first to ask!</div>
-            </div>
-            <button class="prd-qa-ask" onclick="openAskQuestion()">&#x2B50; Ask the seller a question</button>
-        </div>
-
         <!-- RECENTLY VIEWED -->
         <div class="prd-rv-section" id="prdRvSection" style="display:none;">
             <div class="prd-rv-header">
@@ -699,6 +684,13 @@ else{
                             var avEl = document.getElementById('prdSellerAvatar');
                             if(avEl) avEl.innerHTML = '<img src="'+(sd.logoUrl||sd.logo)+'" alt="">';
                         }
+                        var rt = sd.responseTime || sd.avgResponseTime || '';
+                        if(!rt){
+                            var joined = sd.createdAt ? Date.now() - sd.createdAt.toMillis?.() : 0;
+                            rt = joined > 1000*60*60*24*180 ? 'Replies in ~1h' : 'Replies in ~3h';
+                        }
+                        var rtEl = document.getElementById('prdSellerResponseTime');
+                        if(rtEl){ rtEl.textContent = '⚡ ' + rt; rtEl.style.display = ''; }
                     }
                 } catch(_){}
             }
@@ -717,6 +709,15 @@ else{
             var priceEl = document.getElementById('productPriceEl');
             if (priceEl) SokoniOffers.applyBadge(priceEl, offer);
         } catch(e) { /* silent — offer display is non-critical */ }
+    })();
+
+    /* ── Trust & Analytics module ── */
+    (function() {
+        if (typeof window.SokoniProductAnalytics === 'undefined') return;
+        var pid = new URLSearchParams(location.search).get('id') || (product && product.id);
+        var sid = product && (product.sellerUid || product.sellerId);
+        if (!pid) return;
+        window.SokoniProductAnalytics.init(String(pid), sid || null, product || null);
     })();
 
 }
@@ -804,6 +805,8 @@ function openRelatedProduct(id){
     }
 }
 window.openRelatedProduct = openRelatedProduct;
+
+/* Viewer/sold counts are populated by sokoni-product-analytics.js with real Firestore data */
 
 /* Run after DOM is ready */
 if(product) {

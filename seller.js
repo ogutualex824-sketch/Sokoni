@@ -2168,47 +2168,60 @@ window.sendSellerBroadcast = sendSellerBroadcast;
 ========================= */
 
 function generateAiDescription(){
-  const name     = document.getElementById("aiDescName")?.value.trim();
-  const category = document.getElementById("aiDescCategory")?.value;
-  const features = document.getElementById("aiDescFeatures")?.value.trim();
+  const name     = (document.getElementById("aiDescName")?.value || "").trim();
+  const category = (document.getElementById("aiDescCategory")?.value || "default").toLowerCase();
+  const features = (document.getElementById("aiDescFeatures")?.value || "").trim();
+  const price    = (document.getElementById("aiDescPrice")?.value || "").trim();
   if(!name){ showNotification("Enter a product name first","error"); return; }
 
   const btn = document.getElementById("aiDescBtn");
-  if(btn){ btn.textContent = "✨ Generating..."; btn.disabled=true; }
+  if(btn){ btn.textContent = "✨ Generating..."; btn.disabled = true; }
 
-  /* Template-based smart generation (no API key needed) */
-  const templates = {
-    fashion:    ["Elevate your style with", "Turn heads in", "Crafted for those who value"],
-    electronics:["Engineered for performance,", "Experience next-level tech with", "Cutting-edge technology meets"],
-    furniture:  ["Transform your space with", "Handcrafted with premium materials,", "Bring timeless elegance with"],
-    beauty:     ["Reveal your natural glow with", "Luxurious formula for", "Dermatologist-approved"],
-    food:       ["Farm-fresh goodness in every bite —", "Naturally sourced and ethically produced,", "Taste Kenya's finest"],
-    default:    ["Premium quality guaranteed —", "Designed for everyday excellence,", "Built to last, crafted with care —"]
+  /* Rich Kenya-market templates (no API key needed) */
+  const openers = {
+    fashion:     ["Elevate your everyday look with", "Step out in confidence wearing", "Style meets comfort in"],
+    electronics: ["Experience next-level performance with", "Built for power users — introducing", "Engineered to impress:"],
+    furniture:   ["Transform your living space with", "Timeless craftsmanship meets modern design in", "Redefine your home with"],
+    beauty:      ["Unlock your best skin with", "Professional-grade results at home with", "Naturally radiant — discover"],
+    food:        ["Taste the difference with", "Farm-fresh quality in every bite —", "Ethically sourced and full of flavour:"],
+    health:      ["Invest in your wellbeing with", "Trusted by health professionals —", "Clinically inspired and Kenya-proven:"],
+    sports:      ["Push your limits with", "Gear up for greatness with", "Performance-engineered:"],
+    vehicles:    ["Drive with confidence in", "Reliability meets style with", "Your road, your rules —"],
+    default:     ["Premium quality guaranteed with", "Crafted for everyday excellence —", "Designed to impress, built to last:"]
   };
-
-  const catKey = Object.keys(templates).find(k => (category||"").includes(k)) || "default";
-  const opener = templates[catKey][Math.floor(Math.random()*templates[catKey].length)];
-  const keyFeatures = features ? ` Key features: ${features}.` : "";
-  const closers = [
-    " Fast delivery across Kenya. 100% satisfaction guaranteed.",
-    " Trusted by thousands of happy buyers on Sokoni. Order yours today!",
-    " Quality you can feel, price you'll love. Available now on Sokoni.",
-    " Limited stock — don't miss out. Secure yours today!"
+  const benefits = {
+    fashion:     ["Perfect for casual days and formal occasions. Machine washable and easy to care for.", "Breathable fabric designed for Kenya's climate. Available in multiple sizes."],
+    electronics: ["Compatible with all major devices and operating systems. Energy-efficient — saves you money long-term.", "30-day warranty included. Backed by our quality assurance guarantee."],
+    furniture:   ["Easy self-assembly — all fittings included. Durable materials built for Kenya's climate.", "Sturdy construction that lasts. Wipe-clean surface for easy maintenance."],
+    beauty:      ["Suitable for all skin types including sensitive. Dermatologist-tested and free of harmful chemicals.", "Formulated without parabens, sulfates or artificial fragrances. Safe for daily use."],
+    food:        ["No artificial preservatives or additives. Sustainably sourced from Kenyan farmers.", "100% natural ingredients. Ideal for families and health-conscious buyers."],
+    default:     ["Backed by our quality assurance guarantee. Packaged securely for safe delivery anywhere in Kenya.", "Easy returns within 7 days if not satisfied. Trusted by over 10,000 buyers on Sokoni."]
+  };
+  const ctas = [
+    "Order today and get fast delivery across Kenya! 🚚",
+    "Add to cart now — limited stock available!",
+    "Trusted by thousands of happy buyers on Sokoni. Yours is just a click away.",
+    "Shop with confidence — easy 7-day returns on all orders."
   ];
-  const closer = closers[Math.floor(Math.random()*closers.length)];
 
-  const description = `${opener} the ${name}.${keyFeatures}${closer}`;
+  const catKey   = Object.keys(openers).find(k => category.includes(k)) || "default";
+  const opener   = openers[catKey][Math.floor(Math.random() * openers[catKey].length)];
+  const benefit  = (benefits[catKey] || benefits.default)[Math.floor(Math.random() * (benefits[catKey] || benefits.default).length)];
+  const cta      = ctas[Math.floor(Math.random() * ctas.length)];
+
+  const featLine  = features ? `\n\n✅ Key features: ${features}.` : "";
+  const priceLine = price    ? `\n\n💰 Priced at KES ${Number(price).toLocaleString()} — exceptional value for the quality you get.` : "";
+
+  const description = `${opener} the ${name}.\n\n${benefit}${featLine}${priceLine}\n\n${cta}`;
 
   setTimeout(() => {
     const outEl = document.getElementById("aiDescOutput");
-    if(outEl){ outEl.value = description; outEl.style.display="block"; }
-    if(btn){ btn.textContent="✨ Generate Again"; btn.disabled=false; }
-
-    /* Auto-fill the product description field if empty */
+    if(outEl){ outEl.value = description; outEl.style.display = "block"; outEl.rows = 6; }
+    if(btn){ btn.textContent = "✨ Generate Again"; btn.disabled = false; }
     const descField = document.getElementById("productDescription");
     if(descField && !descField.value.trim()) descField.value = description;
     showNotification("AI description generated!","success");
-  }, 1200);
+  }, 1100);
 }
 
 window.generateAiDescription = generateAiDescription;

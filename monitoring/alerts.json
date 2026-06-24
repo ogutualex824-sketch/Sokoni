@@ -157,6 +157,108 @@
       }],
       "alertStrategy": { "autoClose": "86400s" },
       "combiner": "OR"
+    },
+
+    {
+      "displayName": "Email Queue Depth > 200 (backlog)",
+      "documentation": {
+        "content": "More than 200 emails are pending in the emailQueue collection. SendGrid may be down or the queue processor is failing.\nCheck: https://console.cloud.google.com/firestore/data/emailQueue?project=sokoni-aeb26",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "email queue depth critical",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"processEmailQueue\" AND textPayload:\"Both transports failed\"",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "3600s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Payment Verification Failure Rate > 10%",
+      "documentation": {
+        "content": "More than 10% of payment verification attempts are failing. IntaSend integration may be down or the private key is misconfigured.\nCheck verifyIntasendPayment and darajaSTKPush logs.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "payment verification errors",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND (resource.labels.function_name=\"verifyIntasendPayment\" OR resource.labels.function_name=\"darajaSTKPush\") AND severity=ERROR",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Backup Not Run in 26 Hours",
+      "documentation": {
+        "content": "scheduledFirestoreBackup has not run successfully in over 26 hours. Check the Cloud Function logs and verify the GCS bucket sokoni-aeb26-backups exists with correct IAM permissions.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "firestore backup failure",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"scheduledFirestoreBackup\" AND severity=ERROR",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "86400s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "CSP Violations Spike > 50/hour",
+      "documentation": {
+        "content": "A high volume of Content Security Policy violations has been detected. This may indicate an XSS injection attempt or a newly introduced inline script. Check cspViolations collection: https://console.cloud.google.com/firestore/data/cspViolations?project=sokoni-aeb26",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "csp violation spike",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"cspReportCollect\" AND severity!=\"ERROR\"",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "3600s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Search Health Degraded",
+      "documentation": {
+        "content": "The searchHealth endpoint returned a non-200 status code. Algolia or Typesense may be unreachable.\nCheck: https://us-central1-sokoni-aeb26.cloudfunctions.net/searchHealth",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "search health 503",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"searchHealth\" AND httpRequest.status>=500",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "System Health Check Degraded",
+      "documentation": {
+        "content": "The systemHealthCheck endpoint returned HTTP 206 (degraded) or 503 (unhealthy). One or more subsystems need attention.\nCheck: https://us-central1-sokoni-aeb26.cloudfunctions.net/systemHealthCheck",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "system health degraded",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"systemHealthCheck\" AND (httpRequest.status=206 OR httpRequest.status=503)",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
     }
 
   ]

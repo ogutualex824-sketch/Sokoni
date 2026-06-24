@@ -2,6 +2,7 @@
   "name": "SOKONI — Kenya's Global Marketplace",
   "short_name": "SOKONI",
   "description": "Buy, sell, rent, book and hire — Kenya's all-in-one marketplace.",
+  "version": "1.0.0",
   "start_url": "./index.html?source=pwa",
   "scope": "./",
   "id": "sokoni-kenya-marketplace",

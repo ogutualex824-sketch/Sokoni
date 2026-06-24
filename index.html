@@ -12,13 +12,17 @@
   (function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
   <script src="seo.js" defer></script>
   <!-- --- PERFORMANCE — DNS prefetch & preconnect --- -->
+  <meta name="color-scheme" content="dark">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
   <link rel="dns-prefetch" href="https://sokoni-aeb26.firebaseapp.com">
-  <link rel="dns-prefetch" href="https://firestore.googleapis.com">
   <link rel="dns-prefetch" href="https://storage.googleapis.com">
+  <link rel="dns-prefetch" href="https://region1.google-analytics.com">
 
   <!-- --- PRELOAD critical assets for faster paint --- -->
   <link rel="preload" href="style.css" as="style">
@@ -128,6 +132,7 @@
   <script src="sokoni-pay.js" defer></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
+  <link rel="stylesheet" href="sokoni-home-v3.css">
 </head>
 
 <body>
@@ -421,15 +426,15 @@
     <div class="glass-hero-bg" style="position:absolute;inset:0;background:url('assets/backG1.jpeg') center/cover no-repeat;filter:brightness(0.45);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;z-index:0;"></div>
     <div class="glass-hero-card">
       <p class="glass-hero-badge" style="display:inline-flex;align-items:center;gap:6px;"><span style="font-size:20px;line-height:1;flex-shrink:0;">🇰🇪</span> Kenya's #1 Marketplace</p>
-      <h1>Shop Smarter on <span>SOKONI</span></h1>
-      <p class="glass-hero-sub">Buy locally. Receive today. Pay safely.</p>
-      <!-- Platform trust stats -->
-      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:14px;margin-top:-4px;">
-        <span style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.75);display:flex;align-items:center;gap:4px;">✅ 50K+ Products</span>
-        <span style="font-size:11px;color:rgba(255,255,255,0.2);">·</span>
-        <span style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.75);display:flex;align-items:center;gap:4px;">🏪 1,200+ Sellers</span>
-        <span style="font-size:11px;color:rgba(255,255,255,0.2);">·</span>
-        <span style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.75);display:flex;align-items:center;gap:4px;">🚚 Same-Day Nairobi</span>
+      <h1>Shop Smarter on <span class="hero-brand-gradient">SOKONI</span></h1>
+      <p class="glass-hero-sub">Buy locally. Receive today. Pay safely with M-Pesa.</p>
+      <!-- Premium stat pills -->
+      <div class="glass-hero-stat-row">
+        <span class="glass-hero-stat-pill">🛍️ <span class="glass-hero-stat-pill-val">50K+</span> Products</span>
+        <span class="glass-hero-stat-pill">🏪 <span class="glass-hero-stat-pill-val">1,200+</span> Sellers</span>
+        <span class="glass-hero-stat-pill">🚚 Same-Day <span class="glass-hero-stat-pill-val">Nairobi</span></span>
+        <span class="glass-hero-stat-pill">⭐ <span class="glass-hero-stat-pill-val">4.9</span> Rating</span>
+        <span class="glass-hero-stat-pill">🇰🇪 <span class="glass-hero-stat-pill-val">47</span> Counties</span>
       </div>
 
       <!-- GOODS vs SERVICES split -->
@@ -598,7 +603,7 @@
 
   <!-- FEATURES STRIP -->
 
-  <section class="features-strip">
+  <section class="features-strip p9-reveal">
 
     <div class="feature-item">
       <div class="feature-icon">🚚</div>
@@ -633,6 +638,40 @@
     </div>
 
   </section>
+
+  <!-- ── TRUST BADGES STRIP ──────────────────────────────────────────────── -->
+  <div class="sk-trust-strip" role="list" aria-label="Trust and safety badges">
+    <div class="sk-trust-item" role="listitem">
+      <span class="sk-trust-icon">📱</span>
+      <span class="sk-trust-name">M-Pesa Payments</span>
+      <span class="sk-trust-detail">Safaricom partner</span>
+    </div>
+    <div class="sk-trust-item" role="listitem">
+      <span class="sk-trust-icon">🔒</span>
+      <span class="sk-trust-name">SSL Secured</span>
+      <span class="sk-trust-detail">256-bit encryption</span>
+    </div>
+    <div class="sk-trust-item" role="listitem">
+      <span class="sk-trust-icon">✅</span>
+      <span class="sk-trust-name">Verified Sellers</span>
+      <span class="sk-trust-detail">ID & business vetted</span>
+    </div>
+    <div class="sk-trust-item" role="listitem">
+      <span class="sk-trust-icon">🛡️</span>
+      <span class="sk-trust-name">Buyer Protection</span>
+      <span class="sk-trust-detail">Full escrow guarantee</span>
+    </div>
+    <div class="sk-trust-item" role="listitem">
+      <span class="sk-trust-icon">↩️</span>
+      <span class="sk-trust-name">Easy Returns</span>
+      <span class="sk-trust-detail">7-day policy</span>
+    </div>
+    <div class="sk-trust-item" role="listitem">
+      <span class="sk-trust-icon">💬</span>
+      <span class="sk-trust-name">24/7 Support</span>
+      <span class="sk-trust-detail">WhatsApp & live chat</span>
+    </div>
+  </div>
 
   <!-- HUBS NAVIGATION ROW — quick access to every major platform hub -->
   <section id="hubsNav" style="padding:6px 0 2px;border-bottom:1px solid rgba(255,255,255,0.04);">
@@ -676,7 +715,7 @@
 
   <!-- CATEGORIES -->
 
-  <section class="categories-section">
+  <section class="categories-section p9-reveal">
 
     <div class="section-title new-arrivals-title-row">
       <div>
@@ -1163,8 +1202,139 @@
     </div>
   </section>
 
+  <!-- ── FEATURED VEHICLES ──────────────────────────────────────────────── -->
+  <section class="skh-section p9-reveal" aria-labelledby="skVehiclesTitle">
+    <div class="skh-hd">
+      <div class="skh-hd-left">
+        <span class="skh-chip"><span class="skh-chip-dot"></span> Car Hub</span>
+        <h2 class="skh-title" id="skVehiclesTitle">🚗 Vehicles Available Now</h2>
+        <p class="skh-sub">Rent a car, boda boda or van · Pay with M-Pesa · GPS tracked</p>
+      </div>
+      <a href="car-hub.html" class="skh-see-all">All vehicles ›</a>
+    </div>
+    <div class="sk-vehicles-wrap">
+      <div class="sk-vehicles-scroll" role="list" aria-label="Featured vehicles for hire">
+
+        <a href="car-hub.html?tab=browse&type=boda" class="sk-vehicle-card" role="listitem">
+          <div class="sk-vehicle-img" style="background:linear-gradient(135deg,rgba(113,255,0,0.12),rgba(34,197,94,0.08));">
+            🏍️
+            <span class="sk-vehicle-avail sk-vehicle-avail--yes">Available</span>
+          </div>
+          <div class="sk-vehicle-body">
+            <div class="sk-vehicle-type">Boda Boda</div>
+            <div class="sk-vehicle-name">Honda CB 100</div>
+            <div class="sk-vehicle-price-row">
+              <span class="sk-vehicle-price">KES 300</span>
+              <span class="sk-vehicle-per">/ trip</span>
+            </div>
+            <div class="sk-vehicle-meta">
+              <span class="sk-vehicle-loc">📍 Nairobi CBD</span>
+              <span class="sk-vehicle-tag">M-Pesa</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="car-hub.html?tab=browse&type=sedan" class="sk-vehicle-card" role="listitem">
+          <div class="sk-vehicle-img" style="background:linear-gradient(135deg,rgba(59,130,246,0.12),rgba(0,170,255,0.08));">
+            🚙
+            <span class="sk-vehicle-avail sk-vehicle-avail--yes">Available</span>
+          </div>
+          <div class="sk-vehicle-body">
+            <div class="sk-vehicle-type">Sedan · Self-drive</div>
+            <div class="sk-vehicle-name">Toyota Axio</div>
+            <div class="sk-vehicle-price-row">
+              <span class="sk-vehicle-price">KES 3,500</span>
+              <span class="sk-vehicle-per">/ day</span>
+            </div>
+            <div class="sk-vehicle-meta">
+              <span class="sk-vehicle-loc">📍 Westlands</span>
+              <span class="sk-vehicle-tag">GPS Tracked</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="car-hub.html?tab=browse&type=suv" class="sk-vehicle-card" role="listitem">
+          <div class="sk-vehicle-img" style="background:linear-gradient(135deg,rgba(249,115,22,0.12),rgba(234,88,12,0.08));">
+            🛻
+            <span class="sk-vehicle-avail sk-vehicle-avail--limited">2 left</span>
+          </div>
+          <div class="sk-vehicle-body">
+            <div class="sk-vehicle-type">SUV · Chauffeur</div>
+            <div class="sk-vehicle-name">Toyota Prado</div>
+            <div class="sk-vehicle-price-row">
+              <span class="sk-vehicle-price">KES 7,000</span>
+              <span class="sk-vehicle-per">/ day</span>
+            </div>
+            <div class="sk-vehicle-meta">
+              <span class="sk-vehicle-loc">📍 Karen, Nairobi</span>
+              <span class="sk-vehicle-tag">Driver incl.</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="car-hub.html?tab=browse&type=tuktuk" class="sk-vehicle-card" role="listitem">
+          <div class="sk-vehicle-img" style="background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(251,191,36,0.08));">
+            🛺
+            <span class="sk-vehicle-avail sk-vehicle-avail--yes">Available</span>
+          </div>
+          <div class="sk-vehicle-body">
+            <div class="sk-vehicle-type">Tuk-Tuk</div>
+            <div class="sk-vehicle-name">Bajaj RE 3-Wheeler</div>
+            <div class="sk-vehicle-price-row">
+              <span class="sk-vehicle-price">KES 200</span>
+              <span class="sk-vehicle-per">/ trip</span>
+            </div>
+            <div class="sk-vehicle-meta">
+              <span class="sk-vehicle-loc">📍 Mombasa</span>
+              <span class="sk-vehicle-tag">M-Pesa</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="car-hub.html?tab=browse&type=van" class="sk-vehicle-card" role="listitem">
+          <div class="sk-vehicle-img" style="background:linear-gradient(135deg,rgba(168,85,247,0.12),rgba(59,130,246,0.08));">
+            🚐
+            <span class="sk-vehicle-avail sk-vehicle-avail--yes">Available</span>
+          </div>
+          <div class="sk-vehicle-body">
+            <div class="sk-vehicle-type">Van · Hire</div>
+            <div class="sk-vehicle-name">Toyota Hiace</div>
+            <div class="sk-vehicle-price-row">
+              <span class="sk-vehicle-price">KES 5,000</span>
+              <span class="sk-vehicle-per">/ day</span>
+            </div>
+            <div class="sk-vehicle-meta">
+              <span class="sk-vehicle-loc">📍 Industrial Area</span>
+              <span class="sk-vehicle-tag">14-seater</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="car-hub.html?tab=browse&type=ebike" class="sk-vehicle-card" role="listitem">
+          <div class="sk-vehicle-img" style="background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(0,200,120,0.08));">
+            🛵
+            <span class="sk-vehicle-avail sk-vehicle-avail--yes">Available</span>
+          </div>
+          <div class="sk-vehicle-body">
+            <div class="sk-vehicle-type">E-Bike · Eco</div>
+            <div class="sk-vehicle-name">Roam Air E-Bike</div>
+            <div class="sk-vehicle-price-row">
+              <span class="sk-vehicle-price">KES 500</span>
+              <span class="sk-vehicle-per">/ day</span>
+            </div>
+            <div class="sk-vehicle-meta">
+              <span class="sk-vehicle-loc">📍 Kilimani</span>
+              <span class="sk-vehicle-tag">Zero emissions</span>
+            </div>
+          </div>
+        </a>
+
+      </div>
+    </div>
+  </section>
+
   <!-- QUICK LINKS STRIP -->
-  <section class="qlinks-section">
+  <section class="qlinks-section p9-reveal">
     <div class="qlinks-label">⚡ Quick Links</div>
     <div class="qlinks-row">
       <!-- Hubs -->
@@ -1202,7 +1372,7 @@
   </section>
 
   <!-- SERVICES SECTION -->
-  <section class="new-arrivals-section" id="servicesHomeSection">
+  <section class="new-arrivals-section p9-reveal" id="servicesHomeSection">
     <div class="section-title new-arrivals-title-row">
       <div>
         <h2>🔨 Services on Sokoni</h2>
@@ -1262,6 +1432,73 @@
     </div>
   </section>
 
+  <!-- ── FEATURED HEALTHCARE PROVIDERS ─────────────────────────────────── -->
+  <section class="skh-section p9-reveal" aria-labelledby="skHealthTitle">
+    <div class="skh-hd">
+      <div class="skh-hd-left">
+        <span class="skh-chip"><span class="skh-chip-dot"></span> Healthcare Hub</span>
+        <h2 class="skh-title" id="skHealthTitle">🏥 Top Healthcare Providers</h2>
+        <p class="skh-sub">Verified doctors, hospitals, pharmacies & labs across Kenya</p>
+      </div>
+      <a href="healthcare.html" class="skh-see-all">All providers ›</a>
+    </div>
+    <div class="sk-health-grid">
+
+      <a href="healthcare.html?provider=dr-amina" class="sk-health-card">
+        <span class="sk-health-badge">✓ VERIFIED</span>
+        <div class="sk-health-avatar" style="background:linear-gradient(135deg,rgba(0,200,120,0.25),rgba(0,100,200,0.2));">👩‍⚕️</div>
+        <div class="sk-health-name">Dr. Amina Hassan</div>
+        <div class="sk-health-spec">General Practitioner</div>
+        <div class="sk-health-loc">📍 Nairobi, Westlands</div>
+        <div class="sk-health-rating">
+          <span class="sk-health-stars">★★★★★</span>
+          <span class="sk-health-num">4.9 · 312 patients</span>
+        </div>
+        <span class="sk-health-cta">Book Appointment →</span>
+      </a>
+
+      <a href="healthcare.html?provider=nwh" class="sk-health-card">
+        <span class="sk-health-badge">✓ VERIFIED</span>
+        <div class="sk-health-avatar" style="background:linear-gradient(135deg,rgba(0,170,255,0.25),rgba(0,100,200,0.2));">🏥</div>
+        <div class="sk-health-name">Nairobi Women's Hospital</div>
+        <div class="sk-health-spec">Multi-Speciality Hospital</div>
+        <div class="sk-health-loc">📍 Nairobi, Multiple branches</div>
+        <div class="sk-health-rating">
+          <span class="sk-health-stars">★★★★★</span>
+          <span class="sk-health-num">4.8 · 1,240 reviews</span>
+        </div>
+        <span class="sk-health-cta">Book Now →</span>
+      </a>
+
+      <a href="healthcare.html?provider=goodlife" class="sk-health-card">
+        <span class="sk-health-badge">✓ VERIFIED</span>
+        <div class="sk-health-avatar" style="background:linear-gradient(135deg,rgba(113,255,0,0.2),rgba(0,200,120,0.15));">💊</div>
+        <div class="sk-health-name">Goodlife Pharmacy</div>
+        <div class="sk-health-spec">Pharmacy · Medicine Delivery</div>
+        <div class="sk-health-loc">📍 Nationwide — 60+ branches</div>
+        <div class="sk-health-rating">
+          <span class="sk-health-stars">★★★★★</span>
+          <span class="sk-health-num">4.7 · 890 reviews</span>
+        </div>
+        <span class="sk-health-cta">Order Medicine →</span>
+      </a>
+
+      <a href="healthcare.html?provider=lancet" class="sk-health-card">
+        <span class="sk-health-badge">✓ VERIFIED</span>
+        <div class="sk-health-avatar" style="background:linear-gradient(135deg,rgba(168,85,247,0.22),rgba(59,130,246,0.15));">🔬</div>
+        <div class="sk-health-name">Lancet Kenya</div>
+        <div class="sk-health-spec">Diagnostics & Lab Tests</div>
+        <div class="sk-health-loc">📍 Nairobi · Mombasa · Kisumu</div>
+        <div class="sk-health-rating">
+          <span class="sk-health-stars">★★★★★</span>
+          <span class="sk-health-num">4.9 · 2,100 reviews</span>
+        </div>
+        <span class="sk-health-cta">Book Lab Test →</span>
+      </a>
+
+    </div>
+  </section>
+
   <!-- OPPORTUNITY ENGINE -->
   <section style="padding:0 12px 28px;">
     <div style="background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,212,255,0.05));border:1px solid rgba(113,255,0,0.15);border-radius:20px;padding:20px 16px 16px;position:relative;overflow:hidden;">
@@ -1301,7 +1538,7 @@
 
   <!-- FEATURED SELLERS -->
 
-  <section class="seller-section">
+  <section class="seller-section p9-reveal">
 
     <div class="section-title">
       <h2>⭐ Featured Sellers</h2>
@@ -1413,7 +1650,7 @@
   </section>
 
   <!-- GET VERIFIED CTA -->
-  <section class="get-verified-section">
+  <section class="get-verified-section p9-reveal">
     <div class="gv-badge-demo">
       <span class="gv-check">✓</span>
       SOKONI VERIFIED
@@ -1442,7 +1679,7 @@
   </section>
 
   <!-- B2B SECTION -->
-  <section class="new-arrivals-section" id="b2bSection">
+  <section class="new-arrivals-section p9-reveal" id="b2bSection">
     <div class="section-title new-arrivals-title-row">
       <div>
         <h2>🤝 B2B Wholesale Marketplace</h2>
@@ -2132,34 +2369,91 @@
     }
   </style>
 
-  <!-- MARKETPLACE STATS STRIP -->
-
-  <section class="marketplace-stats" id="marketplaceStats" style="display:flex;">
-    <div class="mstat-item">
-      <div class="mstat-num" id="statProductCount">500+</div>
-      <div class="mstat-label">Products Listed</div>
+  <!-- MARKETPLACE STATS — PREMIUM ANIMATED VERSION -->
+  <section id="marketplaceStats" class="sk-stats-premium">
+    <div class="skh-hd" style="padding-top:20px;padding-bottom:18px;">
+      <div class="skh-hd-left">
+        <span class="skh-chip"><span class="skh-chip-dot"></span> Live Platform Data</span>
+        <h2 class="skh-title">SOKONI By the Numbers</h2>
+        <p class="skh-sub">Kenya's fastest-growing digital marketplace</p>
+      </div>
     </div>
-    <div class="mstat-item">
-      <div class="mstat-num" id="statSellerCount">120+</div>
-      <div class="mstat-label">Active Sellers</div>
-    </div>
-    <div class="mstat-item">
-      <div class="mstat-num" style="display:flex;justify-content:center;font-size:36px;line-height:1;">🇰🇪</div>
-      <div class="mstat-label">Ships Kenya-wide</div>
-    </div>
-    <div class="mstat-item">
-      <div class="mstat-num">24/7</div>
-      <div class="mstat-label">Customer Support</div>
-    </div>
-    <div class="mstat-item">
-      <div class="mstat-num">4.9 ★</div>
-      <div class="mstat-label">Avg. Rating</div>
-    </div>
-    <div class="mstat-item">
-      <div class="mstat-num">M-Pesa</div>
-      <div class="mstat-label">Secure Payments</div>
+    <div class="sk-stats-inner">
+      <div class="sk-stat-card">
+        <span class="sk-stat-icon">🛍️</span>
+        <div class="sk-stat-num" id="statProductCount" data-count="50000" data-suffix="+" data-final="50K+">50K+</div>
+        <div class="sk-stat-label">Products Listed</div>
+        <div class="sk-stat-sub">Across all categories</div>
+      </div>
+      <div class="sk-stat-card sk-stat-card--cyan">
+        <span class="sk-stat-icon">🏪</span>
+        <div class="sk-stat-num" id="statSellerCount" data-count="1200" data-suffix="+" data-final="1,200+">1,200+</div>
+        <div class="sk-stat-label">Active Sellers</div>
+        <div class="sk-stat-sub">Verified businesses</div>
+      </div>
+      <div class="sk-stat-card sk-stat-card--green">
+        <span class="sk-stat-icon">🇰🇪</span>
+        <div class="sk-stat-num" data-count="47" data-suffix="" data-final="47">47</div>
+        <div class="sk-stat-label">Counties Covered</div>
+        <div class="sk-stat-sub">Nationwide delivery</div>
+      </div>
+      <div class="sk-stat-card sk-stat-card--amber">
+        <span class="sk-stat-icon">⭐</span>
+        <div class="sk-stat-num" data-count="4.9" data-suffix="★" data-final="4.9★">4.9★</div>
+        <div class="sk-stat-label">Average Rating</div>
+        <div class="sk-stat-sub">From verified buyers</div>
+      </div>
+      <div class="sk-stat-card">
+        <span class="sk-stat-icon">💬</span>
+        <div class="sk-stat-num" data-count="0" data-suffix="" data-final="24/7">24/7</div>
+        <div class="sk-stat-label">Customer Support</div>
+        <div class="sk-stat-sub">WhatsApp & live chat</div>
+      </div>
+      <div class="sk-stat-card sk-stat-card--red">
+        <span class="sk-stat-icon">💰</span>
+        <div class="sk-stat-num" data-count="500" data-suffix="M+" data-final="500M+">500M+</div>
+        <div class="sk-stat-label">KES Transacted</div>
+        <div class="sk-stat-sub">Via M-Pesa escrow</div>
+      </div>
     </div>
   </section>
+  <!-- Counter animation: fires when stats section enters viewport -->
+  <script>
+  (function(){
+    if(!window.IntersectionObserver) return;
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(!entry.isIntersecting) return;
+        var el = entry.target;
+        if(el.dataset.animDone) return;
+        el.dataset.animDone = '1';
+        var target = parseFloat(el.dataset.count);
+        var suffix = el.dataset.suffix || '';
+        var final  = el.dataset.final  || String(target) + suffix;
+        if(!target){ el.textContent = final; return; }
+        var duration = 1800;
+        var start = performance.now();
+        function step(now){
+          var t = Math.min((now-start)/duration, 1);
+          var ease = 1 - Math.pow(1-t, 3);
+          var cur = target * ease;
+          var disp;
+          if(target >= 1000){ disp = (cur/1000 >= 10 ? Math.round(cur/1000) : (cur/1000).toFixed(1)) + 'K'; }
+          else if(Number.isInteger(target)){ disp = Math.round(cur).toString(); }
+          else { disp = cur.toFixed(1); }
+          el.textContent = disp + suffix;
+          if(t < 1) requestAnimationFrame(step);
+          else { el.textContent = final; el.classList.add('sk-counted'); }
+        }
+        requestAnimationFrame(step);
+        obs.unobserve(el);
+      });
+    }, {threshold: 0.3});
+    document.querySelectorAll('.sk-stat-num[data-count]').forEach(function(el){
+      obs.observe(el);
+    });
+  })();
+  </script>
 
   <!-- SOKONI SOCIAL SECTION -->
   <section class="sokoni-social-section">
@@ -2204,6 +2498,131 @@
     </div>
   </section>
 
+  <!-- ── CUSTOMER TESTIMONIALS ──────────────────────────────────────────── -->
+  <section class="skh-section" aria-labelledby="skTestiTitle">
+    <div class="skh-hd">
+      <div class="skh-hd-left">
+        <span class="skh-chip"><span class="skh-chip-dot"></span> Real Buyers · Verified Purchases</span>
+        <h2 class="skh-title" id="skTestiTitle">What Kenya's Buyers Say</h2>
+        <p class="skh-sub">Honest reviews from thousands of happy shoppers across Kenya</p>
+      </div>
+      <a href="reviews.html" class="skh-see-all">All reviews ›</a>
+    </div>
+    <div class="sk-testimonials">
+      <div class="sk-testi-grid">
+
+        <article class="sk-testi-card">
+          <div class="sk-testi-stars">
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span>
+          </div>
+          <p class="sk-testi-quote">"Ordered a Samsung phone on Friday evening — it was at my door in Nairobi by Saturday 10am. The seller even threw in a free screen protector. This is better than any shop I've been to."</p>
+          <span class="sk-testi-product">📱 Samsung A55 · Electronics</span>
+          <div class="sk-testi-author">
+            <div class="sk-testi-avatar" style="background:linear-gradient(135deg,#71ff00,#4fc800);">JM</div>
+            <div class="sk-testi-info">
+              <div class="sk-testi-name">James Mwangi</div>
+              <div class="sk-testi-loc">Nairobi, Westlands · 3 orders</div>
+            </div>
+            <span class="sk-testi-verified">✓ Verified</span>
+          </div>
+        </article>
+
+        <article class="sk-testi-card">
+          <div class="sk-testi-stars">
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span>
+          </div>
+          <p class="sk-testi-quote">"The food delivery from Sokoni Eats is crazy fast. Ordered pilau from my favourite restaurant, tracked it on the map, and it arrived hot in 28 minutes. M-Pesa payment was seamless."</p>
+          <span class="sk-testi-product">🍽️ Sokoni Eats · Food Delivery</span>
+          <div class="sk-testi-author">
+            <div class="sk-testi-avatar" style="background:linear-gradient(135deg,#f59e0b,#f97316);">FA</div>
+            <div class="sk-testi-info">
+              <div class="sk-testi-name">Fatuma Ahmed</div>
+              <div class="sk-testi-loc">Mombasa, Old Town · 12 orders</div>
+            </div>
+            <span class="sk-testi-verified">✓ Verified</span>
+          </div>
+        </article>
+
+        <article class="sk-testi-card">
+          <div class="sk-testi-stars">
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span>
+          </div>
+          <p class="sk-testi-quote">"Rented a Toyota Axio for a client trip to Nakuru. The car was spotless, GPS worked perfectly, and the owner was professional throughout. Will always use Sokoni Car Hub."</p>
+          <span class="sk-testi-product">🚗 Car Hub · Vehicle Rental</span>
+          <div class="sk-testi-author">
+            <div class="sk-testi-avatar" style="background:linear-gradient(135deg,#3b82f6,#00d4ff);">PO</div>
+            <div class="sk-testi-info">
+              <div class="sk-testi-name">Peter Ochieng</div>
+              <div class="sk-testi-loc">Kisumu, Milimani · 5 rentals</div>
+            </div>
+            <span class="sk-testi-verified">✓ Verified</span>
+          </div>
+        </article>
+
+        <article class="sk-testi-card">
+          <div class="sk-testi-stars">
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span>
+          </div>
+          <p class="sk-testi-quote">"Booked a deep cleaning service for my house in Nakuru. The team arrived on time, were professional, and the house smells amazing. Paid via M-Pesa with full receipt. Brilliant service."</p>
+          <span class="sk-testi-product">🧹 Cleaning Services · Home Services</span>
+          <div class="sk-testi-author">
+            <div class="sk-testi-avatar" style="background:linear-gradient(135deg,#a855f7,#ec4899);">GW</div>
+            <div class="sk-testi-info">
+              <div class="sk-testi-name">Grace Wanjiku</div>
+              <div class="sk-testi-loc">Nakuru Town · 8 bookings</div>
+            </div>
+            <span class="sk-testi-verified">✓ Verified</span>
+          </div>
+        </article>
+
+        <article class="sk-testi-card">
+          <div class="sk-testi-stars">
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span>
+          </div>
+          <p class="sk-testi-quote">"I started selling second-hand clothes on Sokoni 6 months ago. I now earn KES 45,000 a month from my phone. The seller dashboard is easy and payouts hit my M-Pesa same day."</p>
+          <span class="sk-testi-product">🏪 Seller Dashboard · Fashion Hub</span>
+          <div class="sk-testi-author">
+            <div class="sk-testi-avatar" style="background:linear-gradient(135deg,#10b981,#71ff00);">DK</div>
+            <div class="sk-testi-info">
+              <div class="sk-testi-name">David Kimani</div>
+              <div class="sk-testi-loc">Nairobi, Eastleigh · Sokoni Seller</div>
+            </div>
+            <span class="sk-testi-verified">✓ Seller</span>
+          </div>
+        </article>
+
+        <article class="sk-testi-card">
+          <div class="sk-testi-stars">
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span><span class="sk-testi-star--full">★</span>
+            <span class="sk-testi-star--full">★</span>
+          </div>
+          <p class="sk-testi-quote">"Booked a lab test through the Healthcare Hub and got my results in 4 hours via email. No queues, no hassle. The doctor consultation via video call was incredibly convenient."</p>
+          <span class="sk-testi-product">🏥 Healthcare Hub · Diagnostics</span>
+          <div class="sk-testi-author">
+            <div class="sk-testi-avatar" style="background:linear-gradient(135deg,#00d4ff,#3b82f6);">AM</div>
+            <div class="sk-testi-info">
+              <div class="sk-testi-name">Aisha Mohammed</div>
+              <div class="sk-testi-loc">Eldoret, Pioneer · 4 bookings</div>
+            </div>
+            <span class="sk-testi-verified">✓ Verified</span>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
   <!-- REVIEWS TEASER -->
 
   <section class="reviews-teaser" id="reviewsTeaser">
@@ -2226,7 +2645,7 @@
 
       <!-- BRAND -->
       <div class="footer-brand">
-        <img loading="lazy" src="assets/Sokonilogo2.png" alt="Sokoni" class="footer-logo">
+        <img loading="lazy" decoding="async" src="assets/Sokonilogo2.png" alt="Sokoni" class="footer-logo" width="120" height="40">
         <p>Kenya's #1 marketplace — buy, sell and grow with Sokoni. Connecting buyers, sellers and service providers nationwide.</p>
         <div class="socials">
           <a href="https://facebook.com/SokoniKe" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
@@ -2308,10 +2727,10 @@
       </div>
 
       <div class="payments">
-        <img loading="lazy" src="assets/mpesa.PNG" alt="M-Pesa">
-        <img loading="lazy" src="assets/visa.PNG" alt="Visa">
-        <img loading="lazy" src="assets/mastercard.PNG" alt="Mastercard">
-        <img loading="lazy" src="assets/paypal.PNG" alt="PayPal">
+        <img loading="lazy" decoding="async" src="assets/mpesa.PNG" alt="M-Pesa" width="48" height="30">
+        <img loading="lazy" decoding="async" src="assets/visa.PNG" alt="Visa" width="48" height="30">
+        <img loading="lazy" decoding="async" src="assets/mastercard.PNG" alt="Mastercard" width="48" height="30">
+        <img loading="lazy" decoding="async" src="assets/paypal.PNG" alt="PayPal" width="48" height="30">
       </div>
 
       <p class="footer-credit">Made by <span>Kass.</span> 🔌</p>

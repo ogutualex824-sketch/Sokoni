@@ -358,11 +358,85 @@ Licensing information is available in `LICENSE.md`.
 
 # Project Status
 
-Current Phase:
+**v1.0.0 — Production**
 
-**Enterprise Production Development**
+Released: 2026-06-25
 
-The platform is under active development with continuous improvements focused on scalability, reliability, security, and feature expansion.
+The platform has completed its initial production stabilization sprint. All core commerce, payments, search, notifications, POS, and analytics systems are deployed and operational.
+
+Current focus: Post-launch monitoring, performance tuning, and next-phase feature development (Wallet, Jobs Hub, Loyalty).
+
+---
+
+# Quick Start
+
+## Local Development
+
+```bash
+npm install
+npm run dev          # http-server on :3000
+npm run dev:bs       # BrowserSync with live reload
+```
+
+## Pre-Deploy Check
+
+```bash
+npm run check        # 12-check validation gate
+```
+
+## Deploy
+
+```bash
+# Hosting only (most common)
+npm run deploy:hosting
+
+# Functions only
+npm run deploy:functions
+
+# Everything
+npm run deploy:all
+```
+
+## Monitoring Setup (one-time)
+
+```bash
+npm run monitor      # creates gcloud alert channel + 12 alert policies
+```
+
+---
+
+# Environment Setup
+
+Required secrets (set once via Firebase Secret Manager):
+
+| Secret | Purpose | Command |
+|--------|---------|---------|
+| `INTASEND_PRIVATE_KEY` | Live payments | `firebase functions:secrets:set INTASEND_PRIVATE_KEY` |
+| `SENDGRID_API_KEY` | Email delivery | `firebase functions:secrets:set SENDGRID_API_KEY` |
+| `MAIL_HOST`, `MAIL_USER`, `MAIL_PASS` | SMTP fallback | `firebase functions:secrets:set MAIL_HOST` |
+| `ALGOLIA_ADMIN_KEY` | Search indexing | `firebase functions:secrets:set ALGOLIA_ADMIN_KEY` |
+| `TYPESENSE_SEARCH_KEY` | Typesense server | `firebase functions:secrets:set TYPESENSE_SEARCH_KEY` |
+
+Frontend keys (set in `sokoni-config.js`):
+- `intasendKey` — IntaSend public key (already set)
+- `algoliaAppId`, `algoliaSearchKey` — Algolia search (already set)
+
+---
+
+# Architecture
+
+| Layer | Technology |
+|-------|-----------|
+| Hosting | Firebase Hosting (site: `sokoni-aeb26`) |
+| Database | Cloud Firestore (185 composite indexes) |
+| Functions | Firebase Cloud Functions Gen2 — Node 22 (395 exports) |
+| Auth | Firebase Authentication |
+| Storage | Cloud Storage (lifecycle-managed) |
+| Search | Algolia (primary) + Typesense (secondary) + Firestore fallback |
+| Payments | IntaSend M-Pesa STK Push + PayPal redirect |
+| Notifications | FCM Push + in-app notification center |
+| Monitoring | Google Cloud Monitoring (12 alert policies) |
+| CI/CD | GitHub Actions (ci.yml + deploy.yml) |
 
 ---
 

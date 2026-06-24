@@ -5835,8 +5835,107 @@ exports.searchQueueRecovery        = searchWorker.searchQueueRecovery;
 const searchHealth = require('./search-health');
 exports.searchHealth               = searchHealth.searchHealth;
 
+/* ── System Health & Ops Tools ───────────────────────────────────────── */
+const systemHealth = require('./system-health');
+exports.systemHealthCheck        = systemHealth.systemHealthCheck;
+
+const opsTools = require('./ops-tools');
+exports.cspReportCollect         = opsTools.cspReportCollect;
+exports.testPushNotification     = opsTools.testPushNotification;
+exports.testEmailDelivery        = opsTools.testEmailDelivery;
+exports.getPaymentAuditTrail     = opsTools.getPaymentAuditTrail;
+exports.getOpsStatus             = opsTools.getOpsStatus;
+
+/* ── Product Analytics & Trust Engine ────────────────────────────────── */
+const productAnalytics = require('./product-analytics');
+exports.recordProductView           = productAnalytics.recordProductView;
+exports.onProductPriceChanged       = productAnalytics.onProductPriceChanged;
+exports.onOrderPaidUpdateStats      = productAnalytics.onOrderPaidUpdateStats;
+exports.aggregateProductStats       = productAnalytics.aggregateProductStats;
+exports.aggregateSellerPerformance  = productAnalytics.aggregateSellerPerformance;
+exports.computeProductTrending      = productAnalytics.computeProductTrending;
+exports.getProductTrustData         = productAnalytics.getProductTrustData;
+exports.getAdminProductAnalytics    = productAnalytics.getAdminProductAnalytics;
+exports.cleanupProductViewDedup     = productAnalytics.cleanupProductViewDedup;
+
 /* ── Manager Authorization Engine ─────────────────────────────────────── */
 const managerAuth = require('./manager-auth');
 exports.managerAuthNotify          = managerAuth.managerAuthNotify;
 exports.cleanupAuthRequests        = managerAuth.cleanupAuthRequests;
 exports.registerManagerFCMToken    = managerAuth.registerManagerFCMToken;
+
+/* ════════════════════════════════════════════════════════════════════════
+   SCHEDULED FIRESTORE BACKUP  —  Daily 02:00 EAT
+   Exports entire Firestore database to GCS bucket sokoni-aeb26-backups.
+   Prerequisite setup (one-time, run in Cloud Shell or gcloud CLI):
+     1. Create bucket:
+          gsutil mb -p sokoni-aeb26 -l europe-west1 gs://sokoni-aeb26-backups
+          gsutil lifecycle set monitoring/backup-lifecycle.json gs://sokoni-aeb26-backups
+     2. Grant the default CF service account export rights:
+          SA="sokoni-aeb26@appspot.gserviceaccount.com"
+          gcloud projects add-iam-policy-binding sokoni-aeb26 \
+            --member="serviceAccount:$SA" --role="roles/datastore.importExportAdmin"
+          gsutil iam ch serviceAccount:$SA:roles/storage.objectAdmin gs://sokoni-aeb26-backups
+   Recovery:
+     gcloud firestore import gs://sokoni-aeb26-backups/firestore/YYYY-MM-DD
+════════════════════════════════════════════════════════════════════════ */
+exports.scheduledFirestoreBackup = onSchedule(
+  {
+    schedule:       "0 2 * * *",
+    timeZone:       "Africa/Nairobi",
+    timeoutSeconds: 540,
+    memory:         "512MiB",
+    region:         "us-central1",
+  },
+  async (_event) => {
+    const projectId        = process.env.GCLOUD_PROJECT || "sokoni-aeb26";
+    const timestamp        = new Date().toISOString().slice(0, 10);
+    const outputUriPrefix  = `gs://sokoni-aeb26-backups/firestore/${timestamp}`;
+
+    /* Get a short-lived OAuth2 token from the GCP metadata server.
+       Works in Cloud Run (Gen2 Functions) without extra dependencies. */
+    const tokenRes = await fetch(
+      "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+      { headers: { "Metadata-Flavor": "Google" } }
+    );
+    if (!tokenRes.ok) {
+      throw new Error(`[Backup] Metadata token request failed: ${tokenRes.status}`);
+    }
+    const { access_token } = await tokenRes.json();
+
+    /* Call the Firestore Admin REST API to start an export */
+    const exportRes = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default):exportDocuments`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${access_token}`,
+          "Content-Type":  "application/json",
+        },
+        body: JSON.stringify({ outputUriPrefix }),
+      }
+    );
+
+    const result = await exportRes.json();
+    if (!exportRes.ok) {
+      console.error("[Backup] Export API error:", JSON.stringify(result));
+      throw new Error(`[Backup] Export failed: ${result.error?.message || exportRes.status}`);
+    }
+
+    /* Log the long-running operation name for manual status checks */
+    console.log(`[Backup] Firestore export started → ${outputUriPrefix}  op=${result.name}`);
+
+    /* Record the backup run in Firestore for the ops dashboard */
+    try {
+      await admin.firestore().collection("ops_backups").add({
+        type:        "firestore_export",
+        destination: outputUriPrefix,
+        operationId: result.name || "",
+        status:      "started",
+        timestamp:   admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (_) { /* non-critical — don't fail the export */ }
+
+    return { success: true, operation: result.name, destination: outputUriPrefix };
+  }
+);

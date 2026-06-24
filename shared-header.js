@@ -89,8 +89,9 @@
   const page = location.pathname.split('/').pop().split('?')[0] || 'index.html';
   if (EXCLUDED.includes(page)) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
-  /* Don't double-inject */
-  if (document.getElementById('sk-top-nav')) return;
+  /* NOTE: pages that bake #sk-top-nav as static HTML (e.g. index.html) still need
+     the CSS injection and event wiring below — _inject() handles that gracefully
+     by checking whether the nav already exists before calling _buildNav(). */
 
   /* ── CSS (injected into <head> immediately to prevent flash) ── */
   const CSS = `
@@ -105,7 +106,7 @@
 
     /* ── Shared top header ── */
     #sk-top-nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 600;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100001;
       height: 64px;
       display: flex; align-items: center; gap: 10px; padding: 0 18px;
       background: rgba(10,10,10,0.97);
@@ -204,6 +205,11 @@
       font-size: 11px; color: rgba(255,255,255,0.3); text-align: center;
     }
     .sk-ac-footer a { color: #71ff00; text-decoration: none; font-weight: 700; }
+    .sk-ac-section-hd {
+      font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.25);
+      text-transform: uppercase; letter-spacing: .1em;
+      padding: 9px 14px 3px; pointer-events: none;
+    }
 
     /* ── Action buttons ── */
     #sk-nav-actions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; margin-left: auto; }
@@ -278,7 +284,7 @@
 
     /* ── Full-screen mobile menu overlay ── */
     #sk-menu-overlay {
-      position: fixed; inset: 0; z-index: 1500;
+      position: fixed; inset: 0; z-index: 100002;
       background: rgba(0,0,0,0.92); backdrop-filter: blur(18px);
       display: none; flex-direction: column;
       overflow-y: auto;
@@ -387,8 +393,10 @@
       #sk-nav-avatar { width: 30px; height: 30px; font-size: 12px; }
       /* Notification + menu icons */
       .sk-nav-icon-btn { width: 36px; height: 36px; font-size: 17px; }
-      body { padding-top: max(52px, calc(52px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(96px, calc(96px + env(safe-area-inset-top, 0px))) !important; }
+      /* Two-row mobile nav (logo+icons row + search row) measures ~114px.
+         Use 120px to give a safe 6px clearance on all mobile devices. */
+      body { padding-top: max(60px, calc(60px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: max(120px, calc(120px + env(safe-area-inset-top, 0px))) !important; }
     }
     /* ── Very small phones ── */
     @media (max-width: 380px) {
@@ -397,8 +405,8 @@
       #sk-nav-cart { padding: 6px 8px; font-size: 10px; }
       #sk-nav-logo img { height: 32px; }
       #sk-nav-avatar { width: 28px; height: 28px; font-size: 11px; }
-      body { padding-top: max(46px, calc(46px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(90px, calc(90px + env(safe-area-inset-top, 0px))) !important; }
+      body { padding-top: max(55px, calc(55px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: max(110px, calc(110px + env(safe-area-inset-top, 0px))) !important; }
     }
   `;
 
@@ -735,11 +743,54 @@
       dropdown.classList.add('open');
     }
 
+    function _renderFocusState() {
+      const _RS_KEY = 'sokoniRecentSearches';
+      let recent = [];
+      try { recent = JSON.parse(localStorage.getItem(_RS_KEY)) || []; } catch(e) {}
+      const trending = [
+        { icon: '📱', label: 'Samsung A55' },
+        { icon: '🏠', label: '2BR Nairobi rent' },
+        { icon: '🚗', label: 'Toyota Axio' },
+        { icon: '👗', label: 'Second-hand clothes' },
+        { icon: '🍔', label: 'Food delivery' },
+        { icon: '💼', label: 'Remote jobs Kenya' },
+      ];
+      let html = '';
+      if (recent.length) {
+        html += '<div class="sk-ac-section-hd">🕐 Recent</div>';
+        html += recent.slice(0, 3).map(function(s) {
+          return '<a class="sk-ac-item" href="search.html?q=' + encodeURIComponent(s) + '" role="option">' +
+            '<span class="sk-ac-item-icon">🕐</span>' +
+            '<span class="sk-ac-item-text"><div class="sk-ac-item-name">' + _esc(s) + '</div></span>' +
+          '</a>';
+        }).join('');
+      }
+      html += '<div class="sk-ac-section-hd">🔥 Trending</div>';
+      html += trending.slice(0, recent.length ? 3 : 5).map(function(t) {
+        return '<a class="sk-ac-item" href="search.html?q=' + encodeURIComponent(t.label) + '" role="option">' +
+          '<span class="sk-ac-item-icon">' + t.icon + '</span>' +
+          '<span class="sk-ac-item-text"><div class="sk-ac-item-name">' + _esc(t.label) + '</div></span>' +
+        '</a>';
+      }).join('');
+      html += '<div class="sk-ac-footer"><a href="search.html">Browse all categories →</a></div>';
+      dropdown.innerHTML = html;
+      dropdown.classList.add('open');
+      _focusIdx = -1;
+    }
+
     input.addEventListener('input', function() {
       clearTimeout(_acTimer);
       const q = this.value.trim();
-      if (q.length < 2) { _close(); return; }
+      if (q.length < 2) {
+        if (q.length === 0) _renderFocusState();
+        else _close();
+        return;
+      }
       _acTimer = setTimeout(function() { _query(q); }, 220);
+    });
+
+    input.addEventListener('focus', function() {
+      if (this.value.trim().length === 0) _renderFocusState();
     });
 
     input.addEventListener('keydown', function(e) {

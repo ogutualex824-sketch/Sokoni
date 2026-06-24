@@ -70,6 +70,19 @@ jobs:
             2>/dev/null && echo "✅ Firestore rules syntax OK" || \
           echo "⚠️ Firebase CLI check skipped (no FIREBASE_TOKEN in CI)"
 
+      - name: Firestore index count guard (≤ 200)
+        run: |
+          COUNT=$(node -e "const f=require('./firestore.indexes.json');console.log((f.indexes||[]).length)")
+          echo "Index count: $COUNT"
+          if [ "$COUNT" -gt "200" ]; then
+            echo "❌ Firestore index limit exceeded: $COUNT > 200"
+            exit 1
+          fi
+          echo "✅ Index count OK: $COUNT/200"
+
+      - name: Run pre-deploy check script
+        run: node scripts/pre-deploy-check.js
+
   # ─────────────────────────────────────────────────────────────
   # 2. DEPENDENCY AUDIT  — blocks on HIGH/CRITICAL vulnerabilities
   # ─────────────────────────────────────────────────────────────

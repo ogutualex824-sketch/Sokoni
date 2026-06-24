@@ -194,6 +194,13 @@ const FALLBACK_PRODUCTS = [
    LOAD PRODUCTS
 ========================= */
 
+/* ── Phase 8: skeleton placeholder shown immediately so grid has height
+   before products arrive from localStorage. Prevents CLS jump. ── */
+function _p8ShowSkeletons(container, count) {
+    const sk = '<div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>';
+    container.innerHTML = Array(count).fill(sk).join('');
+}
+
 function loadProducts(){
 
     const container =
@@ -202,10 +209,12 @@ function loadProducts(){
     );
 
     if(!container){
-
-
         return;
     }
+
+    /* Show skeletons immediately — keeps the grid area occupied (CLS protection)
+       and signals to the user that content is coming */
+    _p8ShowSkeletons(container, 8);
 
     /* GET PRODUCTS */
 
@@ -764,7 +773,38 @@ function displayProducts(productsToShow = []){
         return;
     }
 
-    container.innerHTML = productsToShow.map(p => buildProductCard(p)).join("");
+    /* Phase 8 — INP optimisation:
+       Render first 12 cards synchronously (above/near fold), then hand the
+       remaining batch to requestIdleCallback so it doesn't block the main
+       thread during user interactions. Falls back to setTimeout on browsers
+       that lack requestIdleCallback (Safari < 16). */
+    const FIRST_BATCH = 12;
+    const first  = productsToShow.slice(0, FIRST_BATCH);
+    const rest   = productsToShow.slice(FIRST_BATCH);
+
+    container.innerHTML = first.map(p => buildProductCard(p)).join('');
+
+    /* Phase 9 — stagger first batch cards */
+    container.querySelectorAll('.product-card').forEach(function(card, i){
+      card.style.setProperty('--p9i', (i * 0.04) + 's');
+    });
+
+    if (rest.length === 0) return;
+
+    const scheduleIdle = window.requestIdleCallback
+        ? (cb) => requestIdleCallback(cb, { timeout: 1500 })
+        : (cb) => setTimeout(cb, 60);
+
+    scheduleIdle(() => {
+        /* Append rest without touching already-rendered first batch */
+        const frag = document.createElement('div');
+        frag.innerHTML = rest.map(p => buildProductCard(p)).join('');
+        /* Phase 9 — stagger appended cards (offset index past first batch) */
+        frag.querySelectorAll('.product-card').forEach(function(card, i){
+            card.style.setProperty('--p9i', ((FIRST_BATCH + i) * 0.04) + 's');
+        });
+        while (frag.firstChild) container.appendChild(frag.firstChild);
+    });
 }
 
 /* =========================
@@ -902,6 +942,16 @@ async function buyProduct(productId){
     updateCart();
     if(typeof sokoniTrackAddToCart === "function") sokoniTrackAddToCart(selectedProduct);
     showNotification("Added To Cart 🛒", "success");
+
+    /* Phase 9 — cart-add flash on the product tile */
+    const safeId = String(selectedProduct.id || '').replace(/[^a-zA-Z0-9_-]/g,'');
+    const tile = document.querySelector('.product-card[onclick*="' + safeId + '"]');
+    if (tile) {
+      tile.classList.remove('p9-cart-flash');
+      void tile.offsetWidth; /* reflow to restart animation */
+      tile.classList.add('p9-cart-flash');
+      tile.addEventListener('animationend', function(){ tile.classList.remove('p9-cart-flash'); }, { once: true });
+    }
 }
 
 /* =========================
@@ -999,6 +1049,16 @@ async function addToWishlist(productName){
     trackWishlistDemand(selectedProduct.name, true);
     displayProducts(products);
     showNotification("Added To Wishlist ❤️", "success");
+
+    /* Phase 9 — heart pop on the wishlist button */
+    const safeWId = String(selectedProduct.id || '').replace(/[^a-zA-Z0-9_-]/g,'');
+    const wishBtn = document.querySelector('.product-card[onclick*="' + safeWId + '"] .pcard-btn--wish, .product-card[onclick*="' + safeWId + '"] .pcard-m-wish');
+    if (wishBtn) {
+      wishBtn.classList.remove('p9-heart-pop');
+      void wishBtn.offsetWidth;
+      wishBtn.classList.add('p9-heart-pop');
+      wishBtn.addEventListener('animationend', function(){ wishBtn.classList.remove('p9-heart-pop'); }, { once: true });
+    }
 }
 
 /* =========================
@@ -1096,7 +1156,14 @@ function updateCart(){
     }
 
     const badge = document.getElementById("cartCountBadge");
-    if(badge) badge.innerText = cart.length;
+    if(badge) {
+      badge.innerText = cart.length;
+      /* Phase 9 — badge pop micro-interaction */
+      badge.classList.remove('p9-badge-pop');
+      void badge.offsetWidth;
+      badge.classList.add('p9-badge-pop');
+      badge.addEventListener('animationend', function(){ badge.classList.remove('p9-badge-pop'); }, { once: true });
+    }
 
     localStorage.setItem(
 
@@ -1344,43 +1411,10 @@ function _notifDisabled(){
 }
 
 function startLivePopup(){
-    if(products.length === 0) return;
-    if(_notifDisabled()) return;                  /* respect turned-off state */
-
-    const names = ["Brian K.", "Aisha M.", "Kevin O.", "Grace W.", "James N.", "Fatuma A.", "Daniel M.", "Sharon L."];
-    const locations = ["Nairobi", "Mombasa", "Kisumu", "Nakuru", "Eldoret", "Thika"];
-
-    function showPopup(){
-        if(_notifDisabled()){                     /* re-check every cycle */
-            const popup = document.getElementById("livePopup");
-            if(popup) popup.style.display = "none";
-            if(_livePopupInterval){ clearInterval(_livePopupInterval); _livePopupInterval = null; }
-            return;
-        }
-        const popup = document.getElementById("livePopup");
-        if(!popup) return;
-        const p    = products[Math.floor(Math.random() * products.length)];
-        const name = names[Math.floor(Math.random() * names.length)];
-        const city = locations[Math.floor(Math.random() * locations.length)];
-        popup.innerHTML = `
-            <div class="live-popup-inner">
-                <img src="${p.image || 'assets/default-product.png'}" alt="${p.name}" class="live-popup-img">
-                <div class="live-popup-text">
-                    <strong>${name}</strong> from ${city} just bought<br>
-                    <span>${p.name}</span>
-                    <div class="live-popup-price">KES ${Number(p.price).toLocaleString()}</div>
-                </div>
-            </div>
-        `;
-        popup.style.display = "flex";
-        setTimeout(() => { popup.style.display = "none"; }, 4500);
-    }
-
-    // First popup after 8s, then every 18s — handle stored so disable() can clear it
-    setTimeout(() => {
-        showPopup();
-        _livePopupInterval = setInterval(showPopup, 18000);
-    }, 8000);
+    /* Fake-purchase notification disabled — fabricated names/cities violate
+       platform honesty policy. Will be replaced with real recent-order data
+       from productStats.salesLastPurchasedAt when the activity feed is built. */
+    return;
 }
 
 /* =========================
@@ -3777,6 +3811,29 @@ if(document.readyState === "complete" || document.readyState === "interactive"){
         document.body.appendChild(toast);
         setTimeout(() => { toast.style.opacity="0"; toast.style.transition="opacity .4s"; setTimeout(()=>toast.remove(),400); }, 8000);
     }
+})();
+
+/* ── Phase 9: scroll-reveal + page entrance ── */
+(function(){
+  /* Page fade-in on load */
+  document.addEventListener('DOMContentLoaded', function(){
+    document.body.classList.add('p9-page-in');
+
+    /* Scroll reveal: watch all .p9-reveal elements */
+    if (!window.IntersectionObserver) {
+      document.querySelectorAll('.p9-reveal').forEach(function(el){ el.classList.add('p9-in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('p9-in');
+        io.unobserve(entry.target);
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.p9-reveal').forEach(function(el){ io.observe(el); });
+  });
 })();
 
 

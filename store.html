@@ -228,6 +228,78 @@
       .st-store-name { font-size: 20px; }
     }
 
+    /* ── INFO SECTIONS (hours + policies 2-col) ── */
+    .st-info-sections {
+      max-width: 1100px; margin: 20px auto 0; padding: 0 24px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    @media(max-width: 768px){ .st-info-sections { grid-template-columns: 1fr; } }
+    .st-info-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; padding: 18px 20px;
+    }
+
+    /* ── BUSINESS HOURS ── */
+    .st-hours-grid { margin-top: 10px; }
+    .st-hour-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 13px;
+    }
+    .st-hour-row:last-child { border-bottom: none; }
+    .st-hour-day { color: rgba(255,255,255,0.45); font-weight: 600; display: flex; align-items: center; gap: 7px; flex: 0 0 110px; }
+    .st-hour-day.today { color: white; font-weight: 800; }
+    .st-hour-time   { color: rgba(255,255,255,0.8); font-weight: 700; text-align: right; }
+    .st-hour-closed { color: rgba(255,77,77,0.65);  font-weight: 700; text-align: right; }
+    .st-today-pill {
+      font-size: 9px; font-weight: 900; padding: 1px 6px; border-radius: 4px;
+      background: rgba(113,255,0,0.12); color: #71ff00; border: 1px solid rgba(113,255,0,0.25);
+      text-transform: uppercase; letter-spacing: .3px;
+    }
+    .st-today-pill.closed-pill {
+      background: rgba(255,77,77,0.08); color: #ff4d4d; border-color: rgba(255,77,77,0.2);
+    }
+
+    /* ── POLICIES ── */
+    .st-policy-tabs-row { display: flex; gap: 6px; margin: 12px 0 10px; flex-wrap: wrap; }
+    .st-policy-tab-btn {
+      padding: 5px 13px; border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: transparent; color: rgba(255,255,255,0.4);
+      font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit;
+      transition: all .15s;
+    }
+    .st-policy-tab-btn.active {
+      background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00;
+    }
+    .st-policy-content {
+      font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.75;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px; padding: 13px 15px;
+    }
+
+    /* ── COLLECTIONS ── */
+    .st-collections-wrap { display: flex; flex-direction: column; gap: 32px; }
+    .st-collection-hd {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    }
+    .st-collection-dot {
+      width: 4px; height: 18px; border-radius: 2px;
+      background: linear-gradient(#71ff00, #4fc800); flex-shrink: 0;
+    }
+    .st-collection-name {
+      font-size: 15px; font-weight: 800; color: white;
+    }
+    .st-collection-count {
+      font-size: 12px; color: rgba(255,255,255,0.3); font-weight: 600;
+    }
+    .st-collection-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    @media(max-width: 480px){ .st-collection-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } }
+
     /* ── FOLLOW BUTTON ── */
     .st-follow-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .25s;}
     .st-follow-btn.not-following{background:#71ff00;color:black;box-shadow:0 4px 18px rgba(113,255,0,0.3);}
@@ -296,9 +368,23 @@
   </div>
 </div>
 
+<!-- HOURS + POLICIES -->
+<div class="st-info-sections" id="stInfoSections">
+  <div class="st-info-card">
+    <div class="st-section-h">🕐 Business Hours</div>
+    <div class="st-hours-grid" id="stHoursGrid"></div>
+  </div>
+  <div class="st-info-card">
+    <div class="st-section-h">📋 Store Policies</div>
+    <div id="stPolicyTabsWrap"></div>
+    <div id="stPolicyBody"></div>
+  </div>
+</div>
+
 <!-- TABS -->
 <div class="st-tabs">
   <button type="button" class="st-tab active" onclick="stSwitchTab('products',this)">🛍️ Products</button>
+  <button type="button" class="st-tab" onclick="stSwitchTab('collections',this)">📦 Collections</button>
   <button type="button" class="st-tab" onclick="stSwitchTab('reviews',this)">⭐ Reviews</button>
 </div>
 
@@ -308,6 +394,9 @@
     <div class="st-products-grid" id="stProductsGrid"></div>
     <div class="st-empty" id="stProductsEmpty" style="display:none;">No products listed yet.</div>
   </div>
+  <div class="st-panel" id="st-tab-collections">
+    <div id="stCollectionsContent"></div>
+  </div>
   <div class="st-panel" id="st-tab-reviews">
     <div id="stReviewsContent"></div>
   </div>
@@ -316,7 +405,8 @@
 <script>
 (function(){
   const params    = new URLSearchParams(window.location.search);
-  const storeParm = params.get("store") || params.get("seller") || "";
+  const storeId   = params.get("id") || "";           /* Firebase seller UID */
+  const storeParm = params.get("store") || params.get("seller") || storeId || "";
 
   /* Load store config */
   let store = null;
@@ -326,10 +416,12 @@
   let allProducts = [];
   try { allProducts = JSON.parse(localStorage.getItem("sellerProducts"))||[]; } catch(e){}
 
-  /* Match store by name or seller name */
+  /* Match store by name, seller UID, or owner name */
   const products = allProducts.filter(p => {
     const sn = p.sellerName || "Sokoni Seller";
-    return sn === storeParm || (store && (store.name === storeParm || sn === store.ownerName));
+    const su = p.sellerUid  || p.sellerId || "";
+    return sn === storeParm || su === storeParm || su === storeId ||
+           (store && (store.name === storeParm || sn === store.ownerName));
   });
 
   /* Resolve display store */
@@ -585,6 +677,14 @@
     };
   })();
 
+  /* Phase 3 — render hours, policies and collections from localStorage data,
+     then overlay with Firestore data if a seller UID is available */
+  stRenderHours(null);           /* show default hours immediately */
+  stRenderPolicies(null);        /* show default policies immediately */
+  stRenderCollections(products); /* group localStorage products by category */
+
+  if (storeId) _stLoadFirestore(storeId);
+
   /* +20 pts for first visit to each unique store */
   if(storeParm){
     try{
@@ -609,6 +709,239 @@ function stSwitchTab(name, btn){
   btn.classList.add("active");
   const panel = document.getElementById("st-tab-"+name);
   if(panel) panel.classList.add("active");
+}
+
+/* ═══════════════════════════════════════════════════
+   BUSINESS HOURS
+═══════════════════════════════════════════════════ */
+function stRenderHours(shopData) {
+  const grid = document.getElementById("stHoursGrid");
+  if (!grid) return;
+
+  var hrs = (shopData && shopData.businessHours) || {
+    mon:"8:00 AM – 7:00 PM", tue:"8:00 AM – 7:00 PM", wed:"8:00 AM – 7:00 PM",
+    thu:"8:00 AM – 7:00 PM", fri:"8:00 AM – 7:00 PM",
+    sat:"9:00 AM – 5:00 PM", sun:"Closed"
+  };
+  var dayKeys  = ["sun","mon","tue","wed","thu","fri","sat"];
+  var dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var todayIdx = new Date().getDay();
+  var todayKey = dayKeys[todayIdx];
+  var todayHrs = hrs[todayKey] || "Closed";
+  var isOpenNow = todayHrs !== "Closed";
+
+  /* Add open/closed badge to header */
+  var badgesEl = document.getElementById("stBadges");
+  if (badgesEl) {
+    if (isOpenNow) {
+      badgesEl.innerHTML += '<span class="st-badge">🟢 Open Now</span>';
+    } else {
+      badgesEl.innerHTML += '<span class="st-badge" style="background:rgba(255,77,77,0.08);border-color:rgba(255,77,77,0.2);color:#ff4d4d;">🔴 Closed</span>';
+    }
+  }
+
+  grid.innerHTML = dayKeys.map(function(dk, i) {
+    var isToday  = i === todayIdx;
+    var h        = hrs[dk] || "Closed";
+    var isClosed = h === "Closed";
+    var pill     = isToday
+      ? '<span class="st-today-pill' + (isOpenNow ? "" : " closed-pill") + '">'
+        + (isOpenNow ? "Open" : "Closed") + "</span>"
+      : "";
+    return '<div class="st-hour-row">'
+      + '<span class="st-hour-day' + (isToday ? " today" : "") + '">'
+      + dayNames[i].slice(0, 3) + pill
+      + "</span>"
+      + '<span class="' + (isClosed ? "st-hour-closed" : "st-hour-time") + '">' + h + "</span>"
+      + "</div>";
+  }).join("");
+}
+
+/* ═══════════════════════════════════════════════════
+   STORE POLICIES
+═══════════════════════════════════════════════════ */
+function stRenderPolicies(shopData) {
+  var tabsWrap = document.getElementById("stPolicyTabsWrap");
+  var bodyEl   = document.getElementById("stPolicyBody");
+  if (!tabsWrap || !bodyEl) return;
+
+  var p = (shopData && shopData.policies) || {};
+  var items = [
+    { key:"shipping", label:"🚚 Shipping", text: p.shipping ||
+      "Orders dispatched within 1–2 business days. Same-day delivery available in Nairobi for orders placed before 12 PM. Delivery tracked via SMS." },
+    { key:"returns",  label:"🔄 Returns",  text: p.returns  ||
+      "Returns accepted within 7 days of delivery. Items must be in original condition and packaging. Contact the seller to initiate a return." },
+    { key:"payment",  label:"💳 Payment",  text: p.payment  ||
+      "M-Pesa (STK Push), Cash on Delivery, and bank transfers accepted. All prices are in Kenya Shillings (KES). Receipts provided for every order." },
+    { key:"warranty", label:"🛡️ Warranty",  text: p.warranty ||
+      "Products include manufacturer warranty where applicable. Extended warranty available on electronics. Contact seller directly for warranty claims." },
+  ];
+
+  window._stPolicies = {};
+  items.forEach(function(it) { window._stPolicies[it.key] = it.text; });
+
+  tabsWrap.innerHTML = '<div class="st-policy-tabs-row">'
+    + items.map(function(it, i) {
+        return '<button class="st-policy-tab-btn' + (i === 0 ? " active" : "") + '" '
+          + 'onclick="stSwitchPolicy(\'' + it.key + '\',this)">' + it.label + "</button>";
+      }).join("") + "</div>";
+
+  bodyEl.innerHTML = '<div class="st-policy-content">' + items[0].text + "</div>";
+}
+
+window.stSwitchPolicy = function(key, btn) {
+  document.querySelectorAll(".st-policy-tab-btn").forEach(function(b) { b.classList.remove("active"); });
+  btn.classList.add("active");
+  var bodyEl = document.getElementById("stPolicyBody");
+  if (bodyEl && window._stPolicies) {
+    bodyEl.innerHTML = '<div class="st-policy-content">' + (window._stPolicies[key] || "") + "</div>";
+  }
+};
+
+/* ═══════════════════════════════════════════════════
+   COLLECTIONS (auto-group by category)
+═══════════════════════════════════════════════════ */
+function stRenderCollections(prods) {
+  var el = document.getElementById("stCollectionsContent");
+  if (!el) return;
+
+  var byCat = {};
+  prods.forEach(function(p) {
+    var cat = p.category || "Other";
+    if (!byCat[cat]) byCat[cat] = [];
+    byCat[cat].push(p);
+  });
+
+  var cats = Object.keys(byCat).sort(function(a, b) { return byCat[b].length - byCat[a].length; });
+
+  if (!cats.length) {
+    el.innerHTML = '<div class="st-empty">No collections yet.</div>';
+    return;
+  }
+
+  el.innerHTML = '<div class="st-collections-wrap">'
+    + cats.map(function(cat) {
+        var items = byCat[cat].slice(0, 6);
+        return '<div>'
+          + '<div class="st-collection-hd">'
+          + '<div class="st-collection-dot"></div>'
+          + '<span class="st-collection-name">' + cat + '</span>'
+          + '<span class="st-collection-count">' + byCat[cat].length + ' item' + (byCat[cat].length !== 1 ? 's' : '') + '</span>'
+          + '</div>'
+          + '<div class="st-collection-grid">'
+          + items.map(function(p) {
+              var img  = p.image || "assets/default-product.png";
+              var name = (p.name || "").replace(/</g, "&lt;");
+              return '<a class="st-product-card" href="product.html?id=' + p.id + '">'
+                + '<img src="' + img + '" alt="' + name + '" loading="lazy" onerror="this.src=\'assets/default-product.png\'">'
+                + '<div class="st-product-info">'
+                + '<div class="st-product-name">' + name + '</div>'
+                + '<div class="st-product-price">KES ' + Number(p.price || 0).toLocaleString() + '</div>'
+                + '</div></a>';
+            }).join("")
+          + '</div></div>';
+      }).join("")
+    + "</div>";
+}
+
+/* ═══════════════════════════════════════════════════
+   FIRESTORE LIVE LOADER
+═══════════════════════════════════════════════════ */
+async function _stLoadFirestore(uid) {
+  try {
+    var {initializeApp, getApps} = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    var {getFirestore, doc, getDoc, collection, query, where, getDocs} =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    var cfg = {
+      apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+      authDomain:"sokoni-aeb26.firebaseapp.com",
+      projectId:"sokoni-aeb26",
+      storageBucket:"sokoni-aeb26.firebasestorage.app",
+      messagingSenderId:"24799054989",
+      appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"
+    };
+    var app = getApps().length ? getApps()[0] : initializeApp(cfg);
+    var db  = getFirestore(app);
+
+    /* Shop metadata */
+    var shopSnap = await getDoc(doc(db, "shops", uid));
+    if (!shopSnap.exists()) shopSnap = await getDoc(doc(db, "sellers", uid));
+    var sd = shopSnap.exists() ? shopSnap.data() : {};
+
+    if (sd.banner || sd.bannerUrl) {
+      var bi = document.getElementById("stBannerImg");
+      if (bi) { bi.src = sd.banner || sd.bannerUrl; bi.style.display = "block"; }
+    }
+    if (sd.logo || sd.logoUrl) {
+      var lw = document.getElementById("stLogoWrap");
+      if (lw) lw.innerHTML = '<img src="' + (sd.logo || sd.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+    }
+    if (sd.name || sd.storeName) {
+      var dn = sd.name || sd.storeName;
+      document.title = dn + " — SOKONI";
+      var sn = document.getElementById("stStoreName"); if (sn) sn.textContent = dn;
+    }
+    if (sd.tagline || sd.bio) {
+      var tl = document.getElementById("stTagline");
+      if (tl) { tl.textContent = sd.tagline || sd.bio; tl.style.display = ""; }
+    }
+    if (sd.about || sd.description) {
+      var aw = document.getElementById("stAboutWrap"); var at = document.getElementById("stAboutText");
+      if (aw) aw.style.display = "block";
+      if (at) at.textContent = sd.about || sd.description;
+    }
+
+    /* Render hours + policies from Firestore data (overrides defaults) */
+    stRenderHours(sd);
+    stRenderPolicies(sd);
+
+    /* Verification badge */
+    var vSnap = await getDoc(doc(db, "verifications", uid));
+    if (vSnap.exists() && vSnap.data().status === "approved") {
+      var be = document.getElementById("stBadges");
+      if (be && !be.innerHTML.includes("Verified")) {
+        be.innerHTML = '<span class="st-badge">✅ Verified Seller</span>' + be.innerHTML;
+      }
+    }
+
+    /* Live products */
+    var pQuery = query(collection(db, "products"), where("sellerUid", "==", uid));
+    var pSnap  = await getDocs(pQuery);
+    if (!pSnap.empty) {
+      var fsProds = [];
+      pSnap.forEach(function(d) { fsProds.push(Object.assign({ id: d.id }, d.data())); });
+
+      /* Re-render products grid */
+      var grid  = document.getElementById("stProductsGrid");
+      var empty = document.getElementById("stProductsEmpty");
+      if (grid) {
+        if (fsProds.length) {
+          if (empty) empty.style.display = "none";
+          grid.innerHTML = fsProds.map(function(p) {
+            var ws = p.wholesalePrice
+              ? '<div class="st-wholesale-tag">🏷️ Bulk: KES ' + Number(p.wholesalePrice).toLocaleString()
+                + ' (min ' + p.minWholesaleQty + ')</div>' : "";
+            return '<a class="st-product-card" href="product.html?id=' + p.id + '">'
+              + '<img src="' + (p.image || "assets/default-product.png") + '" alt="' + (p.name||"").replace(/</g,"&lt;") + '" loading="lazy">'
+              + '<div class="st-product-info">'
+              + '<div class="st-product-name">' + (p.name||"").replace(/</g,"&lt;") + '</div>'
+              + '<div class="st-product-price">KES ' + Number(p.price||0).toLocaleString() + '</div>'
+              + ws + '</div></a>';
+          }).join("");
+        }
+      }
+
+      /* Re-render collections with Firestore products */
+      stRenderCollections(fsProds);
+
+      /* Update products badge count */
+      var be2 = document.getElementById("stBadges");
+      if (be2) {
+        be2.innerHTML = be2.innerHTML.replace(/\d+ listings?/, fsProds.length + " listing" + (fsProds.length !== 1 ? "s" : ""));
+      }
+    }
+
+  } catch(e) { /* Firestore is enhancement-only; localStorage data already shown */ }
 }
 </script>
 <script src="scroll-top.js" defer></script>

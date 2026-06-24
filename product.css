@@ -622,6 +622,59 @@ body.light-mode .yml-price { color: #1a8a00; }
 .prd-contact-btn:hover { filter: brightness(1.06); }
 
 /* ═══════════════════════════════════════════════════
+   PHASE 2 — URGENCY SOCIAL PROOF BAR
+═══════════════════════════════════════════════════ */
+.prd-urgency-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  margin: 8px 0 10px;
+  background: rgba(113,255,0,0.04);
+  border: 1px solid rgba(113,255,0,0.12);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.55);
+  line-height: 1;
+}
+.prd-urgency-bar strong {
+  color: rgba(255,255,255,0.9);
+  font-weight: 900;
+}
+.prd-urgency-viewers strong { color: #71ff00; }
+.prd-urgency-sold    strong { color: #ff9800; }
+.prd-urgency-fresh   strong { color: #00aaff; }
+.prd-urgency-sep {
+  color: rgba(255,255,255,0.2);
+  font-weight: 400;
+}
+@media (max-width: 380px) {
+  .prd-urgency-bar { font-size: 11px; padding: 7px 12px; gap: 6px; }
+}
+
+/* ═══════════════════════════════════════════════════
+   PHASE 2 — RESPONSE TIME CHIP
+═══════════════════════════════════════════════════ */
+.prd-seller-chip.response-time {
+  background: rgba(0,170,255,0.08);
+  color: #00aaff;
+  border: 1px solid rgba(0,170,255,0.2);
+}
+
+/* ═══════════════════════════════════════════════════
+   PHASE 2 — LOW STOCK URGENCY PULSE
+═══════════════════════════════════════════════════ */
+.prd-stock-chip.low-stock {
+  animation: prd-low-stock-pulse 2s ease-in-out infinite;
+}
+@keyframes prd-low-stock-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.65; }
+}
+
+/* ═══════════════════════════════════════════════════
    LIGHT MODE OVERRIDES
 ═══════════════════════════════════════════════════ */
 body.light-mode .prd-gallery-wrap { background: #f8f8f8; border-color: rgba(0,0,0,0.08); }
@@ -643,6 +696,11 @@ body.light-mode #prd-contact-modal { background: rgba(0,0,0,0.7); }
 body.light-mode .prd-contact-box { background: #fff; border-color: rgba(0,120,0,0.15); }
 body.light-mode .prd-contact-box h3 { color: #111; }
 body.light-mode .prd-contact-inp { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #111; }
+body.light-mode .prd-urgency-bar { background: rgba(0,120,0,0.04); border-color: rgba(0,120,0,0.12); color: rgba(0,0,0,0.5); }
+body.light-mode .prd-urgency-bar strong { color: rgba(0,0,0,0.8); }
+body.light-mode .prd-urgency-viewers strong { color: #1a8800; }
+body.light-mode .prd-urgency-sold    strong { color: #c06000; }
+body.light-mode .prd-urgency-fresh   strong { color: #0077cc; }
 
 /* ═══════════════════════════════════════════════════
    RESPONSIVE

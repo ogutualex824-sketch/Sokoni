@@ -148,9 +148,8 @@
   --sk-z-raised:   10;
   --sk-z-dropdown: 50;
 
-  /* Navigation */
+  /* In-page navigation (below marketing popups ~99997-99999) */
   --sk-z-sticky:   100;   /* sticky section headers, in-page navs */
-  --sk-z-header:   200;   /* top app bar / hub nav */
   --sk-z-tab-bar:  300;   /* horizontal tab strips below header */
   --sk-z-bottom-nav: 400; /* bottom navigation bar */
 
@@ -159,19 +158,23 @@
   --sk-z-chat-btn: 510;   /* chat / support bubble */
   --sk-z-scroll-top: 520; /* scroll-to-top button */
 
-  /* Overlays */
+  /* In-page overlays (below marketing popups) */
   --sk-z-drawer:   600;   /* side drawers / sheets */
-  --sk-z-modal:    700;   /* modal dialogs */
-  --sk-z-modal-overlay: 690; /* modal backdrop scrim */
 
-  /* Notifications & alerts */
-  --sk-z-toast:    800;   /* toast / snackbar notifications */
-  --sk-z-alert:    810;   /* inline system alerts */
+  /* ── Above-marketing-popup layer (marketing popups sit at ~99997–99999) ── */
+  --sk-z-header:   100001; /* top app bar — must beat all marketing overlays */
+  --sk-z-nav-menu: 100002; /* nav hamburger panel — above header */
+
+  /* UI chrome above the fixed header */
+  --sk-z-modal-overlay: 200000; /* modal backdrop scrim */
+  --sk-z-modal:    200001; /* modal dialogs */
+  --sk-z-toast:    200002; /* toast / snackbar notifications */
+  --sk-z-alert:    200003; /* inline system alerts */
 
   /* Critical */
-  --sk-z-splash:   900;   /* splash / loading screen */
-  --sk-z-cookie:   850;   /* cookie / GDPR banner */
-  --sk-z-emergency: 999;  /* auth timeout, maintenance banners */
+  --sk-z-splash:   300000; /* splash / loading screen */
+  --sk-z-cookie:   300001; /* cookie / GDPR banner */
+  --sk-z-emergency: 999999; /* auth timeout, maintenance banners, push notifications */
 
   /* ══════════════════════════════════════════════════════════════
      TRANSITION / ANIMATION TOKENS

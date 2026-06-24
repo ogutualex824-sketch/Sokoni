@@ -11,6 +11,11 @@
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <meta name="color-scheme" content="dark">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -192,6 +197,27 @@
       box-shadow:0 2px 10px rgba(0,0,0,0.5);
     }
 
+    /* ── Phase 5: Horizontal step progress bar ── */
+    .tk-steps-bar{display:flex;align-items:flex-start;padding:2px 4px 14px;margin-bottom:4px;}
+    .tk-step{display:flex;flex-direction:column;align-items:center;flex:1;gap:5px;position:relative;}
+    .tk-step:not(:last-child)::after{
+      content:'';position:absolute;top:13px;left:55%;right:-55%;
+      height:2px;background:rgba(255,255,255,0.07);z-index:0;transition:background .4s;
+    }
+    .tk-step.ts-done:not(:last-child)::after{background:rgba(113,255,0,0.4);}
+    .tk-step.ts-active:not(:last-child)::after{background:linear-gradient(90deg,rgba(113,255,0,0.4),rgba(255,255,255,0.07));}
+    .tk-dot{
+      width:28px;height:28px;border-radius:50%;
+      border:2px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);
+      display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;
+      position:relative;z-index:1;transition:all .4s;color:rgba(255,255,255,0.2);
+    }
+    .tk-step.ts-done .tk-dot{border-color:#71ff00;background:rgba(113,255,0,0.1);color:#71ff00;}
+    .tk-step.ts-active .tk-dot{border-color:#71ff00;background:rgba(113,255,0,0.2);color:#71ff00;box-shadow:0 0 14px rgba(113,255,0,0.45);}
+    .tk-step-lbl{font-size:8.5px;font-weight:700;color:rgba(255,255,255,0.2);text-transform:uppercase;letter-spacing:.04em;text-align:center;line-height:1.25;transition:color .4s;}
+    .tk-step.ts-done .tk-step-lbl{color:rgba(255,255,255,0.48);}
+    .tk-step.ts-active .tk-step-lbl{color:#71ff00;}
+
     /* ── Module timeline (UIManager.renderTimeline) ── */
     .dt-step{display:flex;align-items:flex-start;gap:10px;min-height:44px;padding:4px 0;}
     .dt-check{font-size:12px;font-weight:900;color:#71ff00;min-width:24px;text-align:center;}
@@ -299,6 +325,26 @@
 
   <!-- SOKONI PREMIUM LIVE TRACKING MAP -->
   <div id="mapContainer" class="map-container">
+
+    <!-- Phase 5: Horizontal Step Progress Bar -->
+    <div class="tk-steps-bar" id="tkStepsBar">
+      <div class="tk-step ts-done" data-step="0">
+        <div class="tk-dot">✓</div>
+        <div class="tk-step-lbl">Order<br>Placed</div>
+      </div>
+      <div class="tk-step ts-done" data-step="1">
+        <div class="tk-dot">✓</div>
+        <div class="tk-step-lbl">Being<br>Packed</div>
+      </div>
+      <div class="tk-step ts-active" data-step="2">
+        <div class="tk-dot">🚚</div>
+        <div class="tk-step-lbl">In<br>Transit</div>
+      </div>
+      <div class="tk-step" data-step="3">
+        <div class="tk-dot">🏠</div>
+        <div class="tk-step-lbl">Delivered</div>
+      </div>
+    </div>
 
     <!-- Glassmorphism Top Status Card -->
     <div class="track-status-card">
@@ -928,6 +974,7 @@
       if(t>=1){
         const s=document.getElementById('riderStatus'); if(s) s.textContent='✅ Arrived';
         const c=document.getElementById('tscStatus');   if(c) c.textContent='✅ Delivered!';
+        if(window._setStepBar) window._setStepBar(3);
       }
     },2800);
   }
@@ -1221,7 +1268,16 @@
     if(!el) return;
     const name=_riderName||'your rider';
     const dcSub=document.getElementById('dcSub');
-    if(dcSub) dcSub.textContent='Delivered by '+name+'. Hope you love your order!';
+    /* Phase 5: Show loyalty points earned */
+    let ptsEarned = 0;
+    try {
+      const urlId = new URLSearchParams(location.search).get('id') || '';
+      const orders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]');
+      const order  = orders.find(function(o) { return o.id === urlId; });
+      if (order && order.total) ptsEarned = Math.max(1, Math.floor(Number(order.total) / 100));
+    } catch(e) {}
+    const ptsMsg = ptsEarned > 0 ? ' You earned <strong style="color:#71ff00;">+' + ptsEarned + ' pts</strong>!' : '';
+    if(dcSub) dcSub.innerHTML = 'Delivered by ' + name + '. Hope you love your order!' + ptsMsg;
     el.classList.add('show');
     /* Stop simulation */
     if(_simInterval){ clearInterval(_simInterval); _simInterval=null; }
@@ -1242,7 +1298,45 @@
     const el=document.getElementById('deliveryComplete');
     if(el) el.classList.remove('show');
   }
-  function reorder(){ window.location.href='cart.html'; }
+  /* Phase 5: Smart reorder — restores items to cart before navigating */
+  function reorder() {
+    const urlId = new URLSearchParams(location.search).get('id') ||
+                  new URLSearchParams(location.search).get('order') ||
+                  new URLSearchParams(location.search).get('orderId');
+    try {
+      const orders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]');
+      const order  = orders.find(function(o) { return o.id === urlId || o.orderId === urlId; });
+      if (order && order.items && order.items.length) {
+        let cart = [];
+        try { cart = JSON.parse(localStorage.getItem('sokoniCart') || '[]'); } catch(e) {}
+        order.items.forEach(function(item) {
+          const idx = cart.findIndex(function(c) { return c.id === item.id; });
+          if (idx >= 0) cart[idx].qty = (cart[idx].qty || 1) + (item.qty || 1);
+          else cart.push(Object.assign({}, item, { qty: item.qty || 1 }));
+        });
+        localStorage.setItem('sokoniCart', JSON.stringify(cart));
+      }
+    } catch(e) {}
+    window.location.href = 'cart.html';
+  }
+
+  /* Phase 5: Update step bar when delivery status changes */
+  function _setStepBar(activeIdx) {
+    const steps = document.querySelectorAll('#tkStepsBar .tk-step');
+    steps.forEach(function(el, i) {
+      el.classList.remove('ts-done', 'ts-active');
+      if (i < activeIdx) el.classList.add('ts-done');
+      else if (i === activeIdx) el.classList.add('ts-active');
+      /* Update dot text for completed steps */
+      const dot = el.querySelector('.tk-dot');
+      if (dot) {
+        if (i < activeIdx) dot.textContent = '✓';
+        else if (i === activeIdx && activeIdx === 3) dot.textContent = '🎉';
+      }
+    });
+  }
+  window._setStepBar = _setStepBar;
+
   function contactSeller(){ window.location.href='messages.html'; }
   window.rateRider=rateRider;
   window.reorder=reorder;

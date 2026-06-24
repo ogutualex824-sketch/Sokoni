@@ -11,8 +11,11 @@
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <meta name="color-scheme" content="dark">
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="sokoni-desktop.css">
   <link rel="manifest" href="manifest.json">
@@ -79,7 +82,7 @@
 
     #searchInput {
       width: 100%;
-      padding: 16px 60px 16px 52px;
+      padding: 16px 128px 16px 52px;
       background: rgba(255,255,255,0.07);
       border: 1.5px solid var(--border);
       border-radius: 28px;
@@ -98,26 +101,43 @@
 
     #searchInput::placeholder { color: var(--text-muted); }
 
-    .search-clear-btn {
+    .search-clear-btn,
+    .search-voice-btn,
+    .search-img-btn {
       position: absolute;
-      right: 16px;
       top: 50%;
       transform: translateY(-50%);
-      background: rgba(255,255,255,0.08);
-      border: none;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
       color: var(--text-muted);
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       cursor: pointer;
-      font-size: 14px;
-      display: none;
+      font-size: 15px;
+      display: flex;
       align-items: center;
       justify-content: center;
-      transition: background .15s, color .15s;
+      transition: background .15s, color .15s, border-color .15s;
     }
-    .search-clear-btn:hover { background: rgba(255,255,255,0.14); color: var(--text); }
+    .search-clear-btn { right: 14px; display: none; }
     .search-clear-btn.visible { display: flex; }
+    .search-voice-btn { right: 52px; }
+    .search-img-btn   { right: 90px; }
+    .search-clear-btn:hover,
+    .search-voice-btn:hover,
+    .search-img-btn:hover { background: rgba(255,255,255,0.13); color: var(--text); border-color: rgba(255,255,255,0.18); }
+    .search-voice-btn.listening {
+      background: rgba(255,50,50,0.12);
+      border-color: rgba(255,50,50,0.4);
+      color: #ff4d4d;
+      animation: voice-pulse 1.2s ease-in-out infinite;
+    }
+    .search-voice-btn.unsupported { opacity: .35; cursor: not-allowed; }
+    @keyframes voice-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,50,50,0.35); }
+      50%      { box-shadow: 0 0 0 8px rgba(255,50,50,0); }
+    }
 
     /* ===== TABS ===== */
     .tab-bar-wrap {
@@ -536,6 +556,50 @@
     .bottom-nav a.active, .bottom-nav a:hover { color: var(--accent); }
     .bottom-nav a span:first-child { font-size: 20px; }
 
+    /* ===== TRENDING SECTION ===== */
+    .trending-wrap {
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .trending-hd {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 10px;
+    }
+    .trending-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .trending-chip {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .trending-chip:hover {
+      border-color: rgba(255,152,0,0.4);
+      background: rgba(255,152,0,0.08);
+      color: #ff9800;
+    }
+    .trending-rank {
+      font-size: 9px;
+      font-weight: 900;
+      color: #ff9800;
+      min-width: 14px;
+    }
+
     /* ===== DESKTOP: wider cards ===== */
     @media (min-width: 640px) {
       .results-area { padding: 24px 24px 60px; }
@@ -562,6 +626,8 @@
       aria-label="Search SOKONI"
       inputmode="search"
     >
+    <button class="search-voice-btn" id="voiceBtn" aria-label="Search by voice" title="Voice search">🎤</button>
+    <button class="search-img-btn" id="imgBtn" aria-label="Image search" title="Image search">📷</button>
     <button class="search-clear-btn" id="clearBtn" aria-label="Clear search" title="Clear">✕</button>
   </div>
 </div>
@@ -906,12 +972,37 @@ function renderPrompt() {
        </div>`
     : "";
 
+  const trendingItems = [
+    { icon: "📱", label: "Samsung A55" },
+    { icon: "🏠", label: "2BR Nairobi rent" },
+    { icon: "🚗", label: "Toyota Axio" },
+    { icon: "👗", label: "Second-hand clothes" },
+    { icon: "📱", label: "iPhone 15" },
+    { icon: "🍔", label: "Food delivery" },
+    { icon: "👷", label: "Plumber Nairobi" },
+    { icon: "💼", label: "Remote jobs Kenya" },
+    { icon: "🎉", label: "Event venues Nairobi" },
+    { icon: "🛵", label: "Boda boda hire" },
+  ];
+  const trendingHTML =
+    `<div class="trending-wrap">
+      <div class="trending-hd"><span>🔥</span> Trending Now</div>
+      <div class="trending-chips">
+        ${trendingItems.map((t, i) =>
+          `<button class="trending-chip" data-q="${escHtml(t.label)}">
+            <span class="trending-rank">${i + 1}</span>${t.icon} ${escHtml(t.label)}
+          </button>`
+        ).join('')}
+      </div>
+    </div>`;
+
   resultsArea.innerHTML =
     '<div class="prompt-state">' +
       '<span class="big-icon">🔍</span>' +
       '<h2>Search Everything on SOKONI</h2>' +
       '<p>Products, services, jobs, properties, vehicles,<br>businesses and professionals — all in one place.</p>' +
       recentHTML +
+      trendingHTML +
       '<div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Popular Categories</div>' +
       '<div class="category-quick-grid">' +
         quickItems.map(q =>
@@ -924,7 +1015,7 @@ function renderPrompt() {
       '</div>' +
     '</div>';
 
-  resultsArea.querySelectorAll(".quick-tile, .recent-chip").forEach(tile => {
+  resultsArea.querySelectorAll(".quick-tile, .recent-chip, .trending-chip").forEach(tile => {
     tile.addEventListener("click", () => {
       searchInput.value = tile.dataset.q;
       triggerSearch(tile.dataset.q);
@@ -1326,6 +1417,66 @@ function escHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+/* ──────────────────────────────────────────
+   VOICE SEARCH
+────────────────────────────────────────── */
+(function _initVoice() {
+  const btn = document.getElementById('voiceBtn');
+  if (!btn) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    btn.title = 'Voice search not supported in this browser';
+    btn.classList.add('unsupported');
+    return;
+  }
+  const rec = new SR();
+  rec.lang = 'en-KE';
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  let _live = false;
+
+  btn.addEventListener('click', () => {
+    if (_live) { rec.stop(); return; }
+    try {
+      rec.start();
+      _live = true;
+      btn.classList.add('listening');
+      btn.title = 'Listening… tap to stop';
+    } catch (e) { /* permission denied etc */ }
+  });
+  rec.onresult = e => {
+    const q = e.results[0]?.[0]?.transcript?.trim() || '';
+    if (q) { searchInput.value = q; triggerSearch(q); }
+    _live = false; btn.classList.remove('listening'); btn.title = 'Voice search';
+  };
+  const _reset = () => { _live = false; btn.classList.remove('listening'); btn.title = 'Voice search'; };
+  rec.onend = _reset;
+  rec.onerror = _reset;
+})();
+
+/* ──────────────────────────────────────────
+   IMAGE SEARCH PLACEHOLDER
+────────────────────────────────────────── */
+(function _initImgSearch() {
+  const btn = document.getElementById('imgBtn');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    let toast = document.getElementById('_imgToast');
+    if (toast) return;
+    toast = document.createElement('div');
+    toast.id = '_imgToast';
+    toast.setAttribute('role', 'status');
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(12px);background:#1c1c1c;border:1px solid rgba(255,152,0,.35);color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:200002;max-width:90vw;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.5);opacity:0;transition:opacity .2s,transform .2s;';
+    toast.textContent = '📷 Image search is coming soon — try describing what you see!';
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(-50%) translateY(0)'; });
+    setTimeout(() => {
+      toast.style.opacity = '0'; toast.style.transform = 'translateX(-50%) translateY(10px)';
+      setTimeout(() => toast.remove(), 250);
+    }, 3200);
+  });
+})();
 
 /* ──────────────────────────────────────────
    INIT

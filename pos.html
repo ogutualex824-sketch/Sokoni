@@ -463,6 +463,20 @@
           <div class="settings-row"><div class="settings-row-label"><strong>Reset POS</strong><span style="color:var(--red)">Clears all local data</span></div><button class="settings-danger-btn" onclick="SPos.data.resetDialog()">Reset</button></div>
         </div>
         <div class="settings-section">
+          <div class="settings-section-title">🩺 DIAGNOSTICS</div>
+          <div class="p7-diag-grid" id="p7DiagGrid">
+            <div class="p7-diag-card"><div class="p7-diag-val" id="dg-db">—</div><div class="p7-diag-lbl">DATABASE</div></div>
+            <div class="p7-diag-card"><div class="p7-diag-val" id="dg-products">—</div><div class="p7-diag-lbl">PRODUCTS</div></div>
+            <div class="p7-diag-card"><div class="p7-diag-val" id="dg-queue">—</div><div class="p7-diag-lbl">SYNC QUEUE</div></div>
+            <div class="p7-diag-card"><div class="p7-diag-val" id="dg-today">—</div><div class="p7-diag-lbl">SALES TODAY</div></div>
+          </div>
+          <div class="p7-diag-log" id="p7DiagLog" style="display:none"></div>
+          <div class="settings-row" style="margin-top:8px">
+            <div class="settings-row-label"><strong>Run Diagnostics</strong><span id="dg-last-sync" style="font-size:10px;color:var(--txt3)">Never synced</span></div>
+            <button class="settings-save-btn" onclick="_p7RunDiag()">Run</button>
+          </div>
+        </div>
+        <div class="settings-section">
           <div class="settings-section-title">🎙 VOICE CASHIER</div>
           <div id="voice-panel-container"></div>
           <div class="settings-row">
@@ -764,6 +778,8 @@
         <span>🚚</span> Dispatch Delivery
       </button>
     </div>
+    <button class="suc-receipt-toggle" id="sucReceiptToggle" onclick="_p7ToggleReceiptPreview()">👁 View Receipt</button>
+    <div id="suc-receipt-preview"></div>
     <button class="suc-close-btn" onclick="document.getElementById('success-overlay').classList.remove('open')">Tap to close</button>
   </div>
 </div>
@@ -802,6 +818,23 @@
   <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
     <div class="modal-header"><span class="modal-title">🏷️ Barcode &amp; Label Designer</span><button class="modal-close" onclick="SPos.modal.close('labels-modal')">✕</button></div>
     <div class="modal-body"><div id="labels-designer-body"></div></div>
+  </div>
+</div>
+
+<!-- ════ ALERTS MODAL (Phase 7) ════ -->
+<div class="modal-overlay" id="p7-alerts-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title">🔔 Inventory Alerts</span>
+      <button class="modal-close" onclick="SPos.modal.close('p7-alerts-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="p7AlertsBody" style="padding:0 16px 8px">
+      <div class="p7-alerts-empty">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-ghost" onclick="SPos.modal.close('p7-alerts-modal')">Dismiss</button>
+      <button class="modal-btn modal-btn-primary" onclick="SPos.ui.switchTab('inventory');SPos.inv.showTab('low-stock',null);SPos.modal.close('p7-alerts-modal')">View Inventory →</button>
+    </div>
   </div>
 </div>
 
@@ -1046,5 +1079,233 @@
 <script defer src="sokoni-observability.js"></script>
 <script defer src="sokoni-gateway.js"></script>
 <script defer src="sokoni-service-mesh.js"></script>
+
+<!-- ════ PHASE 7: SmartPOS Polish ════ -->
+<script>
+(function(){
+  /* ── Long-press context menu on product tiles ── */
+  let _lpTimer = null;
+  document.addEventListener('pointerdown', function(e){
+    const tile = e.target.closest('.product-tile');
+    if (!tile || tile.classList.contains('out-stock')) return;
+    _lpTimer = setTimeout(function(){
+      _p7ShowTileMenu(tile, e.clientX, e.clientY);
+    }, 480);
+  });
+  document.addEventListener('pointerup',    function(){ clearTimeout(_lpTimer); });
+  document.addEventListener('pointermove',  function(){ clearTimeout(_lpTimer); });
+  document.addEventListener('pointercancel',function(){ clearTimeout(_lpTimer); });
+  document.addEventListener('contextmenu',  function(e){
+    if (e.target.closest('.product-tile')) e.preventDefault();
+  });
+
+  function _p7ShowTileMenu(tile, cx, cy){
+    _p7CloseTileMenu();
+    const pid   = tile.dataset.id;
+    const pname = tile.querySelector('.product-tile-name')?.textContent || 'Product';
+    const menu  = document.createElement('div');
+    menu.id = 'p7TileMenu';
+    menu.className = 'p7-tile-menu';
+    menu.innerHTML = [
+      `<button class="p7-tile-menu-item" onclick="_p7TileAdd('${pid}',2)">Add ×2</button>`,
+      `<button class="p7-tile-menu-item" onclick="_p7TileAdd('${pid}',3)">Add ×3</button>`,
+      `<button class="p7-tile-menu-item" onclick="_p7TileAdd('${pid}',5)">Add ×5</button>`,
+      `<button class="p7-tile-menu-item" onclick="_p7TileAdd('${pid}',10)">Add ×10</button>`,
+    ].join('');
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let x = cx + 4, y = cy + 4;
+    if (x + 150 > vw) x = vw - 158;
+    if (y + 180 > vh) y = cy - 184;
+    menu.style.cssText = `left:${x}px;top:${y}px;`;
+    document.body.appendChild(menu);
+    requestAnimationFrame(function(){
+      document.addEventListener('pointerdown', _p7CloseTileMenu, { once: true, capture: true });
+    });
+    /* Haptic on supported devices */
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
+
+  function _p7CloseTileMenu(){
+    const m = document.getElementById('p7TileMenu');
+    if (m) m.remove();
+  }
+
+  window._p7TileAdd = function(pid, qty){
+    _p7CloseTileMenu();
+    if (!window.SPos) return;
+    for (let i = 0; i < qty; i++) SPos.products._addById(pid);
+  };
+
+  /* ── Receipt preview toggle in success overlay ── */
+  let _rpVisible = false;
+  let _rpData    = null;
+
+  window._p7SetReceiptData = function(d){ _rpData = d; _rpVisible = false; _renderReceiptToggle(); };
+
+  function _renderReceiptToggle(){
+    const btn     = document.getElementById('sucReceiptToggle');
+    const preview = document.getElementById('suc-receipt-preview');
+    if (!btn || !preview) return;
+    btn.textContent   = '👁 View Receipt';
+    preview.style.display = 'none';
+    _rpVisible = false;
+  }
+
+  window._p7ToggleReceiptPreview = function(){
+    const btn     = document.getElementById('sucReceiptToggle');
+    const preview = document.getElementById('suc-receipt-preview');
+    if (!btn || !preview || !_rpData) return;
+    _rpVisible = !_rpVisible;
+    if (!_rpVisible){ preview.style.display = 'none'; btn.textContent = '👁 View Receipt'; return; }
+    btn.textContent = '✕ Hide Receipt';
+    const d = _rpData;
+    const bizName  = (d.businessName  || 'SOKONI SmartPOS').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const bizAddr  = (d.businessAddress || '').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const bizPhone = (d.businessPhone  || '').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const footer   = (d.footerMessage  || 'Thank you!').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const rows     = (d.items || []).map(function(it){
+      const name = (it.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      const subtotal = (it.qty||1) * (it.price||0);
+      return `<tr><td class="rp-qty">x${it.qty||1}</td><td>${name}</td><td class="rp-amt">KES ${subtotal.toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td></tr>`;
+    }).join('');
+    preview.innerHTML = `
+      <div class="rp-biz">${bizName}</div>
+      ${bizAddr  ? `<div class="rp-addr">${bizAddr}</div>` : ''}
+      ${bizPhone ? `<div class="rp-addr">📞 ${bizPhone}</div>` : ''}
+      <hr class="rp-divider">
+      <div style="font-size:10px;color:#777;margin-bottom:4px">${d.date||new Date().toLocaleString('en-KE')}</div>
+      <div style="font-size:10px;color:#999;margin-bottom:6px">Receipt: ${(d.receiptNo||'—').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
+      <table class="rp-items">${rows}</table>
+      <hr class="rp-divider">
+      ${d.tax ? `<div style="display:flex;justify-content:space-between;font-size:10px;color:#777"><span>VAT (${d.taxRate||16}%)</span><span>KES ${(d.tax||0).toLocaleString('en-KE',{minimumFractionDigits:2})}</span></div>` : ''}
+      <div class="rp-total-row"><span>TOTAL</span><span>KES ${(d.total||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+      ${d.change > 0 ? `<div style="font-size:10px;color:#555;margin-top:2px">Change: KES ${(d.change||0).toLocaleString('en-KE',{minimumFractionDigits:2})}</div>` : ''}
+      <hr class="rp-divider">
+      <div class="rp-footer">${footer}</div>
+      <div class="rp-footer">Powered by SOKONI SmartPOS</div>`;
+    preview.style.display = 'block';
+  };
+
+  /* ── Alerts modal: show categorized list ── */
+  window._p7ShowAlertsModal = function(low){
+    const body = document.getElementById('p7AlertsBody');
+    if (!body) return;
+    if (!low || !low.length){
+      body.innerHTML = '<div class="p7-alerts-empty">✅ No stock alerts — all products are well stocked!</div>';
+    } else {
+      const outStock = low.filter(function(p){ return !p.stock || p.stock <= 0; });
+      const lowStock = low.filter(function(p){ return p.stock > 0; });
+      let html = '';
+      if (outStock.length){
+        html += '<div class="p7-alert-section-hd">🔴 Out of Stock (' + outStock.length + ')</div>';
+        html += outStock.map(function(p){
+          return '<div class="p7-alert-row">' +
+            '<div class="p7-alert-dot out"></div>' +
+            '<div class="p7-alert-name">' + (p.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</div>' +
+            '<div class="p7-alert-stock">0 left</div>' +
+            '<button class="p7-alert-restock" onclick="SPos.inv.stockInDialog(\'' + (p.id||'').replace(/'/g,"\\'") + '\')">Restock</button>' +
+            '</div>';
+        }).join('');
+      }
+      if (lowStock.length){
+        html += '<div class="p7-alert-section-hd">🟡 Low Stock (' + lowStock.length + ')</div>';
+        html += lowStock.map(function(p){
+          return '<div class="p7-alert-row">' +
+            '<div class="p7-alert-dot low"></div>' +
+            '<div class="p7-alert-name">' + (p.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</div>' +
+            '<div class="p7-alert-stock">' + p.stock + ' left</div>' +
+            '<button class="p7-alert-restock" onclick="SPos.inv.stockInDialog(\'' + (p.id||'').replace(/'/g,"\\'") + '\')">Restock</button>' +
+            '</div>';
+        }).join('');
+      }
+      body.innerHTML = html;
+    }
+    if (window.SPos) SPos.modal.open('p7-alerts-modal');
+  };
+
+  /* ── Diagnostics ── */
+  window._p7RunDiag = async function(){
+    const vals = {
+      'dg-db':       { val: '—', cls: '' },
+      'dg-products': { val: '—', cls: '' },
+      'dg-queue':    { val: '—', cls: '' },
+      'dg-today':    { val: '—', cls: '' },
+    };
+    const log  = document.getElementById('p7DiagLog');
+    const lines = [];
+    const ts = new Date().toLocaleString('en-KE');
+    lines.push('=== SOKONI SmartPOS Diagnostics ===');
+    lines.push('Run at: ' + ts);
+    lines.push('');
+
+    /* DB health */
+    try {
+      if (window.indexedDB){ vals['dg-db'] = { val: 'OK', cls: 'ok' }; lines.push('✅ IndexedDB: available'); }
+      else { vals['dg-db'] = { val: 'N/A', cls: 'warn' }; lines.push('⚠️  IndexedDB: not available'); }
+    } catch(e){ vals['dg-db'] = { val: 'ERR', cls: 'error' }; lines.push('❌ IndexedDB: ' + e.message); }
+
+    /* Product count */
+    try {
+      if (window.PosDB){
+        const prods = await PosDB.products.getAll();
+        vals['dg-products'] = { val: prods.length, cls: prods.length > 0 ? 'ok' : 'warn' };
+        lines.push('📦 Products: ' + prods.length);
+        const lowStock = prods.filter(function(p){ return p.stock !== undefined && p.stock <= (p.lowStockThreshold || 5); });
+        if (lowStock.length) lines.push('⚠️  Low/out-of-stock: ' + lowStock.length);
+      } else { lines.push('⚠️  PosDB not loaded'); }
+    } catch(e){ lines.push('❌ Product load: ' + e.message); }
+
+    /* Sync queue */
+    try {
+      if (window.PosDB && PosDB.syncQueue){
+        const pending = await PosDB.syncQueue.getPending();
+        const cnt = pending.length;
+        vals['dg-queue'] = { val: cnt, cls: cnt === 0 ? 'ok' : 'warn' };
+        lines.push((cnt === 0 ? '✅' : '⚠️ ') + ' Sync queue: ' + cnt + ' pending');
+      }
+    } catch(e){ lines.push('❌ Sync queue: ' + e.message); }
+
+    /* Today's sales */
+    try {
+      if (window.PosDB){
+        const from = new Date().setHours(0,0,0,0);
+        const to   = new Date().setHours(23,59,59,999);
+        const txns = await PosDB.transactions.getByDateRange(from, to);
+        vals['dg-today'] = { val: txns.length, cls: 'ok' };
+        const rev = txns.reduce(function(s,t){ return s + (t.total||0); }, 0);
+        lines.push('💰 Sales today: ' + txns.length + ' (KES ' + rev.toLocaleString('en-KE') + ')');
+      }
+    } catch(e){ lines.push('❌ Transactions: ' + e.message); }
+
+    /* Network */
+    lines.push('');
+    lines.push('🌐 Online: ' + navigator.onLine);
+    lines.push('📱 User Agent: ' + navigator.userAgent.slice(0, 80));
+
+    /* Last sync */
+    const lastSync = localStorage.getItem('posLastSync');
+    const syncEl = document.getElementById('dg-last-sync');
+    if (syncEl) syncEl.textContent = lastSync ? 'Last sync: ' + new Date(parseInt(lastSync)).toLocaleString('en-KE') : 'Never synced';
+
+    /* Update cards */
+    Object.keys(vals).forEach(function(id){
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = vals[id].val;
+      el.className   = 'p7-diag-val ' + vals[id].cls;
+    });
+
+    /* Show log */
+    if (log){ log.textContent = lines.join('\n'); log.style.display = 'block'; }
+  };
+
+  /* ── Init: auto-run diagnostics when settings tab opens ── */
+  const _origSwitch = typeof SPos !== 'undefined' && SPos.ui && SPos.ui.switchTab;
+  document.addEventListener('DOMContentLoaded', function(){
+    /* Auto-populate diag cards on first load after PosDB is ready */
+    setTimeout(function(){ if (document.getElementById('panel-settings')?.classList.contains('active')) _p7RunDiag(); }, 1200);
+  });
+})();
+</script>
 </body>
 </html>

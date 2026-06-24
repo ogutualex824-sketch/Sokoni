@@ -3032,6 +3032,103 @@ service cloud.firestore {
       allow create, update, delete: if false;  /* CF admin SDK only */
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       PRODUCT STATS  — aggregated view/sales/price/trending counters
+       Written exclusively by Cloud Functions (admin SDK).
+       Any authenticated or unauthenticated user may read (public data).
+    ══════════════════════════════════════════════════════════════ */
+    match /productStats/{productId} {
+      allow read:   if true;           /* public — product metrics are public */
+      allow write:  if false;          /* CF admin SDK only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PRODUCT PRICE HISTORY  — one document per price change event
+       Written by onProductPriceChanged trigger (admin SDK).
+       Publicly readable — price history transparency for buyers.
+    ══════════════════════════════════════════════════════════════ */
+    match /productPriceHistory/{historyId} {
+      allow read:   if true;           /* public — transparency for buyers */
+      allow write:  if false;          /* CF admin SDK only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PRODUCT VIEW DEDUP  — session deduplication keys (short-lived)
+       Written by recordProductView CF (admin SDK).
+       No client access — privacy protection.
+    ══════════════════════════════════════════════════════════════ */
+    match /productViewDedup/{dedupKey} {
+      allow read, write: if false;     /* CF admin SDK only — no client access */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SELLER PERFORMANCE  — aggregated seller metrics
+       Written by aggregateSellerPerformance CF (admin SDK).
+       Public read — buyers need this to evaluate sellers.
+    ══════════════════════════════════════════════════════════════ */
+    match /sellerPerformance/{sellerId} {
+      allow read:   if true;           /* public — seller metrics are public */
+      allow write:  if false;          /* CF admin SDK only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       OPS BACKUPS  — Firestore export audit log
+       Written by scheduledFirestoreBackup CF (admin SDK).
+       Admin read only.
+    ══════════════════════════════════════════════════════════════ */
+    match /ops_backups/{docId} {
+      allow read:   if isAdmin();
+      allow write:  if false;          /* CF admin SDK only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CSP VIOLATIONS  — collected by cspReportCollect CF
+       Written publicly by browsers (no auth). Admin read only.
+    ══════════════════════════════════════════════════════════════ */
+    match /cspViolations/{docId} {
+      allow read:   if isAdmin();
+      allow write:  if false;          /* CF only — browsers hit CF endpoint */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       HEALTH CHECK PROBE  — written by systemHealthCheck CF
+    ══════════════════════════════════════════════════════════════ */
+    match /_healthcheck/{docId} {
+      allow read:   if isAdmin();
+      allow write:  if false;          /* CF admin SDK only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       EMAIL LOGS  — delivery log for every sent email
+       Read: owner (matching uid) or admin.
+       Write: CF only.
+    ══════════════════════════════════════════════════════════════ */
+    match /emailLogs/{logId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       EMAIL QUEUE  — pending/processing/failed email jobs
+       Admin read. CF write.
+    ══════════════════════════════════════════════════════════════ */
+    match /emailQueue/{jobId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       EMAIL PREFERENCES  — per-user opt-out preferences
+       User reads and writes their own prefs.
+    ══════════════════════════════════════════════════════════════ */
+    match /emailPreferences/{uid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write:  if isAuthed() && request.auth.uid == uid
+                    && request.resource.data.keys().hasOnly(
+                        ["orders","payments","marketing","account","security"]);
+    }
+
   }
 }
 

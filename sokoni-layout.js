@@ -30,25 +30,28 @@
      Only these values may be used.  All other z-index values are forbidden.
   ───────────────────────────────────────────────────────────────────────── */
   var Z = {
-    below:       -1,
-    base:         0,
-    raised:      10,
-    dropdown:    50,
-    sticky:     100,
-    header:     200,
-    tabBar:     300,
-    bottomNav:  400,
-    fab:        500,
-    chatBtn:    510,
-    scrollTop:  520,
-    drawer:     600,
-    modalOverlay: 690,
-    modal:      700,
-    toast:      800,
-    alert:      810,
-    splash:     900,
-    cookie:     850,
-    emergency:  999
+    below:          -1,
+    base:            0,
+    raised:         10,
+    dropdown:       50,
+    sticky:        100,
+    tabBar:        300,
+    bottomNav:     400,
+    fab:           500,
+    chatBtn:       510,
+    scrollTop:     520,
+    drawer:        600,
+    /* ── Above marketing-popup layer (~99997-99999) ── */
+    header:     100001,   /* top app bar — must beat all marketing overlays */
+    navMenu:    100002,   /* nav hamburger panel */
+    /* ── UI chrome above the fixed header ── */
+    modalOverlay: 200000,
+    modal:        200001,
+    toast:        200002,
+    alert:        200003,
+    splash:       300000,
+    cookie:       300001,
+    emergency:    999999
   };
 
   /* ─────────────────────────────────────────────────────────────────────────

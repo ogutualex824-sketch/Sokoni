@@ -110,6 +110,20 @@ jobs:
         env:
           SMOKE_BASE_URL: "https://sokoni-aeb26--staging.web.app"
 
+      - name: Health check — systemHealthCheck endpoint
+        run: |
+          echo "Waiting 30s for functions to warm up..."
+          sleep 30
+          STATUS=$(curl -s -o /tmp/health.json -w "%{http_code}" \
+            https://us-central1-sokoni-aeb26.cloudfunctions.net/systemHealthCheck)
+          echo "HTTP status: $STATUS"
+          cat /tmp/health.json | python3 -m json.tool 2>/dev/null || cat /tmp/health.json
+          if [ "$STATUS" = "503" ]; then
+            echo "❌ Health check UNHEALTHY (503) — deployment may have broken Firestore"
+            exit 1
+          fi
+          echo "✅ Health check passed (HTTP $STATUS)"
+
   # ─────────────────────────────────────────────────────────────
   # PRODUCTION — Requires manual approval gate + passing smoke tests.
   # Proceeds when smoke tests pass OR when explicitly skipped

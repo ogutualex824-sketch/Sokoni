@@ -712,7 +712,9 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     </div>
 
 </section>
-    
+
+<!-- Phase 6: Smart Insights Strip -->
+<div class="seller-insights-strip" id="sellerInsightsStrip"></div>
 
     <!-- ANALYTICS -->
 
@@ -730,76 +732,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
 
 
-        <div class="chart-bars">
-
-            <div class="bar">
-
-                <span style="height:60%"></span>
-
-                <p>Mon</p>
-
-            </div>
-
-
-
-            <div class="bar">
-
-                <span style="height:85%"></span>
-
-                <p>Tue</p>
-
-            </div>
-
-
-
-            <div class="bar">
-
-                <span style="height:45%"></span>
-
-                <p>Wed</p>
-
-            </div>
-
-
-
-            <div class="bar">
-
-                <span style="height:95%"></span>
-
-                <p>Thu</p>
-
-            </div>
-
-
-
-            <div class="bar">
-
-                <span style="height:70%"></span>
-
-                <p>Fri</p>
-
-            </div>
-
-
-
-            <div class="bar">
-
-                <span style="height:100%"></span>
-
-                <p>Sat</p>
-
-            </div>
-
-
-
-            <div class="bar">
-
-                <span style="height:80%"></span>
-
-                <p>Sun</p>
-
-            </div>
-
+        <!-- Phase 6: Live 7-day revenue chart (reads sokoniOrders localStorage) -->
+        <div class="p6-chart-wrap">
+          <div class="p6-chart-hd">
+            <span class="p6-chart-lbl">Last 7 Days Revenue</span>
+            <span class="p6-chart-total" id="sellerLiveChartTotal">—</span>
+          </div>
+          <canvas id="sellerLiveChart" height="130" style="width:100%;display:block;"></canvas>
+          <div style="font-size:10px;color:rgba(255,255,255,0.18);text-align:center;margin-top:6px;">From orders in your dashboard</div>
         </div>
 
     </div>
@@ -1017,6 +957,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             <option value="name">A–Z</option>
             <option value="stock">In Stock</option>
           </select>
+          <!-- Phase 6: Bulk Price Update button -->
+          <button type="button" onclick="document.getElementById('bulkPriceMod').style.display='flex'" style="padding:8px 14px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.25);border-radius:10px;color:#ff9800;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s;" onmouseenter="this.style.background='rgba(255,152,0,0.14)'" onmouseleave="this.style.background='rgba(255,152,0,0.08)'">📉 Bulk Price</button>
         </div>
       </div>
       <div class="products-grid" id="sellerProductsContainer"></div>
@@ -1536,9 +1478,16 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           </select>
         </div>
       </div>
-      <div class="flash-input-group" style="margin-bottom:14px;">
-        <label>Key Features (optional)</label>
-        <input type="text" id="aiDescFeatures" class="flash-input" placeholder="e.g. noise cancelling, 30hr battery, Bluetooth 5.0">
+      <div class="flash-inputs" style="grid-template-columns:1fr 1fr;margin-bottom:0;">
+        <div class="flash-input-group" style="margin-bottom:14px;">
+          <label>Key Features (optional)</label>
+          <input type="text" id="aiDescFeatures" class="flash-input" placeholder="e.g. noise cancelling, 30hr battery">
+        </div>
+        <!-- Phase 6: Price field for richer AI output -->
+        <div class="flash-input-group" style="margin-bottom:14px;">
+          <label>Price — KES (optional)</label>
+          <input type="number" id="aiDescPrice" class="flash-input" placeholder="e.g. 2500" min="1">
+        </div>
       </div>
       <button type="button" class="flash-go-btn" id="aiDescBtn" onclick="generateAiDescription()" style="background:linear-gradient(135deg,#a080ff,#6040cc);">✨ Generate Description</button>
       <textarea id="aiDescOutput" class="flash-input" rows="3" style="width:100%;margin-top:14px;resize:vertical;display:none;" placeholder="Generated description will appear here..."></textarea>
@@ -5741,6 +5690,176 @@ window.saveSellerDarajaSettings = async function() {
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
   <script defer src="sokoni-service-mesh.js"></script>
+
+<!-- Phase 6: Bulk Price Modal -->
+<div id="bulkPriceMod" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:200001;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#0e0e0e;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px 22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.7);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <div style="font-size:16px;font-weight:900;color:white;">📉 Bulk Price Update</div>
+      <button onclick="document.getElementById('bulkPriceMod').style.display='none'" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:50%;width:30px;height:30px;color:rgba(255,255,255,0.5);cursor:pointer;font-family:inherit;font-size:14px;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+    <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Change Type</div>
+    <select id="bpType" class="flash-select" style="width:100%;margin-bottom:14px;" oninput="_bpPreview()" onchange="_bpPreview()">
+      <option value="discount">% Discount — lower all prices</option>
+      <option value="increase">% Increase — raise all prices</option>
+      <option value="fixed">Set fixed price for all</option>
+    </select>
+    <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Value</div>
+    <input type="number" id="bpValue" class="flash-input" placeholder="e.g. 10 for 10%" min="1" style="width:100%;margin-bottom:10px;" oninput="_bpPreview()">
+    <div id="bpPreview" style="font-size:11px;color:rgba(255,152,0,0.7);margin-bottom:14px;min-height:16px;font-weight:600;"></div>
+    <button type="button" onclick="applyBulkPrice()" class="flash-go-btn" style="width:100%;background:linear-gradient(135deg,rgba(255,152,0,0.18),rgba(255,152,0,0.08));border-color:rgba(255,152,0,0.3);color:#ff9800;">📉 Apply to All Products</button>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   PHASE 6: Live Sales Chart
+══════════════════════════════════════════════════ */
+function _p6LiveChart() {
+  var canvas = document.getElementById('sellerLiveChart');
+  if (!canvas || !canvas.getContext) return;
+  var ctx = canvas.getContext('2d');
+  var orders = [];
+  try { orders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]'); } catch(e) {}
+
+  var now = new Date();
+  var days = [];
+  for (var i = 6; i >= 0; i--) {
+    var d = new Date(now);
+    d.setDate(d.getDate() - i);
+    days.push({ label: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()], date: d.toISOString().slice(0,10), total: 0 });
+  }
+  orders.forEach(function(o) {
+    var dk = String(o.date || '').slice(0, 10);
+    var day = days.find(function(d) { return d.date === dk; });
+    if (day) day.total += Number(o.total) || 0;
+  });
+
+  var maxVal = Math.max.apply(null, days.map(function(d) { return d.total; }).concat([1]));
+  var W = canvas.offsetWidth || 300;
+  canvas.width = W; canvas.height = 130;
+  var H = 130, barW = Math.floor(W / 10);
+  var gapW = Math.floor((W - barW * 7) / 8);
+  var top = 18, bottom = 22, chartH = H - top - bottom;
+
+  ctx.clearRect(0, 0, W, H);
+  days.forEach(function(day, i) {
+    var x = gapW + i * (barW + gapW);
+    var bH = Math.max(4, Math.round((day.total / maxVal) * chartH));
+    var y = top + chartH - bH;
+    var grad = ctx.createLinearGradient(0, y, 0, y + bH);
+    grad.addColorStop(0, 'rgba(113,255,0,0.88)');
+    grad.addColorStop(1, 'rgba(113,255,0,0.15)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, barW, bH, [3,3,0,0]);
+    else ctx.rect(x, y, barW, bH);
+    ctx.fill();
+    if (day.total > 0) {
+      ctx.fillStyle = 'rgba(113,255,0,0.75)';
+      ctx.font = '9px -apple-system,Arial,sans-serif';
+      ctx.textAlign = 'center';
+      var lbl = day.total >= 1000 ? (day.total/1000).toFixed(1)+'k' : String(Math.round(day.total));
+      ctx.fillText(lbl, x + barW/2, y - 3);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.font = '9px -apple-system,Arial,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(day.label, x + barW/2, H - 4);
+  });
+
+  var total = days.reduce(function(s, d) { return s + d.total; }, 0);
+  var totEl = document.getElementById('sellerLiveChartTotal');
+  if (totEl) totEl.textContent = total > 0 ? 'KES ' + total.toLocaleString() : '—';
+}
+
+/* ══════════════════════════════════════════════════
+   PHASE 6: Smart Insights Strip
+══════════════════════════════════════════════════ */
+function _p6Insights() {
+  var el = document.getElementById('sellerInsightsStrip');
+  if (!el) return;
+  var orders = [], products = [];
+  try { orders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]'); } catch(e) {}
+  try { products = JSON.parse(localStorage.getItem('sokoniProducts') || '[]'); } catch(e) {}
+
+  var weekAgo = Date.now() - 7 * 86400000;
+  var twoWeeksAgo = Date.now() - 14 * 86400000;
+
+  var weekRev = orders.filter(function(o) { return new Date(o.date || 0).getTime() > weekAgo; })
+    .reduce(function(s, o) { return s + (Number(o.total) || 0); }, 0);
+
+  var recentIds = new Set();
+  orders.filter(function(o) { return new Date(o.date || 0).getTime() > twoWeeksAgo; })
+    .forEach(function(o) { (o.items || []).forEach(function(it) { recentIds.add(it.id); }); });
+  var stale = products.filter(function(p) { return !recentIds.has(p.id); }).length;
+
+  var catMap = {};
+  orders.forEach(function(o) {
+    (o.items || []).forEach(function(it) {
+      var c = it.category || 'Other';
+      catMap[c] = (catMap[c] || 0) + (Number(it.price) || 0);
+    });
+  });
+  var topEntry = Object.entries(catMap).sort(function(a,b){ return b[1]-a[1]; })[0];
+
+  var insights = [
+    { icon:'💰', val: weekRev > 0 ? 'KES ' + weekRev.toLocaleString() : 'No sales yet', lbl:'Revenue this week', color:'#71ff00' },
+    { icon:'📦', val: products.length ? (stale > 0 ? stale + ' products' : '✅ All moving') : '—', lbl: stale > 0 ? 'Unsold in 14 days' : 'Stock moving well', color: stale > 3 ? '#ff9800' : '#71ff00' },
+    { icon:'🏆', val: topEntry ? topEntry[0] : '—', lbl:'Top revenue category', color:'#00aaff' }
+  ];
+  el.innerHTML = insights.map(function(ins) {
+    return '<div class="seller-insight-card">' +
+      '<div style="font-size:22px;flex-shrink:0;">' + ins.icon + '</div>' +
+      '<div style="min-width:0;overflow:hidden;">' +
+        '<div class="si-val" style="color:' + ins.color + ';">' + ins.val + '</div>' +
+        '<div class="si-lbl">' + ins.lbl + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   PHASE 6: Bulk Price Preview & Apply
+══════════════════════════════════════════════════ */
+function _bpPreview() {
+  var type = document.getElementById('bpType') ? document.getElementById('bpType').value : '';
+  var val  = parseFloat(document.getElementById('bpValue') ? document.getElementById('bpValue').value : '');
+  var prev = document.getElementById('bpPreview');
+  if (!prev) return;
+  if (!val || val <= 0) { prev.textContent = ''; return; }
+  var ex = { discount:'KES 1,000 → KES '+ Math.round(1000*(1-val/100)).toLocaleString(), increase:'KES 1,000 → KES '+Math.round(1000*(1+val/100)).toLocaleString(), fixed:'All → KES '+Number(val).toLocaleString() };
+  prev.textContent = '💡 ' + (ex[type] || '');
+}
+window._bpPreview = _bpPreview;
+
+function applyBulkPrice() {
+  var type = document.getElementById('bpType') ? document.getElementById('bpType').value : '';
+  var val  = parseFloat(document.getElementById('bpValue') ? document.getElementById('bpValue').value : '');
+  if (!val || val <= 0) { if(typeof showNotification==='function') showNotification('Enter a valid value','error'); return; }
+  var prods = [];
+  try { prods = JSON.parse(localStorage.getItem('sokoniProducts') || '[]'); } catch(e) {}
+  if (!prods.length) { if(typeof showNotification==='function') showNotification('No products found','warning'); return; }
+  prods = prods.map(function(p) {
+    var price = Number(p.price) || 0;
+    var np = price;
+    if (type === 'discount') np = Math.round(price * (1 - val / 100));
+    else if (type === 'increase') np = Math.round(price * (1 + val / 100));
+    else np = val;
+    return Object.assign({}, p, { price: Math.max(1, np), originalPrice: price });
+  });
+  try { localStorage.setItem('sokoniProducts', JSON.stringify(prods)); } catch(e) {}
+  document.getElementById('bulkPriceMod').style.display = 'none';
+  if(typeof showNotification==='function') showNotification('✅ Updated ' + prods.length + ' products', 'success');
+  if (typeof refreshProductGrid === 'function') refreshProductGrid();
+}
+window.applyBulkPrice = applyBulkPrice;
+
+/* ══ Init Phase 6 on load ══ */
+document.addEventListener('DOMContentLoaded', function() {
+  _p6LiveChart();
+  _p6Insights();
+});
+</script>
 </body>
 
 </html>
