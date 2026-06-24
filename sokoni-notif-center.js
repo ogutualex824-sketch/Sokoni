@@ -78,11 +78,11 @@
         'pointer-events:none;',
         'transition:background 200ms ease;',
       '}',
-      '#sk-notif-badge-v2.show{display:flex;}',
-      '#sk-notif-badge-v2.priority-critical{background:#ff1744;color:#fff;}',
-      '#sk-notif-badge-v2.priority-high    {background:#ff6d00;color:#fff;}',
-      '#sk-notif-badge-v2.priority-normal  {background:#71ff00;color:#050f05;}',
-      '#sk-notif-badge-v2.priority-low     {background:#455a64;color:#fff;}',
+      '#sk-notif-badge-v2.show,#sk-notif-badge.show{display:flex;}',
+      '#sk-notif-badge-v2.priority-critical,#sk-notif-badge.priority-critical{background:#ff1744;color:#fff;}',
+      '#sk-notif-badge-v2.priority-high,#sk-notif-badge.priority-high        {background:#ff6d00;color:#fff;}',
+      '#sk-notif-badge-v2.priority-normal,#sk-notif-badge.priority-normal    {background:#71ff00;color:#050f05;}',
+      '#sk-notif-badge-v2.priority-low,#sk-notif-badge.priority-low          {background:#455a64;color:#fff;}',
 
       /* ── Panel overlay ── */
       '#sk-nc-overlay{',
@@ -503,7 +503,7 @@
   ───────────────────────────────────────────────────────────────────────── */
 
   function _updateBell(unreadCounts) {
-    if (!_badgeEl) _badgeEl = document.getElementById('sk-notif-badge-v2');
+    if (!_badgeEl) _badgeEl = document.getElementById('sk-notif-badge-v2') || document.getElementById('sk-notif-badge');
     if (!_bellEl)  _bellEl  = document.getElementById('sk-notif-btn');
     if (!_badgeEl || !_bellEl) return;
 

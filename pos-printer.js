@@ -328,7 +328,7 @@ const PosPrinter = (function () {
         if (_conn.char.properties.writeWithoutResponse) {
           await _conn.char.writeValueWithoutResponse(chunk);
         } else {
-          await _conn.char.writeValue(chunk);
+          await _conn.char.writeValueWithResponse(chunk);
         }
         await new Promise(r => setTimeout(r, 20));
       }

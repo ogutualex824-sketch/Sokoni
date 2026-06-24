@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v261";
+const CACHE_VERSION = "sokoni-v264";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -153,6 +153,7 @@ const PRECACHE_STATIC = [
   "/sports-hub.js", "/management-init.js",
   /* ── Architecture Layer v1.0 ── */
   "/sokoni-tokens.css", "/sokoni-ui.js", "/sokoni-layout.js", "/sokoni-bootstrap.js",
+  "/sokoni-mobile-fixes.css",
   /* ── Enterprise Notification Center v1.0 ── */
   "/sokoni-notif-engine.js", "/sokoni-notif-center.js",
 ];
@@ -494,3 +495,4 @@ self.addEventListener("notificationclick", event => {
 
 /* Keep the old notificationclick above, remove duplicate definition issue
    by having one clean handler above */
+

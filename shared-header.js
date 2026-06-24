@@ -66,10 +66,21 @@
     (document.head || document.documentElement).appendChild(polishLink);
   }
 
+  /* Global mobile responsive fixes (once) */
+  if (!document.getElementById('sk-mobile-fixes-link')) {
+    const mfLink = document.createElement('link');
+    mfLink.rel = 'stylesheet';
+    mfLink.id = 'sk-mobile-fixes-link';
+    mfLink.href = 'sokoni-mobile-fixes.css';
+    (document.head || document.documentElement).appendChild(mfLink);
+  }
+
   /* ── PHASE 2: Nav injection — excluded pages stop here ──────────── */
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',
     'register.html', 'success.html', 'offline.html', 'admin.html',
+    /* Profile has its own fully-featured .upn navigation bar */
+    'profile.html',
     /* Enterprise full-screen dashboards — have their own specialized nav */
     'ecc.html', 'wap.html', 'gip.html', 'platform.html',
     'sasos-admin.html', 'pos-kiosk.html', 'superadmin.html',
@@ -102,9 +113,17 @@
       border-bottom: 1px solid rgba(255,255,255,0.07);
       box-shadow: 0 2px 24px rgba(0,0,0,0.5);
     }
-    /* ── Hide the page's own top nav (keep bottom-nav and inner navs) ── */
-    body > nav:not(#sk-top-nav):not(.bottom-nav),
+    /* ── Hide page-specific navs — preserve .sk-sub-nav tab bars ── */
+    body > nav:not(#sk-top-nav):not(.bottom-nav):not(.sk-sub-nav),
+    body > [role="navigation"]:not(#sk-top-nav):not(.bottom-nav):not(.sk-sub-nav),
     body > header { display: none !important; }
+
+    /* ── Sub-nav tab bars: stick below the 64px shared header ── */
+    body > .sk-sub-nav {
+      position: sticky !important;
+      top: 64px !important;
+      z-index: 100 !important;
+    }
 
     /* ── Hide home-page orphaned floating elements (hamburger + bell) ──
        These are <div> elements so the nav rule above doesn't catch them.

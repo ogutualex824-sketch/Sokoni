@@ -6217,6 +6217,165 @@ window.loadSupportQueue = loadSupportQueue;
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
   <script defer src="sokoni-service-mesh.js"></script>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ADMIN UTILITY FUNCTIONS — sub-tab switchers + modal helpers
+  ═══════════════════════════════════════════════════════════════ -->
+  <script>
+  /* Generic sub-tab switcher — prefix is e.g. 'biz', 'ord', 'ride' etc. */
+  function _subTabSwitch(prefix, tabId, btn) {
+    /* Hide all sub-panels for this prefix */
+    document.querySelectorAll('[id^="' + prefix + '-sub-"]').forEach(function(el) {
+      el.style.display = 'none';
+    });
+    /* Remove active class from all tab buttons for this prefix */
+    document.querySelectorAll('[id^="' + prefix + '-tab-"]').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    /* Show target panel */
+    var panel = document.getElementById(prefix + '-sub-' + tabId);
+    if (panel) panel.style.display = '';
+    /* Mark button active */
+    if (btn) btn.classList.add('active');
+    else {
+      var target = document.getElementById(prefix + '-tab-' + tabId);
+      if (target) target.classList.add('active');
+    }
+  }
+
+  /* Sub-tab switchers for each admin section */
+  window.bizSubTab  = function(tab, btn) { _subTabSwitch('biz',  tab, btn); };
+  window.ordSubTab  = function(tab, btn) { _subTabSwitch('ord',  tab, btn); };
+  window.rideSubTab = function(tab, btn) { _subTabSwitch('ride', tab, btn); };
+  window.svcSubTab  = function(tab, btn) { _subTabSwitch('svc',  tab, btn); };
+  window.finSubTab  = function(tab, btn) { _subTabSwitch('fin',  tab, btn); };
+
+  /* Announcement modal */
+  window.openAnnouncementModal = function() {
+    var m = document.getElementById('annModal');
+    if (m) m.classList.add('open');
+  };
+
+  window.saveAnnouncement = function() {
+    var text   = (document.getElementById('annText')   || {}).value || '';
+    var active = (document.getElementById('annActive') || {}).checked !== false;
+    if (!text.trim()) { alert('Please enter announcement text.'); return; }
+    var db = window.firebaseDB;
+    if (!db) { alert('Database not available.'); return; }
+    var btn = document.querySelector('#annModal .solid-btn.solid-green');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    db.collection('announcements').add({
+      text: text.trim(),
+      active: active,
+      createdAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
+      createdBy: window.firebaseAuth?.currentUser?.uid || 'admin',
+    }).then(function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Announcement'; }
+      closeModal('annModal');
+      document.getElementById('annText').value = '';
+      if (typeof window._skToast === 'function') window._skToast('Announcement saved', 'success');
+    }).catch(function(err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Announcement'; }
+      alert('Error saving announcement: ' + err.message);
+    });
+  };
+
+  /* Verifications refresh */
+  window.loadVerifications = function() {
+    var db = window.firebaseDB;
+    if (!db) return;
+    var cont = document.getElementById('verificationsGrid') || document.querySelector('[id*="verif"]');
+    if (cont) cont.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.4);">Loading…</div>';
+    db.collection('verification_requests').orderBy('createdAt', 'desc').limit(50).get().then(function(snap) {
+      if (!cont) return;
+      if (snap.empty) { cont.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">✅</div>No pending verifications</div>'; return; }
+      var rows = snap.docs.map(function(d) {
+        var v = d.data();
+        return '<tr><td>' + (v.name||'-') + '</td><td>' + (v.email||'-') + '</td><td>' + (v.type||'-') + '</td><td>' +
+          new Date(v.createdAt?.seconds ? v.createdAt.seconds * 1000 : v.createdAt || 0).toLocaleDateString() + '</td>' +
+          '<td><span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(251,191,36,0.15);color:#fbbf24;">' + (v.status||'pending') + '</span></td>' +
+          '<td><button class="solid-btn solid-green" style="padding:4px 10px;font-size:11px;" onclick="approveVerification(\'' + d.id + '\')">Approve</button> ' +
+          '<button class="solid-btn solid-red" style="padding:4px 10px;font-size:11px;" onclick="rejectVerification(\'' + d.id + '\')">Reject</button></td></tr>';
+      }).join('');
+      cont.innerHTML = '<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }).catch(function() {
+      if (cont) cont.innerHTML = '<div class="adm-empty">Failed to load verifications</div>';
+    });
+  };
+
+  /* Report generator */
+  window.renderReport = function() {
+    var type    = (document.getElementById('reportType')  || {}).value || 'revenue';
+    var from    = (document.getElementById('reportFrom')  || {}).value;
+    var to      = (document.getElementById('reportTo')    || {}).value;
+    var chart   = document.getElementById('reportChart');
+    if (!chart) return;
+    chart.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.4);">Generating ' + type + ' report…</div>';
+    var db = window.firebaseDB;
+    if (!db) { chart.innerHTML = '<div style="padding:20px;color:#ff6464;">Database not available.</div>'; return; }
+    /* Fetch data and render a simple text summary */
+    var colMap = { revenue: 'transactions', users: 'users', orders: 'orders', rides: 'rides', sellers: 'shops', products: 'products' };
+    var col    = colMap[type] || 'transactions';
+    var q      = db.collection(col).orderBy('createdAt', 'desc').limit(100);
+    q.get().then(function(snap) {
+      var count = snap.size;
+      var label = type.charAt(0).toUpperCase() + type.slice(1);
+      chart.innerHTML =
+        '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:20px;margin-top:8px;">' +
+        '<div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:8px;">' + label + ' Report' + (from ? ' | ' + from + ' → ' + (to||'today') : '') + '</div>' +
+        '<div style="font-size:32px;font-weight:900;color:#71ff00;">' + count + '</div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">records in last 100 entries</div>' +
+        '</div>';
+      window._lastReportData = snap.docs.map(function(d) { return Object.assign({ _id: d.id }, d.data()); });
+    }).catch(function(err) {
+      chart.innerHTML = '<div style="padding:20px;color:#ff6464;">' + err.message + '</div>';
+    });
+  };
+
+  window.exportReport = function() {
+    var data = window._lastReportData;
+    if (!data || !data.length) { alert('Generate a report first.'); return; }
+    var json = JSON.stringify(data, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href   = url;
+    a.download = 'sokoni-report-' + Date.now() + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  /* Tax payment recording */
+  window.markTaxPaid = function() {
+    var type = (document.getElementById('taxPayType') || {}).value || 'vat';
+    var amt  = parseFloat((document.getElementById('taxPayAmt') || {}).value || '0');
+    if (!amt || amt <= 0) { alert('Enter a valid amount.'); return; }
+    var db = window.firebaseDB;
+    if (!db) { alert('Database not available.'); return; }
+    db.collection('taxPayments').add({
+      type: type,
+      amount: amt,
+      paidAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
+      recordedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
+    }).then(function() {
+      var input = document.getElementById('taxPayAmt');
+      if (input) input.value = '';
+      if (typeof window._skToast === 'function') window._skToast('Tax payment recorded — KES ' + amt.toLocaleString(), 'success');
+      if (typeof renderFinance === 'function') renderFinance();
+    }).catch(function(err) { alert('Error: ' + err.message); });
+  };
+
+  /* Service worker cache clear */
+  window.clearSWCache = function() {
+    if (!('caches' in window)) { alert('Cache API not available in this browser.'); return; }
+    caches.keys().then(function(keys) {
+      return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+    }).then(function() {
+      if (typeof window._skToast === 'function') window._skToast('All caches cleared — reload to refresh assets', 'success');
+      else alert('All caches cleared. Reload the page to see fresh assets.');
+    }).catch(function(err) { alert('Cache clear failed: ' + err.message); });
+  };
+  </script>
 </body>
 </html>
 
