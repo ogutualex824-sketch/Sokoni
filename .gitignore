@@ -96,3 +96,7 @@ firestore.indexes.json.bak
 firestore.indexes.json.full_backup
 firestore.indexes.json.new-only
 *.json.phase*.json
+
+# Service account keys — never commit
+*firebase-adminsdk*.json
+*service-account*.json

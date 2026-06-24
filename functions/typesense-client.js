@@ -403,8 +403,8 @@ const _META_FIELDS = [
   { name: 'updatedAt',     type: 'int64',   optional: true, sort: true },
 ];
 
-function _schema(name, fields, defaultSort = '_popularityScore', extra = {}) {
-  return {
+function _schema(name, fields, defaultSort = null, extra = {}) {
+  const schema = {
     name,
     enable_nested_fields: true,
     token_separators:     ['-', '_', '.', '/'],
@@ -416,9 +416,11 @@ function _schema(name, fields, defaultSort = '_popularityScore', extra = {}) {
       ..._META_FIELDS,
       ..._RANKING_FIELDS,
     ],
-    default_sorting_field: defaultSort,
     ...extra,
   };
+  /* Typesense forbids optional fields as default_sorting_field — omit unless caller is certain the field is always present */
+  if (defaultSort) schema.default_sorting_field = defaultSort;
+  return schema;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -565,7 +567,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'attendeeCount',  type: 'int32',   optional: true, sort: true },
     { name: 'isOnline',       type: 'bool',    facet: true,    optional: true },
     { name: 'thumbnail',      type: 'string',  optional: true, index: false },
-  ], 'startDate'),
+  ]),
 
   /* 8 ── Hotels / BnB */
   sokoni_hotels: _schema('sokoni_hotels', [
@@ -721,7 +723,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'productCount', type: 'int32',   optional: true, sort: true },
     { name: 'order',        type: 'int32',   optional: true, sort: true },
     { name: 'active',       type: 'bool',    facet: true },
-  ], 'order'),
+  ]),
 
   /* 17 ── Brands */
   sokoni_brands: _schema('sokoni_brands', [
@@ -759,7 +761,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'validTo',       type: 'int64',   optional: true, sort: true },
     { name: 'applicableTo',  type: 'string',  facet: true,    optional: true },
     { name: 'active',        type: 'bool',    facet: true },
-  ], 'discountValue'),
+  ]),
 
   /* 20 ── Support Articles */
   sokoni_support: _schema('sokoni_support', [
@@ -775,7 +777,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'author',       type: 'string',  optional: true },
     { name: 'slug',         type: 'string',  optional: true },
     { name: 'published',    type: 'bool',    facet: true },
-  ], 'helpfulCount'),
+  ]),
 
   /* 21 ── FAQ */
   sokoni_faq: _schema('sokoni_faq', [
@@ -786,7 +788,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'helpfulCount', type: 'int32',   optional: true, sort: true },
     { name: 'order',        type: 'int32',   optional: true, sort: true },
     { name: 'published',    type: 'bool',    facet: true },
-  ], 'order'),
+  ]),
 
   /* 22 ── Blog Posts */
   sokoni_blog: _schema('sokoni_blog', [
@@ -803,7 +805,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'shareCount',   type: 'int32',   optional: true },
     { name: 'published',    type: 'bool',    facet: true },
     { name: 'publishedAt',  type: 'int64',   optional: true, sort: true },
-  ], 'publishedAt'),
+  ]),
 
   /* 23 ── Announcements */
   sokoni_announcements: _schema('sokoni_announcements', [
@@ -818,7 +820,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'publishedAt',   type: 'int64',   optional: true, sort: true },
     { name: 'expiresAt',     type: 'int64',   optional: true, sort: true },
     { name: 'published',     type: 'bool',    facet: true },
-  ], 'publishedAt'),
+  ]),
 
   /* 24 ── Tourism / Experiences */
   sokoni_tourism: _schema('sokoni_tourism', [
@@ -836,7 +838,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'guideName',     type: 'string',  optional: true },
     { name: 'startDate',     type: 'int64',   optional: true, sort: true },
     { name: 'endDate',       type: 'int64',   optional: true },
-  ], 'startDate'),
+  ]),
 
   /* 25 ── Entertainment */
   sokoni_entertainment: _schema('sokoni_entertainment', [
@@ -854,7 +856,7 @@ const COLLECTION_SCHEMAS = {
     { name: 'venue',         type: 'string',  optional: true },
     { name: 'startDate',     type: 'int64',   optional: true, sort: true },
     { name: 'duration',      type: 'int32',   optional: true },
-  ], 'startDate'),
+  ]),
 
 };
 
