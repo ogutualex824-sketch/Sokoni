@@ -35,6 +35,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
+const logger                 = require('firebase-functions/logger');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -83,7 +84,7 @@ async function _countByStatus(col, status) {
     const snap = await _db().collection(col).where('status', '==', status).count().get();
     return snap.data().count;
   } catch (err) {
-    admin.logger.warn(`_countByStatus: failed for ${col}/${status}`, { error: err.message });
+    logger.warn(`_countByStatus: failed for ${col}/${status}`, { error: err.message });
     return -1;
   }
 }
@@ -105,7 +106,7 @@ async function _writeAlert(message, meta = {}) {
       createdAt: _now(),
     });
   } catch (err) {
-    admin.logger.error('_writeAlert: failed', { error: err.message });
+    logger.error('_writeAlert: failed', { error: err.message });
   }
 }
 
@@ -199,7 +200,7 @@ exports.searchQueueCoordinator = onSchedule(
         };
       }
     } catch (err) {
-      admin.logger.warn('searchQueueCoordinator: could not read queueControl', { error: err.message });
+      logger.warn('searchQueueCoordinator: could not read queueControl', { error: err.message });
     }
 
     /* ── Count pending items ──────────────────────────────────────────────── */
@@ -226,7 +227,7 @@ exports.searchQueueCoordinator = onSchedule(
     try {
       await db.doc(WORKER_STATUS_DOC).set(metrics, { merge: true });
     } catch (err) {
-      admin.logger.error('searchQueueCoordinator: failed to write workerStatus', { error: err.message });
+      logger.error('searchQueueCoordinator: failed to write workerStatus', { error: err.message });
     }
 
     /* ── Alert if queue depth exceeds threshold ───────────────────────────── */
@@ -245,7 +246,7 @@ exports.searchQueueCoordinator = onSchedule(
     }
     if (alerts.length) await Promise.all(alerts);
 
-    admin.logger.info('searchQueueCoordinator: complete', {
+    logger.info('searchQueueCoordinator: complete', {
       algoliaDepth,
       typesenseDepth,
       activeEngines,
@@ -265,7 +266,7 @@ exports.searchDLQSweep = onSchedule(
     secrets:        [ALGOLIA_ADMIN_KEY, TYPESENSE_ADMIN_KEY],
   },
   async () => {
-    admin.logger.info('searchDLQSweep: starting daily DLQ sweep');
+    logger.info('searchDLQSweep: starting daily DLQ sweep');
 
     const [algoliaResult, typesenseResult] = await Promise.allSettled([
       _sweepDLQ(ALGOLIA_DLQ_COL,   ALGOLIA_QUEUE_COL,   DLQ_SWEEP_LIMIT, MAX_DLQ_ATTEMPTS),
@@ -280,7 +281,7 @@ exports.searchDLQSweep = onSchedule(
       ? typesenseResult.value
       : { requeued: 0, skipped: 0, error: typesenseResult.reason?.message };
 
-    admin.logger.info('searchDLQSweep: complete', {
+    logger.info('searchDLQSweep: complete', {
       algolia:   algoliaSummary,
       typesense: typesenseSummary,
     });
@@ -293,7 +294,7 @@ exports.searchDLQSweep = onSchedule(
         ranAt:      _now(),
       });
     } catch (err) {
-      admin.logger.warn('searchDLQSweep: failed to write sweep log', { error: err.message });
+      logger.warn('searchDLQSweep: failed to write sweep log', { error: err.message });
     }
   }
 );
@@ -361,7 +362,7 @@ exports.searchQueueRecovery = onCall(
       }));
     }
 
-    admin.logger.info('searchQueueRecovery: manual recovery triggered', { uid, engine, results });
+    logger.info('searchQueueRecovery: manual recovery triggered', { uid, engine, results });
 
     return { success: true, engine, results, triggeredAt: new Date().toISOString() };
   }

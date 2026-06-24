@@ -29,6 +29,26 @@
       .replace(/'/g, '&#39;');
   }
 
+  /* Strip scripts and inline event handlers from trusted HTML strings.
+     Used by openModal to prevent accidental XSS if user data reaches opts.content. */
+  function _sanitizeModalHtml(html) {
+    if (typeof html !== 'string') return '';
+    var t = document.createElement('template');
+    t.innerHTML = html;
+    t.content.querySelectorAll('script,iframe,object,embed,link').forEach(function(el) { el.remove(); });
+    t.content.querySelectorAll('*').forEach(function(el) {
+      var removeAttrs = [];
+      for (var i = 0; i < el.attributes.length; i++) {
+        var a = el.attributes[i];
+        if (/^on/i.test(a.name)) removeAttrs.push(a.name);
+        if (a.name === 'href' && /^javascript:/i.test(a.value)) removeAttrs.push(a.name);
+        if (a.name === 'src'  && /^javascript:/i.test(a.value)) removeAttrs.push(a.name);
+      }
+      removeAttrs.forEach(function(n) { el.removeAttribute(n); });
+    });
+    return t.innerHTML;
+  }
+
   function _id(prefix) {
     return prefix + '-' + Math.random().toString(36).slice(2, 9);
   }
@@ -280,7 +300,7 @@
       } else {
         var body = document.createElement('div');
         body.className = 'sk-modal-body';
-        body.innerHTML = opts.content;
+        body.innerHTML = opts.rawHtml ? opts.content : _sanitizeModalHtml(opts.content);
         box.appendChild(body);
       }
     }
@@ -609,11 +629,31 @@
     bar.textContent = '📡 No internet connection — some features may not work';
     document.body.insertBefore(bar, document.body.firstChild);
 
-    function update() {
-      var isOnline = navigator.onLine;
+    var _offlineTimer = null;
+
+    /* navigator.onLine is unreliable on VPN/proxy/captive portal.
+       Verify with a real fetch before showing the banner. */
+    function _checkConnection(cb) {
+      fetch('/ping?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
+        .then(function() { cb(true); })
+        .catch(function() { cb(false); });
+    }
+
+    function _applyState(isOnline) {
       bar.classList.toggle('sk-offline--visible', !isOnline);
-      if (!isOnline) document.body.style.paddingTop = bar ? (parseInt(getComputedStyle(bar).height) + 'px') : '';
-      else document.body.style.paddingTop = '';
+    }
+
+    function update() {
+      if (!navigator.onLine) {
+        /* Definitely offline per browser — show immediately */
+        _applyState(false);
+        return;
+      }
+      /* Browser says online — verify with a real request (debounced 300 ms) */
+      clearTimeout(_offlineTimer);
+      _offlineTimer = setTimeout(function() {
+        _checkConnection(function(real) { _applyState(real); });
+      }, 300);
     }
 
     global.addEventListener('online',  update);
@@ -747,6 +787,102 @@
   /* Auto-init if bootstrap not present */
   if (!global.SokoniBootstrap) {
     SokoniUI.init();
+  }
+
+})(window);
+
+/* ══════════════════════════════════════════════════════════
+   SOKONI THEME — Dark / Light / Auto
+   Persists to localStorage('sokoni-theme').
+   Applies .light-mode / .dark-mode on document.body.
+   style.css already has full .light-mode override rules.
+══════════════════════════════════════════════════════════ */
+(function(global) {
+  'use strict';
+
+  var KEY   = 'sokoni-theme';
+  var MODES = ['dark', 'light', 'auto'];
+
+  function _icon(mode) {
+    if (mode === 'light') return '☀️';
+    if (mode === 'auto')  return '⚙️';
+    return '🌙';
+  }
+
+  function _label(mode) {
+    if (mode === 'dark')  return 'Switch to light mode';
+    if (mode === 'light') return 'Switch to auto (system) mode';
+    return 'Switch to dark mode';
+  }
+
+  function _resolved(mode) {
+    if (mode !== 'auto') return mode;
+    try { return global.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; }
+    catch (_) { return 'dark'; }
+  }
+
+  function _apply(mode) {
+    var r = _resolved(mode);
+    document.body.classList.toggle('light-mode', r === 'light');
+    document.body.classList.toggle('dark-mode',  r === 'dark');
+    document.documentElement.setAttribute('data-theme', r);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = r === 'light' ? '#f0f0f0' : '#080808';
+    var iconEl = document.getElementById('sk-theme-icon');
+    if (iconEl) iconEl.textContent = _icon(mode);
+    var btn = document.getElementById('sk-theme-btn');
+    if (btn) btn.setAttribute('title', _label(mode));
+  }
+
+  function init() {
+    var saved = localStorage.getItem(KEY) || 'dark';
+    _apply(saved);
+    try {
+      global.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function() {
+        if (localStorage.getItem(KEY) === 'auto') _apply('auto');
+      });
+    } catch (_) {}
+  }
+
+  function setTheme(mode) {
+    if (MODES.indexOf(mode) === -1) return;
+    localStorage.setItem(KEY, mode);
+    _apply(mode);
+  }
+
+  function toggle() {
+    var cur  = localStorage.getItem(KEY) || 'dark';
+    var next = MODES[(MODES.indexOf(cur) + 1) % MODES.length];
+    setTheme(next);
+    return next;
+  }
+
+  function getTheme() { return localStorage.getItem(KEY) || 'dark'; }
+
+  var SokoniTheme = { init: init, setTheme: setTheme, toggle: toggle, getTheme: getTheme };
+  global.SokoniTheme = SokoniTheme;
+
+  /* Apply immediately (before DOMContentLoaded) to avoid flash of wrong theme */
+  var _t = localStorage.getItem(KEY) || 'dark';
+  var _r = (_t === 'auto' && global.matchMedia)
+    ? (global.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    : _t;
+  if (document.body) {
+    document.body.classList.toggle('light-mode', _r === 'light');
+    document.body.classList.toggle('dark-mode',  _r === 'dark');
+  } else {
+    document.addEventListener('DOMContentLoaded', function() {
+      document.body.classList.toggle('light-mode', _r === 'light');
+      document.body.classList.toggle('dark-mode',  _r === 'dark');
+    });
+  }
+
+  /* Full init (media query listener + icon sync) — works on all pages including EXCLUDED ones */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { SokoniTheme.init(); }, { once: true });
+  } else {
+    /* Already loaded (deferred script) — call init after a microtask so DOM icon elements exist */
+    setTimeout(function() { SokoniTheme.init(); }, 0);
   }
 
 })(window);

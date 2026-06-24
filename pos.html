@@ -18,11 +18,12 @@
      SETUP WIZARD
 ════════════════════════════════════════════════════════════ -->
 <div id="pos-wizard">
+  <div class="wiz-orb-accent" aria-hidden="true"></div>
   <div class="wizard-box">
     <div class="wizard-logo">
       <img src="assets/Sokonilogo2.png" alt="SOKONI" onerror="this.style.display='none'">
       <h1>SmartPOS</h1>
-      <p>Kenya's most powerful point of sale system</p>
+      <p class="wiz-tagline">Kenya's most powerful point of sale system</p>
     </div>
     <div class="wizard-steps">
       <div class="wizard-step active" id="wstep-1"></div>
@@ -216,7 +217,7 @@
         <div class="pos-cashier-avatar" id="cashier-avatar">?</div>
         <div class="pos-cashier-name" id="cashier-name-hdr">Login</div>
       </div>
-      <button class="pos-header-btn" onclick="SPos.ui.showAlerts()" title="Low stock alerts">🔔</button>
+      <button class="pos-header-btn" onclick="SPos.ui.showAlerts()" title="Low stock alerts" style="position:relative;">🔔<span id="notify-badge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:14px;height:14px;display:none;align-items:center;justify-content:center;line-height:1;border:1.5px solid var(--bg);"></span></button>
     </div>
   </header>
 
@@ -559,7 +560,8 @@
         <button class="modal-btn modal-btn-ghost" id="disc-amt-btn" onclick="SPos.cart.setDiscountType('amt')">KES Amount</button>
       </div>
       <input class="wiz-input" id="disc-value" type="number" min="0" placeholder="0" style="font-size:28px;text-align:center;font-weight:900;height:64px">
-      <div style="font-size:11px;color:var(--txt2);text-align:center;margin-top:6px">Quick: </div>
+      <div style="font-size:12px;color:var(--txt2);text-align:center;margin-top:8px">Subtotal: <span id="disc-subtotal" style="color:var(--txt);font-weight:700;">KES 0.00</span></div>
+      <div style="font-size:11px;color:var(--txt2);text-align:center;margin-top:4px">Quick: </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
         <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=5;SPos.cart.setDiscountType('pct')">5%</button>
         <button class="inv-btn inv-btn-outline" onclick="document.getElementById('disc-value').value=10;SPos.cart.setDiscountType('pct')">10%</button>
@@ -1013,6 +1015,10 @@
 <script src="pos-omni.js"></script>
 <!-- ══ POS modules ══ -->
 <script src="pos-printer.js"></script>
+<script src="sokoni-print-engine.js"></script>
+<script src="pos-manager-auth.js"></script>
+<script src="pos-terminals.js"></script>
+<script src="pos-device-manager.js"></script>
 <script src="pos-barcode.js"></script>
 <script src="pos-ai.js"></script>
 <script src="pos-analytics.js"></script>

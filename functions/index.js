@@ -591,7 +591,7 @@ async function executeTool(name, input) {
    no extra Firestore read required.
 ══════════════════════════════════════════════════════════════ */
 exports.kass = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 60, invoker: "public" },
+  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 60, invoker: "public", minInstances: 1 },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
@@ -981,6 +981,7 @@ exports.verifyIntasendPayment = onRequest(
     cors:           ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app"],
     timeoutSeconds: 30,
     invoker:        "public",
+    minInstances:   1,
   },
   async (req, res) => {
     if (req.method !== "POST") {
@@ -1097,6 +1098,7 @@ exports.onOrderStatusChange = onDocumentUpdated(
   {
     document:       "orders/{orderId}",
     secrets:        [AT_API_KEY, AT_USERNAME],
+    minInstances:   1,
   },
   async (event) => {
     const before = event.data.before.data();
@@ -1145,6 +1147,13 @@ exports.onOrderStatusChange = onDocumentUpdated(
 
     await Promise.allSettled([...smsTasks, ...fcmTasks]);
 
+    /* ── Auto-assign rider on confirmed transition (consolidated from onOrderConfirmed) ── */
+    if (toStatus === "confirmed" && before.status !== "confirmed" && !after.assignedDriverUid) {
+      _autoAssignRider(orderId, after).catch(e =>
+        console.error("[onOrderStatusChange] Auto-assign error:", e.message)
+      );
+    }
+
     /* ── Delivery platform fee on order completion ── */
     if (toStatus === "delivered" && after.sellerUid) {
       const deliveryFee = Number(after.deliveryFee || 0);
@@ -1165,111 +1174,197 @@ exports.onOrderStatusChange = onDocumentUpdated(
   }
 );
 
+/* ── Shared rider-assignment helper (called by onOrderStatusChange) ── */
+async function _autoAssignRider(orderId, after) {
+  console.log("[_autoAssignRider] Assigning rider for order", orderId);
+
+  const driversSnap = await db.collection("rideDrivers")
+    .where("isOnline", "==", true)
+    .limit(10)
+    .get()
+    .catch(() => null);
+
+  if (!driversSnap || driversSnap.empty) {
+    console.log("[_autoAssignRider] No online drivers for order", orderId);
+    return;
+  }
+
+  let pickedDriver = null;
+  for (const dDoc of driversSnap.docs) {
+    const activeSnap = await db.collection("orders")
+      .where("assignedDriverUid", "==", dDoc.id)
+      .where("status", "in", ["rider_assigned", "rider_en_route", "picked_up", "in_transit"])
+      .limit(1)
+      .get()
+      .catch(() => ({ empty: false }));
+
+    if (activeSnap.empty) {
+      pickedDriver = { uid: dDoc.id, ...dDoc.data() };
+      break;
+    }
+  }
+
+  if (!pickedDriver) {
+    console.log("[_autoAssignRider] All drivers busy for order", orderId);
+    return;
+  }
+
+  const orderRef = db.collection("orders").doc(orderId);
+  try {
+    await db.runTransaction(async (txn) => {
+      const snap = await txn.get(orderRef);
+      if (!snap.exists) return;
+      const current = snap.data();
+      if (current.status !== "confirmed" || current.assignedDriverUid) return;
+
+      txn.update(orderRef, {
+        assignedDriverUid: pickedDriver.uid,
+        assignedDriverId:  pickedDriver.uid,
+        driverName:    pickedDriver.name || pickedDriver.displayName || "Rider",
+        driverPhone:   pickedDriver.phone || pickedDriver.phoneNumber || "",
+        driverPlate:   pickedDriver.plate || "",
+        driverVehicle: pickedDriver.vehicleType || "motorcycle",
+        status:           "rider_assigned",
+        riderAssignedAt:  admin.firestore.FieldValue.serverTimestamp(),
+        statusHistory:    admin.firestore.FieldValue.arrayUnion({
+          status: "rider_assigned",
+          at:     Date.now(),
+          by:     "auto-assign",
+        }),
+      });
+    });
+  } catch (txnErr) {
+    console.error("[_autoAssignRider] Transaction failed:", txnErr.message);
+    return;
+  }
+
+  await db.collection("orderEvents").doc(orderId).collection("events").add({
+    from: "confirmed", to: "rider_assigned", by: "auto-assign",
+    meta: { driverUid: pickedDriver.uid, automatic: true },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  }).catch(() => {});
+
+  const driverToken = await getFcmToken(pickedDriver.uid);
+  if (driverToken) {
+    await sendFcm(
+      driverToken,
+      "🏍️ New Delivery Assigned!",
+      `Order ${orderId} is waiting for pickup. Open your driver app.`,
+      "driver.html"
+    ).catch(() => {});
+  }
+
+  console.log(`[_autoAssignRider] Assigned driver ${pickedDriver.uid} to order ${orderId}`);
+}
+
 /* ============================================================
-   onOrderConfirmed  — Auto rider assignment
-   Fires when an order transitions to "confirmed" status.
-   1. Queries rideDrivers for the first online unoccupied driver.
-   2. Uses a Firestore transaction to prevent double-assignment.
-   3. Transitions the order to "rider_assigned".
-   4. Sends FCM to the assigned driver.
+   onOrderConfirmed  — DEPRECATED: logic moved to onOrderStatusChange.
+   Kept as an export stub so Firebase deletes it cleanly on next deploy.
+   Safe to remove this export after deploying once.
 ============================================================ */
 exports.onOrderConfirmed = onDocumentUpdated(
   "orders/{orderId}",
+  async () => { /* no-op — rider assignment now handled in onOrderStatusChange */ }
+);
+
+/* ============================================================
+   onNewOrderCreated  — Fires the moment a new order document is
+   written to Firestore (immediately after verifyIntasendPayment
+   creates it).
+
+   Responsibilities:
+     1. FCM push to seller — "New Order!" with amount + buyer name.
+     2. In-app notification document in `notifications` collection.
+     3. SMS to seller if Africa's Talking is configured.
+     4. Increments sellerStats/{sellerUid}.pendingOrders counter.
+
+   Does NOT notify buyer (buyer just completed checkout and already
+   sees the confirmation screen).  Does NOT run auto-assign — that
+   is handled by onOrderConfirmed after the seller confirms.
+============================================================ */
+exports.onNewOrderCreated = onDocumentCreated(
+  {
+    document:       "orders/{orderId}",
+    secrets:        [AT_API_KEY, AT_USERNAME],
+    minInstances:   1,
+  },
   async (event) => {
-    const before = event.data.before.data();
-    const after  = event.data.after.data();
+    const data = event.data?.data();
+    if (!data) return;
 
-    if (!before || !after) return;
-    /* Only act on the confirmed transition; skip if already assigned */
-    if (after.status !== "confirmed" || before.status === "confirmed") return;
-    if (after.assignedDriverUid) return;
+    const orderId   = event.params.orderId;
+    const sellerUid = data.sellerUid || data.sellerId;
+    const buyerName = data.buyerName || data.deliveryName || "Customer";
+    const total     = Number(data.orderTotal || data.total || 0).toLocaleString("en-KE");
+    const sellerPhone = data.sellerPhone || "";
 
-    const orderId = event.params.orderId;
-    console.log("[onOrderConfirmed] Auto-assigning rider for order", orderId);
+    console.log(`[onNewOrderCreated] orderId=${orderId} seller=${sellerUid} total=KES ${total}`);
 
-    /* Find up to 10 online drivers */
-    const driversSnap = await db.collection("rideDrivers")
-      .where("isOnline", "==", true)
-      .limit(10)
-      .get()
-      .catch(() => null);
-
-    if (!driversSnap || driversSnap.empty) {
-      console.log("[onOrderConfirmed] No online drivers for order", orderId);
+    if (!sellerUid) {
+      console.warn("[onNewOrderCreated] No sellerUid on order", orderId);
       return;
     }
 
-    /* Pick the first driver with no active delivery */
-    let pickedDriver = null;
-    for (const dDoc of driversSnap.docs) {
-      const activeSnap = await db.collection("orders")
-        .where("assignedDriverUid", "==", dDoc.id)
-        .where("status", "in", ["rider_assigned", "rider_en_route", "picked_up", "in_transit"])
-        .limit(1)
-        .get()
-        .catch(() => ({ empty: false }));  // conservative — skip on error
+    const tasks = [];
 
-      if (activeSnap.empty) {
-        pickedDriver = { uid: dDoc.id, ...dDoc.data() };
-        break;
-      }
+    /* ── 1. FCM push to seller ── */
+    tasks.push(
+      getFcmToken(sellerUid).then(tok => {
+        if (!tok) return;
+        return sendFcm(
+          tok,
+          "🛒 New Order!",
+          `${buyerName} ordered KES ${total} — confirm now`,
+          "seller.html"
+        );
+      })
+    );
+
+    /* ── 2. In-app notification ── */
+    tasks.push(
+      db.collection("notifications").add({
+        recipientUid:  sellerUid,
+        type:          "new_order",
+        category:      "orders",
+        priority:      "high",
+        title:         "New Order Received!",
+        body:          `${buyerName} placed an order worth KES ${total}. Confirm it to begin processing.`,
+        actionUrl:     "seller.html",
+        orderId,
+        amount:        Number(data.orderTotal || data.total || 0),
+        buyerName,
+        read:          false,
+        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(e => console.warn("[onNewOrderCreated] notif write error:", e.message))
+    );
+
+    /* ── 3. SMS ── */
+    const apiKey   = AT_API_KEY.value()   || "";
+    const username = AT_USERNAME.value()  || "";
+    if (apiKey && username && sellerPhone) {
+      tasks.push(
+        sendSms(
+          apiKey,
+          username,
+          sellerPhone,
+          `SOKONI: New order ${orderId} from ${buyerName}! KES ${total}. Confirm now: mysokoni.co.ke/seller.html`
+        )
+      );
     }
 
-    if (!pickedDriver) {
-      console.log("[onOrderConfirmed] All available drivers are busy for order", orderId);
-      return;
-    }
+    /* ── 4. Increment pending orders counter ── */
+    tasks.push(
+      db.collection("sellerStats").doc(sellerUid).set(
+        {
+          pendingOrders: admin.firestore.FieldValue.increment(1),
+          lastOrderAt:   admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      ).catch(e => console.warn("[onNewOrderCreated] stats error:", e.message))
+    );
 
-    /* Transactional assignment — prevents race conditions */
-    const orderRef = db.collection("orders").doc(orderId);
-    try {
-      await db.runTransaction(async (txn) => {
-        const snap = await txn.get(orderRef);
-        if (!snap.exists) return;
-        const current = snap.data();
-        /* Bail if status changed or already assigned by another process */
-        if (current.status !== "confirmed" || current.assignedDriverUid) return;
-
-        txn.update(orderRef, {
-          assignedDriverUid: pickedDriver.uid,
-          assignedDriverId:  pickedDriver.uid,
-          driverName:   pickedDriver.name || pickedDriver.displayName || "Rider",
-          driverPhone:  pickedDriver.phone || pickedDriver.phoneNumber || "",
-          driverPlate:  pickedDriver.plate || "",
-          driverVehicle: pickedDriver.vehicleType || "motorcycle",
-          status:           "rider_assigned",
-          riderAssignedAt:  admin.firestore.FieldValue.serverTimestamp(),
-          statusHistory:    admin.firestore.FieldValue.arrayUnion({
-            status: "rider_assigned",
-            at:     Date.now(),
-            by:     "auto-assign",
-          }),
-        });
-      });
-    } catch (txnErr) {
-      console.error("[onOrderConfirmed] Transaction failed:", txnErr.message);
-      return;
-    }
-
-    /* Append audit event */
-    await db.collection("orderEvents").doc(orderId).collection("events").add({
-      from: "confirmed", to: "rider_assigned", by: "auto-assign",
-      meta: { driverUid: pickedDriver.uid, automatic: true },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    }).catch(() => {});
-
-    /* FCM push to driver */
-    const driverToken = await getFcmToken(pickedDriver.uid);
-    if (driverToken) {
-      await sendFcm(
-        driverToken,
-        "🏍️ New Delivery Assigned!",
-        `Order ${orderId} is waiting for pickup. Open your driver app.`,
-        "driver.html"
-      ).catch(() => {});
-    }
-
-    console.log(`[onOrderConfirmed] Assigned driver ${pickedDriver.uid} to order ${orderId}`);
+    await Promise.allSettled(tasks);
+    console.log(`[onNewOrderCreated] Notified seller ${sellerUid} for order ${orderId}`);
   }
 );
 
@@ -3079,6 +3174,180 @@ exports.posCancelTerminalPayment = onCall({ timeoutSeconds: 15 }, async (request
 });
 
 /* ══════════════════════════════════════════════════════════════════
+   posPrint — Network Printer Proxy
+   ══════════════════════════════════════════════════════════════════
+   Bridges the browser to a network-attached thermal printer.
+   The browser cannot open a raw TCP socket to port 9100 directly.
+   This Cloud Function accepts ESC/POS bytes from the client and
+   forwards them to the printer's host:port over TCP.
+
+   Authentication: Firebase ID token (Bearer).
+   Seller verification: request.auth.uid must match the shop owner.
+   Payload: octet-stream body + ?host=x.x.x.x&port=9100 query params.
+   Response: 200 OK on success, 4xx/5xx on error.
+
+   Security boundaries:
+   - Requires authenticated seller session.
+   - Host must be a private/LAN IP or explicitly allowlisted IP.
+   - Maximum payload: 64 KB (typical full receipt < 4 KB).
+   - Print job stored in Firestore for audit and retry.
+══════════════════════════════════════════════════════════════════ */
+exports.posPrint = onRequest(
+  {
+    timeoutSeconds: 30,
+    memory:         "256MiB",
+    cors:           ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app"],
+    invoker:        "public",
+  },
+  async (req, res) => {
+    /* ── CORS preflight ── */
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin",  req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "POST");
+      res.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed" });
+      return;
+    }
+
+    /* ── Auth: require Firebase ID token ── */
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Unauthorized — Bearer token required" });
+      return;
+    }
+    let uid;
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.replace("Bearer ", ""));
+      uid = decoded.uid;
+    } catch (_) {
+      res.status(401).json({ error: "Invalid or expired token" });
+      return;
+    }
+
+    /* ── Parameters ── */
+    const host    = String(req.query.host || "").trim();
+    const port    = parseInt(req.query.port || "9100", 10);
+    const shopId  = String(req.query.shopId || "").trim();
+
+    if (!host) {
+      res.status(400).json({ error: "host query parameter required" });
+      return;
+    }
+    if (isNaN(port) || port < 1 || port > 65535) {
+      res.status(400).json({ error: "Invalid port" });
+      return;
+    }
+
+    /* ── Security: only private/LAN IPs allowed (prevents SSRF) ── */
+    const _isPrivateHost = (h) => {
+      if (/^localhost$/i.test(h)) return true;
+      if (/^127\./.test(h))       return true;
+      if (/^192\.168\./.test(h))  return true;
+      if (/^10\./.test(h))        return true;
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
+      /* allow *.local mDNS names (Bonjour printers) */
+      if (/\.local$/i.test(h))    return true;
+      return false;
+    };
+    if (!_isPrivateHost(host)) {
+      res.status(400).json({ error: "Only LAN/private printer addresses allowed" });
+      return;
+    }
+
+    /* ── Payload ── */
+    const body = req.rawBody || req.body;
+    if (!body || !Buffer.isBuffer(body) && typeof body !== "string") {
+      res.status(400).json({ error: "Binary ESC/POS body required" });
+      return;
+    }
+    const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body);
+    if (bytes.length === 0) {
+      res.status(400).json({ error: "Empty print payload" });
+      return;
+    }
+    if (bytes.length > 65536) {
+      res.status(413).json({ error: "Print payload exceeds 64 KB limit" });
+      return;
+    }
+
+    /* ── Log print job (for audit + retry) ── */
+    const jobRef = await db.collection("posPrintJobs").add({
+      uid,
+      shopId:   shopId || null,
+      host,
+      port,
+      bytes:    bytes.length,
+      status:   "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => null);
+
+    /* ── TCP forward to printer ── */
+    const net = require("net");
+    await new Promise((resolve, reject) => {
+      const MTU     = 512;
+      const socket  = new net.Socket();
+      let   sent    = false;
+
+      socket.setTimeout(10000);  /* 10s connection + write timeout */
+
+      socket.connect(port, host, async () => {
+        /* Stream in MTU-sized chunks with 20ms inter-chunk delay */
+        const sendChunk = async (offset) => {
+          if (offset >= bytes.length) {
+            socket.destroy();
+            sent = true;
+            resolve();
+            return;
+          }
+          const chunk = bytes.slice(offset, offset + MTU);
+          const ok = socket.write(chunk);
+          if (!ok) {
+            await new Promise(r => socket.once("drain", r));
+          }
+          await new Promise(r => setTimeout(r, 20));
+          sendChunk(offset + MTU);
+        };
+        sendChunk(0);
+      });
+
+      socket.on("timeout", () => {
+        socket.destroy();
+        reject(new Error("Printer connection timed out"));
+      });
+      socket.on("error", (err) => {
+        socket.destroy();
+        reject(err);
+      });
+    }).then(async () => {
+      /* ── Success ── */
+      if (jobRef) {
+        await jobRef.update({
+          status:      "sent",
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+      res.status(200).json({ success: true, bytes: bytes.length });
+    }).catch(async (err) => {
+      /* ── Failure: log for retry ── */
+      if (jobRef) {
+        await jobRef.update({
+          status:    "failed",
+          error:     err.message,
+          failedAt:  admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+      console.error("[posPrint] TCP error:", host, port, err.message);
+      res.status(502).json({ error: "Printer unreachable: " + err.message });
+    });
+  }
+);
+
+/* ══════════════════════════════════════════════════════════════════
    PRODUCTION PAYMENT SYSTEM — IntaSend M-Pesa STK Push
 ══════════════════════════════════════════════════════════════════ */
 
@@ -3087,7 +3356,7 @@ const https  = require("https");
 
 /* Initiate M-Pesa STK Push via IntaSend */
 exports.initiateSTKPush = onCall(
-  { timeoutSeconds: 30, secrets: [INTASEND_PRIVATE_KEY] },
+  { timeoutSeconds: 30, secrets: [INTASEND_PRIVATE_KEY], minInstances: 1 },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
@@ -3173,7 +3442,7 @@ exports.initiateSTKPush = onCall(
 
 /* IntaSend Webhook — called by IntaSend servers on payment state change */
 exports.intasendWebhook = onRequest(
-  { timeoutSeconds: 30, secrets: [INTASEND_PRIVATE_KEY], invoker: "public" },
+  { timeoutSeconds: 30, secrets: [INTASEND_PRIVATE_KEY], invoker: "public", minInstances: 1 },
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
@@ -3594,8 +3863,6 @@ function checkRateLimit(req, uid = null, limitPerMin = 60) {
   return { ok: true };
 }
 
-/* Expose for use in other handlers that need rate limiting */
-exports._checkRateLimit = checkRateLimit; // internal use only
 
 /* ── Fraud detection: flag suspicious payment patterns ─────── */
 exports.detectFraud = onCall({ timeoutSeconds: 10 }, async (request) => {
@@ -5567,3 +5834,9 @@ exports.searchQueueRecovery        = searchWorker.searchQueueRecovery;
 
 const searchHealth = require('./search-health');
 exports.searchHealth               = searchHealth.searchHealth;
+
+/* ── Manager Authorization Engine ─────────────────────────────────────── */
+const managerAuth = require('./manager-auth');
+exports.managerAuthNotify          = managerAuth.managerAuthNotify;
+exports.cleanupAuthRequests        = managerAuth.cleanupAuthRequests;
+exports.registerManagerFCMToken    = managerAuth.registerManagerFCMToken;

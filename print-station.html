@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#080808">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Print Station — SOKONI SmartPOS</title>
+  <link rel="icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green:    #71ff00;
+      --green-d:  #4db800;
+      --blue:     #2563eb;
+      --amber:    #f59e0b;
+      --red:      #ef4444;
+      --purple:   #8b5cf6;
+      --bg:       #080808;
+      --surface:  #111118;
+      --card:     #18181f;
+      --card2:    #1e1e28;
+      --border:   rgba(255,255,255,.08);
+      --border2:  rgba(255,255,255,.13);
+      --txt:      #f0f0f6;
+      --txt2:     #9898aa;
+      --txt3:     #555566;
+      --radius:   14px;
+      --radius-s: 8px;
+    }
+    html, body { height: 100%; background: var(--bg); color: var(--txt); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; overscroll-behavior: none; }
+
+    /* ── Header ────────────────────────────────────────────── */
+    .ps-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 16px; height: 54px;
+    }
+    .ps-back { font-size: 20px; cursor: pointer; color: var(--txt2); text-decoration: none; display: flex; align-items: center; }
+    .ps-header-title { font-weight: 700; font-size: 16px; flex: 1; }
+    .ps-conn-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 700; letter-spacing: .04em;
+      background: rgba(255,255,255,.06); color: var(--txt2);
+      transition: all .3s;
+    }
+    .ps-conn-badge.connected   { background: rgba(113,255,0,.12); color: var(--green); }
+    .ps-conn-badge.connecting  { background: rgba(245,158,11,.12); color: var(--amber); }
+    .ps-conn-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+    /* ── Main layout ───────────────────────────────────────── */
+    .ps-body { padding: 16px; max-width: 680px; margin: 0 auto; padding-bottom: 80px; }
+
+    /* ── Section headings ──────────────────────────────────── */
+    .ps-section { margin-bottom: 24px; }
+    .ps-section-title {
+      font-size: 10px; font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--txt3);
+      margin-bottom: 10px; padding-left: 2px;
+    }
+
+    /* ── Connection panel ──────────────────────────────────── */
+    .ps-conn-panel {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .ps-conn-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background .15s;
+    }
+    .ps-conn-row:last-child { border-bottom: none; }
+    .ps-conn-row:hover { background: var(--card2); }
+    .ps-conn-icon { font-size: 22px; width: 36px; text-align: center; flex-shrink: 0; }
+    .ps-conn-info { flex: 1 }
+    .ps-conn-name { font-weight: 600; font-size: 13.5px; }
+    .ps-conn-sub  { font-size: 11px; color: var(--txt2); margin-top: 2px; }
+    .ps-conn-action { font-size: 12px; font-weight: 700; padding: 6px 14px; border: none; border-radius: 20px; cursor: pointer; transition: all .2s; }
+    .ps-conn-action.btn-connect { background: rgba(113,255,0,.12); color: var(--green); }
+    .ps-conn-action.btn-connect:hover { background: var(--green); color: #000; }
+    .ps-conn-action.btn-disconnect { background: rgba(239,68,68,.12); color: var(--red); }
+    .ps-conn-action.btn-disconnect:hover { background: var(--red); color: #fff; }
+
+    /* Network IP row */
+    .ps-net-input {
+      flex: 1; background: var(--card2); border: 1px solid var(--border2);
+      border-radius: 8px; padding: 7px 12px; font-size: 13px;
+      color: var(--txt); outline: none;
+    }
+    .ps-net-input::placeholder { color: var(--txt3); }
+    .ps-net-input:focus { border-color: var(--green); }
+
+    /* ── Paper width toggle ─────────────────────────────────── */
+    .ps-toggle-row {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .ps-toggle-label { flex: 1; font-size: 13px; }
+    .ps-toggle-label span { color: var(--txt2); font-size: 11px; display: block; margin-top: 2px; }
+    .ps-seg {
+      display: flex; background: var(--bg); border-radius: 10px; padding: 3px; gap: 2px;
+    }
+    .ps-seg button {
+      border: none; border-radius: 8px; padding: 5px 14px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      background: transparent; color: var(--txt2); transition: all .2s;
+    }
+    .ps-seg button.active { background: var(--green); color: #000; }
+
+    /* ── Document type grid ─────────────────────────────────── */
+    .ps-doc-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    @media (min-width: 480px) { .ps-doc-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 600px) { .ps-doc-grid { grid-template-columns: repeat(5, 1fr); } }
+
+    .ps-doc-tile {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 8px;
+      display: flex; flex-direction: column; align-items: center;
+      gap: 7px; cursor: pointer; transition: all .18s; user-select: none;
+    }
+    .ps-doc-tile:hover  { background: var(--card2); border-color: var(--border2); transform: translateY(-1px); }
+    .ps-doc-tile:active { transform: scale(.97); }
+    .ps-doc-tile.thermal-only  { border-top: 2px solid rgba(37,99,235,.3); }
+    .ps-doc-tile.html-doc      { border-top: 2px solid rgba(139,92,246,.3); }
+    .ps-doc-tile.thermal-html  { border-top: 2px solid rgba(113,255,0,.3); }
+    .ps-doc-icon   { font-size: 26px; }
+    .ps-doc-name   { font-size: 10px; font-weight: 700; text-align: center; color: var(--txt2); line-height: 1.3; }
+    .ps-doc-type   { font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 2px 6px; border-radius: 20px; }
+    .ps-doc-type.thermal { background: rgba(37,99,235,.15); color: #60a5fa; }
+    .ps-doc-type.html    { background: rgba(139,92,246,.15); color: #a78bfa; }
+    .ps-doc-type.any     { background: rgba(113,255,0,.12);  color: var(--green); }
+
+    /* ── Quick action panel ─────────────────────────────────── */
+    .ps-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ps-btn {
+      flex: 1; min-width: 120px; border: none; border-radius: 12px;
+      padding: 12px 16px; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: all .2s; display: flex; align-items: center;
+      gap: 7px; justify-content: center;
+    }
+    .ps-btn-primary  { background: var(--green);   color: #000; }
+    .ps-btn-primary:hover  { background: var(--green-d); }
+    .ps-btn-secondary { background: var(--card2); color: var(--txt); border: 1px solid var(--border2); }
+    .ps-btn-secondary:hover { background: rgba(255,255,255,.08); }
+    .ps-btn-danger { background: rgba(239,68,68,.12); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
+    .ps-btn-danger:hover { background: var(--red); color: #fff; }
+
+    /* ── Brand preview card ─────────────────────────────────── */
+    .ps-brand-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .ps-brand-preview {
+      background: #fff; color: #111;
+      font-family: 'Courier New', monospace; font-size: 11px;
+      padding: 16px; text-align: center; line-height: 1.8;
+      min-height: 100px;
+    }
+    .ps-brand-preview .bp-name  { font-size: 15px; font-weight: 900; letter-spacing: .02em; }
+    .ps-brand-preview .bp-sub   { font-size: 10px; color: #555; }
+    .ps-brand-preview .bp-logo  { max-height: 48px; margin-bottom: 6px; }
+    .ps-brand-footer { padding: 10px 14px; display: flex; gap: 8px; align-items: center; }
+    .ps-brand-note { flex: 1; font-size: 11px; color: var(--txt2); }
+    .ps-brand-edit-btn {
+      background: transparent; border: 1px solid var(--border2);
+      color: var(--txt2); border-radius: 8px; padding: 5px 12px;
+      font-size: 11px; cursor: pointer;
+    }
+    .ps-brand-edit-btn:hover { border-color: var(--green); color: var(--green); }
+
+    /* ── Queue panel ─────────────────────────────────────────── */
+    .ps-queue-empty { color: var(--txt3); font-size: 12px; padding: 14px 0; text-align: center; }
+    .ps-queue-item {
+      background: var(--card2); border-radius: 10px; padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+    }
+    .ps-qi-icon  { font-size: 18px; }
+    .ps-qi-info  { flex: 1 }
+    .ps-qi-name  { font-size: 12.5px; font-weight: 600; }
+    .ps-qi-meta  { font-size: 11px; color: var(--txt2); margin-top: 2px; }
+    .ps-qi-status { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .ps-qi-status.pending    { background: rgba(245,158,11,.15); color: var(--amber); }
+    .ps-qi-status.processing { background: rgba(37,99,235,.15);  color: #60a5fa; }
+    .ps-qi-status.failed     { background: rgba(239,68,68,.15);   color: var(--red); }
+
+    /* ── Modal overlay ──────────────────────────────────────── */
+    .ps-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000;
+      display: flex; align-items: flex-end; justify-content: center;
+    }
+    .ps-modal {
+      background: var(--surface); border-radius: 20px 20px 0 0;
+      padding: 20px 20px 40px; width: 100%; max-width: 520px;
+      max-height: 85vh; overflow-y: auto;
+      animation: slideUp .25s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .ps-modal-title { font-size: 16px; font-weight: 800; margin-bottom: 16px; }
+    .ps-field { margin-bottom: 14px; }
+    .ps-field label { font-size: 11px; font-weight: 700; color: var(--txt2); text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: 6px; }
+    .ps-field input, .ps-field textarea {
+      width: 100%; background: var(--card); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 10px 14px; font-size: 14px;
+      color: var(--txt); outline: none;
+    }
+    .ps-field input:focus, .ps-field textarea:focus { border-color: var(--green); }
+
+    /* ── Toast ──────────────────────────────────────────────── */
+    .ps-toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--card2); color: var(--txt); border-radius: 20px;
+      padding: 10px 20px; font-size: 13px; font-weight: 600;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5); z-index: 9999;
+      animation: fadeIn .2s ease; display: none;
+      border: 1px solid var(--border2);
+    }
+    .ps-toast.show   { display: block; }
+    .ps-toast.success { border-color: var(--green); color: var(--green); }
+    .ps-toast.error   { border-color: var(--red); color: var(--red); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────── -->
+<div class="ps-header">
+  <a href="pos.html" class="ps-back" title="Back to POS">&#8592;</a>
+  <div class="ps-header-title">Print Station</div>
+  <div class="ps-conn-badge" id="ps-conn-badge">
+    <div class="ps-conn-dot"></div>
+    <span id="ps-conn-label">No Printer</span>
+  </div>
+</div>
+
+<div class="ps-body">
+
+  <!-- ── Printer Connection ─────────────────────────────────── -->
+  <div class="ps-section">
+    <div class="ps-section-title">Printer Connection</div>
+    <div class="ps-conn-panel">
+
+      <!-- Bluetooth -->
+      <div class="ps-conn-row" id="bt-row">
+        <div class="ps-conn-icon">&#128250;</div>
+        <div class="ps-conn-info">
+          <div class="ps-conn-name">Bluetooth Printer</div>
+          <div class="ps-conn-sub" id="bt-status">Requires Chrome on Android or desktop</div>
+        </div>
+        <button class="ps-conn-action btn-connect" id="bt-btn" onclick="PSApp.connectBT()">Connect</button>
+      </div>
+
+      <!-- USB -->
+      <div class="ps-conn-row" id="usb-row">
+        <div class="ps-conn-icon">&#128196;</div>
+        <div class="ps-conn-info">
+          <div class="ps-conn-name">USB Printer</div>
+          <div class="ps-conn-sub" id="usb-status">WebUSB — Chrome desktop only</div>
+        </div>
+        <button class="ps-conn-action btn-connect" id="usb-btn" onclick="PSApp.connectUSB()">Connect</button>
+      </div>
+
+      <!-- Network / Wi-Fi -->
+      <div class="ps-conn-row" id="net-row" style="flex-wrap:wrap;gap:8px">
+        <div class="ps-conn-icon">&#127760;</div>
+        <div class="ps-conn-info">
+          <div class="ps-conn-name">Network / Wi-Fi Printer</div>
+          <div class="ps-conn-sub">Same Wi-Fi network as the printer</div>
+        </div>
+        <button class="ps-conn-action btn-connect" id="net-btn" onclick="PSApp.connectNet()">Connect</button>
+        <div style="width:100%;display:flex;gap:8px;padding-left:48px">
+          <input id="net-ip" class="ps-net-input" type="text" placeholder="192.168.1.100" inputmode="decimal" spellcheck="false">
+          <input id="net-port" class="ps-net-input" type="number" placeholder="9100" style="width:80px">
+        </div>
+      </div>
+
+      <!-- Browser / PDF -->
+      <div class="ps-conn-row" id="browser-row">
+        <div class="ps-conn-icon">&#128451;</div>
+        <div class="ps-conn-info">
+          <div class="ps-conn-name">Browser Print Dialog</div>
+          <div class="ps-conn-sub">Works on any device — HTML print dialog</div>
+        </div>
+        <button class="ps-conn-action btn-connect" id="browser-btn" onclick="PSApp.connectBrowser()">Select</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Paper width ────────────────────────────────────────── -->
+  <div class="ps-section">
+    <div class="ps-section-title">Paper Width</div>
+    <div class="ps-toggle-row">
+      <div class="ps-toggle-label">
+        Thermal paper width
+        <span>Affects character columns: 58mm=32 cols, 80mm=42 cols</span>
+      </div>
+      <div class="ps-seg">
+        <button id="w58-btn" onclick="PSApp.setWidth(58)">58mm</button>
+        <button id="w80-btn" class="active" onclick="PSApp.setWidth(80)">80mm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Document Types ─────────────────────────────────────── -->
+  <div class="ps-section">
+    <div class="ps-section-title">Print Document</div>
+    <div class="ps-doc-grid">
+      <div class="ps-doc-tile thermal-html" onclick="PSApp.openDoc('receipt')">
+        <div class="ps-doc-icon">&#129305;</div>
+        <div class="ps-doc-name">Receipt</div>
+        <div class="ps-doc-type any">Thermal / PDF</div>
+      </div>
+      <div class="ps-doc-tile thermal-only" onclick="PSApp.openDoc('barcode-label')">
+        <div class="ps-doc-icon">&#128178;</div>
+        <div class="ps-doc-name">Barcode Label</div>
+        <div class="ps-doc-type thermal">Thermal / HTML</div>
+      </div>
+      <div class="ps-doc-tile thermal-only" onclick="PSApp.openDoc('qr-label')">
+        <div class="ps-doc-icon">&#9638;</div>
+        <div class="ps-doc-name">QR Label</div>
+        <div class="ps-doc-type thermal">Thermal / HTML</div>
+      </div>
+      <div class="ps-doc-tile html-doc" onclick="PSApp.openDoc('shelf-tag')">
+        <div class="ps-doc-icon">&#127991;</div>
+        <div class="ps-doc-name">Shelf Price Tag</div>
+        <div class="ps-doc-type html">HTML Print</div>
+      </div>
+      <div class="ps-doc-tile html-doc" onclick="PSApp.openDoc('sticker')">
+        <div class="ps-doc-icon">&#129999;</div>
+        <div class="ps-doc-name">Product Sticker</div>
+        <div class="ps-doc-type html">HTML Print</div>
+      </div>
+      <div class="ps-doc-tile html-doc" onclick="PSApp.openDoc('invoice')">
+        <div class="ps-doc-icon">&#128203;</div>
+        <div class="ps-doc-name">Invoice</div>
+        <div class="ps-doc-type html">A4 PDF</div>
+      </div>
+      <div class="ps-doc-tile html-doc" onclick="PSApp.openDoc('quotation')">
+        <div class="ps-doc-icon">&#128221;</div>
+        <div class="ps-doc-name">Quotation</div>
+        <div class="ps-doc-type html">A4 PDF</div>
+      </div>
+      <div class="ps-doc-tile html-doc" onclick="PSApp.openDoc('delivery-note')">
+        <div class="ps-doc-icon">&#128666;</div>
+        <div class="ps-doc-name">Delivery Note</div>
+        <div class="ps-doc-type html">A4 PDF</div>
+      </div>
+      <div class="ps-doc-tile html-doc" onclick="PSApp.openDoc('return-slip')">
+        <div class="ps-doc-icon">&#8617;</div>
+        <div class="ps-doc-name">Return Slip</div>
+        <div class="ps-doc-type html">A4 PDF</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Quick Actions ─────────────────────────────────────── -->
+  <div class="ps-section">
+    <div class="ps-section-title">Quick Actions</div>
+    <div class="ps-actions">
+      <button class="ps-btn ps-btn-primary" onclick="PSApp.testPrint()">&#128424; Test Print</button>
+      <button class="ps-btn ps-btn-secondary" onclick="PSApp.openCashDrawer()">&#128180; Open Drawer</button>
+      <button class="ps-btn ps-btn-secondary" onclick="PSApp.showBrandEdit()">&#127912; Edit Branding</button>
+    </div>
+  </div>
+
+  <!-- ── Merchant Branding Preview ─────────────────────────── -->
+  <div class="ps-section">
+    <div class="ps-section-title">Receipt Header Preview</div>
+    <div class="ps-brand-card">
+      <div class="ps-brand-preview" id="ps-brand-preview">
+        Loading branding&hellip;
+      </div>
+      <div class="ps-brand-footer">
+        <div class="ps-brand-note" id="ps-brand-source">Loading from settings&hellip;</div>
+        <button class="ps-brand-edit-btn" onclick="PSApp.showBrandEdit()">Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Print Queue ────────────────────────────────────────── -->
+  <div class="ps-section">
+    <div class="ps-section-title">Print Queue <span id="queue-count" style="color:var(--txt2);font-weight:400"></span></div>
+    <div id="ps-queue-list">
+      <div class="ps-queue-empty">Queue is empty</div>
+    </div>
+    <div style="margin-top:8px" id="ps-queue-actions" style="display:none">
+      <button class="ps-btn ps-btn-danger" style="width:100%" onclick="PSApp.clearQueue()">&#128465; Clear Queue</button>
+    </div>
+  </div>
+
+</div><!-- /ps-body -->
+
+<!-- ── Document print modal ─────────────────────────────────────── -->
+<div class="ps-modal-overlay" id="doc-modal" style="display:none" onclick="if(event.target===this)PSApp.closeModal()">
+  <div class="ps-modal">
+    <div class="ps-modal-title" id="modal-title">Print Document</div>
+    <div id="modal-form"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="ps-btn ps-btn-secondary" style="flex:0 0 80px" onclick="PSApp.closeModal()">Cancel</button>
+      <button class="ps-btn ps-btn-primary" onclick="PSApp.submitModal()">&#128424; Print</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Brand edit modal ──────────────────────────────────────────── -->
+<div class="ps-modal-overlay" id="brand-modal" style="display:none" onclick="if(event.target===this)PSApp.closeBrandModal()">
+  <div class="ps-modal">
+    <div class="ps-modal-title">Merchant Branding</div>
+    <div class="ps-field">
+      <label>Business Name</label>
+      <input id="be-name" type="text" placeholder="Your Business Name">
+    </div>
+    <div class="ps-field">
+      <label>Branch / Location</label>
+      <input id="be-branch" type="text" placeholder="e.g. Westlands Branch">
+    </div>
+    <div class="ps-field">
+      <label>Address</label>
+      <input id="be-address" type="text" placeholder="Street, City">
+    </div>
+    <div class="ps-field">
+      <label>Phone</label>
+      <input id="be-phone" type="tel" placeholder="+254 700 000 000">
+    </div>
+    <div class="ps-field">
+      <label>Email</label>
+      <input id="be-email" type="email" placeholder="info@yourbusiness.co.ke">
+    </div>
+    <div class="ps-field">
+      <label>Website</label>
+      <input id="be-website" type="text" placeholder="yourbusiness.co.ke">
+    </div>
+    <div class="ps-field">
+      <label>KRA PIN</label>
+      <input id="be-pin" type="text" placeholder="P051234567X">
+    </div>
+    <div class="ps-field">
+      <label>Logo URL (Firebase Storage / CDN)</label>
+      <input id="be-logo" type="url" placeholder="https://...">
+    </div>
+    <div class="ps-field">
+      <label>Receipt Footer Message</label>
+      <input id="be-footer" type="text" placeholder="Thank you for shopping with us!">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="ps-btn ps-btn-secondary" style="flex:0 0 80px" onclick="PSApp.closeBrandModal()">Cancel</button>
+      <button class="ps-btn ps-btn-primary" onclick="PSApp.saveBrand()">Save Branding</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ─────────────────────────────────────────────────────── -->
+<div class="ps-toast" id="ps-toast"></div>
+
+<!-- ── Scripts ──────────────────────────────────────────────────── -->
+<script src="firebase.js"></script>
+<script src="pos-printer.js"></script>
+<script src="sokoni-print-engine.js"></script>
+<script>
+/* ── Print Station App Controller ─────────────────────────── */
+const PSApp = (() => {
+  'use strict';
+
+  const ICONS = {
+    'receipt':       '🧾',
+    'barcode-label': '🏷',
+    'qr-label':      '▪',
+    'shelf-tag':     '🏷',
+    'sticker':       '🟡',
+    'invoice':       '📋',
+    'quotation':     '📝',
+    'delivery-note': '🚚',
+    'return-slip':   '↩',
+  };
+
+  let _currentDocType = null;
+
+  /* ── Init ─────────────────────────────────────────────────── */
+  async function init() {
+    // Expose toast to SokoniPrint
+    window._skToast = toast;
+
+    // Load branding
+    const shopId = localStorage.getItem('pos_shop_id') || null;
+    await SokoniPrint.init(shopId);
+    renderBrandPreview();
+
+    // Restore paper width
+    const savedWidth = parseInt(localStorage.getItem('pos_paper_width') || '80');
+    setWidth(savedWidth, true);
+
+    // Status tick
+    setInterval(updateConnStatus, 2000);
+    updateConnStatus();
+  }
+
+  /* ── Connection ───────────────────────────────────────────── */
+  async function connectBT() {
+    if (!navigator.bluetooth) {
+      toast('Web Bluetooth requires Chrome on Android or desktop', 'error');
+      return;
+    }
+    const btn = document.getElementById('bt-btn');
+    const status = document.getElementById('bt-status');
+    if (SokoniPrint.getConnectionType() === 'bluetooth') {
+      SokoniPrint.disconnect();
+      updateConnStatus(); return;
+    }
+    btn.textContent = 'Scanning…'; btn.disabled = true;
+    status.textContent = 'Searching for Bluetooth printers…';
+    try {
+      const name = await SokoniPrint.connectBluetooth();
+      status.textContent = '✓ ' + name;
+      toast('Connected: ' + name, 'success');
+    } catch (e) {
+      status.textContent = e.message;
+      toast(e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      updateConnStatus();
+    }
+  }
+
+  async function connectUSB() {
+    if (!navigator.usb) {
+      toast('WebUSB requires Chrome on desktop', 'error'); return;
+    }
+    const btn = document.getElementById('usb-btn');
+    if (SokoniPrint.getConnectionType() === 'usb') {
+      SokoniPrint.disconnect(); updateConnStatus(); return;
+    }
+    btn.textContent = 'Connecting…'; btn.disabled = true;
+    try {
+      const name = await SokoniPrint.connectUSB();
+      document.getElementById('usb-status').textContent = '✓ ' + name;
+      toast('USB printer connected: ' + name, 'success');
+    } catch (e) {
+      document.getElementById('usb-status').textContent = e.message;
+      toast(e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      updateConnStatus();
+    }
+  }
+
+  async function connectNet() {
+    const ip   = (document.getElementById('net-ip').value || '').trim();
+    const port = parseInt(document.getElementById('net-port').value || '9100');
+    if (!ip) { toast('Enter printer IP address', 'error'); return; }
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+      toast('Invalid IP address format', 'error'); return;
+    }
+    const btn = document.getElementById('net-btn');
+    btn.textContent = 'Connecting…'; btn.disabled = true;
+    try {
+      await SokoniPrint.connectNetwork(ip, port || 9100);
+      document.getElementById('net-status') && (document.getElementById('net-status').textContent = '✓ ' + ip + ':' + (port || 9100));
+      toast('Network printer set: ' + ip, 'success');
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      updateConnStatus();
+    }
+  }
+
+  function connectBrowser() {
+    SokoniPrint.connectBrowser();
+    toast('Browser print dialog selected', 'success');
+    updateConnStatus();
+  }
+
+  function updateConnStatus() {
+    const type  = SokoniPrint.getConnectionType();
+    const badge = document.getElementById('ps-conn-badge');
+    const label = document.getElementById('ps-conn-label');
+    const connected = type && type !== 'none';
+
+    badge.className = 'ps-conn-badge' + (connected ? ' connected' : '');
+    const names = { bluetooth: 'Bluetooth', usb: 'USB', network: 'Network', browser: 'Browser', none: 'No Printer' };
+    label.textContent = names[type] || 'No Printer';
+
+    /* Update per-row buttons */
+    ['bluetooth','usb','network','browser'].forEach(t => {
+      const btn = document.getElementById(t === 'bluetooth' ? 'bt-btn' : t === 'network' ? 'net-btn' : t + '-btn');
+      if (!btn) return;
+      if (type === t) {
+        btn.textContent = 'Disconnect';
+        btn.className = 'ps-conn-action btn-disconnect';
+        btn.onclick = () => { SokoniPrint.disconnect(); updateConnStatus(); };
+      } else {
+        btn.className = 'ps-conn-action btn-connect';
+        if (t === 'bluetooth') { btn.textContent = 'Connect'; btn.onclick = connectBT; }
+        else if (t === 'usb')  { btn.textContent = 'Connect'; btn.onclick = connectUSB; }
+        else if (t === 'network') { btn.textContent = 'Connect'; btn.onclick = connectNet; }
+        else if (t === 'browser') { btn.textContent = 'Select';  btn.onclick = connectBrowser; }
+      }
+    });
+  }
+
+  /* ── Paper width ──────────────────────────────────────────── */
+  function setWidth(mm, silent) {
+    SokoniPrint.setPaperWidth(mm);
+    localStorage.setItem('pos_paper_width', String(mm));
+    document.getElementById('w58-btn').className = mm === 58 ? 'active' : '';
+    document.getElementById('w80-btn').className = mm === 80 ? 'active' : '';
+    if (!silent) toast('Paper width set to ' + mm + 'mm', 'success');
+  }
+
+  /* ── Document modal ──────────────────────────────────────── */
+  const FORMS = {
+    'receipt': `
+      <div class="ps-field"><label>Receipt Number</label><input id="f-receiptNo" type="text" placeholder="RCP-001"></div>
+      <div class="ps-field"><label>Cashier Name</label><input id="f-cashierName" type="text" placeholder="Cashier"></div>
+      <div class="ps-field"><label>Customer Name (optional)</label><input id="f-customerName" type="text" placeholder="Walk-in"></div>
+      <div class="ps-field"><label>Items (JSON — name, qty, price)</label>
+        <textarea id="f-items" rows="4" style="font-family:monospace;font-size:12px">[{"name":"Product A","qty":2,"price":150},{"name":"Product B","qty":1,"price":200}]</textarea></div>
+      <div class="ps-field"><label>Total (KES)</label><input id="f-total" type="number" placeholder="500"></div>
+      <div class="ps-field"><label>Payment Method</label><input id="f-paymentMethod" type="text" placeholder="Cash / M-Pesa"></div>
+      <div class="ps-field"><label>M-Pesa Reference (optional)</label><input id="f-mpesaRef" type="text" placeholder="QK7XXXXXXX"></div>`,
+
+    'barcode-label': `
+      <div class="ps-field"><label>Product Name</label><input id="f-productName" type="text" placeholder="Product Name"></div>
+      <div class="ps-field"><label>Barcode / SKU</label><input id="f-barcode" type="text" placeholder="6001234567890"></div>
+      <div class="ps-field"><label>Price (KES)</label><input id="f-price" type="number" placeholder="299"></div>
+      <div class="ps-field"><label>Expiry Date (optional)</label><input id="f-expiryDate" type="text" placeholder="31/12/2025"></div>`,
+
+    'qr-label': `
+      <div class="ps-field"><label>Title</label><input id="f-title" type="text" placeholder="Product or table name"></div>
+      <div class="ps-field"><label>QR Code Data (URL or text)</label><input id="f-qrData" type="text" placeholder="https://mysokoni.co.ke/p/abc123"></div>
+      <div class="ps-field"><label>Subtitle (optional)</label><input id="f-subtitle" type="text" placeholder="Scan to view / order"></div>
+      <div class="ps-field"><label>Price (optional)</label><input id="f-price" type="number" placeholder="299"></div>`,
+
+    'shelf-tag': `
+      <div class="ps-field"><label>Product Name</label><input id="f-productName" type="text" placeholder="Product Name"></div>
+      <div class="ps-field"><label>Price (KES)</label><input id="f-price" type="number" placeholder="299"></div>
+      <div class="ps-field"><label>Compare Price / Was (optional)</label><input id="f-comparePrice" type="number" placeholder="399"></div>
+      <div class="ps-field"><label>Unit</label><input id="f-unit" type="text" placeholder="per piece / per kg"></div>
+      <div class="ps-field"><label>SKU (optional)</label><input id="f-sku" type="text" placeholder="SKU-001"></div>`,
+
+    'sticker': `
+      <div class="ps-field"><label>Product Name</label><input id="f-productName" type="text" placeholder="Product Name"></div>
+      <div class="ps-field"><label>Price (KES)</label><input id="f-price" type="number" placeholder="299"></div>
+      <div class="ps-field"><label>Barcode / SKU (optional)</label><input id="f-barcode" type="text" placeholder="6001234567890"></div>`,
+
+    'invoice': `
+      <div class="ps-field"><label>Invoice Number</label><input id="f-invoiceNo" type="text" placeholder="INV-001"></div>
+      <div class="ps-field"><label>Customer Name</label><input id="f-cname" type="text" placeholder="Customer Name"></div>
+      <div class="ps-field"><label>Customer Phone</label><input id="f-cphone" type="tel" placeholder="+254 700 000 000"></div>
+      <div class="ps-field"><label>Customer Address</label><input id="f-caddress" type="text" placeholder="Street, City"></div>
+      <div class="ps-field"><label>Due Date</label><input id="f-dueDate" type="date"></div>
+      <div class="ps-field"><label>Items (JSON)</label>
+        <textarea id="f-items" rows="4" style="font-family:monospace;font-size:12px">[{"description":"Service/Product A","qty":1,"unitPrice":5000,"total":5000}]</textarea></div>
+      <div class="ps-field"><label>Total (KES)</label><input id="f-total" type="number" placeholder="5000"></div>
+      <div class="ps-field"><label>Notes (optional)</label><input id="f-notes" type="text" placeholder="Payment terms, bank details…"></div>`,
+
+    'quotation': `
+      <div class="ps-field"><label>Quote Number</label><input id="f-quoteNo" type="text" placeholder="QUO-001"></div>
+      <div class="ps-field"><label>Customer Name</label><input id="f-cname" type="text" placeholder="Customer Name"></div>
+      <div class="ps-field"><label>Customer Phone</label><input id="f-cphone" type="tel" placeholder="+254 700 000 000"></div>
+      <div class="ps-field"><label>Valid Until</label><input id="f-validUntil" type="date"></div>
+      <div class="ps-field"><label>Items (JSON)</label>
+        <textarea id="f-items" rows="4" style="font-family:monospace;font-size:12px">[{"description":"Product/Service","qty":1,"unitPrice":5000,"total":5000}]</textarea></div>
+      <div class="ps-field"><label>Total (KES)</label><input id="f-total" type="number" placeholder="5000"></div>`,
+
+    'delivery-note': `
+      <div class="ps-field"><label>Delivery Note Number</label><input id="f-deliveryNo" type="text" placeholder="DEL-001"></div>
+      <div class="ps-field"><label>Order Reference</label><input id="f-orderNo" type="text" placeholder="ORD-001"></div>
+      <div class="ps-field"><label>Customer Name</label><input id="f-cname" type="text" placeholder="Customer Name"></div>
+      <div class="ps-field"><label>Delivery Address</label><input id="f-caddress" type="text" placeholder="Street, Estate, City"></div>
+      <div class="ps-field"><label>Customer Phone</label><input id="f-cphone" type="tel" placeholder="+254 700 000 000"></div>
+      <div class="ps-field"><label>Driver Name</label><input id="f-driver" type="text" placeholder="Driver name"></div>
+      <div class="ps-field"><label>Vehicle Plate</label><input id="f-vehicle" type="text" placeholder="KCA 000X"></div>
+      <div class="ps-field"><label>Items (JSON — name, qty, unit)</label>
+        <textarea id="f-items" rows="3" style="font-family:monospace;font-size:12px">[{"name":"Item A","qty":2,"unit":"pieces"}]</textarea></div>
+      <div class="ps-field"><label>Notes</label><input id="f-notes" type="text" placeholder="Handle with care…"></div>`,
+
+    'return-slip': `
+      <div class="ps-field"><label>Return Number</label><input id="f-returnNo" type="text" placeholder="RET-001"></div>
+      <div class="ps-field"><label>Original Receipt Number</label><input id="f-originalReceiptNo" type="text" placeholder="RCP-001"></div>
+      <div class="ps-field"><label>Customer Name</label><input id="f-cname" type="text" placeholder="Customer Name"></div>
+      <div class="ps-field"><label>Customer Phone</label><input id="f-cphone" type="tel" placeholder="+254 700 000 000"></div>
+      <div class="ps-field"><label>Items (JSON — name, qty, reason, condition)</label>
+        <textarea id="f-items" rows="3" style="font-family:monospace;font-size:12px">[{"name":"Product","qty":1,"reason":"Wrong size","condition":"Unopened"}]</textarea></div>
+      <div class="ps-field"><label>Refund Amount (KES)</label><input id="f-refundAmount" type="number" placeholder="500"></div>
+      <div class="ps-field"><label>Refund Method</label><input id="f-refundMethod" type="text" placeholder="Cash / M-Pesa"></div>`,
+  };
+
+  const DOC_LABELS = {
+    'receipt': 'Print Receipt', 'barcode-label': 'Print Barcode Label',
+    'qr-label': 'Print QR Label', 'shelf-tag': 'Print Shelf Price Tag',
+    'sticker': 'Print Product Sticker', 'invoice': 'Print Invoice',
+    'quotation': 'Print Quotation', 'delivery-note': 'Print Delivery Note',
+    'return-slip': 'Print Return Slip',
+  };
+
+  function openDoc(docType) {
+    _currentDocType = docType;
+    document.getElementById('modal-title').textContent = DOC_LABELS[docType] || 'Print';
+    document.getElementById('modal-form').innerHTML = FORMS[docType] || '';
+    document.getElementById('doc-modal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('doc-modal').style.display = 'none';
+    _currentDocType = null;
+  }
+
+  function _v(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+  function _n(id) { const v = parseFloat(_v(id)); return isNaN(v) ? 0 : v; }
+  function _j(id) {
+    try { return JSON.parse(_v(id)); }
+    catch (_) { toast('Items field is not valid JSON', 'error'); return null; }
+  }
+
+  async function submitModal() {
+    if (!_currentDocType) return;
+    let data;
+
+    switch (_currentDocType) {
+      case 'receipt':
+        data = {
+          receiptNo: _v('f-receiptNo') || 'RCP-' + Date.now(),
+          cashierName: _v('f-cashierName'),
+          customerName: _v('f-customerName'),
+          items: _j('f-items') || [],
+          total: _n('f-total'),
+          subtotal: _n('f-total'),
+          paymentMethod: _v('f-paymentMethod') || 'Cash',
+          amountPaid: _n('f-total'),
+          mpesaRef: _v('f-mpesaRef'),
+          timestamp: Date.now(),
+        }; break;
+      case 'barcode-label':
+        data = { productName: _v('f-productName'), barcode: _v('f-barcode'), price: _n('f-price'), expiryDate: _v('f-expiryDate') };
+        break;
+      case 'qr-label':
+        data = { title: _v('f-title'), qrData: _v('f-qrData'), subtitle: _v('f-subtitle'), price: _v('f-price') ? _n('f-price') : null };
+        break;
+      case 'shelf-tag':
+        data = { productName: _v('f-productName'), price: _n('f-price'), comparePrice: _v('f-comparePrice') ? _n('f-comparePrice') : null, unit: _v('f-unit') || 'per piece', sku: _v('f-sku') };
+        break;
+      case 'sticker':
+        data = { productName: _v('f-productName'), price: _n('f-price'), barcode: _v('f-barcode') };
+        break;
+      case 'invoice':
+        data = {
+          invoiceNo: _v('f-invoiceNo'), dueDate: _v('f-dueDate'),
+          customer: { name: _v('f-cname'), phone: _v('f-cphone'), address: _v('f-caddress') },
+          items: _j('f-items') || [], total: _n('f-total'), notes: _v('f-notes'),
+        }; break;
+      case 'quotation':
+        data = {
+          quoteNo: _v('f-quoteNo'), validUntil: _v('f-validUntil'),
+          customer: { name: _v('f-cname'), phone: _v('f-cphone') },
+          items: _j('f-items') || [], total: _n('f-total'),
+        }; break;
+      case 'delivery-note':
+        data = {
+          deliveryNo: _v('f-deliveryNo'), orderNo: _v('f-orderNo'),
+          customer: { name: _v('f-cname'), phone: _v('f-cphone'), address: _v('f-caddress') },
+          driver: _v('f-driver'), vehicle: _v('f-vehicle'),
+          items: _j('f-items') || [], notes: _v('f-notes'),
+        }; break;
+      case 'return-slip':
+        data = {
+          returnNo: _v('f-returnNo'), originalReceiptNo: _v('f-originalReceiptNo'),
+          customer: { name: _v('f-cname'), phone: _v('f-cphone') },
+          items: _j('f-items') || [], refundAmount: _n('f-refundAmount'),
+          refundMethod: _v('f-refundMethod'),
+        }; break;
+      default: return;
+    }
+
+    if (data === null) return; // JSON parse failed
+    closeModal();
+    try {
+      await SokoniPrint.print(_currentDocType, data);
+    } catch (e) {
+      toast('Print error: ' + e.message, 'error');
+    }
+  }
+
+  /* ── Branding ─────────────────────────────────────────────── */
+  function renderBrandPreview() {
+    const b = SokoniPrint.getBrand();
+    const preview = document.getElementById('ps-brand-preview');
+    const source  = document.getElementById('ps-brand-source');
+    preview.innerHTML = [
+      b.logoUrl ? `<img class="bp-logo" src="${b.logoUrl}" alt="Logo" onerror="this.style.display='none'">` : '',
+      `<div class="bp-name">${escHTML(b.name)}</div>`,
+      b.branch  ? `<div class="bp-sub">${escHTML(b.branch)}</div>` : '',
+      b.address ? `<div class="bp-sub">${escHTML(b.address)}</div>` : '',
+      b.phone   ? `<div class="bp-sub">Tel: ${escHTML(b.phone)}</div>` : '',
+      b.pin     ? `<div class="bp-sub">KRA PIN: ${escHTML(b.pin)}</div>` : '',
+    ].filter(Boolean).join('');
+    source.textContent = b.logoUrl ? 'Logo + branding loaded' : 'Branding loaded (no logo)';
+  }
+
+  function showBrandEdit() {
+    const b = SokoniPrint.getBrand();
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+    set('be-name',    b.name);
+    set('be-branch',  b.branch);
+    set('be-address', b.address);
+    set('be-phone',   b.phone);
+    set('be-email',   b.email);
+    set('be-website', b.website);
+    set('be-pin',     b.pin);
+    set('be-logo',    b.logoUrl);
+    set('be-footer',  b.receiptFooter);
+    document.getElementById('brand-modal').style.display = 'flex';
+  }
+
+  function closeBrandModal() {
+    document.getElementById('brand-modal').style.display = 'none';
+  }
+
+  function saveBrand() {
+    const g = id => (document.getElementById(id)?.value || '').trim();
+    SokoniPrint.setBrand({
+      businessName:    g('be-name'),
+      branch:          g('be-branch'),
+      businessAddress: g('be-address'),
+      businessPhone:   g('be-phone'),
+      businessEmail:   g('be-email'),
+      website:         g('be-website'),
+      businessPin:     g('be-pin'),
+      logoUrl:         g('be-logo'),
+      receiptFooter:   g('be-footer'),
+    });
+    closeBrandModal();
+    renderBrandPreview();
+    toast('Branding saved', 'success');
+  }
+
+  /* ── Queue ────────────────────────────────────────────────── */
+  function refreshQueue() {
+    const jobs = SokoniPrint.getQueue();
+    const list = document.getElementById('ps-queue-list');
+    const count = document.getElementById('queue-count');
+    const actions = document.getElementById('ps-queue-actions');
+    count.textContent = jobs.length ? '(' + jobs.length + ')' : '';
+    if (!jobs.length) {
+      list.innerHTML = '<div class="ps-queue-empty">Queue is empty</div>';
+      if (actions) actions.style.display = 'none';
+      return;
+    }
+    if (actions) actions.style.display = 'block';
+    list.innerHTML = jobs.map(j => `
+      <div class="ps-queue-item">
+        <div class="ps-qi-icon">${ICONS[j.docType] || '📄'}</div>
+        <div class="ps-qi-info">
+          <div class="ps-qi-name">${j.docType.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</div>
+          <div class="ps-qi-meta">Attempt ${j.attempts}/${3} &bull; ${new Date(j.createdAt).toLocaleTimeString('en-KE')}</div>
+        </div>
+        <div class="ps-qi-status ${j.status}">${j.status}</div>
+        <button onclick="PSApp.cancelJob('${j.id}')" style="background:none;border:none;color:var(--txt3);font-size:16px;cursor:pointer;padding:4px 6px">&#10005;</button>
+      </div>`).join('');
+  }
+
+  function cancelJob(id) { SokoniPrint.cancel(id); refreshQueue(); }
+  function clearQueue()  { SokoniPrint.getQueue().forEach(j => SokoniPrint.cancel(j.id)); refreshQueue(); }
+
+  /* ── Test print / Cash drawer ─────────────────────────────── */
+  async function testPrint() {
+    try {
+      await SokoniPrint.testPrint();
+      toast('Test print sent', 'success');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  function openCashDrawer() {
+    if (!SokoniPrint.isConnected()) {
+      toast('Connect a printer first', 'error'); return;
+    }
+    SokoniPrint.openCashDrawer();
+    toast('Cash drawer signal sent', 'success');
+  }
+
+  /* ── Toast ────────────────────────────────────────────────── */
+  let _toastTimer;
+  function toast(msg, type) {
+    const el = document.getElementById('ps-toast');
+    el.textContent = msg;
+    el.className = 'ps-toast show' + (type ? ' ' + type : '');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.className = 'ps-toast'; }, 3000);
+  }
+
+  /* ── HTML escape ─────────────────────────────────────────── */
+  function escHTML(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* ── Periodic queue refresh ──────────────────────────────── */
+  setInterval(refreshQueue, 2000);
+
+  document.addEventListener('DOMContentLoaded', init);
+
+  return {
+    connectBT, connectUSB, connectNet, connectBrowser,
+    setWidth, openDoc, closeModal, submitModal,
+    showBrandEdit, closeBrandModal, saveBrand,
+    testPrint, openCashDrawer,
+    cancelJob, clearQueue,
+  };
+})();
+</script>
+
+<script src="sw-register.js"></script>
+</body>
+</html>

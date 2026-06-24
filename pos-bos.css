@@ -8,7 +8,10 @@
 .bos-panel-body {
   padding: 16px 20px;
   overflow-y: auto;
-  height: 100%;
+  /* Use min-height instead of height:100% — prevents panel collapse when parent
+     has no bounded height (Finance/Repair/Audit tabs on mobile) */
+  min-height: 200px;
+  max-height: calc(100vh - var(--header-h, 58px) - var(--nav-h, 62px) - 48px);
 }
 
 .bos-topbar {

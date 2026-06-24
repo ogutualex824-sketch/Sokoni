@@ -536,7 +536,12 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#080808;color:#fff;paddi
     <span class="upn-title">My Profile</span>
   </div>
   <div class="upn-right">
+    <!-- Notifications — SokoniNotifCenter (injected by shared-header Phase 1) auto-attaches -->
+    <button type="button" class="upn-btn" id="sk-notif-btn" aria-label="Notifications" title="Notifications" style="font-size:18px;position:relative;">&#x1F514;</button>
     <a href="messages.html" class="upn-btn" title="Messages">&#x1F4AC;</a>
+    <!-- Theme toggle — unified with SokoniTheme -->
+    <button type="button" class="upn-btn" id="upnThemeBtn" title="Toggle theme" aria-label="Toggle theme"
+      onclick="(function(b){if(window.SokoniTheme){var m=SokoniTheme.toggle();b.textContent=m==='light'?'&#x2600;&#xFE0F;':m==='auto'?'&#x2699;&#xFE0F;':'&#x1F319;';}else{document.body.classList.toggle('light-mode');b.textContent=document.body.classList.contains('light-mode')?'&#x2600;&#xFE0F;':'&#x1F319;';}})(this)">&#x1F319;</button>
     <button type="button" class="upn-btn upn-gear" onclick="openSettings()" title="Settings" aria-label="Settings">&#9881;</button>
   </div>
 </nav>

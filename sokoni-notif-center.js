@@ -1141,4 +1141,19 @@
     document.addEventListener('DOMContentLoaded', _injectCSS, { once: true });
   }
 
+  /* Auto-attach bell on pages that have #sk-notif-btn in their own HTML
+     (excluded pages: seller.html, profile.html, admin.html etc.)
+     On non-excluded pages, shared-header.js calls attachBell() explicitly after nav injection.
+     We only auto-attach if the bell is not already wired (_bellEl is null). */
+  function _tryAutoAttach() {
+    if (_bellEl) return;
+    var btn = document.getElementById('sk-notif-btn');
+    if (btn) attachBell(btn);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _tryAutoAttach, { once: true });
+  } else {
+    _tryAutoAttach();
+  }
+
 })(window);

@@ -89,7 +89,7 @@ window.SOKONI_CONFIG = {
        - sokoni-typesense-engine.js uses Typesense as secondary / fallback */
 
   /* Single-node (Typesense Cloud) */
-  typesenseHost:     "",       // ← e.g. "xyz.a1.typesense.net"
+  typesenseHost:     "4kn6y5bfcxv8o702p-1.a2.typesense.net",
   typesensePort:     443,
   typesenseProtocol: "https",
   typesenseSearchKey:"",       // ← Search-Only API key (NOT Admin key)

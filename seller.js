@@ -3291,24 +3291,34 @@ window.sellerReply    = sellerReply;
 ========================= */
 
 function toggleTheme(){
-
+    /* Delegate to unified SokoniTheme if available (sokoni-ui.js injected via shared-header Phase 1) */
+    if (window.SokoniTheme) {
+        var next = SokoniTheme.toggle();
+        var btn = document.getElementById("sellerThemeBtn");
+        if (btn) btn.textContent = next === 'light' ? '☀️' : next === 'auto' ? '⚙️' : '🌙';
+        return;
+    }
+    /* Fallback: direct toggle */
     document.body.classList.toggle("light-mode");
-
     const isLight = document.body.classList.contains("light-mode");
-
+    /* Write to both keys for backward compat */
+    localStorage.setItem("sokoni-theme", isLight ? "light" : "dark");
     localStorage.setItem("theme", isLight ? "light" : "dark");
-
     const btn = document.getElementById("sellerThemeBtn");
     if(btn) btn.textContent = isLight ? "☀️" : "🌙";
-
 }
 
-const savedSellerTheme = localStorage.getItem("theme");
-if(savedSellerTheme === "light"){
-    document.body.classList.add("light-mode");
-    const btn = document.getElementById("sellerThemeBtn");
-    if(btn) btn.textContent = "☀️";
-}
+/* Restore theme on page load — check both keys (unified sokoni-theme takes priority) */
+(function() {
+    var saved = localStorage.getItem("sokoni-theme") || localStorage.getItem("theme") || "dark";
+    if (saved === "light") {
+        document.body.classList.add("light-mode");
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById("sellerThemeBtn");
+            if(btn) btn.textContent = "☀️";
+        });
+    }
+})();
 
 /* =========================
    GLOBAL FUNCTIONS

@@ -260,14 +260,15 @@
 <script src="splash.js"></script>
 
 
-<!--  Nav  -->
-<nav class="en-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="en-nav-logo" alt="Sokoni"></a>
+<!--  Sub-nav — sits below shared header at top:64px via sk-sub-nav class -->
+<nav class="en-nav sk-sub-nav">
+  <!-- Logo hidden: shared-header provides the platform logo -->
+  <a href="index.html" style="display:none;"><img loading="lazy" src="assets/Sokonilogo2.png" class="en-nav-logo" alt="Sokoni"></a>
   <div class="en-nav-right">
-    <a href="javascript:history.back()" class="en-nav-link">← Back</a>
-    <button type="button" onclick="openRegisterModal()" class="en-nav-link" style="background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;">⭐ Join as Performer</button>
-    <button type="button" onclick="openBooking(null,'custom')" class="en-nav-link en-nav-book">📅 Book Now</button>
-    <a href="notifications.html" class="en-nav-link" style="position:relative;" title="Notifications">🔔<span id="enNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
+    <a href="javascript:history.back()" class="en-nav-link">&#x2190; Back</a>
+    <button type="button" onclick="openRegisterModal()" class="en-nav-link" style="background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;">&#x2B50; Join as Performer</button>
+    <button type="button" onclick="openBooking(null,'custom')" class="en-nav-link en-nav-book">&#x1F4C5; Book Now</button>
+    <!-- Bell hidden: shared-header provides notifications via #sk-notif-btn -->
   </div>
 </nav>
 <script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('enNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>

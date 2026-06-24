@@ -15,6 +15,7 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onObjectFinalized }  = require('firebase-functions/v2/storage');
+const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 
 /* Admin SDK is initialised in index.js — do not call initializeApp() again */
@@ -313,35 +314,39 @@ exports.onMediaUploaded = onObjectFinalized(
 );
 
 /* ================================================================
-   Aggregate media analytics (scheduled — called from index.js)
-   Collects daily upload counts and storage stats per user.
+   Aggregate media analytics — runs daily at 02:00 Africa/Nairobi
+   Collects previous day's upload counts and storage stats per user,
+   writing one document per uid per day to mediaStatsByDay.
 ================================================================ */
-exports.aggregateMediaStats = async () => {
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const startTs   = new Date(yesterday).getTime();
-  const endTs     = startTs + 86400000;
+exports.aggregateMediaStats = onSchedule(
+  { schedule: 'every day 02:00', timeZone: 'Africa/Nairobi', memory: '256MiB', timeoutSeconds: 300 },
+  async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const startTs   = new Date(yesterday).getTime();
+    const endTs     = startTs + 86400000;
 
-  const snap = await db.collection('mediaAnalytics')
-    .where('ts', '>=', startTs)
-    .where('ts', '<',  endTs)
-    .get();
+    const snap = await db.collection('mediaAnalytics')
+      .where('ts', '>=', startTs)
+      .where('ts', '<',  endTs)
+      .get();
 
-  const byUser = {};
-  snap.forEach(d => {
-    const r = d.data();
-    if (!r.uid) return;
-    if (!byUser[r.uid]) byUser[r.uid] = { uploads: 0, storageSaved: 0, totalSize: 0 };
-    if (r.event === 'upload') {
-      byUser[r.uid].uploads++;
-      byUser[r.uid].totalSize    += (r.originalSize || 0);
-      byUser[r.uid].storageSaved += ((r.originalSize || 0) - (r.storedSize || 0));
-    }
-  });
+    const byUser = {};
+    snap.forEach(d => {
+      const r = d.data();
+      if (!r.uid) return;
+      if (!byUser[r.uid]) byUser[r.uid] = { uploads: 0, storageSaved: 0, totalSize: 0 };
+      if (r.event === 'upload') {
+        byUser[r.uid].uploads++;
+        byUser[r.uid].totalSize    += (r.originalSize || 0);
+        byUser[r.uid].storageSaved += ((r.originalSize || 0) - (r.storedSize || 0));
+      }
+    });
 
-  const batch = db.batch();
-  Object.entries(byUser).forEach(([uid, stats]) => {
-    const ref = db.collection('mediaStatsByDay').doc(`${uid}_${yesterday}`);
-    batch.set(ref, { uid, date: yesterday, ...stats, computedAt: Date.now() }, { merge: true });
-  });
-  await batch.commit();
-};
+    const batch = db.batch();
+    Object.entries(byUser).forEach(([uid, stats]) => {
+      const ref = db.collection('mediaStatsByDay').doc(`${uid}_${yesterday}`);
+      batch.set(ref, { uid, date: yesterday, ...stats, computedAt: Date.now() }, { merge: true });
+    });
+    await batch.commit();
+  }
+);

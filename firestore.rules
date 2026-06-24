@@ -2936,6 +2936,102 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* managerAuditLog — immutable: create-only from backend, read by admin */
+    match /managerAuditLog/{entryId} {
+      allow read:   if isAdmin();
+      allow create: if false;   /* written exclusively by Cloud Functions / server SDK */
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* managerAuthRequests — POS creates, manager responds (approve/deny), CF reads */
+    match /managerAuthRequests/{reqId} {
+      allow read:   if isAuthed();
+      allow create: if isAuthed();
+      allow update: if isAuthed()
+                    && request.resource.data.keys().hasOnly(['status','respondedById','respondedByName','respondedAt'])
+                    && request.resource.data.status in ['approved','denied'];
+      allow delete: if false;
+    }
+
+    /* managerFCMTokens — manager registers their own push token */
+    match /managerFCMTokens/{managerId} {
+      allow read:   if isAdmin();
+      allow write:  if isAuthed();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CONTACT REQUESTS  (buyer→seller contact leads)
+       Written by product.js _submitContactRequest() when a buyer
+       requests contact with a non-premium seller.
+       • create:  authenticated buyer only; uid must match auth uid.
+       • read:    the seller (sellerUid field) or admin.
+       • update:  seller marks as read/responded; admin can update any field.
+       • delete:  admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /contactRequests/{reqId} {
+      allow create: if isAuthed()
+                    && request.resource.data.buyerUid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['buyerUid','sellerUid','productId','message','createdAt']);
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerUid  == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['status','respondedAt','sellerNote']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PRODUCT Q&A  (buyer questions on product pages)
+       Written by product.js openAskQuestion() to productQA collection.
+       • create:  authenticated user; uid must match auth uid.
+       • read:    public (questions + answers are visible to all).
+       • update:  seller can post answer (sellerUid match); admin can edit anything.
+       • delete:  admin or question author (buyerUid match).
+    ══════════════════════════════════════════════════════════════ */
+    match /productQA/{qaId} {
+      allow read:   if true;
+      allow create: if isAuthed()
+                    && request.resource.data.buyerUid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['buyerUid','productId','question','createdAt']);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.buyerUid  == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['question']))
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['answer','answeredAt']));
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.buyerUid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       POS PRINT JOBS  (audit log for network printer proxy)
+       Written by the posPrint Cloud Function (admin SDK) after
+       forwarding ESC/POS bytes to a LAN printer.
+       • read:   owner seller or admin.
+       • create/update/delete: Cloud Functions only (admin SDK).
+    ══════════════════════════════════════════════════════════════ */
+    match /posPrintJobs/{jobId} {
+      allow read:             if isAdmin()
+                              || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if false;  /* CF admin SDK only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SELLER STATS  (real-time counters: pendingOrders, etc.)
+       Incremented by onNewOrderCreated Cloud Function via admin SDK.
+       Sellers read their own stats for dashboard badge counts.
+       Clients may never write — only CFs write via admin SDK.
+    ══════════════════════════════════════════════════════════════ */
+    match /sellerStats/{sellerUid} {
+      allow read:             if isAdmin()
+                              || (isAuthed() && request.auth.uid == sellerUid);
+      allow create, update, delete: if false;  /* CF admin SDK only */
+    }
+
   }
 }
 

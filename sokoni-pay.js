@@ -106,22 +106,23 @@ function getConfig(key,def){ return localStorage.getItem(key)||def; }
 
 function saveBookingFee(record){
   const r=getRecords("sokoniBookingFees"); r.unshift(record); saveRecords("sokoniBookingFees",r);
+  /* Use the v8 compat Firestore instance (window.firebaseDB) with the v8 API.
+     Previously this imported the v9 modular SDK and passed the v8 compat instance
+     to v9 doc() — causing silent write failures. Fixed to stay in v8 compat. */
   (function(){
-    var FS='https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-    import(FS).then(function(m){
-      var db=window.firebaseDB; if(!db) return;
-      var auth=window.firebaseAuth; var uid=(auth&&auth.currentUser&&auth.currentUser.uid)||null;
-      if(!uid) return; /* Must be authenticated to write bookingFees */
-      var id=record.ref||('BF'+Date.now());
-      /* Firestore rule requires uid, amount, type fields */
-      var fsRecord=Object.assign({},record,{
-        uid:uid,
-        amount:record.totalPaid||record.depositAmount||record.amount||0,
-        type:'booking_fee',
-        savedAt:m.serverTimestamp()
-      });
-      m.setDoc(m.doc(db,'bookingFees',id),fsRecord).catch(function(){});
-    }).catch(function(){});
+    var db=window.firebaseDB; if(!db) return;
+    var auth=window.firebaseAuth; var uid=(auth&&auth.currentUser&&auth.currentUser.uid)||null;
+    if(!uid) return; /* Must be authenticated to write bookingFees */
+    var id=record.ref||('BF'+Date.now());
+    /* Firestore rule requires uid, amount, type fields */
+    var serverTs=window.firebase?.firestore?.FieldValue?.serverTimestamp?.();
+    var fsRecord=Object.assign({},record,{
+      uid:uid,
+      amount:record.totalPaid||record.depositAmount||record.amount||0,
+      type:'booking_fee',
+      savedAt:serverTs||Date.now()
+    });
+    db.collection('bookingFees').doc(id).set(fsRecord).catch(function(){});
   })();
 }
 function saveCommissionRecord(record){

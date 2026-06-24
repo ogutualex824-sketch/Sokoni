@@ -279,6 +279,39 @@ const PosPrinter = (function () {
     if (!char) throw new Error('Could not find writable characteristic. Try pairing the printer first.');
     _conn = { device, server, char };
     _type = 'bluetooth';
+
+    /* Auto-reconnect on GATT server disconnect */
+    device.addEventListener('gattserverdisconnected', async () => {
+      console.warn('[PosPrinter] Bluetooth disconnected — scheduling reconnect');
+      _conn = null;
+      /* Notify PosDeviceManager if loaded — it manages the backoff loop */
+      if (window.PosDeviceManager) {
+        const matched = PosDeviceManager.getAll().find(d => d.connectionMethod === 'bluetooth' && d.meta?.btName === device.name);
+        if (matched) { PosDeviceManager._scheduleReconnect(matched.id); return; }
+      }
+      /* Standalone fallback: attempt reconnect up to 5 times with backoff */
+      let attempt = 0;
+      const tryReconnect = async () => {
+        if (attempt++ >= 5) return;
+        await new Promise(r => setTimeout(r, Math.min(3000 * Math.pow(2, attempt - 1), 60000)));
+        try {
+          const s = await device.gatt.connect();
+          let ch = null;
+          const BT_PAIRS = [
+            ['0000ffe0-0000-1000-8000-00805f9b34fb','0000ffe1-0000-1000-8000-00805f9b34fb'],
+            ['000018f0-0000-1000-8000-00805f9b34fb','00002af1-0000-1000-8000-00805f9b34fb'],
+            ['e7810a71-73ae-499d-8c15-faa9aef0c3f2','bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'],
+          ];
+          for (const [su, cu] of BT_PAIRS) {
+            try { const svc = await s.getPrimaryService(su); ch = await svc.getCharacteristic(cu); if (ch) break; } catch (_) {}
+          }
+          if (ch) { _conn = { device, server: s, char: ch }; _type = 'bluetooth'; console.info('[PosPrinter] Reconnected via Bluetooth'); }
+          else tryReconnect();
+        } catch (_) { tryReconnect(); }
+      };
+      tryReconnect();
+    });
+
     return device.name || 'Bluetooth Printer';
   }
 
@@ -337,12 +370,41 @@ const PosPrinter = (function () {
         await _conn.device.transferOut(_conn.endpointNum, bytes.slice(i, i + MTU));
       }
     } else if (_type === 'network') {
-      // In production: send via Cloud Function / local WebSocket bridge
-      await fetch(`/api/pos-print?host=${_conn.host}&port=${_conn.port}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
+      /* Forward ESC/POS bytes through the posPrint Cloud Function.
+         The function validates auth, SSRF-guards the host, and opens
+         a raw TCP socket to the printer on port 9100 (or custom port). */
+      const CF_BASE = 'https://us-central1-sokoni-aeb26.cloudfunctions.net';
+      const shopId  = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.shopId) || '';
+
+      /* Obtain Firebase ID token for auth */
+      let idToken = '';
+      try {
+        const fb   = window.firebase || window.firebaseApp;
+        const auth = fb && (typeof fb.auth === 'function' ? fb.auth() : fb.auth);
+        if (auth && auth.currentUser) {
+          idToken = await auth.currentUser.getIdToken();
+        }
+      } catch (_) {}
+
+      const qs = new URLSearchParams({
+        host:   _conn.host,
+        port:   String(_conn.port || 9100),
+        shopId,
+      });
+
+      const resp = await fetch(`${CF_BASE}/posPrint?${qs}`, {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/octet-stream',
+          'Authorization': idToken ? `Bearer ${idToken}` : '',
+        },
         body: bytes,
-      }).catch(() => { throw new Error('Network printer unreachable'); });
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error('Network printer error: ' + (errBody.error || resp.status));
+      }
     }
   }
 
@@ -404,10 +466,30 @@ const PosPrinter = (function () {
     _type = null;
   }
 
+  /* Raw byte sender — used by SokoniPrintEngine for custom ESC/POS documents */
+  async function sendRaw(bytes) { return _send(bytes); }
+
+  /* ESC/POS QR code command builder (GS ( k) */
+  function buildQR(data, size = 6, ecLevel = 'M') {
+    const ecMap = { L: 48, M: 49, Q: 50, H: 51 };
+    const ec = ecMap[ecLevel] ?? 49;
+    const encoded = [];
+    for (let i = 0; i < data.length; i++) encoded.push(data.charCodeAt(i) & 0x7f);
+    const dLen = encoded.length + 3;
+    return new Uint8Array([
+      GS, 0x28, 0x6b, 4, 0, 49, 65, 50, 0,
+      GS, 0x28, 0x6b, 3, 0, 49, 67, Math.min(Math.max(size, 1), 16),
+      GS, 0x28, 0x6b, 3, 0, 49, 69, ec,
+      GS, 0x28, 0x6b, dLen & 0xff, (dLen >> 8) & 0xff, 49, 80, 48, ...encoded,
+      GS, 0x28, 0x6b, 3, 0, 49, 81, 48,
+    ]);
+  }
+
   return {
     connectBluetooth, connectUSB, connectNetwork, connectBrowser,
     print, printLabel, testPrint, openCashDrawer, printBrowser,
     isConnected, getType, disconnect, setPaperWidth, buildReceipt,
+    sendRaw, buildQR,
   };
 })();
 

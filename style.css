@@ -797,8 +797,8 @@ body{
 
 .back-to-top-btn {
     position: fixed;
-    bottom: 80px;
-    right: 18px;
+    bottom: var(--sk-scroll-bottom, 136px);
+    right: var(--sk-fab-right, 18px);
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -811,9 +811,9 @@ body{
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 9000;
+    z-index: var(--sk-z-scroll-top, 520);
     box-shadow: 0 4px 16px rgba(113,255,0,0.35);
-    transition: opacity .25s, transform .25s;
+    transition: opacity .25s, transform .25s, bottom .25s;
 }
 
 .back-to-top-btn.visible {

@@ -213,63 +213,64 @@ else{
 
         <div class="premium-product-view">
 
-            <!-- LEFT -->
-
+            <!-- LEFT — GALLERY v2 -->
            <div class="premium-product-gallery">
-
-    <!-- MAIN IMAGE -->
-
-    <img 
-
-    src="${product?.image || 'assets/default-product.png'}"
-
-    class="main-product-image"
-
-    id="mainProductImage"
-
-    >
-
-
-
-    <!-- THUMBNAILS -->
-
-    <div class="thumbnail-gallery">
-        ${(()=>{
-            const imgs = (product.images && product.images.length)
-                ? product.images
-                : [product.image || 'assets/default-product.png'];
-            return imgs.slice(0, 5).map(img =>
-                `<img src="${img}" onclick="changeImage(this.src)" class="thumb-img">`
-            ).join("");
-        })()}
-    </div>
-
-
+            ${(()=>{
+                const allMedia = [];
+                if (product.videoUrl) allMedia.push({ type:'video', src: product.videoUrl });
+                const imgs = (product.images && product.images.length)
+                  ? product.images
+                  : (product.image ? [product.image] : ['assets/default-product.png']);
+                imgs.forEach(i => allMedia.push({ type:'image', src: i }));
+                const first = allMedia[0];
+                const thumbsHtml = allMedia.map((m, idx) =>
+                  `<div class="prd-thumb ${idx===0?'active':''} ${m.type==='video'?'prd-video-thumb':''}" data-idx="${idx}" onclick="_prdGalleryGo(${idx})">`+
+                    (m.type==='video'
+                      ? `<video src="${m.src}" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>`
+                      : `<img src="${m.src}" alt="" loading="lazy">`)+
+                  `</div>`
+                ).join('');
+                const dotsHtml = allMedia.length > 1
+                  ? `<div class="prd-gallery-dots">${allMedia.map((_,i)=>`<div class="prd-gallery-dot${i===0?' active':''}" onclick="_prdGalleryGo(${i})"></div>`).join('')}</div>`
+                  : '';
+                const navHtml = allMedia.length > 1
+                  ? `<button class="prd-gallery-nav prev" onclick="event.stopPropagation();_prdGalleryPrev()" aria-label="Previous">&#x2039;</button><button class="prd-gallery-nav next" onclick="event.stopPropagation();_prdGalleryNext()" aria-label="Next">&#x203a;</button>`
+                  : '';
+                return `<div class="prd-gallery-wrap" id="prdGalleryWrap">
+                  <div class="prd-gallery-main" id="prdGalleryMain" onclick="_prdLightboxOpen()" title="Tap to enlarge">
+                    ${first.type==='video'
+                      ? `<video id="prdMainVid" src="${first.src}" controls muted playsinline style="width:100%;height:100%;object-fit:contain;"></video>`
+                      : `<img id="prdMainImg" src="${first.src}" alt="${(product.name||'').replace(/"/g,'&quot;')}">`}
+                    ${navHtml}
+                    <div class="prd-gallery-zoom-hint">Tap to zoom</div>
+                  </div>
+                  ${dotsHtml}
+                  <div class="prd-thumb-strip">${thumbsHtml}</div>
+                </div>`;
+            })()}
+           </div>
 
             <!-- RIGHT -->
 
             <div class="premium-product-info">
 
-                <p class="product-tag">
+                <p class="product-tag">🔥 Trending Product</p>
 
-                    🔥 Trending Product
+                <h1>${(product.name||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</h1>
 
-                </p>
-
-
-
-                <h1>
-
-                    ${product.name}
-
-                </h1>
-
-                <!-- Seller info row with verification badge -->
+                <!-- Seller card v2 -->
                 ${(product.sellerName || product.sellerUid) ? `
-                <a href="store.html?id=${product.sellerUid||product.sellerId||''}" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;margin-bottom:10px;text-decoration:none;transition:background .15s;" onmouseover="this.style.background='rgba(113,255,0,0.07)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
-                    <span style="font-size:18px;">🏪</span>
-                    <span style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.8);">${product.sellerName||'View Store'}</span>
-                    <span id="sellerVerifiedBadge" style="display:none;font-size:11px;font-weight:800;color:#00c864;background:rgba(0,200,100,0.12);border:1px solid rgba(0,200,100,0.3);border-radius:6px;padding:2px 7px;">✅ Verified</span>
+                <a href="store.html?id=${product.sellerUid||product.sellerId||''}" class="prd-seller-card" id="prdSellerCard">
+                    <div class="prd-seller-avatar" id="prdSellerAvatar">&#x1F3EA;</div>
+                    <div class="prd-seller-info">
+                        <div class="prd-seller-name" id="prdSellerName">${(product.sellerName||'View Store').replace(/</g,'&lt;')}</div>
+                        <div class="prd-seller-meta">
+                            <span class="prd-seller-chip verified" id="sellerVerifiedBadge" style="display:none;">&#x2705; Verified</span>
+                            <span class="prd-seller-chip rating" id="prdSellerRating" style="display:none;"></span>
+                            <span class="prd-seller-chip location" id="prdSellerLoc" style="display:none;"></span>
+                        </div>
+                    </div>
+                    <span class="prd-seller-arrow">&#x203a;</span>
                 </a>` : ''}
 
                 ${product.kebsCert
@@ -352,55 +353,56 @@ else{
 
 
 
-                <!-- ACTIONS -->
-
-                <div class="premium-product-actions">
-
-                    <button 
-
-                    class="premium-cart-btn"
-
-                    onclick="addToCart()"
-
-                    >
-
-                        Add To Cart
-
-                    </button>
-
-
-
-                    <button 
-
-                    class="premium-buy-btn"
-
-                    onclick="buyNowProduct()"
-
-                    >
-
-                        Buy Now
-
-                    </button>
-
+                <!-- TRUST STRIP -->
+                <div class="prd-trust-strip" id="prdTrustStrip">
+                    <div class="prd-trust-item" id="prdTrustVerified" style="display:none;"><span class="ti-icon">&#x2705;</span> Verified Seller</div>
+                    <div class="prd-trust-item green"><span class="ti-icon">&#x1F512;</span> Secure Payment</div>
+                    <div class="prd-trust-item"><span class="ti-icon">&#x1F6E1;&#xFE0F;</span> Buyer Protection</div>
+                    <div class="prd-trust-item"><span class="ti-icon">&#x1F4E6;</span> Fast Delivery</div>
                 </div>
 
-                <!-- SECONDARY ACTIONS: WhatsApp + Make Offer + Wishlist -->
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-                    <button onclick="contactSellerWhatsApp()" style="display:flex;align-items:center;gap:7px;padding:10px 16px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;">
-                        <i class="fab fa-whatsapp"></i> Chat Seller
-                    </button>
-                    <button onclick="openMakeOffer()" style="display:flex;align-items:center;gap:7px;padding:10px 16px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.25);color:#ff9800;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;flex:1;">
-                        🏷️ Make an Offer
-                    </button>
-                    <button onclick="addToWishlistProduct()" style="display:flex;align-items:center;gap:7px;padding:10px 16px;background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.2);color:#ff4d6d;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
-                        ❤️
-                    </button>
-                <!-- SHARE & EARN -->
-                <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.14);border-radius:12px;margin-top:10px;">
-                  <span style="flex:1;font-size:12px;font-weight:800;color:#71ff00;">&#x1F4B8; Share &amp; Earn 5% when friends buy</span>
-                  <button type="button" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');})()" style="padding:8px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:9px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;flex-shrink:0;">&#x1F4E3; Share</button>
+                <!-- DELIVERY + STOCK -->
+                ${(()=>{
+                    var stock = product.stock != null ? Number(product.stock) : null;
+                    var chipClass = 'in-stock', chipText = '&#x2714; In Stock';
+                    if (stock !== null) {
+                        if (stock <= 0) { chipClass = 'out-of-stock'; chipText = '&#x2716; Out of Stock'; }
+                        else if (stock <= 5) { chipClass = 'low-stock'; chipText = '&#x26A0; Only ' + stock + ' left'; }
+                    }
+                    var deliveryCopy = product.deliveryTime
+                        ? 'Delivery: ' + product.deliveryTime
+                        : (product.location || product.county ? 'Ships from ' + (product.location || product.county) + ' · 1–3 days' : 'Delivery estimated in 1–3 business days');
+                    return `<div class="prd-delivery-bar" id="prdDeliveryBar">
+                    <span class="dv-icon">&#x1F6F5;</span>
+                    <span id="prdDeliveryEst">${deliveryCopy}</span>
+                    <span class="prd-stock-chip ${chipClass}" id="prdStockChip" style="margin-left:auto;">${chipText}</span>
+                </div>`;
+                })()}
+
+                <!-- ACTIONS — Premium CTA v2 -->
+                <div style="margin-top:16px;">
+                    <button class="prd-cta-primary" onclick="buyNowProduct()">&#x26A1; Buy Now</button>
+                    <div class="prd-cta-row">
+                        <button class="prd-cta-secondary" onclick="addToCart()">&#x1F6D2; Add to Cart</button>
+                        <button onclick="openMakeOffer()" class="prd-cta-secondary" style="flex:0 0 auto;padding:14px 16px;">&#x1F3F7;&#xFE0F; Offer</button>
+                    </div>
+                    <div class="prd-cta-row" style="margin-top:8px;">
+                        <button class="prd-cta-icon-btn whatsapp" id="prdWaBtn" onclick="contactSellerGated()">
+                            &#x1F4AC; Chat Seller
+                        </button>
+                        <button class="prd-cta-icon-btn wishlist" onclick="addToWishlistProduct()">&#x2764;&#xFE0F; Save</button>
+                        <button class="prd-cta-icon-btn share" onclick="(function(){var url=window.SokoniReferral?SokoniReferral.getShareURL(window.location.href):window.location.href;if(window.SokoniSocial&&product)SokoniSocial.openShareModal({id:product.id||'p',name:product.name||'Product',category:product.category||'',tagline:product.description||'',rating:product.rating||5,type:'product',shareURL:url});else if(navigator.share)navigator.share({title:product&&product.name||'SOKONI',url:url}).catch(function(){});else window.open('https://wa.me/?text='+encodeURIComponent((product&&product.name||'Check this out')+' on SOKONI: '+url),'_blank');})()">&#x1F4E4; Share</button>
+                    </div>
                 </div>
 
+                <!-- MAKE AN OFFER PANEL -->
+                <div id="offerPanel" style="display:none;margin-top:14px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.2);border-radius:14px;padding:16px;">
+                    <div style="font-size:14px;font-weight:800;color:white;margin-bottom:8px;">&#x1F3F7;&#xFE0F; Make an Offer</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:10px;">Listed at <strong style="color:#71ff00;">KES ${Number(product.price).toLocaleString()}</strong> — offer the seller a price.</div>
+                    <input type="number" id="offerPrice" placeholder="Your offer price (KES)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:14px;outline:none;font-family:inherit;margin-bottom:8px;">
+                    <input type="text" id="offerMsg" placeholder="Message to seller (optional)" style="width:100%;padding:12px 14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:13px;outline:none;font-family:inherit;margin-bottom:10px;">
+                    <button onclick="submitOffer()" style="padding:11px 24px;background:linear-gradient(135deg,#ff9800,#e06000);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">&#x1F4E4; Send Offer</button>
+                    <div id="offerConfirm" style="margin-top:8px;font-size:12px;"></div>
                 </div>
 
                 <!-- MAKE AN OFFER PANEL -->
@@ -579,6 +581,33 @@ else{
 
         </div>
 
+        <!-- SPECS -->
+        ${product.specs && product.specs.length ? `
+        <div class="prd-specs-section" id="prdSpecsSection">
+            <div class="prd-specs-title">&#x1F4CB; Specifications</div>
+            <table class="prd-specs-table">
+                ${product.specs.map(s=>`<tr><td>${(s.key||'').replace(/</g,'&lt;')}</td><td>${(s.value||'').replace(/</g,'&lt;')}</td></tr>`).join('')}
+            </table>
+        </div>` : ''}
+
+        <!-- Q&A -->
+        <div class="prd-qa-section" id="prdQaSection">
+            <div class="prd-qa-title">&#x2753; Questions &amp; Answers</div>
+            <div id="prdQaList">
+                <div style="font-size:13px;color:rgba(255,255,255,0.3);text-align:center;padding:10px 0;">No questions yet. Be the first to ask!</div>
+            </div>
+            <button class="prd-qa-ask" onclick="openAskQuestion()">&#x2B50; Ask the seller a question</button>
+        </div>
+
+        <!-- RECENTLY VIEWED -->
+        <div class="prd-rv-section" id="prdRvSection" style="display:none;">
+            <div class="prd-rv-header">
+                <div class="prd-rv-dot"></div>
+                <span>Recently Viewed</span>
+            </div>
+            <div class="prd-rv-strip" id="prdRvStrip"></div>
+        </div>
+
         <!-- YOU MAY LIKE -->
         <div class="yml-section" id="youMayLikeSection">
             <div class="yml-header">
@@ -586,10 +615,10 @@ else{
                     <span class="yml-dot"></span>
                     <h2 class="yml-title">You May Also Like</h2>
                 </div>
-                <a href="category.html?cat=${product.category||'all'}" class="yml-see-all">See All →</a>
+                <a href="category.html?cat=${product.category||'all'}" class="yml-see-all">See All &#x2192;</a>
             </div>
             <div class="yml-grid" id="relatedProductsGrid">
-                <div style="color:rgba(255,255,255,0.25);padding:20px;font-size:12px;">Loading…</div>
+                <div style="color:rgba(255,255,255,0.25);padding:20px;font-size:12px;">Loading&#x2026;</div>
             </div>
         </div>
 
@@ -613,12 +642,29 @@ else{
             var db  = getFirestore(app);
 
             /* Verification badge */
+            var isVerified = false;
             if(sellerUid){
                 var vSnap = await getDoc(doc(db,'verifications',sellerUid));
+                isVerified = vSnap.exists() && vSnap.data().status === 'approved';
                 var badge = document.getElementById('sellerVerifiedBadge');
-                if(badge && vSnap.exists() && vSnap.data().status === 'approved'){
-                    badge.style.display = 'inline-block';
-                }
+                if(badge && isVerified) badge.style.display = '';
+                var trustBadge = document.getElementById('prdTrustVerified');
+                if(trustBadge && isVerified) trustBadge.style.display = '';
+            }
+
+            /* Check premium status for WhatsApp gating */
+            if(sellerUid){
+                try {
+                    var subSnap = await getDoc(doc(db,'subscriptions',sellerUid));
+                    var subData = subSnap.exists() ? subSnap.data() : {};
+                    var isPremium = subData.status === 'active' && (subData.planId||'').indexOf('free') === -1;
+                    window._prdSellerIsPremium = isPremium;
+                    window._prdSellerPhone    = subData.phone || product.sellerPhone || '';
+                    window._prdSellerWhatsApp = subData.whatsapp || product.sellerWhatsApp || '';
+                    /* Update Chat button label */
+                    var waBtn = document.getElementById('prdWaBtn');
+                    if(waBtn && isPremium) waBtn.innerHTML = '&#x1F4AC; WhatsApp Seller';
+                } catch(_){}
             }
 
             /* Seller rating from ratings collection */
@@ -632,16 +678,31 @@ else{
                 if(count > 0){
                     var avg = (total/count).toFixed(1);
                     var stars = '★'.repeat(Math.round(total/count)) + '☆'.repeat(5-Math.round(total/count));
-                    var sellerLink = document.querySelector('a[href*="store.html"]');
-                    if(sellerLink && !sellerLink.querySelector('.seller-rating-pill')){
-                        var pill = document.createElement('span');
-                        pill.className = 'seller-rating-pill';
-                        pill.style.cssText = 'font-size:11px;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);border-radius:6px;padding:2px 7px;white-space:nowrap;';
-                        pill.textContent = stars + ' ' + avg + ' (' + count + ')';
-                        sellerLink.appendChild(pill);
-                    }
+                    var ratingEl = document.getElementById('prdSellerRating');
+                    if(ratingEl){ ratingEl.textContent = stars + ' ' + avg; ratingEl.style.display = ''; }
                 }
             }
+
+            /* Seller location from sellers/shops collection */
+            if(sellerUid){
+                try {
+                    var shopSnap = await getDoc(doc(db,'shops',sellerUid));
+                    if(!shopSnap.exists()) shopSnap = await getDoc(doc(db,'sellers',sellerUid));
+                    if(shopSnap.exists()){
+                        var sd = shopSnap.data();
+                        var loc = sd.location || sd.county || sd.city || '';
+                        if(loc){
+                            var locEl = document.getElementById('prdSellerLoc');
+                            if(locEl){ locEl.textContent = '📍 ' + loc; locEl.style.display = ''; }
+                        }
+                        if(sd.logoUrl || sd.logo){
+                            var avEl = document.getElementById('prdSellerAvatar');
+                            if(avEl) avEl.innerHTML = '<img src="'+(sd.logoUrl||sd.logo)+'" alt="">';
+                        }
+                    }
+                } catch(_){}
+            }
+
         } catch(e){ /* silent */ }
     })();
 
@@ -745,7 +806,23 @@ function openRelatedProduct(id){
 window.openRelatedProduct = openRelatedProduct;
 
 /* Run after DOM is ready */
-if(product) setTimeout(renderRelatedProducts, 150);
+if(product) {
+    setTimeout(renderRelatedProducts, 150);
+    /* Track + render recently viewed */
+    if (typeof _rvTrackProduct === 'function') {
+        _rvTrackProduct(product);
+    } else {
+        setTimeout(function() {
+            if (typeof _rvTrackProduct === 'function') _rvTrackProduct(product);
+        }, 300);
+    }
+    setTimeout(function() {
+        if (typeof _rvRender === 'function') {
+            var pid = new URLSearchParams(location.search).get('id') || product.id || '';
+            _rvRender(pid);
+        }
+    }, 400);
+}
 
 /* DECREASE */
 
@@ -1170,3 +1247,300 @@ function downloadProductVideo(compress){
 }
 
 window.downloadProductVideo=downloadProductVideo;
+
+/* ═══════════════════════════════════════════════════════
+   GALLERY v2 — swipe, navigation, lightbox
+═══════════════════════════════════════════════════════ */
+(function() {
+    var _media = [];
+    var _idx   = 0;
+
+    function _collectMedia() {
+        _media = [];
+        document.querySelectorAll('.prd-thumb').forEach(function(t) {
+            var img = t.querySelector('img');
+            var vid = t.querySelector('video');
+            if (vid) _media.push({ type:'video', src: vid.src });
+            else if (img) _media.push({ type:'image', src: img.src });
+        });
+    }
+
+    function _setActive(n) {
+        if (!_media.length) _collectMedia();
+        _idx = ((n % _media.length) + _media.length) % _media.length;
+        var m = _media[_idx];
+        var main = document.getElementById('prdGalleryMain');
+        if (!main) return;
+        /* Swap main media */
+        if (m.type === 'video') {
+            main.querySelector('img') && (main.querySelector('img').remove());
+            var existVid = main.querySelector('video#prdMainVid');
+            if (!existVid) {
+                var v = document.createElement('video');
+                v.id = 'prdMainVid'; v.src = m.src; v.controls = true; v.muted = true; v.playsInline = true;
+                v.style.cssText = 'width:100%;height:100%;object-fit:contain;';
+                main.insertBefore(v, main.firstChild);
+            } else { existVid.src = m.src; }
+        } else {
+            main.querySelector('video#prdMainVid') && (main.querySelector('video#prdMainVid').remove());
+            var existImg = document.getElementById('prdMainImg');
+            if (!existImg) {
+                var img = document.createElement('img');
+                img.id = 'prdMainImg'; img.alt = '';
+                main.insertBefore(img, main.firstChild);
+                existImg = img;
+            }
+            existImg.src = m.src;
+        }
+        /* Update thumbs */
+        document.querySelectorAll('.prd-thumb').forEach(function(t, i) { t.classList.toggle('active', i === _idx); });
+        /* Update dots */
+        document.querySelectorAll('.prd-gallery-dot').forEach(function(d, i) { d.classList.toggle('active', i === _idx); });
+    }
+
+    window._prdGalleryGo   = _setActive;
+    window._prdGalleryNext = function() { _setActive(_idx + 1); };
+    window._prdGalleryPrev = function() { _setActive(_idx - 1); };
+
+    /* Touch/swipe on gallery wrap */
+    document.addEventListener('DOMContentLoaded', function() {
+        var wrap = document.getElementById('prdGalleryWrap');
+        if (!wrap) return;
+        _collectMedia();
+        var sx = 0;
+        wrap.addEventListener('touchstart', function(e) { sx = e.changedTouches[0].screenX; }, { passive:true });
+        wrap.addEventListener('touchend', function(e) {
+            var dx = e.changedTouches[0].screenX - sx;
+            if (Math.abs(dx) > 40) dx < 0 ? window._prdGalleryNext() : window._prdGalleryPrev();
+        }, { passive:true });
+    });
+
+    /* Lightbox */
+    function _ensureLightbox() {
+        if (document.getElementById('prd-lightbox')) return;
+        var lb = document.createElement('div');
+        lb.id = 'prd-lightbox';
+        lb.setAttribute('role', 'dialog');
+        lb.setAttribute('aria-modal', 'true');
+        lb.setAttribute('aria-label', 'Product image fullscreen');
+        lb.innerHTML =
+            '<button id="prd-lightbox-close" aria-label="Close">&times;</button>' +
+            '<img id="prd-lightbox-img" alt="Product image" style="display:none;">' +
+            '<video id="prd-lightbox-vid" controls muted playsinline style="display:none;"></video>' +
+            '<div id="prd-lightbox-counter"></div>';
+        document.body.appendChild(lb);
+        lb.querySelector('#prd-lightbox-close').onclick = function() { lb.classList.remove('open'); };
+        lb.addEventListener('click', function(e) { if (e.target === lb) lb.classList.remove('open'); });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') lb.classList.remove('open'); });
+    }
+
+    window._prdLightboxOpen = function() {
+        if (!_media.length) _collectMedia();
+        if (!_media.length) return;
+        _ensureLightbox();
+        var m = _media[_idx];
+        var lb   = document.getElementById('prd-lightbox');
+        var lbImg = document.getElementById('prd-lightbox-img');
+        var lbVid = document.getElementById('prd-lightbox-vid');
+        var lbCnt = document.getElementById('prd-lightbox-counter');
+        if (m.type === 'video') {
+            lbImg.style.display = 'none'; lbVid.style.display = '';
+            lbVid.src = m.src; lbVid.play().catch(function(){});
+        } else {
+            lbVid.style.display = 'none'; lbImg.style.display = '';
+            lbImg.src = m.src;
+        }
+        if (lbCnt) lbCnt.textContent = (_idx + 1) + ' / ' + _media.length;
+        lb.classList.add('open');
+    };
+})();
+
+/* ═══════════════════════════════════════════════════════
+   RECENTLY VIEWED — localStorage tracking + render
+═══════════════════════════════════════════════════════ */
+(function() {
+    var RV_KEY = 'sokoni_recently_viewed';
+    var MAX    = 12;
+
+    function _getList() {
+        try { return JSON.parse(localStorage.getItem(RV_KEY) || '[]'); } catch(_) { return []; }
+    }
+
+    function _saveList(list) {
+        try { localStorage.setItem(RV_KEY, JSON.stringify(list.slice(0, MAX))); } catch(_) {}
+    }
+
+    window._rvTrackProduct = function(p) {
+        if (!p || !p.id) return;
+        var list = _getList().filter(function(x) { return x.id !== p.id; });
+        list.unshift({ id: p.id, name: p.name || '', price: p.price || 0, image: p.image || '' });
+        _saveList(list);
+    };
+
+    window._rvRender = function(currentId) {
+        var list = _getList().filter(function(x) { return x.id !== currentId; }).slice(0, 8);
+        if (!list.length) return;
+        var section = document.getElementById('prdRvSection');
+        var strip   = document.getElementById('prdRvStrip');
+        if (!section || !strip) return;
+        strip.innerHTML = list.map(function(item) {
+            return '<a href="product.html?id=' + encodeURIComponent(item.id) + '" class="prd-rv-card">' +
+                '<div class="prd-rv-img"><img src="' + (item.image || 'assets/default-product.png') + '" alt="" loading="lazy" onerror="this.src=\'assets/default-product.png\'"></div>' +
+                '<div class="prd-rv-name">' + (item.name || '').substring(0, 30).replace(/</g, '&lt;') + '</div>' +
+                '<div class="prd-rv-price">KES ' + Number(item.price || 0).toLocaleString() + '</div>' +
+            '</a>';
+        }).join('');
+        section.style.display = '';
+    };
+})();
+
+/* ═══════════════════════════════════════════════════════
+   PHONE MASKING
+═══════════════════════════════════════════════════════ */
+function _maskPhone(phone) {
+    if (!phone) return '';
+    var p = String(phone).replace(/\s+/g, '');
+    if (p.length < 7) return p;
+    return p.slice(0, 4) + '***' + p.slice(-3);
+}
+
+/* ═══════════════════════════════════════════════════════
+   P13: WhatsApp gating — premium gets direct link,
+         non-premium gets in-app contact request modal
+═══════════════════════════════════════════════════════ */
+function contactSellerGated() {
+    var isPremium = window._prdSellerIsPremium;
+    var waNumber  = window._prdSellerWhatsApp || window._prdSellerPhone || '';
+    if (isPremium && waNumber) {
+        /* Premium seller — direct WhatsApp */
+        var productTitle = (typeof product !== 'undefined' && product.name) ? product.name : 'this product';
+        var msg = 'Hi, I am interested in *' + productTitle + '* listed on SOKONI. ' + window.location.href;
+        var clean = waNumber.replace(/[^0-9]/g,'');
+        if (clean.startsWith('0')) clean = '254' + clean.slice(1);
+        window.open('https://wa.me/' + clean + '?text=' + encodeURIComponent(msg), '_blank');
+    } else {
+        /* Non-premium — open in-app contact request */
+        _openContactRequestModal();
+    }
+}
+window.contactSellerGated = contactSellerGated;
+
+/* Keep legacy name for any remaining references */
+window.contactSellerWhatsApp = contactSellerGated;
+
+/* ═══════════════════════════════════════════════════════
+   P15: Contact Request Modal + Firestore lead record
+═══════════════════════════════════════════════════════ */
+function _ensureContactModal() {
+    if (document.getElementById('prd-contact-modal')) return;
+    var modal = document.createElement('div');
+    modal.id = 'prd-contact-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Contact seller');
+    modal.innerHTML =
+        '<div class="prd-contact-box">' +
+            '<h3>Contact Seller</h3>' +
+            '<p>Send a contact request. The seller will reach out to you directly.</p>' +
+            '<input class="prd-contact-inp" id="prdCrName"  type="text"  placeholder="Your name *" style="font-size:16px;">' +
+            '<input class="prd-contact-inp" id="prdCrPhone" type="tel"   placeholder="Your phone number *" style="font-size:16px;">' +
+            '<textarea class="prd-contact-inp" id="prdCrMsg" rows="2" placeholder="Message (optional)" style="resize:none;"></textarea>' +
+            '<button class="prd-contact-btn" id="prdCrSubmit" onclick="_submitContactRequest()">Send Request</button>' +
+            '<div id="prdCrFeedback" style="margin-top:10px;font-size:13px;"></div>' +
+            '<button onclick="document.getElementById(\'prd-contact-modal\').classList.remove(\'open\')" ' +
+              'style="display:block;width:100%;margin-top:10px;padding:10px;background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;">Cancel</button>' +
+        '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('open'); });
+}
+
+function _openContactRequestModal() {
+    _ensureContactModal();
+    document.getElementById('prd-contact-modal').classList.add('open');
+    setTimeout(function() { var el = document.getElementById('prdCrName'); if (el) el.focus(); }, 150);
+}
+
+async function _submitContactRequest() {
+    var name  = (document.getElementById('prdCrName')  || {}).value || '';
+    var phone = (document.getElementById('prdCrPhone') || {}).value || '';
+    var msg   = (document.getElementById('prdCrMsg')   || {}).value || '';
+    var fb    = document.getElementById('prdCrFeedback');
+    var btn   = document.getElementById('prdCrSubmit');
+    if (!name.trim() || !phone.trim()) {
+        if (fb) { fb.textContent = 'Please enter your name and phone number.'; fb.style.color = '#ff9800'; }
+        return;
+    }
+    /* Basic phone sanitization — no internal storage of full number outside lead record */
+    var cleanPhone = phone.replace(/[^0-9+]/g, '');
+    if (cleanPhone.length < 9) {
+        if (fb) { fb.textContent = 'Please enter a valid phone number.'; fb.style.color = '#ff9800'; }
+        return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    try {
+        var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+        var {getFirestore,collection,addDoc,serverTimestamp} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var cfg = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",
+          projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
+          messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+        var app  = getApps().length ? getApps()[0] : initializeApp(cfg);
+        var db   = getFirestore(app);
+        var pid  = new URLSearchParams(location.search).get('id') || (typeof product !== 'undefined' ? (product.id || '') : '');
+        var lead = {
+            buyerName:    name.trim(),
+            buyerPhone:   cleanPhone,
+            message:      msg.trim(),
+            productId:    pid,
+            productName:  (typeof product !== 'undefined' && product.name) ? product.name : '',
+            sellerUid:    (typeof product !== 'undefined') ? (product.sellerUid || product.sellerId || '') : '',
+            sellerName:   (typeof product !== 'undefined') ? (product.sellerName || '') : '',
+            status:       'pending',
+            createdAt:    serverTimestamp(),
+            source:       'product_page',
+        };
+        await addDoc(collection(db, 'contactRequests'), lead);
+        if (fb) { fb.textContent = '✅ Request sent! The seller will contact you soon.'; fb.style.color = '#71ff00'; }
+        if (btn) { btn.textContent = 'Sent!'; }
+        setTimeout(function() { document.getElementById('prd-contact-modal').classList.remove('open'); }, 2000);
+    } catch(e) {
+        if (fb) { fb.textContent = 'Could not send request. Please try again.'; fb.style.color = '#ff4d4d'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Send Request'; }
+    }
+}
+window._submitContactRequest = _submitContactRequest;
+
+/* ═══════════════════════════════════════════════════════
+   Q&A — ask question modal
+═══════════════════════════════════════════════════════ */
+function openAskQuestion() {
+    var q = prompt('Ask the seller a question about this product:');
+    if (!q || !q.trim()) return;
+    (async function() {
+        try {
+            var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+            var {getFirestore,collection,addDoc,serverTimestamp} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+            var cfg = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",
+              projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",
+              messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+            var app = getApps().length ? getApps()[0] : initializeApp(cfg);
+            var db  = getFirestore(app);
+            var pid = new URLSearchParams(location.search).get('id') || (typeof product !== 'undefined' ? (product.id || '') : '');
+            await addDoc(collection(db, 'productQA'), {
+                productId:  pid,
+                sellerUid:  (typeof product !== 'undefined') ? (product.sellerUid || '') : '',
+                question:   q.trim(),
+                answer:     '',
+                createdAt:  serverTimestamp(),
+            });
+            var list = document.getElementById('prdQaList');
+            if (list) {
+                var item = document.createElement('div');
+                item.className = 'prd-qa-item';
+                item.innerHTML = '<div class="prd-qa-q">Q: ' + q.trim().replace(/</g,'&lt;') + '</div>' +
+                    '<div class="prd-qa-a" style="color:rgba(255,255,255,0.3);font-style:italic;">Awaiting seller reply…</div>';
+                list.insertBefore(item, list.firstChild);
+            }
+        } catch(_) { alert('Could not send your question. Please try again.'); }
+    })();
+}
+window.openAskQuestion = openAskQuestion;

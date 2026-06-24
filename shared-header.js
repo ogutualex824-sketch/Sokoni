@@ -206,7 +206,7 @@
     .sk-ac-footer a { color: #71ff00; text-decoration: none; font-weight: 700; }
 
     /* ── Action buttons ── */
-    #sk-nav-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto; }
+    #sk-nav-actions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; margin-left: auto; }
     .sk-nav-icon-btn {
       display: flex; align-items: center; justify-content: center;
       width: 40px; height: 40px; border-radius: 50%;
@@ -215,6 +215,17 @@
       transition: background .15s;
     }
     .sk-nav-icon-btn:hover { background: rgba(255,255,255,0.08); }
+
+    /* ── Theme toggle specific ── */
+    #sk-theme-btn { font-size: 16px; }
+    #sk-theme-btn:hover { background: rgba(113,255,0,0.1); }
+
+    /* ── Activity button ── */
+    #sk-activity-btn { font-size: 17px; }
+
+    /* ── Hamburger menu button ── */
+    #sk-menu-btn { font-size: 20px; letter-spacing: -1px; }
+    #sk-menu-btn:hover { background: rgba(255,255,255,0.08); }
 
     /* ── Unread count badges ── */
     .sk-badge {
@@ -228,6 +239,7 @@
     .sk-badge.visible { display: flex; align-items: center; justify-content: center; }
     #sk-notif-badge { background: #ff4d6d; color: #fff; }
     #sk-msg-badge   { background: #71ff00; color: #000; }
+    #sk-activity-badge { background: #fbbf24; color: #000; }
 
     /* Keep old dot for pages that still read it */
     .sk-notif-dot {
@@ -264,7 +276,91 @@
     }
     #sk-nav-avatar:hover { background: rgba(113,255,0,0.22); }
 
+    /* ── Full-screen mobile menu overlay ── */
+    #sk-menu-overlay {
+      position: fixed; inset: 0; z-index: 1500;
+      background: rgba(0,0,0,0.92); backdrop-filter: blur(18px);
+      display: none; flex-direction: column;
+      overflow-y: auto;
+      animation: skMenuIn .22s cubic-bezier(.22,.68,0,1.1) both;
+    }
+    #sk-menu-overlay.open { display: flex; }
+    @keyframes skMenuIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+    #sk-menu-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.07);
+      flex-shrink: 0;
+    }
+    #sk-menu-header img { height: 36px; }
+    #sk-menu-close {
+      width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 18px;
+    }
+    #sk-menu-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; padding: 20px;
+    }
+    .sk-menu-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-radius: 14px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+      text-decoration: none; color: rgba(255,255,255,0.85);
+      font-size: 13px; font-weight: 700; transition: all .15s;
+      cursor: pointer;
+    }
+    .sk-menu-item:hover { background: rgba(113,255,0,0.07); border-color: rgba(113,255,0,0.2); color: #71ff00; }
+    .sk-menu-item-icon { font-size: 22px; flex-shrink: 0; }
+    #sk-menu-theme-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; margin: 0 0 8px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    #sk-menu-theme-row span { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.6); }
+    .sk-theme-chips { display: flex; gap: 8px; }
+    .sk-theme-chip {
+      padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 800;
+      border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.55); cursor: pointer; transition: all .15s;
+    }
+    .sk-theme-chip.active { background: rgba(113,255,0,0.12); border-color: rgba(113,255,0,0.35); color: #71ff00; }
+
+    /* ── Light-mode header overrides ── */
+    body.light-mode #sk-top-nav {
+      background: rgba(255,255,255,0.97);
+      border-bottom-color: rgba(0,0,0,0.08);
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+    }
+    body.light-mode #sk-nav-search {
+      background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.12);
+      color: #111;
+    }
+    body.light-mode #sk-nav-search::placeholder { color: rgba(0,0,0,0.4); }
+    body.light-mode .sk-nav-icon-btn { color: #333; }
+    body.light-mode .sk-nav-icon-btn:hover { background: rgba(0,0,0,0.07); }
+    body.light-mode #sk-nav-cart {
+      background: rgba(0,120,0,0.08); border-color: rgba(0,120,0,0.2); color: #1a8800;
+    }
+    body.light-mode #sk-nav-avatar {
+      background: rgba(0,120,0,0.1); border-color: rgba(0,120,0,0.25); color: #1a8800;
+    }
+    body.light-mode .sk-badge { border-color: #fff; }
+    body.light-mode #sk-menu-overlay { background: rgba(255,255,255,0.96); }
+    body.light-mode .sk-menu-item { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.07); color: #333; }
+    body.light-mode .sk-menu-item:hover { background: rgba(0,120,0,0.07); color: #1a8800; border-color: rgba(0,120,0,0.2); }
+    body.light-mode #sk-menu-header { border-bottom-color: rgba(0,0,0,0.07); }
+    body.light-mode #sk-menu-close { border-color: rgba(0,0,0,0.12); background: rgba(0,0,0,0.04); color: #555; }
+    body.light-mode #sk-menu-theme-row { border-top-color: rgba(0,0,0,0.06); }
+    body.light-mode #sk-menu-theme-row span { color: rgba(0,0,0,0.5); }
+    body.light-mode .sk-theme-chip { border-color: rgba(0,0,0,0.12); background: rgba(0,0,0,0.04); color: rgba(0,0,0,0.5); }
+    body.light-mode .sk-theme-chip.active { background: rgba(0,120,0,0.1); border-color: rgba(0,120,0,0.3); color: #1a8800; }
+
     /* ── Mobile: two-row layout — logo + compact actions top, search below ── */
+    @media (max-width: 768px) {
+      /* Hide cart text label on tablet, keep pill icon */
+      #sk-nav-cart-label { display: none; }
+    }
     @media (max-width: 600px) {
       #sk-top-nav {
         height: auto; flex-wrap: wrap; padding: 8px 12px 8px; gap: 6px;
@@ -272,23 +368,26 @@
       }
       #sk-nav-logo { order: 0; flex-shrink: 0; }
       #sk-nav-logo img { height: 36px; }
-      #sk-nav-actions { order: 1; margin-left: auto; gap: 2px; }
+      #sk-nav-actions { order: 1; margin-left: auto; gap: 1px; }
       /* Search drops to full-width second row */
       #sk-nav-search-wrap {
         order: 2; flex: 1 1 100%; max-width: 100%; margin: 0;
       }
       #sk-nav-search { padding: 9px 14px 9px 36px; font-size: 13px; }
-      /* Hide messages from header on mobile — accessible via profile/bottom nav */
-      #sk-nav-actions a[aria-label="Messages"] { display: none !important; }
+      /* On mobile: show Notifications, Activity, Cart, Avatar, Menu
+         Hide: Messages (use bottom-nav/messages page), Theme (use menu overlay chips) */
+      #sk-nav-actions a[aria-label="Messages"],
+      #sk-msg-btn { display: none !important; }
+      #sk-theme-btn { display: none !important; }
+      /* Activity visible on mobile per spec */
+      #sk-activity-btn { display: flex !important; }
       /* Cart pill compact on mobile */
       #sk-nav-cart { padding: 7px 10px; font-size: 11px; }
       /* Avatar slightly smaller */
       #sk-nav-avatar { width: 30px; height: 30px; font-size: 12px; }
-      /* Notification icon compact */
+      /* Notification + menu icons */
       .sk-nav-icon-btn { width: 36px; height: 36px; font-size: 17px; }
-      /* Single-row mobile header is ~52px — override the 64px desktop padding to eliminate black gap */
       body { padding-top: max(52px, calc(52px + env(safe-area-inset-top, 0px))) !important; }
-      /* Two-row (with search) is ~96px */
       body.sk-has-search { padding-top: max(96px, calc(96px + env(safe-area-inset-top, 0px))) !important; }
     }
     /* ── Very small phones ── */
@@ -298,7 +397,6 @@
       #sk-nav-cart { padding: 6px 8px; font-size: 10px; }
       #sk-nav-logo img { height: 32px; }
       #sk-nav-avatar { width: 28px; height: 28px; font-size: 11px; }
-      /* Very small phone header heights: ~45px no-search, ~89px with search — round up to avoid gaps */
       body { padding-top: max(46px, calc(46px + env(safe-area-inset-top, 0px))) !important; }
       body.sk-has-search { padding-top: max(90px, calc(90px + env(safe-area-inset-top, 0px))) !important; }
     }
@@ -353,6 +451,9 @@
     nav.setAttribute('aria-label', 'SOKONI top navigation');
     nav.setAttribute('role', 'navigation');
 
+    const themeMode = (function(){ try { return localStorage.getItem('sokoni-theme')||'dark'; } catch(_){ return 'dark'; } })();
+    const themeIcon = themeMode === 'light' ? '☀️' : themeMode === 'auto' ? '⚙️' : '🌙';
+
     nav.innerHTML =
       /* Logo */
       '<a href="index.html" id="sk-nav-logo" aria-label="SOKONI Home">' +
@@ -377,11 +478,17 @@
       /* Actions */
       '<div id="sk-nav-actions">' +
 
-        /* Notifications — button opens slide-in panel; SokoniNotifCenter.attachBell() wires the rest */
+        /* Notifications */
         '<button type="button" class="sk-nav-icon-btn" aria-label="Notifications" aria-expanded="false" aria-haspopup="dialog" id="sk-notif-btn">' +
           '<span id="sk-notif-bell-icon" aria-hidden="true">🔔</span>' +
           '<span class="sk-badge" id="sk-notif-badge" role="status" aria-label="Unread notifications"></span>' +
         '</button>' +
+
+        /* Activity center */
+        '<a href="notifications.html?tab=activity" class="sk-nav-icon-btn" id="sk-activity-btn" aria-label="Activity" title="Activity feed">' +
+          '<span aria-hidden="true">⚡</span>' +
+          '<span class="sk-badge" id="sk-activity-badge" role="status" aria-label="New activity"></span>' +
+        '</a>' +
 
         /* Messages */
         '<a href="messages.html" class="sk-nav-icon-btn" aria-label="Messages" id="sk-msg-btn">' +
@@ -394,12 +501,102 @@
           '<span aria-hidden="true">🛒</span> <span id="sk-nav-cart-pip" style="display:' + (cartCount > 0 ? 'flex' : 'none') + ';" aria-label="' + (cartCount || 0) + ' items">' + (cartCount || 0) + '</span>' +
         '</a>' +
 
-        /* Avatar */
+        /* Avatar / Profile */
         '<a href="' + profileHref + '" id="sk-nav-avatar" aria-label="Profile">' + initial + '</a>' +
+
+        /* Theme toggle */
+        '<button type="button" class="sk-nav-icon-btn" id="sk-theme-btn" ' +
+          'aria-label="Toggle theme" title="Toggle theme" ' +
+          'onclick="if(window.SokoniTheme){SokoniTheme.toggle();}">' +
+          '<span id="sk-theme-icon" aria-hidden="true">' + themeIcon + '</span>' +
+        '</button>' +
+
+        /* Menu (hamburger) */
+        '<button type="button" class="sk-nav-icon-btn" id="sk-menu-btn" aria-label="Menu" aria-expanded="false" ' +
+          'onclick="document.getElementById(\'sk-menu-overlay\').classList.add(\'open\');this.setAttribute(\'aria-expanded\',\'true\');">' +
+          '<span aria-hidden="true" style="font-size:13px;font-weight:900;letter-spacing:0px;display:flex;flex-direction:column;gap:3px;">' +
+            '<span style="display:block;width:18px;height:2px;background:currentColor;border-radius:2px;"></span>' +
+            '<span style="display:block;width:14px;height:2px;background:currentColor;border-radius:2px;"></span>' +
+            '<span style="display:block;width:18px;height:2px;background:currentColor;border-radius:2px;"></span>' +
+          '</span>' +
+        '</button>' +
 
       '</div>';
 
     return nav;
+  }
+
+  /* ── Build the full-screen menu overlay ── */
+  function _buildMenuOverlay() {
+    if (document.getElementById('sk-menu-overlay')) return;
+    const LINKS = [
+      { icon:'🏠', label:'Home',          href:'index.html' },
+      { icon:'🛍️', label:'Marketplace',   href:'category.html?cat=all' },
+      { icon:'🛠️', label:'Services',       href:'services.html' },
+      { icon:'🍔', label:'Food',           href:'food.html' },
+      { icon:'🏠', label:'Property',       href:'property-hub.html' },
+      { icon:'🚗', label:'Cars',           href:'car-hub.html' },
+      { icon:'🏥', label:'Healthcare',     href:'healthcare.html' },
+      { icon:'⚖️', label:'Legal',          href:'legal-hub.html' },
+      { icon:'📱', label:'Tech Hub',       href:'tech-hub.html' },
+      { icon:'💼', label:'Jobs',           href:'jobs.html' },
+      { icon:'🎤', label:'Events',         href:'entertainment.html' },
+      { icon:'🛵', label:'Deliveries',     href:'delivery.html' },
+      { icon:'🧾', label:'SmartPOS',       href:'pos.html' },
+      { icon:'💬', label:'Messages',       href:'messages.html' },
+      { icon:'🔔', label:'Notifications',  href:'notifications.html' },
+      { icon:'❤️', label:'Wishlist',       href:'wishlist.html' },
+      { icon:'🛒', label:'Cart',           href:'cart.html' },
+      { icon:'👤', label:'Profile',        href:'profile.html' },
+    ];
+
+    const ov = document.createElement('div');
+    ov.id = 'sk-menu-overlay';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-label', 'Site menu');
+    ov.setAttribute('aria-modal', 'true');
+
+    const closeMenu = function() {
+      ov.classList.remove('open');
+      const btn = document.getElementById('sk-menu-btn');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    };
+
+    ov.innerHTML =
+      '<div id="sk-menu-header">' +
+        '<img src="assets/Sokonilogo2.png" alt="SOKONI">' +
+        '<button class="sk-menu-close" id="sk-menu-close" aria-label="Close menu">✕</button>' +
+      '</div>' +
+      '<div id="sk-menu-grid">' +
+        LINKS.map(function(l) {
+          return '<a href="' + l.href + '" class="sk-menu-item" onclick="document.getElementById(\'sk-menu-overlay\').classList.remove(\'open\')">' +
+            '<span class="sk-menu-item-icon">' + l.icon + '</span>' +
+            '<span>' + l.label + '</span>' +
+          '</a>';
+        }).join('') +
+      '</div>' +
+      '<div id="sk-menu-theme-row">' +
+        '<span>Theme</span>' +
+        '<div class="sk-theme-chips">' +
+          '<button class="sk-theme-chip" data-theme="dark" onclick="if(window.SokoniTheme)SokoniTheme.setTheme(\'dark\');document.querySelectorAll(\'.sk-theme-chip\').forEach(function(c){c.classList.toggle(\'active\',c.dataset.theme===\'dark\')});">🌙 Dark</button>' +
+          '<button class="sk-theme-chip" data-theme="light" onclick="if(window.SokoniTheme)SokoniTheme.setTheme(\'light\');document.querySelectorAll(\'.sk-theme-chip\').forEach(function(c){c.classList.toggle(\'active\',c.dataset.theme===\'light\')});">☀️ Light</button>' +
+          '<button class="sk-theme-chip" data-theme="auto" onclick="if(window.SokoniTheme)SokoniTheme.setTheme(\'auto\');document.querySelectorAll(\'.sk-theme-chip\').forEach(function(c){c.classList.toggle(\'active\',c.dataset.theme===\'auto\')});">⚙️ Auto</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(ov);
+
+    ov.querySelector('#sk-menu-close').addEventListener('click', closeMenu);
+    ov.addEventListener('click', function(e) { if (e.target === ov) closeMenu(); });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && ov.classList.contains('open')) closeMenu();
+    });
+
+    /* Mark active theme chip */
+    var savedTheme = (function(){ try { return localStorage.getItem('sokoni-theme')||'dark'; } catch(_){ return 'dark'; } })();
+    ov.querySelectorAll('.sk-theme-chip').forEach(function(c) {
+      c.classList.toggle('active', c.dataset.theme === savedTheme);
+    });
   }
 
   /* ── Update live state without rebuilding ── */
@@ -676,6 +873,18 @@
     const nav = _buildNav();
     document.body.insertBefore(nav, document.body.firstChild);
     if (showSearch) document.body.classList.add('sk-has-search');
+
+    /* Build full-screen menu overlay */
+    _buildMenuOverlay();
+
+    /* Init theme system — SokoniTheme may not be loaded yet; defer if needed */
+    (function _initTheme() {
+      if (window.SokoniTheme) {
+        window.SokoniTheme.init();
+      } else {
+        setTimeout(_initTheme, 200);
+      }
+    })();
 
     /* Tag the main content area for the skip-nav link */
     const mainEl = document.querySelector('main') ||

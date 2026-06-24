@@ -48,92 +48,293 @@ html, body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   SETUP WIZARD
+   SETUP WIZARD — PREMIUM
+   Glassmorphism card on animated gradient background.
 ═══════════════════════════════════════════════════════════ */
+
+/* Animated radial gradient mesh background */
+@keyframes wiz-bg-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes wiz-orb-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(40px, -30px) scale(1.15); }
+}
+@keyframes wiz-orb-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(-30px, 40px) scale(1.1); }
+}
+@keyframes wiz-card-in {
+  from { opacity: 0; transform: translateY(24px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes wiz-progress-fill {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+@keyframes wiz-btn-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
 #pos-wizard {
   position: fixed; inset: 0;
-  background: var(--bg);
+  background: #050508;
   display: flex; align-items: center; justify-content: center;
   z-index: 9999;
   padding: 16px;
+  overflow: hidden;
+}
+
+/* Animated orb layer behind the card */
+#pos-wizard::before,
+#pos-wizard::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+}
+#pos-wizard::before {
+  width: 420px; height: 420px;
+  background: radial-gradient(circle, rgba(113,255,0,0.18) 0%, transparent 70%);
+  top: -80px; left: -60px;
+  animation: wiz-orb-1 8s ease-in-out infinite;
+}
+#pos-wizard::after {
+  width: 360px; height: 360px;
+  background: radial-gradient(circle, rgba(37,99,235,0.14) 0%, transparent 70%);
+  bottom: -60px; right: -40px;
+  animation: wiz-orb-2 10s ease-in-out infinite;
+}
+
+/* Secondary accent orb injected via JS — graceful fallback if absent */
+.wiz-orb-accent {
+  position: absolute;
+  width: 280px; height: 280px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
+  filter: blur(60px);
+  bottom: 10%; left: 20%;
+  animation: wiz-orb-2 12s ease-in-out infinite reverse;
+  pointer-events: none;
 }
 
 .wizard-box {
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 24px;
+  position: relative;
+  background: rgba(16,16,22,0.82);
+  border: 1px solid rgba(113,255,0,0.16);
+  border-radius: 28px;
   width: 100%; max-width: 520px;
-  padding: 40px 36px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+  padding: 44px 40px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04),
+    0 8px 32px rgba(0,0,0,0.6),
+    0 40px 100px rgba(0,0,0,0.8),
+    inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  animation: wiz-card-in .55s cubic-bezier(.22,.68,0,1.2) both;
+  z-index: 1;
+}
+
+/* Subtle top highlight rim */
+.wizard-box::before {
+  content: '';
+  position: absolute;
+  inset: 0; border-radius: inherit;
+  background: linear-gradient(145deg, rgba(113,255,0,0.06) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .wizard-logo {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
-.wizard-logo img { height: 40px; margin-bottom: 8px; }
-.wizard-logo h1 { font-size: 22px; font-weight: 900; color: var(--green); letter-spacing: -.5px; }
-.wizard-logo p  { font-size: 12px; color: var(--txt2); margin-top: 2px; }
 
+.wizard-logo img {
+  height: 48px;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 0 18px rgba(113,255,0,0.4));
+  transition: filter .3s;
+}
+.wizard-logo img:hover { filter: drop-shadow(0 0 26px rgba(113,255,0,0.65)); }
+
+.wizard-logo h1 {
+  font-size: 26px; font-weight: 900; color: #71ff00;
+  letter-spacing: -.6px;
+  text-shadow: 0 0 24px rgba(113,255,0,0.35);
+}
+
+.wizard-logo .wiz-tagline {
+  font-size: 12px; color: rgba(152,152,170,0.8);
+  margin-top: 4px; letter-spacing: .4px;
+}
+
+/* Step progress dots → premium pill track */
 .wizard-steps {
-  display: flex; gap: 6px; margin-bottom: 32px;
+  display: flex; gap: 5px; margin-bottom: 36px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 99px;
+  padding: 3px;
 }
 .wizard-step {
-  flex: 1; height: 4px; border-radius: 99px;
-  background: var(--border2);
-  transition: background .3s;
+  flex: 1; height: 5px; border-radius: 99px;
+  background: rgba(255,255,255,0.06);
+  transition: background .35s, box-shadow .35s;
+  position: relative; overflow: hidden;
 }
-.wizard-step.active  { background: var(--green); }
-.wizard-step.done    { background: var(--green-d); }
+.wizard-step.active {
+  background: var(--green);
+  box-shadow: 0 0 12px rgba(113,255,0,0.55);
+}
+.wizard-step.active::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%);
+  animation: wiz-btn-shimmer 1.8s linear infinite;
+  background-size: 200% auto;
+}
+.wizard-step.done { background: var(--green-d); }
 
-.wizard-panel { display: none; }
+.wizard-panel { display: none; animation: wiz-card-in .35s ease both; }
 .wizard-panel.active { display: block; }
 
-.wizard-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
-.wizard-sub   { font-size: 13px; color: var(--txt2); margin-bottom: 24px; }
-
-.wiz-field { margin-bottom: 16px; }
-.wiz-label { font-size: 12px; font-weight: 600; color: var(--txt2); margin-bottom: 5px; letter-spacing: .3px; }
-.wiz-input {
-  width: 100%; padding: 12px 14px; border-radius: 10px;
-  background: var(--card); border: 1px solid var(--border2);
-  color: var(--txt); font-size: 14px; font-family: inherit;
-  transition: border-color .2s;
+.wizard-title {
+  font-size: 20px; font-weight: 900; margin-bottom: 5px;
+  letter-spacing: -.3px;
+  background: linear-gradient(135deg, #fff 60%, rgba(113,255,0,0.7));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
-.wiz-input:focus { outline: none; border-color: var(--green); }
-.wiz-input::placeholder { color: var(--txt3); }
+.wizard-sub { font-size: 13px; color: var(--txt2); margin-bottom: 28px; }
+
+/* ── Form fields ── */
+.wiz-field { margin-bottom: 18px; }
+.wiz-label {
+  font-size: 11px; font-weight: 700; color: rgba(113,255,0,0.7);
+  margin-bottom: 6px; letter-spacing: .6px; text-transform: uppercase;
+}
+
+.wiz-input {
+  width: 100%; padding: 13px 16px; border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--txt); font-size: 15px; font-family: inherit;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+}
+.wiz-input:focus {
+  outline: none;
+  border-color: rgba(113,255,0,0.5);
+  background: rgba(113,255,0,0.04);
+  box-shadow: 0 0 0 3px rgba(113,255,0,0.1), 0 4px 16px rgba(0,0,0,0.3);
+}
+.wiz-input::placeholder { color: rgba(255,255,255,0.18); }
 
 .wiz-select {
-  width: 100%; padding: 12px 14px; border-radius: 10px;
-  background: var(--card); border: 1px solid var(--border2);
-  color: var(--txt); font-size: 14px; font-family: inherit;
-  cursor: pointer;
+  width: 100%; padding: 13px 16px; border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--txt); font-size: 15px; font-family: inherit;
+  cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2371ff00' width='14' height='14'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+  transition: border-color .2s, box-shadow .2s;
 }
-.wiz-select:focus { outline: none; border-color: var(--green); }
+.wiz-select:focus {
+  outline: none;
+  border-color: rgba(113,255,0,0.5);
+  box-shadow: 0 0 0 3px rgba(113,255,0,0.1);
+}
 
-.wiz-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.wiz-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
+/* ── Buttons ── */
 .wiz-btn {
-  width: 100%; padding: 14px; border-radius: 12px;
+  width: 100%; padding: 15px; border-radius: 14px;
   font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit;
-  border: none; transition: all .2s; letter-spacing: -.2px;
+  border: none; transition: all .22s; letter-spacing: -.1px;
+  position: relative; overflow: hidden;
 }
-.wiz-btn-primary { background: var(--green); color: #000; }
-.wiz-btn-primary:hover { background: var(--green-d); transform: translateY(-1px); }
-.wiz-btn-primary:disabled { background: var(--border2); color: var(--txt3); cursor: not-allowed; transform: none; }
-.wiz-btn-ghost { background: transparent; color: var(--txt2); border: 1px solid var(--border2); margin-bottom: 10px; }
-.wiz-btn-ghost:hover { background: var(--card); color: var(--txt); }
+
+.wiz-btn-primary {
+  background: linear-gradient(135deg, #71ff00 0%, #4db800 100%);
+  background-size: 200% auto;
+  color: #000;
+  box-shadow: 0 4px 20px rgba(113,255,0,0.35);
+}
+.wiz-btn-primary::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.22) 50%, transparent 100%);
+  background-size: 200% auto;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.wiz-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(113,255,0,0.5);
+  background-position: right center;
+}
+.wiz-btn-primary:hover::after { opacity: 1; animation: wiz-btn-shimmer 1.2s linear infinite; }
+.wiz-btn-primary:active  { transform: translateY(0); box-shadow: 0 2px 10px rgba(113,255,0,0.3); }
+.wiz-btn-primary:disabled {
+  background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.25);
+  cursor: not-allowed; transform: none; box-shadow: none;
+}
+
+.wiz-btn-ghost {
+  background: rgba(255,255,255,0.04);
+  color: var(--txt2);
+  border: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 12px;
+}
+.wiz-btn-ghost:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--txt);
+  border-color: rgba(255,255,255,0.18);
+}
 
 .wiz-note {
-  font-size: 11px; color: var(--txt3); margin-top: 8px;
-  padding: 8px 10px; background: var(--card); border-radius: 8px;
+  font-size: 12px; color: rgba(152,152,170,0.7); margin-top: 10px;
+  padding: 10px 14px; border-radius: 10px;
+  background: rgba(113,255,0,0.05);
+  border: 1px solid rgba(113,255,0,0.12);
   border-left: 3px solid var(--green);
+  line-height: 1.5;
 }
 
-.wiz-success { text-align: center; padding: 16px 0; }
-.wiz-success .check { font-size: 64px; margin-bottom: 12px; }
-.wiz-success h2 { font-size: 22px; font-weight: 900; color: var(--green); }
-.wiz-success p  { color: var(--txt2); margin-top: 6px; font-size: 13px; }
+/* ── Success panel ── */
+.wiz-success { text-align: center; padding: 24px 0; }
+.wiz-success .check {
+  font-size: 72px; margin-bottom: 16px;
+  display: block;
+  animation: wiz-card-in .6s cubic-bezier(.22,.68,0,1.4) both;
+  filter: drop-shadow(0 0 20px rgba(113,255,0,0.6));
+}
+.wiz-success h2 {
+  font-size: 26px; font-weight: 900; color: var(--green);
+  text-shadow: 0 0 20px rgba(113,255,0,0.4);
+  letter-spacing: -.4px;
+}
+.wiz-success p { color: var(--txt2); margin-top: 8px; font-size: 14px; line-height: 1.6; }
+
+/* ── Mobile responsive wizard ── */
+@media (max-width: 520px) {
+  .wizard-box { padding: 32px 22px; border-radius: 22px; }
+  .wizard-logo h1 { font-size: 22px; }
+  .wiz-row { grid-template-columns: 1fr; gap: 0; }
+  .wiz-input, .wiz-select { font-size: 16px; } /* prevent iOS zoom */
+}
+@media (max-width: 380px) {
+  .wizard-box { padding: 24px 16px; border-radius: 18px; }
+  .wizard-logo img { height: 38px; }
+  .wizard-logo h1 { font-size: 20px; }
+}
 
 /* ═══════════════════════════════════════════════════════════
    MAIN APP SHELL

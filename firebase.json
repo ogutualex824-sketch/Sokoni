@@ -3,7 +3,7 @@
     "source":          "functions",
     "runtime":         "nodejs22",
     "concurrency":     80,
-    "minInstances":    1,
+    "minInstances":    0,
     "maxInstances":    1000,
     "memory":          "512MiB",
     "timeoutSeconds":  60

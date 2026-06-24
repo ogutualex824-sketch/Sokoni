@@ -39,6 +39,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
+const logger                 = require('firebase-functions/logger');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -318,7 +319,7 @@ exports.searchSystemHealth = onSchedule(
       });
     }
 
-    admin.logger.info('searchSystemHealth: snapshot written', {
+    logger.info('searchSystemHealth: snapshot written', {
       overallStatus,
       algoliaStatus,
       typesenseStatus,
@@ -354,7 +355,7 @@ exports.searchGetHealthHistory = onCall(
 
     const history = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    admin.logger.info('searchGetHealthHistory: returned history', { count: history.length, days: safeDays });
+    logger.info('searchGetHealthHistory: returned history', { count: history.length, days: safeDays });
 
     return { history, count: history.length, days: safeDays };
   }
@@ -400,7 +401,7 @@ exports.searchResolveAlert = onCall(
       resolvedBy:  uid || 'admin',
     });
 
-    admin.logger.info('searchResolveAlert: alert resolved', { alertId, resolvedBy: uid });
+    logger.info('searchResolveAlert: alert resolved', { alertId, resolvedBy: uid });
 
     return { success: true, alertId };
   }

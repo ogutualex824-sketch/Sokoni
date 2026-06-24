@@ -230,7 +230,7 @@
     if (window.matchMedia("(display-mode: standalone)").matches) {
       Notification.requestPermission().then(perm => {
         if (perm === "granted") _setupPushAfterPermission();
-      });
+      }).catch(() => {});
       return;
     }
 
@@ -594,7 +594,7 @@
   }
 
   window.addEventListener("appinstalled", () => {
-    _deferredPrompt = null;
+    window._sokoniInstallEvent = null;
     const b = document.getElementById("swInstallBanner");
     if (b) b.remove();
 
@@ -648,19 +648,41 @@
   /* ══════════════════════════════════════════════════════
      6. ONLINE / OFFLINE STATUS DOT
   ══════════════════════════════════════════════════════ */
-  function _updateOnlineStatus() {
+  let _swOfflineTimer = null;
+
+  /* navigator.onLine is unreliable on VPN/proxy/captive portal.
+     Verify with a real fetch before showing the SW offline banner. */
+  function _verifyConnection() {
+    return fetch('/ping?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  function _applyOnlineState(isOnline) {
     const dot = document.getElementById("sokoniOnlineDot");
     if (dot) {
-      dot.style.background = navigator.onLine ? "#71ff00" : "#ff4444";
-      dot.title = navigator.onLine ? "Online" : "Offline — some features unavailable";
+      dot.style.background = isOnline ? "#71ff00" : "#ff4444";
+      dot.title = isOnline ? "Online" : "Offline — some features unavailable";
     }
-    /* Show offline banner */
-    if (!navigator.onLine) {
+    if (!isOnline) {
       _showOfflineBanner();
     } else {
       const b = document.getElementById("sokoniOfflineBanner");
       if (b) b.remove();
     }
+  }
+
+  function _updateOnlineStatus() {
+    if (!navigator.onLine) {
+      /* Browser confirms offline — act immediately */
+      _applyOnlineState(false);
+      return;
+    }
+    /* Browser says online — debounce 300 ms then verify with a real request */
+    clearTimeout(_swOfflineTimer);
+    _swOfflineTimer = setTimeout(() => {
+      _verifyConnection().then(real => _applyOnlineState(real));
+    }, 300);
   }
 
   function _showOfflineBanner() {

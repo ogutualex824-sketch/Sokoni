@@ -56,11 +56,14 @@
     </div>
 
     <div class="seller-nav-right">
-        <button type="button" class="seller-theme-btn" id="sellerThemeBtn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
-        <a href="ministore.html" class="seller-nav-link seller-nav-icon-btn" title="Visit My Store" onclick="event.preventDefault();goToMyStore()">🏪</a>
-        <a href="profile.html" class="seller-nav-link seller-nav-icon-btn" title="My Profile">👤</a>
-        <a href="community.html" class="seller-nav-link seller-nav-icon-btn" title="Community">💬</a>
-        <a href="subscriptions.html" class="seller-nav-link" title="Upgrade Plan" style="background:rgba(113,255,0,0.07);border-color:rgba(113,255,0,0.18);color:#71ff00;">👑</a>
+        <!-- Notifications — SokoniNotifCenter auto-attaches to #sk-notif-btn -->
+        <button type="button" class="seller-nav-link seller-nav-icon-btn" id="sk-notif-btn" aria-label="Notifications" title="Notifications" style="font-size:18px;position:relative;">&#x1F514;</button>
+        <!-- Theme toggle — delegates to unified SokoniTheme if available -->
+        <button type="button" class="seller-theme-btn" id="sellerThemeBtn" onclick="(function(b){if(window.SokoniTheme){var m=SokoniTheme.toggle();b.textContent=m==='light'?'&#x2600;&#xFE0F;':m==='auto'?'&#x2699;&#xFE0F;':'&#x1F319;';}else{toggleTheme();}})(this)" title="Toggle theme">&#x1F319;</button>
+        <a href="ministore.html" class="seller-nav-link seller-nav-icon-btn" title="Visit My Store" onclick="event.preventDefault();goToMyStore()">&#x1F3EA;</a>
+        <a href="profile.html" class="seller-nav-link seller-nav-icon-btn" title="My Profile">&#x1F464;</a>
+        <a href="community.html" class="seller-nav-link seller-nav-icon-btn" title="Community">&#x1F4AC;</a>
+        <a href="subscriptions.html" class="seller-nav-link" title="Upgrade Plan" style="background:rgba(113,255,0,0.07);border-color:rgba(113,255,0,0.18);color:#71ff00;">&#x1F451;</a>
         <!-- admin access: hidden -->
     </div>
 

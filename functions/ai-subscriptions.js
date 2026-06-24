@@ -328,10 +328,10 @@ const getAISubscriptionStats = onCall(
 ================================================================ */
 const updateAIPlan = onCall(
   { region: 'us-central1', timeoutSeconds: 15, memory: '128MiB' },
-  async (data, context) => {
-    assertAdmin(context);
+  async (request) => {
+    assertAdmin(request);
 
-    const planId = sanitize(data.planId, 30);
+    const planId = sanitize(request.data.planId, 30);
     if (!PLANS[planId]) throw new HttpsError('invalid-argument', `Unknown plan: ${planId}`);
 
     /* Only allow safe numeric/boolean fields — never allow writing uid-level data */
@@ -340,21 +340,21 @@ const updateAIPlan = onCall(
       'quotas', 'features', 'badge', 'tagline',
     ]);
     const config = {};
-    Object.entries(data.config || {}).forEach(([k, v]) => {
+    Object.entries(request.data.config || {}).forEach(([k, v]) => {
       if (ALLOWED_FIELDS.has(k)) config[k] = v;
     });
 
     await db().collection('aiPlanOverrides').doc(planId).set({
-      ...config, planId, updatedAt: Date.now(), updatedBy: context.auth.uid,
+      ...config, planId, updatedAt: Date.now(), updatedBy: request.auth.uid,
     }, { merge: true });
 
     /* Audit */
     await db().collection('auditLogs').add({
       type: 'ai_plan_updated', planId, config,
-      uid: context.auth.uid, ts: Date.now(),
+      uid: request.auth.uid, ts: Date.now(),
     });
 
-    logger.info(`[AISubs] Plan config updated: plan=${planId} by=${context.auth.uid}`);
+    logger.info(`[AISubs] Plan config updated: plan=${planId} by=${request.auth.uid}`);
     return { success: true, planId };
   }
 );

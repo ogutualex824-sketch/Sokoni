@@ -99,6 +99,20 @@ const SPos = (function () {
       PosBoss.branch.init(state.settings);
     }
 
+    /* Sync merchant branding into the Unified Print Engine */
+    if (window.SokoniPrint) {
+      SokoniPrint.setBrand({
+        businessName:    state.settings.bizName,
+        businessAddress: state.settings.bizAddress,
+        businessPhone:   state.settings.bizPhone,
+        businessPin:     state.settings.bizPin,
+        logoUrl:         state.settings.logoUrl || '',
+        receiptFooter:   state.settings.receiptFooter || 'Thank you for shopping with us!',
+        paperWidth:      parseInt(state.settings.paperWidth) || 80,
+        website:         state.settings.website || 'mysokoni.co.ke',
+      });
+    }
+
     /* Boot new modules */
     if (window.PosPlugins) {
       PosPlugins.installBuiltins();
@@ -456,11 +470,34 @@ const SPos = (function () {
       if (!p) return;
       if (p.stock === 0) { toast('Out of stock', 'error'); return; }
 
+      /* Pharmacy: block expired products */
+      if (p.expiryDate && new Date(p.expiryDate) < new Date()) {
+        toast(`⚠ ${p.name} has expired (${p.expiryDate}) — cannot sell`, 'error');
+        return;
+      }
+      /* Pharmacy: warn on near-expiry (≤30 days) */
+      if (p.expiryDate) {
+        const daysLeft = Math.ceil((new Date(p.expiryDate) - Date.now()) / 86400000);
+        if (daysLeft <= 30 && daysLeft > 0) {
+          toast(`⚠ ${p.name} expires in ${daysLeft} day(s) (batch ${p.batchNumber || '—'})`, 'warn');
+        }
+      }
+
       const existing = state.cartItems.find(i => i.id === productId);
       if (existing) {
         existing.qty++;
       } else {
-        state.cartItems.push({ id: p.id, name: p.name, price: p.price, cost: p.cost || 0, qty: 1, taxRate: p.taxRate || 0, unit: p.unit });
+        state.cartItems.push({
+          id: p.id, name: p.name, price: p.price, cost: p.cost || 0, qty: 1,
+          taxRate: p.taxRate || 0, unit: p.unit,
+          /* carry pharmacy/electronics metadata for checkout */
+          batchNumber:          p.batchNumber      || null,
+          expiryDate:           p.expiryDate       || null,
+          requiresPrescription: p.requiresPrescription || false,
+          requiresSerial:       p.requiresSerial   || false,
+          requiresIMEI:         p.requiresIMEI     || false,
+          warrantyMonths:       p.warrantyMonths   || null,
+        });
       }
       cart.render();
     },
@@ -493,6 +530,21 @@ const SPos = (function () {
     removeItem(id) {
       state.cartItems = state.cartItems.filter(i => i.id !== id);
       cart.render();
+    },
+
+    async overridePrice(id, name, currentPrice) {
+      if (!window.ManagerAuth) {
+        toast('Manager Authorization module not loaded', 'error');
+        return;
+      }
+      const newPrice = await ManagerAuth.requestPriceOverride(id, name, currentPrice);
+      if (newPrice === null) return;
+      const item = state.cartItems.find(i => i.id === id);
+      if (!item) return;
+      const oldPrice = item.price;
+      item.price = newPrice;
+      cart.render();
+      toast(`Price override: KES ${oldPrice.toFixed(2)} → KES ${newPrice.toFixed(2)}`, 'info');
     },
 
     clear() {
@@ -565,7 +617,9 @@ const SPos = (function () {
         <div class="cart-item" data-id="${item.id}">
           <div class="cart-item-name">
             ${_esc(item.name)}
-            <small>KES ${Number(item.price).toFixed(2)} / ${item.unit || 'piece'}</small>
+            <small>KES ${Number(item.price).toFixed(2)} / ${item.unit || 'piece'}
+              <button class="cart-price-override" title="Override price" onclick="SPos.cart.overridePrice('${item.id}','${_esc(item.name)}',${item.price})" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:11px;padding:0 2px;margin-left:2px">✏</button>
+            </small>
           </div>
           <div class="cart-item-qty">
             <button class="qty-btn remove" onclick="SPos.cart.updateQty('${item.id}',-1)">−</button>
@@ -629,8 +683,30 @@ const SPos = (function () {
       document.getElementById('disc-value').placeholder = isPct ? 'e.g. 10' : 'e.g. 50';
     },
 
-    applyDiscount() {
+    async applyDiscount() {
       const val = parseFloat(_v('disc-value')) || 0;
+      const isPct = state.discountType === 'pct';
+
+      /* Manager authorization for large discounts */
+      if (window.ManagerAuth && val > 0) {
+        const cfg   = ManagerAuth.getConfig();
+        const sub   = cart.getSubtotal();
+        const pctThreshold = cfg.largeDiscountPctThreshold || 15;
+        const amtThreshold = cfg.largeDiscountAmtThreshold || 500;
+        const isLarge = isPct
+          ? val >= pctThreshold
+          : val >= amtThreshold;
+
+        if (isLarge) {
+          const ok = await ManagerAuth.request('large_discount', {
+            discountPct: isPct ? val : null,
+            amount: isPct ? null : val,
+            cashier: state.currentCashier?.name,
+          });
+          if (!ok) { modal.close('discount-modal'); toast('Discount cancelled — authorization denied', 'error'); return; }
+        }
+      }
+
       state.discountVal = val;
       cart.render();
       modal.close('discount-modal');
@@ -787,6 +863,26 @@ const SPos = (function () {
         timestamp:      Date.now(),
       };
 
+      /* ── Electronics: capture IMEI / serial numbers before committing ── */
+      const electronicsItems = txn.items.filter(i => i.requiresSerial || i.requiresIMEI);
+      if (electronicsItems.length > 0) {
+        const serialMap = {};
+        for (const item of electronicsItems) {
+          const captured = await _captureSerialForItem(item);
+          if (captured === null) {
+            /* User cancelled serial capture — abort checkout */
+            if (window.PosIdempotency) PosIdempotency.unlockPayButton();
+            toast('Checkout cancelled — serial number required for ' + item.name, 'error');
+            return;
+          }
+          serialMap[item.id] = captured;
+        }
+        /* Attach captured serials to txn items */
+        for (const item of txn.items) {
+          if (serialMap[item.id]) Object.assign(item, serialMap[item.id]);
+        }
+      }
+
       /* ── Saga: atomic multi-step write with compensating txns ─ */
       const stockSnapshot = [];  // for rollback
       try {
@@ -816,6 +912,25 @@ const SPos = (function () {
 
         /* Step 4: Register idempotency key (prevent replay) */
         if (window.PosIdempotency) await PosIdempotency.recordKey(receiptNo, { txnId, total });
+
+        /* Step 5: Save serial/IMEI records for electronics */
+        if (window.PosSerial) {
+          for (const item of txn.items) {
+            if (item.serial || item.imei) {
+              await PosSerial.add({
+                productId:     item.id,
+                serial:        item.serial     || null,
+                imei:          item.imei       || null,
+                transactionId: txn.id,
+                customerId:    txn.customerId  || null,
+                soldAt:        Date.now(),
+                warrantyExpiry: item.warrantyMonths
+                  ? new Date(Date.now() + item.warrantyMonths * 30 * 86400000).toISOString()
+                  : null,
+              }).catch(() => {});
+            }
+          }
+        }
 
         /* ── All writes committed ─────────────────────────────── */
       } catch (err) {
@@ -854,9 +969,13 @@ const SPos = (function () {
       const receiptRecord = { transactionId: txn.id, receiptNo: txn.receiptNo, data: receiptData, ts: Date.now() };
       await PosDB.receipts.save(receiptRecord).catch(() => {});
 
-      /* Print receipt */
+      /* Print receipt — use SokoniPrint (enhanced: logo + QR) if available */
       if (state.settings.autoPrint || payInfo.method === 'card') {
-        PosPrinter.print(receiptData).catch(() => {});
+        if (window.SokoniPrint) {
+          SokoniPrint.print('receipt', receiptData).catch(() => PosPrinter.printBrowser(receiptData));
+        } else {
+          PosPrinter.print(receiptData).catch(() => {});
+        }
       }
 
       /* Cash drawer */
@@ -1435,6 +1554,17 @@ const SPos = (function () {
       if (!productId)  { toast('Select a product', 'error'); return; }
       if (qty <= 0)    { toast('Enter quantity > 0', 'error'); return; }
 
+      /* Manager authorization required for stock adjustments */
+      if (window.ManagerAuth) {
+        const productName = _v('si-product-search') || productId;
+        const ok = await ManagerAuth.request('stock_adjustment', {
+          product: productName,
+          amount: qty,
+          cashier: state.currentCashier?.name,
+        });
+        if (!ok) { toast('Stock adjustment cancelled — authorization denied', 'error'); return; }
+      }
+
       const cost    = parseFloat(_v('si-cost'))   || null;
       const expiry  = _v('si-expiry')            || null;
       const notes   = _v('si-notes').trim()      || 'manual_stock_in';
@@ -1889,6 +2019,16 @@ const SPos = (function () {
     async modalAction() {
       if (state.currentShift) {
         const closeAmt = parseFloat(document.getElementById('shift-close-amount')?.value) || 0;
+
+        /* Manager authorization required to close shift */
+        if (window.ManagerAuth) {
+          const ok = await ManagerAuth.request('shift_close', {
+            amount: closeAmt,
+            cashier: state.currentCashier?.name,
+          });
+          if (!ok) { toast('Shift close cancelled — authorization denied', 'error'); return; }
+        }
+
         const closed   = await PosDB.shifts.close(state.currentShift.id, closeAmt);
         state.currentShift = null;
         shift.updateBadge();
@@ -1995,7 +2135,8 @@ const SPos = (function () {
           <td><span class="stock-badge ${t.paymentMethod==='mpesa'?'stock-ok':t.paymentMethod==='card'?'stock-low':''}">${(t.paymentMethod||'cash').toUpperCase()}</span></td>
           <td><div class="row-actions">
             <button class="row-btn" onclick="SPos.sales.reprint('${t.id}')">Reprint</button>
-            <button class="row-btn" onclick="SPos.sales.refundDialog('${t.id}')">Refund</button>
+            <button class="row-btn" onclick="SPos.sales.refundDialog('${t.id}')" ${t.refunded?'disabled style="opacity:.4"':''}>Refund</button>
+            ${!t.voided && !t.refunded ? `<button class="row-btn danger" onclick="SPos.sales.voidDialog('${t.id}')">Void</button>` : (t.voided ? '<span style="font-size:11px;color:var(--txt3)">VOIDED</span>' : '')}
           </div></td>
         </tr>`).join('')}</tbody>
       </table>`;
@@ -2067,6 +2208,18 @@ const SPos = (function () {
     async _processRefund(originalTxn) {
       const checkboxes = document.querySelectorAll('[id^="ref-item-"]:checked');
       if (!checkboxes.length) { toast('Select at least one item to refund', 'error'); return; }
+
+      /* Manager authorization required */
+      if (window.ManagerAuth) {
+        const refundPreview = Array.from(checkboxes).reduce((s, cb) => s + (parseInt(cb.dataset.qty) * parseFloat(cb.dataset.price)), 0);
+        const ok = await ManagerAuth.request('refund', {
+          amount: refundPreview,
+          reason: document.getElementById('refund-reason')?.value || 'customer_request',
+          items: checkboxes.length,
+          cashier: state.currentCashier?.name,
+        });
+        if (!ok) { toast('Refund cancelled — authorization denied', 'error'); return; }
+      }
 
       const reason = document.getElementById('refund-reason')?.value || 'customer_request';
       const method = document.getElementById('refund-method')?.value || 'cash';
@@ -2142,6 +2295,70 @@ const SPos = (function () {
         taxRate:         0,
         paperWidth:      parseInt(state.settings.paperWidth) || 32,
       }).catch(() => {});
+    },
+
+    async voidDialog(txnId) {
+      const t = await PosDB.transactions.getById(txnId);
+      if (!t) { toast('Transaction not found', 'error'); return; }
+      if (t.voided)   { toast('This transaction is already voided', 'error'); return; }
+      if (t.refunded) { toast('Refunded transactions cannot be voided', 'error'); return; }
+
+      const body = `
+        <div style="font-size:13px;color:var(--txt2);margin-bottom:12px">
+          Voiding will mark this transaction as cancelled and restore all stock.
+          This action cannot be undone.
+        </div>
+        <div style="background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px">
+          Receipt <strong>${_esc(t.receiptNo || t.id)}</strong><br>
+          Total: <strong>KES ${_fmt(t.total)}</strong> · ${new Date(t.completedAt || t.timestamp).toLocaleString('en-KE')}
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:800;color:var(--txt3)">VOID REASON</label>
+          <select class="form-select" id="void-reason" style="width:100%;margin-top:4px;padding:10px;font-size:14px">
+            <option value="manager_error">Manager / Cashier Error</option>
+            <option value="customer_cancel">Customer Cancelled</option>
+            <option value="duplicate_entry">Duplicate Entry</option>
+            <option value="system_error">System Error</option>
+            <option value="other">Other</option>
+          </select>
+        </div>`;
+
+      confirm.show('Void Transaction', body, async () => {
+        await sales._processVoid(t);
+      });
+    },
+
+    async _processVoid(txn) {
+      /* Manager authorization required */
+      if (window.ManagerAuth) {
+        const ok = await ManagerAuth.request('void', {
+          amount: txn.total,
+          reason: document.getElementById('void-reason')?.value || 'manager_error',
+          cashier: state.currentCashier?.name,
+        });
+        if (!ok) { toast('Void cancelled — authorization denied', 'error'); return; }
+      }
+
+      const reason = document.getElementById('void-reason')?.value || 'manager_error';
+
+      /* Restore stock for all items */
+      for (const item of (txn.items || [])) {
+        await PosDB.products.adjustStock(item.id, item.qty, 'void:' + txn.id, state.currentCashier?.id);
+      }
+
+      /* Mark transaction as voided */
+      txn.voided    = true;
+      txn.voidedAt  = Date.now();
+      txn.voidReason = reason;
+      txn.voidedBy   = state.currentCashier?.id;
+      txn.voidedByName = state.currentCashier?.name;
+      await PosDB.transactions.save(txn);
+
+      if (window.PosAudit) PosAudit.log('void', { receiptNo: txn.receiptNo, total: txn.total, reason });
+
+      await products.reload();
+      await sales.showHistory();
+      toast(`Transaction ${txn.receiptNo || txn.id} voided`, 'info');
     },
   };
 
@@ -2338,6 +2555,53 @@ const SPos = (function () {
     if (dot) dot.classList.toggle('offline', !online);
     dot.title = online ? 'Online' : 'Offline';
     if (online) sync.run(true);
+  }
+
+  /* ── IMEI / Serial capture dialog (called at checkout for electronics) ── */
+  function _captureSerialForItem(item) {
+    return new Promise(resolve => {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.87);display:flex;align-items:flex-end;justify-content:center';
+      const needsIMEI  = item.requiresIMEI;
+      const needsSerial = item.requiresSerial;
+      ov.innerHTML = `
+        <div style="background:#18181f;border-radius:20px 20px 0 0;width:100%;max-width:420px;padding:20px 20px 36px;font-family:-apple-system,sans-serif;color:#f0f0f6">
+          <div style="font-size:17px;font-weight:800;margin-bottom:4px">📱 Register Device</div>
+          <div style="font-size:12px;color:#9898aa;margin-bottom:16px">${_esc(item.name)}</div>
+          ${needsIMEI ? `<label style="font-size:12px;font-weight:700;color:#9898aa;display:block;margin-bottom:4px">IMEI Number</label>
+            <input id="imei-input" type="tel" maxlength="15" placeholder="15-digit IMEI" autocomplete="off"
+              style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#1e1e28;color:#f0f0f6;font-size:16px;margin-bottom:10px;outline:none">` : ''}
+          ${needsSerial ? `<label style="font-size:12px;font-weight:700;color:#9898aa;display:block;margin-bottom:4px">Serial Number</label>
+            <input id="serial-input" type="text" placeholder="Serial number" autocomplete="off"
+              style="width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#1e1e28;color:#f0f0f6;font-size:16px;margin-bottom:12px;outline:none">` : ''}
+          <div style="font-size:11px;color:#9898aa;margin-bottom:14px">Required for warranty registration</div>
+          <button id="serial-confirm" style="width:100%;padding:14px;background:#71ff00;color:#111;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:8px">Confirm</button>
+          <button id="serial-skip" style="width:100%;padding:12px;background:transparent;border:1px solid rgba(255,255,255,.08);border-radius:12px;font-size:13px;font-weight:600;color:#9898aa;cursor:pointer">Skip (no warranty)</button>
+        </div>`;
+      document.body.appendChild(ov);
+
+      function luhnCheck(n) {
+        if (!/^\d{15}$/.test(n)) return false;
+        let s = 0, alt = false;
+        for (let i = n.length - 1; i >= 0; i--) {
+          let d = parseInt(n[i]);
+          if (alt) { d *= 2; if (d > 9) d -= 9; }
+          s += d; alt = !alt;
+        }
+        return s % 10 === 0;
+      }
+
+      ov.querySelector('#serial-confirm').addEventListener('click', () => {
+        const imei   = needsIMEI   ? (ov.querySelector('#imei-input')?.value || '').trim() : null;
+        const serial = needsSerial ? (ov.querySelector('#serial-input')?.value || '').trim() : null;
+        if (needsIMEI && imei && !luhnCheck(imei)) {
+          toast('Invalid IMEI — must be 15 digits (Luhn check failed)', 'error'); return;
+        }
+        ov.remove();
+        resolve({ imei: imei || null, serial: serial || null });
+      });
+      ov.querySelector('#serial-skip').addEventListener('click', () => { ov.remove(); resolve({ imei: null, serial: null }); });
+    });
   }
 
   function _v(id)          { return (document.getElementById(id)?.value || ''); }

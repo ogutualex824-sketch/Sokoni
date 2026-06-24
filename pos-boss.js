@@ -400,7 +400,14 @@ const PosBoss = (() => {
 
     /* Print button */
     const pBtn = document.getElementById('suc-print-btn');
-    if (pBtn) pBtn.onclick = () => PosPrinter.print({ ...txn, ...bizSettings }).catch(() => PosPrinter.printBrowser({ ...txn, ...bizSettings }));
+    if (pBtn) pBtn.onclick = () => {
+      const d = { ...txn, ...bizSettings };
+      if (window.SokoniPrint) {
+        SokoniPrint.print('receipt', d).catch(() => PosPrinter.printBrowser(d));
+      } else {
+        PosPrinter.print(d).catch(() => PosPrinter.printBrowser(d));
+      }
+    };
 
     /* Delivery button */
     const dBtn = document.getElementById('suc-delivery-btn');

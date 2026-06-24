@@ -112,7 +112,16 @@ const PosNotify = (() => {
   async function sendDailySummary() {
     const start = new Date().setHours(0,0,0,0);
     const end   = new Date().setHours(23,59,59,999);
-    const report = await PosDB.reports.forDateRange(start, end).catch(() => ({}));
+    let report = {};
+    try {
+      /* Build summary from transactions store (PosDB.reports.forDateRange not available) */
+      const all = await PosDB.transactions.getAll();
+      const day = all.filter(t => t.completedAt >= start && t.completedAt <= end && t.status === 'completed');
+      report = {
+        total: day.reduce((s, t) => s + (t.total || 0), 0),
+        count: day.length,
+      };
+    } catch (_) {}
     await send('daily_summary', { revenue: report.total || 0, transactions: report.count || 0 });
   }
 
@@ -171,7 +180,7 @@ const PosMarketing = (() => {
     if (!navigator.onLine) { if (window.SPos) SPos.toast('No internet for SMS', 'error'); return; }
     try {
       const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js');
-      const fns  = getFunctions(window._firebaseApp);
+      const fns  = getFunctions(window.firebaseApp);
       const call = httpsCallable(fns, 'posSendSMS');
       const res  = await call({ phones, message, businessId: window.SPos?.state?.settings?.bizPin });
       if (window.SPos) SPos.toast(`SMS sent to ${res.data?.sent || phones.length} recipients`, 'success');
@@ -345,7 +354,7 @@ const PosOmni = (() => {
     try {
       const { getFirestore, collection, onSnapshot, query, where } =
         await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      const db = getFirestore(window._firebaseApp);
+      const db = getFirestore(window.firebaseApp);
       const q  = query(collection(db, 'products'), where('sellerId', '==', bizPin));
 
       _unsub = onSnapshot(q, async (snap) => {
@@ -377,7 +386,7 @@ const PosOmni = (() => {
     if (!product?.marketplaceId) return;
     const { getFirestore, doc, updateDoc } =
       await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    const db = getFirestore(window._firebaseApp);
+    const db = getFirestore(window.firebaseApp);
     await updateDoc(doc(db, 'products', product.marketplaceId), { stock: product.stock });
   }
 
@@ -656,7 +665,7 @@ const PosRepair = (() => {
     const job = await PosDB.repairs.get(jobId);
     if (!job) throw new Error('Job not found');
     const history = job.history || [];
-    history.push({ status, note, ts: Date.now(), cashier: window.SPos?.state?.cashier?.name });
+    history.push({ status, note, ts: Date.now(), cashier: window.SPos?.state?.currentCashier?.name });
     await PosDB.repairs.update(jobId, { status, updatedAt: Date.now(), history });
     /* Notify customer */
     if (status === 'Ready' && job.customerPhone && window.PosBoss) {
@@ -693,8 +702,8 @@ const PosRepair = (() => {
       customerId:    job.customerId,
       customerName:  job.customerName,
       status:        'completed',
-      cashierId:     window.SPos?.state?.cashier?.id,
-      cashierName:   window.SPos?.state?.cashier?.name,
+      cashierId:     window.SPos?.state?.currentCashier?.id,
+      cashierName:   window.SPos?.state?.currentCashier?.name,
     };
     const txnId = await PosDB.transactions.add(txnData);
     await PosDB.repairs.update(jobId, { status: 'Collected', paidAt: Date.now(), transactionId: txnId });
@@ -779,7 +788,7 @@ const PosRepair = (() => {
     if (window.SPos) SPos.toast(`Job created: ${id}`, 'success');
     if (window.PosAudit) PosAudit.log('product_created', { jobType: 'repair', device: data.deviceName });
     document.getElementById('repair-job-form').style.display = 'none';
-    await renderHub(document.getElementById('repair-job-form').parentElement.id || 'repair-body');
+    await renderHub('repair-body');
   }
 
   async function _openJob(jobId) {

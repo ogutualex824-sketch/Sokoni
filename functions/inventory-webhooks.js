@@ -93,7 +93,6 @@ async function dispatchWebhookEvent(tenantId, event, payload) {
   if (snap.empty) return;
   await Promise.all(snap.docs.map(doc => _dispatch(doc, event, payload)));
 }
-exports.dispatchWebhookEvent = dispatchWebhookEvent;
 
 /* ── Register Webhook ────────────────────────────────────────────── */
 exports.inventoryRegisterWebhook = onCall(CF_OPTS, async req => {

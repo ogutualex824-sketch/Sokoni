@@ -325,6 +325,9 @@ const PosMobile = (() => {
         <button class="more-tile" onclick="PosMobile.closeSheet();PosMobile.tab('audit')">     📋<span>Audit</span></button>
         <button class="more-tile" onclick="PosMobile.closeSheet();PosMobile.tab('settings')">  ⚙️<span>Settings</span></button>
         <button class="more-tile" onclick="PosMobile.closeSheet();PosMobile.openBluetooth()">  🔵<span>Bluetooth</span></button>
+        <button class="more-tile" onclick="PosMobile.closeSheet();window.location='print-station.html'">  🖨️<span>Print Station</span></button>
+        <button class="more-tile" onclick="PosMobile.closeSheet();window.location='manager-auth.html'">   🔐<span>Mgr Auth</span></button>
+        <button class="more-tile" onclick="PosMobile.closeSheet();window.location='commissioning.html'"> 🏭<span>Commission</span></button>
         <button class="more-tile" onclick="PosMobile.closeSheet();PosMobile.installApp()">     📲<span>Install App</span></button>
       </div>
       <div style="height:16px"></div>
@@ -623,6 +626,21 @@ const PosMobile = (() => {
 
   async function _connectCashDrawer() {
     const status = document.getElementById('bt-status');
+
+    /* Manager authorization gate — only enforced when requireManagerForCashDrawer is on */
+    if (window.ManagerAuth) {
+      const cfg = ManagerAuth.getConfig();
+      if (cfg.requireManagerForCashDrawer) {
+        const ok = await ManagerAuth.request('cash_drawer', {
+          cashier: window.state?.currentCashier?.name,
+        });
+        if (!ok) {
+          if (window.SPos) SPos.toast('Cash drawer access denied — authorization required', 'error');
+          return;
+        }
+      }
+    }
+
     if (!navigator.bluetooth) {
       if (status) { status.style.color = 'var(--amber)'; status.textContent = '⚠ Bluetooth not available — requires Chrome on Android.'; }
       return;
