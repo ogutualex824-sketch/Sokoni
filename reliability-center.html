@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reliability Center — SOKONI</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="sokoni-tokens.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    .rc-wrap{max-width:1200px;margin:0 auto;padding:24px 16px 80px}
+    h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+    .rc-sub{color:#6b7280;font-size:.875rem;margin-bottom:24px}
+    .grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+    .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    .card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px}
+    .card-val{font-size:2.25rem;font-weight:800;line-height:1}
+    .card-label{font-size:.75rem;color:#9ca3af;margin-top:4px}
+    .uptime-great{color:#10b981}
+    .uptime-warn{color:#f59e0b}
+    .uptime-poor{color:#ef4444}
+    .section-title{font-size:1rem;font-weight:700;margin:28px 0 12px;display:flex;align-items:center;gap:10px}
+    .period-tabs{display:flex;gap:4px;background:#e5e7eb;border-radius:8px;padding:3px;width:fit-content;margin-bottom:16px}
+    .period-tab{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;background:transparent;color:#6b7280;transition:all .15s}
+    .period-tab.active{background:#fff;color:var(--color-primary,#5b21b6);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+    /* Status timeline */
+    .timeline{display:flex;gap:3px;flex-wrap:nowrap;overflow-x:auto;padding:4px 0;margin-bottom:8px}
+    .tl-block{width:14px;height:32px;border-radius:3px;flex-shrink:0;cursor:pointer;transition:transform .1s}
+    .tl-block:hover{transform:scaleY(1.1)}
+    .tl-healthy{background:#10b981}
+    .tl-degraded{background:#f59e0b}
+    .tl-unreachable{background:#ef4444}
+    .tl-unknown{background:#d1d5db}
+    .tl-legend{display:flex;gap:16px;font-size:.75rem;color:#6b7280;margin-bottom:12px;flex-wrap:wrap}
+    .tl-legend-item{display:flex;align-items:center;gap:4px}
+    .tl-dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+    /* Latency chart */
+    .lat-chart{display:flex;align-items:flex-end;gap:2px;height:80px}
+    .lat-bar{flex:1;min-width:4px;border-radius:2px 2px 0 0;background:var(--color-primary,#5b21b6);opacity:.7;transition:opacity .1s}
+    .lat-bar:hover{opacity:1}
+    .lat-note{font-size:.75rem;color:#9ca3af;margin-top:6px}
+    .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .funnel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+    .funnel-card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);text-align:center;position:relative}
+    .funnel-step{font-size:.7rem;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.05em;margin-bottom:6px}
+    .funnel-count{font-size:1.75rem;font-weight:800;line-height:1}
+    .funnel-rate{font-size:.8rem;color:#6b7280;margin-top:4px}
+    .funnel-arrow{position:absolute;right:-10px;top:50%;transform:translateY(-50%);color:#d1d5db;font-size:1.125rem;z-index:1}
+    .toolbar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+    .btn-refresh{padding:8px 18px;border:none;border-radius:8px;background:var(--color-primary,#5b21b6);color:#fff;font-size:.875rem;font-weight:600;cursor:pointer}
+    .btn-refresh:hover{background:#4c1d95}
+    .ts-note{font-size:.75rem;color:#9ca3af;margin-left:auto}
+    @media(max-width:640px){.card-val{font-size:1.75rem}}
+  </style>
+</head>
+<body>
+<div class="rc-wrap">
+  <h1>Reliability Center</h1>
+  <div class="rc-sub">Platform uptime, latency trends, and conversion funnel</div>
+
+  <div class="toolbar">
+    <button class="btn-refresh" id="btnRefresh">Refresh</button>
+    <div class="ts-note" id="tsNote">Loading...</div>
+  </div>
+
+  <!-- Uptime KPIs -->
+  <div class="grid-4" id="kpiGrid">
+    <div class="card"><div class="card-title">Uptime (7d)</div><div class="skeleton" style="height:2.25rem;width:80%;margin-top:4px"></div></div>
+    <div class="card"><div class="card-title">Avg Firestore</div><div class="skeleton" style="height:2.25rem;width:60%;margin-top:4px"></div></div>
+    <div class="card"><div class="card-title">P95 Firestore</div><div class="skeleton" style="height:2.25rem;width:60%;margin-top:4px"></div></div>
+    <div class="card"><div class="card-title">Health Checks</div><div class="skeleton" style="height:2.25rem;width:70%;margin-top:4px"></div></div>
+  </div>
+
+  <!-- Status Timeline -->
+  <div class="section-title">Status Timeline (last 48 checks)</div>
+  <div class="card" style="margin-bottom:24px">
+    <div class="tl-legend">
+      <div class="tl-legend-item"><div class="tl-dot tl-healthy"></div>Healthy</div>
+      <div class="tl-legend-item"><div class="tl-dot tl-degraded"></div>Degraded</div>
+      <div class="tl-legend-item"><div class="tl-dot tl-unreachable"></div>Down</div>
+      <div class="tl-legend-item"><div class="tl-dot tl-unknown"></div>No data</div>
+    </div>
+    <div id="timeline" class="timeline"></div>
+    <div id="timelineNote" class="lat-note" style="margin-top:8px"></div>
+  </div>
+
+  <!-- Period selector for funnel -->
+  <div class="section-title">Conversion Funnel</div>
+  <div class="period-tabs">
+    <button class="period-tab" data-days="7">7d</button>
+    <button class="period-tab active" data-days="30">30d</button>
+    <button class="period-tab" data-days="90">90d</button>
+  </div>
+  <div class="funnel-grid" id="funnelGrid">
+    <div class="card" style="text-align:center"><div class="skeleton" style="height:1.75rem;width:50%;margin:8px auto"></div></div>
+    <div class="card" style="text-align:center"><div class="skeleton" style="height:1.75rem;width:50%;margin:8px auto"></div></div>
+    <div class="card" style="text-align:center"><div class="skeleton" style="height:1.75rem;width:50%;margin:8px auto"></div></div>
+  </div>
+
+  <!-- Firestore Latency Chart -->
+  <div class="section-title">Firestore Latency (last 48 snapshots)</div>
+  <div class="card" style="margin-bottom:24px">
+    <div id="latChart" class="lat-chart" style="height:80px;align-items:flex-end;gap:2px"></div>
+    <div id="latNote" class="lat-note"></div>
+  </div>
+
+  <!-- Quick Links -->
+  <div class="section-title">External Consoles</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+    <div class="card"><a href="https://console.firebase.google.com/project/sokoni-aeb26/functions/logs" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Function Logs</div><div style="font-size:.8rem;color:#6b7280">Firebase Console →</div></a></div>
+    <div class="card"><a href="https://console.cloud.google.com/monitoring/dashboards?project=sokoni-aeb26" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Cloud Monitoring</div><div style="font-size:.8rem;color:#6b7280">Alert policies, uptime →</div></a></div>
+    <div class="card"><a href="https://console.cloud.google.com/errors?project=sokoni-aeb26" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Error Reporting</div><div style="font-size:.8rem;color:#6b7280">GCP Error Reporting →</div></a></div>
+    <div class="card"><a href="ops-dashboard.html" style="text-decoration:none;color:inherit"><div class="card-title">Ops Dashboard</div><div style="font-size:.8rem;color:#6b7280">Daily counters →</div></a></div>
+  </div>
+</div>
+
+<script src="firebase.js"></script>
+<script type="module">
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+  import { getAuth, onAuthStateChanged }  from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+  const fns                = getFunctions(undefined, "us-central1");
+  const getReliability     = httpsCallable(fns, "getReliabilityMetrics");
+  const getFunnelMetrics   = httpsCallable(fns, "getFunnelMetrics");
+
+  let currentFunnelDays = 30;
+
+  function uptimeColor(pct) {
+    if (pct >= 99)  return "uptime-great";
+    if (pct >= 95)  return "uptime-warn";
+    return "uptime-poor";
+  }
+
+  async function loadReliability() {
+    try {
+      const { data } = await getReliability({ hours: 168 });
+      if (!data.totalSnapshots) {
+        document.getElementById("kpiGrid").innerHTML =
+          `<div class="card" style="grid-column:1/-1;color:#6b7280;font-size:.875rem">No health snapshots yet — <code>recordHealthSnapshot</code> runs hourly</div>`;
+        document.getElementById("timeline").innerHTML =
+          '<div style="color:#9ca3af;font-size:.8rem;padding:8px 0">Snapshots will appear after the first hourly run</div>';
+        return;
+      }
+
+      const up = data.uptime ?? 0;
+      document.getElementById("kpiGrid").innerHTML = `
+        <div class="card">
+          <div class="card-title">Uptime (7d)</div>
+          <div class="card-val ${uptimeColor(up)}">${up}%</div>
+          <div class="card-label">${data.totalSnapshots} checks</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Avg Firestore</div>
+          <div class="card-val">${data.firestore?.avg != null ? data.firestore.avg + "ms" : "—"}</div>
+          <div class="card-label">round-trip</div>
+        </div>
+        <div class="card">
+          <div class="card-title">P95 Firestore</div>
+          <div class="card-val">${data.firestore?.p95 != null ? data.firestore.p95 + "ms" : "—"}</div>
+          <div class="card-label">95th percentile</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Degraded / Down</div>
+          <div class="card-val" style="font-size:1.25rem">${data.degradedPct}% / ${data.downPct}%</div>
+          <div class="card-label">of ${data.totalSnapshots} checks</div>
+        </div>`;
+
+      /* Timeline */
+      const recent = data.recent || [];
+      const blocks = recent.map(s => {
+        const cls = s.status === "healthy" ? "tl-healthy"
+          : s.status === "degraded" ? "tl-degraded"
+          : s.status === "unreachable" ? "tl-unreachable"
+          : "tl-unknown";
+        const ts = s.ts ? new Date(s.ts).toLocaleString() : "";
+        const lat = s.fsLatency != null ? ` · ${s.fsLatency}ms` : "";
+        return `<div class="tl-block ${cls}" title="${s.status}${lat} — ${ts}"></div>`;
+      }).join("");
+
+      document.getElementById("timeline").innerHTML =
+        blocks || '<div style="color:#9ca3af;font-size:.8rem">No recent snapshots</div>';
+      document.getElementById("timelineNote").textContent =
+        recent.length ? `${recent.length} checks shown — most recent on left` : "";
+
+      /* Latency chart */
+      const lats = recent.filter(s => s.fsLatency != null).map(s => s.fsLatency);
+      if (lats.length > 0) {
+        const max = Math.max(...lats, 1);
+        document.getElementById("latChart").innerHTML = lats.map(l =>
+          `<div class="lat-bar" style="height:${Math.max(Math.round(l/max*100),4)}%;flex:1" title="${l}ms"></div>`
+        ).join("");
+        document.getElementById("latNote").textContent =
+          `${lats.length} data points · avg ${Math.round(lats.reduce((a,b)=>a+b,0)/lats.length)}ms · max ${Math.max(...lats)}ms`;
+      } else {
+        document.getElementById("latChart").innerHTML = '<div style="color:#9ca3af;font-size:.8rem;align-self:center">No latency data yet</div>';
+      }
+    } catch (e) {
+      document.getElementById("kpiGrid").innerHTML =
+        `<div class="card" style="grid-column:1/-1;color:#dc2626;font-size:.875rem">${e.message}</div>`;
+    }
+  }
+
+  async function loadFunnel(days) {
+    document.getElementById("funnelGrid").innerHTML =
+      [1,2,3].map(() => `<div class="card" style="text-align:center"><div class="skeleton" style="height:1.75rem;width:50%;margin:8px auto"></div></div>`).join("");
+    try {
+      const { data } = await getFunnelMetrics({ days });
+      const steps = data.funnel || [];
+      document.getElementById("funnelGrid").innerHTML = steps.map((s, i) => `
+        <div class="funnel-card">
+          ${i < steps.length - 1 ? '<div class="funnel-arrow">›</div>' : ""}
+          <div class="funnel-step">${s.step}</div>
+          <div class="funnel-count">${s.count?.toLocaleString() ?? "—"}</div>
+          <div class="funnel-rate">${s.pct != null ? s.pct + "% of prev" : ""}</div>
+        </div>`).join("");
+    } catch (e) {
+      document.getElementById("funnelGrid").innerHTML =
+        `<div class="card" style="grid-column:1/-1;color:#dc2626;font-size:.875rem">${e.message}</div>`;
+    }
+  }
+
+  async function refresh() {
+    document.getElementById("tsNote").textContent = "Refreshing...";
+    await Promise.all([loadReliability(), loadFunnel(currentFunnelDays)]);
+    document.getElementById("tsNote").textContent = "Updated: " + new Date().toLocaleTimeString();
+  }
+
+  document.querySelectorAll(".period-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".period-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentFunnelDays = +btn.dataset.days;
+      loadFunnel(currentFunnelDays);
+    });
+  });
+
+  document.getElementById("btnRefresh").addEventListener("click", refresh);
+
+  onAuthStateChanged(getAuth(), user => {
+    if (!user) {
+      document.getElementById("kpiGrid").innerHTML =
+        '<div class="card" style="grid-column:1/-1;color:#6b7280">Admin sign-in required</div>';
+    } else {
+      refresh();
+    }
+  });
+</script>
+<script src="shared-header.js" defer></script>
+</body>
+</html>

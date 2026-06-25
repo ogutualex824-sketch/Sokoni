@@ -52,6 +52,10 @@
     .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;height:100px}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
     .count-tag{margin-left:auto;font-size:.75rem;color:#6b7280;font-weight:600}
+    .badge-priority-low{background:#f3f4f6;color:#6b7280}
+    .badge-priority-medium{background:#e0f2fe;color:#0369a1}
+    .badge-priority-high{background:#fef3c7;color:#92400e}
+    .badge-priority-critical{background:#fee2e2;color:#991b1b}
   </style>
 </head>
 <body>
@@ -74,6 +78,13 @@
       <option value="">All statuses</option>
       <option value="resolved">Resolved</option>
       <option value="wontfix">Won't Fix</option>
+    </select>
+    <select id="filterPriority">
+      <option value="">All priorities</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
     </select>
     <button class="btn-load" id="btnLoad">Load</button>
     <span class="count-tag" id="countTag"></span>
@@ -109,6 +120,7 @@
   function renderCard(item) {
     const typeLabel = { bug:"Bug", feature:"Feature", page_rating:"Rating",
                         incorrect_listing:"Listing", other:"Other" }[item.type] || item.type;
+    const pri = item.priority || "medium";
     return `
     <div class="fb-card status-${item.status}" id="card-${item.id}">
       <div class="fb-header">
@@ -116,6 +128,7 @@
           <div class="fb-type-row">
             ${badge(item.type, typeLabel)}
             ${badge(item.status, item.status)}
+            ${badge("priority-" + pri, pri.toUpperCase())}
             ${item.rating ? stars(item.rating) : ""}
           </div>
           <div class="fb-ts">${ts(item.createdAt)}${item.uid ? " · uid: " + item.uid.substring(0,8) + "…" : " · anonymous"}</div>
@@ -130,6 +143,12 @@
           <option value="reviewing" ${item.status==="reviewing" ?"selected":""}>Reviewing</option>
           <option value="resolved"  ${item.status==="resolved"  ?"selected":""}>Resolved</option>
           <option value="wontfix"   ${item.status==="wontfix"   ?"selected":""}>Won't Fix</option>
+        </select>
+        <select id="pri-${item.id}" aria-label="Priority">
+          <option value="low"      ${pri==="low"      ?"selected":""}>Low</option>
+          <option value="medium"   ${pri==="medium"   ?"selected":""}>Medium</option>
+          <option value="high"     ${pri==="high"     ?"selected":""}>High</option>
+          <option value="critical" ${pri==="critical" ?"selected":""}>Critical</option>
         </select>
         <textarea id="note-${item.id}" placeholder="Add admin note (optional)">${item.adminNote || ""}</textarea>
         <button class="btn-save" data-id="${item.id}" aria-label="Save triage">Save</button>
@@ -159,11 +178,12 @@
         btn.addEventListener("click", async () => {
           const id      = btn.dataset.id;
           const newStat = document.getElementById("sel-"  + id).value;
+          const newPri  = document.getElementById("pri-"  + id)?.value;
           const note    = document.getElementById("note-" + id).value.trim();
           btn.disabled = true;
           btn.textContent = "…";
           try {
-            await updateStatus({ id, status: newStat, adminNote: note || null });
+            await updateStatus({ id, status: newStat, priority: newPri || undefined, adminNote: note || null });
             const card = document.getElementById("card-" + id);
             card.className = "fb-card status-" + newStat;
             btn.textContent = "✓ Saved";

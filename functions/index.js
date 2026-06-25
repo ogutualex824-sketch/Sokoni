@@ -5858,6 +5858,20 @@ exports.getBusinessMetrics  = businessMetrics.getBusinessMetrics;
 exports.getOrderTrends      = businessMetrics.getOrderTrends;
 exports.getSecuritySummary  = businessMetrics.getSecuritySummary;
 
+/* ── Scheduled Reports (daily ops + weekly security) ─────────────────── */
+const scheduledReports = require('./scheduled-reports');
+exports.scheduledDailyOpsReport       = scheduledReports.scheduledDailyOpsReport;
+exports.scheduledWeeklySecurityReport = scheduledReports.scheduledWeeklySecurityReport;
+exports.getDailyReport                = scheduledReports.getDailyReport;
+exports.getWeeklyReports              = scheduledReports.getWeeklyReports;
+
+/* ── Conversion Analytics & Reliability ──────────────────────────────── */
+const conversionAnalytics = require('./conversion-analytics');
+exports.recordFunnelEvent     = conversionAnalytics.recordFunnelEvent;
+exports.getFunnelMetrics      = conversionAnalytics.getFunnelMetrics;
+exports.recordHealthSnapshot  = conversionAnalytics.recordHealthSnapshot;
+exports.getReliabilityMetrics = conversionAnalytics.getReliabilityMetrics;
+
 /* ── Product Analytics & Trust Engine ────────────────────────────────── */
 const productAnalytics = require('./product-analytics');
 exports.recordProductView           = productAnalytics.recordProductView;

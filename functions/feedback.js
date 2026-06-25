@@ -12,8 +12,9 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 
-const ALLOWED_TYPES    = ["bug", "feature", "page_rating", "incorrect_listing", "other"];
-const ALLOWED_STATUSES = ["new", "reviewing", "resolved", "wontfix"];
+const ALLOWED_TYPES      = ["bug", "feature", "page_rating", "incorrect_listing", "other"];
+const ALLOWED_STATUSES   = ["new", "reviewing", "resolved", "wontfix"];
+const ALLOWED_PRIORITIES = ["low", "medium", "high", "critical"];
 
 function requireAdmin(request) {
   if (!request.auth?.token?.isAdmin && !request.auth?.token?.isSuperAdmin) {
@@ -32,7 +33,7 @@ function esc(v) {
 exports.submitFeedback = onCall(
   { maxInstances: 80 },
   async (request) => {
-    const { type, message, rating, pageUrl, productId } = request.data || {};
+    const { type, message, rating, pageUrl, productId, priority } = request.data || {};
 
     if (!ALLOWED_TYPES.includes(type)) {
       throw new HttpsError("invalid-argument", "Invalid feedback type");
@@ -45,6 +46,9 @@ exports.submitFeedback = onCall(
     const db  = getFirestore();
     const uid = request.auth?.uid || null;
 
+    const safePriority = (priority && ALLOWED_PRIORITIES.includes(priority) && priority !== "critical")
+      ? priority : "medium";
+
     await db.collection("feedback").add({
       type,
       message:   esc(msg),
@@ -53,6 +57,7 @@ exports.submitFeedback = onCall(
       pageUrl:   pageUrl   ? String(pageUrl).substring(0, 500)   : null,
       productId: productId ? String(productId).substring(0, 100) : null,
       uid,
+      priority:  safePriority,
       status:    "new",
       adminNote: null,
       createdAt: FieldValue.serverTimestamp(),
@@ -102,7 +107,7 @@ exports.updateFeedbackStatus = onCall(
   async (request) => {
     requireAdmin(request);
 
-    const { id, status, adminNote } = request.data || {};
+    const { id, status, adminNote, priority } = request.data || {};
 
     if (!id || typeof id !== "string") {
       throw new HttpsError("invalid-argument", "id required");
@@ -112,12 +117,17 @@ exports.updateFeedbackStatus = onCall(
     }
 
     const db = getFirestore();
-    await db.collection("feedback").doc(id).update({
+    const update = {
       status,
       adminNote: adminNote ? esc(String(adminNote).substring(0, 1000)) : null,
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: request.auth.uid,
-    });
+    };
+    if (priority && ALLOWED_PRIORITIES.includes(priority)) {
+      update.priority = priority;
+    }
+
+    await db.collection("feedback").doc(id).update(update);
 
     return { success: true };
   }

@@ -1,4 +1,69 @@
-﻿## [2026-06-25] — release: SOKONI v1.1 Post-Launch Operations Sprint — SW v292
+﻿## [2026-06-25] — release: SOKONI v1.1 Continuous Operations Infrastructure — SW v293
+
+### Summary
+Automated operational reporting, reliability tracking, conversion funnel analytics, and report templates. Daily ops reports emailed at 06:00 EAT. Weekly security digest every Monday. Hourly health snapshots build a 30-day reliability history. Feedback system upgraded with priority levels. Three report templates added for weekly, monthly, and 30-day reviews.
+
+### New Cloud Functions (8)
+
+| Function | Type | Purpose |
+|----------|------|---------|
+| `scheduledDailyOpsReport` | scheduled 03:00 UTC | 24h metrics snapshot → Firestore + email digest |
+| `scheduledWeeklySecurityReport` | scheduled Mon 04:00 UTC | 7d security digest → Firestore + email |
+| `getDailyReport` | admin callable | Fetch stored daily reports (last N days) |
+| `getWeeklyReports` | admin callable | Fetch stored weekly security reports |
+| `recordFunnelEvent` | public callable | Increment daily cart/checkout counters |
+| `getFunnelMetrics` | admin callable | Conversion rates by funnel step |
+| `recordHealthSnapshot` | scheduled hourly | Store health check result, prune >30d |
+| `getReliabilityMetrics` | admin callable | Uptime %, latency stats, 48 recent snapshots |
+
+### New Pages
+
+| Page | Purpose |
+|------|---------|
+| `reliability-center.html` | Uptime %, status timeline, latency chart, conversion funnel |
+
+### Updated Pages
+
+| Page | Change |
+|------|--------|
+| `admin-feedback.html` | Added priority badge, priority filter, priority selector in triage |
+
+### Updated Cloud Functions
+
+| Function | Change |
+|----------|--------|
+| `submitFeedback` | Accept `priority` field (low/medium/high; not critical) |
+| `updateFeedbackStatus` | Accept `priority` field — admins can escalate to critical |
+
+### New Firestore Collections
+
+| Collection | Purpose |
+|-----------|---------|
+| `ops_reports` | Stores daily + weekly automated reports |
+| `healthSnapshots` | Hourly health check results, 30-day rolling |
+| `funnelStats` | Daily aggregate cart/checkout counters |
+
+### New Firestore Indexes (2)
+
+| Index | Purpose |
+|-------|---------|
+| `ops_reports(type, date DESC)` | Query daily reports by type + date |
+| `healthSnapshots(timestamp, status)` | Range queries for reliability metrics |
+
+### New Docs
+
+| Doc | Purpose |
+|-----|---------|
+| `docs/WEEKLY_OPS_REPORT_TEMPLATE.md` | 11-section weekly ops report template |
+| `docs/MONTHLY_EXEC_REPORT_TEMPLATE.md` | 11-section monthly executive report |
+| `docs/30_DAY_REVIEW_TEMPLATE.md` | 12-section soft launch review with go/no-go gate |
+
+### Index count: 188 → 190 / 200
+### Service Worker: sokoni-v292 → sokoni-v293
+
+---
+
+## [2026-06-25] — release: SOKONI v1.1 Post-Launch Operations Sprint — SW v292
 
 ### Summary
 Post-launch operations and observability sprint. Added real-time ops monitoring dashboard, executive business KPI dashboard, user feedback system with admin triage, and business metrics Cloud Functions. Expanded Firestore indexes to 188. Firestore rules updated with feedback collection. v1.1 roadmap prioritized: Loyalty & Rewards, Wallet, Jobs Marketplace.

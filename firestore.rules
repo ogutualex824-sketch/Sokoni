@@ -3140,6 +3140,33 @@ service cloud.firestore {
       allow write:  if false;            /* submitFeedback CF writes */
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       OPS REPORTS  — daily + weekly reports written by scheduled CFs
+       Admin read. CF write.
+    ══════════════════════════════════════════════════════════════ */
+    match /ops_reports/{reportId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       HEALTH SNAPSHOTS  — hourly snapshots from recordHealthSnapshot
+       Admin read. CF write.
+    ══════════════════════════════════════════════════════════════ */
+    match /healthSnapshots/{snapId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FUNNEL STATS  — daily aggregate counters for conversion tracking
+       Admin read. CF write.
+    ══════════════════════════════════════════════════════════════ */
+    match /funnelStats/{dateId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
   }
 }
 
