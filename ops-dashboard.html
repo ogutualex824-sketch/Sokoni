@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ops Dashboard — SOKONI</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="sokoni-tokens.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    .ops-wrap{max-width:1280px;margin:0 auto;padding:24px 16px 80px}
+    h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+    .ops-sub{color:#6b7280;font-size:.875rem;margin-bottom:24px}
+    .ops-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    .ops-toolbar button{padding:8px 18px;border:none;border-radius:8px;cursor:pointer;font-size:.875rem;font-weight:600;transition:background .15s}
+    .btn-refresh{background:var(--color-primary,#5b21b6);color:#fff}
+    .btn-refresh:hover{background:#4c1d95}
+    .ops-ts{font-size:.75rem;color:#9ca3af;margin-left:auto}
+    .status-badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+    .badge-ok{background:#d1fae5;color:#065f46}
+    .badge-warn{background:#fef3c7;color:#92400e}
+    .badge-error{background:#fee2e2;color:#991b1b}
+    .badge-skip{background:#e5e7eb;color:#6b7280}
+    .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+    .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+    .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    .card-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:12px}
+    .card-val{font-size:2rem;font-weight:800;line-height:1}
+    .card-label{font-size:.75rem;color:#6b7280;margin-top:4px}
+    .health-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6}
+    .health-row:last-child{border-bottom:none}
+    .health-name{font-size:.875rem;font-weight:500}
+    .health-detail{font-size:.75rem;color:#6b7280;margin-top:2px}
+    .section-title{font-size:1rem;font-weight:700;margin:32px 0 12px}
+    .metric-table{width:100%;border-collapse:collapse}
+    .metric-table th{text-align:left;font-size:.75rem;font-weight:600;text-transform:uppercase;color:#6b7280;padding:8px 12px;border-bottom:2px solid #e5e7eb}
+    .metric-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;font-size:.875rem;vertical-align:middle}
+    .metric-table tr:last-child td{border-bottom:none}
+    .metric-table tr:hover td{background:#f9fafb}
+    .pulse{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+    .pulse-ok{background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.2)}
+    .pulse-warn{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.2)}
+    .pulse-error{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.2)}
+    .alert-banner{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;font-size:.875rem;display:none}
+    .alert-banner.show{display:block}
+    .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;height:1.5em;width:80%}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    @media(max-width:640px){.card-val{font-size:1.5rem}}
+  </style>
+</head>
+<body>
+<div class="ops-wrap">
+  <h1>Operations Dashboard</h1>
+  <div class="ops-sub">Real-time platform health — auto-refreshes every 60 seconds</div>
+
+  <div class="ops-toolbar">
+    <button class="btn-refresh" id="btnRefresh">Refresh Now</button>
+    <div class="ops-ts" id="lastUpdated">Loading...</div>
+  </div>
+
+  <div id="alertBanner" class="alert-banner"></div>
+
+  <!-- System Health -->
+  <div class="section-title">System Health</div>
+  <div class="card" style="margin-bottom:24px">
+    <div id="healthRows"><div class="skeleton" style="margin:12px 0"></div><div class="skeleton" style="margin:12px 0"></div><div class="skeleton" style="margin:12px 0"></div></div>
+  </div>
+
+  <!-- Key Counters -->
+  <div class="section-title">24-Hour Counters</div>
+  <div class="grid-3">
+    <div class="card"><div class="card-title">Orders Today</div><div class="card-val" id="statOrders">—</div><div class="card-label">all statuses</div></div>
+    <div class="card"><div class="card-title">Email Queue</div><div class="card-val" id="statEmailQ">—</div><div class="card-label">pending</div></div>
+    <div class="card"><div class="card-title">Email Failures</div><div class="card-val" id="statEmailF">—</div><div class="card-label">last 24h</div></div>
+    <div class="card"><div class="card-title">CSP Violations</div><div class="card-val" id="statCSP">—</div><div class="card-label">last 24h</div></div>
+    <div class="card"><div class="card-title">Last Backup</div><div class="card-val" id="statBackup" style="font-size:1rem;padding-top:8px">—</div><div class="card-label" id="statBackupDetail"> </div></div>
+    <div class="card"><div class="card-title">Open Bug Reports</div><div class="card-val" id="statBugs">—</div><div class="card-label">unreviewed</div></div>
+  </div>
+
+  <!-- Security -->
+  <div class="section-title">Security Events</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Failed Payments (24h)</div>
+      <div class="card-val" id="statFailedPay">—</div>
+      <div class="card-label">payment_failed status</div>
+    </div>
+    <div class="card">
+      <div class="card-title">CSP Violations (7d)</div>
+      <div class="card-val" id="statCSP7d">—</div>
+      <div class="card-label"><a href="admin-feedback.html" style="color:var(--color-primary,#5b21b6)">View feedback →</a></div>
+    </div>
+  </div>
+
+  <!-- Quick Links -->
+  <div class="section-title">Quick Actions</div>
+  <div class="grid-3">
+    <div class="card"><a href="business-kpi.html" style="text-decoration:none;color:inherit"><div class="card-title">Business KPIs</div><div style="font-size:.875rem;color:#6b7280;margin-top:4px">GMV, orders, buyers →</div></a></div>
+    <div class="card"><a href="admin-feedback.html" style="text-decoration:none;color:inherit"><div class="card-title">Feedback Triage</div><div style="font-size:.875rem;color:#6b7280;margin-top:4px">Bug reports, feature requests →</div></a></div>
+    <div class="card"><a href="admin.html" style="text-decoration:none;color:inherit"><div class="card-title">Admin Panel</div><div style="font-size:.875rem;color:#6b7280;margin-top:4px">Users, products, orders →</div></a></div>
+    <div class="card"><a href="monitor.html" style="text-decoration:none;color:inherit"><div class="card-title">Platform Monitor</div><div style="font-size:.875rem;color:#6b7280;margin-top:4px">Deep observability →</div></a></div>
+    <div class="card"><a href="https://console.firebase.google.com/project/sokoni-aeb26/functions/logs" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Function Logs</div><div style="font-size:.875rem;color:#6b7280;margin-top:4px">Firebase Console →</div></a></div>
+    <div class="card"><a href="https://console.cloud.google.com/monitoring/dashboards?project=sokoni-aeb26" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Cloud Monitoring</div><div style="font-size:.875rem;color:#6b7280;margin-top:4px">Alert policies, uptime →</div></a></div>
+  </div>
+</div>
+
+<script src="firebase.js"></script>
+<script type="module">
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+  const HEALTH_URL = "https://us-central1-sokoni-aeb26.cloudfunctions.net/systemHealthCheck";
+
+  function setBadge(status) {
+    if (status === "ok")      return '<span class="status-badge badge-ok">OK</span>';
+    if (status === "warn")    return '<span class="status-badge badge-warn">WARN</span>';
+    if (status === "error")   return '<span class="status-badge badge-error">ERROR</span>';
+    if (status === "healthy") return '<span class="status-badge badge-ok">HEALTHY</span>';
+    if (status === "degraded")return '<span class="status-badge badge-warn">DEGRADED</span>';
+    return '<span class="status-badge badge-skip">SKIP</span>';
+  }
+
+  function pulse(status) {
+    if (status === "ok" || status === "healthy") return '<span class="pulse pulse-ok"></span>';
+    if (status === "warn" || status === "degraded") return '<span class="pulse pulse-warn"></span>';
+    if (status === "error") return '<span class="pulse pulse-error"></span>';
+    return '<span class="pulse" style="background:#d1d5db"></span>';
+  }
+
+  function set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+  async function loadHealth() {
+    try {
+      const res  = await fetch(HEALTH_URL, { cache: "no-store" });
+      const data = await res.json();
+
+      const rows = Object.entries(data.checks || {}).map(([name, check]) => `
+        <div class="health-row">
+          <div>
+            <div class="health-name">${pulse(check.status)}${name}</div>
+            ${check.latencyMs != null ? `<div class="health-detail">${check.latencyMs}ms</div>` : ""}
+            ${check.error ? `<div class="health-detail" style="color:#ef4444">${check.error.substring(0,120)}</div>` : ""}
+          </div>
+          ${setBadge(check.status)}
+        </div>`).join("");
+
+      document.getElementById("healthRows").innerHTML = rows ||
+        '<div class="health-row"><div class="health-name">No checks returned</div></div>';
+
+      const banner = document.getElementById("alertBanner");
+      if (data.status !== "healthy") {
+        banner.textContent = `⚠ System status: ${data.status.toUpperCase()} — ${(data.errors || []).join(", ")}`;
+        banner.classList.add("show");
+      } else {
+        banner.classList.remove("show");
+      }
+    } catch (e) {
+      document.getElementById("healthRows").innerHTML =
+        '<div class="health-row"><div class="health-name" style="color:#ef4444">Health check unreachable</div></div>';
+    }
+  }
+
+  async function loadOpsStatus(fns) {
+    try {
+      const getOpsStatus = httpsCallable(fns, "getOpsStatus");
+      const { data } = await getOpsStatus();
+      set("statOrders",  data.commerce?.orders24h    ?? "—");
+      set("statEmailQ",  data.queues?.emailPending    ?? "—");
+      set("statEmailF",  data.queues?.emailFailed24h  ?? "—");
+      set("statCSP",     data.security?.cspViolations24h ?? "—");
+
+      if (data.backups?.lastBackupAt) {
+        const d = new Date(data.backups.lastBackupAt);
+        document.getElementById("statBackup").textContent = d.toLocaleDateString();
+        document.getElementById("statBackupDetail").textContent = data.backups.lastBackupStatus || "";
+      } else {
+        set("statBackup", "—");
+        set("statBackupDetail", "no backup yet");
+      }
+    } catch (_) { /* admin-only — ignore if not admin */ }
+  }
+
+  async function loadSecuritySummary(fns) {
+    try {
+      const getSecuritySummary = httpsCallable(fns, "getSecuritySummary");
+      const { data } = await getSecuritySummary();
+      set("statFailedPay", data.failedPayments24h ?? "—");
+      set("statCSP7d",     data.cspViolations7d   ?? "—");
+      set("statBugs",      data.openBugReports     ?? "—");
+    } catch (_) {}
+  }
+
+  async function refresh() {
+    const auth = getAuth();
+    const fns  = getFunctions(undefined, "us-central1");
+
+    await loadHealth();
+
+    if (auth.currentUser) {
+      await Promise.all([loadOpsStatus(fns), loadSecuritySummary(fns)]);
+    }
+
+    document.getElementById("lastUpdated").textContent =
+      "Last updated: " + new Date().toLocaleTimeString();
+  }
+
+  onAuthStateChanged(getAuth(), async () => { await refresh(); });
+  document.getElementById("btnRefresh").addEventListener("click", refresh);
+  setInterval(refresh, 60000);
+</script>
+<script src="shared-header.js" defer></script>
+</body>
+</html>

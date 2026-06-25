@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Send Feedback — SOKONI</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="sokoni-tokens.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    .fb-wrap{max-width:600px;margin:0 auto;padding:32px 16px 80px}
+    h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+    .fb-sub{color:#6b7280;font-size:.875rem;margin-bottom:28px}
+    .type-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:24px}
+    .type-btn{padding:14px 10px;border:2px solid #e5e7eb;border-radius:12px;cursor:pointer;background:#fff;text-align:center;transition:all .15s;font-size:.875rem;font-weight:600;color:#374151}
+    .type-btn.active{border-color:var(--color-primary,#5b21b6);background:#f5f3ff;color:var(--color-primary,#5b21b6)}
+    .type-icon{font-size:1.5rem;display:block;margin-bottom:4px}
+    label{display:block;font-size:.8rem;font-weight:600;color:#374151;margin-bottom:6px}
+    textarea{width:100%;min-height:120px;padding:12px;border:1.5px solid #d1d5db;border-radius:10px;font-size:.9375rem;resize:vertical;transition:border .15s;font-family:inherit}
+    textarea:focus{outline:none;border-color:var(--color-primary,#5b21b6)}
+    .rating-row{display:flex;gap:10px;margin-bottom:20px}
+    .star{font-size:1.75rem;cursor:pointer;color:#d1d5db;transition:color .1s;user-select:none;line-height:1}
+    .star.active,.star.hover{color:#f59e0b}
+    .field-group{margin-bottom:20px}
+    .submit-btn{width:100%;padding:14px;border:none;border-radius:10px;background:var(--color-primary,#5b21b6);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;transition:background .15s}
+    .submit-btn:hover{background:#4c1d95}
+    .submit-btn:disabled{background:#9ca3af;cursor:not-allowed}
+    .success-state{text-align:center;padding:48px 24px;display:none}
+    .success-icon{font-size:3rem;margin-bottom:12px}
+    .success-title{font-size:1.25rem;font-weight:700;margin-bottom:8px}
+    .success-sub{color:#6b7280;font-size:.875rem}
+    .back-link{display:inline-block;margin-top:20px;color:var(--color-primary,#5b21b6);font-size:.875rem;font-weight:600;text-decoration:none}
+    .err-msg{color:#dc2626;font-size:.8rem;margin-top:6px;display:none}
+    @media(max-width:400px){.type-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="fb-wrap">
+  <div id="formState">
+    <h1>Send Feedback</h1>
+    <div class="fb-sub">Help us improve SOKONI — your feedback goes directly to the product team.</div>
+
+    <div class="type-grid" role="group" aria-label="Feedback type">
+      <button class="type-btn active" data-type="bug" aria-pressed="true">
+        <span class="type-icon">🐛</span>Bug Report
+      </button>
+      <button class="type-btn" data-type="feature" aria-pressed="false">
+        <span class="type-icon">💡</span>Feature Request
+      </button>
+      <button class="type-btn" data-type="page_rating" aria-pressed="false">
+        <span class="type-icon">⭐</span>Rate This Page
+      </button>
+      <button class="type-btn" data-type="incorrect_listing" aria-pressed="false">
+        <span class="type-icon">🚩</span>Report Listing
+      </button>
+    </div>
+
+    <div id="ratingSection" class="field-group" style="display:none">
+      <label>Your Rating</label>
+      <div class="rating-row" id="stars" role="group" aria-label="Star rating">
+        <span class="star" data-val="1" role="radio" aria-label="1 star" tabindex="0">★</span>
+        <span class="star" data-val="2" role="radio" aria-label="2 stars" tabindex="0">★</span>
+        <span class="star" data-val="3" role="radio" aria-label="3 stars" tabindex="0">★</span>
+        <span class="star" data-val="4" role="radio" aria-label="4 stars" tabindex="0">★</span>
+        <span class="star" data-val="5" role="radio" aria-label="5 stars" tabindex="0">★</span>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label for="msgArea" id="msgLabel">Describe the bug</label>
+      <textarea id="msgArea" placeholder="What happened? What did you expect?" maxlength="2000" aria-labelledby="msgLabel"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:4px"><span id="charCount" style="font-size:.75rem;color:#9ca3af">0 / 2000</span></div>
+    </div>
+
+    <div class="err-msg" id="errMsg" role="alert"></div>
+
+    <button class="submit-btn" id="btnSubmit">Send Feedback</button>
+  </div>
+
+  <div class="success-state" id="successState">
+    <div class="success-icon">✅</div>
+    <div class="success-title">Thank you!</div>
+    <div class="success-sub">Your feedback has been received. The SOKONI team will review it shortly.</div>
+    <a href="javascript:history.back()" class="back-link">← Go back</a>
+  </div>
+</div>
+
+<script src="firebase.js"></script>
+<script type="module">
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+
+  const fns           = getFunctions(undefined, "us-central1");
+  const submitFeedback = httpsCallable(fns, "submitFeedback");
+
+  let selectedType = "bug";
+  let selectedRating = 0;
+
+  const LABELS = {
+    bug:               "Describe the bug",
+    feature:           "Describe your idea",
+    page_rating:       "Any additional comments (optional)",
+    incorrect_listing: "What is incorrect about this listing?",
+    other:             "Your message",
+  };
+
+  const PLACEHOLDERS = {
+    bug:               "What happened? What did you expect to happen?",
+    feature:           "Describe the feature and why it would be useful.",
+    page_rating:       "Optional: what could be better?",
+    incorrect_listing: "Describe what information is wrong or misleading.",
+    other:             "Tell us anything.",
+  };
+
+  /* Type selection */
+  document.querySelectorAll(".type-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".type-btn").forEach(b => {
+        b.classList.remove("active");
+        b.setAttribute("aria-pressed", "false");
+      });
+      btn.classList.add("active");
+      btn.setAttribute("aria-pressed", "true");
+      selectedType = btn.dataset.type;
+      document.getElementById("ratingSection").style.display =
+        selectedType === "page_rating" ? "block" : "none";
+      document.getElementById("msgLabel").textContent = LABELS[selectedType] || "Message";
+      document.getElementById("msgArea").placeholder  = PLACEHOLDERS[selectedType] || "";
+    });
+  });
+
+  /* Star rating */
+  const stars = document.querySelectorAll(".star");
+  stars.forEach(star => {
+    star.addEventListener("mouseenter", () => {
+      const v = +star.dataset.val;
+      stars.forEach(s => s.classList.toggle("hover", +s.dataset.val <= v));
+    });
+    star.addEventListener("mouseleave", () => {
+      stars.forEach(s => s.classList.remove("hover"));
+    });
+    star.addEventListener("click", () => {
+      selectedRating = +star.dataset.val;
+      stars.forEach(s => s.classList.toggle("active", +s.dataset.val <= selectedRating));
+    });
+    star.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { star.click(); e.preventDefault(); }
+    });
+  });
+
+  /* Char counter */
+  document.getElementById("msgArea").addEventListener("input", () => {
+    document.getElementById("charCount").textContent =
+      document.getElementById("msgArea").value.length + " / 2000";
+  });
+
+  /* Submit */
+  document.getElementById("btnSubmit").addEventListener("click", async () => {
+    const msg = document.getElementById("msgArea").value.trim();
+    const errEl = document.getElementById("errMsg");
+    errEl.style.display = "none";
+
+    if (selectedType === "page_rating" && selectedRating === 0 && msg.length < 5) {
+      errEl.textContent = "Please select a star rating or add a comment.";
+      errEl.style.display = "block"; return;
+    }
+    if (selectedType !== "page_rating" && msg.length < 5) {
+      errEl.textContent = "Please describe the issue (at least 5 characters).";
+      errEl.style.display = "block"; return;
+    }
+
+    const btn = document.getElementById("btnSubmit");
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+
+    try {
+      await submitFeedback({
+        type:     selectedType,
+        message:  msg || "(no additional comment)",
+        rating:   selectedType === "page_rating" ? selectedRating : undefined,
+        pageUrl:  location.href,
+      });
+      document.getElementById("formState").style.display  = "none";
+      document.getElementById("successState").style.display = "block";
+    } catch (e) {
+      errEl.textContent = e.message || "Failed to send. Please try again.";
+      errEl.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Send Feedback";
+    }
+  });
+</script>
+<script src="shared-header.js" defer></script>
+</body>
+</html>

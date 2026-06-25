@@ -3129,6 +3129,17 @@ service cloud.firestore {
                         ["orders","payments","marketing","account","security"]);
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       USER FEEDBACK  — bug reports, feature requests, page ratings
+       Submit: any authenticated user or anonymous (via CF).
+       Read / triage: admin only.
+       Write directly: CF only.
+    ══════════════════════════════════════════════════════════════ */
+    match /feedback/{feedbackId} {
+      allow read:   if isAdmin();
+      allow write:  if false;            /* submitFeedback CF writes */
+    }
+
   }
 }
 

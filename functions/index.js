@@ -5846,6 +5846,18 @@ exports.testEmailDelivery        = opsTools.testEmailDelivery;
 exports.getPaymentAuditTrail     = opsTools.getPaymentAuditTrail;
 exports.getOpsStatus             = opsTools.getOpsStatus;
 
+/* ── User Feedback & Triage ───────────────────────────────────────────── */
+const feedback = require('./feedback');
+exports.submitFeedback        = feedback.submitFeedback;
+exports.getFeedbackItems      = feedback.getFeedbackItems;
+exports.updateFeedbackStatus  = feedback.updateFeedbackStatus;
+
+/* ── Business Metrics & Security Summary ─────────────────────────────── */
+const businessMetrics = require('./business-metrics');
+exports.getBusinessMetrics  = businessMetrics.getBusinessMetrics;
+exports.getOrderTrends      = businessMetrics.getOrderTrends;
+exports.getSecuritySummary  = businessMetrics.getSecuritySummary;
+
 /* ── Product Analytics & Trust Engine ────────────────────────────────── */
 const productAnalytics = require('./product-analytics');
 exports.recordProductView           = productAnalytics.recordProductView;

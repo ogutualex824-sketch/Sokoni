@@ -1,4 +1,57 @@
-﻿## [2026-06-25] — release: SOKONI v1.0 Enterprise Production Verification — SW v291
+﻿## [2026-06-25] — release: SOKONI v1.1 Post-Launch Operations Sprint — SW v292
+
+### Summary
+Post-launch operations and observability sprint. Added real-time ops monitoring dashboard, executive business KPI dashboard, user feedback system with admin triage, and business metrics Cloud Functions. Expanded Firestore indexes to 188. Firestore rules updated with feedback collection. v1.1 roadmap prioritized: Loyalty & Rewards, Wallet, Jobs Marketplace.
+
+### New Cloud Functions (6)
+
+| Function | Type | Purpose |
+|----------|------|---------|
+| `submitFeedback` | onCall (public) | Accept bug/feature/rating/listing reports |
+| `getFeedbackItems` | onCall (admin) | Paginated feedback list with type/status filters |
+| `updateFeedbackStatus` | onCall (admin) | Triage: mark reviewing/resolved/wontfix, add note |
+| `getBusinessMetrics` | onCall (admin) | GMV, orders, AOV, active buyers/sellers, top categories |
+| `getOrderTrends` | onCall (admin) | Daily order volume chart data (7–90 day window) |
+| `getSecuritySummary` | onCall (admin) | 24h/7d CSP violations, failed payments, open bug count |
+
+### New Pages (4)
+
+| Page | Purpose |
+|------|---------|
+| `ops-dashboard.html` | Real-time ops monitoring — health, 24h counters, security events, quick links |
+| `business-kpi.html` | Executive KPI — GMV, orders, AOV, buyers, sellers, categories, trend chart |
+| `feedback.html` | User-facing feedback form — bug, feature, rating, incorrect listing |
+| `admin-feedback.html` | Admin feedback triage — filter, status update, admin notes |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `functions/feedback.js` | Feedback CFs with XSS sanitization |
+| `functions/business-metrics.js` | Business metrics + security summary CFs |
+| `docs/LAUNCH_CHECKLIST.md` | Go-live checklist with rollback procedure |
+
+### Firestore Changes
+
+| Collection | Change |
+|-----------|--------|
+| `feedback` | New collection; rules: CF write only, admin read |
+| `feedback(type, createdAt)` | New composite index |
+| `feedback(status, createdAt)` | New composite index |
+| Index total | 186 → 188 / 200 |
+
+### Roadmap Updated
+
+- v1.1 priorities ranked with 5-axis scoring: Loyalty (22/25) → Wallet (21/25) → Jobs (18/25)
+- Evidence-driven decision principle: no Tier 2/3 features until Tier 1 shows measurable results
+- All previous ROADMAP blockers resolved and removed
+
+### Service Worker
+`sokoni-v291` → `sokoni-v292`
+
+---
+
+## [2026-06-25] — release: SOKONI v1.0 Enterprise Production Verification — SW v291
 
 ### Summary
 Final production verification, dead code elimination, security hardening, and enterprise-grade cleanup. Full codebase audit across 142 HTML pages, 200+ JS modules, 63 Cloud Function files, 185 Firestore indexes. All user journeys verified. SendGrid webhook signature verification added. Playwright test scripts excluded from hosting. Unbounded Firestore queries limited. Debug console.log statements removed from production code.

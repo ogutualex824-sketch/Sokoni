@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feedback Triage — SOKONI Admin</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="sokoni-tokens.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    .af-wrap{max-width:1100px;margin:0 auto;padding:24px 16px 80px}
+    h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+    .af-sub{color:#6b7280;font-size:.875rem;margin-bottom:24px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+    select{padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.875rem;background:#fff;cursor:pointer;min-width:130px}
+    select:focus{outline:none;border-color:var(--color-primary,#5b21b6)}
+    .btn-load{padding:8px 18px;border:none;border-radius:8px;background:var(--color-primary,#5b21b6);color:#fff;font-size:.875rem;font-weight:600;cursor:pointer}
+    .btn-load:hover{background:#4c1d95}
+    .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+    .badge-bug{background:#fee2e2;color:#991b1b}
+    .badge-feature{background:#e0f2fe;color:#0369a1}
+    .badge-page_rating{background:#fef9c3;color:#713f12}
+    .badge-incorrect_listing{background:#ffe4e6;color:#9f1239}
+    .badge-other{background:#f3f4f6;color:#374151}
+    .badge-new{background:#fef3c7;color:#92400e}
+    .badge-reviewing{background:#e0f2fe;color:#0369a1}
+    .badge-resolved{background:#d1fae5;color:#065f46}
+    .badge-wontfix{background:#f3f4f6;color:#6b7280}
+    .fb-list{display:flex;flex-direction:column;gap:12px}
+    .fb-card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.08);border-left:4px solid #e5e7eb;transition:border-color .2s}
+    .fb-card.status-new{border-left-color:#f59e0b}
+    .fb-card.status-reviewing{border-left-color:#3b82f6}
+    .fb-card.status-resolved{border-left-color:#10b981}
+    .fb-card.status-wontfix{border-left-color:#9ca3af}
+    .fb-header{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .fb-meta{flex:1;min-width:0}
+    .fb-type-row{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+    .fb-ts{font-size:.7rem;color:#9ca3af}
+    .fb-msg{font-size:.875rem;color:#374151;line-height:1.5;margin-bottom:10px;white-space:pre-line;word-break:break-word}
+    .fb-url{font-size:.7rem;color:#6b7280;margin-bottom:10px;word-break:break-all}
+    .fb-note{font-size:.8rem;color:#4b5563;background:#f9fafb;padding:8px 12px;border-radius:6px;margin-bottom:10px;font-style:italic}
+    .stars{color:#f59e0b;font-size:1rem;letter-spacing:-.05em}
+    .triage-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .triage-row select{padding:6px 10px;font-size:.8rem;min-width:110px}
+    .triage-row textarea{flex:1;min-width:180px;padding:6px 10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.8rem;resize:none;height:36px;font-family:inherit}
+    .triage-row textarea:focus{outline:none;border-color:var(--color-primary,#5b21b6)}
+    .btn-save{padding:6px 16px;border:none;border-radius:8px;background:#10b981;color:#fff;font-size:.8rem;font-weight:700;cursor:pointer}
+    .btn-save:hover{background:#059669}
+    .btn-save:disabled{background:#9ca3af;cursor:not-allowed}
+    .empty-state{text-align:center;padding:64px 24px;color:#9ca3af;font-size:.875rem}
+    .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;height:100px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .count-tag{margin-left:auto;font-size:.75rem;color:#6b7280;font-weight:600}
+  </style>
+</head>
+<body>
+<div class="af-wrap">
+  <h1>Feedback Triage</h1>
+  <div class="af-sub">Review and action user-submitted feedback</div>
+
+  <div class="toolbar">
+    <select id="filterType">
+      <option value="">All types</option>
+      <option value="bug">Bug Reports</option>
+      <option value="feature">Feature Requests</option>
+      <option value="page_rating">Page Ratings</option>
+      <option value="incorrect_listing">Incorrect Listings</option>
+      <option value="other">Other</option>
+    </select>
+    <select id="filterStatus">
+      <option value="new">New</option>
+      <option value="reviewing">Reviewing</option>
+      <option value="">All statuses</option>
+      <option value="resolved">Resolved</option>
+      <option value="wontfix">Won't Fix</option>
+    </select>
+    <button class="btn-load" id="btnLoad">Load</button>
+    <span class="count-tag" id="countTag"></span>
+  </div>
+
+  <div id="fbList" class="fb-list">
+    <div class="skeleton"></div>
+    <div class="skeleton" style="margin-top:12px;height:80px"></div>
+  </div>
+</div>
+
+<script src="firebase.js"></script>
+<script type="module">
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+  const fns              = getFunctions(undefined, "us-central1");
+  const getFeedbackItems = httpsCallable(fns, "getFeedbackItems");
+  const updateStatus     = httpsCallable(fns, "updateFeedbackStatus");
+
+  function badge(cls, text) { return `<span class="badge badge-${cls}">${text}</span>`; }
+
+  function stars(n) {
+    if (!n) return "";
+    return '<span class="stars">' + "★".repeat(n) + "☆".repeat(5 - n) + "</span>";
+  }
+
+  function ts(ms) {
+    if (!ms) return "";
+    return new Date(ms).toLocaleString();
+  }
+
+  function renderCard(item) {
+    const typeLabel = { bug:"Bug", feature:"Feature", page_rating:"Rating",
+                        incorrect_listing:"Listing", other:"Other" }[item.type] || item.type;
+    return `
+    <div class="fb-card status-${item.status}" id="card-${item.id}">
+      <div class="fb-header">
+        <div class="fb-meta">
+          <div class="fb-type-row">
+            ${badge(item.type, typeLabel)}
+            ${badge(item.status, item.status)}
+            ${item.rating ? stars(item.rating) : ""}
+          </div>
+          <div class="fb-ts">${ts(item.createdAt)}${item.uid ? " · uid: " + item.uid.substring(0,8) + "…" : " · anonymous"}</div>
+        </div>
+      </div>
+      <div class="fb-msg">${item.message}</div>
+      ${item.pageUrl ? `<div class="fb-url">Page: ${item.pageUrl}</div>` : ""}
+      ${item.adminNote ? `<div class="fb-note">Admin note: ${item.adminNote}</div>` : ""}
+      <div class="triage-row">
+        <select id="sel-${item.id}" aria-label="Change status">
+          <option value="new"       ${item.status==="new"       ?"selected":""}>New</option>
+          <option value="reviewing" ${item.status==="reviewing" ?"selected":""}>Reviewing</option>
+          <option value="resolved"  ${item.status==="resolved"  ?"selected":""}>Resolved</option>
+          <option value="wontfix"   ${item.status==="wontfix"   ?"selected":""}>Won't Fix</option>
+        </select>
+        <textarea id="note-${item.id}" placeholder="Add admin note (optional)">${item.adminNote || ""}</textarea>
+        <button class="btn-save" data-id="${item.id}" aria-label="Save triage">Save</button>
+      </div>
+    </div>`;
+  }
+
+  async function load() {
+    const type   = document.getElementById("filterType").value;
+    const status = document.getElementById("filterStatus").value;
+    document.getElementById("fbList").innerHTML =
+      '<div class="skeleton"></div><div class="skeleton" style="margin-top:12px;height:80px"></div>';
+    document.getElementById("countTag").textContent = "";
+
+    try {
+      const { data } = await getFeedbackItems({ type: type || undefined, status: status || undefined, limit: 50 });
+      if (!data || data.length === 0) {
+        document.getElementById("fbList").innerHTML =
+          '<div class="empty-state">No feedback items match the current filters.</div>';
+        return;
+      }
+      document.getElementById("fbList").innerHTML = data.map(renderCard).join("");
+      document.getElementById("countTag").textContent = data.length + " item" + (data.length !== 1 ? "s" : "");
+
+      /* Wire save buttons */
+      document.querySelectorAll(".btn-save[data-id]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id      = btn.dataset.id;
+          const newStat = document.getElementById("sel-"  + id).value;
+          const note    = document.getElementById("note-" + id).value.trim();
+          btn.disabled = true;
+          btn.textContent = "…";
+          try {
+            await updateStatus({ id, status: newStat, adminNote: note || null });
+            const card = document.getElementById("card-" + id);
+            card.className = "fb-card status-" + newStat;
+            btn.textContent = "✓ Saved";
+            setTimeout(() => { btn.disabled = false; btn.textContent = "Save"; }, 2000);
+          } catch (e) {
+            btn.disabled = false;
+            btn.textContent = "Error";
+            alert(e.message);
+          }
+        });
+      });
+    } catch (e) {
+      document.getElementById("fbList").innerHTML =
+        `<div class="empty-state" style="color:#dc2626">${e.message}</div>`;
+    }
+  }
+
+  document.getElementById("btnLoad").addEventListener("click", load);
+
+  onAuthStateChanged(getAuth(), user => {
+    if (!user) {
+      document.getElementById("fbList").innerHTML =
+        '<div class="empty-state">Admin sign-in required</div>';
+    } else {
+      load();
+    }
+  });
+</script>
+<script src="shared-header.js" defer></script>
+</body>
+</html>

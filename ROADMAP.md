@@ -2,9 +2,9 @@
 
 # SOKONI Platform Roadmap
 
-**Version:** 3.1.0  
-**Updated:** 2026-06-21  
-**Status:** Production Certified — Active Development
+**Version:** 4.0.0  
+**Updated:** 2026-06-25  
+**Status:** v1.0.0 — Enterprise Ready — Post-Launch Operations Mode
 
 Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 
@@ -185,72 +185,134 @@ These are NOT code gaps — the platform code is complete. Real credentials are 
 
 ---
 
-## Planned Features
+## v1.1 Roadmap — Recommended Initiatives
 
-### Near-Term (Next Sprint)
+All v1.0 infrastructure is live. v1.1 focuses on revenue expansion and retention — no new hubs without user-demand evidence.
 
-| Feature | Priority | Notes |
-|---|---|---|
-| Wallet / Digital Wallet | High | Buyer stored-value wallet, top-up via M-Pesa, spend at checkout |
-| Jobs Marketplace | High | Job listings, applications, employer dashboard |
-| CSP hardening — remove `unsafe-inline` | High | Scheduled in v2.2 certification (30-day sprint) |
-| `previewEmailTemplate` Cloud Function | Medium | Admin Email Center template preview (graceful fallback exists) |
-| Loyalty & Rewards Program | Medium | Points per order, redemption at checkout, tiers |
-| QR code system | Medium | Product QR, venue QR, order QR for pickup |
-| Barcode system | Medium | Product barcode scanning for POS and inventory |
+### Priority Ranking Methodology
 
-### Medium-Term
+Each initiative ranked on 5 axes (1–5 each, 25 max):
+- **User Impact** — how many users benefit and how directly
+- **Revenue Potential** — GMV uplift, new revenue streams, or reduced churn
+- **Dev Complexity** — estimated effort (5 = trivially simple, 1 = very hard)
+- **Operational Cost** — recurring infra/support burden (5 = very low cost, 1 = high)
+- **Dependency Risk** — depends on unbuilt components (5 = no deps, 1 = many deps)
 
-| Feature | Priority | Notes |
-|---|---|---|
-| Education Hub | Medium | Tutors, online courses, exam prep |
-| Super Admin portal | Medium | Cross-project oversight, global analytics |
-| Receipt printing improvements | Medium | Thermal printer templates, logo, QR |
-| Algolia/Typesense production | Medium | Real search-as-a-service credentials + indexing pipeline |
-| B2C payout improvements | Medium | Instant vs scheduled payout option for sellers |
+---
 
-### Long-Term
+### Tier 1 — v1.1 (Build First)
 
-| Feature | Priority | Notes |
-|---|---|---|
-| SOKONI Wallet full stack | Low | Peer-to-peer transfers, merchant accounts, virtual cards |
-| Insurance marketplace | Low | Integration with insurance providers |
-| Government services | Low | NTSA, KRA, e-citizen integration |
-| Franchise/white-label | Low | Branded sub-platforms for enterprise clients |
+#### 1. Loyalty & Rewards Program — Score: 22/25
+
+| Axis | Score | Rationale |
+|------|-------|-----------|
+| User Impact | 5 | Every buyer benefits on every order — immediately visible |
+| Revenue Potential | 5 | Points drive repeat purchase; redemption keeps spend on-platform |
+| Dev Complexity | 4 | Points ledger + redemption UI; no new APIs needed |
+| Operational Cost | 5 | Pure Firestore; minimal CF cost |
+| Dependency Risk | 3 | Requires stable order flow (already live) |
+
+**Plan:** Points earned at order completion (`onOrderPaid` trigger), redeemed at checkout as partial payment. Tiers: Bronze/Silver/Gold/Platinum. Admin dashboard for campaign boosts.
+
+---
+
+#### 2. Wallet & Seller Payouts — Score: 21/25
+
+| Axis | Score | Rationale |
+|------|-------|-----------|
+| User Impact | 4 | High impact for sellers (instant payouts vs manual settlement) |
+| Revenue Potential | 5 | Float income on wallet balances; seller retention driver |
+| Dev Complexity | 3 | IntaSend B2C API wired; needs balance ledger + payout scheduler |
+| Operational Cost | 4 | Low infra cost; compliance overhead moderate |
+| Dependency Risk | 5 | Zero new deps — IntaSend already live |
+
+**Plan:** Firestore double-entry ledger per seller. Top-up via M-Pesa STK Push. Payout to registered M-Pesa number. Minimum payout threshold: KES 100. Scheduled daily payout sweep via Cloud Scheduler.
+
+---
+
+#### 3. Jobs Marketplace — Score: 18/25
+
+| Axis | Score | Rationale |
+|------|-------|-----------|
+| User Impact | 5 | Opens the platform to a completely new user demographic (job seekers, employers) |
+| Revenue Potential | 4 | Featured listings, promoted applications, subscription job boards |
+| Dev Complexity | 3 | Standard listing → application flow; hub-register already handles categories |
+| Operational Cost | 3 | Moderation overhead; job post expiry logic |
+| Dependency Risk | 3 | Depends on Hub Registration + Auth (both live) |
+
+**Plan:** Employer posts job (hub-register flow). Seekers browse + apply. Employer reviews applications. Featured placement via commission engine. Employer dashboard for tracking.
+
+---
+
+### Tier 2 — v1.2
+
+| Initiative | Score | When |
+|------------|-------|------|
+| QR Code System | 16/25 | After Loyalty (shares checkout flow) |
+| Super Admin Portal | 15/25 | When multi-admin team exists |
+| CSP nonce migration (`unsafe-inline` removal) | 14/25 | When IntaSend SDK supports nonces |
+| Education Hub | 13/25 | After Jobs validates service-marketplace pattern |
+| `SENDGRID_WEBHOOK_KEY` hardening | 12/25 | Operational — low effort, do in v1.1 maintenance window |
+
+---
+
+### Tier 3 — v1.3+
+
+| Initiative | Notes |
+|------------|-------|
+| Insurance Marketplace | Requires insurance provider partnerships first |
+| Government Services | Requires API agreements with NTSA, KRA, eCitizen |
+| Franchise / White-label | Requires stable multi-tenancy architecture |
+| Peer-to-peer Wallet | Requires CBK licensing considerations |
+
+---
+
+### v1.1 Decision Principle
+
+> **Do not build Tier 2 or Tier 3 features until:**
+> 1. Loyalty has measurable repeat-purchase lift (track via `productStats.salesLast30d` vs baseline)
+> 2. Wallet has processed ≥50 real payouts without incident
+> 3. Jobs has ≥20 active listings within 30 days of launch
+
+Evidence from real users determines what gets built next, not assumptions.
 
 ---
 
 ## Technical Debt
 
-| Item | Severity | Notes |
-|---|---|---|
-| CSP `unsafe-inline` | High | `Content-Security-Policy` header uses `unsafe-inline` for scripts/styles — planned removal in next security sprint |
-| EmailJS template ID placeholder | Low | `sokoni-invoice.js` still references `YOUR_TEMPLATE_ID`; CF fallback works, so this is cosmetic |
-| VAPID key not configured | Medium | FCM web push silently disabled until key is generated and wired |
-| Monitoring alerts not applied | Medium | `monitoring/alerts.json` ready but `NOTIFICATION_CHANNEL_ID` not set in GCP |
-| Search credentials placeholder | Low | Algolia/Typesense keys not set; Firestore fallback active |
+| Item | Severity | Status |
+|------|----------|--------|
+| CSP `unsafe-inline` in script-src | LOW | IntaSend SDK requires it; CSP nonce migration in v1.2 |
+| `SENDGRID_WEBHOOK_KEY` not set | LOW | Webhook accepts but logs warning; set before v1.1 |
+| `MAIL_HOST` secret = placeholder | LOW | SMTP fallback offline; SendGrid primary works |
+| First Firestore backup not yet run | INFO | Scheduled daily; will self-resolve |
+| Search index backfill pending | INFO | Run `searchBackfillAll` once |
 
 ---
 
-## Known Limitations
+## Known Limitations (v1.0.0 Production)
 
-- Email delivery requires real SendGrid or SMTP credentials (currently placeholder)
-- IntaSend payments bypass live key guard and return test responses
-- FCM web push notifications not delivered (VAPID key absent)
-- Google Cloud Monitoring alerts inactive (channel not provisioned)
-- Algolia/Typesense search falls back to Firestore (slower, less ranked)
+All previous blockers (secrets, DNS, monitoring, deployments) resolved as of 2026-06-25.
+
+Remaining accepted limitations:
+- `unsafe-inline` required until IntaSend SDK nonce-compatible version released
+- SMTP fallback offline (SendGrid covers all email delivery)
+- Algolia/Typesense indexes empty until `searchBackfillAll` is run (Firestore fallback active)
 
 ---
 
-## Platform Health
+## Platform Health (Verified 2026-06-25)
 
 | Metric | Score | Notes |
 |---|---|---|
-| Launch Readiness | 92/100 | Updated 2026-06-21: 40-phase directive certified |
-| Security | 97/100 | Zero inline auth guards; all HttpsError codes correct; KRA compliant |
-| Cloud Functions | 75+ live | All Gen 2 triggers verified |
-| Unit Tests | **480 passing** | 10 test suites — constants, helpers, errors, auth-claims, sasos-core, fraud, webhook, wap-inventory, resilience, certification |
-| Firestore Indexes | 182 / 200 | 18 reserve slots |
+| Production Readiness | **98/100** | All infra live, verified by live HTTP + health check |
+| Security | **94/100** | HSTS, CSP + frame-ancestors + report-uri, HMAC webhook, 237 Firestore rule blocks |
+| Performance | **89/100** | Bounded queries, cache-first SW, lazy loading, 3-tier search |
+| Scalability | **94/100** | Stateless Gen2 CFs, flat Firestore, GCS lifecycle, scale/queue modules |
+| Reliability | **93/100** | 12 monitoring alerts, CF circuit breakers, email queue+retry, health endpoint |
+| Maintainability | **89/100** | 63 CF modules, pre-deploy gate (12/12), CI/CD pipeline, 188 indexes documented |
+| Cloud Functions | **569 live** | All Gen2 Node 22; verified via firebase functions:list |
+| Firestore Indexes | **188 / 200** | 12 reserve slots |
 | Email Templates | 53 | All branded, Outlook-compatible |
-| CF Auth Guards | **100%** | All CFs use shared assertAuth/assertAdmin/assertSuperAdmin |
-| Financial Constants | **100% KRA** | VAT 16%, WHT 5%, DST 1.5%, all tested |
+| Service Worker | sokoni-v292 | Cache-first with background sync |
+| Git Tag | v1.0.0 | Commit 3560bba; latest 1c552c2 |

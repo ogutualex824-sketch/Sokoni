@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business KPIs — SOKONI</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="sokoni-tokens.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    .kpi-wrap{max-width:1280px;margin:0 auto;padding:24px 16px 80px}
+    h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+    .kpi-sub{color:#6b7280;font-size:.875rem;margin-bottom:24px}
+    .period-tabs{display:flex;gap:4px;background:#e5e7eb;border-radius:10px;padding:4px;width:fit-content;margin-bottom:24px}
+    .period-tab{padding:8px 18px;border:none;border-radius:8px;cursor:pointer;font-size:.875rem;font-weight:600;background:transparent;color:#6b7280;transition:all .15s}
+    .period-tab.active{background:#fff;color:var(--color-primary,#5b21b6);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .grid-5{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+    .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    .card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px}
+    .card-val{font-size:1.875rem;font-weight:800;line-height:1.1}
+    .card-label{font-size:.75rem;color:#9ca3af;margin-top:4px}
+    .card-delta{font-size:.75rem;font-weight:600;margin-top:6px}
+    .delta-pos{color:#059669}
+    .delta-neg{color:#dc2626}
+    .section-title{font-size:1rem;font-weight:700;margin:28px 0 12px}
+    /* Category bar chart */
+    .cat-list{display:flex;flex-direction:column;gap:10px}
+    .cat-row{display:grid;grid-template-columns:160px 1fr 64px;align-items:center;gap:10px}
+    .cat-name{font-size:.8rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cat-bar-bg{background:#f3f4f6;border-radius:99px;height:8px;overflow:hidden}
+    .cat-bar{background:var(--color-primary,#5b21b6);height:8px;border-radius:99px;transition:width .5s ease}
+    .cat-count{font-size:.8rem;font-weight:700;text-align:right;color:#374151}
+    /* Trend chart */
+    .trend-chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding-bottom:4px}
+    .trend-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%}
+    .trend-bar{width:100%;background:var(--color-primary,#5b21b6);border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;opacity:.85}
+    .trend-bar:hover{opacity:1}
+    .trend-date{font-size:.6rem;color:#9ca3af;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);margin-top:4px;white-space:nowrap}
+    .trend-empty{display:flex;align-items:center;justify-content:center;height:120px;color:#9ca3af;font-size:.875rem}
+    .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;height:2.5rem;width:70%}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .kpi-note{font-size:.75rem;color:#9ca3af;margin-top:8px}
+    @media(max-width:640px){.cat-row{grid-template-columns:120px 1fr 50px}.card-val{font-size:1.5rem}}
+  </style>
+</head>
+<body>
+<div class="kpi-wrap">
+  <h1>Business KPIs</h1>
+  <div class="kpi-sub">Executive dashboard — select a reporting period</div>
+
+  <div class="period-tabs">
+    <button class="period-tab" data-period="daily">Today</button>
+    <button class="period-tab active" data-period="weekly">7 Days</button>
+    <button class="period-tab" data-period="monthly">30 Days</button>
+    <button class="period-tab" data-period="quarterly">90 Days</button>
+    <button class="period-tab" data-period="yearly">12 Months</button>
+  </div>
+
+  <!-- Core KPIs -->
+  <div class="grid-5" id="kpiGrid">
+    <div class="card"><div class="card-title">GMV</div><div class="skeleton"></div></div>
+    <div class="card"><div class="card-title">Orders</div><div class="skeleton"></div></div>
+    <div class="card"><div class="card-title">Avg Order Value</div><div class="skeleton"></div></div>
+    <div class="card"><div class="card-title">Active Buyers</div><div class="skeleton"></div></div>
+    <div class="card"><div class="card-title">Active Sellers</div><div class="skeleton"></div></div>
+  </div>
+
+  <!-- Order Trends Chart -->
+  <div class="section-title">Order Volume (Daily)</div>
+  <div class="card">
+    <div id="trendChart" class="trend-empty">Loading trend data...</div>
+    <div class="kpi-note" id="trendNote"></div>
+  </div>
+
+  <!-- Top Categories -->
+  <div class="section-title">Top Categories by Order Count</div>
+  <div class="card">
+    <div id="catList"><div class="skeleton" style="margin:10px 0"></div><div class="skeleton" style="margin:10px 0;width:60%"></div><div class="skeleton" style="margin:10px 0;width:40%"></div></div>
+  </div>
+
+  <div class="kpi-note" id="generatedAt" style="margin-top:16px"></div>
+</div>
+
+<script src="firebase.js"></script>
+<script type="module">
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+
+  let currentPeriod = "weekly";
+  const fns = getFunctions(undefined, "us-central1");
+
+  function fmt(n) {
+    if (n == null) return "—";
+    if (n >= 1_000_000) return "KES " + (n / 1_000_000).toFixed(1) + "M";
+    if (n >= 1_000)     return "KES " + (n / 1_000).toFixed(1) + "K";
+    return "KES " + n.toLocaleString();
+  }
+
+  function renderKPIs(d) {
+    document.getElementById("kpiGrid").innerHTML = `
+      <div class="card">
+        <div class="card-title">GMV</div>
+        <div class="card-val">${fmt(d.gmv)}</div>
+        <div class="card-label">${d.period}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Orders</div>
+        <div class="card-val">${d.orderCount?.toLocaleString() ?? "—"}</div>
+        <div class="card-label">paid/delivered/completed</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Avg Order Value</div>
+        <div class="card-val">${fmt(d.averageOrderValue)}</div>
+        <div class="card-label">AOV</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Active Buyers</div>
+        <div class="card-val">${d.activeBuyers?.toLocaleString() ?? "—"}</div>
+        <div class="card-label">placed ≥1 order</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Active Sellers</div>
+        <div class="card-val">${d.activeSellers?.toLocaleString() ?? "—"}</div>
+        <div class="card-label">received ≥1 order</div>
+      </div>`;
+    if (d.generatedAt) {
+      document.getElementById("generatedAt").textContent =
+        "Generated: " + new Date(d.generatedAt).toLocaleString();
+    }
+  }
+
+  function renderCategories(cats) {
+    if (!cats || cats.length === 0) {
+      document.getElementById("catList").innerHTML =
+        '<div style="color:#9ca3af;font-size:.875rem;padding:8px 0">No order data yet for this period</div>';
+      return;
+    }
+    const max = cats[0].count;
+    document.getElementById("catList").innerHTML =
+      '<div class="cat-list">' +
+      cats.map(c => `
+        <div class="cat-row">
+          <div class="cat-name" title="${c.name}">${c.name}</div>
+          <div class="cat-bar-bg"><div class="cat-bar" style="width:${Math.round(c.count/max*100)}%"></div></div>
+          <div class="cat-count">${c.count}</div>
+        </div>`).join("") +
+      "</div>";
+  }
+
+  function renderTrend(trends) {
+    if (!trends || trends.length === 0) {
+      document.getElementById("trendChart").innerHTML = '<div class="trend-empty">No order data yet</div>';
+      return;
+    }
+    const max = Math.max(...trends.map(t => t.orders), 1);
+    const showEvery = trends.length > 14 ? 7 : 1;
+    const bars = trends.map((t, i) => {
+      const pct = Math.round((t.orders / max) * 100);
+      const label = i % showEvery === 0
+        ? t.date.substring(5)  /* MM-DD */
+        : "";
+      return `<div class="trend-bar-wrap" title="${t.date}: ${t.orders} orders, GMV ${fmt(t.gmv)}">
+        <div class="trend-bar" style="height:${Math.max(pct, 2)}%"></div>
+        <div class="trend-date">${label}</div>
+      </div>`;
+    }).join("");
+    document.getElementById("trendChart").className = "trend-chart";
+    document.getElementById("trendChart").innerHTML = bars;
+    document.getElementById("trendNote").textContent =
+      `${trends.length} days shown. Max daily orders: ${max}.`;
+  }
+
+  async function load() {
+    const getBusinessMetrics = httpsCallable(fns, "getBusinessMetrics");
+    const getOrderTrends     = httpsCallable(fns, "getOrderTrends");
+
+    try {
+      const [metricsRes, trendsRes] = await Promise.all([
+        getBusinessMetrics({ period: currentPeriod }),
+        getOrderTrends({ days: currentPeriod === "daily" ? 7 : currentPeriod === "weekly" ? 14 : currentPeriod === "yearly" ? 90 : 30 }),
+      ]);
+      renderKPIs(metricsRes.data);
+      renderCategories(metricsRes.data.topCategories);
+      renderTrend(trendsRes.data.trends);
+    } catch (e) {
+      document.getElementById("kpiGrid").innerHTML =
+        `<div class="card" style="grid-column:1/-1;color:#dc2626;font-size:.875rem">${e.message}</div>`;
+    }
+  }
+
+  document.querySelectorAll(".period-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".period-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentPeriod = btn.dataset.period;
+      load();
+    });
+  });
+
+  onAuthStateChanged(getAuth(), user => {
+    if (!user) {
+      document.getElementById("kpiGrid").innerHTML =
+        '<div class="card" style="grid-column:1/-1;color:#6b7280">Sign in as admin to view KPIs</div>';
+    } else {
+      load();
+    }
+  });
+</script>
+<script src="shared-header.js" defer></script>
+</body>
+</html>
