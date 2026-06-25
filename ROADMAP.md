@@ -284,7 +284,7 @@ Evidence from real users determines what gets built next, not assumptions.
 |------|----------|--------|
 | CSP `unsafe-inline` in script-src | LOW | IntaSend SDK requires it; CSP nonce migration in v1.2 |
 | `SENDGRID_WEBHOOK_KEY` not set | LOW | Webhook accepts but logs warning; set before v1.1 |
-| `MAIL_HOST` secret = placeholder | LOW | SMTP fallback offline; SendGrid primary works |
+| ~~`MAIL_HOST` secret = placeholder~~ | RESOLVED | smtp.sendgrid.net — SendGrid SMTP relay configured 2026-06-25 |
 | First Firestore backup not yet run | INFO | Scheduled daily; will self-resolve |
 | Search index backfill pending | INFO | Run `searchBackfillAll` once |
 

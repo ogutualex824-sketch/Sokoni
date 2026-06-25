@@ -3534,9 +3534,9 @@ Full enterprise email platform built and deployed. 53 branded HTML email templat
 | Secret | Status |
 |---|---|
 | `SENDGRID_API_KEY` | Placeholder set — set real key after SendGrid domain auth |
-| `MAIL_HOST` | Placeholder set — set real SMTP host |
-| `MAIL_USER` | Placeholder set — set real SMTP user |
-| `MAIL_PASS` | Placeholder set — set real SMTP password |
+| `MAIL_HOST` | ✅ smtp.sendgrid.net (2026-06-25) |
+| `MAIL_USER` | ✅ apikey (2026-06-25) |
+| `MAIL_PASS` | ✅ Set — equals SENDGRID_API_KEY (2026-06-25) |
 | `GMAIL_USER` | Set to company Gmail account (see secrets manager) |
 | `GMAIL_APP_PASSWORD` | Placeholder set — set real Google App Password |
 

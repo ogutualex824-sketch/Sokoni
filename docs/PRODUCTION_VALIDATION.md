@@ -98,9 +98,9 @@ Derived from grepping all 60 function files for `defineSecret("...")` calls.
 | `ALGOLIA_ADMIN_KEY` | index.js + 9 algolia-*.js + 8 search-*.js | Full-text search indexing | ❌ UNTESTABLE |
 | `ALGOLIA_SEARCH_KEY` | algolia-secured-keys.js, search-admin.js, search-service.js | Search query execution | ❌ UNTESTABLE |
 | `SENDGRID_API_KEY` | email-service.js | Transactional email delivery | ❌ UNTESTABLE |
-| `MAIL_HOST` | email-service.js | Fallback SMTP host | ❌ UNTESTABLE |
-| `MAIL_USER` | email-service.js | Fallback SMTP username | ❌ UNTESTABLE |
-| `MAIL_PASS` | email-service.js | Fallback SMTP password | ❌ UNTESTABLE |
+| `MAIL_HOST` | email-service.js | Fallback SMTP host | ✅ smtp.sendgrid.net |
+| `MAIL_USER` | email-service.js | Fallback SMTP username | ✅ apikey |
+| `MAIL_PASS` | email-service.js | Fallback SMTP password | ✅ Set (= SENDGRID_API_KEY) |
 | `SUB_OS_SIGNING_SECRET` | subscription-os.js | Subscription integrity signing | ❌ UNTESTABLE |
 | `TYPESENSE_ADMIN_KEY` | typesense-*.js + search-monitor/admin/health/worker/queue/repair | Typesense indexing | ❌ UNTESTABLE |
 | `TYPESENSE_SEARCH_KEY` | typesense-secured-keys.js, search-admin.js, search-service.js | Typesense queries | ❌ UNTESTABLE |

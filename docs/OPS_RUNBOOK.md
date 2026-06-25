@@ -461,9 +461,9 @@ Ranked by: **Business Impact × User Demand ÷ Engineering Complexity**
 | `AT_USERNAME` | Defined in Firebase | Africa's Talking dashboard |
 | `ALGOLIA_ADMIN_KEY` | Defined in Firebase | algolia.com/api-keys |
 | `SENDGRID_API_KEY` | **NOT SET** | sendgrid.com/settings/api_keys |
-| `MAIL_HOST` | **NOT SET** | Your SMTP provider |
-| `MAIL_USER` | **NOT SET** | Your SMTP username |
-| `MAIL_PASS` | **NOT SET** | Your SMTP password |
+| `MAIL_HOST` | `smtp.sendgrid.net` | SendGrid SMTP relay |
+| `MAIL_USER` | `apikey` | SendGrid SMTP relay username |
+| `MAIL_PASS` | Set (= SENDGRID_API_KEY) | SendGrid SMTP relay password |
 | `TYPESENSE_SEARCH_KEY` | **NOT SET** | Typesense dashboard |
 | `SUB_OS_SIGNING_SECRET` | NOT SET | `openssl rand -hex 32` |
 | `DARAJA_CONSUMER_KEY` | NOT SET | Safaricom Daraja portal |
