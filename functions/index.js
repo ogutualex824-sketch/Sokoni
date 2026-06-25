@@ -5111,7 +5111,7 @@ function _buildSearchTerms(doc) {
     str.toLowerCase().split(/\s+/).forEach(function(word) {
       if (word.length >= 2) {
         terms.add(word);
-        for (var i = 2; i <= Math.min(word.length, 6); i++) {
+        for (let i = 2; i <= Math.min(word.length, 6); i++) {
           terms.add(word.slice(0, i));
         }
       }
@@ -5313,7 +5313,7 @@ exports.processSettlementQueue = onSchedule(
       .limit(20).get().catch(() => null);
     if (!snap || snap.empty) return;
 
-    for (var i = 0; i < snap.docs.length; i++) {
+    for (let i = 0; i < snap.docs.length; i++) {
       const docRef = snap.docs[i];
       const item   = docRef.data();
       await docRef.ref.update({ status: "processing" }).catch(() => {});
