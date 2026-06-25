@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Authenticate GCP
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
@@ -71,7 +71,7 @@ jobs:
     timeout-minutes: 60
     if: inputs.target == 'all' || inputs.target == 'storage' || github.event_name == 'schedule'
     steps:
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
@@ -107,7 +107,7 @@ jobs:
           TYPESENSE_ADMIN_KEY: ${{ secrets.TYPESENSE_ADMIN_KEY }}
 
       - name: Upload snapshot to GCS
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
@@ -126,7 +126,7 @@ jobs:
     timeout-minutes: 10
     if: inputs.target == 'all' || inputs.target == 'secrets' || github.event_name == 'schedule'
     steps:
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
