@@ -2712,10 +2712,19 @@
       ]
     },
     {
-      "collectionGroup": "productViewDedup",
+      "collectionGroup": "emailLogs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "lastAt", "order": "ASCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "sentAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
     }
   ],
