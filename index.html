@@ -135,7 +135,7 @@
   <link rel="stylesheet" href="sokoni-home-v3.css">
 </head>
 
-<body>
+<body class="sk-has-search">
 
   <!-- ── HOME SPLASH — creative colour journey ── -->
   <style>
@@ -3277,8 +3277,16 @@
         setTimeout(function () { toast.classList.remove("show"); }, 3500);
       }
 
-      window.addEventListener("online", function () { showNetworkToast(true); });
-      window.addEventListener("offline", function () { showNetworkToast(false); });
+      /* Debounce offline toast: 1-second delay prevents false positives from
+         momentary SW cache transitions and first-load network blips on Android/iOS */
+      var _offlineTimer = null;
+      window.addEventListener("online", function () {
+        clearTimeout(_offlineTimer);
+        showNetworkToast(true);
+      });
+      window.addEventListener("offline", function () {
+        _offlineTimer = setTimeout(function () { showNetworkToast(false); }, 1000);
+      });
 
       /* -- Pull-to-refresh visual -- */
       var ptr = document.getElementById("pullRefreshIndicator");
@@ -3516,8 +3524,8 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
 @media(max-width:600px){
 
   /* ── Hero: compact section padding on phone ── */
-  .glass-hero{ padding:28px 14px !important; min-height:auto !important; }
-  .glass-hero-card{ padding:28px 18px !important; border-radius:22px !important; }
+  .glass-hero{ padding:14px 12px 18px !important; min-height:auto !important; }
+  .glass-hero-card{ padding:18px 14px !important; border-radius:22px !important; }
   .glass-hero-card h1{ font-size:28px !important; margin-bottom:10px !important; }
   .glass-hero-sub{ font-size:13px !important; margin-bottom:18px !important; }
   .glass-hero-badge{ font-size:11px !important; padding:5px 14px !important; margin-bottom:14px !important; }

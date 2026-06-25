@@ -1,4 +1,37 @@
-﻿## [2026-06-25] — RC1 Final Hardening & Go-Live Certification
+﻿## [2026-06-25] — Mobile UI Recovery & Stability Audit
+
+### Summary
+Production UI recovery pass targeting root-cause fixes for four mobile regressions: fixed-header movement on scroll (GPU compositing), body padding layout shift on pages with search bar (early `sk-has-search` class application), bottom nav icons invisible on Samsung/Android Chrome (`backface-visibility:hidden` + `backdrop-filter` conflict), and false-positive offline toast on first load (1-second debounce). Hero section vertical height reduced on mobile (~54px saved). SW cache version bumped to force cache refresh.
+
+### Bug Fixes
+- **Header movement on scroll** — Added `will-change:transform; transform:translateZ(0)` to `#sk-top-nav` CSS in `shared-header.js`; promotes the fixed nav to its own compositor layer so the browser doesn't repaint it on every scroll frame.
+- **Header height flash (zero-height flash)** — Added `min-height:52px` to mobile `#sk-top-nav` rule; prevents height-0 frame when `height:auto` resolves before content loads.
+- **Body padding CLS (60px→120px jump)** — Moved `NO_SEARCH`/`showSearch` computation to before CSS injection in `shared-header.js`; applied `sk-has-search` class immediately after CSS injection rather than waiting for `DOMContentLoaded`. Added `<body class="sk-has-search">` to `index.html` as belt-and-suspenders.
+- **Bottom nav icons invisible** — In `mobile.css`, removed `.bottom-nav` from the `backface-visibility:hidden` GPU compositing block. The `backdrop-filter:blur()` already in `.bottom-nav` creates a compositor layer; adding `backface-visibility:hidden` on top causes blank rendering on Samsung Internet and some Android Chrome versions. `.bottom-nav` now gets a separate `will-change:transform; translateZ(0)` rule without the problematic flag.
+- **Offline toast false positive** — Added 1-second `setTimeout` debounce on the `offline` event in `index.html`. The browser fires `offline` on momentary connectivity blips during SW cache transitions on first load; the debounce prevents the false "No internet" banner from appearing on load.
+- **Hero section excessive height on mobile** — Reduced `padding` on `.glass-hero` from `28px 14px` → `14px 12px 18px` and on `.glass-hero-card` from `28px 18px` → `18px 14px` in `index.html` mobile CSS block. Saves ~54px of vertical space above the product grid on phones.
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `shared-header.js` | GPU compositing on `#sk-top-nav`; `min-height:52px` on mobile nav; `NO_SEARCH`/`showSearch` moved before CSS injection; early `sk-has-search` class application |
+| `index.html` | `sk-has-search` on `<body>`; offline toast 1-second debounce; hero mobile padding reduced |
+| `mobile.css` | `.bottom-nav` separated from `backface-visibility:hidden` block with dedicated GPU compositing rule |
+| `service-worker.js` | Cache version bumped to `sokoni-20260625160000` |
+
+### Security Changes
+None.
+
+### Performance Changes
+- GPU compositor layer on `#sk-top-nav` eliminates main-thread repaints on every scroll frame.
+- Early `sk-has-search` class application eliminates layout shift CLS on pages with search bar.
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-25] — RC1 Final Hardening & Go-Live Certification
 
 ### Summary
 Comprehensive RC1 regression pass across all security-changed code paths. Found and fixed 5 additional XSS vectors in `script.js` that were outside the original `buildProductCard` scope: saved searches, featured shop storeUrl, flash sale card IDs, compare bar product IDs, and story product CTA JSON injection. Fixed checkout OOS feedback regression. Fixed pre-deploy check SW version format mismatch. Added Dependabot, monitoring upsert, MFA enforcement utility, Firestore rules for `commissions`/`securityEvents`, 2 new test suites (73 tests).

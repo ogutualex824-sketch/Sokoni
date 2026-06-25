@@ -93,6 +93,15 @@
      the CSS injection and event wiring below — _inject() handles that gracefully
      by checking whether the nav already exists before calling _buildNav(). */
 
+  /* ── Pages where search bar is hidden — computed BEFORE CSS injection ── */
+  const NO_SEARCH = [
+    'checkout.html', 'cart.html', 'track.html', 'messages.html',
+    'dispute.html', 'invoice.html', 'notifications.html',
+    'profile.html', 'reviews.html', 'referral.html',
+    'subscriptions.html', 'loyalty.html',
+  ];
+  const showSearch = !NO_SEARCH.includes(page);
+
   /* ── CSS (injected into <head> immediately to prevent flash) ── */
   const CSS = `
     /* ── Skip navigation link (keyboard / screen-reader users) ── */
@@ -113,6 +122,9 @@
       backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
       border-bottom: 1px solid rgba(255,255,255,0.07);
       box-shadow: 0 2px 24px rgba(0,0,0,0.5);
+      will-change: transform;
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
     }
     /* ── Hide page-specific navs — preserve .sk-sub-nav tab bars ── */
     body > nav:not(#sk-top-nav):not(.bottom-nav):not(.sk-sub-nav),
@@ -369,7 +381,7 @@
     }
     @media (max-width: 600px) {
       #sk-top-nav {
-        height: auto; flex-wrap: wrap; padding: 8px 12px 8px; gap: 6px;
+        height: auto; min-height: 52px; flex-wrap: wrap; padding: 8px 12px 8px; gap: 6px;
         align-items: center;
       }
       #sk-nav-logo { order: 0; flex-shrink: 0; }
@@ -416,14 +428,9 @@
   styleEl.textContent = CSS;
   (document.head || document.documentElement).appendChild(styleEl);
 
-  /* ── Pages where search bar is hidden (no benefit) ── */
-  const NO_SEARCH = [
-    'checkout.html', 'cart.html', 'track.html', 'messages.html',
-    'dispute.html', 'invoice.html', 'notifications.html',
-    'profile.html', 'reviews.html', 'referral.html',
-    'subscriptions.html', 'loyalty.html',
-  ];
-  const showSearch = !NO_SEARCH.includes(page);
+  /* Apply sk-has-search immediately after CSS injection — prevents body padding
+     from flickering from 60px→120px when _inject() runs later on DOMContentLoaded. */
+  if (showSearch && document.body) document.body.classList.add('sk-has-search');
 
   /* ── Read user + cart from localStorage ── */
   function _readState() {
@@ -927,6 +934,7 @@
       const nav = _buildNav();
       document.body.insertBefore(nav, document.body.firstChild);
     }
+    /* sk-has-search already applied before first paint — only need idempotent add here */
     if (showSearch) document.body.classList.add('sk-has-search');
     if (_navExists) _refresh(); /* sync avatar/cart from localStorage */
 

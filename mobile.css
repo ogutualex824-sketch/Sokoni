@@ -80,7 +80,6 @@ button, a, [role="button"] {
    on swipe and avoid breaking stacking contexts in modals and drawers.
    contain:layout+style isolates grids so browser skips repainting siblings.
    will-change tells the compositor to keep these layers promoted. */
-.bottom-nav,
 .shared-header,
 .navbar,
 [class*="-nav"],
@@ -94,6 +93,15 @@ button, a, [role="button"] {
   -webkit-transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+}
+
+/* bottom-nav: GPU compositing WITHOUT backface-visibility:hidden — the hidden flag
+   combined with backdrop-filter:blur causes blank/invisible rendering on Android
+   Chrome and Samsung Internet. Transform alone is sufficient for layer promotion. */
+.bottom-nav {
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 /* Isolate heavy grids from the scroll-paint budget */
