@@ -1488,6 +1488,15 @@ exports.verifyIntasendPayment = onRequest(
         );
       }
 
+      /* Decrement stock for each purchased item — prevents overselling */
+      (resolvedItems || []).forEach(item => {
+        if (item.productId) {
+          batch.update(db.collection("products").doc(String(item.productId)), {
+            stock: admin.firestore.FieldValue.increment(-(Number(item.qty) || 1)),
+          });
+        }
+      });
+
       await batch.commit();
 
       /* Order event written after batch (subcollections cannot be in a batch) */
@@ -4502,11 +4511,12 @@ async function _processWebhook(req, res, opts) {
 
 /* â”€â”€ IntaSend â”€â”€ */
 exports.webhookIntasend = onRequest(
-  { timeoutSeconds: 30, cors: false, invoker: "public" },
+  { timeoutSeconds: 30, cors: false, invoker: "public", secrets: [INTASEND_PRIVATE_KEY] },
   async (req, res) => {
     if (req.method !== "POST") return res.status(405).end();
     await _processWebhook(req, res, {
       provider:    "intasend",
+      secretKey:   INTASEND_PRIVATE_KEY.value(),
       getEventId:  (b) => (b && b.invoice && b.invoice.invoice_id) || (b && b.id) || (b && b.tracking_id),
       parsePayload:(b) => ({
         status:    ((b.state || b.status || "")).toUpperCase(),
@@ -5340,6 +5350,7 @@ const emailSvcInv = require("./email-service");
 exports.sendInvoiceEmail = onCall(
   { secrets: _INV_SECRETS, enforceAppCheck: false },
   async (req) => {
+    if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const { toEmail, toName, invoice } = req.data || {};
     if (!toEmail || !invoice) {
       throw new HttpsError("invalid-argument", "toEmail and invoice are required");

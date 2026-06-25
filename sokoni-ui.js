@@ -631,12 +631,12 @@
     bar.textContent = '📡 No internet connection — some features may not work';
     document.body.insertBefore(bar, document.body.firstChild);
 
-    var _offlineTimer = null;
+    var _offlineTimer  = null;
+    var _uiPageLoadTs  = Date.now();
 
-    /* navigator.onLine is unreliable on VPN/proxy/captive portal.
-       Verify with a real fetch before showing the banner. */
+    /* navigator.onLine is unreliable on VPN/proxy/captive portal and goes
+       false briefly during SW installation. Always verify with a real fetch. */
     function _checkConnection(cb) {
-      /* Use manifest.json — guaranteed to exist; SW caches it so also works offline */
       fetch('/manifest.json?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
         .then(function() { cb(true); })
         .catch(function() { cb(false); });
@@ -646,33 +646,23 @@
       bar.classList.toggle('sk-offline--visible', !isOnline);
     }
 
-    /* _initialCheck: on page load trust navigator.onLine to avoid false-positive
-       banners caused by the SW intercepting the ping before network is ready. */
-    var _initialCheck = true;
-
     function update() {
-      if (!navigator.onLine) {
-        _applyState(false);
-        _initialCheck = false;
-        return;
-      }
-      if (_initialCheck) {
-        /* First check — trust the browser; do NOT fire a fetch that the SW
-           might intercept and fail before connectivity is confirmed. */
-        _applyState(true);
-        _initialCheck = false;
-        return;
-      }
-      /* Subsequent online events — verify with a real network request */
+      /* Debounce + real-fetch for every online/offline transition.
+         During SW installation (first ~5s) the browser briefly flips
+         navigator.onLine=false; the 2s debounce + fetch absorbs this.
+         Page-load grace period: ignore any offline signal in first 5s. */
       clearTimeout(_offlineTimer);
+      var elapsed = Date.now() - _uiPageLoadTs;
+      if (elapsed < 5000 && !navigator.onLine) return; /* SW install noise */
       _offlineTimer = setTimeout(function() {
         _checkConnection(function(real) { _applyState(real); });
-      }, 300);
+      }, navigator.onLine ? 300 : 2000);
     }
 
     global.addEventListener('online',  update);
     global.addEventListener('offline', update);
-    update();
+    /* Delay initial check 1s so DOM + SW settle before first fetch */
+    setTimeout(update, 1000);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────

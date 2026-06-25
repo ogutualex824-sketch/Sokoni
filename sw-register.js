@@ -648,12 +648,13 @@
   /* ══════════════════════════════════════════════════════
      6. ONLINE / OFFLINE STATUS DOT
   ══════════════════════════════════════════════════════ */
-  let _swOfflineTimer = null;
+  let _swOfflineTimer  = null;
+  const _swPageLoadTs  = Date.now();
 
-  /* navigator.onLine is unreliable on VPN/proxy/captive portal.
-     Verify with a real fetch before showing the SW offline banner. */
+  /* navigator.onLine is unreliable on VPN/proxy/captive portal and goes
+     false briefly during SW installation. Always verify with a real fetch. */
   function _verifyConnection() {
-    return fetch('/ping?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
+    return fetch('/manifest.json?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
       .then(() => true)
       .catch(() => false);
   }
@@ -673,16 +674,15 @@
   }
 
   function _updateOnlineStatus() {
-    if (!navigator.onLine) {
-      /* Browser confirms offline — act immediately */
-      _applyOnlineState(false);
-      return;
-    }
-    /* Browser says online — debounce 300 ms then verify with a real request */
+    /* Debounce + real-fetch for all transitions. Page-load grace period
+       (first 5s) absorbs the brief offline blip caused by SW installation. */
     clearTimeout(_swOfflineTimer);
+    const elapsed = Date.now() - _swPageLoadTs;
+    if (elapsed < 5000 && !navigator.onLine) return;
+    const delay = navigator.onLine ? 300 : 2000;
     _swOfflineTimer = setTimeout(() => {
       _verifyConnection().then(real => _applyOnlineState(real));
-    }, 300);
+    }, delay);
   }
 
   function _showOfflineBanner() {
@@ -696,7 +696,8 @@
 
   window.addEventListener("online",  _updateOnlineStatus);
   window.addEventListener("offline", _updateOnlineStatus);
-  _updateOnlineStatus();
+  /* Delay initial check 1s so DOM + SW settle before first fetch */
+  setTimeout(_updateOnlineStatus, 1000);
 
   /* ══════════════════════════════════════════════════════
      7. SW MESSAGE HANDLER

@@ -97,11 +97,15 @@ button, a, [role="button"] {
 
 /* bottom-nav: GPU compositing WITHOUT backface-visibility:hidden — the hidden flag
    combined with backdrop-filter:blur causes blank/invisible rendering on Android
-   Chrome and Samsung Internet. Transform alone is sufficient for layer promotion. */
+   Chrome and Samsung Internet. Transform alone is sufficient for layer promotion.
+   backface-visibility:visible explicitly overrides the [class*="-nav"] selector
+   above which also matches "bottom-nav" as a substring. */
 .bottom-nav {
   will-change: transform;
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
 }
 
 /* Isolate heavy grids from the scroll-paint budget */

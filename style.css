@@ -15465,13 +15465,18 @@ label { font-size:12px !important; font-weight:700 !important; margin-bottom:4px
   100% { background-position: -200% 0; }
 }
 
-/* ── Page entrance: body fades in on load ── */
+/* ── Page entrance: body fades in on load ──
+   fill-mode:backwards (not both) — 'both' freezes translateY(0) = matrix(identity)
+   on <body> after the animation ends. Any non-none transform on <body> breaks
+   position:fixed for ALL children (they become fixed relative to body, not viewport).
+   'backwards' applies the from-keyframe at start (prevents opacity flash) but does
+   NOT freeze the to-state, so <body> gets transform:none restored after 0.38s. */
 body.p9-page-in {
-  animation: p9PageIn 0.38s ease both;
+  animation: p9PageIn 0.38s ease backwards;
 }
 @keyframes p9PageIn {
   from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ── Scroll reveal system ──

@@ -466,11 +466,18 @@
         /* Always show the delivery + counties pills */
         _showRow();
 
-        /* Load real counts from Firestore when Firebase is ready */
+        /* Load real counts from Firestore — only for authenticated users.
+           Firestore rules require auth for these aggregation queries; running
+           them anonymously produces 403 console errors with no benefit. */
         var _tried = false;
         function _tryLoad() {
-          if (_tried) return; _tried = true;
+          if (_tried) return;
           if (!window.firebaseDB) return;
+          /* Skip if user is not authenticated (avoids 403 console errors) */
+          var auth = window.firebaseAuth || (window._firebaseApp && window.firebase && window.firebase.auth && window.firebase.auth());
+          var user = auth && (typeof auth.currentUser !== 'undefined' ? auth.currentUser : null);
+          if (!user) return;
+          _tried = true;
           import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
             .then(function(fs) {
               var db = window.firebaseDB;
@@ -507,10 +514,17 @@
             }).catch(function(){});
         }
 
-        /* Wait for Firebase to be ready */
-        document.addEventListener('sokoniFirebaseReady', _tryLoad);
-        document.addEventListener('DOMContentLoaded', function(){
-          setTimeout(_tryLoad, 3000); /* fallback after 3s */
+        /* Wait for Firebase + auth to be ready */
+        document.addEventListener('sokoniFirebaseReady', function() {
+          var auth = window.firebaseAuth;
+          if (auth) {
+            /* onAuthStateChanged fires immediately with current user (null or user) */
+            auth.onAuthStateChanged(function(user) {
+              if (user) _tryLoad();
+            });
+          } else {
+            setTimeout(_tryLoad, 3000); /* fallback if auth not ready */
+          }
         });
       })();
       </script>
@@ -2899,8 +2913,7 @@
   <!-- SCRIPT -->
 
   <script src="adult-gate.js"></script>
-  <!-- Demo seed: runs once, populates all localStorage with rich Kenyan demo data -->
-  <script src="demo-seed.js"></script>
+  <!-- demo-seed.js intentionally removed from production -->
   <script src="script.js" defer></script>
   <script>
     function accessAdultCat(btn, cat) {
@@ -3277,15 +3290,32 @@
         setTimeout(function () { toast.classList.remove("show"); }, 3500);
       }
 
-      /* Debounce offline toast: 1-second delay prevents false positives from
-         momentary SW cache transitions and first-load network blips on Android/iOS */
+      /* Offline toast guard:
+         - 5-second page-load grace period absorbs SW install + cache warm-up blips
+         - 2-second debounce at all other times
+         - navigator.onLine check at fire time (VPN/captive-portal guard)
+         - "Back online" toast only shows if user actually saw the offline toast first */
       var _offlineTimer = null;
+      var _wasOffline   = false;
+      var _pageLoadTs   = Date.now();
+
       window.addEventListener("online", function () {
         clearTimeout(_offlineTimer);
-        showNetworkToast(true);
+        if (_wasOffline) {
+          _wasOffline = false;
+          showNetworkToast(true);
+        }
       });
       window.addEventListener("offline", function () {
-        _offlineTimer = setTimeout(function () { showNetworkToast(false); }, 1000);
+        clearTimeout(_offlineTimer);
+        var elapsed = Date.now() - _pageLoadTs;
+        if (elapsed < 5000) return; /* ignore offline events in first 5s */
+        _offlineTimer = setTimeout(function () {
+          if (!navigator.onLine) {
+            _wasOffline = true;
+            showNetworkToast(false);
+          }
+        }, 2000);
       });
 
       /* -- Pull-to-refresh visual -- */
