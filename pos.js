@@ -991,6 +991,7 @@ const SPos = (function () {
         businessAddress: state.settings.bizAddress,
         businessPhone:   state.settings.bizPhone,
         businessPin:     state.settings.bizPin,
+        branchName:      window._currentBranchName || 'Main Branch',
         footerMessage:   state.settings.receiptFooter || 'Thank you for shopping with us!',
         date:            new Date().toLocaleString('en-KE'),
         taxRate:         state.settings.taxRate || 16,

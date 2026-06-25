@@ -35,10 +35,60 @@
   <link rel="stylesheet" href="sokoni-premium-v2.css">
 <script src="sokoni-pay.js" defer></script>
 <script src="shared-header.js" defer></script>
+<script src="sokoni-branch.js"></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
+<style>
+/* ── Branch switcher ── */
+.so-branch-switcher{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:7px 12px;cursor:pointer;
+  color:white;font-family:inherit;font-size:12px;font-weight:700;white-space:nowrap;
+  transition:background .12s,border-color .12s;min-height:36px;}
+.so-branch-switcher:hover{background:rgba(255,255,255,0.1);border-color:rgba(113,255,0,0.3);}
+.so-branch-icon{font-size:14px;line-height:1;}
+.so-branch-label{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.so-branch-caret{font-size:9px;opacity:.5;margin-left:2px;}
+/* Employee card improvements */
+.so-emp-card{display:flex;align-items:flex-start;gap:12px;padding:14px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;margin-bottom:8px;transition:border-color .12s;}
+.so-emp-card:hover{border-color:rgba(255,255,255,0.14);}
+.so-emp-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:16px;font-weight:900;flex-shrink:0;
+  color:white;text-transform:uppercase;}
+.so-emp-name{font-weight:800;color:white;font-size:13px;line-height:1.2;}
+.so-emp-email{font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;}
+.so-emp-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.so-emp-badge{padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;}
+.so-emp-role-cashier{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.2);}
+.so-emp-role-manager{background:rgba(100,180,255,0.1);color:#64b4ff;border:1px solid rgba(100,180,255,0.2);}
+.so-emp-role-inventory{background:rgba(255,180,0,0.1);color:#fbbf24;border:1px solid rgba(255,180,0,0.2);}
+.so-emp-role-support{background:rgba(180,100,255,0.1);color:#c084fc;border:1px solid rgba(180,100,255,0.2);}
+.so-emp-status-active{background:rgba(113,255,0,0.08);color:#71ff00;border:1px solid rgba(113,255,0,0.18);}
+.so-emp-status-suspended{background:rgba(255,60,60,0.08);color:#ff6464;border:1px solid rgba(255,60,60,0.2);}
+.so-emp-actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+.so-emp-action{padding:5px 10px;border-radius:7px;font-size:10px;font-weight:800;cursor:pointer;
+  border:1px solid;font-family:inherit;transition:opacity .1s;min-height:32px;}
+.so-emp-action:hover{opacity:.8;}
+.so-emp-action-promote{background:rgba(113,255,0,0.08);color:#71ff00;border-color:rgba(113,255,0,0.25);}
+.so-emp-action-demote{background:rgba(255,180,0,0.08);color:#fbbf24;border-color:rgba(255,180,0,0.25);}
+.so-emp-action-suspend{background:rgba(255,100,0,0.08);color:#fb923c;border-color:rgba(255,100,0,0.25);}
+.so-emp-action-pin{background:rgba(100,180,255,0.08);color:#64b4ff;border-color:rgba(100,180,255,0.25);}
+.so-emp-action-delete{background:rgba(255,60,60,0.08);color:#ff6464;border-color:rgba(255,60,60,0.2);}
+/* Loading skeleton */
+@keyframes so-shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.so-skeleton{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.04) 75%);
+  background-size:800px 100%;animation:so-shimmer 1.4s infinite linear;border-radius:8px;}
+/* Mobile branch switcher responsive */
+@media(max-width:640px){
+  .so-branch-label{max-width:90px;}
+  .so-emp-actions{gap:4px;}
+  .so-emp-action{padding:5px 8px;font-size:9px;}
+}
+</style>
 </head>
 
 <body class="seller-page-shell">
+<a href="#seller-main-content" class="so-skip-link">Skip to content</a>
 <script src="sokoni-security.js"></script>
 <script src="sokoni-guards.js"></script>
 <script src="splash.js"></script>
@@ -51,8 +101,9 @@
         <img loading="lazy" src="assets/Sokonilogo2.png" alt="Sokoni" class="seller-nav-logo-img" id="sellerLogoSecret" style="cursor:pointer;touch-action:manipulation;">
     </div>
 
-    <div class="seller-nav-center">
+    <div class="seller-nav-center" style="display:flex;align-items:center;gap:10px;">
         <span class="seller-nav-title">⚡ Seller Dashboard</span>
+        <div id="seller-branch-switcher"></div>
     </div>
 
     <div class="seller-nav-right">
@@ -112,7 +163,7 @@
 
   <!-- MAIN CONTENT -->
 
-  <main class="main-content">
+  <main class="main-content" id="seller-main-content" role="main">
 
     <!-- TOPBAR -->
 
@@ -134,6 +185,29 @@
       if(el) el.textContent = greet + name + " ⚡";
       const dateEl = document.getElementById("sellerDate");
       if(dateEl) dateEl.textContent = new Date().toLocaleDateString("en-KE",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) + " · Seller Dashboard";
+
+      /* ── Branch switcher init ── */
+      if (window.SokoniBranch) {
+        SokoniBranch.renderSwitcher('seller-branch-switcher');
+      } else {
+        document.addEventListener('DOMContentLoaded', function() {
+          if (window.SokoniBranch) SokoniBranch.renderSwitcher('seller-branch-switcher');
+        });
+      }
+
+      /* ── React to branch changes ── */
+      document.addEventListener('soBranchChanged', function(e) {
+        var branch = e.detail && e.detail.branch;
+        if (!branch) return;
+        /* Show toast */
+        if (typeof showNotification === 'function') {
+          showNotification('Switched to ' + branch.name, 'success');
+        }
+        /* Refresh employees if that section is visible */
+        if (typeof renderEmployeeList === 'function') renderEmployeeList();
+        /* Dispatch event for any other listeners (orders, analytics etc.) */
+        document.dispatchEvent(new CustomEvent('soSellerBranchUpdated', { detail: branch }));
+      });
     })();
 
     /* ── Visit My Store — opens the seller's own MiniStore public storefront ── */

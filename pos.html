@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="pos.css">
   <link rel="stylesheet" href="pos-bos.css">
   <link rel="stylesheet" href="pos-mobile.css">
+  <script src="sokoni-branch.js"></script>
 </head>
 <body>
 
@@ -202,7 +203,7 @@
 
   <div class="pos-offline-bar hidden" id="offline-bar">📶 Offline — sales saved locally, will sync when connected</div>
 
-  <header class="pos-header">
+  <header class="pos-header" role="banner">
     <img src="assets/logosokoni.png" class="pos-header-logo" alt="" onerror="this.style.display='none'">
     <div>
       <div class="pos-brand" id="hdr-biz-name">SOKONI SmartPOS</div>
@@ -224,16 +225,16 @@
     </div>
   </header>
 
-  <nav class="pos-tabs">
-    <button class="pos-tab active" data-tab="pos" onclick="SPos.ui.switchTab('pos')"><span class="tab-icon">🛒</span><span>Checkout</span></button>
-    <button class="pos-tab" data-tab="inventory" onclick="SPos.ui.switchTab('inventory')"><span class="tab-icon">📦</span><span>Inventory</span></button>
-    <button class="pos-tab" data-tab="reports" onclick="SPos.ui.switchTab('reports')"><span class="tab-icon">📊</span><span>Reports</span></button>
-    <button class="pos-tab" data-tab="customers" onclick="SPos.ui.switchTab('customers')"><span class="tab-icon">👤</span><span>Customers</span></button>
-    <button class="pos-tab" data-tab="bos"      onclick="SPos.ui.switchTab('bos')">     <span class="tab-icon">📡</span><span>BOS Hub</span></button>
-    <button class="pos-tab" data-tab="finance"  onclick="SPos.ui.switchTab('finance')"> <span class="tab-icon">💰</span><span>Finance</span></button>
-    <button class="pos-tab" data-tab="repair"   onclick="SPos.ui.switchTab('repair')">  <span class="tab-icon">🔧</span><span>Repairs</span></button>
-    <button class="pos-tab" data-tab="audit"    onclick="SPos.ui.switchTab('audit')">   <span class="tab-icon">📋</span><span>Audit</span></button>
-    <button class="pos-tab" data-tab="settings" onclick="SPos.ui.switchTab('settings')"><span class="tab-icon">⚙️</span><span>Settings</span></button>
+  <nav class="pos-tabs" role="tablist" aria-label="POS sections">
+    <button class="pos-tab active" role="tab" aria-selected="true"  data-tab="pos"      onclick="SPos.ui.switchTab('pos')">      <span class="tab-icon" aria-hidden="true">🛒</span><span>Checkout</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="inventory" onclick="SPos.ui.switchTab('inventory')"><span class="tab-icon" aria-hidden="true">📦</span><span>Inventory</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="reports"   onclick="SPos.ui.switchTab('reports')">  <span class="tab-icon" aria-hidden="true">📊</span><span>Reports</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="customers" onclick="SPos.ui.switchTab('customers')"><span class="tab-icon" aria-hidden="true">👤</span><span>Customers</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="bos"       onclick="SPos.ui.switchTab('bos')">      <span class="tab-icon" aria-hidden="true">📡</span><span>BOS Hub</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="finance"   onclick="SPos.ui.switchTab('finance')">  <span class="tab-icon" aria-hidden="true">💰</span><span>Finance</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="repair"    onclick="SPos.ui.switchTab('repair')">   <span class="tab-icon" aria-hidden="true">🔧</span><span>Repairs</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="audit"     onclick="SPos.ui.switchTab('audit')">    <span class="tab-icon" aria-hidden="true">📋</span><span>Audit</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="settings"  onclick="SPos.ui.switchTab('settings')" aria-label="POS Settings"><span class="tab-icon" aria-hidden="true">⚙️</span><span>Settings</span></button>
   </nav>
 
   <div class="pos-content">
@@ -1430,13 +1431,37 @@ var SPosBranch = (function(){
     _setCurrent(branch);
     _applyCurrentBranch();
     closeSelector();
-    /* Reload product grid for this branch if SPos is available */
-    if (typeof SPos !== 'undefined' && SPos.products && SPos.products.render) {
-      SPos.products.render();
+
+    /* ── Loading skeleton while branch data refreshes ── */
+    var grid = document.getElementById('product-grid');
+    if (grid) {
+      grid.innerHTML = [0,1,2,3,4,5,6,7].map(function(){
+        return '<div class="pos-skel-card">' +
+          '<div class="pos-skel-img so-skeleton"></div>' +
+          '<div class="pos-skel-line so-skeleton" style="width:80%;height:12px;margin-top:8px;"></div>' +
+          '<div class="pos-skel-line so-skeleton" style="width:55%;height:10px;margin-top:5px;"></div>' +
+        '</div>';
+      }).join('');
     }
-    if (typeof SPos !== 'undefined' && SPos.ui && SPos.ui.showToast) {
-      SPos.ui.showToast('Switched to ' + branch.name);
-    }
+
+    /* Fire global event so SokoniBranch (if loaded) stays in sync */
+    document.dispatchEvent(new CustomEvent('soBranchChanged', {
+      bubbles: true,
+      detail: { branch: branch, id: branch.id, name: branch.name }
+    }));
+
+    /* Refresh all POS panels after a tick */
+    setTimeout(function() {
+      if (typeof SPos !== 'undefined') {
+        if (SPos.products && SPos.products.render) SPos.products.render();
+        if (SPos.reports  && SPos.reports.render)  SPos.reports.render();
+        if (SPos.ui && SPos.ui.updateDashboardWidgets) SPos.ui.updateDashboardWidgets();
+      }
+      /* Toast confirmation */
+      if (typeof SPos !== 'undefined' && SPos.ui && SPos.ui.showToast) {
+        SPos.ui.showToast('🏢 Switched to ' + branch.name);
+      }
+    }, 80);
   }
 
   function addBranch() {

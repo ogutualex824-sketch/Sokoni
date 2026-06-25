@@ -3646,3 +3646,128 @@ body.light-mode .flash-input{
 body.light-mode .flash-go-btn{
     box-shadow:0 4px 16px rgba(113,255,0,0.2);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 4 — MOBILE FIXES
+═══════════════════════════════════════════════════════════ */
+/* No horizontal scroll anywhere */
+body, .main-content, .seller-section-card, .seller-stats { max-width: 100%; overflow-x: hidden; }
+
+/* Minimum touch targets */
+.nav-item, .sd-tab-btn, .flash-go-btn, .seller-nav-link,
+.seller-nav-icon-btn, .seller-theme-btn {
+  min-height: 44px;
+}
+.nav-item { display: flex; align-items: center; }
+
+/* Safe-area support on the bottom nav */
+.sd-mobile-bottom-bar {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+/* Modal scrolling on iOS */
+.seller-modal, .flash-modal, .preview-modal {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+  max-height: 90dvh;
+}
+
+/* Prevent keyboard from hiding bottom CTAs on mobile */
+@media (max-width: 768px) {
+  .main-content {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  /* Tables: horizontal scroll container with hint */
+  .table-wrap, .adm-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-wrap::after {
+    content: '← scroll →';
+    display: block;
+    text-align: center;
+    font-size: 9px;
+    color: rgba(255,255,255,0.2);
+    padding: 4px 0;
+  }
+  /* Landscape orientation: allow sidebar to be narrower */
+  @media (orientation: landscape) {
+    .sidebar { width: 180px; }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 7 — UI CONSISTENCY
+═══════════════════════════════════════════════════════════ */
+/* Unified empty state */
+.so-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.25);
+}
+.so-empty-state .so-empty-icon { font-size: 40px; margin-bottom: 10px; }
+.so-empty-state .so-empty-title { font-size: 14px; font-weight: 800; color: rgba(255,255,255,0.4); }
+.so-empty-state .so-empty-sub   { font-size: 11px; margin-top: 4px; }
+
+/* Unified success / error / info banners */
+.so-banner { display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:12px;font-size:12px;line-height:1.5; }
+.so-banner-success { background:rgba(113,255,0,0.06); border:1px solid rgba(113,255,0,0.2); color:#71ff00; }
+.so-banner-error   { background:rgba(255,60,60,0.06);  border:1px solid rgba(255,60,60,0.2);  color:#ff6464; }
+.so-banner-info    { background:rgba(100,180,255,0.06);border:1px solid rgba(100,180,255,0.2);color:#64b4ff; }
+.so-banner-warning { background:rgba(255,180,0,0.06);  border:1px solid rgba(255,180,0,0.2);  color:#fbbf24; }
+
+/* Unified loading spinner */
+.so-spinner {
+  width: 22px; height: 22px;
+  border: 2.5px solid rgba(255,255,255,0.1);
+  border-top-color: #71ff00;
+  border-radius: 50%;
+  animation: so-spin .7s linear infinite;
+  display: inline-block;
+}
+@keyframes so-spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 8 — ACCESSIBILITY
+═══════════════════════════════════════════════════════════ */
+/* Focus rings */
+*:focus-visible {
+  outline: 2px solid #71ff00;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+*:focus:not(:focus-visible) { outline: none; }
+
+/* Skip-to-content link */
+.so-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  background: #71ff00;
+  color: #000;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  z-index: 9999;
+  text-decoration: none;
+  transition: top .1s;
+}
+.so-skip-link:focus { top: 8px; }
+
+/* ARIA-disabled styling */
+[aria-disabled="true"] { opacity: 0.35 !important; pointer-events: none !important; cursor: not-allowed !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   PHASE 9 — PERFORMANCE
+═══════════════════════════════════════════════════════════ */
+/* Contain reflows inside cards */
+.seller-section-card { contain: layout style; }
+/* GPU-accelerate scroll containers */
+.main-content, .seller-stats { will-change: scroll-position; }
+/* Prevent FOUC on images */
+.seller-section-card img { aspect-ratio: attr(width) / attr(height); }

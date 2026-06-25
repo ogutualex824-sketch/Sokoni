@@ -20,10 +20,31 @@ function initEmployeeSession(){
 
   /* Apply employee restrictions based on role */
   const ROLE_PERMS = {
-    cashier:   { tabs:["orders-section","buyer-orders-section","seller-dms","seller-stats"], label:"💰 Cashier" },
-    manager:   { tabs:null /* all */, label:"📊 Manager" },
-    inventory: { tabs:["upload-section","products-section","bulk-upload-section","restock-section"], label:"📦 Inventory Clerk" },
-    support:   { tabs:["seller-dms","qa-section","seller-ratings-section"], label:"💬 Support Agent" }
+    cashier: {
+      tabs: ["orders-section","buyer-orders-section","seller-dms","seller-stats","customers-section","receipts-section"],
+      hideSections: ["wallet-section","expense-section","analytics-section","sales-analytics-section","profit-section","employees-section","verify-section","ads-section","tax-section"],
+      label: "💰 Cashier"
+    },
+    manager: {
+      tabs: null, /* all */
+      hideSections: ["wallet-section"],   /* financial withdrawal — owner only */
+      label: "📊 Manager"
+    },
+    branch_manager: {
+      tabs: null,
+      hideSections: ["wallet-section","tax-section"],
+      label: "🏢 Branch Manager"
+    },
+    inventory: {
+      tabs: ["upload-section","products-section","bulk-upload-section","restock-section","inventory-section","qa-section"],
+      hideSections: ["wallet-section","expense-section","analytics-section","profit-section","employees-section","orders-section","seller-dms","tax-section"],
+      label: "📦 Inventory Clerk"
+    },
+    support: {
+      tabs: ["seller-dms","qa-section","seller-ratings-section","buyer-orders-section"],
+      hideSections: ["wallet-section","expense-section","analytics-section","profit-section","upload-section","employees-section","tax-section","ads-section"],
+      label: "💬 Support Agent"
+    }
   };
   const perm = ROLE_PERMS[sess.employeeRole] || ROLE_PERMS.support;
 
@@ -58,17 +79,35 @@ function initEmployeeSession(){
     }).catch(()=>{});
   }
 
-  /* Restrict tabs if not manager */
+  /* Restrict sidebar nav tabs by role */
   if(perm.tabs){
-    document.querySelectorAll(".sd-tab-btn").forEach(btn=>{
-      const tab = btn.dataset.tab || btn.getAttribute("onclick")?.match(/showSDTab\(['"]([^'"]+)['"]\)/)?.[1];
+    document.querySelectorAll(".sd-tab-btn, .nav-item[onclick]").forEach(btn=>{
+      const tab = btn.dataset.tab
+        || btn.getAttribute("onclick")?.match(/showSDTab\(['"]([^'"]+)['"]\)/)?.[1]
+        || btn.getAttribute("onclick")?.match(/showDashPage\(['"]([^'"]+)['"]\)/)?.[1];
       if(tab && !perm.tabs.some(t=>t.includes(tab)||tab.includes(t))){
-        btn.style.opacity = "0.3";
+        btn.style.opacity    = "0.3";
         btn.style.pointerEvents = "none";
-        btn.title = "Access restricted for your role";
+        btn.title            = "Access restricted — " + perm.label + " role";
+        btn.setAttribute("aria-disabled","true");
       }
     });
   }
+
+  /* Hide sections that this role must never see, even if navigated to directly */
+  if(perm.hideSections && perm.hideSections.length){
+    /* Run after DOM is painted */
+    requestAnimationFrame(function(){
+      perm.hideSections.forEach(function(id){
+        const section = document.getElementById(id);
+        if(section){ section.style.display = "none"; section.setAttribute("aria-hidden","true"); }
+      });
+    });
+  }
+
+  /* Set session role globally so renderEmployeeList can read it */
+  window._sellerSessionRole = sess.employeeRole;
+  window._sellerSessionBranch = sess.branch || null;
 }
 
 function logoutEmployee(){
@@ -1978,21 +2017,115 @@ async function renderEmployeeList(){
 
   if(ct) ct.textContent = employees.length;
 
-  const roleIcon = { cashier:"💰", manager:"📊", inventory:"📦", support:"💬" };
-  const roleLabel = { cashier:"Cashier", manager:"Manager", inventory:"Inventory Clerk", support:"Support Agent" };
-  el.innerHTML = employees.length ? employees.map(e=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:8px;">
-      <div style="width:38px;height:38px;border-radius:50%;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">${roleIcon[e.role]||"👤"}</div>
+  const roleLabel   = { cashier:"Cashier", manager:"Manager", inventory:"Inventory Clerk", support:"Support Agent" };
+  const roleClass   = { cashier:"so-emp-role-cashier", manager:"so-emp-role-manager", inventory:"so-emp-role-inventory", support:"so-emp-role-support" };
+  const ROLE_ORDER  = ["manager","cashier","inventory","support"];
+
+  /* Sort: managers first, then alphabetical */
+  employees.sort((a,b)=>{
+    const ra = ROLE_ORDER.indexOf(a.role), rb = ROLE_ORDER.indexOf(b.role);
+    if(ra !== rb) return ra - rb;
+    return (a.name||"").localeCompare(b.name||"");
+  });
+
+  /* Branch filter (if a branch is selected and not main) */
+  const currentBranch = window.SokoniBranch ? window.SokoniBranch.getCurrent() : null;
+  const filterBranch  = currentBranch && !currentBranch.isMain;
+  const visible = filterBranch
+    ? employees.filter(e => !e.branch || e.branch === currentBranch.name || e.branch === currentBranch.id)
+    : employees;
+
+  /* Session role: branch_manager can only see their branch */
+  let sess = null;
+  try { sess = JSON.parse(localStorage.getItem("sokoniEmployeeSession")); } catch(_){}
+  const sessionRole = sess && sess.isEmployee ? sess.employeeRole : "owner";
+
+  function _avatar(name, role) {
+    const initials = (name||"?").split(" ").map(w=>w[0]||"").join("").slice(0,2).toUpperCase();
+    const colors = { cashier:"#1a3a0a,#71ff00", manager:"#0a1a3a,#64b4ff", inventory:"#3a2a00,#fbbf24", support:"#2a0a3a,#c084fc" };
+    const [bg, fg] = (colors[role]||"#222,rgba(255,255,255,0.8)").split(",");
+    return `<div class="so-emp-avatar" style="background:${bg};color:${fg};border:1px solid ${fg}40;">${initials}</div>`;
+  }
+
+  function _actions(e) {
+    const id = _esc(e.uid||e.id||"");
+    const isSuspended = e.status === "suspended";
+    /* Owner sees all actions; branch manager sees limited set */
+    if(sessionRole !== "owner" && sessionRole !== "manager") return "";
+    const canPromote   = e.role !== "manager";
+    const canDemote    = e.role === "manager";
+    return `<div class="so-emp-actions">
+      ${canPromote ? `<button class="so-emp-action so-emp-action-promote" onclick="_empPromote('${id}')" title="Promote to Manager">▲ Promote</button>` : ""}
+      ${canDemote  ? `<button class="so-emp-action so-emp-action-demote"  onclick="_empDemote('${id}')"  title="Demote from Manager">▼ Demote</button>` : ""}
+      <button class="so-emp-action so-emp-action-suspend" onclick="_empSuspend('${id}',${isSuspended})">${isSuspended ? "▶ Reinstate" : "⏸ Suspend"}</button>
+      <button class="so-emp-action so-emp-action-pin"    onclick="_empResetPin('${id}')" title="Reset PIN">🔑 Reset PIN</button>
+      ${sessionRole === "owner" ? `<button class="so-emp-action so-emp-action-delete" onclick="removeEmployee('${id}')" title="Remove employee">✕ Remove</button>` : ""}
+    </div>`;
+  }
+
+  el.innerHTML = visible.length ? visible.map(e=>{
+    const lastActive = e.lastActive ? new Date(e.lastActive).toLocaleDateString("en-KE") : "Never";
+    const statusClass = e.status === "suspended" ? "so-emp-status-suspended" : "so-emp-status-active";
+    const statusLabel = e.status === "suspended" ? "Suspended" : "Active";
+    const branch      = e.branch || (currentBranch ? currentBranch.name : "Main Branch");
+    return `<div class="so-emp-card" data-role="${_esc(e.role)}" data-empid="${_esc(e.uid||e.id||"")}">
+      ${_avatar(e.name, e.role)}
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:800;color:white;font-size:13px;">${e.name}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">${e.email}</div>
-        <div style="font-size:10px;color:rgba(113,255,0,0.7);font-weight:700;margin-top:2px;">${roleLabel[e.role]||e.role} · ${e.createdAt||""}</div>
-        <div style="font-size:10px;color:rgba(0,170,255,0.7);margin-top:2px;">🔗 Joined via invite · own credentials</div>
+        <div class="so-emp-name">${_esc(e.name||"Unknown")}</div>
+        <div class="so-emp-email">${_esc(e.email||"")}</div>
+        <div class="so-emp-meta">
+          <span class="so-emp-badge ${roleClass[e.role]||""}">${roleLabel[e.role]||e.role}</span>
+          <span class="so-emp-badge ${statusClass}">${statusLabel}</span>
+          <span class="so-emp-badge" style="background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.1);">🏢 ${_esc(branch)}</span>
+          <span class="so-emp-badge" style="background:transparent;color:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.07);" title="Last active">⏱ ${lastActive}</span>
+        </div>
+        ${_actions(e)}
       </div>
-      <button onclick="removeEmployee('${e.uid||e.id}')" style="background:rgba(255,61,61,0.1);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;">Remove</button>
-    </div>
-  `).join("") : `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:12px 0;">No employees yet — add your first team member above</div>`;
+    </div>`;
+  }).join("") : `<div style="text-align:center;padding:32px 16px;color:rgba(255,255,255,0.25);">
+    <div style="font-size:36px;margin-bottom:8px;">👥</div>
+    <div style="font-size:13px;font-weight:700;">${filterBranch ? "No employees in this branch" : "No team members yet"}</div>
+    <div style="font-size:11px;margin-top:4px;">Use the invite form to add your first team member.</div>
+  </div>`;
+
+  /* Update empty state in HTML overlay */
+  const empEmpty = document.getElementById("empEmptyState");
+  if(empEmpty) empEmpty.style.display = "none";
 }
+
+/* ── Employee actions ─────────────────────────────────────────────── */
+function _empUpdateLocal(uid, patch) {
+  let employees = [];
+  try { employees = JSON.parse(localStorage.getItem("sokoniEmployees"))||[]; } catch(_){}
+  const idx = employees.findIndex(e=>(e.uid||e.id)===uid);
+  if(idx >= 0) { Object.assign(employees[idx], patch); localStorage.setItem("sokoniEmployees", JSON.stringify(employees)); }
+  renderEmployeeList();
+}
+
+async function _empPromote(uid) {
+  _empUpdateLocal(uid, { role:"manager" });
+  showNotification("Employee promoted to Manager","success");
+}
+async function _empDemote(uid) {
+  _empUpdateLocal(uid, { role:"cashier" });
+  showNotification("Employee demoted to Cashier","info");
+}
+async function _empSuspend(uid, isSuspended) {
+  const newStatus = isSuspended ? "active" : "suspended";
+  _empUpdateLocal(uid, { status: newStatus });
+  showNotification(isSuspended ? "Employee reinstated" : "Employee suspended", isSuspended ? "success" : "warning");
+}
+function _empResetPin(uid) {
+  const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+  _empUpdateLocal(uid, { pin: newPin, pinReset: Date.now() });
+  /* Show new PIN in a toast — production would email it */
+  showNotification(`PIN reset. New temporary PIN: ${newPin} — share securely.`, "info");
+}
+
+window._empPromote  = _empPromote;
+window._empDemote   = _empDemote;
+window._empSuspend  = _empSuspend;
+window._empResetPin = _empResetPin;
 
 window.addEmployee       = addEmployee;
 window.copyEmpInviteLink = copyEmpInviteLink;

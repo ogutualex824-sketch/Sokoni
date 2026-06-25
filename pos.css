@@ -1287,3 +1287,104 @@ html, body {
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+
+/* ═══════════════════════════════════════════════════════════
+   BRANCH SWITCH SKELETON  (Phase 5 — SmartPOS polish)
+═══════════════════════════════════════════════════════════ */
+@keyframes so-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.so-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,.04) 25%,
+    rgba(255,255,255,.10) 50%,
+    rgba(255,255,255,.04) 75%
+  );
+  background-size: 800px 100%;
+  animation: so-shimmer 1.4s infinite linear;
+  border-radius: 8px;
+}
+.pos-skel-card {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.pos-skel-img  { width: 100%; height: 80px; border-radius: 8px; }
+.pos-skel-line { border-radius: 6px; }
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE — Phase 4 fixes
+═══════════════════════════════════════════════════════════ */
+/* Prevent horizontal overflow everywhere */
+#pos-app, .pos-content, .pos-products, .pos-cart { max-width: 100%; overflow-x: hidden; }
+
+/* Safe-area insets for notched phones */
+.pos-header {
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-left:  max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+}
+#pos-app { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Minimum touch targets — 44×44px on all interactive elements */
+.pos-tab, .pos-scan-btn, .pos-header-btn, .cat-chip, .pos-cashier-pill,
+.shift-badge, .toggle, .suc-receipt-toggle {
+  min-height: 44px;
+  min-width:  44px;
+}
+.cat-chip { min-height: 36px; padding: 8px 14px; }
+
+/* Keyboard overlap: push content above keyboard on mobile */
+@media (max-width: 768px) {
+  .pos-cart-footer {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: var(--surface);
+    z-index: 10;
+  }
+  /* Landscape: give more horizontal space to product grid */
+  @media (orientation: landscape) {
+    .pos-products { flex: 1.5; }
+    .pos-cart      { flex: 1; }
+  }
+}
+
+/* Modal scroll on mobile */
+.pos-modal, .manager-modal, .shift-modal {
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACCESSIBILITY — Phase 8
+═══════════════════════════════════════════════════════════ */
+/* Visible focus rings */
+*:focus-visible {
+  outline: 2px solid #71ff00;
+  outline-offset: 2px;
+}
+/* Hide focus ring for mouse/touch */
+*:focus:not(:focus-visible) { outline: none; }
+
+/* High contrast status chips */
+.shift-badge { letter-spacing: .04em; font-weight: 800; }
+
+/* ═══════════════════════════════════════════════════════════
+   PERFORMANCE — Phase 9
+═══════════════════════════════════════════════════════════ */
+/* GPU-accelerate frequently animated elements */
+.pos-product-grid, .pos-cart-items { will-change: scroll-position; }
+.pos-modal, .suc-overlay           { will-change: opacity, transform; }
+
+/* Contain layout reflows inside sections */
+.pos-panel { contain: layout style; }
+
+/* Prevent layout shifts on image load */
+.product-img { aspect-ratio: 1 / 1; object-fit: cover; width: 100%; display: block; }

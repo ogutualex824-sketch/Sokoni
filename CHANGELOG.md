@@ -1,4 +1,67 @@
-﻿## [2026-06-25] — phase0: Merchant Acquisition & Market Activation Program
+﻿## [2026-06-25] — sprint: Final UX & Multi-Branch Polish Sprint — SW v297
+
+### Summary
+10-phase UX, RBAC, accessibility, and performance polish sprint. No new Cloud Functions. No new Firestore collections. Centred on multi-branch correctness, role enforcement, mobile experience, and UI consistency.
+
+### New Files (1)
+
+| File | Purpose |
+|------|---------|
+| `sokoni-branch.js` | Canonical global branch module — `SokoniBranch` API with `soBranchChanged` event; shared by seller.html and pos.html via same localStorage keys |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `seller.html` | Load `sokoni-branch.js`; branch switcher in navbar; `soBranchChanged` listener; skip-to-content link; `role="main"` on main element |
+| `seller.js` | Rich employee cards (avatar, role badge, branch, status, last active); owner/manager actions (promote, demote, suspend, reset PIN); branch-filtered employee list; extended RBAC with `hideSections`; `branch_manager` role added |
+| `pos.html` | Load `sokoni-branch.js`; branch switch fires `soBranchChanged`; loading skeleton on grid; receipt uses `branchName`; ARIA `role="tablist"` + `aria-selected` on tabs; `role="banner"` on header |
+| `pos.js` | `branchName` added to `receiptData` |
+| `pos.css` | Skeleton animation; mobile touch targets ≥44px; safe-area insets; landscape layout; modal scrolling; focus rings; GPU-accelerated containers; `contain: layout style` |
+| `seller.css` | Mobile fixes; touch targets; table horizontal scroll; empty states; status banners; spinner; focus rings; skip link; `aria-disabled`; performance `contain` + `will-change` |
+
+### RBAC Changes (Phase 2)
+
+| Role | Newly Enforced |
+|------|---------------|
+| Cashier | Hides: wallet, expense, analytics, profit, employees, verify, ads, tax |
+| Manager | Hides: wallet (financial withdrawal — owner only) |
+| Branch Manager | Hides: wallet, tax — new role added |
+| Inventory | Hides: wallet, expense, analytics, profit, employees, orders, DMs, tax |
+| Support | Hides: wallet, expense, analytics, profit, upload, employees, tax, ads |
+
+### Multi-Branch (Phases 1 & 3)
+
+- `soBranchChanged` event fires on every switch — seller and POS sections can react without polling
+- Employee list automatically filtered by active branch (non-main branches only see their staff)
+- POS: loading skeleton covers product grid during branch switch; all panels refresh after 80ms
+- POS: `window._currentBranchName` injected into every receipt
+
+### Mobile (Phase 4)
+
+- Safe-area insets on POS header and body
+- All interactive elements ≥44×44px touch targets
+- Landscape mode: product grid gets 1.5× more width
+- Modal scrolling fixed (`max-height:90dvh`, `-webkit-overflow-scrolling:touch`)
+- No horizontal overflow
+
+### Accessibility (Phase 8)
+
+- Skip-to-content link on seller.html
+- Focus rings on all focusable elements (`*:focus-visible`)
+- POS tabs: `role="tablist"`, `aria-selected`, `aria-hidden` on decorative icons
+- `aria-disabled="true"` replaces `pointer-events:none` for screen readers
+
+### Performance (Phase 9)
+
+- `contain: layout style` on all section cards
+- `will-change: scroll-position` on scroll containers
+- `product-img` gets `aspect-ratio: 1/1` to prevent layout shifts
+- Skeleton animation is CSS-only (no JS timers)
+
+---
+
+## [2026-06-25] — phase0: Merchant Acquisition & Market Activation Program
 
 ### Summary
 Development frozen. Platform shifts to marketplace activation. Five operational documents created covering the full seller acquisition and quality pipeline. Store Completeness Score widget added to seller dashboard — automatically tracks the 7 readiness requirements (logo, banner, description, 20+ products, payment, delivery, verification) and shows a live percentage score to guide sellers to 100% readiness.
