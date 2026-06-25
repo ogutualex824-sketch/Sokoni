@@ -1,4 +1,32 @@
-﻿## [2026-06-25] — RC1 Defect Hunt — SW v299
+﻿## [2026-06-25] — Phase 0 Merchant Onboarding Operations — SW v300
+
+### Summary
+Operational infrastructure for Phase 0 Merchant Onboarding & Soft Launch. No new Cloud Functions. No new Firestore collections. Uses existing `businesses` and `products` collections.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `merchant-pipeline.html` | Admin tool: full seller onboarding pipeline with per-seller completeness scoring, stage tracking, approve/request-changes actions. Auth-gated. |
+| `docs/PHASE0_OPERATIONS_PLAYBOOK.md` | Complete 7-phase ops guide: anchor seller execution, category readiness, merchant success reviews, buyer experience review, launch dashboard, first 30 days, success criteria for marketing expansion. |
+| `docs/ops-reports/WEEK_1_REPORT.md` | Week 1 baseline report. All targets at zero — kickoff state documented. Highest priority: begin merchant recruitment. |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `admin.html` | Added Merchant Pipeline link to sidebar (Platform group) and Command Center grid |
+| `service-worker.js` | Bumped v299 → v300; added `merchant-pipeline.html` to precache list |
+
+### Database Changes
+None. `merchant-pipeline.html` reads from existing `businesses` and `products` collections. Approval action writes `verified: true`, `onboardingStatus`, `approvedAt`, `approvedBy` fields to existing `businesses` documents. "Request Changes" writes `onboardingStatus: needs_changes` and `adminNotes` to existing `businesses` documents. No new collections.
+
+### Security
+Auth gate reuses existing SHA-256 PIN + Firebase custom claim check (same pattern as launch-readiness.html). All seller data displayed with `_esc()` escaping.
+
+---
+
+## [2026-06-25] — RC1 Defect Hunt — SW v299
 
 ### Summary
 10-phase release candidate defect hunt. All confirmed bugs fixed. No new features, no new Cloud Functions, no new Firestore collections.

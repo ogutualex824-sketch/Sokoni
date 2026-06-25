@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v299";
+const CACHE_VERSION = "sokoni-v300";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -59,7 +59,7 @@ const PRECACHE_PAGES = [
   "/onboarding.html", "/onboarding-seller.html", "/onboarding-driver.html", "/onboarding-professional.html",
   "/help.html", "/moderation.html",
   "/beta.html", "/beta-dashboard.html",
-  "/seller-success.html", "/driver-success.html", "/join.html", "/support.html", "/launch-metrics.html", "/launch-readiness.html",
+  "/seller-success.html", "/driver-success.html", "/join.html", "/support.html", "/launch-metrics.html", "/launch-readiness.html", "/merchant-pipeline.html",
   "/ride-book.html",
   "/jobs.html", "/education.html", "/superadmin.html", "/scan.html",
   "/inventory.html",
