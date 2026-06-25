@@ -428,14 +428,92 @@
       <p class="glass-hero-badge" style="display:inline-flex;align-items:center;gap:6px;"><span style="font-size:20px;line-height:1;flex-shrink:0;">🇰🇪</span> Kenya's #1 Marketplace</p>
       <h1>Shop Smarter on <span class="hero-brand-gradient">SOKONI</span></h1>
       <p class="glass-hero-sub">Buy locally. Receive today. Pay safely with M-Pesa.</p>
-      <!-- Premium stat pills -->
-      <div class="glass-hero-stat-row">
-        <span class="glass-hero-stat-pill">🛍️ <span class="glass-hero-stat-pill-val">50K+</span> Products</span>
-        <span class="glass-hero-stat-pill">🏪 <span class="glass-hero-stat-pill-val">1,200+</span> Sellers</span>
+      <!-- Live stat pills — populated dynamically; hide if no real data yet -->
+      <div class="glass-hero-stat-row" id="heroStatRow" style="display:none;">
+        <span class="glass-hero-stat-pill" id="hero-stat-products" style="display:none;">🛍️ <span class="glass-hero-stat-pill-val" id="hero-val-products">—</span> Products</span>
+        <span class="glass-hero-stat-pill" id="hero-stat-sellers"  style="display:none;">🏪 <span class="glass-hero-stat-pill-val" id="hero-val-sellers">—</span> Sellers</span>
         <span class="glass-hero-stat-pill">🚚 Same-Day <span class="glass-hero-stat-pill-val">Nairobi</span></span>
-        <span class="glass-hero-stat-pill">⭐ <span class="glass-hero-stat-pill-val">4.9</span> Rating</span>
+        <span class="glass-hero-stat-pill" id="hero-stat-rating"   style="display:none;">⭐ <span class="glass-hero-stat-pill-val" id="hero-val-rating">—</span> Rating</span>
         <span class="glass-hero-stat-pill">🇰🇪 <span class="glass-hero-stat-pill-val">47</span> Counties</span>
       </div>
+      <script>
+      /* Live marketplace stats — shows real numbers once platform has meaningful inventory.
+         Below minimum thresholds, pills are hidden to avoid trust-destroying placeholder counts. */
+      (function(){
+        var MIN_SELLERS  = 5;   /* show seller count only after 5+ verified sellers */
+        var MIN_PRODUCTS = 50;  /* show product count only after 50+ active listings */
+        var MIN_RATINGS  = 10;  /* show rating only after 10+ reviews */
+
+        function _fmt(n) {
+          if (n >= 1000) return (n/1000).toFixed(n >= 10000 ? 0 : 1) + 'K+';
+          return n + '+';
+        }
+
+        function _showRow() {
+          var row = document.getElementById('heroStatRow');
+          if (row) row.style.display = '';
+        }
+
+        function _updateStat(statId, valId, value, minimum) {
+          if (value < minimum) return;
+          var pill = document.getElementById(statId);
+          var val  = document.getElementById(valId);
+          if (pill) pill.style.display = '';
+          if (val)  val.textContent = _fmt(value);
+          _showRow();
+        }
+
+        /* Always show the delivery + counties pills */
+        _showRow();
+
+        /* Load real counts from Firestore when Firebase is ready */
+        var _tried = false;
+        function _tryLoad() {
+          if (_tried) return; _tried = true;
+          if (!window.firebaseDB) return;
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+            .then(function(fs) {
+              var db = window.firebaseDB;
+              /* Product count */
+              fs.getCountFromServer(fs.query(
+                fs.collection(db,'products'),
+                fs.where('status','==','active')
+              )).then(function(snap){
+                _updateStat('hero-stat-products','hero-val-products', snap.data().count, MIN_PRODUCTS);
+              }).catch(function(){});
+              /* Seller count */
+              fs.getCountFromServer(fs.query(
+                fs.collection(db,'businesses'),
+                fs.where('verified','==',true)
+              )).then(function(snap){
+                _updateStat('hero-stat-sellers','hero-val-sellers', snap.data().count, MIN_SELLERS);
+              }).catch(function(){});
+              /* Rating average from feedback */
+              fs.getAggregateFromServer(
+                fs.query(fs.collection(db,'feedback'),
+                  fs.where('type','==','product_review'),
+                  fs.where('rating','>',0)
+                ),
+                { count: fs.count(), avg: fs.average('rating') }
+              ).then(function(snap){
+                var count = snap.data().count;
+                var avg   = snap.data().avg;
+                if (count >= MIN_RATINGS && avg) {
+                  _updateStat('hero-stat-rating','hero-val-rating', 1, 0); /* show pill */
+                  var rEl = document.getElementById('hero-val-rating');
+                  if (rEl) rEl.textContent = avg.toFixed(1);
+                }
+              }).catch(function(){});
+            }).catch(function(){});
+        }
+
+        /* Wait for Firebase to be ready */
+        document.addEventListener('sokoniFirebaseReady', _tryLoad);
+        document.addEventListener('DOMContentLoaded', function(){
+          setTimeout(_tryLoad, 3000); /* fallback after 3s */
+        });
+      })();
+      </script>
 
       <!-- GOODS vs SERVICES split -->
       <div

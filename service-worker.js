@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-v297";
+const CACHE_VERSION = "sokoni-v298";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -59,7 +59,7 @@ const PRECACHE_PAGES = [
   "/onboarding.html", "/onboarding-seller.html", "/onboarding-driver.html", "/onboarding-professional.html",
   "/help.html", "/moderation.html",
   "/beta.html", "/beta-dashboard.html",
-  "/seller-success.html", "/driver-success.html", "/join.html", "/support.html", "/launch-metrics.html",
+  "/seller-success.html", "/driver-success.html", "/join.html", "/support.html", "/launch-metrics.html", "/launch-readiness.html",
   "/ride-book.html",
   "/jobs.html", "/education.html", "/superadmin.html", "/scan.html",
   "/inventory.html",
@@ -73,7 +73,7 @@ const PRECACHE_PAGES = [
 ];
 
 const PRECACHE_STATIC = [
-  "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js",
+  "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css",
   "/manifest.json", "/assets/logosokoni.png", "/assets/Sokonilogo2.png",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",

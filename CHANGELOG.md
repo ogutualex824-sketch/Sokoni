@@ -1,4 +1,36 @@
-﻿## [2026-06-25] — sprint: Final UX & Multi-Branch Polish Sprint — SW v297
+﻿## [2026-06-25] — sprint: Final Pre-Launch Polish & QA Sprint (Phase 2 + 9) — SW v298
+
+### Summary
+Phase 2: `sokoni-quality.css` unified design system — tokens, buttons, cards, tables, forms, badges, toasts, modals, nav, skeletons, accessibility utilities, responsive grid helpers, light-mode override.
+Phase 9: `launch-readiness.html` live Launch Readiness Dashboard — 8-criteria tracker with SVG ring, priority action list, admin auth gate, Firestore count reads, CF integration.
+Homepage hero stats converted from hardcoded marketing copy to dynamic Firestore counts hidden below minimum thresholds (5 sellers / 50 products / 10 ratings).
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `launch-readiness.html` | Admin-gated dashboard — 8 launch criteria (sellers, listings, categories, quality, payment, search zero-result rate, critical bugs, health score), SVG ring, priority action list, Firestore live reads + CF integration |
+| `sokoni-quality.css` | Unified design system — CSS custom properties, button variants, cards, tables, forms, badges, chips, toasts, modals, nav, skeleton loaders, spinners, banners, empty states, accessibility (`focus-visible`, skip-link, `aria-disabled`, 44px touch targets), responsive grid helpers, light-mode override |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `admin.html` | Added 🚀 Launch Readiness card to Command Center grid; added Launch Readiness to sidebar Platform group (first entry, green highlight) |
+| `index.html` | Hero stats converted to dynamic Firestore counts; pills hidden below minimum thresholds; "Same-Day Nairobi" and "47 Counties" pills remain always visible |
+| `service-worker.js` | Bumped v297→v298; added `launch-readiness.html` and `sokoni-quality.css` to precache |
+
+### Performance
+- `sokoni-quality.css`: single shared stylesheet eliminates per-page redundancy for buttons, forms, toasts
+- `launch-readiness.html`: uses `getCountFromServer()` (server-side aggregation, 1 read each) not `getDocs()`
+
+### Accessibility
+- All interactive elements in `sokoni-quality.css` enforce `min-height: 44px` WCAG touch target
+- Focus rings via `*:focus-visible`; `[aria-disabled]` enforced at CSS layer
+
+---
+
+## [2026-06-25] — sprint: Final UX & Multi-Branch Polish Sprint — SW v297
 
 ### Summary
 10-phase UX, RBAC, accessibility, and performance polish sprint. No new Cloud Functions. No new Firestore collections. Centred on multi-branch correctness, role enforcement, mobile experience, and UI consistency.
