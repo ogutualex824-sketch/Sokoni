@@ -303,6 +303,12 @@ async function addToCart(id){
     localStorage.setItem("cart", JSON.stringify(cartData));
     updateCartCount();
     showNotif("Added to cart 🛒", "success");
+    try {
+        const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
+        httpsCallable(getFunctions(undefined, "us-central1"), "recordFunnelEvent")({
+            step: "addToCart", category: product.category || null
+        }).catch(() => {});
+    } catch(_) {}
 }
 
 /* WISHLIST */
