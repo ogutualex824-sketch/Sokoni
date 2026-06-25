@@ -244,7 +244,24 @@ Each initiative ranked on 5 axes (1–5 each, 25 max):
 
 ---
 
-### Tier 2 — v1.2
+### v1.2 — Completed (2026-06-25)
+
+| Initiative | Status |
+|------------|--------|
+| Complete conversion funnel (paymentAttempted) | ✅ Done |
+| Seller Success Center (tabbed, data-driven) | ✅ Done |
+| Listing quality scoring (getListingQualityReport) | ✅ Done |
+| Seller performance summary (fast/slow movers) | ✅ Done |
+| Retention engine (recently viewed, saved searches, price alerts) | ✅ Done |
+| Marketplace quality scanner (7 issue types, health score) | ✅ Done |
+| Search insights CF (no-result terms, top queries, conversions) | ✅ Done |
+| Conversion analysis document | ✅ Done |
+| Search quality report | ✅ Done |
+| Marketplace quality report | ✅ Done |
+| Scalability review | ✅ Done |
+| 90-day growth plan (evidence-gated) | ✅ Done |
+
+### Tier 2 — v1.3 (post-Phase-A evidence)
 
 | Initiative | Score | When |
 |------------|-------|------|

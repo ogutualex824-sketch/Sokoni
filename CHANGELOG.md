@@ -1,4 +1,67 @@
-﻿## [2026-06-25] — release: SOKONI v1.1 Continuous Operations Infrastructure — SW v293
+﻿## [2026-06-25] — release: SOKONI v1.2 Growth, Adoption & Platform Excellence — SW v294
+
+### Summary
+Conversion funnel completed (paymentAttempted wired), Seller Success Center upgraded to data-driven three-tab dashboard, retention engine (recently viewed, saved searches, price alerts), marketplace quality scanner, search insights CF, and 5 strategy documents covering conversion analysis, search quality, marketplace quality, scalability review, and 90-day growth plan.
+
+### Funnel Completion
+- `paymentAttempted` event wired into `checkout.html` — all 4 funnel steps now instrumented
+- Full funnel: addToCart → checkoutStarted → paymentAttempted → paid (orders collection)
+
+### New Cloud Functions (11)
+
+| Function | Type | Purpose |
+|----------|------|---------|
+| `getListingQualityReport` | seller callable | Per-product quality score (0–100), issues, tips |
+| `getSellerPerformanceSummary` | seller callable | Fast/slow movers, revenue, pricing by category |
+| `getMarketplaceSellerHealth` | admin callable | Cross-seller quality distribution |
+| `recordRecentlyViewed` | public callable | Store recently viewed (per-user subcollection) |
+| `saveSearch` / `deleteSavedSearch` | auth callable | Persist/remove saved searches |
+| `createPriceAlert` / `deletePriceAlert` | auth callable | Create/cancel price drop alerts |
+| `triggerPriceAlerts` | scheduled 07:00 UTC daily | Check prices, send email on match |
+| `getRetentionData` | auth callable | Recently viewed + saved searches + active alerts |
+| `getMarketplaceQualityReport` | admin callable | Full catalogue quality scan with 7 issue types |
+| `flagLowQualityListing` | admin callable | Mark listing for moderation |
+| `getSearchInsights` | admin callable | Top queries, no-result terms, conversion rates |
+| `getZeroResultTerms` | admin callable | No-result query list for Algolia synonyms |
+| `recordSearchQuery` | public callable | Lightweight custom search signal log |
+
+### New Pages
+| Page | Purpose |
+|------|---------|
+| `seller-success.html` | Upgraded: 3-tab Seller Success Center (Setup / Quality / Performance) |
+
+### New Frontend Module
+| File | Purpose |
+|------|---------|
+| `sokoni-retention.js` | localStorage-first recently viewed, saved searches, price alert API |
+
+### New Firestore Collections
+| Collection | Purpose |
+|-----------|---------|
+| `recentlyViewed/{uid}/items` | Per-user recently viewed products (last 20) |
+| `savedSearches/{uid}/searches` | Per-user saved search queries |
+| `priceAlerts` | Price drop alerts with daily scheduler |
+| `searchQueryLog` | Daily aggregate of custom search signals |
+
+### New Firestore Indexes (2, total 190→192/200)
+| Index | Purpose |
+|-------|---------|
+| `priceAlerts(uid, status)` | User's active alerts |
+| `priceAlerts(productId, status, targetPrice)` | Scheduler price check |
+
+### New Documentation (5 files)
+- `docs/CONVERSION_ANALYSIS.md` — 5 drop-off points, benchmarks, quick wins
+- `docs/SEARCH_QUALITY_REPORT.md` — architecture, zero-result strategy, targets
+- `docs/MARKETPLACE_QUALITY_REPORT.md` — quality framework, enforcement phases
+- `docs/SCALABILITY_REVIEW.md` — Firestore, Functions, Algolia, Storage assessment
+- `docs/GROWTH_PLAN_90_DAYS.md` — evidence-gated 90-day roadmap with 3 phases
+
+### Index count: 190 → 192 / 200
+### Service Worker: sokoni-v293 → sokoni-v294
+
+---
+
+## [2026-06-25] — release: SOKONI v1.1 Continuous Operations Infrastructure — SW v293
 
 ### Summary
 Automated operational reporting, reliability tracking, conversion funnel analytics, and report templates. Daily ops reports emailed at 06:00 EAT. Weekly security digest every Monday. Hourly health snapshots build a 30-day reliability history. Feedback system upgraded with priority levels. Three report templates added for weekly, monthly, and 30-day reviews.

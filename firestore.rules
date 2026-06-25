@@ -3167,6 +3167,43 @@ service cloud.firestore {
       allow write:  if false;
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       RETENTION: recently viewed (per-user subcollection)
+    ══════════════════════════════════════════════════════════════ */
+    match /recentlyViewed/{uid}/items/{productId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow write: if false; // CF-only writes for unauthenticated paths
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RETENTION: saved searches (per-user subcollection)
+    ══════════════════════════════════════════════════════════════ */
+    match /savedSearches/{uid}/searches/{searchId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RETENTION: price alerts
+       Users own their alerts. CF handles scheduler writes.
+    ══════════════════════════════════════════════════════════════ */
+    match /priceAlerts/{alertId} {
+      allow read:   if request.auth != null &&
+                       (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if request.auth != null &&
+                       request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null &&
+                       (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SEARCH: query log (CF write, admin read)
+    ══════════════════════════════════════════════════════════════ */
+    match /searchQueryLog/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
   }
 }
 

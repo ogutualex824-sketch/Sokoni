@@ -1,72 +1,124 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head><script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Welcome to SOKONI Sellers!</title>
+<title>Seller Success Center — SOKONI</title>
 <link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#080808">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;padding-bottom:40px;}
-.ss-hero{background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(0,0,0,0));border-bottom:1px solid rgba(113,255,0,0.12);padding:40px 20px 32px;text-align:center;}
-.ss-hero h1{font-size:clamp(22px,5vw,34px);font-weight:900;margin-bottom:8px;line-height:1.2;}
-.ss-hero h1 span{color:#71ff00;}
-.ss-hero p{font-size:14px;color:rgba(255,255,255,0.45);max-width:440px;margin:0 auto;}
-.ss-name{color:#71ff00;}
-.ss-body{max-width:640px;margin:0 auto;padding:20px 16px;}
-.ss-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;margin-bottom:14px;}
-.ss-card h2{font-size:13px;font-weight:900;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
-.ss-progress{height:8px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;margin-bottom:4px;}
-.ss-progress-bar{height:100%;background:linear-gradient(90deg,#71ff00,#5ccc00);border-radius:99px;transition:width .6s;}
-.ss-progress-lbl{font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:14px;}
-.ss-checklist{list-style:none;}
-.ss-check-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;}
-.ss-check-item:last-child{border-bottom:none;}
-.ss-check-box{width:24px;height:24px;border-radius:7px;border:2px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;}
-.ss-check-box.done{background:rgba(113,255,0,0.12);border-color:#71ff00;color:#71ff00;font-size:14px;}
-.ss-check-text{flex:1;}
-.ss-check-title{font-size:13px;font-weight:800;color:#fff;margin-bottom:2px;}
-.ss-check-title.done{color:rgba(255,255,255,0.4);text-decoration:line-through;}
-.ss-check-sub{font-size:11px;color:rgba(255,255,255,0.3);}
-.ss-check-link{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;color:#71ff00;text-decoration:none;}
-.ss-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
-.ss-action{padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;text-decoration:none;text-align:center;transition:all .2s;}
-.ss-action:hover{border-color:rgba(113,255,0,0.3);}
-.ss-action-icon{font-size:26px;margin-bottom:6px;}
-.ss-action-lbl{font-size:12px;font-weight:800;color:rgba(255,255,255,0.7);}
-.ss-action-sub{font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;}
-.ss-tip{padding:14px;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.15);border-radius:12px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;}
-.ss-tip-icon{font-size:20px;flex-shrink:0;margin-top:1px;}
-.ss-tip-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;}
-.ss-tip-text strong{color:#71ff00;}
-.ss-cta{width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#5ccc00);border:none;border-radius:13px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center;}
-.ss-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:20px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:16px;}
-.ss-tier{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;}
-.ss-tier-badge{font-size:28px;}
-.ss-tier-info h3{font-size:13px;font-weight:900;color:#fff;}
-.ss-tier-info p{font-size:11px;color:rgba(255,255,255,0.35);}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;min-height:100vh;padding-bottom:80px}
+
+/* Hero */
+.ss-hero{background:linear-gradient(135deg,rgba(113,255,0,.1),rgba(0,0,0,0));border-bottom:1px solid rgba(113,255,0,.12);padding:32px 20px 24px;text-align:center}
+.ss-hero h1{font-size:clamp(20px,5vw,30px);font-weight:900;margin-bottom:6px;line-height:1.2}
+.ss-hero h1 span{color:#71ff00}
+.ss-hero p{font-size:13px;color:rgba(255,255,255,.45);max-width:440px;margin:0 auto}
+.ss-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.25);border-radius:20px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:14px}
+
+/* Tab bar */
+.ss-tabs{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.08);overflow-x:auto;padding:0 16px}
+.ss-tab{padding:12px 18px;font-size:13px;font-weight:700;color:rgba(255,255,255,.4);border:none;background:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s}
+.ss-tab.active{color:#71ff00;border-bottom-color:#71ff00}
+.ss-pane{display:none;max-width:680px;margin:0 auto;padding:20px 16px}
+.ss-pane.active{display:block}
+
+/* Cards */
+.ss-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px;margin-bottom:14px}
+.ss-card h2{font-size:12px;font-weight:900;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+
+/* Quality score */
+.qs-product{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.qs-product:last-child{border-bottom:none}
+.qs-img{width:48px;height:48px;border-radius:8px;object-fit:cover;background:rgba(255,255,255,.05);flex-shrink:0}
+.qs-info{flex:1;min-width:0}
+.qs-name{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qs-issues{font-size:11px;color:rgba(255,255,255,.35);margin-top:2px}
+.qs-score-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
+.qs-score{font-size:18px;font-weight:900;line-height:1}
+.qs-grade{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.grade-A{color:#10b981}.grade-B{color:#3b82f6}.grade-C{color:#f59e0b}.grade-D{color:#f97316}.grade-F{color:#ef4444}
+.qs-bar-wrap{height:4px;background:rgba(255,255,255,.06);border-radius:99px;margin-top:4px;overflow:hidden}
+.qs-bar{height:100%;border-radius:99px;background:#71ff00;transition:width .6s}
+
+/* Performance */
+.perf-movers{display:flex;flex-direction:column;gap:10px}
+.perf-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,255,255,.02);border-radius:10px;border:1px solid rgba(255,255,255,.06)}
+.perf-rank{font-size:16px;font-weight:900;color:rgba(255,255,255,.25);width:24px;flex-shrink:0;text-align:center}
+.perf-name{flex:1;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.perf-rev{font-size:12px;font-weight:800;color:#71ff00}
+.perf-views{font-size:11px;color:rgba(255,255,255,.3)}
+.slow-badge{display:inline-block;padding:2px 8px;background:rgba(239,68,68,.1);color:#ef4444;border-radius:99px;font-size:10px;font-weight:800;margin-left:6px}
+
+/* KPI row */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.kpi-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 12px;text-align:center}
+.kpi-val{font-size:22px;font-weight:900;line-height:1;color:#71ff00}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.3);margin-top:4px}
+
+/* Checklist (onboarding) */
+.ss-progress{height:8px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;margin-bottom:4px}
+.ss-progress-bar{height:100%;background:linear-gradient(90deg,#71ff00,#5ccc00);border-radius:99px;transition:width .6s}
+.ss-progress-lbl{font-size:11px;color:rgba(255,255,255,.3);margin-bottom:14px}
+.ss-checklist{list-style:none}
+.ss-check-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer}
+.ss-check-item:last-child{border-bottom:none}
+.ss-check-box{width:24px;height:24px;border-radius:7px;border:2px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
+.ss-check-box.done{background:rgba(113,255,0,.12);border-color:#71ff00;color:#71ff00;font-size:14px}
+.ss-check-text{flex:1}
+.ss-check-title{font-size:13px;font-weight:800;color:#fff;margin-bottom:2px}
+.ss-check-title.done{color:rgba(255,255,255,.4);text-decoration:line-through}
+.ss-check-sub{font-size:11px;color:rgba(255,255,255,.3)}
+.ss-check-link{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;color:#71ff00;text-decoration:none}
+.ss-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.ss-action{padding:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;text-decoration:none;text-align:center;transition:all .2s}
+.ss-action:hover{border-color:rgba(113,255,0,.3)}
+.ss-action-icon{font-size:26px;margin-bottom:6px}
+.ss-action-lbl{font-size:12px;font-weight:800;color:rgba(255,255,255,.7)}
+.ss-action-sub{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
+.ss-tip{padding:14px;background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.15);border-radius:12px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.ss-tip-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.ss-tip-text{font-size:12px;color:rgba(255,255,255,.55);line-height:1.6}
+.ss-tip-text strong{color:#71ff00}
+.ss-cta{width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#5ccc00);border:none;border-radius:13px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center}
+.ss-tier{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px}
+
+/* Shared */
+.skeleton{background:linear-gradient(90deg,#1a1a1a 25%,#222 50%,#1a1a1a 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.empty-state{text-align:center;padding:40px 16px;color:rgba(255,255,255,.3);font-size:13px}
+.empty-state a{color:#71ff00;text-decoration:none}
+.tip-tag{display:inline-block;padding:3px 8px;background:rgba(113,255,0,.08);color:#71ff00;border-radius:99px;font-size:10px;font-weight:800;margin-left:6px}
+.err-msg{color:#ef4444;font-size:13px;text-align:center;padding:16px}
 </style>
 </head>
 <body>
 
 <div class="ss-hero">
-  <div class="ss-badge">✅ Account Created</div>
-  <h1>Welcome to<br><span>SOKONI Sellers</span><span id="ssName"></span>!</h1>
-  <p>You're 4 steps away from your first sale. Complete your setup to start earning.</p>
+  <div class="ss-badge">✅ Seller Account</div>
+  <h1>Seller Success<span id="ssName"></span></h1>
+  <p>Track quality, performance and growth all in one place</p>
 </div>
 
-<div class="ss-body">
+<!-- TABS -->
+<div class="ss-tabs">
+  <button class="ss-tab active" data-tab="setup">Setup</button>
+  <button class="ss-tab"        data-tab="quality">Listing Quality</button>
+  <button class="ss-tab"        data-tab="performance">Performance</button>
+</div>
 
-  <!-- SETUP CHECKLIST -->
+<!-- ═══════════════════ TAB: SETUP ═══════════════════ -->
+<div class="ss-pane active" id="pane-setup">
+
   <div class="ss-card">
     <h2>📋 Setup Checklist</h2>
     <div class="ss-progress"><div class="ss-progress-bar" id="ssProgressBar" style="width:25%"></div></div>
     <div class="ss-progress-lbl" id="ssProgressLbl">1 of 4 steps complete</div>
     <ul class="ss-checklist" id="ssChecklist">
-      <li class="ss-check-item done" id="chk-profile" onclick="toggleCheck('profile')">
+      <li class="ss-check-item done" id="chk-profile">
         <div class="ss-check-box done">✓</div>
         <div class="ss-check-text">
           <div class="ss-check-title done">Create your seller account</div>
@@ -89,7 +141,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;m
           <a class="ss-check-link" href="verification.html">→ Apply for Verification</a>
         </div>
       </li>
-      <li class="ss-check-item" id="chk-sale" onclick="">
+      <li class="ss-check-item" id="chk-sale">
         <div class="ss-check-box" id="box-sale"></div>
         <div class="ss-check-text">
           <div class="ss-check-title" id="title-sale">Complete your first sale</div>
@@ -99,173 +151,343 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;m
     </ul>
   </div>
 
-  <!-- QUICK ACTIONS -->
   <div class="ss-actions">
-    <a href="seller.html" class="ss-action">
-      <div class="ss-action-icon">📊</div>
-      <div class="ss-action-lbl">Dashboard</div>
-      <div class="ss-action-sub">Orders & analytics</div>
-    </a>
-    <a href="seller.html?tab=products" class="ss-action">
-      <div class="ss-action-icon">📦</div>
-      <div class="ss-action-lbl">Add Products</div>
-      <div class="ss-action-sub">List what you sell</div>
-    </a>
-    <a href="messages.html" class="ss-action">
-      <div class="ss-action-icon">💬</div>
-      <div class="ss-action-lbl">Inbox</div>
-      <div class="ss-action-sub">Buyer messages</div>
-    </a>
-    <a href="seller-analytics.html" class="ss-action">
-      <div class="ss-action-icon">📈</div>
-      <div class="ss-action-lbl">Analytics</div>
-      <div class="ss-action-sub">Sales & earnings</div>
-    </a>
-    <a href="verification.html" class="ss-action">
-      <div class="ss-action-icon">✅</div>
-      <div class="ss-action-lbl">Get Verified</div>
-      <div class="ss-action-sub">Build buyer trust</div>
-    </a>
-    <a href="subscriptions.html" class="ss-action">
-      <div class="ss-action-icon">⭐</div>
-      <div class="ss-action-lbl">Boost Visibility</div>
-      <div class="ss-action-sub">Reach more buyers</div>
-    </a>
+    <a href="seller.html" class="ss-action"><div class="ss-action-icon">📊</div><div class="ss-action-lbl">Dashboard</div><div class="ss-action-sub">Orders & analytics</div></a>
+    <a href="seller.html?tab=products" class="ss-action"><div class="ss-action-icon">📦</div><div class="ss-action-lbl">Add Products</div><div class="ss-action-sub">List what you sell</div></a>
+    <a href="messages.html" class="ss-action"><div class="ss-action-icon">💬</div><div class="ss-action-lbl">Inbox</div><div class="ss-action-sub">Buyer messages</div></a>
+    <a href="seller-analytics.html" class="ss-action"><div class="ss-action-icon">📈</div><div class="ss-action-lbl">Analytics</div><div class="ss-action-sub">Sales & earnings</div></a>
+    <a href="verification.html" class="ss-action"><div class="ss-action-icon">✅</div><div class="ss-action-lbl">Get Verified</div><div class="ss-action-sub">Build buyer trust</div></a>
+    <a href="subscriptions.html" class="ss-action"><div class="ss-action-icon">⭐</div><div class="ss-action-lbl">Boost Visibility</div><div class="ss-action-sub">Reach more buyers</div></a>
   </div>
 
-  <!-- SELLER TIER -->
-  <div class="ss-card">
-    <h2>🏆 Your Seller Tier</h2>
-    <div class="ss-tier">
-      <div class="ss-tier-badge">🥉</div>
-      <div class="ss-tier-info">
-        <h3>Bronze Seller</h3>
-        <p>New seller. Complete setup checklist to unlock Silver tier and boost visibility by 2×.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- TIPS FOR FIRST SALE -->
   <div class="ss-card">
     <h2>💡 Tips for Your First Sale</h2>
-    <div class="ss-tip">
-      <div class="ss-tip-icon">📸</div>
-      <div class="ss-tip-text"><strong>Use real photos.</strong> Products with 3+ clear, well-lit photos sell 4× faster than those without. Use natural light, show all angles.</div>
-    </div>
-    <div class="ss-tip">
-      <div class="ss-tip-icon">💰</div>
-      <div class="ss-tip-text"><strong>Price competitively.</strong> Search for similar products on SOKONI and price within 10% of competitors. You can always adjust later.</div>
-    </div>
-    <div class="ss-tip">
-      <div class="ss-tip-icon">📝</div>
-      <div class="ss-tip-text"><strong>Write detailed descriptions.</strong> Include size, colour, condition, and what makes your product special. Answer buyer questions before they ask.</div>
-    </div>
-    <div class="ss-tip">
-      <div class="ss-tip-icon">⚡</div>
-      <div class="ss-tip-text"><strong>Reply fast.</strong> Sellers who reply to messages within 1 hour convert 60% more inquiries into sales. Enable notifications.</div>
-    </div>
-    <div class="ss-tip">
-      <div class="ss-tip-icon">✅</div>
-      <div class="ss-tip-text"><strong>Get verified.</strong> The ✅ verified badge builds instant trust. Verified sellers earn 3× more on average. Apply now — it's free.</div>
-    </div>
+    <div class="ss-tip"><div class="ss-tip-icon">📸</div><div class="ss-tip-text"><strong>Use real photos.</strong> Products with 3+ clear, well-lit photos sell 4× faster. Use natural light, show all angles.</div></div>
+    <div class="ss-tip"><div class="ss-tip-icon">💰</div><div class="ss-tip-text"><strong>Price competitively.</strong> Search for similar products on SOKONI and price within 10% of competitors.</div></div>
+    <div class="ss-tip"><div class="ss-tip-icon">📝</div><div class="ss-tip-text"><strong>Write detailed descriptions.</strong> Include size, colour, condition, and what makes your product special.</div></div>
+    <div class="ss-tip"><div class="ss-tip-icon">⚡</div><div class="ss-tip-text"><strong>Reply fast.</strong> Sellers who reply within 1 hour convert 60% more inquiries into sales.</div></div>
+    <div class="ss-tip"><div class="ss-tip-icon">✅</div><div class="ss-tip-text"><strong>Get verified.</strong> The ✅ badge builds instant trust. Verified sellers earn 3× more on average.</div></div>
   </div>
 
-  <!-- VERIFICATION REMINDER -->
-  <div class="ss-card" style="background:rgba(113,255,0,0.03);border-color:rgba(113,255,0,0.15);">
-    <h2 style="color:#71ff00;">🔐 Seller Verification</h2>
-    <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:14px;">Verified sellers get a ✅ badge, rank higher in search, and buyers trust them more. Takes 24–48 hours.</p>
-    <p style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:14px;line-height:1.6;"><strong style="color:rgba(255,255,255,0.6);">You'll need:</strong> National ID or business registration certificate + a selfie. That's it.</p>
+  <div class="ss-card" style="background:rgba(113,255,0,.03);border-color:rgba(113,255,0,.15)">
+    <h2 style="color:#71ff00">🔐 Seller Verification</h2>
+    <p style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:14px">Verified sellers get a ✅ badge, rank higher in search, and buyers trust them more. Takes 24–48 hours.</p>
     <a href="verification.html" class="ss-cta">Apply for Verification →</a>
   </div>
 
-  <!-- SUPPORT LINK -->
-  <div style="text-align:center;padding:8px 0;">
-    <a href="support.html" style="font-size:12px;color:rgba(255,255,255,0.3);text-decoration:none;">Need help? → Contact Support</a>
-    <span style="color:rgba(255,255,255,0.1);margin:0 8px;">·</span>
-    <a href="help.html" style="font-size:12px;color:rgba(255,255,255,0.3);text-decoration:none;">Help Center</a>
+  <div style="text-align:center;padding:8px 0">
+    <a href="support.html" style="font-size:12px;color:rgba(255,255,255,.3);text-decoration:none">Need help? → Contact Support</a>
+    <span style="color:rgba(255,255,255,.1);margin:0 8px">·</span>
+    <a href="help.html" style="font-size:12px;color:rgba(255,255,255,.3);text-decoration:none">Help Center</a>
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB: QUALITY ═══════════════════ -->
+<div class="ss-pane" id="pane-quality">
+
+  <div class="ss-card" id="qs-summary-card">
+    <h2>📊 Catalogue Quality Overview</h2>
+    <div id="qs-summary-loading">
+      <div class="skeleton" style="height:20px;width:60%;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:14px;width:80%"></div>
+    </div>
+    <div id="qs-summary" style="display:none">
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-val" id="qs-avg">—</div><div class="kpi-lbl">Avg Score</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="qs-total">—</div><div class="kpi-lbl">Listings</div></div>
+        <div class="kpi-card"><div class="kpi-val grade-A" id="qs-a">—</div><div class="kpi-lbl">Grade A</div></div>
+        <div class="kpi-card"><div class="kpi-val grade-F" id="qs-f">—</div><div class="kpi-lbl">Need Work</div></div>
+      </div>
+      <p id="qs-tip" style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.6"></p>
+    </div>
   </div>
 
+  <div class="ss-card">
+    <h2>📦 Products to Improve <span class="tip-tag" id="qs-fix-count">—</span></h2>
+    <div id="qs-list">
+      <div class="skeleton" style="height:60px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:60px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:60px"></div>
+    </div>
+  </div>
+
+  <div class="ss-card" style="background:rgba(113,255,0,.03);border-color:rgba(113,255,0,.12)">
+    <h2 style="color:#71ff00">✅ Top-Rated Listings</h2>
+    <div id="qs-top-list">
+      <div class="skeleton" style="height:48px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:48px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB: PERFORMANCE ═══════════════════ -->
+<div class="ss-pane" id="pane-performance">
+
+  <div class="kpi-row" id="perf-kpis" style="margin-top:0">
+    <div class="kpi-card"><div class="kpi-val skeleton" style="height:22px;width:70%;margin:0 auto 4px">—</div><div class="kpi-lbl">Revenue (30d)</div></div>
+    <div class="kpi-card"><div class="kpi-val skeleton" style="height:22px;width:70%;margin:0 auto 4px">—</div><div class="kpi-lbl">Units Sold</div></div>
+    <div class="kpi-card"><div class="kpi-val skeleton" style="height:22px;width:70%;margin:0 auto 4px">—</div><div class="kpi-lbl">Listings</div></div>
+  </div>
+
+  <div class="ss-card">
+    <h2>🚀 Fast Movers</h2>
+    <div id="perf-fast"><div class="skeleton" style="height:48px;margin-bottom:8px"></div><div class="skeleton" style="height:48px"></div></div>
+  </div>
+
+  <div class="ss-card">
+    <h2>🐌 Slow Movers <span class="tip-tag">Has views, 0 sales</span></h2>
+    <div id="perf-slow"><div class="skeleton" style="height:48px;margin-bottom:8px"></div><div class="skeleton" style="height:48px"></div></div>
+  </div>
+
+  <div class="ss-card">
+    <h2>👻 Zero Views <span class="tip-tag">Not visible yet</span></h2>
+    <div id="perf-zero"><div class="skeleton" style="height:48px"></div></div>
+  </div>
+
+  <div class="ss-card">
+    <h2>💡 Pricing by Category</h2>
+    <div id="perf-cats"><div class="skeleton" style="height:48px"></div></div>
+  </div>
+
+  <div class="ss-card" id="perf-tip-card" style="display:none;background:rgba(113,255,0,.04);border-color:rgba(113,255,0,.15)">
+    <h2 style="color:#71ff00">💡 AI Tip</h2>
+    <p id="perf-tip" style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.6"></p>
+  </div>
 </div>
 
 <script src="sokoni-launch.js"></script>
-<script>
-var CHECKS_KEY = '_sokoniSellerSetup';
+<script type="module">
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
 
-function loadChecks() {
-  try { return JSON.parse(localStorage.getItem(CHECKS_KEY)||'{}'); } catch { return {}; }
-}
+const auth = getAuth();
+const fns  = getFunctions(undefined, "us-central1");
+const getQuality     = httpsCallable(fns, "getListingQualityReport");
+const getPerformance = httpsCallable(fns, "getSellerPerformanceSummary");
 
-function saveChecks(c) {
-  try { localStorage.setItem(CHECKS_KEY, JSON.stringify(c)); } catch {}
-}
+/* ── Tab switching ── */
+document.querySelectorAll(".ss-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll(".ss-tab").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".ss-pane").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("pane-" + tab).classList.add("active");
+    if (tab === "quality"     && !window._qsLoaded)   loadQuality();
+    if (tab === "performance" && !window._perfLoaded)  loadPerformance();
+  });
+});
 
-function toggleCheck(id) {
-  var checks = loadChecks();
-  checks[id] = !checks[id];
-  saveChecks(checks);
-  renderChecklist(checks);
-}
-
-function goTo(url) { window.location.href = url; }
+/* ── Onboarding checklist (localStorage) ── */
+const CHECKS_KEY = "_sokoniSellerSetup";
+function loadChecks()     { try { return JSON.parse(localStorage.getItem(CHECKS_KEY)||"{}"); } catch { return {}; } }
+function saveChecks(c)    { try { localStorage.setItem(CHECKS_KEY, JSON.stringify(c)); } catch {} }
+window.goTo = url => { window.location.href = url; };
+window.toggleCheck = id => { const c = loadChecks(); c[id] = !c[id]; saveChecks(c); renderChecklist(c); };
 
 function renderChecklist(checks) {
-  var items = ['product','verify','sale'];
-  items.forEach(function(id) {
-    var done = !!checks[id];
-    var box   = document.getElementById('box-'+id);
-    var title = document.getElementById('title-'+id);
-    var li    = document.getElementById('chk-'+id);
-    if (box)   { box.className = 'ss-check-box' + (done?' done':''); box.textContent = done ? '✓' : ''; }
-    if (title) { title.className = 'ss-check-title' + (done?' done':''); }
-    if (li)    { li.style.opacity = done ? '0.6' : '1'; }
+  ["product","verify","sale"].forEach(id => {
+    const done  = !!checks[id];
+    const box   = document.getElementById("box-"  + id);
+    const title = document.getElementById("title-" + id);
+    const li    = document.getElementById("chk-"  + id);
+    if (box)   { box.className = "ss-check-box" + (done ? " done" : ""); box.textContent = done ? "✓" : ""; }
+    if (title) { title.className = "ss-check-title" + (done ? " done" : ""); }
+    if (li)    { li.style.opacity = done ? "0.6" : "1"; }
   });
-
-  /* Progress: profile always done, +1 per check */
-  var done = 1 + items.filter(function(id){ return !!checks[id]; }).length;
-  var total = 4;
-  var pct = Math.round(done/total*100);
-  var bar = document.getElementById('ssProgressBar');
-  var lbl = document.getElementById('ssProgressLbl');
-  if (bar) bar.style.width = pct + '%';
-  if (lbl) lbl.textContent = done + ' of ' + total + ' steps complete';
+  const done  = 1 + ["product","verify","sale"].filter(id => !!checks[id]).length;
+  const bar   = document.getElementById("ssProgressBar");
+  const lbl   = document.getElementById("ssProgressLbl");
+  if (bar) bar.style.width = Math.round(done/4*100) + "%";
+  if (lbl) lbl.textContent = done + " of 4 steps complete";
 }
 
 function autoDetectProgress() {
-  var checks = loadChecks();
-  /* Detect products from localStorage */
+  const checks = loadChecks();
+  try { if (JSON.parse(localStorage.getItem("sellerProducts")||"[]").length) checks.product = true; } catch {}
   try {
-    var prods = JSON.parse(localStorage.getItem('sellerProducts')||'[]');
-    if (prods.length > 0) checks.product = true;
+    if (JSON.parse(localStorage.getItem("sokoniOrders")||"[]")
+      .some(o => o.status==="delivered"||o.status==="completed")) checks.sale = true;
   } catch {}
-  /* Detect completed order */
-  try {
-    var orders = JSON.parse(localStorage.getItem('sokoniOrders')||'[]');
-    if (orders.some(function(o){ return o.status==='delivered'||o.status==='completed'; })) checks.sale = true;
-  } catch {}
-  saveChecks(checks);
-  renderChecklist(checks);
+  saveChecks(checks); renderChecklist(checks);
 }
 
-/* Show seller name if available */
-window.addEventListener('DOMContentLoaded', function() {
+/* ── Quality tab ── */
+async function loadQuality() {
+  window._qsLoaded = true;
   try {
-    var u = JSON.parse(localStorage.getItem('sokoniUser')||'{}');
-    var shopName = localStorage.getItem('sokoniShopName') || u.displayName || '';
+    const { data } = await getQuality();
+    const { products = [], summary } = data;
+
+    if (!summary) {
+      document.getElementById("qs-list").innerHTML =
+        `<div class="empty-state">No listings yet — <a href="seller.html?tab=products">add your first product</a></div>`;
+      document.getElementById("qs-top-list").innerHTML = "";
+      return;
+    }
+
+    /* Summary card */
+    document.getElementById("qs-avg").textContent   = summary.avgQualityScore;
+    document.getElementById("qs-total").textContent = summary.totalListings;
+    document.getElementById("qs-a").textContent     = summary.gradeA;
+    document.getElementById("qs-f").textContent     = summary.listingsNeedingAttention;
+    document.getElementById("qs-summary-loading").style.display = "none";
+    document.getElementById("qs-summary").style.display = "block";
+
+    const avg = summary.avgQualityScore;
+    document.getElementById("qs-tip").textContent = avg >= 80
+      ? "Excellent catalogue quality. Keep all listings updated to maintain visibility."
+      : avg >= 60
+      ? "Good quality. Focus on adding more photos and longer descriptions to the products flagged below."
+      : "Your listings need attention. Products with low scores get fewer views. Fix the items below first.";
+
+    /* Products needing attention (score < 80, worst first) */
+    const needWork = products.filter(p => p.score < 80);
+    document.getElementById("qs-fix-count").textContent = needWork.length;
+
+    if (needWork.length === 0) {
+      document.getElementById("qs-list").innerHTML = `<div class="empty-state">All listings score 80+. Great work!</div>`;
+    } else {
+      document.getElementById("qs-list").innerHTML = needWork.slice(0, 15).map(p => _productRow(p)).join("");
+    }
+
+    /* Top-rated */
+    const topRated = [...products].filter(p => p.score >= 80).slice(0, 5);
+    document.getElementById("qs-top-list").innerHTML = topRated.length
+      ? topRated.map(p => `
+          <div class="qs-product">
+            ${p.image ? `<img class="qs-img" src="${p.image}" alt="">` : `<div class="qs-img"></div>`}
+            <div class="qs-info">
+              <div class="qs-name">${_esc(p.name)}</div>
+              <div class="qs-issues" style="color:#10b981">KES ${Number(p.price).toLocaleString()} · ${p.stats?.views||0} views · ${p.stats?.sales||0} sales</div>
+              <div class="qs-bar-wrap" style="margin-top:6px;max-width:160px"><div class="qs-bar" style="width:${p.score}%"></div></div>
+            </div>
+            <div class="qs-score-wrap">
+              <div class="qs-score grade-${p.grade}">${p.score}</div>
+              <div class="qs-grade grade-${p.grade}">Grade ${p.grade}</div>
+            </div>
+          </div>`).join("")
+      : `<div class="empty-state">Improve your listing quality scores to see top-rated listings here</div>`;
+  } catch (e) {
+    document.getElementById("qs-list").innerHTML = `<div class="err-msg">${e.message}</div>`;
+  }
+}
+
+function _productRow(p) {
+  const firstTip = p.tips?.[0] || p.issues?.[0] || "";
+  return `
+    <div class="qs-product">
+      ${p.image ? `<img class="qs-img" src="${p.image}" alt="">` : `<div class="qs-img"></div>`}
+      <div class="qs-info">
+        <div class="qs-name">${_esc(p.name)}</div>
+        ${firstTip ? `<div class="qs-issues">${_esc(firstTip)}</div>` : ""}
+        <div class="qs-bar-wrap" style="margin-top:6px;max-width:160px"><div class="qs-bar" style="width:${p.score}%;background:${p.score<50?"#ef4444":p.score<70?"#f59e0b":"#71ff00"}"></div></div>
+        <a href="seller.html?edit=${p.id}" style="font-size:11px;color:#71ff00;text-decoration:none;font-weight:800;margin-top:4px;display:inline-block">→ Edit listing</a>
+      </div>
+      <div class="qs-score-wrap">
+        <div class="qs-score grade-${p.grade}">${p.score}</div>
+        <div class="qs-grade grade-${p.grade}">Grade ${p.grade}</div>
+      </div>
+    </div>`;
+}
+
+/* ── Performance tab ── */
+async function loadPerformance() {
+  window._perfLoaded = true;
+  try {
+    const { data } = await getPerformance({ days: 30 });
+
+    /* KPIs */
+    document.getElementById("perf-kpis").innerHTML = `
+      <div class="kpi-card"><div class="kpi-val">KES ${(data.totalRevenue||0).toLocaleString()}</div><div class="kpi-lbl">Revenue (30d)</div></div>
+      <div class="kpi-card"><div class="kpi-val">${data.totalUnitsSold||0}</div><div class="kpi-lbl">Units Sold</div></div>
+      <div class="kpi-card"><div class="kpi-val">${data.totalListings||0}</div><div class="kpi-lbl">Listings</div></div>`;
+
+    /* Fast movers */
+    document.getElementById("perf-fast").innerHTML = data.fastMovers?.length
+      ? data.fastMovers.map((p, i) => `
+          <div class="perf-item">
+            <div class="perf-rank">${i+1}</div>
+            <div class="perf-name">${_esc(p.name)}</div>
+            <div>
+              <div class="perf-rev">KES ${p.revenueInPeriod.toLocaleString()}</div>
+              <div class="perf-views">${p.unitsSoldInPeriod} units</div>
+            </div>
+          </div>`).join("")
+      : `<div class="empty-state">No sales in the last 30 days yet</div>`;
+
+    /* Slow movers */
+    document.getElementById("perf-slow").innerHTML = data.slowMovers?.length
+      ? data.slowMovers.map(p => `
+          <div class="perf-item">
+            <div class="perf-rank" style="color:#ef4444">↓</div>
+            <div class="perf-name">${_esc(p.name)}<span class="slow-badge">${p.views} views</span></div>
+            <div>
+              <div class="perf-rev" style="color:#ef4444">KES ${Number(p.price).toLocaleString()}</div>
+              <div class="perf-views">0 sales · <a href="seller.html?edit=${p.id}" style="color:#71ff00;text-decoration:none">Edit</a></div>
+            </div>
+          </div>`).join("")
+      : `<div class="empty-state">No slow movers — every listing with views has sales</div>`;
+
+    /* Zero views */
+    document.getElementById("perf-zero").innerHTML = data.zeroViewListings?.length
+      ? data.zeroViewListings.slice(0,5).map(p => `
+          <div class="perf-item">
+            <div class="perf-rank" style="color:rgba(255,255,255,.2)">0</div>
+            <div class="perf-name">${_esc(p.name)}</div>
+            <div>
+              <div class="perf-views">KES ${Number(p.price).toLocaleString()}</div>
+              <div class="perf-views"><a href="subscriptions.html" style="color:#71ff00;text-decoration:none">Boost visibility</a></div>
+            </div>
+          </div>`).join("")
+      : `<div class="empty-state">All listings have at least one view</div>`;
+
+    /* Category pricing */
+    document.getElementById("perf-cats").innerHTML = data.categoryInsights?.length
+      ? data.categoryInsights.slice(0,6).map(c => `
+          <div class="perf-item" style="justify-content:space-between">
+            <div class="perf-name">${_esc(c.category)}</div>
+            <div style="text-align:right">
+              <div class="perf-rev">avg KES ${c.avgPrice.toLocaleString()}</div>
+              <div class="perf-views">${c.listingCount} listing${c.listingCount!==1?"s":""}</div>
+            </div>
+          </div>`).join("")
+      : `<div class="empty-state">Category data will appear as you add listings</div>`;
+
+    /* Tip */
+    if (data.pricingTip) {
+      document.getElementById("perf-tip").textContent = data.pricingTip;
+      document.getElementById("perf-tip-card").style.display = "block";
+    }
+  } catch (e) {
+    document.getElementById("perf-fast").innerHTML = `<div class="err-msg">${e.message}</div>`;
+  }
+}
+
+function _esc(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ── Init ── */
+onAuthStateChanged(auth, user => {
+  if (!user) {
+    window.location.href = "login.html?next=seller-success.html";
+    return;
+  }
+  try {
+    const shopName = localStorage.getItem("sokoniShopName") || user.displayName || "";
     if (shopName) {
-      var el = document.getElementById('ssName');
-      if (el) el.textContent = ', ' + shopName.split(' ')[0];
+      const el = document.getElementById("ssName");
+      if (el) el.textContent = " — " + shopName.split(" ")[0];
     }
   } catch {}
   autoDetectProgress();
-
-  /* Track new seller metric */
-  if (window.SokoniLaunch) SokoniLaunch.newSeller({ page: 'seller-success' });
+  if (window.SokoniLaunch) SokoniLaunch.newSeller({ page: "seller-success" });
 });
 </script>
 <script src="sw-register.js" defer></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
+<script defer src="sokoni-event-bus.js"></script>
+<script defer src="sokoni-observability.js"></script>
+<script defer src="sokoni-gateway.js"></script>
 </body>
 </html>

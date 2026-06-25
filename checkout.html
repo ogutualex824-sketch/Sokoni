@@ -1500,6 +1500,13 @@ function placeOrder(){
     showPushToast("🛒 Empty Cart", "Add products before checking out", "orange");
     return;
   }
+  /* Funnel: payment attempted */
+  (async () => {
+    try {
+      const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
+      httpsCallable(getFunctions(undefined, "us-central1"), "recordFunnelEvent")({ step: "paymentAttempted" }).catch(() => {});
+    } catch(_) {}
+  })();
   /* M-Pesa: use Daraja direct-to-seller when seller UID is known */
   if (selectedPayment === 'mpesa') {
     const currentCart2 = JSON.parse(localStorage.getItem('cart') || '[]');

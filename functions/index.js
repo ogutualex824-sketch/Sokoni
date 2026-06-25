@@ -5872,6 +5872,33 @@ exports.getFunnelMetrics      = conversionAnalytics.getFunnelMetrics;
 exports.recordHealthSnapshot  = conversionAnalytics.recordHealthSnapshot;
 exports.getReliabilityMetrics = conversionAnalytics.getReliabilityMetrics;
 
+/* ── Seller Quality Engine ───────────────────────────────────────────── */
+const sellerQuality = require('./seller-quality');
+exports.getListingQualityReport    = sellerQuality.getListingQualityReport;
+exports.getSellerPerformanceSummary = sellerQuality.getSellerPerformanceSummary;
+exports.getMarketplaceSellerHealth  = sellerQuality.getMarketplaceSellerHealth;
+
+/* ── Retention Engine ─────────────────────────────────────────────────── */
+const retention = require('./retention');
+exports.recordRecentlyViewed = retention.recordRecentlyViewed;
+exports.saveSearch           = retention.saveSearch;
+exports.deleteSavedSearch    = retention.deleteSavedSearch;
+exports.createPriceAlert     = retention.createPriceAlert;
+exports.deletePriceAlert     = retention.deletePriceAlert;
+exports.triggerPriceAlerts   = retention.triggerPriceAlerts;
+exports.getRetentionData     = retention.getRetentionData;
+
+/* ── Marketplace Quality Engine ──────────────────────────────────────── */
+const marketplaceQuality = require('./marketplace-quality');
+exports.getMarketplaceQualityReport = marketplaceQuality.getMarketplaceQualityReport;
+exports.flagLowQualityListing       = marketplaceQuality.flagLowQualityListing;
+
+/* ── Search Insights Engine ──────────────────────────────────────────── */
+const searchInsights = require('./search-insights');
+exports.getSearchInsights   = searchInsights.getSearchInsights;
+exports.getZeroResultTerms  = searchInsights.getZeroResultTerms;
+exports.recordSearchQuery   = searchInsights.recordSearchQuery;
+
 /* ── Product Analytics & Trust Engine ────────────────────────────────── */
 const productAnalytics = require('./product-analytics');
 exports.recordProductView           = productAnalytics.recordProductView;

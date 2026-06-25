@@ -2758,6 +2758,23 @@
         { "fieldPath": "timestamp", "order": "ASCENDING" },
         { "fieldPath": "status",    "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "priceAlerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid",    "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "priceAlerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productId",   "order": "ASCENDING" },
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "targetPrice", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
