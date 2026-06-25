@@ -18,6 +18,6 @@
   "devDependencies": {
     "browser-sync": "^3.0.4",
     "http-server": "^14.1.1",
-    "playwright": "^1.60.0"
+    "playwright": "^1.61.1"
   }
 }
