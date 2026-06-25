@@ -2379,32 +2379,12 @@ function showSuggestions(){
 
     suggestions.innerHTML = "";
 
-
-
     filtered.slice(0,5).forEach(product => {
-
-
-
-        suggestions.innerHTML += `
-
-            <div 
-
-            class="search-item"
-
-            onclick="selectSuggestion(
-
-            '${product.name}'
-
-            )"
-
-            >
-
-                ${product.name}
-
-            </div>
-
-        `;
-
+        const item = document.createElement("div");
+        item.className = "search-item";
+        item.textContent = product.name;
+        item.addEventListener("click", () => selectSuggestion(product.name));
+        suggestions.appendChild(item);
     });
 
 

@@ -1,4 +1,40 @@
-﻿## [2026-06-25] — sprint: Final Pre-Launch Polish & QA Sprint (Phase 2 + 9) — SW v298
+﻿## [2026-06-25] — RC1 Defect Hunt — SW v299
+
+### Summary
+10-phase release candidate defect hunt. All confirmed bugs fixed. No new features, no new Cloud Functions, no new Firestore collections.
+
+### Bugs Fixed
+
+| # | Severity | File | Description |
+|---|----------|------|-------------|
+| 1 | HIGH — Security | `script.js:2388` | XSS: search suggestions used `innerHTML +=` with unescaped `product.name` in both `onclick` attribute and element text. Replaced with `createElement` + `textContent` + `addEventListener`. |
+| 2 | HIGH — Security | `seller.js:882` | XSS: `product.image` and `product.name` unescaped in `src=""` and `alt=""` attributes. Wrapped with `_esc()`. |
+| 3 | HIGH — Security | `admin.html:5180` | RBAC: Firebase Auth module check only accepted `claims.admin`, not `claims.superAdmin`. A superAdmin would be redirected to index.html. Fixed to accept either claim. |
+| 4 | HIGH — Broken Feature | `admin.html` | Missing functions: `approveVerification(id)`, `rejectVerification(id)`, `loadFlags()`, `bulkDismissFlags()`, `dismissFlag(id)`, `escalateFlag(id)` — called from onclick but never defined. Added complete implementations with Firestore writes and toast feedback. |
+| 5 | MEDIUM — Privacy | `sokoni-invoice.js:37` | `console.log` exposed recipient email address in production. Removed. |
+| 6 | MEDIUM — Privacy | `pos-voice.js:382` | `console.log` exposed voice transcript content in production. Removed. |
+| 7 | LOW — Reliability | `monitor.js:56` | `card.querySelector(".value")` called without null guard. If `.value` child missing, page throws. Added null guard. |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `script.js` | Fix XSS in search suggestion rendering |
+| `seller.js` | Escape `product.image` and `product.name` in img attributes |
+| `admin.html` | Fix superAdmin auth check; add 6 missing moderation/verification functions |
+| `sokoni-invoice.js` | Remove email-leaking console.log |
+| `pos-voice.js` | Remove transcript-leaking console.log |
+| `monitor.js` | Add null guard on querySelector |
+| `service-worker.js` | Bumped v298→v299 |
+
+### Security Summary
+- All XSS vectors identified by audit are closed
+- No new attack surface introduced
+- Admin claim check now correctly accepts both `admin` and `superAdmin` roles
+
+---
+
+## [2026-06-25] — sprint: Final Pre-Launch Polish & QA Sprint (Phase 2 + 9) — SW v298
 
 ### Summary
 Phase 2: `sokoni-quality.css` unified design system — tokens, buttons, cards, tables, forms, badges, toasts, modals, nav, skeletons, accessibility utilities, responsive grid helpers, light-mode override.

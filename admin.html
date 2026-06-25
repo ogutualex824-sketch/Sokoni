@@ -5177,8 +5177,8 @@ document.body.style.visibility = 'hidden';
 onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.replace('login.html'); return; }
   const token = await user.getIdTokenResult(true).catch(() => null);
-  if (token && token.claims.admin) {
-    /* Normal admin — show page */
+  if (token && (token.claims.admin || token.claims.superAdmin)) {
+    /* Admin or superAdmin — show page */
     document.body.style.visibility = '';
   } else if (user.email === FOUNDER_EMAIL) {
     /* Founder without claim yet — show page so they can bootstrap */
@@ -6633,6 +6633,124 @@ window.loadSupportQueue = loadSupportQueue;
       if (typeof window._skToast === 'function') window._skToast('All caches cleared — reload to refresh assets', 'success');
       else alert('All caches cleared. Reload the page to see fresh assets.');
     }).catch(function(err) { alert('Cache clear failed: ' + err.message); });
+  };
+
+  /* ── Verification approve / reject ── */
+  window.approveVerification = function(id) {
+    if (!id) return;
+    var db = window.firebaseDB;
+    if (!db) { alert('Database not available.'); return; }
+    if (!confirm('Approve this verification request?')) return;
+    db.collection('verification_requests').doc(id).update({
+      status: 'approved',
+      reviewedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
+      reviewedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
+    }).then(function() {
+      if (typeof window._skToast === 'function') window._skToast('Verification approved ✅', 'success');
+      if (typeof window.loadVerifications === 'function') window.loadVerifications();
+    }).catch(function(err) { alert('Error: ' + err.message); });
+  };
+
+  window.rejectVerification = function(id) {
+    if (!id) return;
+    var db = window.firebaseDB;
+    if (!db) { alert('Database not available.'); return; }
+    var reason = prompt('Reason for rejection (shown to applicant):');
+    if (!reason || !reason.trim()) return;
+    db.collection('verification_requests').doc(id).update({
+      status: 'rejected',
+      rejectionReason: reason.trim(),
+      reviewedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
+      reviewedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
+    }).then(function() {
+      if (typeof window._skToast === 'function') window._skToast('Verification rejected', 'success');
+      if (typeof window.loadVerifications === 'function') window.loadVerifications();
+    }).catch(function(err) { alert('Error: ' + err.message); });
+  };
+
+  /* ── Moderation — flagged content queue ── */
+  window.loadFlags = function() {
+    var db = window.firebaseDB;
+    if (!db) return;
+    var grid = document.getElementById('flagsGrid');
+    if (grid) grid.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,.4);">Loading flagged content…</div>';
+    db.collection('contentFlags').where('status','==','pending').orderBy('createdAt','desc').limit(100).get().then(function(snap) {
+      if (!grid) return;
+      if (snap.empty) {
+        grid.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">✅</div><p>No flagged content</p></div>';
+        return;
+      }
+      var _h = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+      var rows = snap.docs.map(function(d) {
+        var f = d.data();
+        return '<tr data-flag-id="'+d.id+'">'
+          +'<td><input type="checkbox" class="flag-chk" data-id="'+d.id+'"></td>'
+          +'<td>'+_h(f.contentType||'-')+'</td>'
+          +'<td>'+_h(f.reason||'-')+'</td>'
+          +'<td>'+_h(f.reportedBy||'-')+'</td>'
+          +'<td>'+new Date(f.createdAt?.seconds ? f.createdAt.seconds*1000 : f.createdAt||0).toLocaleDateString()+'</td>'
+          +'<td>'
+            +'<button class="solid-btn solid-red" style="padding:3px 10px;font-size:11px;" onclick="dismissFlag(\''+d.id+'\')">Dismiss</button> '
+            +'<button class="solid-btn solid-blue" style="padding:3px 10px;font-size:11px;" onclick="escalateFlag(\''+d.id+'\')">Escalate</button>'
+          +'</td></tr>';
+      }).join('');
+      grid.innerHTML = '<div class="adm-table-wrap"><table class="adm-table">'
+        +'<thead><tr>'
+        +'<th><input type="checkbox" id="selectAllFlags" onchange="document.querySelectorAll(\'.flag-chk\').forEach(function(c){c.checked=document.getElementById(\'selectAllFlags\').checked;})"></th>'
+        +'<th>Type</th><th>Reason</th><th>Reporter</th><th>Date</th><th>Actions</th>'
+        +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    }).catch(function(err) {
+      if (grid) grid.innerHTML = '<div class="adm-empty">Error loading flags: '+err.message+'</div>';
+    });
+  };
+
+  window.dismissFlag = function(id) {
+    var db = window.firebaseDB;
+    if (!db) return;
+    db.collection('contentFlags').doc(id).update({
+      status: 'dismissed',
+      reviewedAt: Date.now(),
+      reviewedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
+    }).then(function() {
+      var row = document.querySelector('tr[data-flag-id="'+id+'"]');
+      if (row) row.remove();
+      if (typeof window._skToast === 'function') window._skToast('Flag dismissed', 'success');
+    }).catch(function(err) { alert('Error: '+err.message); });
+  };
+
+  window.escalateFlag = function(id) {
+    var db = window.firebaseDB;
+    if (!db) return;
+    db.collection('contentFlags').doc(id).update({
+      status: 'escalated',
+      reviewedAt: Date.now(),
+      reviewedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
+    }).then(function() {
+      if (typeof window._skToast === 'function') window._skToast('Flag escalated to moderation team', 'success');
+      if (typeof window.loadFlags === 'function') window.loadFlags();
+    }).catch(function(err) { alert('Error: '+err.message); });
+  };
+
+  window.bulkDismissFlags = function() {
+    var checked = Array.from(document.querySelectorAll('.flag-chk:checked')).map(function(c) { return c.dataset.id; });
+    if (!checked.length) {
+      if (typeof window._skToast === 'function') window._skToast('Select flags to dismiss first', 'info');
+      else alert('Select at least one flag.');
+      return;
+    }
+    if (!confirm('Dismiss '+checked.length+' selected flag(s)?')) return;
+    var db = window.firebaseDB;
+    if (!db) return;
+    Promise.all(checked.map(function(id) {
+      return db.collection('contentFlags').doc(id).update({
+        status: 'dismissed',
+        reviewedAt: Date.now(),
+        reviewedBy: window.firebaseAuth?.currentUser?.uid || 'admin',
+      });
+    })).then(function() {
+      if (typeof window._skToast === 'function') window._skToast(checked.length+' flag(s) dismissed', 'success');
+      if (typeof window.loadFlags === 'function') window.loadFlags();
+    }).catch(function(err) { alert('Partial error: '+err.message); });
   };
   </script>
 </body>

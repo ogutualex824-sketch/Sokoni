@@ -53,10 +53,10 @@
     if (!card) return;
     card.classList.remove("loading");
     if (opts.value !== undefined) {
-      card.querySelector(".value").innerHTML = _esc(String(opts.value));
-      card.querySelector(".value").classList.remove("skeleton");
+      const valEl = card.querySelector(".value");
+      if (valEl) { valEl.innerHTML = _esc(String(opts.value)); valEl.classList.remove("skeleton"); }
     }
-    if (opts.subtext !== undefined) card.querySelector(".subtext").textContent = opts.subtext;
+    if (opts.subtext !== undefined) { const st = card.querySelector(".subtext"); if (st) st.textContent = opts.subtext; }
     if (opts.trend !== undefined) {
       let t = card.querySelector(".trend");
       if (!t) { t = document.createElement("div"); t.className = "trend"; card.querySelector(".subtext").after(t); }

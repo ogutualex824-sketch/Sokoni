@@ -879,8 +879,8 @@ function displaySellerProducts(){
                 <!-- Square image with overlay badges -->
                 <div style="position:relative;aspect-ratio:1/1;overflow:hidden;background:rgba(255,255,255,0.03);flex-shrink:0;">
                     <img
-                        src="${product.image || 'assets/default-product.png'}"
-                        alt="${product.name}"
+                        src="${_esc(product.image || 'assets/default-product.png')}"
+                        alt="${_esc(product.name)}"
                         style="width:100%;height:100%;object-fit:cover;display:block;"
                         onerror="this.src='assets/default-product.png'"
                     >

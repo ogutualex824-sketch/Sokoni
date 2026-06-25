@@ -379,7 +379,7 @@ const PosVoice = (() => {
     r.onresult = async (e) => {
       const transcript = e.results[0][0].transcript.trim();
       const confidence = e.results[0][0].confidence;
-      console.log(`[Voice] "${transcript}" (${(confidence*100).toFixed(0)}%)`);
+
 
       _updateDisplay(transcript, 'user');
 

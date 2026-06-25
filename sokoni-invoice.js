@@ -34,7 +34,7 @@
       if(token) headers['Authorization'] = 'Bearer ' + token;
       fetch(CF_EMAIL_URL, { method: 'POST', headers: headers, body: JSON.stringify(payload) })
         .then(function(r){ return r.json(); })
-        .then(function(){ console.log('[SOKONI] Invoice email sent (CF) to ' + toEmail); })
+        .then(function(){ /* email dispatched */ })
         .catch(function(e){ console.warn('[SOKONI] CF email failed:', e); });
     }
     /* Try to get auth token via firebase.js global (window.firebaseAuth); fall through if unavailable */
