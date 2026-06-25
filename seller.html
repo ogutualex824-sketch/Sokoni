@@ -1405,53 +1405,124 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     ============================================================ -->
     <section class="seller-section-card" id="employees-section" data-sdtab="team">
       <div class="seller-section-header">
-        <h2>👥 Employee Accounts</h2>
-        <p class="seller-section-sub">Create accounts for your team — Cashier, Manager, Inventory Clerk</p>
+        <h2>👥 Employee Management</h2>
+        <p class="seller-section-sub">Manage your team — roles, permissions, PIN resets, branch assignments</p>
+      </div>
+
+      <!-- Role permission matrix -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:24px;">
+        <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:12px;padding:12px;">
+          <div style="font-size:13px;font-weight:800;color:#71ff00;margin-bottom:6px;">💰 Cashier</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">POS checkout<br>Order processing<br>Receipt printing</div>
+        </div>
+        <div style="background:rgba(100,180,255,0.06);border:1px solid rgba(100,180,255,0.18);border-radius:12px;padding:12px;">
+          <div style="font-size:13px;font-weight:800;color:#64b4ff;margin-bottom:6px;">📊 Manager</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">Full dashboard<br>Reports &amp; analytics<br>Staff supervision</div>
+        </div>
+        <div style="background:rgba(255,180,0,0.06);border:1px solid rgba(255,180,0,0.18);border-radius:12px;padding:12px;">
+          <div style="font-size:13px;font-weight:800;color:#fbbf24;margin-bottom:6px;">📦 Inventory</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">Products &amp; stock<br>Purchase orders<br>Transfers</div>
+        </div>
+        <div style="background:rgba(180,100,255,0.06);border:1px solid rgba(180,100,255,0.18);border-radius:12px;padding:12px;">
+          <div style="font-size:13px;font-weight:800;color:#c084fc;margin-bottom:6px;">💬 Support</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">Messages &amp; disputes<br>Customer Q&amp;A<br>Returns</div>
+        </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start;">
         <div>
-          <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">Invite by email</div>
+          <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">Invite Team Member</div>
           <div class="flash-input-group" style="margin-bottom:10px;">
-            <label>Their email address</label>
+            <label>Email address</label>
             <input type="email" id="empEmail" class="flash-input" placeholder="jane@gmail.com" style="width:100%;padding:13px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
           </div>
-          <div class="flash-input-group" style="margin-bottom:14px;">
+          <div class="flash-input-group" style="margin-bottom:10px;">
+            <label>Full name (optional)</label>
+            <input type="text" id="empName" class="flash-input" placeholder="Jane Kamau" style="width:100%;padding:13px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+          </div>
+          <div class="flash-input-group" style="margin-bottom:10px;">
             <label>Role</label>
             <select id="empRole" class="flash-select">
-              <option value="cashier">💰 Cashier — Process orders & payments</option>
+              <option value="cashier">💰 Cashier — Process orders &amp; payments</option>
               <option value="manager">📊 Manager — Full dashboard access</option>
               <option value="inventory">📦 Inventory Clerk — Manage stock only</option>
-              <option value="support">💬 Support Agent — Handle messages & disputes</option>
+              <option value="support">💬 Support Agent — Handle messages &amp; disputes</option>
             </select>
+          </div>
+          <div class="flash-input-group" style="margin-bottom:14px;">
+            <label>Branch (optional)</label>
+            <input type="text" id="empBranch" class="flash-input" placeholder="e.g. Westlands Branch" style="width:100%;padding:13px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
           </div>
           <button type="button" class="flash-go-btn" style="width:100%;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;" onclick="addEmployee()">Create Invite Link</button>
           <div id="empStatus" style="display:none;font-size:12px;font-weight:700;margin-top:10px;padding:8px 12px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:10px;line-height:1.5;"></div>
-          <!-- Invite link result -->
           <div id="empInviteResult" style="display:none;margin-top:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;">
             <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.35);margin-bottom:8px;">INVITE LINK — valid 7 days</div>
             <div style="display:flex;gap:7px;align-items:center;">
               <input id="empInviteLink" readonly style="flex:1;padding:9px 11px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#71ff00;font-size:11px;font-family:monospace;outline:none;">
               <button onclick="copyEmpInviteLink()" style="padding:9px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:8px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">Copy</button>
+              <button onclick="_shareEmpInvite()" style="padding:9px 12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:8px;color:#25d366;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">WhatsApp</button>
             </div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:7px;">Share via WhatsApp, SMS, or email. They click the link, create their own account, and appear in Your Team below.</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:7px;">Share via WhatsApp or email. The employee clicks the link, signs up, and appears in Your Team below.</div>
           </div>
         </div>
 
         <div>
-          <div style="font-size:13px;font-weight:800;color:white;margin-bottom:14px;">Your Team (<span id="empCount">0</span>)</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div style="font-size:13px;font-weight:800;color:white;">Your Team (<span id="empCount">0</span>)</div>
+            <select id="empFilterRole" onchange="_filterEmployeeList()" style="padding:7px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:white;font-size:12px;outline:none;font-family:inherit;">
+              <option value="">All Roles</option>
+              <option value="cashier">Cashier</option>
+              <option value="manager">Manager</option>
+              <option value="inventory">Inventory</option>
+              <option value="support">Support</option>
+            </select>
+          </div>
           <div id="employeeList"></div>
-
-          <div style="margin-top:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;font-size:12px;color:rgba(255,255,255,0.4);line-height:1.7;">
-            <strong style="color:white;">Role Permissions:</strong><br>
-            💰 <strong style="color:rgba(255,255,255,0.7);">Cashier</strong> — View orders, process payments<br>
-            📊 <strong style="color:rgba(255,255,255,0.7);">Manager</strong> — Full access except financial withdrawal<br>
-            📦 <strong style="color:rgba(255,255,255,0.7);">Inventory Clerk</strong> — Add/edit products, manage stock<br>
-            💬 <strong style="color:rgba(255,255,255,0.7);">Support</strong> — Messages, disputes, Q&A
+          <div id="empEmptyState" style="display:none;text-align:center;padding:32px 16px;color:rgba(255,255,255,0.25);">
+            <div style="font-size:36px;margin-bottom:8px;">👥</div>
+            <div style="font-size:13px;font-weight:700;">No team members yet</div>
+            <div style="font-size:11px;margin-top:4px;">Invite your first employee using the form on the left.</div>
           </div>
         </div>
       </div>
     </section>
+    <script>
+    /* ── Employee list filter ── */
+    function _filterEmployeeList() {
+      var role = (document.getElementById('empFilterRole') || {}).value || '';
+      var cards = document.querySelectorAll('#employeeList .emp-card');
+      cards.forEach(function(c) {
+        if (!role || c.dataset.role === role) { c.style.display = ''; }
+        else { c.style.display = 'none'; }
+      });
+    }
+    /* ── WhatsApp share ── */
+    function _shareEmpInvite() {
+      var link = (document.getElementById('empInviteLink') || {}).value || '';
+      if (!link) return;
+      var msg = encodeURIComponent('You have been invited to join our team on SOKONI SmartPOS.\n\nClick this link to set up your account:\n' + link);
+      window.open('https://wa.me/?text=' + msg, '_blank');
+    }
+    /* Enhance renderEmployees to add data-role and empty state */
+    var _origRenderEmployees = window.renderEmployees;
+    document.addEventListener('sokoniSellerReady', function() {
+      var _orig = window.renderEmployees;
+      if (!_orig) return;
+      window.renderEmployees = function(list) {
+        _orig(list);
+        /* Tag cards with data-role for filter */
+        setTimeout(function() {
+          var cards = document.querySelectorAll('#employeeList .emp-card, #employeeList [data-empid]');
+          /* If emp-card doesn't exist try generic detection */
+          var empDiv = document.getElementById('employeeList');
+          var empty = document.getElementById('empEmptyState');
+          if (empDiv && empty) {
+            empty.style.display = empDiv.children.length === 0 ? 'block' : 'none';
+          }
+        }, 100);
+      };
+    });
+    </script>
 
     <!-- ============================================================
          AI PRODUCT DESCRIPTION GENERATOR

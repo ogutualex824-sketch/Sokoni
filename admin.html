@@ -96,16 +96,47 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060606;color:white;
 .adm-shell{display:flex;min-height:calc(100vh - 50px);}
 
 /* SIDEBAR */
-.adm-sidebar{width:220px;flex-shrink:0;background:rgba(255,255,255,0.015);border-right:1px solid rgba(255,255,255,0.06);
-  padding:14px 8px;overflow-y:auto;}
-.adm-sidebar-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border-radius:12px;
-  border:none;background:transparent;color:rgba(255,255,255,0.45);font-size:13px;font-weight:700;
-  cursor:pointer;font-family:inherit;transition:.15s;text-align:left;}
-.adm-sidebar-btn:hover{background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.8);}
-.adm-sidebar-btn.active{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.2);}
-.sb-badge{margin-left:auto;background:#ff3c3c;color:white;border-radius:999px;padding:1px 6px;font-size:9px;font-weight:900;display:none;}
+.adm-sidebar{width:248px;flex-shrink:0;background:rgba(255,255,255,0.012);border-right:1px solid rgba(255,255,255,0.06);
+  padding:12px 8px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:0;}
+.adm-sidebar-btn{display:flex;align-items:center;gap:9px;width:100%;padding:9px 12px;border-radius:10px;
+  border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.42);font-size:12.5px;font-weight:700;
+  cursor:pointer;font-family:inherit;transition:all .12s;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.adm-sidebar-btn:hover{background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.85);border-color:rgba(255,255,255,0.06);}
+.adm-sidebar-btn.active{background:rgba(113,255,0,0.1);color:#71ff00;border-color:rgba(113,255,0,0.22);}
+.sb-badge{margin-left:auto;background:#ff3c3c;color:white;border-radius:999px;padding:1px 6px;font-size:9px;font-weight:900;display:none;flex-shrink:0;}
+/* Group headers */
+.adm-sidebar-group{margin-top:6px;}
+.adm-sidebar-group-header{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:900;
+  color:rgba(255,255,255,0.18);text-transform:uppercase;letter-spacing:.1em;
+  padding:10px 12px 5px;border-top:1px solid rgba(255,255,255,0.04);margin-top:4px;}
+.adm-sidebar-group-header:first-child,.adm-sidebar-group:first-child .adm-sidebar-group-header{border-top:none;margin-top:0;}
+.adm-sidebar-group-icon{font-size:11px;opacity:.6;}
+/* External link style */
+.adm-sidebar-ext{color:rgba(255,255,255,0.3)!important;font-size:11.5px!important;}
+.adm-sidebar-ext:hover{color:rgba(255,255,255,0.7)!important;}
+/* Old divider kept for compat */
 .adm-sidebar-divider{font-size:9px;font-weight:900;color:rgba(255,255,255,0.2);text-transform:uppercase;
   letter-spacing:.1em;padding:12px 14px 4px;margin-top:4px;}
+/* Role badge in nav */
+.adm-role-badge{padding:3px 8px;border-radius:20px;font-size:9px;font-weight:900;letter-spacing:.04em;
+  text-transform:uppercase;margin-left:6px;}
+.adm-role-super{background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.3);}
+.adm-role-admin{background:rgba(113,255,0,0.1);color:#71ff00;border:1px solid rgba(113,255,0,0.2);}
+/* Mobile 7 bottom nav (fixed) */
+.mob-7nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:500;
+  background:rgba(5,5,5,0.97);border-top:1px solid rgba(255,255,255,0.08);
+  backdrop-filter:blur(20px);padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+  display:none;grid-template-columns:repeat(7,1fr);gap:2px;}
+.mob-7btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;
+  border:none;background:transparent;color:rgba(255,255,255,0.35);font-family:inherit;
+  cursor:pointer;border-radius:8px;transition:all .12s;-webkit-tap-highlight-color:transparent;position:relative;}
+.mob-7btn .m7-icon{font-size:18px;line-height:1;}
+.mob-7btn .m7-label{font-size:9px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
+.mob-7btn.active{color:#71ff00;}
+.mob-7btn.active .m7-icon{filter:drop-shadow(0 0 6px rgba(113,255,0,.5));}
+.mob-7btn .m7-dot{position:absolute;top:4px;right:14px;width:7px;height:7px;background:#ff3c3c;
+  border-radius:50%;border:1.5px solid #060606;display:none;}
+.mob-7btn .m7-dot.show{display:block;}
 
 /* MAIN */
 .adm-main{flex:1;overflow-y:auto;padding:20px;min-width:0;}
@@ -113,13 +144,21 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060606;color:white;
 .adm-pane.active{display:block;}
 
 /* STATS */
-.adm-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:20px;}
-.adm-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;
-  text-align:center;cursor:pointer;transition:.15s;}
-.adm-stat:hover{border-color:rgba(113,255,0,0.25);background:rgba(113,255,0,0.04);}
-.adm-stat-icon{font-size:20px;margin-bottom:4px;}
-.adm-stat-val{font-size:20px;font-weight:900;color:#71ff00;}
-.adm-stat-lbl{font-size:9px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+.adm-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px;}
+.adm-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 14px;
+  text-align:center;cursor:pointer;transition:all .15s;}
+.adm-stat:hover{border-color:rgba(113,255,0,0.3);background:rgba(113,255,0,0.05);transform:translateY(-1px);}
+.adm-stat-icon{font-size:22px;margin-bottom:6px;}
+.adm-stat-val{font-size:22px;font-weight:900;color:#71ff00;line-height:1;}
+.adm-stat-lbl{font-size:9px;color:rgba(255,255,255,0.32);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px;}
+/* TOOL CARDS (overview command center) */
+.adm-tool-card{display:flex;flex-direction:column;gap:4px;background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 14px;
+  transition:all .15s;cursor:pointer;}
+.adm-tool-card:hover{border-color:rgba(255,255,255,0.15);background:rgba(255,255,255,0.055);transform:translateY(-2px);}
+.adm-tool-icon{font-size:24px;margin-bottom:2px;}
+.adm-tool-name{font-size:13px;font-weight:800;color:white;}
+.adm-tool-sub{font-size:10.5px;color:rgba(255,255,255,0.32);}
 
 /* SECTION HEADING */
 .adm-sec-h{font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;
@@ -294,11 +333,12 @@ table.adm-table{width:100%;border-collapse:collapse;font-size:12px;}
    ADMIN — COMPREHENSIVE MOBILE LAYOUT
 ═══════════════════════════════════════ */
 
-/* ── 768px: hide sidebar, show mobile tabs ── */
+/* ── 768px: hide sidebar, show 7-tab fixed bottom nav ── */
 @media(max-width:768px){
-  .adm-sidebar{display:none;}
-  .mob-tabs{display:flex;}
-  .adm-main{padding:14px 12px 100px;}
+  .adm-sidebar{display:none!important;}
+  .mob-tabs{display:none!important;}
+  .mob-7nav{display:grid!important;}
+  .adm-main{padding:14px 12px 90px;}
 
   /* Nav: tighten */
   .adm-nav{padding:8px 12px;gap:6px;}
@@ -459,6 +499,26 @@ table.adm-table{width:100%;border-collapse:collapse;font-size:12px;}
   .adm-toggle::after{width:20px;height:20px;}
   .adm-toggle.on::after{left:24px;}
 }
+
+/* ── Light mode (dark is default) ── */
+body.adm-light{
+  --adm-bg:      #f2f3f6;
+  --adm-surface: #ffffff;
+  --adm-sidebar: #1a1a2e;
+  background: var(--adm-bg);
+}
+body.adm-light .adm-nav{background:rgba(255,255,255,0.95);border-color:rgba(0,0,0,0.08);}
+body.adm-light .adm-nav-title{color:#111;}
+body.adm-light .adm-pane{background:transparent;}
+body.adm-light .adm-sec-card{background:#fff;border-color:rgba(0,0,0,0.07);}
+body.adm-light .adm-stat{background:#fff;border-color:rgba(0,0,0,0.07);}
+body.adm-light .adm-stat-label{color:rgba(0,0,0,0.45);}
+body.adm-light .adm-stat-val{color:#111;}
+body.adm-light .adm-table th{background:rgba(0,0,0,0.03);color:rgba(0,0,0,0.45);}
+body.adm-light .adm-table td{border-color:rgba(0,0,0,0.05);color:#222;}
+body.adm-light .adm-table tr:hover td{background:rgba(0,0,0,0.02);}
+body.adm-light .adm-main{background:var(--adm-bg);}
+body.adm-light .adm-sec-h{color:#111;}
 </style>
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -579,67 +639,112 @@ table.adm-table{width:100%;border-collapse:collapse;font-size:12px;}
         <img src="assets/Sokonilogo2.png" class="adm-nav-logo" onerror="this.style.display='none'" alt="">
       </a>
       <span class="adm-nav-title">⚡ SOKONI Admin</span>
+      <span class="adm-role-badge adm-role-admin" id="navRoleBadge" style="display:none"></span>
       <span class="nav-alert-dot" id="navAlertDot">0</span>
     </div>
     <div class="adm-nav-right">
       <a href="index.html" class="adm-pill" style="background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);text-decoration:none;display:flex;align-items:center;gap:4px;">🏠 Home</a>
       <button class="adm-pill adm-pill-blue" onclick="exportAll()">📥 Export</button>
       <button class="adm-pill adm-pill-green" onclick="refreshAll()">🔄</button>
+      <button class="adm-pill" id="darkModeBtn" onclick="toggleDarkMode()" title="Toggle dark/light mode" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">🌙</button>
       <button class="adm-pill adm-pill-red" onclick="lockAdmin()">🔒 Lock</button>
     </div>
   </nav>
 
-  <!-- MOBILE TAB BAR -->
-  <div class="mob-tabs" id="mobTabs">
-    <button class="mob-tab active" onclick="showPane('overview',this)">📊 Overview</button>
-    <button class="mob-tab" onclick="showPane('users',this)">👥 Users</button>
-    <button class="mob-tab" onclick="showPane('businesses',this)">🏪 Biz</button>
-    <button class="mob-tab" onclick="showPane('orders',this)">📦 Orders</button>
-    <button class="mob-tab" onclick="showPane('rides',this)">🚗 Rides</button>
-    <button class="mob-tab" onclick="showPane('offers',this)">🏷️ Offers</button>
-    <button class="mob-tab" onclick="showPane('properties',this)">🏘️ Props</button>
-    <button class="mob-tab" onclick="showPane('services',this)">🔧 Services</button>
-    <button class="mob-tab" onclick="showPane('verification',this)">✅ Verify</button>
-    <button class="mob-tab" onclick="showPane('moderation',this)">🚩 Mod</button>
-    <button class="mob-tab" onclick="showPane('reports',this)">📈 Reports</button>
-    <button class="mob-tab" onclick="showPane('settings',this)">⚙️ Settings</button>
-  </div>
+  <!-- MOBILE TAB BAR (legacy, hidden on mobile via CSS) -->
+  <div class="mob-tabs" id="mobTabs" style="display:none"></div>
+
+  <!-- MOBILE 7-TAB BOTTOM NAV -->
+  <nav class="mob-7nav" id="mob7Nav" role="navigation" aria-label="Mobile navigation">
+    <button class="mob-7btn active" id="m7-overview" onclick="mob7Show('overview',this)" aria-label="Overview">
+      <span class="mob-7btn .m7-icon m7-icon">📊</span><span class="m7-label">Overview</span>
+    </button>
+    <button class="mob-7btn" id="m7-businesses" onclick="mob7Show('businesses',this)" aria-label="Marketplace">
+      <span class="m7-icon">🛍️</span><span class="m7-label">Market</span>
+      <span class="m7-dot" id="m7dot-businesses"></span>
+    </button>
+    <button class="mob-7btn" id="m7-orders" onclick="mob7Show('orders',this)" aria-label="Orders">
+      <span class="m7-icon">📦</span><span class="m7-label">Orders</span>
+      <span class="m7-dot" id="m7dot-orders"></span>
+    </button>
+    <button class="mob-7btn" id="m7-users" onclick="mob7Show('users',this)" aria-label="Users">
+      <span class="m7-icon">👥</span><span class="m7-label">Users</span>
+    </button>
+    <button class="mob-7btn" id="m7-rides" onclick="mob7Show('rides',this)" aria-label="Transport">
+      <span class="m7-icon">🚗</span><span class="m7-label">Transport</span>
+      <span class="m7-dot" id="m7dot-rides"></span>
+    </button>
+    <button class="mob-7btn" id="m7-moderation" onclick="mob7Show('moderation',this)" aria-label="Trust">
+      <span class="m7-icon">🛡️</span><span class="m7-label">Trust</span>
+      <span class="m7-dot" id="m7dot-mod"></span>
+    </button>
+    <button class="mob-7btn" id="m7-reports" onclick="mob7Show('reports',this)" aria-label="Platform">
+      <span class="m7-icon">⚙️</span><span class="m7-label">Platform</span>
+    </button>
+  </nav>
 
   <div class="adm-shell">
 
-    <!-- SIDEBAR -->
-    <nav class="adm-sidebar">
-      <div style="padding:10px 14px 6px;font-size:10px;font-weight:900;color:rgba(255,255,255,0.2);text-transform:uppercase;letter-spacing:.1em;">SOKONI ADMIN</div>
+    <!-- SIDEBAR — 4 groups: Marketplace / Users / Operations / Platform -->
+    <nav class="adm-sidebar" role="navigation" aria-label="Admin navigation">
+
+      <!-- Header -->
+      <div style="padding:8px 10px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:4px;">
+        <img src="assets/logosokoni.png" alt="SOKONI" style="height:22px;">
+        <span style="font-size:11px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;">Admin</span>
+        <span class="adm-role-badge adm-role-admin" id="sidebarRoleBadge" style="display:none"></span>
+      </div>
+
       <button class="adm-sidebar-btn active" id="sb-overview" onclick="showPane('overview',this)">📊 Overview</button>
-      <div class="adm-sidebar-divider">People</div>
-      <button class="adm-sidebar-btn" id="sb-users" onclick="showPane('users',this)">👥 Users</button>
-      <button class="adm-sidebar-btn" id="sb-businesses" onclick="showPane('businesses',this)">🏪 Businesses <span class="sb-badge" id="app-badge"></span></button>
-      <div class="adm-sidebar-divider">Commerce</div>
-      <button class="adm-sidebar-btn" id="sb-orders" onclick="showPane('orders',this)">📦 Orders <span class="sb-badge" id="disputes-badge"></span></button>
-      <button class="adm-sidebar-btn" id="sb-rides" onclick="showPane('rides',this)">🚗 Rides <span class="sb-badge" id="payouts-badge"></span></button>
-      <button class="adm-sidebar-btn" id="sb-drivers" onclick="showPane('drivers',this)">🚕 Driver Approval <span class="sb-badge" id="driver-badge"></span></button>
-      <button class="adm-sidebar-btn" id="sb-offers" onclick="showPane('offers',this)">🏷️ Offers <span class="sb-badge" id="offers-badge"></span></button>
-      <button class="adm-sidebar-btn" id="sb-properties" onclick="showPane('properties',this)">🏘️ Properties</button>
-      <button class="adm-sidebar-btn" id="sb-services" onclick="showPane('services',this)">🔧 Services</button>
-      <div class="adm-sidebar-divider">My Team</div>
-      <button class="adm-sidebar-btn" id="sb-team" onclick="showPane('team',this)">🧑‍💼 Platform Staff <span class="sb-badge" id="team-badge"></span></button>
-      <div class="adm-sidebar-divider">Trust &amp; Safety</div>
-      <button class="adm-sidebar-btn" id="sb-verification" onclick="showPane('verification',this)">✅ Verification <span class="sb-badge" id="verif-badge"></span></button>
-      <button class="adm-sidebar-btn" id="sb-moderation" onclick="showPane('moderation',this)">🚩 Moderation <span class="sb-badge" id="mod-badge"></span></button>
-      <a href="moderation.html" class="adm-sidebar-btn" style="display:block;text-decoration:none;color:inherit;">⚖️ Full Mod Dashboard ↗</a>
-      <a href="monitor.html" class="adm-sidebar-btn" style="display:block;text-decoration:none;color:inherit;">📊 Platform Monitor ↗</a>
-      <a href="superadmin.html" class="adm-sidebar-btn" style="display:block;text-decoration:none;color:inherit;color:#a78bfa;">👑 Super Admin Console ↗</a>
-      <a href="email-center.html" class="adm-sidebar-btn" style="display:block;text-decoration:none;color:inherit;">✉️ Email Center ↗</a>
-      <a href="beta-dashboard.html" class="adm-sidebar-btn" style="display:block;text-decoration:none;color:inherit;">🧪 Beta Dashboard ↗</a>
-      <a href="launch-metrics.html" class="adm-sidebar-btn" style="display:block;text-decoration:none;color:inherit;">🚀 Launch Metrics ↗</a>
-      <button class="adm-sidebar-btn" id="sb-support-queue" onclick="showPane('support-queue',this)">🎫 Support Queue <span class="sb-badge" id="sq-badge"></span></button>
-      <div class="adm-sidebar-divider">Analytics</div>
-      <button class="adm-sidebar-btn" id="sb-reports" onclick="showPane('reports',this)">📈 Reports</button>
-      <div class="adm-sidebar-divider">System</div>
-      <button class="adm-sidebar-btn" id="sb-settings" onclick="showPane('settings',this)">⚙️ Settings</button>
-      <div style="padding:16px 14px 4px;margin-top:8px;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.2);">Logged in as</div>
-        <div id="adminUserLabel" style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-top:2px;">Admin</div>
+
+      <!-- GROUP 1: Marketplace -->
+      <div class="adm-sidebar-group">
+        <div class="adm-sidebar-group-header"><span class="adm-sidebar-group-icon">🛍️</span> Marketplace</div>
+        <button class="adm-sidebar-btn" id="sb-businesses" onclick="showPane('businesses',this)">🏪 Sellers &amp; Products <span class="sb-badge" id="app-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-orders" onclick="showPane('orders',this)">📦 Orders <span class="sb-badge" id="disputes-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-offers" onclick="showPane('offers',this)">🏷️ Offers &amp; Promotions <span class="sb-badge" id="offers-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-properties" onclick="showPane('properties',this)">🏘️ Properties</button>
+        <button class="adm-sidebar-btn" id="sb-services" onclick="showPane('services',this)">🔧 Services</button>
+      </div>
+
+      <!-- GROUP 2: Users -->
+      <div class="adm-sidebar-group">
+        <div class="adm-sidebar-group-header"><span class="adm-sidebar-group-icon">👥</span> Users</div>
+        <button class="adm-sidebar-btn" id="sb-users" onclick="showPane('users',this)">🛒 Buyers</button>
+        <button class="adm-sidebar-btn" id="sb-drivers" onclick="showPane('drivers',this)">🚕 Driver Approval <span class="sb-badge" id="driver-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-team" onclick="showPane('team',this)">🧑‍💼 Platform Staff <span class="sb-badge" id="team-badge"></span></button>
+      </div>
+
+      <!-- GROUP 3: Operations -->
+      <div class="adm-sidebar-group">
+        <div class="adm-sidebar-group-header"><span class="adm-sidebar-group-icon">⚡</span> Operations</div>
+        <button class="adm-sidebar-btn" id="sb-rides" onclick="showPane('rides',this)">🚗 Rides &amp; Deliveries <span class="sb-badge" id="payouts-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-reports" onclick="showPane('reports',this)">📈 Reports</button>
+        <button class="adm-sidebar-btn" id="sb-support-queue" onclick="showPane('support-queue',this)">🎫 Support Queue <span class="sb-badge" id="sq-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-mpesa" onclick="showPane('mpesa',this)">💳 Payments / M-Pesa</button>
+        <button class="adm-sidebar-btn" id="sb-finance" onclick="showPane('finance',this)">💰 Finance &amp; Tax</button>
+      </div>
+
+      <!-- GROUP 4: Platform -->
+      <div class="adm-sidebar-group">
+        <div class="adm-sidebar-group-header"><span class="adm-sidebar-group-icon">🛡️</span> Platform</div>
+        <button class="adm-sidebar-btn" id="sb-verification" onclick="showPane('verification',this)">✅ Verification <span class="sb-badge" id="verif-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-moderation" onclick="showPane('moderation',this)">🚩 Moderation <span class="sb-badge" id="mod-badge"></span></button>
+        <button class="adm-sidebar-btn" id="sb-settings" onclick="showPane('settings',this)">⚙️ Configuration</button>
+        <a href="platform-health.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">🩺 Platform Health ↗</a>
+        <a href="reliability-center.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">⚡ Reliability ↗</a>
+        <a href="ops-dashboard.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">📊 Ops Dashboard ↗</a>
+        <a href="admin-feedback.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">💬 Feedback &amp; Bugs ↗</a>
+        <a href="moderation.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">⚖️ Mod Dashboard ↗</a>
+        <a href="email-center.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">✉️ Email Center ↗</a>
+        <a href="superadmin.html" class="adm-sidebar-btn adm-sidebar-ext" id="link-superadmin" style="text-decoration:none;display:flex;color:#c084fc!important;">👑 Super Admin ↗</a>
+        <a href="monitor.html" class="adm-sidebar-btn adm-sidebar-ext" style="text-decoration:none;display:flex;">🖥️ System Monitor ↗</a>
+      </div>
+
+      <!-- User identity footer -->
+      <div style="margin-top:auto;padding:14px 10px 4px;border-top:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:9.5px;color:rgba(255,255,255,0.18);text-transform:uppercase;letter-spacing:.06em;">Logged in as</div>
+        <div id="adminUserLabel" style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-top:3px;">Admin</div>
       </div>
     </nav>
 
@@ -649,20 +754,58 @@ table.adm-table{width:100%;border-collapse:collapse;font-size:12px;}
            SECTION 1: OVERVIEW (default active)
       ═══════════════════════════════════ -->
       <div id="adm-pane-overview" class="adm-pane active">
+
+        <!-- Admin tool quick-links -->
+        <div class="adm-sec-h">🚀 Command Center</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:24px;">
+          <a href="platform-health.html" style="text-decoration:none;" class="adm-tool-card">
+            <div class="adm-tool-icon" style="color:#c084fc">🩺</div>
+            <div class="adm-tool-name">Platform Health</div>
+            <div class="adm-tool-sub">5-dimension score</div>
+          </a>
+          <a href="reliability-center.html" style="text-decoration:none;" class="adm-tool-card">
+            <div class="adm-tool-icon" style="color:#71ff00">⚡</div>
+            <div class="adm-tool-name">Reliability</div>
+            <div class="adm-tool-sub">Uptime &amp; latency</div>
+          </a>
+          <a href="ops-dashboard.html" style="text-decoration:none;" class="adm-tool-card">
+            <div class="adm-tool-icon" style="color:#64b4ff">📊</div>
+            <div class="adm-tool-name">Ops Dashboard</div>
+            <div class="adm-tool-sub">Daily operations</div>
+          </a>
+          <a href="business-kpi.html" style="text-decoration:none;" class="adm-tool-card">
+            <div class="adm-tool-icon" style="color:#fbbf24">📈</div>
+            <div class="adm-tool-name">Business KPIs</div>
+            <div class="adm-tool-sub">GMV &amp; conversion</div>
+          </a>
+          <a href="admin-feedback.html" style="text-decoration:none;" class="adm-tool-card">
+            <div class="adm-tool-icon" style="color:#f97316">💬</div>
+            <div class="adm-tool-name">Bugs &amp; Feedback</div>
+            <div class="adm-tool-sub">Triage inbox</div>
+          </a>
+          <a href="seller-success.html" style="text-decoration:none;" class="adm-tool-card">
+            <div class="adm-tool-icon" style="color:#34d399">🏪</div>
+            <div class="adm-tool-name">Seller Success</div>
+            <div class="adm-tool-sub">Quality &amp; performance</div>
+          </a>
+        </div>
+
         <div class="adm-sec-h">📊 Platform Stats</div>
         <div class="adm-stats" id="overviewStats"></div>
-        <div class="adm-sec-h" style="margin-top:20px;">Recent Activity <span style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.25);">last 20 events from adminLog</span></div>
-        <div id="overviewActivity"><div class="adm-empty"><div class="adm-empty-icon">⏳</div>Loading activity…</div></div>
-        <div class="adm-sec-h" style="margin-top:20px;">Quick Actions</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="solid-btn solid-green" onclick="openAnnouncementModal()">📢 New Announcement</button>
+
+        <div class="adm-sec-h" style="margin-top:20px;">⚡ Quick Actions</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
+          <button class="solid-btn solid-green" onclick="openAnnouncementModal()">📢 Announcement</button>
           <button class="solid-btn solid-blue" onclick="exportAll()">📥 Export Report</button>
           <button class="solid-btn" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);" onclick="clearSWCache()">🗑️ Clear Cache</button>
-          <button class="solid-btn" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);" onclick="refreshAll()">🔄 Refresh Data</button>
+          <button class="solid-btn" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);" onclick="refreshAll()">🔄 Refresh</button>
         </div>
-        <!-- Attention Cards (legacy, compact) -->
-        <div class="adm-sec-h" style="margin-top:24px;">Needs Attention</div>
+
+        <div class="adm-sec-h">⚠️ Needs Attention</div>
         <div class="attn-grid" id="attnGrid"></div>
+
+        <div class="adm-sec-h" style="margin-top:20px;">🕐 Recent Activity <span style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.2);text-transform:none;letter-spacing:0">last 20 events</span></div>
+        <div id="overviewActivity"><div class="adm-empty"><div class="adm-empty-icon">⏳</div>Loading activity…</div></div>
       </div>
 
       <!-- Announcement Modal -->
@@ -2200,10 +2343,12 @@ async function _tryUnlock(secret, mode) {
         return;
       }
       var tokenResult = await fbUser.getIdTokenResult(true /* forceRefresh */);
-      if (!tokenResult.claims || tokenResult.claims.admin !== true) {
+      if (!tokenResult.claims || (tokenResult.claims.admin !== true && tokenResult.claims.superAdmin !== true)) {
         _lockSetError('Firebase admin claim not found. Contact the platform owner.');
         return;
       }
+      /* Store role for RBAC — superAdmin > admin */
+      window._admClaimedRole = tokenResult.claims.superAdmin === true ? 'superAdmin' : 'admin';
     } catch (claimErr) {
       /* Network error — deny access to prevent offline bypass attacks */
       _lockSetError('Cannot verify admin claim — check your connection and try again.');
@@ -2215,6 +2360,8 @@ async function _tryUnlock(secret, mode) {
     document.getElementById('adminLock').style.display = 'none';
     document.getElementById('adminDash').style.display = 'block';
     loadAll();
+    /* Apply role-based UI immediately after unlock */
+    if (typeof applyRBAC === 'function') applyRBAC(window._admClaimedRole || 'admin');
     document.dispatchEvent(new CustomEvent('sokoniAdminReady'));
   } else {
     var entry = sec ? sec.recordFailedLogin(LOCK_ID) : null;
@@ -2477,12 +2624,118 @@ function toast(msg,ms){
 }
 
 /* ════════════════════════════════
+   ROLE-BASED ACCESS CONTROL
+════════════════════════════════ */
+var _admCurrentRole = 'admin';
+
+function applyRBAC(role) {
+  _admCurrentRole = role || 'admin';
+  var isSuperAdmin = role === 'superAdmin';
+
+  /* Role badge in sidebar */
+  var badge = document.getElementById('sidebarRoleBadge');
+  if (badge) {
+    badge.textContent = isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN';
+    badge.className = 'adm-role-badge ' + (isSuperAdmin ? 'adm-role-super' : 'adm-role-admin');
+    badge.style.display = 'inline-flex';
+  }
+
+  /* Role badge in nav */
+  var navBadge = document.getElementById('navRoleBadge');
+  if (navBadge) {
+    navBadge.textContent = isSuperAdmin ? 'SUPER' : 'ADMIN';
+    navBadge.className = 'adm-role-badge ' + (isSuperAdmin ? 'adm-role-super' : 'adm-role-admin');
+    navBadge.style.display = 'inline-flex';
+  }
+
+  /* Super Admin link — always visible but highlighted for superAdmin */
+  var superLink = document.getElementById('link-superadmin');
+  if (superLink) {
+    superLink.style.color = isSuperAdmin ? '#c084fc' : 'rgba(255,255,255,0.25)';
+    superLink.style.opacity = isSuperAdmin ? '1' : '0.5';
+  }
+
+  /* Mobile 7-nav: hide/show transport tab for non-transport admins */
+  /* (currently show all — role filtering applied when business units are active) */
+
+  /* Update footer label */
+  var lbl = document.getElementById('adminUserLabel');
+  if (lbl && window.firebaseAuth && window.firebaseAuth.currentUser) {
+    var u = window.firebaseAuth.currentUser;
+    lbl.textContent = (u.displayName || u.email || 'Admin');
+  }
+}
+
+/* ════════════════════════════════
+   DARK / LIGHT MODE TOGGLE
+════════════════════════════════ */
+function toggleDarkMode() {
+  var isLight = document.body.classList.toggle('adm-light');
+  localStorage.setItem('admDarkMode', isLight ? 'light' : 'dark');
+  var btn = document.getElementById('darkModeBtn');
+  if (btn) btn.textContent = isLight ? '☀️' : '🌙';
+}
+/* Restore preference on load */
+(function(){
+  if (localStorage.getItem('admDarkMode') === 'light') {
+    document.body.classList.add('adm-light');
+    document.addEventListener('DOMContentLoaded', function(){
+      var btn = document.getElementById('darkModeBtn');
+      if (btn) btn.textContent = '☀️';
+    });
+  }
+})();
+
+/* ════════════════════════════════
+   MOBILE 7-TAB NAV
+════════════════════════════════ */
+/* Maps each of the 7 bottom buttons to a pane name */
+var _mob7Map = {
+  'overview':    'overview',
+  'businesses':  'businesses',
+  'orders':      'orders',
+  'users':       'users',
+  'rides':       'rides',
+  'moderation':  'moderation',
+  'reports':     'reports'
+};
+
+function mob7Show(pane, btn) {
+  /* Deactivate all 7 buttons */
+  document.querySelectorAll('.mob-7btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  /* Route to the real pane */
+  showPane(pane, null);
+  /* Scroll main to top */
+  var main = document.querySelector('.adm-main');
+  if (main) main.scrollTop = 0;
+}
+
+/* Keep 7-nav in sync when showPane is called from sidebar */
+function _sync7Nav(paneName) {
+  var reverseMap = {
+    'overview':'overview', 'businesses':'businesses', 'orders':'orders',
+    'users':'users', 'rides':'rides', 'moderation':'moderation', 'reports':'reports',
+    'offers':'businesses', 'properties':'businesses', 'services':'businesses',
+    'drivers':'users', 'team':'users', 'verification':'moderation',
+    'support-queue':'reports', 'finance':'reports', 'mpesa':'reports',
+    'settings':'reports', 'billing':'reports'
+  };
+  var mapped = reverseMap[paneName] || null;
+  if (!mapped) return;
+  document.querySelectorAll('.mob-7btn').forEach(function(b){ b.classList.remove('active'); });
+  var el = document.getElementById('m7-' + mapped);
+  if (el) el.classList.add('active');
+}
+
+/* ════════════════════════════════
    PANE NAV
 ════════════════════════════════ */
 function showPane(name,btn){
   document.querySelectorAll('.adm-pane').forEach(function(p){ p.classList.remove('active'); });
   document.querySelectorAll('.adm-sidebar-btn').forEach(function(b){ b.classList.remove('active'); });
   document.querySelectorAll('.mob-tab').forEach(function(b){ b.classList.remove('active'); });
+  _sync7Nav(name);
   var pane=document.getElementById('adm-pane-'+name);
   if(pane) pane.classList.add('active');
   var sb=document.getElementById('sb-'+name);

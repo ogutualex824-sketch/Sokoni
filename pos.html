@@ -206,7 +206,10 @@
     <img src="assets/logosokoni.png" class="pos-header-logo" alt="" onerror="this.style.display='none'">
     <div>
       <div class="pos-brand" id="hdr-biz-name">SOKONI SmartPOS</div>
-      <div class="pos-branch" id="branch-name-el">Main Branch</div>
+      <div class="pos-branch" id="branch-name-el" onclick="SPosBranch.openSelector()" title="Switch branch" style="cursor:pointer;display:flex;align-items:center;gap:4px;">
+        <span id="branch-name-text">Main Branch</span>
+        <span style="font-size:9px;opacity:.5;">▼</span>
+      </div>
     </div>
     <div class="pos-header-spacer"></div>
     <div class="pos-header-info">
@@ -1305,6 +1308,176 @@
     /* Auto-populate diag cards on first load after PosDB is ready */
     setTimeout(function(){ if (document.getElementById('panel-settings')?.classList.contains('active')) _p7RunDiag(); }, 1200);
   });
+})();
+</script>
+
+<!-- ════════════════════════════════════════════════════════════
+     MULTI-BRANCH SELECTOR
+════════════════════════════════════════════════════════════ -->
+<div id="branch-selector-modal" style="display:none;position:fixed;inset:0;z-index:9500;
+  background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);
+  align-items:flex-end;justify-content:center;padding-bottom:env(safe-area-inset-bottom);">
+  <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;
+    width:100%;max-width:480px;padding:24px;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:16px;font-weight:900;color:white;">Select Branch</div>
+        <div id="branch-biz-label" style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;"></div>
+      </div>
+      <button onclick="SPosBranch.closeSelector()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+        color:rgba(255,255,255,0.5);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;">✕</button>
+    </div>
+    <div id="branch-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+    <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
+      <div style="font-size:11px;font-weight:900;color:rgba(255,255,255,0.25);
+        text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Add Branch</div>
+      <div style="display:flex;gap:8px;">
+        <input id="new-branch-name" placeholder="Branch name (e.g. Westlands)" style="flex:1;padding:10px 14px;
+          background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+          border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
+        <button onclick="SPosBranch.addBranch()" style="padding:10px 16px;background:rgba(113,255,0,0.12);
+          border:1px solid rgba(113,255,0,0.3);color:#71ff00;border-radius:10px;
+          font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── SPosBranch — Multi-branch manager ─────────────────────────── */
+var SPosBranch = (function(){
+  var STORE_KEY    = 'sokoniBranches';
+  var CURRENT_KEY  = 'sokoniCurrentBranch';
+
+  function _getBranches() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e){ return []; }
+  }
+  function _saveBranches(arr) {
+    localStorage.setItem(STORE_KEY, JSON.stringify(arr));
+  }
+  function _getCurrent() {
+    try { return JSON.parse(localStorage.getItem(CURRENT_KEY) || 'null'); } catch(e){ return null; }
+  }
+  function _setCurrent(branch) {
+    localStorage.setItem(CURRENT_KEY, JSON.stringify(branch));
+  }
+
+  function init() {
+    var branches = _getBranches();
+    /* Seed main branch if empty */
+    if (!branches.length) {
+      var bizName = localStorage.getItem('posBizName') || 'My Business';
+      branches = [{ id: 'main', name: 'Main Branch', biz: bizName, isMain: true }];
+      _saveBranches(branches);
+    }
+    /* Set current to first branch if none selected */
+    if (!_getCurrent()) {
+      _setCurrent(branches[0]);
+    }
+    _applyCurrentBranch();
+  }
+
+  function _applyCurrentBranch() {
+    var current = _getCurrent();
+    if (!current) return;
+    var el = document.getElementById('branch-name-text');
+    if (el) el.textContent = current.name;
+    /* Persist for POS data isolation */
+    window._currentBranchId   = current.id;
+    window._currentBranchName = current.name;
+  }
+
+  function openSelector() {
+    var modal    = document.getElementById('branch-selector-modal');
+    var list     = document.getElementById('branch-list');
+    var bizLabel = document.getElementById('branch-biz-label');
+    if (!modal) return;
+    var branches = _getBranches();
+    var current  = _getCurrent();
+    var bizName  = localStorage.getItem('posBizName') || 'My Business';
+    if (bizLabel) bizLabel.textContent = bizName;
+
+    list.innerHTML = branches.map(function(b){
+      var isActive = current && current.id === b.id;
+      return '<div onclick="SPosBranch.selectBranch(\'' + b.id + '\')" style="display:flex;align-items:center;' +
+        'justify-content:space-between;padding:14px 16px;border-radius:12px;cursor:pointer;' +
+        'background:' + (isActive ? 'rgba(113,255,0,0.1)' : 'rgba(255,255,255,0.04)') + ';' +
+        'border:1px solid ' + (isActive ? 'rgba(113,255,0,0.3)' : 'rgba(255,255,255,0.08)') + ';' +
+        'transition:all .12s;">' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:800;color:' + (isActive ? '#71ff00' : 'white') + '">' + b.name + '</div>' +
+          (b.isMain ? '<div style="font-size:10px;color:rgba(255,255,255,0.3);">Main Branch</div>' : '') +
+        '</div>' +
+        (isActive ? '<span style="font-size:16px;">✓</span>' :
+          (!b.isMain ? '<button onclick="event.stopPropagation();SPosBranch.deleteBranch(\'' + b.id + '\')" style="' +
+            'background:rgba(255,60,60,0.1);border:1px solid rgba(255,60,60,0.2);color:#ff6464;' +
+            'border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;">Remove</button>' : '')) +
+        '</div>';
+    }).join('');
+
+    modal.style.display = 'flex';
+  }
+
+  function closeSelector() {
+    var modal = document.getElementById('branch-selector-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function selectBranch(id) {
+    var branches = _getBranches();
+    var branch   = branches.find(function(b){ return b.id === id; });
+    if (!branch) return;
+    _setCurrent(branch);
+    _applyCurrentBranch();
+    closeSelector();
+    /* Reload product grid for this branch if SPos is available */
+    if (typeof SPos !== 'undefined' && SPos.products && SPos.products.render) {
+      SPos.products.render();
+    }
+    if (typeof SPos !== 'undefined' && SPos.ui && SPos.ui.showToast) {
+      SPos.ui.showToast('Switched to ' + branch.name);
+    }
+  }
+
+  function addBranch() {
+    var input    = document.getElementById('new-branch-name');
+    var name     = (input && input.value.trim()) || '';
+    if (!name) { if (input) input.focus(); return; }
+    var branches = _getBranches();
+    var id       = 'branch_' + Date.now();
+    var bizName  = localStorage.getItem('posBizName') || 'My Business';
+    branches.push({ id: id, name: name, biz: bizName, isMain: false });
+    _saveBranches(branches);
+    if (input) input.value = '';
+    openSelector(); /* refresh list */
+  }
+
+  function deleteBranch(id) {
+    var branches = _getBranches().filter(function(b){ return b.id !== id; });
+    _saveBranches(branches);
+    /* If deleted branch was current, switch to main */
+    var current = _getCurrent();
+    if (current && current.id === id) {
+      _setCurrent(branches[0] || null);
+      _applyCurrentBranch();
+    }
+    openSelector();
+  }
+
+  /* Close on backdrop click */
+  document.addEventListener('click', function(e){
+    var modal = document.getElementById('branch-selector-modal');
+    if (modal && e.target === modal) closeSelector();
+  });
+
+  /* Init when page ready */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else { init(); }
+
+  return { openSelector: openSelector, closeSelector: closeSelector,
+           selectBranch: selectBranch, addBranch: addBranch, deleteBranch: deleteBranch,
+           getCurrent: _getCurrent, getBranches: _getBranches };
 })();
 </script>
 </body>

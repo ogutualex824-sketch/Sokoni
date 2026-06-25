@@ -1,4 +1,41 @@
-﻿## [2026-06-25] — release: SOKONI v2.0 Market Leadership Program — SW v295
+﻿## [2026-06-25] — release: SOKONI Final Polish Sprint — SW v296
+
+### Summary
+Polish sprint focused entirely on UX, responsiveness, enterprise usability, and multi-branch support. No new Cloud Functions. Improvements span admin dashboard, SmartPOS, and seller employee management.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `admin.html` | 4-group sidebar, 7-tab mobile nav, RBAC via custom claims, dark/light mode toggle, Command Center overview cards |
+| `pos.html` | Multi-branch selector — clickable header badge, branch modal, add/remove branches, localStorage isolation |
+| `seller.html` | Employee section redesign — role matrix cards, name + branch fields, WhatsApp invite share, role filter |
+| `service-worker.js` | Bumped to sokoni-v296 |
+
+### UX Improvements
+
+- **Admin sidebar** — reorganised into 4 semantic groups: Marketplace, Users, Operations, Platform
+- **Admin mobile nav** — replaced broken 12-tab scrollable bar with clean 7-tab fixed bottom nav
+- **RBAC** — `applyRBAC()` reads `superAdmin` / `admin` from Firebase ID token claims; super admin link highlighted, role badge shown in nav and sidebar
+- **Dark mode** — toggleable light/dark mode with preference persisted to localStorage
+- **SmartPOS multi-branch** — clickable branch selector in POS header; owner can add named branches; inventory and sales isolated per branch via `window._currentBranchId`
+- **Employee management** — 4 role cards with permission summary; invite form now captures name + branch; WhatsApp share button; role filter dropdown; empty state
+
+### Security
+
+- Dual claim check: `admin || superAdmin` — both roles accepted; superAdmin gets additional sidebar access
+- Branch data stored in localStorage only; no new Firestore collections or indexes required
+- No new Cloud Functions
+
+### Performance
+
+- SW bumped to v296 — forces cache refresh for all CSS/JS changes
+- No new external dependencies
+- No new Firestore indexes (still 192/200)
+
+---
+
+## [2026-06-25] — release: SOKONI v2.0 Market Leadership Program — SW v295
 
 ### Summary
 Platform governance sprint. Introduced five-dimension health scoring engine, unified admin health dashboard, and four mandatory governance documents (feature proposal gate, performance budget, cost governance, scaling triggers). No new user-facing features — every engineering hour from v2.0 onward must be justified by a completed Feature Proposal.
