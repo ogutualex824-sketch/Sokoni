@@ -2,6 +2,10 @@
 let collection = null;
 let getDocs = null;
 
+/* HTML-escapes the 5 dangerous characters for safe innerHTML / attribute insertion.
+   Defined here so buildProductCard() and all callers share one implementation. */
+const _escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+
 /* Block browser autofill/email injection on all search inputs sitewide */
 (function blockSearchAutofill(){
   function applyToEl(el){
@@ -561,7 +565,7 @@ function buildProductCard(product, size = "normal"){
     const price    = Number(product.price).toLocaleString();
     const locLabel = product.location ? locationLabels[product.location] || product.location : "";
     const locTag   = locLabel ? `<span class="product-location-tag">📍 ${locLabel}</span>` : "";
-    const descTag  = product.description ? `<p class="product-desc-text">${product.description}</p>` : "";
+    const descTag  = product.description ? `<p class="product-desc-text">${_escHtml(product.description)}</p>` : "";
     const boosted  = isProductBoosted(product.id);
     const isAdult     = typeof isAdultCategory === "function" && isAdultCategory(product.category);
     const adultBadge  = isAdult ? `<div class="adult-card-badge">🔞 18+</div>` : "";
@@ -576,7 +580,8 @@ function buildProductCard(product, size = "normal"){
     const _srn = product.sellerName || '';
     const _sri = _srn ? _srn.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase() : '';
     const _src = _srn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#8b5cf6','#0891b2','#dc2626','#059669'][_srn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
-    const shopRing = _srn ? `<a class="pcard-shop-ring" href="seller-public.html?seller=${encodeURIComponent(_srn)}" onclick="event.stopPropagation()" title="Visit ${_srn.replace(/"/g,'&quot;').replace(/</g,'&lt;')}" style="background:${_src};">${_sri}</a>` : '';
+    /* data-stop-prop prevents the card's open-product handler from firing when clicking the seller ring */
+    const shopRing = _srn ? `<a class="pcard-shop-ring" href="seller-public.html?seller=${encodeURIComponent(_srn)}" data-stop-prop="1" title="Visit ${_escHtml(_srn)}" style="background:${_src};">${_escHtml(_sri)}</a>` : '';
     const verified        = product.sellerName && isSellerVerified();
     const sellerAvgRating = getSellerRating(product.sellerName);
     const verifiedBadge   = verified
@@ -598,38 +603,44 @@ function buildProductCard(product, size = "normal"){
     const buyLabel = isServiceProd ? "📩 Book" : isDigitalProd ? "⚡ Get" : "Buy Now";
     const cartLabel = isServiceProd ? "📋 Enquire" : isDigitalProd ? "🛒 Buy" : "🛒 Cart";
 
-    /* ── Premium button rows ── */
+    /* ── All user-data goes into data-* attributes; zero inline JS injection. ──
+       A single delegated listener on productsContainer handles all interactions.
+       data-name stores the HTML-escaped product name; dataset.name returns the
+       decoded raw value, which the handler then passes to functions. ── */
+    const dName  = _escHtml(product.name);
+    const dPrice = Number(product.price) || 0;
+
     const btnRow = compact
-        /* COMPACT — icon + short label, 3 equal columns */
         ? `<div class="pcard-actions pcard-actions--compact">
                 <div class="pcard-row">
-                    <button class="pcard-btn pcard-btn--cart" onclick="event.stopPropagation();buyProduct('${safeId}')" ${btnDisabled}>
+                    <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
                         ${isServiceProd ? "📩" : "🛒"} <span>${isServiceProd ? "Book" : "Cart"}</span>
                     </button>
-                    <button class="pcard-btn pcard-btn--wish" onclick="event.stopPropagation();addToWishlist('${product.name}')" title="Wishlist">
+                    <button class="pcard-btn pcard-btn--wish" data-action="wish" title="Wishlist">
                         ❤
                     </button>
-                    <button class="pcard-btn pcard-btn--buy" onclick="event.stopPropagation();buyNow('${safeId}')" ${btnDisabled}>
+                    <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
                         ${isServiceProd ? "📋" : "⚡"} <span>${isServiceProd ? "Hire" : "Buy"}</span>
                     </button>
                 </div>
            </div>`
-        /* NORMAL — labelled primary row + social row */
         : `<div class="pcard-actions">
                 <div class="pcard-row">
-                    <button class="pcard-btn pcard-btn--cart" onclick="event.stopPropagation();buyProduct('${safeId}')" ${btnDisabled}>
+                    <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
                         ${isServiceProd ? "📩" : "🛒"} ${cartLabel.replace(/^[^\s]+ /,"")}
                     </button>
-                    <button class="pcard-btn pcard-btn--wish" onclick="event.stopPropagation();addToWishlist('${product.name}')" title="Wishlist">❤</button>
-                    <button class="pcard-btn pcard-btn--buy" onclick="event.stopPropagation();buyNow('${safeId}')" ${btnDisabled}>
+                    <button class="pcard-btn pcard-btn--wish" data-action="wish" title="Wishlist">❤</button>
+                    <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
                         ${buyLabel}
                     </button>
                 </div>
                 <div class="pcard-row pcard-row--secondary">
-                    <button class="pcard-btn pcard-btn--share" onclick="event.stopPropagation();shareProductWA('${encodeURIComponent(product.name)}','${product.price}')">
+                    <button class="pcard-btn pcard-btn--share" data-action="share"
+                            data-name="${dName}" data-price="${dPrice}">
                         <i class="fab fa-whatsapp"></i> Share
                     </button>
-                    <button class="pcard-btn pcard-btn--offer" onclick="event.stopPropagation();quickOffer('${safeId}','${encodeURIComponent(product.name)}','${product.price}')">
+                    <button class="pcard-btn pcard-btn--offer" data-action="offer"
+                            data-name="${dName}" data-price="${dPrice}">
                         ${isServiceProd ? "💬 Chat" : "🏷️ Offer"}
                     </button>
                 </div>
@@ -638,37 +649,37 @@ function buildProductCard(product, size = "normal"){
     const catEmoji = {electronics:'📱',fashion:'👗',beauty:'💄',shoes:'👟',food:'🛒',computers:'💻',appliances:'🔌',sports:'⚽',furniture:'🛋️',accessories:'👜',construction:'🏗️',printing:'🖨️',services:'🛠️',gas:'🔥',charcoal:'🪵',solar:'☀️'};
     const catLabel = product.category ? (product.category.charAt(0).toUpperCase()+product.category.slice(1).replace(/-/g,' ')) : 'Shop';
 
-    /* ── Portrait image overlay: name + price float over deep gradient (mobile) ── */
     const nameOverlay = `<div class="pcard-name-overlay">
-        <span class="pcard-ov-cat">${catEmoji[product.category]||'🛍️'} ${catLabel}</span>
-        <span class="pcard-ov-name">${product.name}</span>
+        <span class="pcard-ov-cat">${catEmoji[product.category]||'🛍️'} ${_escHtml(catLabel)}</span>
+        <span class="pcard-ov-name">${_escHtml(product.name)}</span>
         <div class="pcard-ov-bottom">
             <span class="pcard-ov-price">KES ${price}</span>
             ${rating ? `<span class="pcard-ov-stars">${ratingStarsHtml(rating.avg)} <span class="pcard-ov-rcount">${rating.count}</span></span>` : ''}
         </div>
     </div>`;
 
-    /* ── Social proof line for the action strip ── */
     const _soldCnt  = Number(product.soldCount  || 0);
     const _wishCnt  = Number(product.wishlistCount || 0);
     const _stripInfo = _soldCnt > 5  ? `✅ ${_soldCnt.toLocaleString()} sold` :
                        _wishCnt >= 5 ? `🔥 ${_wishCnt} want this` :
-                       product.sellerName ? `🏪 ${product.sellerName.split(' ')[0]}` : '📦 In stock';
+                       product.sellerName ? `🏪 ${_escHtml(product.sellerName.split(' ')[0])}` : '📦 In stock';
 
-    const mobileStrip = `<div class="pcard-mobile-strip" onclick="event.stopPropagation()">
+    /* data-stop-prop on the strip prevents accidental card-open on strip touch/scroll */
+    const mobileStrip = `<div class="pcard-mobile-strip" data-stop-prop="1">
         <span class="pcard-strip-info">${_stripInfo}</span>
         <div class="pcard-m-btns">
-            <button class="pcard-m-wish" onclick="addToWishlist('${product.name}')" title="Wishlist">❤</button>
-            <button class="pcard-m-buy" onclick="buyNow('${safeId}')" ${btnDisabled}>${isServiceProd?'📩 Book':'⚡ Buy'}</button>
+            <button class="pcard-m-wish" data-action="wish" title="Wishlist">❤</button>
+            <button class="pcard-m-buy" data-action="buy" ${btnDisabled}>${isServiceProd?'📩 Book':'⚡ Buy'}</button>
         </div>
     </div>`;
 
+    /* data-pid is the single source of truth for which product this card represents */
     return `
-        <div class="product-card ${boosted ? "product-boosted" : ""} ${isAdult ? "adult-card" : ""} ${oos ? "oos-card" : ""}" style="position:relative;animation:cardFadeIn 0.35s ease;" onclick="openProduct('${product.id}')">
+        <div class="product-card ${boosted ? "product-boosted" : ""} ${isAdult ? "adult-card" : ""} ${oos ? "oos-card" : ""}" style="position:relative;animation:cardFadeIn 0.35s ease;" data-pid="${safeId}">
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap" data-emoji="${catEmoji[product.category]||'🛍️'}">
-                <img src="${img}" alt="${product.name}" loading="lazy" decoding="async"
+                <img src="${img}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async"
                   onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">
                 ${locTag}
                 ${nameOverlay}
@@ -676,7 +687,7 @@ function buildProductCard(product, size = "normal"){
             </div>
             <div class="product-body">
                 ${badge || kebs ? `<div class="pcard-badge-row">${badge}${kebs}</div>` : ""}
-                <h3 class="product-name">${product.name}</h3>
+                <h3 class="product-name">${_escHtml(product.name)}</h3>
                 ${getSellerBadgesHtml(product.sellerName,'sm')}
                 <div class="price-row">
                     <p class="price">KES ${price}</p>
@@ -687,6 +698,45 @@ function buildProductCard(product, size = "normal"){
             ${mobileStrip}
         </div>
     `;
+}
+
+/* ── Delegated product-card click handler ───────────────────────────────────
+   A single listener on productsContainer handles all card interactions.
+   No inline JS, no user-data in event attribute strings.
+─────────────────────────────────────────────────────────────────────────── */
+function _productCardClick(e) {
+    /* Action buttons (cart, wish, buy, share, offer) take priority */
+    const btn = e.target.closest('[data-action]');
+    if (btn) {
+        e.stopPropagation();
+        const card = btn.closest('[data-pid]');
+        const pid  = card ? card.dataset.pid : null;
+        if (!pid) return;
+        const action = btn.dataset.action;
+        /* dataset.name gives the HTML-decoded raw value (browser unescapes &amp; etc.) */
+        const rawName = btn.dataset.name || '';
+        const price   = btn.dataset.price || '0';
+        if (action === 'cart')  { buyProduct(pid); return; }
+        if (action === 'wish')  { addToWishlist(pid); return; }
+        if (action === 'buy')   { buyNow(pid); return; }
+        if (action === 'share') { shareProductWA(encodeURIComponent(rawName), price); return; }
+        if (action === 'offer') { quickOffer(pid, encodeURIComponent(rawName), price); return; }
+        return;
+    }
+    /* Propagation guards (seller ring anchor, mobile strip) — stop without opening */
+    if (e.target.closest('[data-stop-prop]')) {
+        e.stopPropagation();
+        return;
+    }
+    /* Default: open the product whose card was clicked */
+    const card = e.target.closest('[data-pid]');
+    if (card) openProduct(card.dataset.pid);
+}
+
+function _attachPcardDelegation(container) {
+    /* Remove any previously attached listener before re-attaching to avoid duplicates */
+    container.removeEventListener('click', _productCardClick);
+    container.addEventListener('click', _productCardClick);
 }
 
 /* =========================
@@ -783,6 +833,9 @@ function displayProducts(productsToShow = []){
     const rest   = productsToShow.slice(FIRST_BATCH);
 
     container.innerHTML = first.map(p => buildProductCard(p)).join('');
+
+    /* Single delegated listener — handles both first batch and lazy-appended rest */
+    _attachPcardDelegation(container);
 
     /* Phase 9 — stagger first batch cards */
     container.querySelectorAll('.product-card').forEach(function(card, i){
@@ -1016,11 +1069,12 @@ window.quickOffer     = quickOffer;
 
 /* ADD TO WISHLIST */
 
-async function addToWishlist(productName){
+async function addToWishlist(productId){
+    /* productId is the sanitized ID from safeId (alphanumeric + - _).
+       We match against the same sanitization to be consistent. */
+    const _mkSafe = id => String(id||'').replace(/[^a-zA-Z0-9_-]/g,'');
 
-    const selectedProduct = products.find(
-        product => product.name === productName
-    );
+    const selectedProduct = products.find(p => _mkSafe(p.id) === productId);
 
     if(!selectedProduct) return;
 
@@ -1032,11 +1086,11 @@ async function addToWishlist(productName){
         }
     }
 
-    const alreadyExists = wishlist.find(item => item.name === productName);
+    const alreadyExists = wishlist.find(item => _mkSafe(item.id) === productId);
 
     /* REMOVE */
     if(alreadyExists){
-        wishlist = wishlist.filter(item => item.name !== productName);
+        wishlist = wishlist.filter(item => _mkSafe(item.id) !== productId);
         localStorage.setItem("wishlist", JSON.stringify(wishlist));
         displayProducts(products);
         showNotification("Removed From Wishlist 💔", "error");
@@ -1052,7 +1106,7 @@ async function addToWishlist(productName){
 
     /* Phase 9 — heart pop on the wishlist button */
     const safeWId = String(selectedProduct.id || '').replace(/[^a-zA-Z0-9_-]/g,'');
-    const wishBtn = document.querySelector('.product-card[onclick*="' + safeWId + '"] .pcard-btn--wish, .product-card[onclick*="' + safeWId + '"] .pcard-m-wish');
+    const wishBtn = document.querySelector('.product-card[data-pid="' + safeWId + '"] .pcard-btn--wish, .product-card[data-pid="' + safeWId + '"] .pcard-m-wish');
     if (wishBtn) {
       wishBtn.classList.remove('p9-heart-pop');
       void wishBtn.offsetWidth;
@@ -1205,6 +1259,18 @@ function displayFeaturedShops(){
     const active  = featured.filter(f => f.endsAt > Date.now());
 
     section.style.display = "block";
+
+    /* Delegate clicks on featured shop cards (avoids storeUrl injection in onclick=) */
+    grid.addEventListener("click", function _fsClick(e) {
+        const card = e.target.closest("[data-store-url]");
+        if (!card) return;
+        const url = card.dataset.storeUrl;
+        /* Block javascript: protocol URLs — only allow http/https/relative paths */
+        if (url && /^(https?:\/\/|\/|seller-public\.html)/i.test(url)) {
+            window.location.href = url;
+        }
+    }, { once: false });
+
     if(!active.length){
         grid.innerHTML = `
         <div class="seller-card featured-shop-promo">
@@ -1237,7 +1303,7 @@ function displayFeaturedShops(){
             : `<span style="font-size:22px;font-weight:900;color:#f5a623;">${initials}</span>`;
         const avatarStyle  = f.logo ? "" : "background:linear-gradient(135deg,rgba(245,166,35,0.15),rgba(247,201,72,0.08));display:flex;align-items:center;justify-content:center;";
         return `
-        <div class="seller-card featured-shop-card" onclick="window.location.href='${f.storeUrl}'" style="cursor:pointer;">
+        <div class="seller-card featured-shop-card" data-store-url="${_escHtml(String(f.storeUrl||''))}" style="cursor:pointer;">
             <div class="featured-ribbon">
                 <span class="featured-ribbon-star">★</span>
                 SPOTLIGHT
@@ -1874,6 +1940,12 @@ function loadFlashSale(){
 
     const grid = document.getElementById("flashProductsGrid");
     if(!grid) return;
+
+    /* Delegate clicks for flash sale cards — safe, no raw product IDs in onclick= */
+    grid.addEventListener("click", function(e){
+        const item = e.target.closest("[data-action='open'][data-pid]");
+        if(item && item.dataset.pid) openProduct(item.dataset.pid);
+    });
     const flashItems = active.map(f => {
         const p = allProducts.find(p => p.id === f.productId);
         if(!p) return null;
@@ -1890,7 +1962,7 @@ function loadFlashSale(){
         const imgBlock = hasImg
             ? `<img src="${p.image}" alt="${p.name}" loading="lazy" decoding="async" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;flex-shrink:0;">`
             : `<div style="width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;background:${p.bg||'linear-gradient(135deg,#1a1a2e,#16213e)'};flex-shrink:0;"><span style="font-size:52px;line-height:1">${p.emoji||'🛍️'}</span></div>`;
-        return `<div class="fs-item" style="cursor:pointer;" onclick="openProduct('${p.id}')">
+        return `<div class="fs-item" style="cursor:pointer;" data-pid="${String(p.id||'').replace(/[^a-zA-Z0-9_-]/g,'')}" data-action="open">
             <span class="fs-badge">-${p.discount}%</span>
             ${imgBlock}
             <div class="fs-body">
@@ -2104,19 +2176,34 @@ function renderCompareBar(){
     bar.innerHTML = `
         <div class="cb-left">
             <span class="cb-title">⇄ Compare (${compareList.length}/3)</span>
-            ${compareList.map(p=>`
+            ${compareList.map((p,i)=>`
                 <div class="cb-item">
                     <img src="${p.image||'assets/default-product.png'}" onerror="this.src='assets/default-product.png'">
-                    <span>${p.name.substring(0,22)}${p.name.length>22?"…":""}</span>
-                    <button onclick="toggleCompare('${p.id}')">✕</button>
+                    <span>${_escHtml(p.name.substring(0,22))}${p.name.length>22?"…":""}</span>
+                    <button data-compare-remove="${i}">✕</button>
                 </div>
             `).join("")}
         </div>
         <div class="cb-right">
-            ${compareList.length >= 2 ? `<button class="cb-compare-btn" onclick="openCompareModal()">Compare Now →</button>` : `<span style="font-size:12px;color:rgba(255,255,255,0.4);">Add ${2-compareList.length} more to compare</span>`}
-            <button class="cb-clear-btn" onclick="clearCompare()">Clear</button>
+            ${compareList.length >= 2 ? `<button class="cb-compare-btn" data-compare-action="open">Compare Now →</button>` : `<span style="font-size:12px;color:rgba(255,255,255,0.4);">Add ${2-compareList.length} more to compare</span>`}
+            <button class="cb-clear-btn" data-compare-action="clear">Clear</button>
         </div>
     `;
+
+    /* Delegate compare bar actions — avoids product IDs in onclick= strings */
+    bar.addEventListener("click", function(e){
+        const removeBtn = e.target.closest("[data-compare-remove]");
+        if(removeBtn){
+            const idx = parseInt(removeBtn.dataset.compareRemove, 10);
+            if(!isNaN(idx) && compareList[idx]) toggleCompare(compareList[idx].id);
+            return;
+        }
+        const actionBtn = e.target.closest("[data-compare-action]");
+        if(actionBtn){
+            if(actionBtn.dataset.compareAction === "open") openCompareModal();
+            if(actionBtn.dataset.compareAction === "clear") clearCompare();
+        }
+    });
 }
 
 function clearCompare(){
@@ -2171,10 +2258,10 @@ function openCompareModal(){
                         `).join("")}
                         <tr>
                             <td class="compare-row-label">Actions</td>
-                            ${compareList.map(p=>`
+                            ${compareList.map((p,i)=>`
                                 <td class="compare-row-val">
-                                    <button class="cb-compare-btn" style="margin-bottom:6px;width:100%;" onclick="buyProduct('${p.id}')">🛒 Cart</button>
-                                    <button class="cb-compare-btn" style="background:rgba(255,140,0,0.15);color:#ff9800;width:100%;" onclick="buyNow('${p.id}')">Buy Now</button>
+                                    <button class="cb-compare-btn" style="margin-bottom:6px;width:100%;" data-cmp-action="cart" data-cmp-idx="${i}">🛒 Cart</button>
+                                    <button class="cb-compare-btn" style="background:rgba(255,140,0,0.15);color:#ff9800;width:100%;" data-cmp-action="buy" data-cmp-idx="${i}">Buy Now</button>
                                 </td>
                             `).join("")}
                         </tr>
@@ -2184,6 +2271,17 @@ function openCompareModal(){
         </div>
     `;
     modal.style.display = "flex";
+
+    /* Delegate compare modal Cart/Buy Now actions — safe, uses compareList index */
+    modal.addEventListener("click", function(e){
+        const btn = e.target.closest("[data-cmp-action]");
+        if(!btn) return;
+        const idx = parseInt(btn.dataset.cmpIdx, 10);
+        const p   = compareList[idx];
+        if(!p) return;
+        if(btn.dataset.cmpAction === "cart") buyProduct(p.id);
+        if(btn.dataset.cmpAction === "buy")  buyNow(p.id);
+    });
 }
 
 window.toggleCompare    = toggleCompare;
@@ -2228,9 +2326,17 @@ function renderSavedSearches(){
   if(!el) return;
   let saves = [];
   try { saves = JSON.parse(localStorage.getItem("sokoniSavedSearches"))||[]; } catch(e){}
-  el.innerHTML = saves.map(s=>`
-    <button class="saved-search-pill" onclick="document.getElementById('searchInput').value='${s}';searchProducts()">🔍 ${s}</button>
+  /* Use data-attributes to avoid injecting user search terms into onclick JS strings */
+  el.innerHTML = saves.map((s,i)=>`
+    <button class="saved-search-pill" data-saved-search="${_escHtml(String(s))}" data-idx="${i}">🔍 ${_escHtml(String(s))}</button>
   `).join("");
+  el.querySelectorAll("[data-saved-search]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const inp = document.getElementById("searchInput");
+      if(inp) inp.value = btn.dataset.savedSearch;
+      searchProducts();
+    });
+  });
 }
 
 /* ==============================================
@@ -3517,11 +3623,12 @@ function showCurrentStory(){
         const pimg  = snap.image || "";
         const ename = String(pname).replace(/</g,"&lt;").replace(/>/g,"&gt;");
         ctaEl.innerHTML = `
-          <div onclick="viewStoryProduct('${String(pid).replace(/'/g,"\\'")}',${JSON.stringify(JSON.stringify(snap))})"
+          <div data-story-pid="${_escHtml(String(pid))}" data-story-snap="${_escHtml(JSON.stringify(snap))}"
                style="background:rgba(255,255,255,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:14px;
                       padding:10px 12px;display:flex;align-items:center;gap:10px;max-width:340px;cursor:pointer;
                       transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.6)'"
-               onmouseout="this.style.borderColor='rgba(113,255,0,0.25)'">
+               onmouseout="this.style.borderColor='rgba(113,255,0,0.25)'"
+               onclick="(function(el){try{viewStoryProduct(el.dataset.storyPid,JSON.parse(el.dataset.storySnap))}catch(e){}})(this)">
             ${pimg ? `<img src="${pimg.replace(/"/g,"&quot;")}" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;">` : '<div style="width:44px;height:44px;border-radius:8px;background:rgba(113,255,0,0.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>'}
             <div style="flex:1;min-width:0;">
               <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:2px;">Featured Product</div>

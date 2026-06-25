@@ -1610,7 +1610,7 @@ const INTASEND_LIVE = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.intasendLive
 /* ============================
    M-PESA STK PUSH — IntaSend
 ============================ */
-function sendStkPush(){
+async function sendStkPush(){
   /* Rate-limit STK pushes: max 3 per 2 minutes — prevents accidental double-charges */
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('stk_push', 3, 120000)){
     showPushToast("⚠️ Please Wait", "Too many payment requests. Wait 2 minutes.", "orange");
@@ -1618,7 +1618,6 @@ function sendStkPush(){
   }
   const num = document.getElementById("mpesaNumber").value.trim();
   if(!num || num.length < 9){ showPushToast("❌ Invalid Number", "Enter a valid M-PESA phone number", "orange"); return; }
-  /* Validate Kenyan phone format before hitting API */
   if(typeof SokoniSecurity !== 'undefined'){
     const {valid} = SokoniSecurity.PaymentSecurity.normaliseMpesaPhone(num);
     if(!valid){ showPushToast("❌ Invalid Number", "Enter a valid Safaricom/Airtel number", "orange"); return; }
@@ -1632,9 +1631,8 @@ function sendStkPush(){
   const btn   = document.getElementById("mpesaPushBtn");
   const steps = document.getElementById("stkSteps");
   btn.disabled = true;
-  btn.innerHTML = '⏳ Connecting to M-PESA...';
+  btn.innerHTML = '⏳ Verifying cart...';
   steps.style.display = "flex";
-  activateStkStep(1);
 
   if("Notification" in window && Notification.permission === "default") Notification.requestPermission();
 
@@ -1644,6 +1642,46 @@ function sendStkPush(){
   const [fName, ...lParts] = fullName.split(" ");
   const apiRef    = "SKN" + Date.now().toString().slice(-8);
 
+  /* ── Server-side cart lock: create a checkout session so the server
+     controls the amount charged, not the client. ── */
+  let stkAmount = orderTotal; /* used only if session creation fails or not available */
+  let _sessionId = null;
+
+  if (SOKONI_FUNCTIONS_URL && cart.length > 0) {
+    try {
+      const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
+      const createSession = httpsCallable(getFunctions(undefined, "us-central1"), "createCheckoutSession");
+      const cartForSession = cart.map(i => ({
+        productId: String(i.id || i.productId || ""),
+        qty:       Math.max(1, Math.round(Number(i.qty) || Number(i.quantity) || 1)),
+      })).filter(i => i.productId);
+
+      const sessionRes = await createSession({ cartItems: cartForSession, deliveryFee: deliveryFee || 0 });
+      _sessionId = sessionRes.data.sessionId;
+      stkAmount  = sessionRes.data.serverTotal;
+
+      /* Notify buyer if some items were out of stock and removed from session */
+      const oos = sessionRes.data.outOfStockItems;
+      if (Array.isArray(oos) && oos.length > 0) {
+        showPushToast(
+          "⚠️ Some items unavailable",
+          `Removed from order (out of stock): ${oos.slice(0, 3).join(", ")}`,
+          "orange"
+        );
+        /* Give buyer 3 seconds to see the notice before proceeding */
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    } catch (sessionErr) {
+      console.error("[SOKONI] createCheckoutSession failed:", sessionErr);
+      btn.disabled = false;
+      btn.innerHTML = '⚠️ Retry Payment';
+      showPushToast("❌ Cart Error", "Could not verify cart prices. Please try again.", "orange");
+      return;
+    }
+  }
+
+  activateStkStep(1);
+  btn.innerHTML = '⏳ Connecting to M-PESA...';
   showPushToast("📲 Connecting", "Sending STK Push to 0" + phone.slice(3), "green");
 
   new window.IntaSend({
@@ -1677,11 +1715,12 @@ function sendStkPush(){
         body:    JSON.stringify({
           invoiceId:       result.invoice_id || result.tracking_id || apiRef,
           trackingId:      result.tracking_id || null,
-          amount:          orderTotal,
+          sessionId:       _sessionId || null,  /* server reads cart + total from session */
           phone:           phone,
-          orderItems:      cart,
           deliveryName:    document.getElementById("coName")?.value.trim()    || "",
           deliveryAddress: document.getElementById("coAddress")?.value.trim() || "",
+          /* amount and orderItems omitted when sessionId is present — server uses session data */
+          ...(!_sessionId && { amount: orderTotal, orderItems: cart }),
         }),
       });
 
@@ -1720,7 +1759,7 @@ function sendStkPush(){
     resetStkSteps();
   })
   .run({
-    amount:       orderTotal,
+    amount:       stkAmount,   /* server-verified total from createCheckoutSession */
     currency:     "KES",
     phone_number: phone,
     email:        user?.email || "",

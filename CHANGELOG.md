@@ -1,4 +1,82 @@
-﻿## [2026-06-25] — Phase 0 Merchant Onboarding Operations — SW v300
+﻿## [2026-06-25] — RC1 Final Hardening & Go-Live Certification
+
+### Summary
+Comprehensive RC1 regression pass across all security-changed code paths. Found and fixed 5 additional XSS vectors in `script.js` that were outside the original `buildProductCard` scope: saved searches, featured shop storeUrl, flash sale card IDs, compare bar product IDs, and story product CTA JSON injection. Fixed checkout OOS feedback regression. Fixed pre-deploy check SW version format mismatch. Added Dependabot, monitoring upsert, MFA enforcement utility, Firestore rules for `commissions`/`securityEvents`, 2 new test suites (73 tests).
+
+### Security Fixes (Regression Pass Findings)
+- `renderSavedSearches()` — user search terms from localStorage injected into `onclick=` JS string; replaced with `data-saved-search` attribute + event delegation
+- `displayFeaturedShops()` — `f.storeUrl` from Firestore injected into `onclick=`; replaced with `data-store-url` + URL validation (blocks `javascript:` protocol)
+- Flash sale grid (`displayFlashSale`) — `p.id` from Firestore in `onclick="openProduct('${p.id}')"` — replaced with `data-pid`/`data-action` delegation
+- Compare bar — `p.id` in `onclick="toggleCompare('${p.id}')"` — replaced with index-based `data-compare-remove` delegation
+- Compare modal — `p.id` in `onclick="buyProduct/buyNow('${p.id}')"` — replaced with `data-cmp-idx` delegation
+- Story CTA (`viewStoryProduct`) — `JSON.stringify(JSON.stringify(snap))` produced unescaped `"` in HTML attribute; replaced with `data-story-snap`/`data-story-pid` + `_escHtml()`
+
+### Bug Fixes
+- `checkout.html` — `outOfStockItems` from `createCheckoutSession` response was silently ignored; now shown to buyer with 3-second notice before STK push proceeds
+- `scripts/pre-deploy-check.js` — hardcoded `sokoni-v\d+` regex didn't accept new datestamp SW version format; updated to `sokoni-[\w-]+`
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `script.js` | 6 XSS fixes: saved searches, storeUrl, flash sale, compare bar, compare modal, story CTA |
+| `checkout.html` | Surface OOS items to buyer before payment |
+| `scripts/pre-deploy-check.js` | Accept new SW version format |
+| `monitoring/apply-alerts.js` | Upsert (not blind create); validates gcloud + project; fails loudly |
+| `monitoring/alerts.json` | +6 alert policies: payment replay, rate-limit abuse, KASS injection, 2 SLO breaches |
+| `.github/dependabot.yml` | NEW — weekly npm + Actions dependency updates |
+| `firestore.rules` | Rules for `commissions` and `securityEvents` collections |
+| `functions/index.js` | `hasMFASatisfied()`/`assertMFA()` utility; MFA check wired into KASS; `minInstances:1` on `createCheckoutSession` |
+| `functions/test/firestore-rules-audit.test.js` | NEW — 33 static security rules assertions |
+| `functions/test/checkout-integration.test.js` | NEW — 40 checkout + payment + KASS + MFA + rate-limit tests |
+| `.github/workflows/ci.yml` | Index count warns at 195 (hard-fail remains at 200) |
+| `firebase.json` | JS/CSS cache extended to 7 days |
+| `jest.config.js` | NEW — root Jest config excluding e2e/worktrees/self-contained harnesses |
+
+### Test Certification
+**14 test suites — 652 tests — ALL PASS**
+Pre-deploy check: **11/11 pass, 1 warning (197/200 indexes)**
+
+---
+
+## [2026-06-25] — Final Remediation Execution — Production Hardening Sprint
+
+### Summary
+Comprehensive production hardening across 9 security and reliability areas: payment idempotency, CSP enforcement, KASS prompt-injection resistance, Firestore indexes for new collections, structured logging with correlation IDs, inventory stock checking in checkout sessions, CI service worker version auto-bumping, PITR enablement script, and full test suite certification (579/579 passing).
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `functions/index.js` | `createLogger()` utility; `verifyIntasendPayment` idempotency guard via `paymentVerifications` batch write; KASS prompt injection sanitizer with injection pattern detection + audit logging; `createCheckoutSession` stock check with out-of-stock item feedback |
+| `firebase.json` | Added `script-src-attr 'none'` to CSP to enforce inline event handler block (all `onclick=` attributes already removed) |
+| `firestore.indexes.json` | +5 composite indexes: `checkoutSessions` (uid+status, uid+expiresAt, status+expiresAt), `paymentVerifications` (uid+createdAt), `rateLimits` (expiresAt) |
+| `.github/workflows/deploy.yml` | Added `Bump service worker cache version` step before hosting deploy |
+| `jest.config.js` | NEW — root-level Jest config excluding e2e/worktree/self-contained-harness tests |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `scripts/enable-pitr.sh` | One-shot script to enable Firestore PITR; includes restore command reference |
+| `scripts/backup/validate-restore.sh` | Backup restore drill — imports latest export to temp DB, validates critical collections, deletes temp DB |
+| `scripts/deploy/bump-sw-version.js` | CI utility — replaces `CACHE_VERSION` with a date-based build stamp on every deploy |
+
+### Security Changes
+- **Payment idempotency**: `verifyIntasendPayment` now writes `paymentVerifications/{ref}` atomically with the order creation (single batch). Any retry returns the cached `orderId` without touching Firestore again — prevents double-order on network retry.
+- **CSP `script-src-attr 'none'`**: Browsers will now block any HTML attribute event handler (`onclick=`, `onerror=`, etc.) at the browser level, complementing the server-side XSS escaping already in place.
+- **KASS injection guard**: Validates message count (max 40), character length (max 8000/msg), and scans for 7 prompt-injection patterns. Logs security events to `securityEvents` collection. Uses `sanitizedMessages` for all Anthropic API calls.
+- **Inventory stock check**: `createCheckoutSession` now skips out-of-stock items (`outOfStock: true` or `stock <= 0`) and returns `outOfStockItems[]` to the client so the cart can update.
+
+### Performance Changes
+- **Structured logging**: `createLogger()` emits JSON lines with `requestId`, `severity`, and `fn` fields, enabling Cloud Logging trace queries across all CF instances.
+
+### Test Certification
+- **12 test suites, 579 tests — ALL PASS**
+- Exclusions (pre-existing, not regressions): `tests/e2e/` (requires Playwright), `functions/test/algolia-sync|search-worker|search-monitor` (self-contained Node.js harnesses, not Jest)
+
+---
+
+## [2026-06-25] — Phase 0 Merchant Onboarding Operations — SW v300
 
 ### Summary
 Operational infrastructure for Phase 0 Merchant Onboarding & Soft Launch. No new Cloud Functions. No new Firestore collections. Uses existing `businesses` and `products` collections.

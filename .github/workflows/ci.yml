@@ -73,10 +73,13 @@ jobs:
       - name: Firestore index count guard (≤ 200)
         run: |
           COUNT=$(node -e "const f=require('./firestore.indexes.json');console.log((f.indexes||[]).length)")
-          echo "Index count: $COUNT"
+          echo "Index count: $COUNT / 200"
           if [ "$COUNT" -gt "200" ]; then
-            echo "❌ Firestore index limit exceeded: $COUNT > 200"
+            echo "❌ Firestore index limit EXCEEDED: $COUNT > 200 — deploy blocked"
             exit 1
+          fi
+          if [ "$COUNT" -gt "195" ]; then
+            echo "::warning::Firestore index count is at $COUNT/200 — only $((200 - COUNT)) slots remain. Review before adding more."
           fi
           echo "✅ Index count OK: $COUNT/200"
 

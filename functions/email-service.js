@@ -83,6 +83,11 @@ const PREF_MAP = {
 /* ── Dedup window: 5 minutes ──────────────────────────────── */
 const DEDUP_TTL_MS = 5 * 60 * 1000;
 
+/* ── CRLF sanitizer — prevents header injection in SMTP path ── */
+function _sanitizeHeader(val) {
+  return String(val || "").replace(/[\r\n]/g, " ").trim();
+}
+
 /* ── DB references (lazy) ─────────────────────────────────── */
 let _db;
 function db() {
@@ -141,12 +146,24 @@ async function _sendViaSendGrid(payload) {
   return { provider: "sendgrid", statusCode: response.statusCode, messageId: response.headers["x-message-id"] || "" };
 }
 
+/* Strict email format check — defends against nodemailer addressparser DoS
+ * and unintended-domain routing bugs (CVE-2024-* series). Only simple
+ * user@domain.tld addresses accepted; RFC-2822 "Group:" syntax is rejected. */
+function _assertSafeEmail(addr) {
+  if (typeof addr !== "string") throw new Error("Invalid recipient address type");
+  const sanitized = addr.replace(/[\r\n]/g, "");
+  if (!/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(sanitized)) {
+    throw new Error(`Rejected non-simple email address to prevent parser exploit: ${sanitized.slice(0,60)}`);
+  }
+}
+
 /* ── Send via SMTP (nodemailer) ────────────────────────────── */
 async function _sendViaSmtp(payload) {
   const host = MAIL_HOST.value();
   const user = MAIL_USER.value();
   const pass = MAIL_PASS.value();
   if (!host || !user || !pass) throw new Error("MAIL_HOST / MAIL_USER / MAIL_PASS not set");
+  _assertSafeEmail(payload.to);
   const nodemailer = require("nodemailer");
   const transporter = nodemailer.createTransport({
     host, port: 587, secure: false,
@@ -155,11 +172,12 @@ async function _sendViaSmtp(payload) {
     tls: { rejectUnauthorized: true },
   });
   const customHeaders = _buildHeaders(payload);
+  /* Sanitize header-injectable fields before passing to nodemailer SMTP */
   const info = await transporter.sendMail({
-    from:    payload.from || FROM.default,
-    to:      payload.to,
-    replyTo: payload.replyTo,
-    subject: payload.subject,
+    from:    _sanitizeHeader(payload.from || FROM.default),
+    to:      _sanitizeHeader(payload.to),
+    replyTo: payload.replyTo ? _sanitizeHeader(payload.replyTo) : undefined,
+    subject: _sanitizeHeader(payload.subject),
     html:    payload.html,
     text:    payload.text || "",
     headers: customHeaders,

@@ -13,7 +13,8 @@ service firebase.storage {
             || request.resource.contentType.matches('application/x-dosexec')
             || request.resource.contentType == 'text/html'
             || request.resource.contentType == 'text/javascript'
-            || request.resource.contentType == 'application/javascript');
+            || request.resource.contentType == 'application/javascript'
+            || request.resource.contentType == 'image/svg+xml');
     }
 
     /* ── Provider & entertainment stories — 150 MB video or 15 MB image ── */

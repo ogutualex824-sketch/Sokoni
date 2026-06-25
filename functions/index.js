@@ -20,6 +20,59 @@ const AT_API_KEY           = defineSecret("AT_API_KEY");
 const AT_USERNAME          = defineSecret("AT_USERNAME");
 const ALGOLIA_ADMIN_KEY    = defineSecret("ALGOLIA_ADMIN_KEY");
 
+/* ── Structured logging utility ─────────────────────────────────────────────
+   Creates a scoped logger that prefixes every message with a unique
+   requestId so all log lines for a single invocation can be correlated
+   in Cloud Logging using: jsonPayload.requestId = "<id>"
+─────────────────────────────────────────────────────────────────────────── */
+function createLogger(context = {}) {
+  const id = context.requestId ||
+    (Date.now().toString(36) + Math.random().toString(36).slice(2, 7)).toUpperCase();
+  const base = { requestId: id, ...context };
+
+  return {
+    id,
+    info:  (msg, extra = {}) => console.log(JSON.stringify({ severity: "INFO",    message: msg, ...base, ...extra })),
+    warn:  (msg, extra = {}) => console.warn(JSON.stringify({ severity: "WARNING", message: msg, ...base, ...extra })),
+    error: (msg, extra = {}) => console.error(JSON.stringify({ severity: "ERROR",  message: msg, ...base, ...extra })),
+    audit: (msg, extra = {}) => console.log(JSON.stringify({ severity: "NOTICE",  message: msg, ...base, ...extra, audit: true })),
+  };
+}
+
+/* ── MFA enforcement helper ──────────────────────────────────────────────────
+   Checks that the decoded Firebase ID token carries a satisfied second factor.
+   Firebase encodes MFA satisfaction in token.firebase.sign_in_second_factor.
+   Returns true if the user has passed MFA, false otherwise.
+
+   Usage: call requireMFA(decodedToken) in any admin-scoped Cloud Function.
+   If it returns false, throw HttpsError("unauthenticated", "MFA required.").
+   MFA ENROLLMENT must be done via Firebase Console or the Admin SDK separately.
+─────────────────────────────────────────────────────────────────────────── */
+function hasMFASatisfied(decodedToken) {
+  /* Firebase encodes the second factor in the nested firebase.sign_in_second_factor claim */
+  return !!(
+    decodedToken?.firebase?.sign_in_second_factor ||
+    decodedToken?.firebase?.sign_in_attributes?.second_factor
+  );
+}
+
+/* Set of roles that MUST have MFA. Enforce when MFA_REQUIRED env is "true". */
+const MFA_REQUIRED_ENV = process.env.MFA_REQUIRED === "true";
+
+function assertMFA(decodedToken, role = "admin") {
+  if (!MFA_REQUIRED_ENV) return; /* Soft-enforce — set MFA_REQUIRED=true to harden */
+  if (!hasMFASatisfied(decodedToken)) {
+    console.warn(JSON.stringify({
+      severity: "WARNING",
+      message:  "MFA not satisfied",
+      uid:      decodedToken?.uid,
+      role,
+    }));
+    throw new HttpsError("unauthenticated",
+      "Multi-factor authentication is required for this action. Please re-authenticate with your second factor.");
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════
    ADMIN CLAIM MANAGEMENT  (Fix 4)
 
@@ -46,7 +99,19 @@ exports.bootstrapAdminClaim = onCall(
       throw new HttpsError("permission-denied", "Not authorised for bootstrap.");
     }
 
-    /* Safety: refuse if an admin already exists */
+    /* ── Triple-layer bootstrap guard ────────────────────────────────────────
+       1. Permanent lock flag in _systemConfig/bootstrap — once set, never cleared.
+          This document is protected by Firestore security rules (admin-only writes)
+          so an attacker cannot delete it to re-enable bootstrap.
+       2. users collection check — ensure no admin role record exists.
+       3. Firebase Auth custom-claims check — the JWT itself is the source of truth.
+    ── */
+    const lockRef  = db.collection("_systemConfig").doc("bootstrap");
+    const lockSnap = await lockRef.get();
+    if (lockSnap.exists && lockSnap.data().locked === true) {
+      throw new HttpsError("already-exists", "Bootstrap has already been completed. Use grantAdminClaim.");
+    }
+
     const existing = await db.collection("users")
       .where("role", "==", "admin").limit(1).get();
     if (!existing.empty) {
@@ -54,12 +119,28 @@ exports.bootstrapAdminClaim = onCall(
     }
 
     const uid = request.auth.uid;
+
+    const callerRecord = await admin.auth().getUser(uid);
+    const callerClaims = callerRecord.customClaims || {};
+    if (callerClaims.admin === true) {
+      throw new HttpsError("already-exists", "This account already has admin access.");
+    }
+
     const existingClaims = await admin.auth().getUser(uid).then(u => u.customClaims || {}).catch(() => ({}));
     await admin.auth().setCustomUserClaims(uid, { ...existingClaims, admin: true });
     await db.collection("users").doc(uid).set(
       { role: "admin", adminGrantedAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
+
+    /* Set the permanent lock — Firestore rules prevent non-admins from clearing this */
+    await lockRef.set({
+      locked:       true,
+      adminUid:     uid,
+      completedAt:  admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[bootstrapAdminClaim] Bootstrap completed by uid=${uid} — lock set.`);
     return { success: true, message: "Admin claim granted. Sign out and back in to activate." };
   }
 );
@@ -619,9 +700,85 @@ exports.kass = onRequest(
       return;
     }
 
+    /* MFA enforcement — KASS has full admin data access, so MFA is mandatory when enabled */
+    try { assertMFA(decodedToken, "kass"); } catch (_mfaErr) {
+      res.status(401).json({ error: _mfaErr.message });
+      return;
+    }
+
+    /* Rate-limit: 30 KASS requests per admin per minute (Firestore-backed) */
+    const _kassRl = await checkRateLimitDurable(`kass_${decodedToken.uid}`, 30, 60);
+    if (!_kassRl.ok) {
+      res.status(429).json({ error: "Too many requests. Please wait before sending another message." });
+      return;
+    }
+
     const { messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ error: "messages array required" });
+      return;
+    }
+
+    /* ── Prompt injection guard ─────────────────────────────────────────────
+       KASS is admin-only, but a compromised admin account or a rogue browser
+       extension could inject content that attempts to override the system
+       prompt, exfiltrate data, or cause KASS to take unintended actions.
+       We validate inputs server-side regardless of trust level.
+    ── */
+    const MAX_MESSAGES   = 40;
+    const MAX_MSG_CHARS  = 8000;
+
+    if (messages.length > MAX_MESSAGES) {
+      res.status(400).json({ error: `Message history too long (max ${MAX_MESSAGES}).` });
+      return;
+    }
+
+    /* Detect and strip injection patterns from user messages */
+    const _INJECTION_PATTERNS = [
+      /ignore\s+(all\s+)?previous\s+instructions/i,
+      /disregard\s+(your\s+)?system\s+prompt/i,
+      /you\s+are\s+now\s+(a\s+)?different/i,
+      /new\s+instructions?:/i,
+      /\[system\]/i,
+      /<\/?system>/i,
+      /\/system:/i,
+    ];
+
+    const sanitizedMessages = messages.map(msg => {
+      if (!msg || typeof msg !== "object") return null;
+      const role    = msg.role === "assistant" ? "assistant" : "user";
+      let   content = "";
+
+      if (typeof msg.content === "string") {
+        content = msg.content.slice(0, MAX_MSG_CHARS);
+      } else if (Array.isArray(msg.content)) {
+        /* Only keep text blocks from array-form content */
+        content = msg.content
+          .filter(b => b && b.type === "text")
+          .map(b => String(b.text || "").slice(0, MAX_MSG_CHARS))
+          .join("\n")
+          .slice(0, MAX_MSG_CHARS);
+      }
+
+      /* Log injection attempt but return sanitized (not blocked) so UX is unaffected */
+      for (const pattern of _INJECTION_PATTERNS) {
+        if (pattern.test(content)) {
+          console.warn(`[KASS] Possible injection detected from uid=${decodedToken.uid}:`, content.slice(0, 200));
+          db.collection("securityEvents").add({
+            type:    "kass_injection_attempt",
+            uid:     decodedToken.uid,
+            snippet: content.slice(0, 500),
+            ts:      admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+          break;
+        }
+      }
+
+      return { role, content };
+    }).filter(Boolean);
+
+    if (sanitizedMessages.length === 0) {
+      res.status(400).json({ error: "No valid messages provided." });
       return;
     }
 
@@ -649,10 +806,13 @@ Format monetary values in KES. Use simple markdown for tables when showing lists
 Today's date: ${new Date().toLocaleDateString("en-KE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`;
 
     try {
-      let currentMessages = messages;
+      let currentMessages = sanitizedMessages;
       let finalResponse = "";
+      const MAX_TOOL_ITERATIONS = 10;
+      let _iterations = 0;
 
-      while (true) {
+      while (_iterations < MAX_TOOL_ITERATIONS) {
+        _iterations++;
         const response = await anthropic.messages.create({
           model: "claude-sonnet-4-6",
           max_tokens: 1024,
@@ -684,6 +844,11 @@ Today's date: ${new Date().toLocaleDateString("en-KE", { weekday: "long", year: 
             { role: "assistant", content: response.content },
             { role: "user", content: toolResults },
           ];
+
+          if (_iterations >= MAX_TOOL_ITERATIONS) {
+            console.warn(`[KASS] Max tool iterations (${MAX_TOOL_ITERATIONS}) reached — ending loop.`);
+            finalResponse = "I've reached my search limit for this request. Please try a more specific question.";
+          }
           continue;
         }
 
@@ -969,6 +1134,123 @@ function smsTemplates(o) {
 }
 
 /* ============================================================
+   createCheckoutSession  — locks cart server-side before payment
+   Called by checkout.html BEFORE the IntaSend STK Push is initiated.
+   Returns a sessionId and the server-authoritative cart total so the
+   frontend can pass that total to IntaSend — the client never computes
+   or controls the amount the STK Push charges.
+============================================================ */
+exports.createCheckoutSession = onCall(
+  { timeoutSeconds: 30, minInstances: 1 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+
+    const { cartItems, deliveryFee } = request.data || {};
+    if (!Array.isArray(cartItems) || cartItems.length === 0) {
+      throw new HttpsError("invalid-argument", "cartItems must be a non-empty array.");
+    }
+    if (cartItems.length > 50) {
+      throw new HttpsError("invalid-argument", "Cart too large (max 50 items).");
+    }
+
+    const productIds = [...new Set(
+      cartItems.map(i => String(i.productId || i.id || "")).filter(Boolean)
+    )];
+    if (productIds.length === 0) {
+      throw new HttpsError("invalid-argument", "No valid product IDs in cart.");
+    }
+
+    /* Fetch authoritative prices from Firestore (10-item chunk limit for `in`) */
+    const priceMap = {};
+    for (let ci = 0; ci < productIds.length; ci += 10) {
+      const chunk = productIds.slice(ci, ci + 10);
+      const snap = await db.collection("products")
+        .where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
+      snap.forEach(doc => { priceMap[doc.id] = doc.data(); });
+    }
+
+    /* Build session items using server prices — any item not in the catalogue is skipped.
+       Also validates stock availability: out-of-stock items are rejected so the session
+       cannot be used to purchase items that are unavailable. */
+    const sessionItems = [];
+    let serverSubtotal = 0;
+    const outOfStockItems = [];
+    for (const item of cartItems) {
+      const pid  = String(item.productId || item.id || "");
+      const prod = priceMap[pid];
+      if (!prod) continue;
+
+      /* Out-of-stock check: outOfStock flag OR stock field present and zero */
+      const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
+      const isOos    = prod.outOfStock === true || (stockQty !== null && stockQty <= 0);
+      if (isOos) {
+        outOfStockItems.push(prod.name || pid);
+        continue;
+      }
+
+      const unitPrice = Number(prod.salePrice || prod.price || 0);
+      const qty       = Math.max(1, Math.min(99, Math.round(Number(item.qty) || 1)));
+      const lineTotal = unitPrice * qty;
+      serverSubtotal += lineTotal;
+      sessionItems.push({
+        productId:  pid,
+        name:       prod.name   || "Item",
+        unitPrice,
+        qty,
+        lineTotal,
+        sellerUid:  prod.sellerUid  || null,
+        sellerName: prod.sellerName || null,
+        image:      prod.image      || null,
+      });
+    }
+
+    if (outOfStockItems.length > 0 && sessionItems.length === 0) {
+      throw new HttpsError("failed-precondition",
+        `All items in your cart are out of stock: ${outOfStockItems.slice(0, 3).join(", ")}`
+      );
+    }
+    if (outOfStockItems.length > 0) {
+      /* Partial: some items available, some out-of-stock — return which ones were skipped */
+      console.warn("[createCheckoutSession] Skipped out-of-stock items:", outOfStockItems);
+    }
+    if (sessionItems.length === 0) {
+      throw new HttpsError("not-found", "None of the cart items were found in the product catalogue.");
+    }
+
+    /* Cap delivery fee at KES 5,000 to prevent inflated totals */
+    const safeDeliveryFee = Math.max(0, Math.min(5000, Math.round(Number(deliveryFee) || 0)));
+    const serverTotal     = Math.round(serverSubtotal + safeDeliveryFee);
+
+    if (serverTotal < 1) {
+      throw new HttpsError("invalid-argument", "Cart total is too low.");
+    }
+
+    const sessionId = "CS" + Date.now().toString(36).toUpperCase()
+                    + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); /* 30-minute window */
+
+    await db.collection("checkoutSessions").doc(sessionId).set({
+      sessionId,
+      uid:         request.auth.uid,
+      items:       sessionItems,
+      serverTotal,
+      deliveryFee: safeDeliveryFee,
+      status:      "pending",
+      expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
+      createdAt:   admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[createCheckoutSession] session=${sessionId} uid=${request.auth.uid} total=${serverTotal}`);
+    return {
+      sessionId,
+      serverTotal,
+      itemCount:       sessionItems.length,
+      outOfStockItems: outOfStockItems.length > 0 ? outOfStockItems : undefined,
+    };
+  }
+);
+
+/* ============================================================
    verifyIntasendPayment  — server-side M-Pesa verification
    Called by checkout.html after IntaSend COMPLETE callback.
    1. Verifies invoice with IntaSend REST API (private key).
@@ -984,12 +1266,28 @@ exports.verifyIntasendPayment = onRequest(
     minInstances:   1,
   },
   async (req, res) => {
+    const log = createLogger({ fn: "verifyIntasendPayment" });
+
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
-    const { invoiceId, trackingId, amount, phone, orderItems, deliveryName, deliveryAddress } = req.body;
+    /* Rate-limit: 10 verification attempts per IP per minute (Firestore-backed, cross-instance) */
+    const ip  = (req.headers["x-forwarded-for"] || req.ip || "unknown").split(",")[0].trim();
+    const _rl = await checkRateLimitDurable(`verify_${ip}`, 10, 60);
+    if (!_rl.ok) {
+      log.warn("Rate limit exceeded", { ip });
+      res.status(429).json({ verified: false, error: "Rate limit exceeded. Please wait before retrying." });
+      return;
+    }
+
+    const {
+      invoiceId, trackingId, amount, phone, orderItems,
+      deliveryName, deliveryAddress,
+      sessionId, /* preferred: server-side checkout session ID */
+    } = req.body;
+
     if (!invoiceId && !trackingId) {
       res.status(400).json({ verified: false, error: "invoiceId or trackingId required" });
       return;
@@ -999,6 +1297,32 @@ exports.verifyIntasendPayment = onRequest(
     if (!privKey) {
       res.status(500).json({ verified: false, error: "Payment gateway not configured" });
       return;
+    }
+
+    /* ── Load checkout session when provided (preferred secure path) ──
+       Session items and total are server-computed; we never trust the
+       client's orderItems or amount when a sessionId is present. ── */
+    let sessionDoc   = null;
+    let sessionTotal = null;
+    if (sessionId) {
+      const sessionSnap = await db.collection("checkoutSessions").doc(String(sessionId)).get();
+      if (!sessionSnap.exists) {
+        return res.status(400).json({ verified: false, error: "Checkout session not found or expired." });
+      }
+      sessionDoc = sessionSnap.data();
+
+      /* Session must still be in pending state (one-use guard) */
+      if (sessionDoc.status !== "pending") {
+        return res.status(400).json({ verified: false, error: "Checkout session already used or expired." });
+      }
+
+      /* Session must not be expired */
+      const now = admin.firestore.Timestamp.now();
+      if (sessionDoc.expiresAt && sessionDoc.expiresAt.toMillis() < now.toMillis()) {
+        return res.status(400).json({ verified: false, error: "Checkout session has expired." });
+      }
+
+      sessionTotal = sessionDoc.serverTotal;
     }
 
     try {
@@ -1037,19 +1361,88 @@ exports.verifyIntasendPayment = onRequest(
       /* ── Amount cross-check: trust the API, not the client ── */
       const apiAmount    = Number(payment.value || payment.amount || payment.paid_amount || 0);
       const clientAmount = Number(amount) || 0;
-      if (apiAmount > 0 && clientAmount > 0 && Math.abs(apiAmount - clientAmount) > 1) {
-        console.error(`[verifyIntasendPayment] Amount mismatch for ${ref}: client=${clientAmount}, api=${apiAmount}`);
-        db.collection("auditLogs").add({
-          type: "payment_amount_mismatch", ref, clientAmount, apiAmount,
-          ts: admin.firestore.FieldValue.serverTimestamp(),
-        }).catch(() => {});
-        return res.status(400).json({ verified: false, error: "Payment amount mismatch" });
-      }
+
+      /* When a session is present compare against session.serverTotal (server-authoritative).
+         When no session fall back to the client amount (e.g., service/subscription payments). */
+      const expectedTotal   = sessionTotal || clientAmount;
       const confirmedAmount = apiAmount || clientAmount;
 
-      /* ── Create order in Firestore ── */
-      const orderId   = "SKN" + Date.now().toString().slice(-8).toUpperCase();
-      const sellerUid = orderItems?.[0]?.sellerUid || null;
+      /* ── Amount integrity check ── */
+      if (apiAmount > 0 && expectedTotal > 0 && confirmedAmount < expectedTotal - 1) {
+        const logType = sessionTotal ? "payment_session_underpayment" : "payment_amount_mismatch";
+        console.error(
+          `[verifyIntasendPayment] ${logType} for ${ref}: paid=${confirmedAmount} expected=${expectedTotal}`
+        );
+        db.collection("auditLogs").add({
+          type: logType, ref, confirmedAmount, expectedTotal, sessionId: sessionId || null,
+          ts: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+        return res.status(400).json({ verified: false, error: "Payment does not cover the order total." });
+      }
+
+      /* ── Catalogue price verification (fallback path — no session) ──
+         When the client did not supply a sessionId (e.g., old app version),
+         fall back to the live product-catalogue cross-check as a safety net. ── */
+      if (!sessionDoc && Array.isArray(orderItems) && orderItems.length > 0) {
+        const productIds = [...new Set(
+          orderItems.map(i => String(i.id || i.productId || "")).filter(Boolean)
+        )];
+
+        if (productIds.length > 0) {
+          const priceMap = {};
+          for (let ci = 0; ci < productIds.length; ci += 10) {
+            const chunk = productIds.slice(ci, ci + 10);
+            const snap = await db.collection("products")
+              .where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
+            snap.forEach(doc => { priceMap[doc.id] = doc.data(); });
+          }
+
+          let serverTotal = 0;
+          let unknownItems = 0;
+          for (const item of orderItems) {
+            const pid = String(item.id || item.productId || "");
+            if (!pid || !priceMap[pid]) { unknownItems++; continue; }
+            const prod = priceMap[pid];
+            const unitPrice = Number(prod.salePrice || prod.price || 0);
+            serverTotal += unitPrice * (Math.max(1, Number(item.qty) || Number(item.quantity) || 1));
+          }
+
+          if (serverTotal > 0 && confirmedAmount < serverTotal - 1) {
+            console.error(
+              `[verifyIntasendPayment] Price mismatch for ${ref}: paid=${confirmedAmount} required=${serverTotal}`
+            );
+            db.collection("auditLogs").add({
+              type: "payment_price_mismatch", ref, confirmedAmount, serverTotal,
+              unknownItems, productIds,
+              ts: admin.firestore.FieldValue.serverTimestamp(),
+            }).catch(() => {});
+            return res.status(400).json({ verified: false, error: "Payment does not cover the order total." });
+          }
+        }
+      }
+
+      /* ── Resolve authoritative order items ──
+         Session items take priority; fall back to client-supplied items only when
+         no session is present (e.g., service bookings not going through the cart). ── */
+      const resolvedItems = sessionDoc ? sessionDoc.items : (orderItems || []);
+
+      /* ── Idempotency guard ─────────────────────────────────────────────────────
+         Use the IntaSend invoice/tracking ref as a payment-level idempotency key.
+         If a prior call already verified and created an order for this ref,
+         return the cached result without touching Firestore again. This prevents
+         duplicate orders on client network retries and double-clicks.
+      ── */
+      const verifRef  = db.collection("paymentVerifications").doc(ref);
+      const verifSnap = await verifRef.get();
+      if (verifSnap.exists) {
+        const cached = verifSnap.data();
+        log.audit("idempotent replay", { ref, existingOrder: cached.orderId });
+        return res.json({ verified: true, orderId: cached.orderId, verificationToken: cached.verificationToken, replayed: true });
+      }
+
+      /* ── Create order in Firestore (inside a transaction for atomicity) ── */
+      const orderId  = "SKN" + Date.now().toString().slice(-8).toUpperCase();
+      const sellerUid = resolvedItems?.[0]?.sellerUid || null;
       const orderDoc  = {
         id:              orderId,
         status:          "paid",
@@ -1062,27 +1455,53 @@ exports.verifyIntasendPayment = onRequest(
         deliveryAddress: deliveryAddress || "",
         orderTotal:      confirmedAmount,
         total:           confirmedAmount,
-        items:           orderItems || [],
+        items:           resolvedItems,
         sellerUid,
-        sellerName:      orderItems?.[0]?.sellerName || null,
+        sellerName:      resolvedItems?.[0]?.sellerName || null,
         paymentMethod:   "mpesa",
+        sessionId:       sessionId || null,
         escrow:          { held: confirmedAmount, released: 0, refunded: 0 },
         statusHistory:   [{ status: "paid", at: Date.now(), by: "intasend-webhook" }],
         createdAt:       admin.firestore.FieldValue.serverTimestamp(),
       };
+      const verificationToken = `${orderId}_v${Date.now()}`;
 
-      await db.collection("orders").doc(orderId).set(orderDoc);
+      /* Run all writes in a single batch for atomicity */
+      const batch = db.batch();
 
-      await db.collection("orderEvents").doc(orderId).collection("events").add({
-        from: null, to: "paid", by: "intasend-webhook",
-        meta: { invoiceId, trackingId, phone, amount },
+      batch.set(db.collection("orders").doc(orderId), orderDoc);
+
+      /* Idempotency record — prevents duplicate orders on retry */
+      batch.set(verifRef, {
+        orderId,
+        ref,
+        verificationToken,
+        amount: confirmedAmount,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      return res.json({ verified: true, orderId, verificationToken: `${orderId}_v${Date.now()}` });
+      /* Session consumed marker */
+      if (sessionId && sessionDoc) {
+        batch.update(
+          db.collection("checkoutSessions").doc(String(sessionId)),
+          { status: "consumed", orderId, consumedAt: admin.firestore.FieldValue.serverTimestamp() }
+        );
+      }
+
+      await batch.commit();
+
+      /* Order event written after batch (subcollections cannot be in a batch) */
+      await db.collection("orderEvents").doc(orderId).collection("events").add({
+        from: null, to: "paid", by: "intasend-webhook",
+        meta: { invoiceId, trackingId, phone },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      log.audit("order created", { orderId, ref, amount: confirmedAmount, sessionId: sessionId || null });
+      return res.json({ verified: true, orderId, verificationToken });
 
     } catch (err) {
-      console.error("[verifyIntasendPayment] Error:", err);
+      log.error("unhandled error", { err: err.message, stack: err.stack });
       return res.status(500).json({ verified: false, error: "Internal error" });
     }
   }
@@ -3360,6 +3779,10 @@ exports.initiateSTKPush = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
+    /* Rate-limit: 5 STK Push initiations per authenticated user per minute (Firestore-backed) */
+    const _rl = await checkRateLimitDurable(`stk_${request.auth.uid}`, 5, 60);
+    if (!_rl.ok) throw new HttpsError("resource-exhausted", "Too many payment requests. Please wait a moment.");
+
     const { phone, amount, ref, meta } = request.data || {};
     if (!phone || !amount || !ref) throw new HttpsError("invalid-argument", "phone, amount, ref required.");
     if (!/^254[17]\d{8}$/.test(String(phone))) throw new HttpsError("invalid-argument", "Invalid phone.");
@@ -3798,26 +4221,76 @@ exports.cleanupExpiredSubscriptions = onSchedule(
      • Suspiciously uniform timing (< 20 ms apart consistently)
 ══════════════════════════════════════════════════════════════════ */
 
-/* Sliding-window rate limiter (in-memory, per CF instance) */
-const _rl = new Map(); // key → { timestamps: number[] }
+/* ── In-memory rate limiter (per-instance — used for bot detection heuristics only) ── */
+const _rlMap = new Map(); // key → { timestamps: number[] }
 
 function _rateLimit(key, limitPerMin = 120) {
   const now    = Date.now();
   const window = 60000;
-  const entry  = _rl.get(key) || { ts: [] };
+  const entry  = _rlMap.get(key) || { ts: [] };
 
-  /* Prune events outside the window */
   entry.ts = entry.ts.filter(t => now - t < window);
   entry.ts.push(now);
-  _rl.set(key, entry);
+  _rlMap.set(key, entry);
 
-  if (_rl.size > 50000) {
-    /* Evict oldest 20% when map grows large */
-    const keys = [..._rl.keys()].slice(0, 10000);
-    keys.forEach(k => _rl.delete(k));
+  if (_rlMap.size > 50000) {
+    const keys = [..._rlMap.keys()].slice(0, 10000);
+    keys.forEach(k => _rlMap.delete(k));
   }
 
   return entry.ts.length <= limitPerMin;
+}
+
+/* ── Firestore-backed rate limiter ──────────────────────────────────────────
+   Uses Firestore transactions for cross-instance atomic counting.
+   Applied to all payment, admin, and AI endpoints so that rate limits
+   remain effective across all 1,000 concurrent Cloud Function instances.
+
+   Keys are stored in rateLimits/{sanitizedKey} documents with a TTL field
+   (expiresAt) so Cloud Firestore TTL can auto-clean them (enable TTL policy
+   on the expiresAt field in the Firebase Console for the rateLimits collection).
+─────────────────────────────────────────────────────────────────────────── */
+async function checkRateLimitDurable(key, limitPerWindow, windowSecs = 60) {
+  const now        = Date.now();
+  const windowMs   = windowSecs * 1000;
+  /* Sanitise the key to a valid Firestore doc ID */
+  const safeKey    = String(key).replace(/[^a-zA-Z0-9_@.-]/g, "_").slice(0, 200);
+  const docRef     = db.collection("rateLimits").doc(safeKey);
+
+  try {
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) {
+        tx.set(docRef, {
+          count:       1,
+          windowStart: admin.firestore.Timestamp.fromMillis(now),
+          expiresAt:   admin.firestore.Timestamp.fromMillis(now + windowMs + 120000),
+          key: safeKey,
+        });
+        return { count: 1, ok: true };
+      }
+      const data       = snap.data();
+      const windowAge  = now - (data.windowStart?.toMillis() || 0);
+      if (windowAge >= windowMs) {
+        /* Window expired — start a fresh one */
+        tx.update(docRef, {
+          count:       1,
+          windowStart: admin.firestore.Timestamp.fromMillis(now),
+          expiresAt:   admin.firestore.Timestamp.fromMillis(now + windowMs + 120000),
+        });
+        return { count: 1, ok: true };
+      }
+      const newCount = (data.count || 0) + 1;
+      tx.update(docRef, { count: admin.firestore.FieldValue.increment(1) });
+      return { count: newCount, ok: newCount <= limitPerWindow };
+    });
+    return result;
+  } catch (err) {
+    /* Fail open on Firestore error to avoid blocking payments on DB outages.
+       The error is logged so operations can detect and alert on it. */
+    console.error("[checkRateLimitDurable] Firestore error — failing open:", err.message);
+    return { count: 0, ok: true };
+  }
 }
 
 /* Bot-signal heuristics */

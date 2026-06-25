@@ -107,7 +107,8 @@ for (const f of ["firestore.rules", "firestore.indexes.json", "storage.rules"]) 
 ───────────────────────────────────────────── */
 try {
   const swContent = readFile("service-worker.js");
-  const match = swContent.match(/CACHE_VERSION\s*=\s*"(sokoni-v\d+)"/);
+  /* Accept both legacy "sokoni-v300" and new datestamp "sokoni-20260625120133" format */
+  const match = swContent.match(/CACHE_VERSION\s*=\s*"(sokoni-[\w-]+)"/);
   const currentVersion = match?.[1];
 
   if (!currentVersion) {
@@ -119,12 +120,12 @@ try {
       const gitContent = execSync("git show HEAD:service-worker.js", {
         encoding: "utf8", stdio: ["pipe","pipe","pipe"]
       });
-      const gm = gitContent.match(/CACHE_VERSION\s*=\s*"(sokoni-v\d+)"/);
+      const gm = gitContent.match(/CACHE_VERSION\s*=\s*"(sokoni-[\w-]+)"/);
       gitVersion = gm?.[1];
     } catch (_) {}
 
     if (gitVersion && gitVersion === currentVersion) {
-      warn_("service-worker.js: CACHE_VERSION unchanged from last commit", `Still: ${currentVersion} — bump it if static assets changed`);
+      warn_("service-worker.js: CACHE_VERSION unchanged from last commit", `Still: ${currentVersion} — CI will bump it before deploy`);
     } else {
       ok(`service-worker.js: CACHE_VERSION updated (${gitVersion || "unknown"} → ${currentVersion})`);
     }

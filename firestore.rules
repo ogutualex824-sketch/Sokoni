@@ -3204,6 +3204,70 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       CHECKOUT SESSIONS  — server-side cart lock before payment
+       Created by createCheckoutSession CF (onCall).
+       Users may read only their own pending session.
+       Only CFs may update (consumed) or delete.
+    ══════════════════════════════════════════════════════════════ */
+    match /checkoutSessions/{sessionId} {
+      allow read:   if isAuthed() && resource.data.uid == request.auth.uid;
+      allow create: if false;   /* createCheckoutSession CF only */
+      allow update: if false;   /* verifyIntasendPayment CF only */
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RATE LIMITS  — Firestore-backed cross-instance rate counters
+       Managed exclusively by checkRateLimitDurable() inside CFs.
+       Admins may read for debugging; no client access.
+    ══════════════════════════════════════════════════════════════ */
+    match /rateLimits/{key} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PAYMENT VERIFICATIONS  — idempotency guard
+       Set once by verifyIntasendPayment on first success.
+       Prevents duplicate order creation on network retries.
+    ══════════════════════════════════════════════════════════════ */
+    match /paymentVerifications/{ref} {
+      allow read:  if isAuthed() &&
+                      (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;    /* verifyIntasendPayment CF only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SYSTEM CONFIG  — platform-level persistent flags (bootstrap lock)
+       Written by bootstrapAdminClaim CF once. Immutable to clients.
+    ══════════════════════════════════════════════════════════════ */
+    match /_systemConfig/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;    /* bootstrapAdminClaim CF only */
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       COMMISSIONS  — WAP commission records written by Cloud Functions.
+       Sellers read their own entries; admins read all.
+       No client may write — Cloud Functions use Admin SDK.
+    ══════════════════════════════════════════════════════════════ */
+    match /commissions/{commissionId} {
+      allow read:   if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
+      allow create: if false;   /* wap.js CF only */
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SECURITY EVENTS  — injection attempts, fraud signals, rate limit
+       abuse logged by Cloud Functions. Admins read; no client writes.
+    ══════════════════════════════════════════════════════════════ */
+    match /securityEvents/{eventId} {
+      allow read:  if isAdmin();
+      allow write: if false;    /* CF only — Admin SDK bypasses rules */
+    }
+
   }
 }
 

@@ -8,11 +8,23 @@
     "   OR apply one at a time: gcloud alpha monitoring policies create --policy-from-file=<policy_file.json>"
   ],
   "_notification_channels": [
-    "Create a notification channel first:",
-    "  gcloud alpha monitoring channels create --display-name='SOKONI Ops' --type=email --channel-labels=email_address=devops@mysokoni.co.ke",
-    "  Then copy the channel ID into NOTIFICATION_CHANNEL_ID below."
+    "Set up the GCP notification channel ONCE, then store the channel ID as a GitHub Actions secret.",
+    "",
+    "Step 1 — create the channel:",
+    "  gcloud alpha monitoring channels create \\",
+    "    --display-name='SOKONI Ops' \\",
+    "    --type=email \\",
+    "    --channel-labels=email_address=devops@mysokoni.co.ke",
+    "",
+    "Step 2 — get the channel ID:",
+    "  gcloud alpha monitoring channels list --filter='displayName=SOKONI Ops' --format='value(name)'",
+    "",
+    "Step 3 — add as GitHub Actions secret:",
+    "  gh secret set GCP_MONITORING_CHANNEL_ID --body 'projects/sokoni-aeb26/notificationChannels/<ID>'",
+    "",
+    "The deploy workflow reads NOTIFICATION_CHANNEL_ID from the GCP_MONITORING_CHANNEL_ID secret.",
+    "DO NOT put the real channel ID in this file — store it in GitHub Secrets only."
   ],
-  "NOTIFICATION_CHANNEL_ID": "projects/sokoni-aeb26/notificationChannels/REPLACE_WITH_CHANNEL_ID",
 
   "policies": [
 
@@ -258,6 +270,91 @@
         }
       }],
       "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Payment Idempotency Replay Spike (> 20/hour)",
+      "documentation": {
+        "content": "More than 20 idempotent payment replays detected in an hour. This may indicate a client retry loop, a webhook misconfiguration, or a downstream processing delay that is causing IntaSend to re-deliver callbacks. Check the paymentVerifications collection and verifyIntasendPayment logs.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "high replay rate",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"verifyIntasendPayment\" AND jsonPayload.message=\"idempotent replay\"",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "3600s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "Rate Limit Abuse Detected",
+      "documentation": {
+        "content": "A rate limit was triggered by verifyIntasendPayment, initiateSTKPush, or KASS. If this fires repeatedly from the same IP or UID it may indicate credential stuffing or API abuse. Check rateLimits collection and Cloud Function logs.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "rate limit triggered",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND jsonPayload.message=\"Rate limit exceeded\" AND severity=WARNING",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "3600s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "SLO Breach — Order Success Rate < 99%",
+      "documentation": {
+        "content": "The order success rate (orders with status='paid' / total STK push attempts) has dropped below 99% in the last 30 minutes. This is a payment SLO breach. Check verifyIntasendPayment logs, IntaSend dashboard, and the orders collection for recent failures.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "order success rate SLO breach",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"verifyIntasendPayment\" AND severity=ERROR",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "SLO Breach — Checkout Session Creation Error",
+      "documentation": {
+        "content": "createCheckoutSession is returning errors. This directly blocks users from completing payments. Check Firestore products collection and Cloud Function logs. SLO target: < 0.1% error rate.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "checkout session error",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"createCheckoutSession\" AND severity=ERROR",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "1800s" },
+      "combiner": "OR"
+    },
+
+    {
+      "displayName": "KASS Prompt Injection Attempt",
+      "documentation": {
+        "content": "A possible prompt injection was detected in the KASS admin AI. The message has been sanitized and the event has been logged to the securityEvents collection in Firestore. Review the event for potential account compromise.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [{
+        "displayName": "kass injection detected",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND resource.labels.function_name=\"kass\" AND textPayload:\"Possible injection detected\"",
+          "labelExtractors": {}
+        }
+      }],
+      "alertStrategy": { "autoClose": "86400s" },
       "combiner": "OR"
     }
 

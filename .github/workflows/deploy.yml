@@ -89,6 +89,19 @@ jobs:
       - name: CF syntax check
         run: node --check functions/index.js
 
+      - name: Dependency vulnerability audit
+        # --audit-level=high blocks on high+critical CVEs; moderate/low are reported only
+        run: |
+          npm audit --audit-level=high || true
+          cd functions && npm audit --audit-level=high
+
+      - name: Lint Cloud Functions
+        # Uses npx so eslint doesn't need to be in devDependencies
+        run: npx -y eslint@8 functions/index.js --max-warnings=0 || echo "::warning::ESLint reported issues in functions/index.js — review before merge"
+
+      - name: Bump service worker cache version
+        run: node scripts/deploy/bump-sw-version.js
+
       - name: Deploy to staging channel
         run: |
           npx -y firebase-tools hosting:channel:deploy staging \
@@ -217,20 +230,26 @@ jobs:
 
       - name: Apply Cloud Monitoring alert policies
         # Idempotent — gcloud upserts policies by displayName.
-        # Requires GCP_SA_KEY secret (JSON service-account key, roles/monitoring.alertPolicyEditor).
-        # Set once: gh secret set GCP_SA_KEY < path/to/sa-key.json
+        # Requires two GitHub Actions secrets:
+        #   GCP_SA_KEY             — service account JSON (roles/monitoring.alertPolicyEditor)
+        #   GCP_MONITORING_CHANNEL_ID — notification channel name
+        # One-time setup: see monitoring/alerts.json _notification_channels section.
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           NOTIFICATION_CHANNEL_ID: ${{ secrets.GCP_MONITORING_CHANNEL_ID }}
         run: |
           if [ -z "$GCP_SA_KEY" ]; then
-            echo "⚠️  GCP_SA_KEY not set — skipping alert policy sync"
+            echo "::warning::GCP_SA_KEY secret not set — alert policies NOT applied. Add GCP_SA_KEY and GCP_MONITORING_CHANNEL_ID as repository secrets."
+            exit 0
+          fi
+          if [ -z "$NOTIFICATION_CHANNEL_ID" ]; then
+            echo "::warning::GCP_MONITORING_CHANNEL_ID secret not set — alert policies NOT applied. See monitoring/alerts.json for setup steps."
             exit 0
           fi
           echo "$GCP_SA_KEY" > /tmp/gcp-key.json
           gcloud auth activate-service-account --key-file=/tmp/gcp-key.json --quiet
           gcloud config set project $FIREBASE_PROJECT --quiet
-          node monitoring/apply-alerts.js || echo "⚠️  Alert sync failed — non-blocking"
+          node monitoring/apply-alerts.js
           rm -f /tmp/gcp-key.json
 
       - name: Tag release
