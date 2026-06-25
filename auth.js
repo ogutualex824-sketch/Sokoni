@@ -162,6 +162,29 @@ async function loginUser(){
         }
 
         showAuthMsg("Login successful! Taking you home...", "success");
+
+        /* ── Fire login-alert email (new device detection) ── */
+        (async () => {
+            try {
+                const { getFunctions, httpsCallable } = await import(
+                    "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js"
+                );
+                const fns  = getFunctions(window.firebaseApp, "us-central1");
+                const call = httpsCallable(fns, "onLoginEvent");
+                /* Simple device fingerprint: hash of UA + screen dims */
+                const raw  = [navigator.userAgent, screen.width, screen.height, navigator.language].join("|");
+                let fp = 0;
+                for (let i = 0; i < raw.length; i++) fp = (Math.imul(31, fp) + raw.charCodeAt(i)) >>> 0;
+                await call({
+                    device:      navigator.userAgent,
+                    userAgent:   navigator.userAgent,
+                    fingerprint: String(fp),
+                    location:    "Kenya",
+                    ip:          "",
+                });
+            } catch (_) { /* non-fatal — never block login */ }
+        })();
+
         const _rawRedir = sessionStorage.getItem("sokoniLoginRedirect") || "index.html";
         sessionStorage.removeItem("sokoniLoginRedirect");
         /* Validate redirect — only allow same-origin relative paths, block open-redirect */

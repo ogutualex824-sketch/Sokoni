@@ -828,3 +828,71 @@ exports.resendEmail = onCall(
     return { success: true };
   }
 );
+
+/* ═══════════════════════════════════════════════════════════
+   onCall: Record login event — detect new devices and send
+   login-alert email. Called from frontend after every sign-in.
+   Throttled: max 1 alert per device per 24 h.
+═══════════════════════════════════════════════════════════ */
+exports.onLoginEvent = onCall(
+  { secrets: EMAIL_SECRETS, maxInstances: 20 },
+  async (req) => {
+    const uid = assertAuth(req);
+    const { device, ip, location, userAgent, fingerprint } = req.data || {};
+
+    const deviceKey = (fingerprint || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || "unknown";
+    const db        = admin.firestore();
+    const deviceRef = db.collection("users").doc(uid)
+                        .collection("knownDevices").doc(deviceKey);
+
+    const snap    = await deviceRef.get();
+    const isNew   = !snap.exists;
+    const now     = admin.firestore.FieldValue.serverTimestamp();
+    const nowMs   = Date.now();
+
+    /* Throttle: skip alert if same device seen in last 24 h */
+    const lastSeen  = snap.exists ? (snap.data().lastSeenMs || 0) : 0;
+    const throttled = !isNew && (nowMs - lastSeen) < 86_400_000;
+
+    /* Always upsert the device record */
+    await deviceRef.set({
+      device:      device    || userAgent || "Unknown",
+      ip:          ip        || "",
+      location:    location  || "Kenya",
+      userAgent:   userAgent || "",
+      firstSeenMs: isNew ? nowMs : (snap.data().firstSeenMs || nowMs),
+      lastSeenMs:  nowMs,
+      lastSeen:    now,
+    }, { merge: true });
+
+    if (throttled) return { sent: false, reason: "throttled" };
+
+    /* Fetch user details */
+    const authUser = await admin.auth().getUser(uid);
+    const email    = authUser.email || "";
+    if (!email) return { sent: false, reason: "no_email" };
+
+    const userDoc = await db.collection("users").doc(uid).get();
+    const name    = userDoc.exists
+      ? (userDoc.data().displayName || userDoc.data().name || authUser.displayName || "there")
+      : (authUser.displayName || "there");
+
+    const sentAt = new Date().toLocaleString("en-KE", {
+      timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short",
+    });
+
+    await trigger("login-alert", {
+      name,
+      email,
+      device:   device   || userAgent || "Unknown device",
+      ip:       ip       || "Unknown",
+      location: location || "Kenya",
+      time:     sentAt,
+    }, {
+      uid,
+      emailId: `login-alert-${uid}-${deviceKey}-${nowMs}`,
+    });
+
+    return { sent: true, isNewDevice: isNew };
+  }
+);
