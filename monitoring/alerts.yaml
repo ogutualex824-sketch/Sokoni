@@ -1,0 +1,172 @@
+# SOKONI Cloud Monitoring Alert Policies
+# Applied by: node monitoring/apply-alerts.js
+# Required role: roles/monitoring.alertPolicyEditor on GCP service account
+
+project: sokoni-aeb26
+notification_channel_display_name: "SOKONI Ops"   # must match channel created in GCP console
+
+policies:
+
+  # ── Error Rate ───────────────────────────────────────────────
+  - display_name: "CF Error Rate > 2%"
+    conditions:
+      - display_name: "Cloud Function error rate elevated"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            metric.type="run.googleapis.com/request_count"
+            metric.labels.response_code_class="5xx"
+          comparison: COMPARISON_GT
+          threshold_value: 0.02
+          duration: 120s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+              cross_series_reducer: REDUCE_SUM
+    alert_strategy:
+      auto_close: 1800s
+    severity: CRITICAL
+
+  # ── Latency ─────────────────────────────────────────────────
+  - display_name: "CF P95 Latency > 3s"
+    conditions:
+      - display_name: "Cloud Function high latency"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            metric.type="run.googleapis.com/request_latencies"
+          comparison: COMPARISON_GT
+          threshold_value: 3000   # ms
+          duration: 180s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_PERCENTILE_95
+    severity: WARNING
+
+  # ── Firestore Latency ────────────────────────────────────────
+  - display_name: "Firestore Read Latency > 500ms"
+    conditions:
+      - display_name: "Firestore high read latency"
+        condition_threshold:
+          filter: >
+            resource.type="firestore_instance"
+            metric.type="firestore.googleapis.com/document/read_count"
+          comparison: COMPARISON_GT
+          threshold_value: 500
+          duration: 300s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+    severity: WARNING
+
+  # ── Payment Failures ─────────────────────────────────────────
+  - display_name: "Payment Failure Rate > 5%"
+    conditions:
+      - display_name: "Elevated payment failures"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            resource.label.service_name=~"intasendwebhook|darajastkcallback"
+            metric.type="run.googleapis.com/request_count"
+            metric.labels.response_code_class!="2xx"
+          comparison: COMPARISON_GT
+          threshold_value: 0.05
+          duration: 120s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+              cross_series_reducer: REDUCE_SUM
+    severity: CRITICAL
+
+  # ── Memory ───────────────────────────────────────────────────
+  - display_name: "CF Memory > 85%"
+    conditions:
+      - display_name: "Cloud Function high memory usage"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            metric.type="run.googleapis.com/container/memory/utilizations"
+          comparison: COMPARISON_GT
+          threshold_value: 0.85
+          duration: 300s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_MEAN
+              cross_series_reducer: REDUCE_MAX
+    severity: WARNING
+
+  # ── Instance Count (scaling) ─────────────────────────────────
+  - display_name: "CF Instances > 90% of limit"
+    conditions:
+      - display_name: "Approaching instance limit"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            metric.type="run.googleapis.com/container/instance_count"
+          comparison: COMPARISON_GT
+          threshold_value: 90
+          duration: 300s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_MAX
+    severity: WARNING
+
+  # ── Auth Failures ────────────────────────────────────────────
+  - display_name: "Auth Failures Spike"
+    conditions:
+      - display_name: "Elevated authentication failures"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            resource.label.service_name="onloginevent"
+            metric.type="run.googleapis.com/request_count"
+            metric.labels.response_code="403"
+          comparison: COMPARISON_GT
+          threshold_value: 50
+          duration: 60s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+    severity: WARNING
+
+  # ── Health Endpoint ──────────────────────────────────────────
+  - display_name: "Health Endpoint Down"
+    conditions:
+      - display_name: "systemHealthCheck returning 503"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            resource.label.service_name="systemhealthcheck"
+            metric.type="run.googleapis.com/request_count"
+            metric.labels.response_code_class="5xx"
+          comparison: COMPARISON_GT
+          threshold_value: 0
+          duration: 60s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+    severity: CRITICAL
+
+  # ── Canary: Error rate during rollout ────────────────────────
+  - display_name: "Canary Error Rate Breach (auto-rollback)"
+    conditions:
+      - display_name: "Error rate > 1% during canary"
+        condition_threshold:
+          filter: >
+            resource.type="cloud_run_revision"
+            metric.type="run.googleapis.com/request_count"
+            metric.labels.response_code_class="5xx"
+          comparison: COMPARISON_GT
+          threshold_value: 0.01
+          duration: 60s
+          aggregations:
+            - alignment_period: 60s
+              per_series_aligner: ALIGN_RATE
+              cross_series_reducer: REDUCE_SUM
+    severity: CRITICAL
+    documentation:
+      content: |
+        This alert fires during canary rollouts.
+        If triggered: run the rollback workflow immediately.
+        GitHub: Actions → canary-deploy → Auto-Rollback
+        Manual: node scripts/deploy/rollback.js

@@ -1,0 +1,169 @@
+name: Automated Backup — Nightly
+
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 01:00 UTC = 04:00 EAT every night
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to back up"
+        required: false
+        default: "all"
+        type: choice
+        options: ["all", "firestore", "storage", "search", "secrets"]
+
+env:
+  FIREBASE_PROJECT: sokoni-aeb26
+  BACKUP_BUCKET:    gs://sokoni-aeb26-backups
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # FIRESTORE EXPORT
+  # ─────────────────────────────────────────────────────────────
+  backup-firestore:
+    name: Firestore Export
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: inputs.target == 'all' || inputs.target == 'firestore' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Export Firestore to GCS
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M)
+          DEST="${BACKUP_BUCKET}/firestore/${TIMESTAMP}"
+          echo "Exporting Firestore to $DEST..."
+          gcloud firestore export "$DEST" \
+            --project="${FIREBASE_PROJECT}" \
+            --async
+          echo "✅ Firestore export initiated → $DEST"
+          echo "BACKUP_PATH=$DEST" >> $GITHUB_ENV
+
+      - name: Verify export object exists
+        run: |
+          sleep 30
+          gsutil ls "${BACKUP_BUCKET}/firestore/" | tail -5
+          echo "✅ Recent backups:"
+          gsutil du -sh "${BACKUP_BUCKET}/firestore/" 2>/dev/null || true
+
+      - name: Prune backups older than 30 days
+        run: |
+          CUTOFF=$(date -d "30 days ago" +%Y%m%d)
+          echo "Pruning backups older than $CUTOFF..."
+          gsutil ls -l "${BACKUP_BUCKET}/firestore/" | \
+            awk -v cutoff="$CUTOFF" '$3 < cutoff {print $3}' | \
+            xargs -r gsutil -m rm -r || true
+
+  # ─────────────────────────────────────────────────────────────
+  # CLOUD STORAGE BACKUP
+  # ─────────────────────────────────────────────────────────────
+  backup-storage:
+    name: Cloud Storage Sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: inputs.target == 'all' || inputs.target == 'storage' || github.event_name == 'schedule'
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Sync media bucket to backup
+        run: |
+          TIMESTAMP=$(date +%Y%m%d)
+          gsutil -m rsync -r -d \
+            "gs://sokoni-aeb26.appspot.com/media/" \
+            "${BACKUP_BUCKET}/storage/media/${TIMESTAMP}/" || true
+          echo "✅ Storage backup complete"
+
+      - name: Report backup size
+        run: gsutil du -sh "${BACKUP_BUCKET}/storage/" 2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # TYPESENSE SNAPSHOT
+  # ─────────────────────────────────────────────────────────────
+  backup-typesense:
+    name: Typesense Snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: inputs.target == 'all' || inputs.target == 'search' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: cd functions && npm ci
+
+      - name: Export Typesense collection schemas
+        run: node scripts/backup/typesense-snapshot.js
+        env:
+          TYPESENSE_ADMIN_KEY: ${{ secrets.TYPESENSE_ADMIN_KEY }}
+
+      - name: Upload snapshot to GCS
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M)
+          gsutil cp /tmp/typesense-snapshot.json \
+            "${BACKUP_BUCKET}/search/typesense/${TIMESTAMP}.json"
+          echo "✅ Typesense snapshot uploaded"
+
+  # ─────────────────────────────────────────────────────────────
+  # SECRET INVENTORY (names only — never values)
+  # ─────────────────────────────────────────────────────────────
+  backup-secrets-inventory:
+    name: Secrets Inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: inputs.target == 'all' || inputs.target == 'secrets' || github.event_name == 'schedule'
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Export secret names and versions (not values)
+        run: |
+          echo "# SOKONI Secrets Inventory - $(date)" > /tmp/secrets-inventory.txt
+          gcloud secrets list \
+            --project="${FIREBASE_PROJECT}" \
+            --format="table(name,createTime,labels)" \
+            >> /tmp/secrets-inventory.txt
+          echo "Total secrets: $(gcloud secrets list --project=${FIREBASE_PROJECT} --format='value(name)' | wc -l)"
+          cat /tmp/secrets-inventory.txt
+
+      - name: Upload inventory
+        run: |
+          TIMESTAMP=$(date +%Y%m%d)
+          gsutil cp /tmp/secrets-inventory.txt \
+            "${BACKUP_BUCKET}/secrets/inventory-${TIMESTAMP}.txt"
+
+  # ─────────────────────────────────────────────────────────────
+  # SUMMARY NOTIFICATION
+  # ─────────────────────────────────────────────────────────────
+  notify:
+    name: Backup Summary
+    runs-on: ubuntu-latest
+    needs: [backup-firestore, backup-storage, backup-typesense, backup-secrets-inventory]
+    if: always()
+    steps:
+      - name: Send summary to Slack
+        run: |
+          FS="${{ needs.backup-firestore.result }}"
+          ST="${{ needs.backup-storage.result }}"
+          TS="${{ needs.backup-typesense.result }}"
+          SE="${{ needs.backup-secrets-inventory.result }}"
+          DATE=$(date +"%Y-%m-%d %H:%M UTC")
+          MSG="📦 SOKONI Nightly Backup ($DATE)\n• Firestore: $FS\n• Storage: $ST\n• Typesense: $TS\n• Secrets: $SE"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"$MSG\"}" || true

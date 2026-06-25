@@ -27,6 +27,33 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────
+  # PRE-DEPLOY SAFETY GATE
+  # Runs before staging so secrets are NOT scoped to any environment.
+  # GitHub Actions linter requires secrets used in env-scoped jobs
+  # to be defined in that environment — running the gate here avoids that.
+  # ─────────────────────────────────────────────────────────────
+  safety-gate:
+    name: Pre-Deploy Safety Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.target == 'staging' ||
+        github.event.inputs.target == 'production'))
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "npm" }
+      - run: npm ci && cd functions && npm ci
+      - name: Run pre-deploy gate
+        run: node scripts/deploy/gate.js
+        env:
+          FIREBASE_PROJECT:                    ${{ env.FIREBASE_PROJECT }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GCP_SA_KEY }}
+          GATE_TIMEOUT_MINUTES: "10"
+
+  # ─────────────────────────────────────────────────────────────
   # STAGING — Auto-deploys on every push to main.
   # Also runs for workflow_dispatch target=staging or target=production.
   # Does NOT run for target=rollback (rollback job runs independently).
@@ -38,11 +65,14 @@ jobs:
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
+    needs: [safety-gate]
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' &&
-       (github.event.inputs.target == 'staging' ||
-        github.event.inputs.target == 'production'))
+      always() &&
+      needs.safety-gate.result == 'success' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+       (github.event_name == 'workflow_dispatch' &&
+        (github.event.inputs.target == 'staging' ||
+         github.event.inputs.target == 'production')))
     environment: staging
     steps:
       - uses: actions/checkout@v4

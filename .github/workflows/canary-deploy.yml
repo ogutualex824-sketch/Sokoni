@@ -1,0 +1,319 @@
+name: Canary Deploy — Progressive Rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_stage:
+        description: "Start from stage (1=1%, 2=5%, 3=10%, 4=25%, 5=50%, 6=100%)"
+        required: false
+        default: "1"
+        type: choice
+        options: ["1","2","3","4","5","6"]
+      skip_gate:
+        description: "Skip pre-deploy safety gate (emergency only)"
+        required: false
+        default: false
+        type: boolean
+      rollback_on_failure:
+        description: "Auto-rollback if any stage fails"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  FIREBASE_PROJECT: sokoni-aeb26
+  HEALTH_URL:       https://us-central1-sokoni-aeb26.cloudfunctions.net/systemHealthCheck
+
+permissions:
+  contents: write
+  deployments: write
+
+concurrency:
+  group: canary-deploy
+  cancel-in-progress: false   # never cancel a running canary mid-flight
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # 0. PRE-DEPLOY SAFETY GATE
+  # ─────────────────────────────────────────────────────────────
+  safety-gate:
+    name: Pre-Deploy Safety Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ !inputs.skip_gate }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Install firebase-admin
+        run: cd functions && npm ci
+      - name: Run pre-deploy gate
+        run: node scripts/deploy/gate.js
+        env:
+          FIREBASE_PROJECT:      ${{ env.FIREBASE_PROJECT }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GCP_SA_KEY }}
+          GATE_TIMEOUT_MINUTES: "10"
+
+  # ─────────────────────────────────────────────────────────────
+  # 1. BASELINE HEALTH SNAPSHOT
+  # ─────────────────────────────────────────────────────────────
+  baseline:
+    name: Baseline Health Snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [safety-gate]
+    if: always() && (needs.safety-gate.result == 'success' || needs.safety-gate.result == 'skipped')
+    outputs:
+      baseline_score: ${{ steps.snap.outputs.score }}
+    steps:
+      - name: Capture baseline health score
+        id: snap
+        run: |
+          RESP=$(curl -s --max-time 10 "$HEALTH_URL" || echo '{}')
+          SCORE=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('score',80))" 2>/dev/null || echo "80")
+          echo "Baseline score: $SCORE"
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. DEPLOY TO STAGING + WARM UP
+  # ─────────────────────────────────────────────────────────────
+  deploy-functions:
+    name: Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [baseline]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci && cd functions && npm ci
+
+      - name: Syntax check
+        run: node --check functions/index.js
+
+      - name: Deploy Cloud Functions
+        run: |
+          npx -y firebase-tools deploy --only functions \
+            --project $FIREBASE_PROJECT --force
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Firestore rules
+        run: |
+          npx -y firebase-tools deploy --only firestore \
+            --project $FIREBASE_PROJECT
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Warm-up pause (functions cold start)
+        run: sleep 30
+
+  # ─────────────────────────────────────────────────────────────
+  # CANARY STAGE 1 — 1% (Cloudflare Load Balancing rule)
+  # ─────────────────────────────────────────────────────────────
+  canary-1pct:
+    name: "Canary Stage 1 — 1%"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [deploy-functions]
+    if: inputs.start_stage <= '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+
+      - name: Update Cloudflare traffic weight to 1%
+        run: node scripts/deploy/cloudflare-traffic.js --weight=1
+        env:
+          CF_API_TOKEN:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID:    ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        continue-on-error: true   # Cloudflare traffic split is optional
+
+      - name: Observe Stage 1 (2 minutes)
+        run: node scripts/deploy/canary-controller.js --stage=1
+        env:
+          HEALTH_URL: ${{ env.HEALTH_URL }}
+          OBSERVE_MINUTES: "2"
+
+  canary-5pct:
+    name: "Canary Stage 2 — 5%"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [canary-1pct]
+    if: inputs.start_stage <= '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - name: Update traffic to 5%
+        run: node scripts/deploy/cloudflare-traffic.js --weight=5
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID:   ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        continue-on-error: true
+      - name: Observe Stage 2 (4 minutes)
+        run: node scripts/deploy/canary-controller.js --stage=2
+        env:
+          HEALTH_URL: ${{ env.HEALTH_URL }}
+          OBSERVE_MINUTES: "4"
+
+  canary-10pct:
+    name: "Canary Stage 3 — 10%"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [canary-5pct]
+    if: inputs.start_stage <= '3'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - name: Update traffic to 10%
+        run: node scripts/deploy/cloudflare-traffic.js --weight=10
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID:   ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        continue-on-error: true
+      - name: Observe Stage 3 (6 minutes)
+        run: node scripts/deploy/canary-controller.js --stage=3
+        env:
+          HEALTH_URL: ${{ env.HEALTH_URL }}
+
+  canary-25pct:
+    name: "Canary Stage 4 — 25%"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [canary-10pct]
+    if: inputs.start_stage <= '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - name: Update traffic to 25%
+        run: node scripts/deploy/cloudflare-traffic.js --weight=25
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID:   ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        continue-on-error: true
+      - name: Observe Stage 4 (8 minutes)
+        run: node scripts/deploy/canary-controller.js --stage=4
+        env:
+          HEALTH_URL: ${{ env.HEALTH_URL }}
+
+  canary-50pct:
+    name: "Canary Stage 5 — 50%"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: [canary-25pct]
+    if: inputs.start_stage <= '5'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - name: Update traffic to 50%
+        run: node scripts/deploy/cloudflare-traffic.js --weight=50
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID:   ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        continue-on-error: true
+      - name: Observe Stage 5 (10 minutes)
+        run: node scripts/deploy/canary-controller.js --stage=5
+        env:
+          HEALTH_URL: ${{ env.HEALTH_URL }}
+
+  # ─────────────────────────────────────────────────────────────
+  # FULL PRODUCTION — 100%
+  # ─────────────────────────────────────────────────────────────
+  production-100pct:
+    name: "Production — 100%"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [canary-50pct]
+    environment:
+      name: production
+      url: https://mysokoni.co.ke
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci && cd functions && npm ci
+
+      - name: Deploy hosting to production
+        run: |
+          npx -y firebase-tools hosting:clone \
+            $FIREBASE_PROJECT:staging $FIREBASE_PROJECT:live
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Set Cloudflare traffic to 100%
+        run: node scripts/deploy/cloudflare-traffic.js --weight=100
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID:   ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        continue-on-error: true
+
+      - name: Tag release
+        run: |
+          git config user.email "ci@mysokoni.co.ke"
+          git config user.name "SOKONI CI"
+          git tag -a "release-$(date +%Y%m%d-%H%M)" -m "Canary deploy $(date)"
+          git push --tags
+
+      - name: Final health check
+        run: |
+          sleep 15
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL")
+          [ "$STATUS" = "200" ] || [ "$STATUS" = "206" ] || (echo "❌ Health check failed: $STATUS" && exit 1)
+          echo "✅ Production healthy (HTTP $STATUS)"
+
+      - name: Notify success
+        if: success()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"✅ SOKONI canary deploy complete — 100% traffic on ${{ github.sha }}"}' || true
+
+  # ─────────────────────────────────────────────────────────────
+  # AUTO-ROLLBACK on any canary stage failure
+  # ─────────────────────────────────────────────────────────────
+  auto-rollback:
+    name: Auto-Rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [canary-1pct, canary-5pct, canary-10pct, canary-25pct, canary-50pct, production-100pct]
+    if: |
+      always() && inputs.rollback_on_failure == true && (
+        needs.canary-1pct.result   == 'failure' ||
+        needs.canary-5pct.result   == 'failure' ||
+        needs.canary-10pct.result  == 'failure' ||
+        needs.canary-25pct.result  == 'failure' ||
+        needs.canary-50pct.result  == 'failure' ||
+        needs.production-100pct.result == 'failure'
+      )
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full history for git tag lookups
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci && cd functions && npm ci
+
+      - name: Execute full-stack rollback
+        run: node scripts/deploy/rollback.js
+        env:
+          FIREBASE_TOKEN:    ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_PROJECT:  ${{ env.FIREBASE_PROJECT }}
+          CF_API_TOKEN:      ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ZONE_ID:        ${{ secrets.CLOUDFLARE_ZONE_ID }}
+
+      - name: Notify rollback
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"🔄 SOKONI canary ROLLED BACK — failure detected, previous version restored"}' || true

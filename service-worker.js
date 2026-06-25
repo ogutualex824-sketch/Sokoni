@@ -176,7 +176,9 @@ const SKIP_CACHE_PATTERNS = [
 
 /* â”€â”€ INSTALL â”€â”€ */
 self.addEventListener("install", event => {
-  self.skipWaiting(); /* Activate immediately â€” do not block on precaching */
+  /* Precache silently — do NOT skipWaiting() here.
+     Active checkouts, chats and POS sessions must not be interrupted.
+     The page receives SW_UPDATE_READY and decides when it is safe to upgrade. */
   event.waitUntil((async () => {
     const [sc, pc] = await Promise.all([
       caches.open(STATIC_CACHE),
@@ -184,10 +186,16 @@ self.addEventListener("install", event => {
     ]);
     await Promise.allSettled(PRECACHE_STATIC.map(u => sc.add(u).catch(() => {})));
     await Promise.allSettled(PRECACHE_PAGES.map(u  => pc.add(u).catch(() => {})));
+    /* Notify controlled clients that an update is waiting */
+    const clients = await self.clients.matchAll({ type: "window" });
+    clients.forEach(c => c.postMessage({ type: "SW_UPDATE_READY", version: CACHE_VERSION }));
   })());
 });
 
-/* â”€â”€ ACTIVATE â”€â”€ */
+/* Client sends SW_SKIP_WAITING when it is safe (not mid-checkout / mid-chat) */
+self.addEventListener("message", event => {
+  if (event.data?.type === "SW_SKIP_WAITING") self.skipWaiting();
+});
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
     const valid = new Set([STATIC_CACHE, PAGES_CACHE, IMAGES_CACHE]);
