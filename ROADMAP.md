@@ -2,9 +2,26 @@
 
 # SOKONI Platform Roadmap
 
-**Version:** 4.0.0  
+**Version:** 5.0.0  
 **Updated:** 2026-06-25  
-**Status:** v1.0.0 — Enterprise Ready — Post-Launch Operations Mode
+**Status:** v2.0 — Market Leadership Program — Feature-Frozen, Quality-Focused
+
+**v2.0 policy:** No new feature without a completed `docs/FEATURE_PROPOSAL_TEMPLATE.md`.  
+**v2.1 candidates:** See `docs/V2_ROADMAP.md` for ranked evidence-gated initiatives.
+
+---
+
+## v2.0 Completed (2026-06-25)
+
+| Initiative | Status |
+|------------|--------|
+| Platform health scoring engine (5 dimensions) | ✅ Done |
+| Unified admin health dashboard (platform-health.html) | ✅ Done |
+| Feature Proposal governance gate | ✅ Done |
+| Performance budget document | ✅ Done |
+| Cost governance document | ✅ Done |
+| Scaling triggers (12 thresholds) | ✅ Done |
+| v2.0 evidence-gated roadmap | ✅ Done |
 
 Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 

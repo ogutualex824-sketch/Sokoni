@@ -1,4 +1,53 @@
-﻿## [2026-06-25] — release: SOKONI v1.2 Growth, Adoption & Platform Excellence — SW v294
+﻿## [2026-06-25] — release: SOKONI v2.0 Market Leadership Program — SW v295
+
+### Summary
+Platform governance sprint. Introduced five-dimension health scoring engine, unified admin health dashboard, and four mandatory governance documents (feature proposal gate, performance budget, cost governance, scaling triggers). No new user-facing features — every engineering hour from v2.0 onward must be justified by a completed Feature Proposal.
+
+### New Cloud Functions (2)
+
+| Function | Type | Purpose |
+|----------|------|---------|
+| `getPlatformHealthScores` | admin callable | Five composite scores (marketplace, seller, buyer, ops, cost) computed from live Firestore data |
+| `getTopBusinessPriorities` | admin callable | Ranked v2.0 feature candidates adjusted by live evidence signals |
+
+### New Pages (1)
+
+| Page | Purpose |
+|------|---------|
+| `platform-health.html` | Unified admin health dashboard — 5 score rings, alerts, ranked priorities, admin tool links |
+
+### New Documents (5)
+
+| Document | Purpose |
+|----------|---------|
+| `docs/FEATURE_PROPOSAL_TEMPLATE.md` | Mandatory template for all new feature requests |
+| `docs/PERFORMANCE_BUDGET.md` | Lighthouse targets, Firestore read limits, bundle rules |
+| `docs/COST_GOVERNANCE.md` | Monthly cost review, optimisation rules, alert thresholds |
+| `docs/SCALING_TRIGGERS.md` | 12 objective thresholds before architectural changes are allowed |
+| `docs/V2_ROADMAP.md` | Evidence-gated v2.1 candidate pool ranked by scoring matrix |
+
+### Architecture Decisions
+- Feature freeze: no new features without a completed Feature Proposal
+- Health scoring: 5 dimensions weighted (marketplace 30%, seller 25%, buyer 25%, ops 15%, cost 5%)
+- v2.1 candidates ranked: Loyalty (21/25), Cart Abandonment (20/25), Wallet (19/25), Jobs (17/25)
+
+### Infrastructure
+- Service worker bumped: v294 → v295
+- Firestore indexes unchanged: 192/200
+- New Cloud Functions: 2
+- New composite indexes: 0
+
+### Security Review
+- No new security surface introduced
+- `platform-health.html` is admin-gated (custom claims check)
+- `getPlatformHealthScores` and `getTopBusinessPriorities` both have `requireAdmin()` guard
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-25] — release: SOKONI v1.2 Growth, Adoption & Platform Excellence — SW v294
 
 ### Summary
 Conversion funnel completed (paymentAttempted wired), Seller Success Center upgraded to data-driven three-tab dashboard, retention engine (recently viewed, saved searches, price alerts), marketplace quality scanner, search insights CF, and 5 strategy documents covering conversion analysis, search quality, marketplace quality, scalability review, and 90-day growth plan.

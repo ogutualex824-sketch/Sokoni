@@ -5899,6 +5899,11 @@ exports.getSearchInsights   = searchInsights.getSearchInsights;
 exports.getZeroResultTerms  = searchInsights.getZeroResultTerms;
 exports.recordSearchQuery   = searchInsights.recordSearchQuery;
 
+/* ── Platform Health Scoring Engine (v2.0) ───────────────────────────── */
+const platformHealth = require('./platform-health');
+exports.getPlatformHealthScores   = platformHealth.getPlatformHealthScores;
+exports.getTopBusinessPriorities  = platformHealth.getTopBusinessPriorities;
+
 /* ── Product Analytics & Trust Engine ────────────────────────────────── */
 const productAnalytics = require('./product-analytics');
 exports.recordProductView           = productAnalytics.recordProductView;

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Platform Health — SOKONI Admin</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="sokoni-tokens.css" />
+  <style>
+    :root {
+      --score-green:  #16a34a;
+      --score-amber:  #d97706;
+      --score-red:    #dc2626;
+      --score-bg:     #f0fdf4;
+      --card-bg:      #fff;
+      --border:       #e5e7eb;
+      --text:         #111827;
+      --text-muted:   #6b7280;
+      --radius:       12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f9fafb;
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── header ── */
+    .ph-header {
+      background: #0f172a;
+      color: #fff;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .ph-header h1 { font-size: 1.1rem; font-weight: 700; flex: 1; }
+    .ph-header small { font-size: .8rem; color: #94a3b8; }
+    .ph-back { color: #94a3b8; text-decoration: none; font-size: .85rem; }
+    .ph-back:hover { color: #fff; }
+
+    /* ── overall hero ── */
+    .ph-hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+      color: #fff;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .ph-hero-label { font-size: .85rem; color: #94a3b8; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
+    .ph-overall-ring {
+      width: 120px; height: 120px;
+      margin: 0 auto 16px;
+      position: relative;
+    }
+    .ph-overall-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .ph-overall-ring .track { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 10; }
+    .ph-overall-ring .fill  { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+    .ph-overall-label {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .ph-overall-label .score-val { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .ph-overall-label .grade-val { font-size: .9rem; color: #94a3b8; }
+    .ph-hero-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+    .ph-hero-sub   { font-size: .85rem; color: #94a3b8; }
+
+    /* ── main content ── */
+    .ph-main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+    /* ── alerts ── */
+    .ph-alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+    .ph-alert {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 12px 16px; border-radius: 8px; font-size: .875rem;
+    }
+    .ph-alert.high   { background: #fef2f2; border-left: 4px solid var(--score-red); }
+    .ph-alert.medium { background: #fffbeb; border-left: 4px solid var(--score-amber); }
+    .ph-alert.info   { background: #f0fdf4; border-left: 4px solid var(--score-green); }
+    .ph-alert-area   { font-weight: 700; white-space: nowrap; min-width: 100px; }
+
+    /* ── 5 score cards ── */
+    .ph-scores {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .score-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .score-card-header { display: flex; align-items: center; gap: 10px; }
+    .score-ring-sm {
+      width: 64px; height: 64px; flex-shrink: 0; position: relative;
+    }
+    .score-ring-sm svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .score-ring-sm .track { fill: none; stroke: #f3f4f6; stroke-width: 8; }
+    .score-ring-sm .fill  { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+    .score-ring-label {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .score-ring-label .sv { font-size: 1rem; font-weight: 800; line-height: 1; }
+    .score-ring-label .gv { font-size: .65rem; color: var(--text-muted); }
+    .score-card-name { font-size: .85rem; font-weight: 700; color: var(--text); line-height: 1.3; }
+    .score-card-weight { font-size: .75rem; color: var(--text-muted); }
+    .score-dims { display: flex; flex-direction: column; gap: 8px; }
+    .score-dim { }
+    .score-dim-header { display: flex; justify-content: space-between; font-size: .75rem; margin-bottom: 3px; }
+    .score-dim-name  { color: var(--text-muted); }
+    .score-dim-value { font-weight: 600; font-size: .75rem; }
+    .score-dim-bar   { height: 4px; background: #f3f4f6; border-radius: 9px; overflow: hidden; }
+    .score-dim-fill  { height: 100%; border-radius: 9px; transition: width .8s ease; }
+    .dim-missing { font-size: .72rem; color: #9ca3af; font-style: italic; }
+
+    /* ── section headings ── */
+    .ph-section-title {
+      font-size: 1rem; font-weight: 700; margin-bottom: 16px;
+      padding-bottom: 8px; border-bottom: 2px solid var(--border);
+    }
+
+    /* ── priorities ── */
+    .priorities-table { width: 100%; border-collapse: collapse; font-size: .875rem; margin-bottom: 32px; }
+    .priorities-table th {
+      text-align: left; padding: 10px 12px;
+      background: #f9fafb; border-bottom: 2px solid var(--border);
+      font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em;
+    }
+    .priorities-table td { padding: 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    .priorities-table tr:hover td { background: #f9fafb; }
+    .pri-score-badge {
+      display: inline-block;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: .75rem; font-weight: 700; color: #fff;
+      min-width: 32px; text-align: center;
+    }
+    .pri-ready-badge {
+      display: inline-block;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: .7rem; font-weight: 600;
+      background: #dcfce7; color: #16a34a;
+    }
+    .pri-wait-badge {
+      display: inline-block;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: .7rem; font-weight: 600;
+      background: #fef3c7; color: #d97706;
+    }
+    .pri-block-badge {
+      display: inline-block;
+      padding: 2px 8px; border-radius: 20px;
+      font-size: .7rem; font-weight: 600;
+      background: #f3f4f6; color: #6b7280;
+    }
+    .pri-name { font-weight: 600; margin-bottom: 2px; }
+    .pri-desc { font-size: .78rem; color: var(--text-muted); }
+    .criterion-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    .criterion-pip {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #e5e7eb;
+    }
+    .criterion-pip.filled { background: #6366f1; }
+
+    /* ── quick links ── */
+    .ph-links { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+    .ph-link-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      text-decoration: none;
+      color: var(--text);
+      font-size: .85rem;
+      font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .ph-link-card:hover { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.08); }
+    .ph-link-icon { font-size: 1.1rem; }
+
+    /* ── loading / error ── */
+    .ph-loading { text-align: center; padding: 60px 24px; color: var(--text-muted); }
+    .ph-spinner {
+      width: 40px; height: 40px; border: 4px solid #e5e7eb;
+      border-top-color: #6366f1; border-radius: 50%;
+      animation: spin .8s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ph-error { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px 20px; color: #dc2626; }
+
+    /* ── footer ── */
+    .ph-footer { text-align: center; padding: 32px 16px; font-size: .8rem; color: #9ca3af; }
+
+    @media (max-width: 640px) {
+      .ph-scores { grid-template-columns: 1fr 1fr; }
+      .priorities-table .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="ph-header">
+  <div>
+    <h1>Platform Health Dashboard</h1>
+    <small id="computed-at">Loading…</small>
+  </div>
+  <a href="admin.html" class="ph-back">← Admin</a>
+</div>
+
+<div class="ph-hero">
+  <div class="ph-hero-label">Overall SOKONI Health Score</div>
+  <div class="ph-overall-ring" id="overall-ring">
+    <svg viewBox="0 0 120 120">
+      <circle class="track" cx="60" cy="60" r="50"/>
+      <circle class="fill" id="overall-fill" cx="60" cy="60" r="50"
+              stroke-dasharray="314" stroke-dashoffset="314"/>
+    </svg>
+    <div class="ph-overall-label">
+      <span class="score-val" id="overall-score">—</span>
+      <span class="grade-val" id="overall-grade"></span>
+    </div>
+  </div>
+  <div class="ph-hero-title" id="overall-title">Computing scores…</div>
+  <div class="ph-hero-sub" id="overall-sub"></div>
+</div>
+
+<div class="ph-main">
+
+  <div id="alerts-area" class="ph-alerts" style="display:none"></div>
+
+  <div id="loading-state" class="ph-loading">
+    <div class="ph-spinner"></div>
+    <div>Loading platform metrics…</div>
+  </div>
+
+  <div id="main-content" style="display:none">
+
+    <div class="ph-section-title">Dimension Scores</div>
+    <div class="ph-scores" id="scores-grid"></div>
+
+    <div class="ph-section-title">Top Business Priorities</div>
+    <div id="priorities-area">
+      <div class="ph-loading" style="padding:20px">
+        <div class="ph-spinner"></div>
+        <div>Loading priorities…</div>
+      </div>
+    </div>
+
+    <div class="ph-section-title">Admin Tools</div>
+    <div class="ph-links">
+      <a href="ops-dashboard.html"     class="ph-link-card"><span class="ph-link-icon">📊</span> Ops Dashboard</a>
+      <a href="business-kpi.html"      class="ph-link-card"><span class="ph-link-icon">📈</span> Business KPIs</a>
+      <a href="reliability-center.html" class="ph-link-card"><span class="ph-link-icon">⚡</span> Reliability Center</a>
+      <a href="admin-feedback.html"    class="ph-link-card"><span class="ph-link-icon">💬</span> Feedback & Bugs</a>
+      <a href="moderation.html"        class="ph-link-card"><span class="ph-link-icon">🛡️</span> Moderation</a>
+      <a href="seller-success.html"    class="ph-link-card"><span class="ph-link-icon">🏪</span> Seller Success</a>
+      <a href="monitor.html"           class="ph-link-card"><span class="ph-link-icon">🖥️</span> System Monitor</a>
+    </div>
+
+  </div>
+
+  <div id="error-state" style="display:none" class="ph-error"></div>
+</div>
+
+<div class="ph-footer">
+  SOKONI v2.0 Platform Health · Scores recompute on each page load from live Firestore data
+</div>
+
+<script type="module">
+import { initializeApp, getApps }    from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getFunctions, httpsCallable }  from "https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js";
+
+const cfg = window.__SOKONI_CONFIG__;
+if (!cfg || !getApps().length) { import("./firebase.js").then(() => boot()); }
+else { boot(); }
+
+function boot() {
+  const auth = getAuth();
+  onAuthStateChanged(auth, user => {
+    if (!user) { location.href = "login.html?next=platform-health.html"; return; }
+    user.getIdTokenResult().then(r => {
+      if (!r.claims.admin) { location.href = "index.html"; return; }
+      loadScores();
+    });
+  });
+}
+
+function scoreColor(s) {
+  if (s >= 80) return "#16a34a";
+  if (s >= 60) return "#d97706";
+  return "#dc2626";
+}
+
+function setRing(fillEl, score, r = 50) {
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
+  fillEl.style.strokeDasharray  = circ;
+  fillEl.style.strokeDashoffset = circ; // start at 0, animate in
+  fillEl.style.stroke = scoreColor(score);
+  requestAnimationFrame(() => {
+    setTimeout(() => { fillEl.style.strokeDashoffset = offset; }, 80);
+  });
+}
+
+function buildDimBar(dim) {
+  if (dim.missing) {
+    return `<div class="score-dim">
+      <div class="score-dim-header"><span class="score-dim-name">${dim.name}</span></div>
+      <div class="dim-missing">${dim.value}</div>
+    </div>`;
+  }
+  const pct = Math.round((dim.contribution / dim.max) * 100);
+  const col = scoreColor(pct);
+  return `<div class="score-dim">
+    <div class="score-dim-header">
+      <span class="score-dim-name">${dim.name}</span>
+      <span class="score-dim-value">${dim.value}</span>
+    </div>
+    <div class="score-dim-bar">
+      <div class="score-dim-fill" style="width:${pct}%;background:${col}"></div>
+    </div>
+  </div>`;
+}
+
+function buildScoreCard(id, label, weight, data) {
+  const dims = (data.dimensions || []).map(buildDimBar).join("");
+  const col   = scoreColor(data.score);
+  const circ  = 2 * Math.PI * 28; // r=28 for small ring
+  return `<div class="score-card">
+    <div class="score-card-header">
+      <div class="score-ring-sm">
+        <svg viewBox="0 0 64 64">
+          <circle class="track" cx="32" cy="32" r="28"/>
+          <circle class="fill" id="ring-${id}" cx="32" cy="32" r="28"
+                  stroke-dasharray="${circ}" stroke-dashoffset="${circ}"/>
+        </svg>
+        <div class="score-ring-label">
+          <span class="sv" style="color:${col}">${data.score}</span>
+          <span class="gv">${data.grade}</span>
+        </div>
+      </div>
+      <div>
+        <div class="score-card-name">${label}</div>
+        <div class="score-card-weight">${weight}% of overall</div>
+      </div>
+    </div>
+    <div class="score-dims">${dims}</div>
+  </div>`;
+}
+
+const CARDS = [
+  { id: "marketplace", label: "Marketplace Health",  weight: 30, key: "marketplace" },
+  { id: "seller",      label: "Seller Success",       weight: 25, key: "seller"      },
+  { id: "buyer",       label: "Buyer Satisfaction",   weight: 25, key: "buyer"       },
+  { id: "operational", label: "Operational Health",   weight: 15, key: "operational" },
+  { id: "cost",        label: "Cost Efficiency",      weight:  5, key: "cost"        },
+];
+
+function pips(val, max = 5) {
+  return Array.from({ length: max }, (_, i) =>
+    `<div class="criterion-pip${i < val ? " filled" : ""}"></div>`
+  ).join("");
+}
+
+function buildPrioritiesTable(result) {
+  const rows = (result.topPriorities || []).map((p, i) => {
+    const badgeStyle = `background:${i === 0 ? "#6366f1" : i === 1 ? "#3b82f6" : "#6b7280"}`;
+    const readyBadge = p.evidenceReady
+      ? `<span class="pri-ready-badge">Ready</span>`
+      : (p.totalScore >= 18
+        ? `<span class="pri-wait-badge">Phase B</span>`
+        : `<span class="pri-block-badge">Phase C</span>`);
+    return `<tr>
+      <td><span class="pri-score-badge" style="${badgeStyle}">${p.totalScore}</span></td>
+      <td>
+        <div class="pri-name">${p.name}</div>
+        <div class="pri-desc">${p.description}</div>
+      </td>
+      <td class="hide-mobile">
+        <div style="font-size:.75rem;margin-bottom:4px">Revenue · Demand · Effort · Strategic · Cost</div>
+        <div class="criterion-row">
+          ${pips(p.revenueImpact)}
+          <span style="width:8px"></span>
+          ${pips(p.userDemand)}
+          <span style="width:8px"></span>
+          ${pips(p.effortInverse)}
+          <span style="width:8px"></span>
+          ${pips(p.strategic)}
+          <span style="width:8px"></span>
+          ${pips(p.costInverse)}
+        </div>
+      </td>
+      <td>${readyBadge}<div style="font-size:.72rem;color:#6b7280;margin-top:4px">${p.evidenceGate}</div></td>
+    </tr>`;
+  }).join("");
+
+  return `<table class="priorities-table">
+    <thead><tr>
+      <th>Score</th>
+      <th>Initiative</th>
+      <th class="hide-mobile">Scoring</th>
+      <th>Evidence Gate</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <p style="font-size:.8rem;color:#6b7280;margin-bottom:24px">
+    Each criterion scored 1–5 (max 25). Scores adjust based on live Firestore evidence.
+    Only start "Ready" initiatives — all others wait for Phase A/B data.
+  </p>`;
+}
+
+async function loadScores() {
+  const fns = getFunctions(undefined, "us-central1");
+  const getScores     = httpsCallable(fns, "getPlatformHealthScores");
+  const getPriorities = httpsCallable(fns, "getTopBusinessPriorities");
+
+  try {
+    const [scoreRes, priRes] = await Promise.all([
+      getScores({}),
+      getPriorities({}),
+    ]);
+    const d = scoreRes.data;
+
+    /* Overall ring */
+    const overallFill = document.getElementById("overall-fill");
+    setRing(overallFill, d.overall.score, 50);
+    document.getElementById("overall-score").textContent = d.overall.score;
+    document.getElementById("overall-grade").textContent = "Grade " + d.overall.grade;
+    document.getElementById("overall-title").textContent =
+      d.overall.score >= 80 ? "Platform is healthy" :
+      d.overall.score >= 60 ? "Platform needs attention in some areas" :
+      "Platform requires immediate attention";
+    document.getElementById("overall-sub").textContent =
+      "Index budget: " + d.indexBudget.used + "/" + d.indexBudget.max + " · Computed at " +
+      new Date(d.computedAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" });
+    document.getElementById("computed-at").textContent =
+      "Last updated: " + new Date(d.computedAt).toLocaleString("en-KE");
+
+    /* Alerts */
+    if (d.alerts?.length) {
+      const area = document.getElementById("alerts-area");
+      area.style.display = "flex";
+      area.innerHTML = d.alerts.map(a =>
+        `<div class="ph-alert ${a.severity}">
+          <strong class="ph-alert-area">${a.area}</strong>
+          <span>${a.message}</span>
+        </div>`
+      ).join("");
+    }
+
+    /* Score cards */
+    const grid = document.getElementById("scores-grid");
+    grid.innerHTML = CARDS.map(c => buildScoreCard(c.id, c.label, c.weight, d[c.key])).join("");
+
+    /* Animate small rings after DOM insertion */
+    requestAnimationFrame(() => {
+      CARDS.forEach(c => {
+        const el = document.getElementById("ring-" + c.id);
+        if (el) setRing(el, d[c.key].score, 28);
+      });
+    });
+
+    /* Priorities */
+    document.getElementById("priorities-area").innerHTML =
+      buildPrioritiesTable(priRes.data);
+
+    document.getElementById("loading-state").style.display = "none";
+    document.getElementById("main-content").style.display  = "block";
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById("loading-state").style.display = "none";
+    const errEl = document.getElementById("error-state");
+    errEl.style.display = "block";
+    errEl.textContent = "Failed to load health data: " + (err.message || "unknown error");
+  }
+}
+</script>
+</body>
+</html>
