@@ -1,4 +1,40 @@
-﻿## [2026-06-25] — release: SOKONI Final Polish Sprint — SW v296
+﻿## [2026-06-25] — phase0: Merchant Acquisition & Market Activation Program
+
+### Summary
+Development frozen. Platform shifts to marketplace activation. Five operational documents created covering the full seller acquisition and quality pipeline. Store Completeness Score widget added to seller dashboard — automatically tracks the 7 readiness requirements (logo, banner, description, 20+ products, payment, delivery, verification) and shows a live percentage score to guide sellers to 100% readiness.
+
+### New Documents (5)
+
+| Document | Purpose |
+|----------|---------|
+| `docs/ANCHOR_SELLER_PROGRAM.md` | Structured program to recruit 25–50 anchor sellers before marketing |
+| `docs/CATEGORY_LAUNCH_TARGETS.md` | Minimum listing counts per category before advertising |
+| `docs/MERCHANT_ONBOARDING_CHECKLIST.md` | Operations checklist for reviewing each seller before going live |
+| `docs/MARKETPLACE_QUALITY_STANDARDS.md` | Listing quality scoring, rejection criteria, strike system |
+| `docs/SOFT_LAUNCH_CRITERIA.md` | 16-criterion go/no-go checklist with 4-stage marketing ladder |
+| `docs/WEEKLY_ACTIVATION_REPORT_TEMPLATE.md` | Full weekly ops report template covering all 6 phases |
+
+### UI Change (1)
+
+| File | Change |
+|------|--------|
+| `seller.html` | Store Completeness Score widget — 7-item checklist with animated ring, progress bar, and contextual CTAs. Checks logo, banner, description, 20+ products, payment, delivery, verification. Rendered via `window._scRender(shopData, productCount)` |
+
+### No Code Changes
+- No new Cloud Functions
+- No new Firestore indexes
+- No service worker bump (no cached assets changed)
+
+### Operations Targets
+- 25–50 anchor sellers before public marketing
+- 500–1,000 active listings before paid ads
+- All 11 categories at their minimum listing counts
+- Average listing quality score ≥ 80
+- Payment success rate ≥ 90%
+
+---
+
+## [2026-06-25] — release: SOKONI Final Polish Sprint — SW v296
 
 ### Summary
 Polish sprint focused entirely on UX, responsiveness, enterprise usability, and multi-branch support. No new Cloud Functions. Improvements span admin dashboard, SmartPOS, and seller employee management.

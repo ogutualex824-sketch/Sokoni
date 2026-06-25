@@ -2,12 +2,34 @@
 
 # SOKONI Platform Roadmap
 
-**Version:** 5.0.0  
+**Version:** 5.1.0  
 **Updated:** 2026-06-25  
-**Status:** v2.0 — Market Leadership Program — Feature-Frozen, Quality-Focused
+**Status:** Phase 0 — Merchant Acquisition & Market Activation
+
+**Current focus:** Build the supply side before driving buyer traffic. No new features. Every week is measured by sellers onboarded, listings added, and quality scores — not by code committed.
 
 **v2.0 policy:** No new feature without a completed `docs/FEATURE_PROPOSAL_TEMPLATE.md`.  
 **v2.1 candidates:** See `docs/V2_ROADMAP.md` for ranked evidence-gated initiatives.
+
+---
+
+## Phase 0 — Market Activation (In Progress)
+
+| Milestone | Target | Status |
+|-----------|--------|--------|
+| Anchor seller program launched | 25–50 sellers | 🔵 Active |
+| Category coverage: 6+ categories ready | ≥50 listings each | 🔴 0/11 |
+| Soft launch readiness (16 criteria) | All ✅ | 🔴 0/16 |
+| Stage 2 community launch | 500+ listings | 🔴 Pending |
+| Stage 3 paid marketing begins | All criteria met | 🔴 Pending |
+
+### Activation Documents
+- `docs/ANCHOR_SELLER_PROGRAM.md` — [[Anchor Seller Program]]
+- `docs/CATEGORY_LAUNCH_TARGETS.md` — [[Category Launch Targets]]
+- `docs/MERCHANT_ONBOARDING_CHECKLIST.md` — [[Merchant Onboarding Checklist]]
+- `docs/MARKETPLACE_QUALITY_STANDARDS.md` — [[Marketplace Quality Standards]]
+- `docs/SOFT_LAUNCH_CRITERIA.md` — [[Soft Launch Criteria]]
+- `docs/WEEKLY_ACTIVATION_REPORT_TEMPLATE.md` — [[Weekly Activation Report Template]]
 
 ---
 

@@ -713,6 +713,171 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
 </section>
 
+<!-- ════════════════════════════════════════════════════════════
+     STORE COMPLETENESS SCORE (Phase 3 — Anchor Seller Program)
+════════════════════════════════════════════════════════════ -->
+<div id="store-completeness-banner" style="display:none;margin:0 0 16px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  border-radius:16px;padding:18px 20px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div style="font-size:14px;font-weight:900;color:white;">Store Readiness</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;">Complete all steps before your store goes live to buyers.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="sc-score-ring" style="position:relative;width:52px;height:52px;">
+        <svg width="52" height="52" style="transform:rotate(-90deg)">
+          <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="4"/>
+          <circle cx="26" cy="26" r="21" fill="none" id="sc-ring-arc"
+            stroke="#71ff00" stroke-width="4"
+            stroke-dasharray="132" stroke-dashoffset="132"
+            stroke-linecap="round" style="transition:stroke-dashoffset .6s ease;"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          font-size:11px;font-weight:900;color:white;" id="sc-score-pct">0%</div>
+      </div>
+      <div>
+        <div id="sc-score-label" style="font-size:13px;font-weight:800;color:#71ff00;">Getting Started</div>
+        <div id="sc-score-sub" style="font-size:10px;color:rgba(255,255,255,0.35);">0 of 7 complete</div>
+      </div>
+    </div>
+  </div>
+  <!-- Progress bar -->
+  <div style="height:4px;background:rgba(255,255,255,0.07);border-radius:4px;margin-bottom:14px;overflow:hidden;">
+    <div id="sc-progress-bar" style="height:100%;background:linear-gradient(90deg,#71ff00,#4fc800);
+      border-radius:4px;width:0%;transition:width .6s ease;"></div>
+  </div>
+  <!-- Checklist items -->
+  <div id="sc-checklist" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:7px;"></div>
+  <!-- CTA -->
+  <div id="sc-cta" style="display:none;margin-top:14px;padding:12px 14px;
+    background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:12px;">
+    <div style="font-size:12px;font-weight:800;color:#71ff00;margin-bottom:3px;">🎉 Your store is ready for buyers!</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.4);">Your store meets all requirements. Keep your listings updated to maintain quality.</div>
+  </div>
+  <div id="sc-incomplete-cta" style="margin-top:12px;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.3);">
+      Stores scoring below 100% are marked as <span style="color:#f59e0b;font-weight:700;">Incomplete</span> and will have reduced visibility in search results until all steps are done.
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Store Completeness Score Engine ──────────────────────────── */
+(function(){
+  var CHECKS = [
+    { id:'logo',     label:'Business logo uploaded',       icon:'🖼️',  points:15, how:'Go to Store Settings → Logo' },
+    { id:'banner',   label:'Cover banner uploaded',        icon:'🏞️',  points:10, how:'Go to Store Settings → Banner' },
+    { id:'desc',     label:'Business description written', icon:'📝',  points:15, how:'Go to Store Settings → About' },
+    { id:'products', label:'At least 20 products listed',  icon:'📦',  points:25, how:'Add products in the Products tab' },
+    { id:'payment',  label:'Payment details configured',   icon:'💳',  points:15, how:'Go to Earnings → Payment Setup' },
+    { id:'delivery', label:'Delivery settings configured', icon:'🚚',  points:10, how:'Go to Store Settings → Delivery' },
+    { id:'verified', label:'Store identity verified',      icon:'✅',  points:10, how:'Go to Team → Verify your store' }
+  ];
+
+  var LABELS = [
+    [0,   'Getting Started',   '#ff6464'],
+    [30,  'In Progress',       '#f59e0b'],
+    [60,  'Almost Ready',      '#60a5fa'],
+    [85,  'Nearly Complete',   '#a3e635'],
+    [100, 'Store Ready',       '#71ff00']
+  ];
+
+  function _label(pct) {
+    for (var i = LABELS.length - 1; i >= 0; i--) {
+      if (pct >= LABELS[i][0]) return LABELS[i];
+    }
+    return LABELS[0];
+  }
+
+  function renderChecklist(data) {
+    var banner = document.getElementById('store-completeness-banner');
+    if (!banner) return;
+    banner.style.display = 'block';
+
+    var totalPoints = CHECKS.reduce(function(a,c){ return a+c.points; }, 0);
+    var earned = 0;
+    var doneCount = 0;
+
+    var listEl = document.getElementById('sc-checklist');
+    listEl.innerHTML = CHECKS.map(function(c) {
+      var done = !!data[c.id];
+      if (done) { earned += c.points; doneCount++; }
+      return '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-radius:10px;' +
+        'background:' + (done ? 'rgba(113,255,0,0.06)' : 'rgba(255,255,255,0.03)') + ';' +
+        'border:1px solid ' + (done ? 'rgba(113,255,0,0.18)' : 'rgba(255,255,255,0.07)') + ';">' +
+        '<span style="font-size:16px;line-height:1.2;">' + (done ? '✅' : '⬜') + '</span>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:11.5px;font-weight:' + (done ? '700' : '600') + ';' +
+            'color:' + (done ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.5)') + ';line-height:1.3;">' +
+            c.label + '</div>' +
+          (!done ? '<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:2px;">' + c.how + '</div>' : '') +
+        '</div>' +
+        '<span style="font-size:10px;font-weight:800;color:' + (done ? '#71ff00' : 'rgba(255,255,255,0.2)') + ';">' +
+          c.points + 'pts</span>' +
+      '</div>';
+    }).join('');
+
+    var pct = Math.round((earned / totalPoints) * 100);
+    var lbl = _label(pct);
+    var circumference = 132;
+
+    /* Ring */
+    var arc = document.getElementById('sc-ring-arc');
+    if (arc) {
+      arc.style.stroke = lbl[2];
+      arc.style.strokeDashoffset = (circumference * (1 - pct / 100)).toString();
+    }
+    /* Progress bar */
+    var bar = document.getElementById('sc-progress-bar');
+    if (bar) { bar.style.width = pct + '%'; bar.style.background = 'linear-gradient(90deg,' + lbl[2] + ',#4fc800)'; }
+    /* Labels */
+    var pctEl = document.getElementById('sc-score-pct');
+    if (pctEl) pctEl.textContent = pct + '%';
+    var lblEl = document.getElementById('sc-score-label');
+    if (lblEl) { lblEl.textContent = lbl[1]; lblEl.style.color = lbl[2]; }
+    var subEl = document.getElementById('sc-score-sub');
+    if (subEl) subEl.textContent = doneCount + ' of ' + CHECKS.length + ' complete';
+
+    /* CTAs */
+    var ctaDone = document.getElementById('sc-cta');
+    var ctaInc = document.getElementById('sc-incomplete-cta');
+    if (pct === 100) {
+      if (ctaDone) ctaDone.style.display = 'block';
+      if (ctaInc) ctaInc.style.display = 'none';
+    } else {
+      if (ctaDone) ctaDone.style.display = 'none';
+      if (ctaInc) ctaInc.style.display = 'block';
+    }
+  }
+
+  /* Compute checks from live seller data once auth is ready */
+  function computeChecks(shopData, productCount) {
+    return {
+      logo:     !!(shopData && shopData.logoUrl && shopData.logoUrl.trim()),
+      banner:   !!(shopData && shopData.bannerUrl && shopData.bannerUrl.trim()),
+      desc:     !!(shopData && shopData.description && shopData.description.trim().length >= 20),
+      products: productCount >= 20,
+      payment:  !!(shopData && (shopData.mpesaPhone || shopData.bankAccount || shopData.intasendKey)),
+      delivery: !!(shopData && (shopData.deliveryOption || shopData.deliveryOptions)),
+      verified: !!(shopData && shopData.verified === true)
+    };
+  }
+
+  /* Hook into seller data load — called from main seller init */
+  window._scRender = function(shopData, productCount) {
+    renderChecklist(computeChecks(shopData, productCount || 0));
+  };
+
+  /* Auto-call if seller data is already available on DOM ready */
+  document.addEventListener('sokoniSellerDataLoaded', function(e) {
+    if (e.detail) {
+      window._scRender(e.detail.shop || {}, e.detail.productCount || 0);
+    }
+  });
+})();
+</script>
+
 <!-- Phase 6: Smart Insights Strip -->
 <div class="seller-insights-strip" id="sellerInsightsStrip"></div>
 
