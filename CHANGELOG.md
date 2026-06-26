@@ -1,4 +1,47 @@
-﻿## [2026-06-26] — Fitness Hub: Bug Fixes + Full Firestore Wiring + Security Rules
+﻿## [2026-06-26] — BnB Hub: Bug Fixes + Full Firestore Wiring + Data Silo Unification + Security Rules
+
+### Summary
+Fixed 5 bugs across the 4 BnB files (crash in `deleteBnBListing`, XSS in `renderBnBs`, wrong payment param in `submitBooking`, misrouted Firestore writes via `fsWrite`, SDK version mismatch). Unified 3 isolated data silos into one canonical `bnbListings` + `bnbBookings` Firestore collection pair. Added photo upload to Firebase Storage (replacing base64 localStorage). Added 2 Firestore security rule blocks.
+
+### Files Changed
+- `sokoni-bnb.js` — fixed `fsWrite` to write to dedicated Firestore collections; added `_BNB_COLL` map + `_db()` helper; added `syncUserDataFromFirestore()`
+- `bnb-hub.html` — fixed `submitBooking` (`amount` → `totalAmount`, added `onSuccess` callback, booking now saved only after payment confirmed); fixed Firestore module SDK version (`10.12.0` → `10.12.2`); renamed booking collection from generic `bookings` → `bnbBookings`
+- `bnb.html` — fixed XSS in `renderBnBs()` and `openBookModal()` (all user-supplied fields now escaped via `esc()`); added Firestore module (loads `bnbListings` collection via `onSnapshot`, saves bookings to `bnbBookings` after payment); added `_mergeBnBFirestoreListings` hook
+- `bnb-manage.html` — fixed `deleteBnBListing` crash (undefined `_c`/`_skConfirm`/`_lid`/`_doRmListing`); fixed photo storage (uploads to Firebase Storage instead of base64 localStorage); added `hostUid` to listing doc; added Firestore module (live listing sync via `where('hostUid','==',uid)`, booking sync via `where('hostUid','==',uid)`); fixed `loadEarnings` commission rate (reads from `SokoniPay.COMMISSION_RATES` instead of hardcoded 5%); `updateBookingStatus` now syncs to Firestore
+- `firestore.rules` — added `bnbListings` + `bnbBookings` security rule blocks
+
+### Bug Fixes
+- **`deleteBnBListing()` crash** — referenced undefined `_c`, `_skConfirm`, `_lid`, `_doRmListing`; replaced with native `confirm()` dialog; added `_deleteBnBListingFS()` hook for Firestore cleanup
+- **XSS in `bnb.html` `renderBnBs()`** — `b.name`, `b.location`, `b.type`, `b.description`, `b.rating`, amenity items injected raw into innerHTML; all escaped via `esc()` helper
+- **`sokoni-bnb.js` `fsWrite()`** — all writes routed to generic `applications` collection via `SokoniDB.saveApplication()`; replaced with direct Firestore v8 compat writes to `bnbListings` / `bnbBookings` / `bnbReviews` / `bnbHosts`
+- **`bnb-hub.html` `submitBooking()` wrong param** — `amount:total` instead of `totalAmount:total`; no `onSuccess` callback; booking saved before payment confirmed. Fixed: correct param, booking now written inside `onSuccess` only
+- **Firestore SDK version mismatch** — `bnb-hub.html` module imported `firebase-firestore.js@10.12.0` while `firebase.js` uses `10.12.2`; unified to `10.12.2`
+- **Photo base64 localStorage overflow** — 8 hi-res photos stored as base64 DataURLs would exceed localStorage quota; replaced with Firebase Storage upload + download URL storage
+
+### Data Silo Unification
+| Before | After |
+|---|---|
+| `bnb-manage.html` saved to `sokoniBnBs` localStorage only | Also writes to `bnbListings` Firestore; loads host's docs on auth |
+| `bnb.html` read from `sokoniBnBs` localStorage only | Also subscribes to `bnbListings` Firestore via `onSnapshot` |
+| `bnb-hub.html` already read from `bnbListings` | No change — canonical source confirmed |
+| `bnb.html` bookings to `sokoniBnBBookings` localStorage | Also writes to `bnbBookings` Firestore after payment confirmed |
+| `bnb-manage.html` bookings from `sokoniBnBBookings` localStorage | Also loads from `bnbBookings` Firestore filtered by `hostUid` |
+| `sokoni-bnb.js` writes to generic `applications` collection | Writes to `bnbListings` / `bnbBookings` / `bnbReviews` / `bnbHosts` |
+| `bnb-hub.html` saved to generic `bookings` collection | Renamed to `bnbBookings` |
+
+### Firestore Security Rules (2 new collections)
+| Collection | Read | Create | Update | Delete |
+|---|---|---|---|---|
+| `bnbListings` | Public | Authed host (`claimsOwner` + required fields + `hostUid==uid`) | Host (limited fields) or admin | Host or admin |
+| `bnbBookings` | Guest, host, or admin | Authed (`status=='confirmed'` + required fields) | Host (status only) or admin | Admin only |
+
+### Performance
+- Photos uploaded to Firebase Storage CDN — no localStorage quota risk; images served from edge
+- Firestore `onSnapshot` listeners replace polling patterns for real-time host dashboard updates
+
+---
+
+## [2026-06-26] — Fitness Hub: Bug Fixes + Full Firestore Wiring + Security Rules
 
 ### Summary
 Fixed four runtime bugs in `fitness-hub.html` (Firestore data fetched but never rendered, random chart values, goal sync gap), extended Firestore persistence to six previously localStorage-only features, and added ten Firestore security rule blocks covering all fitness collections.
