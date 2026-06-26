@@ -1,4 +1,23 @@
-﻿## [2026-06-26] — Hero Layout Restore: Floating Card Over Background Image
+﻿## [2026-06-26] — Fuel Estimator: ERC Prices Updated to June 2026 EPRA Revision
+
+### Summary
+Updated hardcoded Kenya EPRA/ERC fuel prices in the delivery hub fuel estimator (`driver.html`). Super Petrol Nairobi corrected from KES 176.70 to KES 214.00. All regional prices (Mombasa, Kisumu, Other) and fuel types (Diesel, Kerosene) updated using the same fixed regional differentials. Old base prices rolled into `ERC_PREV_PRICES` for trend display (up arrow will now show correctly).
+
+### Data Changes
+| Fuel | Region | Old | New |
+|---|---|---|---|
+| Super Petrol | Nairobi | 176.70 | **214.00** |
+| Super Petrol | Mombasa | 165.68 | **203.00** |
+| Super Petrol | Kisumu | 179.68 | **217.00** |
+| Diesel | Nairobi | 163.41 | **200.71** |
+| Kerosene | Nairobi | 138.92 | **176.22** |
+
+### Modified Files
+- `driver.html` — `ERC_BASE_PRICES` and `ERC_PREV_PRICES` constants
+
+---
+
+## [2026-06-26] — Hero Layout Restore: Floating Card Over Background Image
 
 ### Summary
 Restored the homepage hero to a compact floating-card design. Removed excessive vertical padding from the `.glass-hero` section and the `.glass-hero-card` internal padding across all breakpoints. Internal element spacing (badge→h1→subtitle→stat row) was tightened. On mobile (≤600px) the card now has rounded corners on all sides with a small section padding so the background image is visible around the card, giving a genuine floating effect instead of a full-bleed flush layout.

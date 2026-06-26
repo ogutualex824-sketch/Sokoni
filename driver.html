@@ -542,22 +542,23 @@ function platformShareFromFee(fee){ return Math.round(fee * 0.12); }
    FUEL & RUNNING COST ENGINE
    Kenya ERC prices — updated monthly ~15th of each month
    Source: Energy & Petroleum Regulatory Authority (EPRA)
+   Last updated: June 2026 revision
 ══════════════════════════════════════════════ */
 
 const FUEL_DB_KEY = "sokoniFuelPrices";
 
-/* Base Kenya ERC prices — admin updates these on each ERC revision */
+/* Base Kenya ERC prices — June 2026 EPRA revision */
 const ERC_BASE_PRICES = {
-  super_petrol: { nairobi:176.70, mombasa:165.68, kisumu:179.68, other:179.68 },
-  diesel:       { nairobi:163.41, mombasa:152.39, kisumu:166.39, other:166.39 },
-  kerosene:     { nairobi:138.92, mombasa:127.90, kisumu:141.90, other:141.90 },
+  super_petrol: { nairobi:214.00, mombasa:203.00, kisumu:217.00, other:217.00 },
+  diesel:       { nairobi:200.71, mombasa:189.69, kisumu:203.69, other:203.69 },
+  kerosene:     { nairobi:176.22, mombasa:165.20, kisumu:179.20, other:179.20 },
 };
 
 /* Previous month prices for trend comparison */
 const ERC_PREV_PRICES = {
-  super_petrol: { nairobi:182.90, mombasa:171.88, kisumu:185.88, other:185.88 },
-  diesel:       { nairobi:168.40, mombasa:157.38, kisumu:171.38, other:171.38 },
-  kerosene:     { nairobi:144.61, mombasa:133.59, kisumu:147.59, other:147.59 },
+  super_petrol: { nairobi:176.70, mombasa:165.68, kisumu:179.68, other:179.68 },
+  diesel:       { nairobi:163.41, mombasa:152.39, kisumu:166.39, other:166.39 },
+  kerosene:     { nairobi:138.92, mombasa:127.90, kisumu:141.90, other:141.90 },
 };
 
 /* Vehicle fuel consumption (km per litre) + cargo metadata */
