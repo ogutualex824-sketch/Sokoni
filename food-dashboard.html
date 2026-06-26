@@ -286,19 +286,19 @@ function orderCard(o, actions) {
   <div class="fd-order-card">
     <div class="fd-oc-top">
       <div>
-        <div class="fd-oc-id">#${o.id.slice(-8)}</div>
-        <div class="fd-oc-time">${timeAgo}</div>
+        <div class="fd-oc-id">#${esc(o.id).slice(-8)}</div>
+        <div class="fd-oc-time">${esc(timeAgo)}</div>
       </div>
-      <span class="fd-oc-badge ${o.status}">${SokoniFood.STATUS_LABELS[o.status]||o.status}</span>
+      <span class="fd-oc-badge ${esc(o.status)}">${esc(SokoniFood.STATUS_LABELS[o.status]||o.status)}</span>
     </div>
-    <div class="fd-oc-items">${items}</div>
+    <div class="fd-oc-items">${esc(items)}</div>
     <div class="fd-oc-footer">
       <div class="fd-oc-total">KES ${SokoniFood.fmt(total)}</div>
       <div class="fd-oc-actions">
-        ${actions.includes('confirm') ? `<button class="fd-oc-btn confirm" onclick="advOrder('${o.id}','confirmed')">✅ Confirm</button>` : ''}
-        ${actions.includes('ready') ? `<button class="fd-oc-btn ready" onclick="advOrder('${o.id}','ready')">🔔 Mark Ready</button>` : ''}
-        ${actions.includes('reject') ? `<button class="fd-oc-btn reject" onclick="advOrder('${o.id}','cancelled')">✗ Reject</button>` : ''}
-        <button class="fd-oc-btn confirm" onclick="viewOrder('${o.id}')">👁</button>
+        ${actions.includes('confirm') ? `<button class="fd-oc-btn confirm" onclick="advOrder('${esc(o.id)}','confirmed')">✅ Confirm</button>` : ''}
+        ${actions.includes('ready') ? `<button class="fd-oc-btn ready" onclick="advOrder('${esc(o.id)}','ready')">🔔 Mark Ready</button>` : ''}
+        ${actions.includes('reject') ? `<button class="fd-oc-btn reject" onclick="advOrder('${esc(o.id)}','cancelled')">✗ Reject</button>` : ''}
+        <button class="fd-oc-btn confirm" onclick="viewOrder('${esc(o.id)}')">👁</button>
       </div>
     </div>
   </div>`;
@@ -327,15 +327,15 @@ function renderMenu() {
       <div class="fd-ms-header"><div class="fd-ms-title">${cat}</div></div>
       ${citems.length ? citems.map(item => `
       <div class="fd-menu-item">
-        <div class="fd-mi-emoji">${item.emoji||'🍽️'}</div>
+        <div class="fd-mi-emoji">${esc(item.emoji||'🍽️')}</div>
         <div class="fd-mi-info">
-          <div class="fd-mi-name">${item.name}</div>
+          <div class="fd-mi-name">${esc(item.name)}</div>
           <div class="fd-mi-price">KES ${SokoniFood.fmt(item.price)}</div>
-          <div class="fd-mi-desc">${item.desc||''}</div>
+          <div class="fd-mi-desc">${esc(item.desc||'')}</div>
         </div>
         <div class="fd-mi-actions">
-          <button class="fd-mi-btn fd-mi-edit" onclick="editItem('${item.id}')">✏️</button>
-          <button class="fd-mi-btn fd-mi-del" onclick="delItem('${item.id}')">🗑</button>
+          <button class="fd-mi-btn fd-mi-edit" onclick="editItem('${esc(item.id)}')">✏️</button>
+          <button class="fd-mi-btn fd-mi-del" onclick="delItem('${esc(item.id)}')">🗑</button>
         </div>
       </div>`).join('') : '<div style="font-size:12px;color:rgba(255,255,255,0.3);padding:10px 0;">No items in this category</div>'}
     </div>`).join('');
@@ -369,14 +369,14 @@ function editItem(itemId) {
   if (!item) return;
   const cats = _menu.categories || ['Main'];
   openModal('Edit Item', `
-    <label class="fd-label">Item Name</label><input id="miName" class="fd-input" value="${item.name}">
+    <label class="fd-label">Item Name</label><input id="miName" class="fd-input" value="${esc(item.name)}">
     <label class="fd-label">Category</label>
-    <select id="miCat" class="fd-select">${cats.map(c=>`<option value="${c}" ${c===item.cat?'selected':''}>${c}</option>`).join('')}</select>
+    <select id="miCat" class="fd-select">${cats.map(c=>`<option value="${esc(c)}" ${c===item.cat?'selected':''}>${esc(c)}</option>`).join('')}</select>
     <div class="fd-grid2">
-      <div><label class="fd-label">Price (KES)</label><input id="miPrice" class="fd-input" type="number" value="${item.price}"></div>
-      <div><label class="fd-label">Emoji</label><input id="miEmoji" class="fd-input" value="${item.emoji||''}"></div>
+      <div><label class="fd-label">Price (KES)</label><input id="miPrice" class="fd-input" type="number" value="${Number(item.price||0)}"></div>
+      <div><label class="fd-label">Emoji</label><input id="miEmoji" class="fd-input" value="${esc(item.emoji||'')}"></div>
     </div>
-    <label class="fd-label">Description</label><input id="miDesc" class="fd-input" value="${item.desc||''}">
+    <label class="fd-label">Description</label><input id="miDesc" class="fd-input" value="${esc(item.desc||'')}">`
     <button class="fd-submit-btn" onclick="saveItem('${itemId}')">Save Changes</button>
     <div id="miMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
   `);
@@ -416,7 +416,7 @@ function saveItem(editId) {
 }
 
 function delItem(itemId) {
-  if(!_c){_skConfirm('Remove this item from your menu?',()=>_doRmMenu(_mid,true));return;}
+  if (!confirm('Remove this item from your menu?')) return;
   const menuKey = 'fd_menu_' + _restaurant.id;
   const saved = JSON.parse(localStorage.getItem(menuKey) || 'null') || _menu;
   saved.items = (saved.items||[]).filter(i => i.id !== itemId);
@@ -424,6 +424,7 @@ function delItem(itemId) {
   _menu = saved;
   SokoniFood.MENUS[_restaurant.id] = saved;
   renderMenu();
+  if (window._updateFoodMenuFS) window._updateFoodMenuFS(_restaurant.id, saved);
 }
 
 /* ── PROMOS ── */
@@ -481,7 +482,7 @@ function savePromo() {
 }
 
 function delPromo(idx) {
-  if(!_c){_skConfirm('Delete this promo code?',()=>_doRmPromo(_pid,true));return;}
+  if (!confirm('Delete this promo code?')) return;
   _vendorPromos.splice(idx, 1);
   localStorage.setItem('vendor_promos_' + _restaurant.id, JSON.stringify(_vendorPromos));
   renderPromos();
@@ -505,7 +506,16 @@ function renderAnalytics() {
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const today = new Date().getDay();
   const reorder = [...Array(7)].map((_,i)=>days[(today-6+i+7)%7]);
-  const dayRev = [480, 920, 750, 1100, 890, 2200, 1650];
+  /* Build real daily revenue from Firestore-loaded _vendorOrders */
+  const days7 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const today7 = new Date().getDay(); /* 0=Sun */
+  const reorder = [...Array(7)].map((_,i)=>days7[(today7-7+i+7)%7]);
+  const dayRev = reorder.map((_, di) => {
+    const targetDay = (today7 - 6 + di + 7) % 7;
+    return orders.filter(o => {
+      const d = new Date(o.placedAt||o.createdAt||0); return d.getDay() === targetDay;
+    }).reduce((s,o)=>{ const v=(o.vendors||[]).find(v=>v.restaurantId===_restaurant.id); return s+(v?v.subtotal:o.total||0); },0);
+  });
   const maxRev = Math.max(...dayRev, 1);
 
   document.getElementById('analyticsCharts').innerHTML = `
@@ -539,7 +549,7 @@ function renderAnalytics() {
         <span style="color:#f59e0b;">${'⭐'.repeat(r.rating)}</span>
         <span style="font-size:10px;color:rgba(255,255,255,0.3);">${r.ts ? new Date(r.ts).toLocaleDateString() : ''}</span>
       </div>
-      ${r.comment ? `<div style="font-size:12px;color:rgba(255,255,255,0.6);">"${r.comment}"</div>` : ''}
+      ${r.comment ? `<div style="font-size:12px;color:rgba(255,255,255,0.6);">"${esc(r.comment)}"</div>` : ''}
     </div>`).join('')}
   </div>` : ''}`;
 }
@@ -597,6 +607,8 @@ function openModal(title, body) {
 function closeModal() { document.getElementById('fdModal').classList.remove('open'); }
 document.getElementById('fdModal').addEventListener('click', e => { if(e.target===document.getElementById('fdModal')) closeModal(); });
 
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
 /* ── UTILS ── */
 function timeSince(ts) {
   const diff = Date.now() - ts;
@@ -610,12 +622,67 @@ init();
 </script>
 <script src="analytics.js" defer></script>
 <script src="sw-register.js" defer></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: dashboard stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-service-mesh.js"></script>
+<script defer src="kass-widget.js"></script>
+<script defer src="sokoni-event-bus.js"></script>
+<script defer src="sokoni-observability.js"></script>
+<script defer src="sokoni-gateway.js"></script>
+<script defer src="sokoni-service-mesh.js"></script>
+
+<script type="module">
+import { db, auth } from './firebase.js';
+import {
+  collection, doc, setDoc, onSnapshot, query, where,
+  orderBy, limit, serverTimestamp, updateDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+let _uid = null;
+onAuthStateChanged(auth, u => { _uid = u ? u.uid : null; });
+
+/* ── Live order feed for this restaurant ── */
+const rid = new URLSearchParams(window.location.search).get('id') || 'jambo-burgers';
+try {
+  onSnapshot(
+    query(collection(db,'foodOrders'), where('restaurantId','==',rid), orderBy('placedAt','desc'), limit(100)),
+    snap => {
+      if (snap.empty) return;
+      const live = snap.docs.map(d => ({...d.data(), id:d.id}));
+      /* Merge into SokoniFood so renderOrders() picks them up */
+      live.forEach(o => {
+        const existing = SokoniFood._orders || [];
+        const idx = existing.findIndex(x => x.id === o.id);
+        if (idx > -1) existing[idx] = o; else existing.unshift(o);
+        SokoniFood._orders = existing;
+      });
+      if (typeof _vendorOrders !== 'undefined') {
+        window._vendorOrders = live;
+        if (typeof renderOrders === 'function') renderOrders();
+        if (typeof renderAnalytics === 'function') renderAnalytics();
+      }
+    }
+  );
+} catch(e) { console.warn('[FoodDash] Firestore feed failed:', e); }
+
+/* ── Update order status in Firestore ── */
+window._advOrderFS = async function(orderId, status) {
+  try {
+    await updateDoc(doc(db,'foodOrders',orderId), {
+      status,
+      updatedAt: serverTimestamp(),
+      statusHistory: [] /* updated server-side via CF in future */
+    });
+  } catch(e) {}
+};
+
+/* ── Save menu to Firestore ── */
+window._updateFoodMenuFS = async function(restaurantId, menu) {
+  try {
+    await setDoc(doc(db,'foodMenus',restaurantId), {
+      ...menu, restaurantId, updatedAt: serverTimestamp()
+    }, {merge:true});
+  } catch(e) {}
+};
+</script>
 </body>
 </html>
 

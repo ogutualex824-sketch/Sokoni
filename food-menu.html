@@ -110,7 +110,27 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
       <div class="fcb-count" id="fcbCount">0 items</div>
       <div class="fcb-total" id="fcbTotal">KES 0</div>
     </div>
-    <button class="fcb-btn" onclick="window.location.href='cart.html'">View Cart →</button>
+    <button class="fcb-btn" onclick="openCheckout()">Checkout →</button>
+  </div>
+</div>
+
+<!-- Checkout Modal -->
+<div class="food-modal" id="checkoutModal">
+  <div class="food-modal-box">
+    <button class="food-modal-close" onclick="closeCheckout()">✕</button>
+    <h3 style="font-size:16px;font-weight:900;margin-bottom:4px;">📦 Place Your Order</h3>
+    <p id="coRestName" style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;"></p>
+    <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:4px;display:block;">Your Name *</label>
+    <input type="text" id="coName" class="food-modal-input" placeholder="Full name">
+    <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:4px;display:block;">M-Pesa Phone *</label>
+    <input type="tel" id="coPhone" class="food-modal-input" placeholder="07XXXXXXXX">
+    <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:4px;display:block;">Delivery Address *</label>
+    <input type="text" id="coAddr" class="food-modal-input" placeholder="Street, building, floor…">
+    <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:4px;display:block;">Order Notes (optional)</label>
+    <textarea class="food-modal-input" id="coNotes" placeholder="Allergies, instructions…" style="min-height:56px;resize:vertical;"></textarea>
+    <div id="coOrderSummary" style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px;margin-bottom:10px;font-size:12px;"></div>
+    <button class="food-modal-submit" onclick="placeOrder()">📲 Pay with M-Pesa</button>
+    <div id="coMsg" style="margin-top:8px;font-size:12px;text-align:center;min-height:14px;"></div>
   </div>
 </div>
 
@@ -129,6 +149,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 </div>
 
 <script>
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
 const _id = new URLSearchParams(window.location.search).get('id');
 const _rest = SokoniFood.RESTAURANTS.find(r => r.id === _id);
 const _menu = SokoniFood.MENUS[_id];
@@ -181,7 +203,7 @@ function renderRestHeader() {
           <span class="review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span>
           <span class="review-date">${new Date(r.ts).toLocaleDateString()}</span>
         </div>
-        <div class="review-text">${r.comment || 'No comment'}</div>
+        <div class="review-text">${esc(r.comment || 'No comment')}</div>
       </div>`).join('') : '<div style="font-size:12px;color:rgba(255,255,255,0.3);">No reviews yet — order and be the first!</div>'}
       <button class="rate-btn" onclick="openRateModal()" style="margin-top:10px;">⭐ Write a Review</button>
     </div>
@@ -207,8 +229,8 @@ function renderMenu() {
         const qty = inCart ? inCart.qty : 0;
         return `<div class="menu-item" id="item-${item.id}">
           <div class="menu-item-info">
-            <div class="menu-item-name">${item.name}${item.popular ? '<span class="menu-popular">🔥 Popular</span>' : ''}</div>
-            <div class="menu-item-desc">${item.desc}</div>
+            <div class="menu-item-name">${esc(item.name)}${item.popular ? '<span class="menu-popular">🔥 Popular</span>' : ''}</div>
+            <div class="menu-item-desc">${esc(item.desc)}</div>
             <div class="menu-item-price">KES ${SokoniFood.fmt(item.price)}</div>
           </div>
           <div class="menu-item-controls">
@@ -286,6 +308,85 @@ function submitRating() {
 document.getElementById('starSelect').innerHTML = [1,2,3,4,5].map(i=>`<button onclick="setRating(${i})" id="star${i}" style="font-size:28px;background:none;border:none;cursor:pointer;opacity:.35;transition:opacity .2s;">⭐</button>`).join('');
 
 updateCartBar();
+
+/* ── CHECKOUT ── */
+function openCheckout(){
+  const cart = SokoniFood.getCart().filter(c => c.restaurantId === _id);
+  if(!cart.length){ return; }
+  document.getElementById('checkoutModal').classList.add('open');
+}
+function closeCheckout(){ document.getElementById('checkoutModal').classList.remove('open'); }
+
+function placeOrder(){
+  const name    = document.getElementById('coName')?.value.trim();
+  const phone   = document.getElementById('coPhone')?.value.trim();
+  const addr    = document.getElementById('coAddr')?.value.trim();
+  const notes   = document.getElementById('coNotes')?.value.trim();
+  const msg     = document.getElementById('coMsg');
+  if(!name||!phone){ if(msg){ msg.textContent='⚠️ Name and phone are required'; msg.style.color='#f59e0b'; } return; }
+  if(!addr){ if(msg){ msg.textContent='⚠️ Delivery address required'; msg.style.color='#f59e0b'; } return; }
+
+  const cart = SokoniFood.getCart().filter(c => c.restaurantId === _id);
+  if(!cart.length){ if(msg){ msg.textContent='⚠️ Your cart is empty'; msg.style.color='#f59e0b'; } return; }
+
+  const subtotal   = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const deliveryFee = _rest.deliveryFee || 50;
+  const total      = subtotal + deliveryFee;
+
+  if(!window.SokoniPay?.platformBook){ if(msg){ msg.textContent='Payment module loading…'; } return; }
+
+  if(msg){ msg.textContent='📲 Sending M-Pesa request…'; msg.style.color='#22c55e'; }
+
+  SokoniPay.platformBook({
+    providerName: _rest.name,
+    category: 'food',
+    serviceDesc: `Food order from ${_rest.name}`,
+    totalAmount: total,
+    providerPhone: _rest.phone || '',
+    onSuccess: function(ref){
+      const orderId = 'fo_'+Date.now();
+      const order = {
+        id: orderId,
+        status: 'placed',
+        restaurantId: _id,
+        restaurantName: _rest.name,
+        restaurantEmoji: _rest.emoji || '🍽️',
+        customerName: name,
+        phone,
+        deliveryAddress: addr,
+        notes: notes || '',
+        items: cart.map(c=>({id:c.itemId,name:c.name,qty:c.qty,price:c.price})),
+        vendors: [{restaurantId:_id,restaurantName:_rest.name,restaurantEmoji:_rest.emoji||'🍽️',items:cart.map(c=>({id:c.itemId,name:c.name,qty:c.qty,price:c.price})),subtotal}],
+        subtotal,
+        deliveryFee,
+        total,
+        paymentRef: ref,
+        paymentMethod: 'M-Pesa',
+        buyerUid: (()=>{ try{ return JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid||null; }catch(e){ return null; } })(),
+        deliveryTime: _rest.deliveryTime || '30-45 min',
+        placedAt: Date.now(),
+        statusHistory: [{status:'placed',ts:Date.now()}]
+      };
+      /* Save locally */
+      SokoniFood.saveOrder(order);
+      /* Save to Firestore */
+      if(window._saveFoodOrderFS) window._saveFoodOrderFS(order);
+      /* Commission */
+      if(window.SokoniPay?.saveCommission){
+        const cPct = 10;
+        SokoniPay.saveCommission({ref,providerName:_rest.name,category:'food',commissionPct:cPct,sokoniCut:Math.round(total*cPct/100),providerNet:total-Math.round(total*cPct/100),serviceTotal:total,status:'auto_collected',note:'Food order: '+_rest.name,createdAt:Date.now()});
+      }
+      /* Invoice */
+      if(window.SokoniInvoice){
+        SokoniInvoice.generate({type:'food',buyerName:name,buyerPhone:phone,items:cart.map(c=>({name:c.name,category:'Food',qty:c.qty,price:c.price})),subtotal,total,paymentMethod:'M-Pesa · '+ref,paymentRef:ref,sellerName:_rest.name,notes:addr});
+      }
+      /* Clear food cart */
+      SokoniFood.clearCart();
+      closeCheckout();
+      window.location.href = 'food-order.html?id=' + orderId;
+    }
+  });
+}
 </script>
 <script src="analytics.js" defer></script>
 <script src="sw-register.js" defer></script>
