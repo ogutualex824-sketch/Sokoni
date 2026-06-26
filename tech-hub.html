@@ -633,6 +633,7 @@ const DEMO_TECHS = [
 const PHONE_COMPARE_DATA = DEMO_DEVICES.filter(d => d.cat === 'phone' || d.cat === 'laptop');
 let _selectedCompare = [];
 let _activeBrand = 'all';
+let _fsDevices = [];  /* approved device listings from Firestore */
 
 /* ── DEVICES ── */
 function filterDevices() {
@@ -640,11 +641,17 @@ function filterDevices() {
   const cond = document.getElementById('devCondition')?.value||'';
   const cat  = document.getElementById('devCategory')?.value||'';
   let local  = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
-  let list   = [...local, ...DEMO_DEVICES.filter(d => !local.some(l => l.id === d.id))];
+  /* Merge: Firestore devices first, then localStorage, then demo fallbacks */
+  const allIds = new Set([..._fsDevices.map(d=>d.id||d._id), ...local.map(d=>d.id)]);
+  let list = [
+    ..._fsDevices.map(d=>({...d, id:d._id||d.id})),
+    ...local.filter(d => !_fsDevices.some(f=>(f._id||f.id)===d.id)),
+    ...DEMO_DEVICES.filter(d => !allIds.has(d.id)),
+  ];
   if (_activeBrand !== 'all') list = list.filter(d => d.brand === _activeBrand);
   if (cond)  list = list.filter(d => d.cond === cond);
   if (cat)   list = list.filter(d => d.cat === cat);
-  if (q)     list = list.filter(d => (d.name+d.brand+d.os).toLowerCase().includes(q));
+  if (q)     list = list.filter(d => (d.name+d.brand+(d.os||'')).toLowerCase().includes(q));
   const cnt = document.getElementById('devCount'); if(cnt) cnt.textContent = list.length+' found';
   renderDevicesGrid(list);
 }
@@ -709,6 +716,7 @@ function bookRepair() {
   let bks = []; try { bks = JSON.parse(localStorage.getItem('sokoniRepairs'))||[]; } catch(e) {}
   bks.unshift({ ref, name, phone, device, type, date, loc, status:'sent', createdAt:Date.now() });
   localStorage.setItem('sokoniRepairs', JSON.stringify(bks.slice(0,20)));
+  _thFireWrite('techRepairs', { ref, name, phone, device, repairType:type, date, location:loc, notes:desc, status:'pending' });
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
     SokoniPay.waConnect('254705726803', msg, {providerName:'SOKONI Tech Hub',category:'default',serviceDesc:type||'Device Repair'});
   } else {
@@ -817,6 +825,7 @@ function postTechRequest() {
   let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_tech'))||[]; } catch(e) {}
   reqs.unshift({ id:'TREQ'+Date.now(), text, cat: cat||'General', phone, ts: Date.now() });
   localStorage.setItem('askHub_tech', JSON.stringify(reqs.slice(0,30)));
+  _thFireWrite('techRequests', { text, category: cat||'General', phone, status:'open' });
   document.getElementById('techAskText').value = '';
   document.getElementById('techAskPhone').value = '';
   renderTechAskFeed();
@@ -860,6 +869,7 @@ function listDevice() {
   };
   let local = []; try { local = JSON.parse(localStorage.getItem('sokoniDevices'))||[]; } catch(e) {}
   local.unshift(dev); localStorage.setItem('sokoniDevices', JSON.stringify(local.slice(0,50)));
+  _thFireWrite('techDevices', { ...dev, status:'active' });
   if(msgEl) { msgEl.innerHTML='✅ Device listed! <a href="javascript:void(0)" onclick="goThPanel(\'devices\',null)" style="color:#00d4ff;font-weight:700;">View Listings →</a>'; msgEl.style.color='#00d4ff'; }
   ['sellDevName','sellDevPrice','sellDevPhone','sellDevDesc'].forEach(id => { const el=document.getElementById(id); if(el)el.value=''; });
 }
@@ -901,6 +911,21 @@ async function _thFireWrite(coll, data) {
     const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
     const _a=getApps().find(a=>a.name==="th-write")||initializeApp(_cfg,"th-write");
     await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
+  } catch(e){}
+}
+
+/* ── FIRESTORE LISTENER — live device listings ── */
+async function _initFsDevices() {
+  try {
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,query,where,orderBy,limit,onSnapshot}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="th-read")||initializeApp(_cfg,"th-read");
+    const q=query(collection(getFirestore(_a),'techDevices'),where('status','==','active'),orderBy('createdAt','desc'),limit(100));
+    onSnapshot(q, snap=>{
+      _fsDevices=snap.docs.map(d=>({_id:d.id,...d.data()}));
+      filterDevices();
+    }, ()=>{});
   } catch(e){}
 }
 
@@ -1168,6 +1193,7 @@ function filterAITools(cat, btn) {
 window.filterAITools = filterAITools;
 
 /* ── INIT ── */
+_initFsDevices();
 filterDevices();
 filterTechs();
 renderCompareSelect();
