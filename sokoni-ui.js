@@ -647,16 +647,21 @@
     }
 
     function update() {
-      /* Debounce + real-fetch for every online/offline transition.
-         During SW installation (first ~5s) the browser briefly flips
-         navigator.onLine=false; the 2s debounce + fetch absorbs this.
-         Page-load grace period: ignore any offline signal in first 5s. */
       clearTimeout(_offlineTimer);
       var elapsed = Date.now() - _uiPageLoadTs;
       if (elapsed < 5000 && !navigator.onLine) return; /* SW install noise */
-      _offlineTimer = setTimeout(function() {
-        _checkConnection(function(real) { _applyState(real); });
-      }, navigator.onLine ? 300 : 2000);
+      if (navigator.onLine) {
+        /* Browser reports online — trust it; hide bar without a fetch.
+           Fetch verification is unreliable during SW activation and on
+           some Android browsers with captive-portal detection disabled. */
+        _applyState(true);
+      } else {
+        /* Browser reports offline — verify with a real fetch (captive-portal
+           guard) before showing the bar, with a 2s debounce. */
+        _offlineTimer = setTimeout(function() {
+          _checkConnection(function(real) { _applyState(real); });
+        }, 2000);
+      }
     }
 
     global.addEventListener('online',  update);

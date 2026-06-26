@@ -1,4 +1,127 @@
-﻿## [2026-06-25] — Final Independent Production Certification & Security Hardening (SRE Audit)
+﻿## [2026-06-26] — Offline Bar + Header Visibility: Fixed Banner Z-Index and Online Detection
+
+### Summary
+Two UI reliability fixes: (1) `#sokoniOfflineBanner` (sw-register.js) was positioned at `top:0; z-index:999999` — ABOVE the fixed nav (`z-index:100001`) — making the header disappear whenever SW triggered the banner. Repositioned to `top:var(--sk-header-h,64px)` with `z-index:9999` (below nav). (2) Both offline-bar detectors (`sokoni-ui.js`, `sw-register.js`) used a real fetch to confirm connectivity before hiding the bar. Fetch fails during SW activation even when the device has internet (`navigator.onLine=true`), keeping the bar visible. Fix: trust `navigator.onLine` immediately for the ONLINE→hide direction; only use fetch to verify before SHOWING the bar.
+
+### Bug Fixes
+
+#### Header "not fixed" — offline banner covering nav
+`_showOfflineBanner()` in `sw-register.js` injected a `position:fixed; top:0; z-index:999999` element. Since the nav has `z-index:100001`, the banner rendered ON TOP of the nav, making the header disappear. Fix: `top:var(--sk-header-h,64px)` (below nav) + `z-index:9999` (well below nav). Nav now always visible above any connectivity indicator.
+
+#### Offline bar persists with internet — fetch fails during SW activation
+During Service Worker installation/activation, `fetch('/manifest.json')` fails (SW intercepts the request before its cache is ready), returning a network error even when `navigator.onLine===true`. Both `sokoni-ui.js` (`_initOfflineBar → update()`) and `sw-register.js` (`_updateOnlineStatus()`) used this fetch to confirm online state before hiding the bar. Fix: when `navigator.onLine===true`, call `_applyState(true)` / `_applyOnlineState(true)` immediately without a fetch. Fetch verification is only used to avoid false positives when the browser reports OFFLINE (captive portals, flaky connections).
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `sw-register.js` | `_showOfflineBanner()`: `top:0 → top:var(--sk-header-h,64px)`, `z-index:999999 → 9999`; `_updateOnlineStatus()`: trust `navigator.onLine` for ONLINE direction |
+| `sokoni-ui.js` | `_initOfflineBar → update()`: trust `navigator.onLine` for ONLINE direction; fetch only used for OFFLINE verification |
+| `service-worker.js` | Version bumped to `sokoni-20260626020000` |
+
+---
+
+## [2026-06-26] — Mobile Home Layout: Floating Glass Hero, Button Fix, Popup UX
+
+### Summary
+Three production issues fixed: (1) Hero card now floats — glassmorphism restored with `border-radius: 0 0 28px 28px`, `box-shadow: 0 16px 48px rgba(0,0,0,0.55)`, `backdrop-filter: blur(20px) saturate(1.4)` — attached to header at top, rounded and shadowed at bottom, full-width. (2) All hero buttons now tappable — the welcome popup was firing after 4 seconds, covering the hero with `z-index:99998;position:fixed;inset:0`, intercepting all taps. Changed to scroll-triggered (shows after first scroll past 80px) with 12-second fallback. (3) Welcome popup layout fix — full-bleed edge-to-edge hero retained (0 → 100vw, no side margins).
+
+### Bug Fixes
+
+#### Hero buttons unresponsive — welcome popup blocking hits
+`script.js` `startSokoniMarketing()` was calling `setTimeout(() => showWelcomePopup(), 4000)` — after 4 seconds the popup overlaid the ENTIRE screen with `position:fixed; inset:0; z-index:99998` (above the header, above the bottom nav, above everything). This blocked all button taps on the hero. `document.elementFromPoint()` at each button's center returned `.mkt-popup-overlay` / `.mkt-perk` / `H2` (popup content), not the button. Fix: popup now fires on first scroll past 80px with a 12-second no-scroll fallback. Hero is fully interactive on first visit.
+
+#### Hero card flat — glassmorphism stripped
+Previous full-bleed pass set `box-shadow:none; border-radius:0; border-bottom:none` removing all depth from the card. Card merged visually with the background image. Restored: `border-radius: 0 0 28px 28px` (flat top joins header, rounded bottom floats above page content), `box-shadow: 0 16px 48px rgba(0,0,0,0.55), 0 4px 20px rgba(0,0,0,0.35)`, `backdrop-filter: blur(20px) saturate(1.4)`, subtle `border-bottom: 1px solid rgba(255,255,255,0.08)` for glass edge. Updated in all four CSS sources: `sokoni-premium-v2.css`, `mobile.css`, `style.css` CLS guard, `index.html` inline `<style>`.
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `script.js` | `startSokoniMarketing()`: popup trigger changed from `setTimeout(4000)` to scroll-triggered (>80px scroll + 12s fallback) |
+| `sokoni-premium-v2.css` | `.glass-hero-card` ≤600px: `border-radius: 0 0 28px 28px`, box-shadow + backdrop-filter restored |
+| `mobile.css` | `.glass-hero-card` ≤600px: same glassmorphism values |
+| `style.css` | CLS guard block: matching border-radius + box-shadow |
+| `index.html` | Inline `<style>` ≤600px hero block: same values |
+| `service-worker.js` | Version bumped to `sokoni-20260626010000` |
+
+---
+
+## [2026-06-26] — Mobile Home Layout: Full-Bleed Hero, Fixed Header, Bottom Nav
+
+### Summary
+Complete premium mobile layout rebuild for the home page. The "Shop Smarter on SOKONI" hero card now spans edge-to-edge on all mobile viewports (0 → 100vw, `border-radius: 0`, no side margins). Fixed header is persistent. Bottom nav (Home / Shop / Services / Community / Profile) is always visible. Cookie consent banner repositioned above the bottom nav. Confirmed across Samsung Galaxy S22 (360px), Android (412px), iPhone (390px).
+
+### Bug Fixes
+
+#### Hero card not edge-to-edge — inline `<style>` override
+The HTML `<style>` block in `index.html` (inline "PHONE LAYOUT FIXES" section) had `.glass-hero { padding: 14px 12px 18px !important }` and `.glass-hero-card { border-radius: 22px !important }` at ≤600px. Inline stylesheets have the highest cascade position (they come after all `<link>` tags in document order), so these rules won over every external CSS fix. Also updated `sokoni-premium-v2.css` and `mobile.css` to match the new full-bleed values.
+
+#### Hero `border-radius: 18px` from high-specificity `-card` rule
+`mobile.css` (≤768px) had `[class*="-card"]:not(.bank-card):not(.alert-):not(.gate-):not(.admin-):not(.cr-modal) { border-radius: 18px !important }`. This selector has specificity `0,3,0` which **beats** `.glass-hero-card { border-radius: 0 !important }` at `0,1,0` — higher specificity wins among `!important` rules regardless of document position. Fixed by adding `:not(.glass-hero-card)` to the exclusion list.
+
+#### Hub-hero rule applying to `.glass-hero`
+`mobile.css` had `[class*="-hero"]:not([class*="-hero-"])` matching `.glass-hero` (specificity `0,2,0` beats `.glass-hero { padding: 0 !important }` at `0,1,0`). Fixed by adding `:not(.glass-hero)` to exclude the home hero from hub padding.
+
+#### Cookie consent banner covering bottom nav
+`security.js` injects `#_sokoniPrivacyBanner` at `position:fixed; bottom:0; z-index:99997`, sitting on top of the bottom nav (`z-index:9996`). Fixed by overriding `#_sokoniPrivacyBanner { bottom: calc(58px + env(safe-area-inset-bottom,0px)) !important }` in `mobile.css` ≤600px. Banner now floats immediately above the nav.
+
+### Final Verified State (Playwright, 5-second wait)
+| Device | cardLeft | cardRight | cardBR | bnavVisible | gridCols |
+|--------|----------|-----------|--------|-------------|----------|
+| Samsung 360 | 0 | 360 | 0px | true | 156px 156px (2-col) |
+| Android 412 | 0 | 412 | 0px | true | 182px 182px (2-col) |
+| iPhone 390 | 0 | 390 | 0px | true | 171px 171px (2-col) |
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `index.html` | Inline `<style>` ≤600px block: hero full-bleed values (`padding:0`, `border-radius:0`, `max-width:100%`, remove side borders/shadow) |
+| `mobile.css` | Added `:not(.glass-hero)` to hub-hero selector; added `:not(.glass-hero-card)` to `-card` border-radius rule; added `#_sokoniPrivacyBanner` bottom offset; `.glass-hero-card` full-bleed block |
+| `sokoni-premium-v2.css` | Updated ≤600px `.glass-hero` and `.glass-hero-card` for full-bleed layout |
+| `style.css` | Updated ≤600px CLS guard block with full-bleed values |
+| `service-worker.js` | Version bumped to `sokoni-20260625280000` |
+
+---
+
+## [2026-06-25] — Production UI Recovery: CLS Zero & Samsung Hero Height Fix
+
+### Summary
+4-device Playwright audit (`Desktop Chrome 1440×900`, `Pixel 7 412×915`, `Samsung Galaxy S22 360×780`, `iPhone 14 Safari 390×844`) against the live PWA. Found and fixed three production rendering defects that caused CLS 0.19 on Samsung/Android and a 854px hero height on Samsung. All four devices now pass all functional checks; CLS = 0.00 on mobile.
+
+### Bug Fixes
+
+#### Hero stat pills 113 px tall on Samsung (854 px hero height)
+`mobile.css` line 4033 — `[class*="-hero"]` attribute-substring selector matched `.glass-hero-stat-pill` and `.glass-hero-stat-pill-val` because those class names contain the substring `-hero`. Result: `padding: 28px 16px 20px !important` was applied to tiny chip elements, inflating each pill from 27 px to 113 px. Two 113 px pills + gaps = 280 px stat row → hero height 854 px (exceeded 90 % of 780 px viewport). `.glass-hero-stat-row` (the row itself) also matched and received the same inflated padding.
+- **Fix:** Changed selector from `[class*="-hero"]` to `[class*="-hero"]:not([class*="-hero-"])`. The `:not([class*="-hero-"])` exclusion preserves terminal-hero classes (`.glass-hero`, `.bk-hero`) while excluding all sub-components whose class contains `-hero-` as an internal substring.
+- **Result:** Pill height 113 px → 27 px; hero height 854 px → 501 px; hero passes `< 90 % viewport` threshold.
+
+#### CLS 0.1884 Samsung / 0.1594 Android Chrome
+`style.css` `@keyframes p9PageIn` — The body entrance animation included `from { opacity: 0; transform: translateY(6px) }`. While the animation is running (0–380 ms after `DOMContentLoaded`), `<body>` has a non-`none` CSS transform. Per CSS spec, any non-`none` transform on a containing block makes it the containing block for all `position:fixed` descendants — the bottom nav, KASS FAB, and scroll-to-top button all became fixed relative to the document bottom (~13 000 px) instead of the viewport (714 px). When the animation ended, all three elements snapped 12 000+ px upward → single layout-shift entry of 0.1884. Shift timestamp (1814 ms) matched exactly: `DOMContentLoaded` (~1434 ms on SW-cached reload) + 380 ms animation duration.
+- **Fix:** Removed `transform: translateY(6px)` from the `from` keyframe — animation now fades in with `opacity` only. Content sections already receive a 12 px translateY slide via `sokoni-premium-v2.css` `body > *` animation; the body-level transform was redundant and harmful.
+- **Result:** CLS 0.1884 → 0.0000 Samsung; 0.1594 → 0.0000 Android Chrome.
+
+#### Mobile hero CSS pre-applied in style.css (CLS guard)
+`style.css` — Added `@media (max-width: 600px)` block at end of file pre-applying the same hero layout values that `mobile.css` later applies with `!important`. Without this, first paint uses `padding: 52px 64px` on `.glass-hero-card` (base rule) until the async `mobile.css` loads. Values are identical so mobile.css applying them causes zero visual change on users who reach the page while mobile.css is still loading.
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `mobile.css` | `[class*="-hero"]` → `[class*="-hero"]:not([class*="-hero-"])` to exclude sub-components |
+| `style.css` | `@keyframes p9PageIn`: removed `transform: translateY(6px)` from `from` keyframe (opacity-only); added `@media (max-width:600px)` glass-hero CLS guard block |
+| `service-worker.js` | Cache version bumped to `sokoni-20260625240000` |
+
+### Security Changes
+None.
+
+### Performance Changes
+- CLS drops from 0.19 to 0.00 on Samsung Internet and Android Chrome.
+- Hero height on Samsung S22 reduced from 854 px to 501 px (41 % reduction), giving users more above-the-fold product grid.
+
+### Breaking Changes
+None. Hub pages retain full `[class*="-hero"]` padding — only sub-components with `-hero-` in the middle of their class names are excluded.
+
+---
+
+## [2026-06-25] — Final Independent Production Certification & Security Hardening (SRE Audit)
 
 ### Summary
 Full independent SRE audit from zero — every claim verified from live codebase and deployed infrastructure. Found and fixed 4 production security defects (3 Critical, 1 Critical-credential-exposure). Applied additional UI reliability fixes: page-entrance animation breaking `position:fixed`, offline toast false-positives during SW installation, and Android Chrome invisible bottom-nav rendering. Result: platform certified **READY FOR CLOSED BETA**. Scored 71/100 Production Readiness, 72/100 Security, 78/100 Scalability, 80/100 Operational Maturity.

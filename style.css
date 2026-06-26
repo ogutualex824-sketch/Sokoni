@@ -7456,13 +7456,12 @@ body.light-mode{
 
 .glass-hero{
     width:100%;
-    min-height:400px;
     position:relative;
     display:flex;
     align-items:center;
     justify-content:center;
     overflow:hidden;
-    padding:60px 20px;
+    padding:32px 20px;
 }
 
 .glass-hero-bg{
@@ -7486,7 +7485,7 @@ body.light-mode{
     -webkit-backdrop-filter:blur(28px);
     border:1px solid rgba(255,255,255,0.15);
     border-radius:32px;
-    padding:52px 64px;
+    padding:28px 48px;
     text-align:center;
     box-shadow:
         0 24px 64px rgba(0,0,0,0.5),
@@ -7504,7 +7503,7 @@ body.light-mode{
     border-radius:999px;
     font-size:13px;
     font-weight:700;
-    margin-bottom:22px;
+    margin-bottom:12px;
     letter-spacing:0.5px;
 }
 
@@ -7513,7 +7512,7 @@ body.light-mode{
     font-weight:900;
     color:white;
     line-height:1.1;
-    margin-bottom:18px;
+    margin-bottom:10px;
     text-shadow:0 4px 24px rgba(0,0,0,0.45);
 }
 
@@ -7525,7 +7524,7 @@ body.light-mode{
 .glass-hero-sub{
     color:rgba(255,255,255,0.72);
     font-size:16px;
-    margin-bottom:36px;
+    margin-bottom:16px;
     line-height:1.6;
 }
 
@@ -14764,7 +14763,7 @@ body.light-mode .feature-text p{color:rgba(0,0,0,0.4)!important;}
 .flash-label{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;font-weight:900;font-size:11px;padding:5px 12px;border-radius:999px;letter-spacing:.05em;box-shadow:0 2px 12px rgba(239,68,68,0.4);animation:flashLabelPulse 1.8s ease-in-out infinite;}
 @keyframes flashLabelPulse{0%,100%{box-shadow:0 2px 12px rgba(239,68,68,0.35);}50%{box-shadow:0 4px 22px rgba(239,68,68,0.6);}}
 /* GLASS HERO */
-.glass-hero{position:relative;padding:28px 20px 32px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:340px;}
+.glass-hero{position:relative;padding:32px 20px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .glass-hero-bg{position:absolute;inset:0;background:url("assets/backG1.jpeg") center/cover no-repeat;filter:brightness(0.5);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;}
 .glass-btn-green{background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:13px;padding:13px 24px;border-radius:16px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 24px rgba(113,255,0,0.35);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s;}
 .glass-btn-green:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 12px 36px rgba(113,255,0,0.5);}
@@ -15475,8 +15474,8 @@ body.p9-page-in {
   animation: p9PageIn 0.38s ease backwards;
 }
 @keyframes p9PageIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ── Scroll reveal system ──
@@ -15889,5 +15888,51 @@ select.p10-valid {
   }
   [data-tip]::after {
     transition: none !important;
+  }
+}
+/* GLASS HERO — MOBILE CLS GUARD
+   Pre-applied at ≤600px so first paint matches the mobile.css layout.
+   When mobile.css loads asynchronously and applies its !important overrides
+   the values are identical → no visual change → zero CLS contribution. */
+@media (max-width: 600px) {
+  .glass-hero {
+    padding: 0;
+    min-height: unset;
+    margin: 0;
+  }
+  .glass-hero-card {
+    border-radius: 0 0 28px 28px;
+    max-width: 100%;
+    width: 100%;
+    padding: 28px 20px 24px;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.55), 0 4px 20px rgba(0,0,0,0.35);
+  }
+  .glass-hero h1 {
+    font-size: clamp(22px, 7vw, 32px);
+    line-height: 1.12;
+  }
+  .glass-hero-sub {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .glass-hero-badge {
+    font-size: 11px;
+    padding: 5px 12px;
+  }
+  .glass-hero-btns {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .glass-hero-btns a,
+  .glass-hero-btns button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    font-size: 14px;
+    border-radius: 14px;
   }
 }

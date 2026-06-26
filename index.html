@@ -3553,19 +3553,12 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
 /* ══ PHONE LAYOUT FIXES ══ */
 @media(max-width:600px){
 
-  /* ── Hero: compact section padding on phone ── */
-  .glass-hero{ padding:14px 12px 18px !important; min-height:auto !important; }
-  .glass-hero-card{ padding:18px 14px !important; border-radius:22px !important; }
-  .glass-hero-card h1{ font-size:28px !important; margin-bottom:10px !important; }
-  .glass-hero-sub{ font-size:13px !important; margin-bottom:18px !important; }
-  .glass-hero-badge{ font-size:11px !important; padding:5px 14px !important; margin-bottom:14px !important; }
-
-  /* ── Hero 2-col card grid: collapse to 1-col under 400px ── */
-  @media(max-width:400px){
-    .glass-hero-card > div[style*="grid-template-columns:1fr 1fr"]{
-      grid-template-columns:1fr !important;
-    }
-  }
+  /* ── Hero: full-width floating glass card below fixed header ── */
+  .glass-hero{ padding:0 !important; margin:0 !important; min-height:auto !important; }
+  .glass-hero-card{ padding:28px 20px 24px !important; border-radius:0 0 28px 28px !important; max-width:100% !important; width:100% !important; border-left:none !important; border-right:none !important; border-top:none !important; border-bottom:1px solid rgba(255,255,255,0.08) !important; box-shadow:0 16px 48px rgba(0,0,0,0.55),0 4px 20px rgba(0,0,0,0.35) !important; backdrop-filter:blur(20px) saturate(1.4) !important; -webkit-backdrop-filter:blur(20px) saturate(1.4) !important; }
+  .glass-hero-card h1{ font-size:clamp(22px,7vw,32px) !important; line-height:1.12 !important; margin-bottom:8px !important; }
+  .glass-hero-sub{ font-size:13px !important; margin-bottom:14px !important; line-height:1.5 !important; }
+  .glass-hero-badge{ font-size:11px !important; padding:5px 12px !important; margin-bottom:10px !important; }
 
   /* ── Quick links: scrollable single row on phone ── */
   .qlinks-row{

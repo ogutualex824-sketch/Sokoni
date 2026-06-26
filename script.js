@@ -2590,11 +2590,22 @@ function reviewCard(r){
 ========================= */
 
 function startSokoniMarketing(){
-    /* — Welcome pop-up for first-time visitors — */
+    /* — Welcome pop-up for first-time visitors — shown after first scroll past hero so it never blocks hero buttons — */
     const visited = localStorage.getItem("sokoniVisited");
     if(!visited){
-        setTimeout(() => showWelcomePopup(), 4000);
         localStorage.setItem("sokoniVisited", "true");
+        let _popShown = false;
+        const _showOnScroll = () => {
+            if(_popShown) return;
+            if(window.scrollY > 80){
+                _popShown = true;
+                window.removeEventListener("scroll", _showOnScroll, {passive:true});
+                showWelcomePopup();
+            }
+        };
+        window.addEventListener("scroll", _showOnScroll, {passive:true});
+        /* Fallback: show after 12s if user never scrolls */
+        setTimeout(() => { if(!_popShown){ _popShown=true; window.removeEventListener("scroll",_showOnScroll,{passive:true}); showWelcomePopup(); } }, 12000);
     }
 
     /* — Exit-intent pop-up — */

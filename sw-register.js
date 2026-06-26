@@ -674,22 +674,26 @@
   }
 
   function _updateOnlineStatus() {
-    /* Debounce + real-fetch for all transitions. Page-load grace period
-       (first 5s) absorbs the brief offline blip caused by SW installation. */
     clearTimeout(_swOfflineTimer);
     const elapsed = Date.now() - _swPageLoadTs;
     if (elapsed < 5000 && !navigator.onLine) return;
-    const delay = navigator.onLine ? 300 : 2000;
-    _swOfflineTimer = setTimeout(() => {
-      _verifyConnection().then(real => _applyOnlineState(real));
-    }, delay);
+    if (navigator.onLine) {
+      /* Trust browser's online signal — hide banner/dot without a fetch.
+         Avoids SW-activation race where fetch fails despite real connectivity. */
+      _applyOnlineState(true);
+    } else {
+      /* Verify offline with a real fetch before showing the banner. */
+      _swOfflineTimer = setTimeout(() => {
+        _verifyConnection().then(real => _applyOnlineState(real));
+      }, 2000);
+    }
   }
 
   function _showOfflineBanner() {
     if (document.getElementById("sokoniOfflineBanner")) return;
     const b = document.createElement("div");
     b.id = "sokoniOfflineBanner";
-    b.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:999999;background:#1a0000;border-bottom:2px solid #ff4444;padding:10px 20px;text-align:center;font-size:13px;color:#ff8888;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px;`;
+    b.style.cssText = `position:fixed;top:var(--sk-header-h,64px);left:0;right:0;z-index:9999;background:#1a0000;border-bottom:2px solid rgba(255,68,68,0.5);padding:8px 16px;text-align:center;font-size:12px;color:#ff8888;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;`;
     b.innerHTML = `<span>📶 You're offline — some features may not work.</span><a href="offline.html" style="color:#ff4444;font-weight:700;text-decoration:none;">View cached pages →</a>`;
     document.body.prepend(b);
   }
