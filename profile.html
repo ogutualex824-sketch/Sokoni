@@ -1522,9 +1522,9 @@ function loadBookings(){
   if(window.firebaseDB && _user && _user.uid){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
       var db = window.firebaseDB;
-      var q = m.query(m.collection(db,'bookings'), m.where('userId','==',_user.uid), m.orderBy('createdAt','desc'), m.limit(10));
+      var q = m.query(m.collection(db,'bookings'), m.orderBy('createdAt','desc'), m.limit(100));
       m.onSnapshot(q, function(snap){
-        var fsb = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+        var fsb = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); }).filter(function(b){ return b.userId===_user.uid; });
         if(fsb.length){ _render(fsb); }
       }, function(){});
     }).catch(function(){});
@@ -1545,8 +1545,10 @@ function loadReviews(){
 
   import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
     var db = window.firebaseDB;
-    var q = m.query(m.collection(db,'reviews'), m.where('revieweeUid','==',_user.uid), m.orderBy('createdAt','desc'), m.limit(20));
+    var q = m.query(m.collection(db,'reviews'), m.orderBy('createdAt','desc'), m.limit(100));
     m.onSnapshot(q, function(snap){
+      snap = {docs: snap.docs.filter(function(d){ return d.data().revieweeUid===_user.uid; })};
+
       var reviews = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
       if(!reviews.length){
         el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet. Complete transactions to earn reviews.</div>';
