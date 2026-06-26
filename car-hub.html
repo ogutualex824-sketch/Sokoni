@@ -2541,6 +2541,7 @@ function confirmBooking(){
   const bid="BK"+Date.now().toString().slice(-7);
   const booking={id:bid,carId:c.id,carMake:c.make,carModel:c.model,carPlate:c.plate,carImage:c.image||"",ownerName:c.owner||"",ownerPhone:c.ownerPhone||"",renterName:name,renterPhone:phone,pickupDate:p,returnDate:r,days,priceDay:dp,insurance:ins,deposit:c.deposit||0,total,status:"active",carLat:c.lat,carLng:c.lng,createdAt:Date.now()};
   const bookings=getBookings();bookings.unshift(booking);saveBookings(bookings);
+  _chFireWrite('carRentals',{...booking,hub:'car-rental'});
   const cars=getCars(),idx=cars.findIndex(x=>x.id===c.id);
   if(idx>-1){cars[idx].status="rented";saveCars(cars);}
   /* Notify car owner via WhatsApp */
@@ -4347,6 +4348,7 @@ var CarHubPro = (function(){
       var bks=[]; try{bks=JSON.parse(localStorage.getItem('sokoniMechBookings')||'[]');}catch(e){}
       bks.unshift(bk);
       localStorage.setItem('sokoniMechBookings',JSON.stringify(bks.slice(0,50)));
+      _chFireWrite('mechBookings',{...bk,hub:'car-mechanic',status:'pending'});
     } catch(e){}
   }
 
@@ -4437,6 +4439,7 @@ var CarHubPro = (function(){
     var parts=[]; try{parts=JSON.parse(localStorage.getItem('sokoniParts')||'[]');}catch(e){}
     parts.unshift(part);
     localStorage.setItem('sokoniParts',JSON.stringify(parts.slice(0,100)));
+    _chFireWrite('carParts',{...part,status:'active'});
     if(msg) msg.textContent='✅ Part listed successfully!';
     setTimeout(function(){ closeChpModal(); renderPartsGrid(); }, 1200);
   }
@@ -4451,6 +4454,7 @@ var CarHubPro = (function(){
     var waText = encodeURIComponent('SOKONI Roadside SOS\nService: '+(serviceType||'Emergency')+'\nLocation: '+loc+'\nPhone: '+phone+(desc?'\nDetails: '+desc:''));
     var data={type:'roadside_sos',service:serviceType,location:loc,phone:phone,desc:desc,ts:new Date().toISOString()};
     try{ localStorage.setItem('sokoniSOS_'+Date.now(),JSON.stringify(data)); }catch(e){}
+    _chFireWrite('carSOS',{service:serviceType,location:loc,phone:phone,description:desc,status:'open'});
     if(msg){ msg.textContent='✅ SOS sent! Connecting you to nearest responders...'; msg.style.color='#71ff00'; }
     else showFleetMsg('SOS sent! Connecting you to nearest responders...');
     setTimeout(function(){ window.open('https://wa.me/254705726803?text='+waText,'_blank'); }, 800);
@@ -4485,6 +4489,7 @@ var CarHubPro = (function(){
     if(!name||!phone||!income||!partner){ if(msg){ msg.textContent='⚠️ Fill all required fields.'; msg.style.color='#ff9800'; } return; }
     var data={type:'car_finance',name:name,phone:phone,income:income,partner:partner,ts:new Date().toISOString()};
     try{ localStorage.setItem('sokoniFinApp_'+Date.now(),JSON.stringify(data)); }catch(e){}
+    _chFireWrite('carFinanceApplications',{name,phone,monthlyIncome:income,financingPartner:partner,status:'pending'});
     var wa=encodeURIComponent('SOKONI Car Finance Application\nName: '+name+'\nPhone: '+phone+'\nIncome: KES '+income+'\nBank: '+partner);
     if(msg){ msg.textContent='✅ Application submitted! Redirecting to WhatsApp...'; msg.style.color='#71ff00'; }
     setTimeout(function(){ window.open('https://wa.me/254705726803?text='+wa,'_blank'); }, 1000);
@@ -4522,6 +4527,7 @@ var CarHubPro = (function(){
     var centerName = center?center.querySelector('[style*="font-weight:800"]')?.textContent||'Selected Center':'SOKONI Inspection Centre';
     var data={type:'inspection',vehicle:vehicle,date:date,phone:phone,center:centerName,ts:new Date().toISOString()};
     try{ localStorage.setItem('sokoniInsp_'+Date.now(),JSON.stringify(data)); }catch(e){}
+    _chFireWrite('carInspections',{vehicle,date,phone,center:centerName,status:'pending'});
     var wa=encodeURIComponent('SOKONI Inspection Booking\nVehicle: '+vehicle+'\nDate: '+date+'\nCenter: '+centerName+'\nPhone: '+phone);
     if(msg){ msg.textContent='✅ Booking confirmed! Opening WhatsApp...'; msg.style.color='#71ff00'; }
     setTimeout(function(){ window.open('https://wa.me/254705726803?text='+wa,'_blank'); }, 1000);
@@ -4564,6 +4570,7 @@ var CarHubPro = (function(){
     var vt   = (document.getElementById('transVehicleType')||{}).value||'Saloon';
     var svc  = (document.getElementById('transServiceType')||{}).value||'Open transporter';
     var wa   = encodeURIComponent('SOKONI Vehicle Transport Request\nFrom: '+from+'\nTo: '+to+'\nVehicle: '+vt+'\nService: '+svc+'\nPhone: '+phone);
+    _chFireWrite('carTransportRequests',{from,to,vehicleType:vt,serviceType:svc,phone,status:'open'});
     if(msg){ msg.textContent='✅ Request sent! Connecting with transporters...'; msg.style.color='#71ff00'; }
     setTimeout(function(){ window.open('https://wa.me/254705726803?text='+wa,'_blank'); }, 800);
   }
@@ -4652,9 +4659,21 @@ function submitRegisterMechanic(){
   if(!name||!phone){if(msg)msg.textContent='⚠️ Name and phone are required.';return;}
   const data={type:'mechanic_registration',name,phone,location:(document.getElementById('regMechLocation')||{}).value||'',specs:(document.getElementById('regMechSpecs')||{}).value||'',ts:new Date().toISOString()};
   localStorage.setItem('sokoniMechReg_'+Date.now(),JSON.stringify(data));
+  _chFireWrite('carMechanics',{type:'mechanic_registration',name,phone,location:(document.getElementById('regMechLocation')||{}).value||'',specs:(document.getElementById('regMechSpecs')||{}).value||'',status:'pending'});
   if(msg)msg.textContent='✅ Registration submitted! Our team will contact you within 24 hours.';
   const wa=encodeURIComponent('New mechanic registration on SOKONI:\nName: '+name+'\nPhone: '+phone);
   setTimeout(function(){window.open('https://wa.me/254705726803?text='+wa,'_blank');},1500);
+}
+
+/* ── FIRESTORE FIRE-AND-FORGET ── */
+async function _chFireWrite(coll,data){
+  try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="ch-write")||initializeApp(_cfg,"ch-write");
+    await addDoc(collection(getFirestore(_a),coll),{...data,createdAt:serverTimestamp()});
+  }catch(e){}
 }
 </script>
   <!-- REGISTER CTA — universal fallback for other business types -->
