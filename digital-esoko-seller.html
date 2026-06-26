@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Digital Esoko — Seller Dashboard | SOKONI</title>
+<meta name="description" content="Sell your digital products on SOKONI. Upload eBooks, templates, music, courses and more.">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="landlord.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-premium-v2.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="shared-header.js" defer></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
+a{text-decoration:none;color:inherit}
+
+.des-topnav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(10,10,10,.96);border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px)}
+.des-logo{height:28px}
+.des-nav-title{font-size:14px;font-weight:800;color:rgba(255,255,255,.7)}
+.des-nav-links{display:flex;gap:8px}
+.des-nav-link{padding:7px 14px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);background:transparent;transition:all .2s}
+.des-nav-link:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+.des-nav-link.green{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.3);color:#71ff00}
+
+.des-layout{display:flex;gap:0;min-height:calc(100vh - 53px)}
+.des-sidebar{width:200px;flex-shrink:0;background:rgba(255,255,255,.02);border-right:1px solid rgba(255,255,255,.07);padding:20px 0;position:sticky;top:53px;height:calc(100vh - 53px);overflow-y:auto}
+.des-sb-btn{display:block;width:100%;padding:11px 20px;font-size:13px;font-weight:700;color:rgba(255,255,255,.5);background:none;border:none;text-align:left;cursor:pointer;font-family:inherit;transition:all .2s;border-left:3px solid transparent}
+.des-sb-btn:hover{color:rgba(255,255,255,.8);background:rgba(255,255,255,.03)}
+.des-sb-btn.active-ll-btn{color:#71ff00;border-left-color:#71ff00;background:rgba(113,255,0,.05)}
+
+.des-main{flex:1;padding:24px 24px 100px;overflow-y:auto}
+.des-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.des-stat-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px 18px;text-align:center}
+.des-stat-card .des-stat-icon{font-size:22px;margin-bottom:6px}
+.des-stat-card .des-stat-val{font-size:22px;font-weight:900}
+.des-stat-card p{font-size:11px;color:rgba(255,255,255,.4);margin-top:3px}
+.des-stat-green{border-color:rgba(113,255,0,.2);background:rgba(113,255,0,.04)}
+
+.des-section{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:24px}
+.des-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.des-section-header h2{font-size:16px;font-weight:900}
+.des-add-btn{padding:8px 18px;background:linear-gradient(135deg,#71ff00,#44bb00);border:none;border-radius:10px;color:#000;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit}
+
+.des-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.des-form-group{display:flex;flex-direction:column;gap:6px}
+.des-span2{grid-column:1/-1}
+.des-label{font-size:12px;font-weight:700;color:rgba(255,255,255,.55)}
+.des-input,.des-textarea,.des-select{padding:11px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:14px;outline:none;font-family:inherit;transition:border-color .2s;width:100%}
+.des-input:focus,.des-textarea:focus,.des-select:focus{border-color:rgba(113,255,0,.35)}
+.des-input::placeholder,.des-textarea::placeholder{color:rgba(255,255,255,.25)}
+.des-textarea{resize:vertical;min-height:90px}
+.des-select option{background:#1a1a1a;color:#fff}
+.des-submit-btn{padding:13px 28px;background:linear-gradient(135deg,#71ff00,#44bb00);border:none;border-radius:12px;color:#000;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;margin-top:10px;transition:filter .2s;width:100%}
+.des-submit-btn:hover{filter:brightness(1.1)}
+.des-submit-btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
+
+.des-upload-drop{border:2px dashed rgba(113,255,0,.25);border-radius:14px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;background:rgba(255,255,255,.02)}
+.des-upload-drop:hover{border-color:rgba(113,255,0,.5)}
+
+.des-prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.des-prod-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden}
+.des-prod-img{width:100%;height:110px;object-fit:cover}
+.des-prod-ph{width:100%;height:110px;display:flex;align-items:center;justify-content:center;font-size:36px;background:linear-gradient(135deg,rgba(113,255,0,.04),rgba(0,170,255,.03))}
+.des-prod-body{padding:12px 13px}
+.des-prod-title{font-size:13px;font-weight:800;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.des-prod-price{font-size:14px;font-weight:900;color:#71ff00;margin-bottom:8px}
+.des-prod-actions{display:flex;gap:6px}
+.des-prod-btn{flex:1;padding:6px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid;transition:opacity .2s}
+.des-prod-btn:hover{opacity:.8}
+
+.des-sale-row{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.des-sale-title{font-size:14px;font-weight:800;margin-bottom:4px}
+.des-sale-meta{font-size:11px;color:rgba(255,255,255,.4);display:flex;gap:10px;flex-wrap:wrap}
+.des-sale-amount{font-size:16px;font-weight:900;color:#71ff00}
+
+.des-earn-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px;text-align:center}
+.des-earn-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:0}
+.des-earn-label{font-size:12px;color:rgba(255,255,255,.4);margin-bottom:6px}
+.des-earn-val{font-size:22px;font-weight:900}
+
+.des-empty{text-align:center;padding:50px 20px;color:rgba(255,255,255,.3)}
+.des-empty-icon{font-size:40px;margin-bottom:10px}
+
+#desNotifContainer{position:fixed;bottom:80px;right:16px;z-index:9000;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:280px}
+.des-notif{padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;pointer-events:auto;backdrop-filter:blur(8px);border:1px solid}
+.des-notif.success{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.3);color:#71ff00}
+.des-notif.error{background:rgba(255,80,80,.12);border-color:rgba(255,80,80,.3);color:#ff8080}
+.des-notif.info{background:rgba(0,170,255,.12);border-color:rgba(0,170,255,.3);color:#00aaff}
+
+@media(max-width:768px){
+  .des-sidebar{display:none}
+  .des-stats-row{grid-template-columns:repeat(2,1fr)}
+  .des-form-grid{grid-template-columns:1fr}
+  .des-earn-cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body class="landlord-body">
+<script src="sokoni-security.js"></script>
+<script src="sokoni-guards.js"></script>
+<script src="splash.js"></script>
+
+<nav class="des-topnav">
+  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="des-logo" alt="SOKONI"></a>
+  <div class="des-nav-title">📦 Digital Esoko — Seller</div>
+  <div class="des-nav-links">
+    <a href="digital-esoko.html" class="des-nav-link">👁️ View Store</a>
+    <a href="index.html" class="des-nav-link">← Home</a>
+  </div>
+</nav>
+
+<div class="des-layout">
+  <aside class="des-sidebar">
+    <button type="button" class="des-sb-btn active-ll-btn" onclick="showSection('products',this)">📦 My Products</button>
+    <button type="button" class="des-sb-btn" onclick="showSection('add',this)">➕ Add Product</button>
+    <button type="button" class="des-sb-btn" onclick="showSection('sales',this)">💳 My Sales <span id="desSalesBadge" style="display:none;background:rgba(113,255,0,.2);color:#71ff00;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px"></span></button>
+    <button type="button" class="des-sb-btn" onclick="showSection('earnings',this)">💰 Earnings</button>
+    <a href="digital-esoko.html" class="des-sb-btn" style="border:none">👁️ Preview Store</a>
+  </aside>
+
+  <main class="des-main">
+    <!-- STATS -->
+    <div class="des-stats-row">
+      <div class="des-stat-card"><div class="des-stat-icon">📦</div><div class="des-stat-val" id="statProds">0</div><p>Products Listed</p></div>
+      <div class="des-stat-card"><div class="des-stat-icon">💳</div><div class="des-stat-val" id="statSales">0</div><p>Total Sales</p></div>
+      <div class="des-stat-card"><div class="des-stat-icon">📥</div><div class="des-stat-val" id="statDLs">0</div><p>Downloads</p></div>
+      <div class="des-stat-card des-stat-green"><div class="des-stat-icon">💰</div><div class="des-stat-val" id="statEarnings">KES 0</div><p>Net Earnings</p></div>
+    </div>
+
+    <!-- MY PRODUCTS -->
+    <section id="sec-products" class="des-section">
+      <div class="des-section-header">
+        <h2>📦 My Products</h2>
+        <button type="button" class="des-add-btn" onclick="showSection('add',null)">+ Add New</button>
+      </div>
+      <div class="des-prod-grid" id="desProdGrid"></div>
+    </section>
+
+    <!-- ADD PRODUCT -->
+    <section id="sec-add" class="des-section" style="display:none">
+      <div class="des-section-header"><h2>➕ Add New Digital Product</h2></div>
+      <div class="des-form-grid">
+        <div class="des-form-group des-span2">
+          <label class="des-label">Product Title *</label>
+          <input type="text" id="desTitle" class="des-input" placeholder="e.g. Complete Business Plan Template KE 2024">
+        </div>
+        <div class="des-form-group">
+          <label class="des-label">Category *</label>
+          <select id="desCategory" class="des-select">
+            <option value="">Select category</option>
+            <option value="ebook">📚 eBook</option>
+            <option value="template">🎨 Template</option>
+            <option value="music">🎵 Music & Audio</option>
+            <option value="photo">📷 Photography</option>
+            <option value="course">🎓 Course</option>
+            <option value="software">💻 Software</option>
+            <option value="tool">🔧 Business Tool</option>
+            <option value="marketing">📣 Marketing Kit</option>
+            <option value="design">✏️ Design Asset</option>
+            <option value="data">📊 Spreadsheet</option>
+          </select>
+        </div>
+        <div class="des-form-group">
+          <label class="des-label">Price (KES) *</label>
+          <input type="number" id="desPrice" class="des-input" placeholder="e.g. 500 (enter 0 for FREE)">
+        </div>
+        <div class="des-form-group des-span2">
+          <label class="des-label">Description *</label>
+          <textarea id="desDesc" class="des-textarea" placeholder="Describe what buyers get, what it includes, who it's for…"></textarea>
+        </div>
+        <div class="des-form-group">
+          <label class="des-label">Tags <span style="font-weight:400;color:rgba(255,255,255,.3)">(comma-separated)</span></label>
+          <input type="text" id="desTags" class="des-input" placeholder="e.g. business, finance, Kenya">
+        </div>
+        <div class="des-form-group">
+          <label class="des-label">Your Phone (for M-Pesa)</label>
+          <input type="tel" id="desPhone" class="des-input" placeholder="07xxxxxxxx">
+        </div>
+        <div class="des-form-group des-span2">
+          <label class="des-label">Cover Image <span style="font-weight:400;color:rgba(255,255,255,.3)">(JPG/PNG — displayed in marketplace)</span></label>
+          <div class="des-upload-drop" onclick="document.getElementById('desCoverInput').click()" id="desCoverDrop">
+            <div style="font-size:28px;margin-bottom:6px">🖼️</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.5);font-weight:700">Tap to upload cover image</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:3px">Max 5MB · JPG, PNG, WEBP</div>
+          </div>
+          <input type="file" id="desCoverInput" accept="image/*" style="display:none" onchange="previewCover(event)">
+          <div id="desCoverPreview" style="margin-top:8px;display:none">
+            <img id="desCoverImg" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;border:1px solid rgba(113,255,0,.25)">
+          </div>
+        </div>
+        <div class="des-form-group des-span2">
+          <label class="des-label">Digital File <span style="font-weight:400;color:rgba(255,255,255,.3)">(PDF, ZIP, MP3, MP4, etc. — max 100MB)</span></label>
+          <div class="des-upload-drop" onclick="document.getElementById('desFileInput').click()" id="desFileDrop">
+            <div style="font-size:28px;margin-bottom:6px">📁</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.5);font-weight:700">Tap to upload your digital file</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:3px">PDF, ZIP, MP3, MP4, PSD, DOCX, XLSX…</div>
+          </div>
+          <input type="file" id="desFileInput" accept=".pdf,.zip,.mp3,.mp4,.wav,.mov,.psd,.ai,.fig,.sketch,.docx,.xlsx,.pptx,.epub,.apk,.exe,.dmg" style="display:none" onchange="previewFile(event)">
+          <div id="desFileInfo" style="margin-top:8px;display:none;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:12px;color:rgba(255,255,255,.6)"></div>
+        </div>
+      </div>
+      <button type="button" class="des-submit-btn" id="desSubmitBtn" onclick="addProduct()">⬆️ Publish Product</button>
+    </section>
+
+    <!-- MY SALES -->
+    <section id="sec-sales" class="des-section" style="display:none">
+      <div class="des-section-header"><h2>💳 My Sales</h2></div>
+      <div id="desSalesList"></div>
+    </section>
+
+    <!-- EARNINGS -->
+    <section id="sec-earnings" class="des-section" style="display:none">
+      <div class="des-section-header"><h2>💰 Earnings Summary</h2></div>
+      <div id="desEarningsBody"></div>
+    </section>
+  </main>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="digital-esoko.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Browse</span></a>
+  <a href="digital-esoko-seller.html" class="bnav-item active-bnav"><span class="bnav-emoji">🚀</span><span>Sell</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
+<div id="desNotifContainer"></div>
+
+<script src="scroll-top.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script type="module" src="sokoni-upload.js"></script>
+
+<script>
+const DES_CATS_MAP = {
+  ebook:'📚 eBook', template:'🎨 Template', music:'🎵 Music & Audio',
+  photo:'📷 Photography', course:'🎓 Course', software:'💻 Software',
+  tool:'🔧 Business Tool', marketing:'📣 Marketing Kit',
+  design:'✏️ Design Asset', data:'📊 Spreadsheet'
+};
+
+function _lsGet(k,def){ try{ return JSON.parse(localStorage.getItem(k))||def; }catch(e){ return def; } }
+function _lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function _user(){ try{ return JSON.parse(localStorage.getItem('sokoniUser')||'null'); }catch(e){ return null; } }
+
+let _myProducts = [];
+let _mySales    = [];
+let _desCoverFile = null;
+let _desFileObj   = null;
+
+function showSection(name, btn){
+  document.querySelectorAll('.des-section').forEach(s=>s.style.display='none');
+  document.querySelectorAll('.des-sb-btn').forEach(b=>b.classList.remove('active-ll-btn'));
+  const sec = document.getElementById('sec-'+name);
+  if(sec) sec.style.display='block';
+  if(btn) btn.classList.add('active-ll-btn');
+  if(name==='products') loadMyProducts();
+  if(name==='sales')    loadMySales();
+  if(name==='earnings') loadEarnings();
+}
+
+function loadStats(){
+  const dl = _myProducts.reduce((s,p)=>s+(p.downloads||0),0);
+  const commPct = (window.SokoniPay?.COMMISSION_RATES?.completion?.['digital'])||5;
+  const gross = _mySales.filter(s=>s.status==='completed').reduce((s,p)=>s+Number(p.amount||0),0);
+  const net = Math.round(gross*(1-commPct/100));
+  const el1=document.getElementById('statProds'); if(el1) el1.textContent=_myProducts.length;
+  const el2=document.getElementById('statSales'); if(el2) el2.textContent=_mySales.length;
+  const el3=document.getElementById('statDLs');   if(el3) el3.textContent=dl.toLocaleString();
+  const el4=document.getElementById('statEarnings'); if(el4) el4.textContent='KES '+net.toLocaleString();
+  const badge=document.getElementById('desSalesBadge');
+  if(badge){ badge.textContent=_mySales.length; badge.style.display=_mySales.length?'inline':'none'; }
+}
+
+function loadMyProducts(){
+  const grid = document.getElementById('desProdGrid'); if(!grid) return;
+  if(!_myProducts.length){
+    grid.innerHTML='<div class="des-empty"><div class="des-empty-icon">📦</div><p>No products yet.<br><button type="button" onclick="showSection(\'add\',null)" style="color:#71ff00;background:none;border:none;cursor:pointer;font-weight:800;font-family:inherit">Add your first product →</button></p></div>';
+    return;
+  }
+  grid.innerHTML=_myProducts.map(p=>{
+    const cat=DES_CATS_MAP[p.category]||'📦 Digital';
+    return `
+      <div class="des-prod-card">
+        ${p.coverURL?`<img loading="lazy" class="des-prod-img" src="${esc(p.coverURL)}" alt="${esc(p.title)}">`:`<div class="des-prod-ph">${cat.split(' ')[0]}</div>`}
+        <div class="des-prod-body">
+          <div class="des-prod-title">${esc(p.title)}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">${esc(cat)} · 📥 ${p.downloads||0}</div>
+          <div class="des-prod-price">${!p.price||p.price===0?'FREE':'KES '+Number(p.price).toLocaleString()}</div>
+          <div class="des-prod-actions">
+            <button type="button" class="des-prod-btn" style="background:rgba(0,170,255,.08);border-color:rgba(0,170,255,.25);color:#00aaff" onclick="toggleProductActive('${esc(p.id)}')">
+              ${p.active!==false?'⏸ Pause':'▶ Live'}
+            </button>
+            <button type="button" class="des-prod-btn" style="background:rgba(255,80,80,.08);border-color:rgba(255,80,80,.2);color:#ff8080" onclick="deleteProduct('${esc(p.id)}')">
+              🗑️
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function loadMySales(){
+  const el = document.getElementById('desSalesList'); if(!el) return;
+  if(!_mySales.length){
+    el.innerHTML='<div class="des-empty"><div class="des-empty-icon">💳</div><p>No sales yet. Share your products to get your first sale!</p></div>';
+    return;
+  }
+  el.innerHTML=_mySales.map(s=>`
+    <div class="des-sale-row">
+      <div>
+        <div class="des-sale-title">${esc(s.productTitle||'Digital Product')}</div>
+        <div class="des-sale-meta">
+          <span>👤 ${esc(s.buyerName||'Buyer')}</span>
+          <span>📞 ${esc(s.buyerPhone||'—')}</span>
+          <span>🔖 ${esc(s.ref||'—')}</span>
+          <span>📅 ${s.createdAt?new Date(s.createdAt).toLocaleDateString('en-KE'):'—'}</span>
+        </div>
+      </div>
+      <div class="des-sale-amount">KES ${Number(s.amount||0).toLocaleString()}</div>
+    </div>`).join('');
+}
+
+function loadEarnings(){
+  const el = document.getElementById('desEarningsBody'); if(!el) return;
+  const commPct = (window.SokoniPay?.COMMISSION_RATES?.completion?.['digital'])||5;
+  const gross = _mySales.filter(s=>s.status==='completed').reduce((s,p)=>s+Number(p.amount||0),0);
+  const comm  = Math.round(gross*commPct/100);
+  const net   = gross-comm;
+  el.innerHTML=`
+    <div class="des-earn-cards" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+      <div class="des-earn-card"><div class="des-earn-label">Gross Revenue</div><div class="des-earn-val">KES ${gross.toLocaleString()}</div></div>
+      <div class="des-earn-card"><div class="des-earn-label">SOKONI Commission (${commPct}%)</div><div class="des-earn-val" style="color:#ff8800">KES ${comm.toLocaleString()}</div></div>
+      <div class="des-earn-card" style="border-color:rgba(113,255,0,.25);background:rgba(113,255,0,.04)"><div class="des-earn-label">Your Net Earnings</div><div class="des-earn-val" style="color:#71ff00">KES ${net.toLocaleString()}</div></div>
+      <div class="des-earn-card"><div class="des-earn-label">Completed Sales</div><div class="des-earn-val">${_mySales.filter(s=>s.status==='completed').length}</div></div>
+    </div>`;
+}
+
+function toggleProductActive(id){
+  const p = _myProducts.find(x=>x.id===id);
+  if(!p) return;
+  p.active = p.active===false;
+  _lsSet('desMyProducts_'+_getUid(), _myProducts);
+  loadMyProducts();
+  if(window._updateDEProductFS) window._updateDEProductFS(id,{active:p.active});
+}
+
+function deleteProduct(id){
+  if(!confirm('Delete this product? Existing buyers will keep their downloads.')) return;
+  _myProducts = _myProducts.filter(p=>p.id!==id);
+  _lsSet('desMyProducts_'+_getUid(), _myProducts);
+  loadMyProducts();
+  loadStats();
+  desNotif('Product removed','info');
+  if(window._deleteDEProductFS) window._deleteDEProductFS(id);
+}
+
+function _getUid(){ const u=_user(); return u?.uid||''; }
+
+/* ── File preview handlers ── */
+function previewCover(e){
+  const file = e.target.files[0]; if(!file) return;
+  if(file.size>5*1024*1024){ desNotif('Cover must be under 5MB','error'); return; }
+  _desCoverFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('desCoverImg').src = ev.target.result;
+    document.getElementById('desCoverPreview').style.display = 'block';
+    document.getElementById('desCoverDrop').style.borderColor = 'rgba(113,255,0,.5)';
+  };
+  reader.readAsDataURL(file);
+}
+window.previewCover = previewCover;
+
+function previewFile(e){
+  const file = e.target.files[0]; if(!file) return;
+  if(file.size>100*1024*1024){ desNotif('File must be under 100MB','error'); return; }
+  _desFileObj = file;
+  const info = document.getElementById('desFileInfo');
+  info.innerHTML = `📁 <strong>${esc(file.name)}</strong> · 💾 ${(file.size/1024/1024).toFixed(2)} MB`;
+  info.style.display = 'block';
+  document.getElementById('desFileDrop').style.borderColor = 'rgba(113,255,0,.5)';
+}
+window.previewFile = previewFile;
+
+async function addProduct(){
+  const title    = document.getElementById('desTitle').value.trim();
+  const category = document.getElementById('desCategory').value;
+  const price    = Number(document.getElementById('desPrice').value)||0;
+  const desc     = document.getElementById('desDesc').value.trim();
+  const tagsRaw  = document.getElementById('desTags').value.trim();
+  const phone    = document.getElementById('desPhone').value.trim();
+  if(!title||!category||!desc){ desNotif('Fill in Title, Category and Description','error'); return; }
+  if(!_desFileObj){ desNotif('Upload your digital file first','error'); return; }
+  const user = _user();
+  if(!user||!user.uid){ desNotif('Sign in to publish','error'); return; }
+
+  const btn = document.getElementById('desSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+
+  let coverURL = '';
+  let fileURL  = '';
+  const fileSize = `${(_desFileObj.size/1024/1024).toFixed(2)} MB`;
+
+  try {
+    if(_desCoverFile && window.SokoniUpload){
+      desNotif('Uploading cover image…','info');
+      coverURL = await window.SokoniUpload.uploadToStorage(_desCoverFile,`digital-covers/${Date.now()}_${_desCoverFile.name}`,null);
+    }
+    if(window.SokoniUpload){
+      desNotif('Uploading product file…','info');
+      fileURL = await window.SokoniUpload.uploadToStorage(_desFileObj,`digital-products/${user.uid}/${Date.now()}_${_desFileObj.name}`,
+        pct => { btn.textContent = `Uploading… ${Math.round(pct)}%`; });
+    }
+  } catch(err){
+    console.warn('[DigitalEsoko] Upload failed:', err);
+    desNotif('File upload failed — check your connection and try again','error');
+    btn.disabled=false; btn.textContent='⬆️ Publish Product';
+    return;
+  }
+
+  if(!fileURL){ desNotif('File upload required — try again','error'); btn.disabled=false; btn.textContent='⬆️ Publish Product'; return; }
+
+  const tags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  const product = {
+    id: 'dp_'+Date.now(),
+    title, category, price, description:desc, tags,
+    coverURL, fileURL,
+    fileName: _desFileObj.name,
+    fileSize,
+    sellerUid: user.uid,
+    sellerName: user.name||user.displayName||'Creator',
+    sellerPhone: phone||user.phone||'',
+    downloads: 0,
+    rating: null,
+    active: true,
+    featured: false,
+    createdAt: Date.now()
+  };
+
+  _myProducts.unshift(product);
+  _lsSet('desMyProducts_'+user.uid, _myProducts);
+  if(window._saveDEProductFS) window._saveDEProductFS(product);
+
+  /* Reset form */
+  ['desTitle','desDesc','desTags','desPhone'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('desCategory').value='';
+  document.getElementById('desPrice').value='';
+  _desCoverFile=null; _desFileObj=null;
+  document.getElementById('desCoverPreview').style.display='none';
+  document.getElementById('desFileInfo').style.display='none';
+  document.getElementById('desCoverDrop').style.borderColor='rgba(113,255,0,.25)';
+  document.getElementById('desFileDrop').style.borderColor='rgba(113,255,0,.25)';
+  document.getElementById('desCoverInput').value='';
+  document.getElementById('desFileInput').value='';
+
+  btn.disabled=false; btn.textContent='⬆️ Publish Product';
+  desNotif('🎉 Product published!','success');
+  loadStats();
+  showSection('products', document.querySelector('.des-sb-btn'));
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+function desNotif(msg, type){
+  const c = document.getElementById('desNotifContainer'); if(!c) return;
+  const n = document.createElement('div');
+  n.className='des-notif '+(type||'info');
+  n.textContent=msg;
+  c.appendChild(n);
+  setTimeout(()=>n.remove(),4000);
+}
+
+loadStats();
+loadMyProducts();
+</script>
+
+<script type="module">
+import { db, auth } from './firebase.js';
+import {
+  collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot,
+  query, where, orderBy, limit, serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+let _uid = null;
+
+onAuthStateChanged(auth, u => {
+  _uid = u ? u.uid : null;
+  if(_uid){ loadFSProducts(); loadFSSales(); }
+});
+
+/* ── Save product ── */
+window._saveDEProductFS = async function(product){
+  if(!product) return;
+  try {
+    await setDoc(doc(db,'digitalProducts',product.id), {...product, createdAt:serverTimestamp(), updatedAt:serverTimestamp()}, {merge:true});
+  } catch(e){ console.warn('[DigitalEsoko] Product save failed:',e); }
+};
+
+/* ── Update product fields ── */
+window._updateDEProductFS = async function(id, fields){
+  try { await updateDoc(doc(db,'digitalProducts',id), {...fields, updatedAt:serverTimestamp()}); } catch(e){}
+};
+
+/* ── Delete product ── */
+window._deleteDEProductFS = async function(id){
+  try { await deleteDoc(doc(db,'digitalProducts',id)); } catch(e){}
+};
+
+/* ── Load seller's products ── */
+function loadFSProducts(){
+  if(!_uid) return;
+  try {
+    onSnapshot(
+      query(collection(db,'digitalProducts'), where('sellerUid','==',_uid), orderBy('createdAt','desc'), limit(200)),
+      snap => {
+        if(snap.empty) return;
+        const live = snap.docs.map(d=>({...d.data(),id:d.id}));
+        const existing = new Map(_myProducts.map(p=>[p.id,p]));
+        live.forEach(p=>existing.set(p.id,p));
+        _myProducts = [...existing.values()];
+        localStorage.setItem('desMyProducts_'+_uid, JSON.stringify(_myProducts));
+        if(typeof loadMyProducts==='function') loadMyProducts();
+        if(typeof loadStats==='function') loadStats();
+      }
+    );
+  } catch(e){ console.warn('[DigitalEsoko] loadFSProducts failed:',e); }
+}
+
+/* ── Load seller's sales ── */
+function loadFSSales(){
+  if(!_uid) return;
+  try {
+    onSnapshot(
+      query(collection(db,'digitalPurchases'), where('sellerUid','==',_uid), orderBy('createdAt','desc'), limit(500)),
+      snap => {
+        if(snap.empty) return;
+        const live = snap.docs.map(d=>({...d.data(),id:d.id}));
+        const existing = new Map(_mySales.map(s=>[s.id,s]));
+        live.forEach(s=>existing.set(s.id,s));
+        _mySales = [...existing.values()];
+        if(typeof loadStats==='function') loadStats();
+        if(document.getElementById('sec-sales')?.style.display!=='none') { if(typeof loadMySales==='function') loadMySales(); }
+      }
+    );
+  } catch(e){ console.warn('[DigitalEsoko] loadFSSales failed:',e); }
+}
+</script>
+</body>
+</html>

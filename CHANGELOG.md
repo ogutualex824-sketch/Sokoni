@@ -1,4 +1,60 @@
-﻿## [2026-06-26] — BnB Hub: Bug Fixes + Full Firestore Wiring + Data Silo Unification + Security Rules
+﻿## [2026-06-26] — Digital Esoko: Full Digital Products Marketplace
+
+### Summary
+Built the complete Digital Esoko marketplace from scratch — Kenya's first digital products storefront inside SOKONI. Buyers can browse, filter, search and purchase downloadable digital products (eBooks, templates, music, courses, software, design assets) via M-Pesa with instant file delivery. Sellers get a full dashboard to upload products (file + cover to Firebase Storage), track sales and earnings. Full Firestore wiring with real-time feeds, commission tracking, invoicing, and 2 new security rule blocks.
+
+### Files Added
+- `digital-esoko.html` — buyer-facing marketplace (browse, filter, purchase, download)
+- `digital-esoko-seller.html` — seller dashboard (publish products, track sales, earnings)
+
+### Files Changed
+- `firestore.rules` — 2 new collection rules: `digitalProducts` + `digitalPurchases`
+
+### Features — Buyer Side (digital-esoko.html)
+- 10-category filter bar (eBooks, Templates, Music, Photography, Courses, Software, Business Tools, Marketing Kits, Design Assets, Spreadsheets)
+- Product grid with cover image, category badge, download count, rating, price
+- "Owned" badge on purchased products — no re-purchasing
+- Product detail modal — cover, description, tags, file info, price, action button
+- M-Pesa payment via `SokoniPay.platformBook` with `onSuccess` gate — file download triggered only after payment confirmed
+- Instant file download after purchase (`<a download>` trigger)
+- Commission tracking via `SokoniPay.saveCommission`
+- Invoice generation via `SokoniInvoice`
+- My Downloads — filter grid to show only purchased items
+- Firestore `onSnapshot` on `digitalProducts` for real-time product feed
+- Cross-device purchase restore — loads `digitalPurchases` from Firestore on auth
+- Free product support (price = 0, bypasses payment)
+- `downloads` counter incremented on each purchase via Firestore `increment()`
+- Full XSS protection — all user-supplied fields escaped via `esc()`
+
+### Features — Seller Side (digital-esoko-seller.html)
+- Auth-gated (data-require-auth="true")
+- 4-section dashboard: My Products / Add Product / My Sales / Earnings
+- Add Product form — title, category, price, description, tags, phone, cover image, digital file
+- Cover image upload to Firebase Storage via `SokoniUpload.uploadToStorage()`
+- Digital file upload to Firebase Storage with upload progress indicator
+- Supported file types: PDF, ZIP, MP3, MP4, WAV, MOV, PSD, AI, Figma, Sketch, DOCX, XLSX, PPTX, EPUB, APK, EXE, DMG
+- Firestore `onSnapshot` on `digitalProducts where sellerUid==uid` for live product list
+- Firestore `onSnapshot` on `digitalPurchases where sellerUid==uid` for live sales list
+- Pause/unpause product (`active` toggle) — synced to Firestore
+- Delete product with confirmation — removes from Firestore
+- Earnings summary: gross revenue, SOKONI commission (dynamic %), net earnings, sales count
+
+### Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `digitalProducts` | All listed products (public read; seller-owned write) |
+| `digitalPurchases` | Purchase records (buyer/seller/admin read; buyer creates post-payment) |
+
+### Security
+- `digitalProducts` create requires `claimsOwner()` + `['id','title','category','price','sellerUid','sellerName','fileURL']` + `price >= 0`
+- `digitalProducts` update by seller restricted to content fields only (no `sellerUid` or `downloads` override from client)
+- `digitalPurchases` create requires authenticated buyer + `status=='completed'` + `amount>0`
+- `digitalPurchases` update/delete restricted to admin only — purchase records are immutable
+- All user-data fields XSS-escaped in both HTML files
+
+---
+
+## [2026-06-26] — BnB Hub: Bug Fixes + Full Firestore Wiring + Data Silo Unification + Security Rules
 
 ### Summary
 Fixed 5 bugs across the 4 BnB files (crash in `deleteBnBListing`, XSS in `renderBnBs`, wrong payment param in `submitBooking`, misrouted Firestore writes via `fsWrite`, SDK version mismatch). Unified 3 isolated data silos into one canonical `bnbListings` + `bnbBookings` Firestore collection pair. Added photo upload to Firebase Storage (replacing base64 localStorage). Added 2 Firestore security rule blocks.

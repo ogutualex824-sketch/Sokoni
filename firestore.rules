@@ -1083,6 +1083,46 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       DIGITAL ESOKO — PRODUCTS  (digital-esoko-seller.html → digital-esoko.html)
+       • read:   public (anyone can browse)
+       • create: authenticated seller; claimsOwner() + required fields + price ≥ 0
+       • update: seller (limited fields) or admin
+       • delete: seller or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /digitalProducts/{productId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(['id','title','category','price','sellerUid','sellerName','fileURL'])
+                    && request.resource.data.price >= 0
+                    && request.resource.data.sellerUid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['title','description','price','category','tags','coverURL','fileURL','fileName','fileSize','active','featured','downloads','rating','updatedAt']));
+      allow delete: if isAdmin() || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DIGITAL ESOKO — PURCHASES  (buyer → confirmed payment only)
+       • read:   buyer (buyerUid match), seller (sellerUid match), or admin
+       • create: authenticated buyer; status must be 'completed'; amount > 0
+       • update: admin only (no field changes by users after purchase)
+       • delete: admin only
+    ══════════════════════════════════════════════════════════════ */
+    match /digitalPurchases/{purchaseId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.buyerUid  == request.auth.uid)
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['productId','buyerUid','sellerUid','amount','ref','status'])
+                    && request.resource.data.buyerUid == request.auth.uid
+                    && request.resource.data.status   == 'completed'
+                    && request.resource.data.amount    > 0;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        BNB LISTINGS  (bnb-manage.html host → bnb.html / bnb-hub.html guest)
        • read:   public (anyone can browse listings)
        • create: authenticated host; claimsOwner() + required fields
