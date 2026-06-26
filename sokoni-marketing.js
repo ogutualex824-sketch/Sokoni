@@ -187,28 +187,27 @@ MKT.stars = r => '★'.repeat(Math.floor(r)) + (r%1>=0.5?'½':'') + '☆'.repeat
 
 // ---- Firestore: save booking/quote ----
 MKT.saveBooking = async data => {
-  if (!window.db) return {id:'local-'+Date.now()};
   try {
-    const ref = await window.db.collection('marketingBookings').add({
-      ...data,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      status: 'pending',
-    });
-    return {id: ref.id};
-  } catch(e) { return {id:'local-'+Date.now()}; }
+    const {collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const db=window.firebaseDB;
+    if(!db) return {id:'local-'+Date.now()};
+    const ref=await addDoc(collection(db,'marketingBookings'),{...data,status:'pending',createdAt:serverTimestamp()});
+    return {id:ref.id};
+  } catch(e){return {id:'local-'+Date.now()};}
 };
 
 // ---- Firestore: load real providers (supplements mock data) ----
 MKT.loadFirestoreProviders = async () => {
-  if (!window.db) return;
   try {
-    const snap = await window.db.collection('marketingProviders')
-      .where('active','==',true).orderBy('rating','desc').limit(40).get();
-    snap.forEach(doc => {
-      if (!MKT.PROVIDERS.find(p => p.id === doc.id))
-        MKT.PROVIDERS.push({id:doc.id, ...doc.data(), _fs:true});
+    const {collection,query,where,orderBy,limit,getDocs}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const db=window.firebaseDB;
+    if(!db) return;
+    const snap=await getDocs(query(collection(db,'marketingProviders'),where('active','==',true),orderBy('createdAt','desc'),limit(40)));
+    snap.forEach(doc=>{
+      if(!MKT.PROVIDERS.find(p=>p.id===doc.id))
+        MKT.PROVIDERS.push({id:doc.id,...doc.data(),_fs:true});
     });
-  } catch(e) {}
+  } catch(e){}
 };
 
 global.MKT = MKT;
