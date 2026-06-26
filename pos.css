@@ -82,10 +82,11 @@ html, body {
 #pos-wizard {
   position: fixed; inset: 0;
   background: #050508;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: flex-start; justify-content: center;
   z-index: 9999;
-  padding: 16px;
-  overflow: hidden;
+  padding: 20px 16px 40px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Animated orb layer behind the card */
@@ -123,11 +124,12 @@ html, body {
 
 .wizard-box {
   position: relative;
-  background: rgba(16,16,22,0.82);
+  background: rgba(16,16,22,0.92);
   border: 1px solid rgba(113,255,0,0.16);
   border-radius: 28px;
   width: 100%; max-width: 520px;
   padding: 44px 40px;
+  margin: auto;
   box-shadow:
     0 0 0 1px rgba(255,255,255,0.04),
     0 8px 32px rgba(0,0,0,0.6),
@@ -138,6 +140,24 @@ html, body {
   animation: wiz-card-in .55s cubic-bezier(.22,.68,0,1.2) both;
   z-index: 1;
 }
+
+/* X close button on wizard */
+.wiz-close-btn {
+  position: absolute;
+  top: 16px; right: 16px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.5);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+  text-decoration: none;
+  z-index: 2;
+}
+.wiz-close-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
 /* Subtle top highlight rim */
 .wizard-box::before {
