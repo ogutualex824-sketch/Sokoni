@@ -389,9 +389,9 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
         messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
       var app = getApps().length?getApps()[0]:initializeApp(cfg);
       var db  = getFirestore(app);
-      var q   = query(collection(db,'orders'),where('sellerUid','==',uid),orderBy('createdAt','desc'),limit(500));
+      var q   = query(collection(db,'orders'),orderBy('createdAt','desc'),limit(500));
       var snap = await getDocs(q);
-      return snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+      return snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }).filter(function(o){ return o.sellerUid===uid; });
     } catch(e){
       console.warn('[Analytics] Firestore orders:', e.message);
       return [];

@@ -481,14 +481,10 @@ window.loadMyCommissions = async function() {
   const total  = document.getElementById("myCommTotal");
   body.innerHTML = "<tr><td colspan='6' class='no-data'>Loading...</td></tr>";
   try {
-    const q = query(
-      collection(_db,"commissionLedger"),
-      where("sellerUid","==",_uid),
-      where("period","==",period),
-      orderBy("createdAt","desc"),
-      limit(100)
-    );
-    const snap = await getDocs(q);
+    const q = query(collection(_db,"commissionLedger"), orderBy("createdAt","desc"), limit(200));
+    const _snap = await getDocs(q);
+    const snap = { docs: _snap.docs.filter(d => d.data().sellerUid===_uid && d.data().period===period), empty: false };
+    snap.empty = snap.docs.length === 0;
     let sum = 0;
     if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='no-data'>No commission records this period</td></tr>"; total.textContent=""; return; }
     body.innerHTML = snap.docs.map(d => {
@@ -570,8 +566,10 @@ window.loadMyFeatured = async function() {
   const body = document.getElementById("myFeaturedBody");
   body.innerHTML = "<tr><td colspan='6' class='no-data'>Loading...</td></tr>";
   try {
-    const q = query(collection(_db,"featuredListings"), where("sellerUid","==",_uid), orderBy("createdAt","desc"), limit(50));
-    const snap = await getDocs(q);
+    const q = query(collection(_db,"featuredListings"), orderBy("createdAt","desc"), limit(200));
+    const _fsnap = await getDocs(q);
+    const snap = { docs: _fsnap.docs.filter(d => d.data().sellerUid===_uid), empty: false };
+    snap.empty = snap.docs.length === 0;
     if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='no-data'>No featured listings yet</td></tr>"; return; }
     body.innerHTML = snap.docs.map(d => {
       const r = d.data();
@@ -602,8 +600,10 @@ window.loadMyAds = async function() {
   const body = document.getElementById("myAdsBody");
   body.innerHTML = "<tr><td colspan='6' class='no-data'>Loading...</td></tr>";
   try {
-    const q = query(collection(_db,"sokoAds"), where("sellerUid","==",_uid), orderBy("createdAt","desc"), limit(50));
-    const snap = await getDocs(q);
+    const q = query(collection(_db,"sokoAds"), orderBy("createdAt","desc"), limit(200));
+    const _asnap = await getDocs(q);
+    const snap = { docs: _asnap.docs.filter(d => d.data().sellerUid===_uid), empty: false };
+    snap.empty = snap.docs.length === 0;
     if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='no-data'>No ad campaigns yet</td></tr>"; return; }
     body.innerHTML = snap.docs.map(d => {
       const r = d.data();
