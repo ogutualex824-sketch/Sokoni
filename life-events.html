@@ -66,8 +66,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080a0f;color:white;
 .le-event-card:hover .le-event-arrow,.le-event-card:active .le-event-arrow{color:white;transform:translateX(3px);}
 
 /* ── DETAIL PANEL ── */
-.le-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:50000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
-.le-detail-overlay.open{opacity:1;pointer-events:all;}
+.le-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:50000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+.le-detail-overlay.open{opacity:1;pointer-events:all;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
 .le-detail-sheet{background:#0d1117;border-radius:24px 24px 0 0;border:1px solid rgba(255,255,255,0.09);border-bottom:none;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;padding:28px 20px 100px;transform:translateY(100%);transition:transform .32s cubic-bezier(0.4,0,0.2,1);}
 .le-detail-overlay.open .le-detail-sheet{transform:translateY(0);}
 .le-detail-header{display:flex;align-items:flex-start;gap:14px;margin-bottom:22px;padding-right:40px;}
