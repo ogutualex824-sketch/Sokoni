@@ -63,13 +63,18 @@ const EntHub = {
   },
 
   listenArtists(filters, callback, limitN = 80) {
-    /* Public grid: only show approved/verified artists */
-    const statusFilter = filters?.all ? [] : [where('status', 'in', ['approved', 'active'])];
-    let q = query(collection(db, 'entArtists'), ...statusFilter, orderBy('createdAt', 'desc'), limit(limitN));
-    if (filters?.type) q = query(collection(db, 'entArtists'), where('type', '==', filters.type), ...statusFilter, orderBy('createdAt', 'desc'), limit(limitN));
-    if (filters?.city) q = query(collection(db, 'entArtists'), where('city', '==', filters.city), ...statusFilter, orderBy('createdAt', 'desc'), limit(limitN));
+    /* Query only by single equality field to avoid composite index requirements.
+       Status filtering (approved/active) is applied client-side. */
+    let q = query(collection(db, 'entArtists'), orderBy('createdAt', 'desc'), limit(limitN));
+    if (filters?.type) q = query(collection(db, 'entArtists'), where('type', '==', filters.type), orderBy('createdAt', 'desc'), limit(limitN));
+    if (filters?.city) q = query(collection(db, 'entArtists'), where('city', '==', filters.city), orderBy('createdAt', 'desc'), limit(limitN));
+    const allowAll = filters?.all;
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => {
+        let artists = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        if (!allowAll) artists = artists.filter(a => a.status === 'approved' || a.status === 'active');
+        callback(artists);
+      },
       err => console.warn('[EntHub] artists:', err.message)
     );
   },
