@@ -873,8 +873,8 @@
     document.head.appendChild(st);
   }
 
-  /* ─── HOME FEED — 20 cards, no infinite scroll ─── */
-  const HOME_LIMIT = 20;
+  /* ─── HOME FEED — 16 cards, no infinite scroll ─── */
+  const HOME_LIMIT = 16;
 
   function renderHome(containerId) {
     const el = document.getElementById(containerId);
