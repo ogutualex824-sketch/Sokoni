@@ -7,19 +7,25 @@
 ;(function(){
 'use strict';
 
-/* ── Firestore helper ── */
+/* ── Firestore collection map ── */
+const _B2B_COLL = {
+  'b2b_rfqs':'b2bRFQs', 'b2b_quotes':'b2bQuotes', 'b2b_orders':'b2bOrders',
+  'b2b_messages':'b2bMessages', 'b2b_suppliers':'b2bSuppliers',
+  'b2b_products':'b2bProducts', 'b2b_ratings':'b2bRatings', 'b2b_invoices':'b2bInvoices',
+};
+const _B2B_CFG = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+
 function fsWrite(col, data) {
-  try {
-    if (window.SokoniDB && SokoniDB.saveApplication)
-      return SokoniDB.saveApplication({...data, category: col});
-  } catch(e){}
-  try {
-    const key = 'b2b_' + col;
-    const arr = JSON.parse(localStorage.getItem(key)||'[]');
-    const idx = arr.findIndex(x=>x.id===data.id);
-    if (idx > -1) arr[idx] = data; else arr.unshift(data);
-    localStorage.setItem(key, JSON.stringify(arr.slice(0,500)));
-  } catch(e){}
+  const fsColl = _B2B_COLL[col] || col;
+  (async()=>{try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,doc,addDoc,setDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _a=getApps().find(a=>a.name==="b2b-fs")||initializeApp(_B2B_CFG,"b2b-fs");
+    const db=getFirestore(_a);
+    const payload={...data,_savedAt:serverTimestamp()};
+    if(data.id) await setDoc(doc(db,fsColl,data.id),payload,{merge:true});
+    else await addDoc(collection(db,fsColl),payload);
+  }catch(e){}})();
 }
 
 function fsRead(col) {
