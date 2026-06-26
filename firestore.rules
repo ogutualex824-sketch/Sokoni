@@ -1083,6 +1083,45 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       BNB LISTINGS  (bnb-manage.html host → bnb.html / bnb-hub.html guest)
+       • read:   public (anyone can browse listings)
+       • create: authenticated host; claimsOwner() + required fields
+       • update: the host who owns it (limited fields) or admin
+       • delete: listing owner or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /bnbListings/{listingId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(['id','name','type','location','price','phone','hostUid'])
+                    && request.resource.data.hostUid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.hostUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['name','type','location','price','pricePerNight','desc','description','amenities','phone','image','images','video','available','maxGuests','bedrooms','bathrooms','updatedAt']));
+      allow delete: if isAdmin() || (isAuthed() && resource.data.hostUid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BNB BOOKINGS  (bnb.html / bnb-hub.html guest confirm)
+       • read:   the guest (uid match), the host (hostUid match), or admin
+       • create: authenticated guest; claimsOwner() + required fields; status must be 'confirmed'
+       • update: the host (status changes only) or admin
+       • delete: admin only
+    ══════════════════════════════════════════════════════════════ */
+    match /bnbBookings/{bookingId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid    == request.auth.uid)
+                    || (isAuthed() && resource.data.hostUid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['bnbId','name','phone','checkIn','checkOut','nights','total','status'])
+                    && request.resource.data.status == 'confirmed';
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.hostUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        DISPUTES  (dispute.html — buyer/seller dispute resolution)
        • create: any authenticated user may submit a dispute.
        • read: submitter (uid match), moderator, or admin.
