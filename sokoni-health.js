@@ -91,13 +91,15 @@ const SokoniHealth = {
   },
 
   listenProviders(callback, filters = {}, limitN = 100) {
-    let constraints = [orderBy('createdAt', 'desc'), limit(limitN)];
-    if (filters.type)     constraints = [where('type', '==', filters.type), ...constraints];
-    if (filters.verified) constraints = [where('verified', '==', true), ...constraints];
-    const q = query(collection(db, 'healthProviders'), ...constraints);
+    const q = query(collection(db, 'healthProviders'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
-      err  => console.warn('[SokoniHealth] providers:', err.message)
+      snap => {
+        let providers = snap.docs.map(d => ({ _fsId: d.id, ...d.data() }));
+        if (filters.type)     providers = providers.filter(p => p.type === filters.type);
+        if (filters.verified) providers = providers.filter(p => p.verified === true);
+        callback(providers);
+      },
+      err => console.warn('[SokoniHealth] providers:', err.message)
     );
   },
 
@@ -178,27 +180,17 @@ const SokoniHealth = {
   listenUserAppointments(callback, limitN = 50) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(
-      collection(db, 'healthAppointments'),
-      where('uid', '==', uid),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthAppointments'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
       err  => console.warn('[SokoniHealth] userAppts:', err.message)
     );
   },
 
   listenProviderAppointments(providerId, callback, limitN = 200) {
-    const q = query(
-      collection(db, 'healthAppointments'),
-      where('providerId', '==', providerId),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthAppointments'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
       err  => console.warn('[SokoniHealth] providerAppts:', err.message)
     );
   },
@@ -229,27 +221,17 @@ const SokoniHealth = {
   listenUserLabBookings(callback, limitN = 50) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(
-      collection(db, 'healthLabBookings'),
-      where('uid', '==', uid),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthLabBookings'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
       err  => console.warn('[SokoniHealth] labBookings:', err.message)
     );
   },
 
   listenProviderLabBookings(providerId, callback, limitN = 200) {
-    const q = query(
-      collection(db, 'healthLabBookings'),
-      where('providerId', '==', providerId),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthLabBookings'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
       err  => console.warn('[SokoniHealth] provLabBookings:', err.message)
     );
   },
@@ -280,27 +262,17 @@ const SokoniHealth = {
   listenUserMedOrders(callback, limitN = 50) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(
-      collection(db, 'healthMedOrders'),
-      where('uid', '==', uid),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthMedOrders'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
       err  => console.warn('[SokoniHealth] medOrders:', err.message)
     );
   },
 
   listenPharmacyOrders(pharmacyId, callback, limitN = 200) {
-    const q = query(
-      collection(db, 'healthMedOrders'),
-      where('pharmacyId', '==', pharmacyId),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthMedOrders'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.pharmacyId === pharmacyId)),
       err  => console.warn('[SokoniHealth] pharmacyOrders:', err.message)
     );
   },
@@ -331,27 +303,17 @@ const SokoniHealth = {
   listenUserTelemedicine(callback, limitN = 30) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(
-      collection(db, 'healthTelemedicine'),
-      where('uid', '==', uid),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthTelemedicine'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
       err  => console.warn('[SokoniHealth] telemedicine:', err.message)
     );
   },
 
   listenProviderTelemedicine(providerId, callback, limitN = 100) {
-    const q = query(
-      collection(db, 'healthTelemedicine'),
-      where('providerId', '==', providerId),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthTelemedicine'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
       err  => console.warn('[SokoniHealth] provTele:', err.message)
     );
   },
@@ -383,14 +345,9 @@ const SokoniHealth = {
   listenUserHomeServices(callback, limitN = 30) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(
-      collection(db, 'healthHomeServices'),
-      where('uid', '==', uid),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthHomeServices'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
       err  => console.warn('[SokoniHealth] homeServices:', err.message)
     );
   },
@@ -437,14 +394,9 @@ const SokoniHealth = {
   },
 
   listenProviderReviews(providerId, callback, limitN = 20) {
-    const q = query(
-      collection(db, 'healthReviews'),
-      where('providerId', '==', providerId),
-      orderBy('createdAt', 'desc'),
-      limit(limitN)
-    );
+    const q = query(collection(db, 'healthReviews'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
       err  => console.warn('[SokoniHealth] reviews:', err.message)
     );
   },
