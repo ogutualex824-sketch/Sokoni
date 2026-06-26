@@ -1897,13 +1897,14 @@ function confirmConsultation(lawyerId){
       `I found you on SOKONI Legal Hub and would like to book a consultation. Please confirm your availability. Thank you!`
     );
     if(msgEl){ msgEl.innerHTML=`✅ Opening WhatsApp... Booking ref: <strong>${ref}</strong>`; msgEl.style.color="#71ff00"; }
-    /* Track lead fee — fire-and-forget, fails silently if user not authed */
+    /* Track lead fee — recorded when WhatsApp contact is actually shared */
     (async function(){try{
-      const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-      const{getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+      const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const{getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
       const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
       const _a=getApps().find(a=>a.name==="lh-lead")||initializeApp(_cfg,"lh-lead");
-      await addDoc(collection(getFirestore(_a),"leadFees"),{sellerUid:l.sellerUid||null,buyerPhone:phone,hub:"legal",bookingRef:ref,providerName:l.name||"",matter,contactShared:true,feeKES:50,status:"pending",createdAt:serverTimestamp()});
+      const uid=window._sokoniUser?.uid||null;
+      await addDoc(collection(getFirestore(_a),"leadFees"),{sellerUid:l.sellerUid||null,buyerUid:uid,buyerPhone:phone,hub:"legal",bookingRef:ref,providerName:l.name||"",matter,contactShared:true,feeKES:50,status:"pending",createdAt:serverTimestamp()});
     }catch(e){}})();
     if(typeof SokoniPay!=='undefined'&&SokoniPay.waConnect){
       SokoniPay.waConnect(wa, decodeURIComponent(msg), {providerName:l.name,category:'legal',serviceDesc:matter+' Consultation'});
@@ -1913,18 +1914,21 @@ function confirmConsultation(lawyerId){
     setTimeout(closeConsultModal, 2000);
   }
 
-  /* Save booking */
-  let bks = [];
-  try{ bks = JSON.parse(localStorage.getItem("sokoniLegalBookings"))||[]; }catch(e){}
-  bks.unshift({ ref, lawyerId, lawyerName:l.name, name, phone, matter, date, time, details, status:"sent", createdAt:Date.now() });
-  localStorage.setItem("sokoniLegalBookings", JSON.stringify(bks));
-  (async()=>{try{
-    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-    const _a=getApps().find(a=>a.name==="lh-bk")||initializeApp(_cfg,"lh-bk");
-    await addDoc(collection(getFirestore(_a),'legalBookings'),{ref,lawyerId,lawyerName:l.name,clientName:name,phone,matter,date,time,details,status:'pending',hub:'legal',createdAt:serverTimestamp()});
-  }catch(e){}})();
+  function _saveBookingRecord(status){
+    /* localStorage */
+    let bks=[];try{bks=JSON.parse(localStorage.getItem("sokoniLegalBookings"))||[];}catch(e){}
+    bks.unshift({ref,lawyerId,lawyerName:l.name,name,phone,matter,date,time,details,status,createdAt:Date.now()});
+    localStorage.setItem("sokoniLegalBookings",JSON.stringify(bks));
+    /* Firestore — only called after payment confirmed or for WhatsApp-only bookings */
+    const uid=window._sokoniUser?.uid||null;
+    (async()=>{try{
+      const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const{getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+      const _a=getApps().find(a=>a.name==="lh-bk")||initializeApp(_cfg,"lh-bk");
+      await addDoc(collection(getFirestore(_a),'legalBookings'),{ref,lawyerId,lawyerName:l.name,clientName:name,clientUid:uid,phone,matter,date:date||'',time:time||'',details:details||'',status,hub:'legal',createdAt:serverTimestamp()});
+    }catch(e){}})();
+  }
 
   /* Collect booking deposit via Daraja if lawyer has it configured */
   const depositAmt = l.depositAmount || 500;
@@ -1939,6 +1943,8 @@ function confirmConsultation(lawyerId){
       sellerName: l.name,
       description: matter + ' Consultation Deposit',
       onSuccess: r => {
+        /* Booking only recorded after payment confirmed */
+        _saveBookingRecord('confirmed');
         if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:matter+' Consultation Deposit',category:'Legal',qty:1,price:depositAmt}],subtotal:depositAmt,total:depositAmt,paymentMethod:'M-Pesa · '+(r.mpesaCode||''),paymentRef:ref,sellerName:l.name,date:new Date().toISOString(),notes:date?'Date: '+date:''}),700);
         _sendWA(r.mpesaCode);
       },
@@ -1946,6 +1952,8 @@ function confirmConsultation(lawyerId){
     });
     return;
   }
+  /* WhatsApp-only booking — no M-Pesa, record as 'sent' */
+  _saveBookingRecord('sent');
 
   if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:matter+' Consultation',category:'Legal',qty:1,price:l.rate||0}],subtotal:l.rate||0,total:l.rate||0,paymentMethod:'WhatsApp Booking',paymentRef:ref,sellerName:l.name,date:new Date().toISOString(),notes:date?'Date: '+date:''}),700);
   _sendWA(null);

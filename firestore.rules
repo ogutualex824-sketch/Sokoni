@@ -574,6 +574,28 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       LEGAL BOOKINGS  (legal-hub.html → lawyer consultation bookings)
+       • read:   client (clientUid match), lawyer (lawyerId match via sellerUid), admin
+       • create: authenticated; clientUid must match caller; status restricted
+       • update: admin or the lawyer (status + updatedAt only)
+       • delete: admin only
+    ══════════════════════════════════════════════════════════════ */
+    match /legalBookings/{bookingId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.clientUid == request.auth.uid)
+                    || (isAuthed() && resource.data.lawyerId  == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['ref','lawyerId','lawyerName','clientName','phone','matter','status','hub'])
+                    && request.resource.data.clientUid == request.auth.uid
+                    && request.resource.data.status in ['sent','confirmed']
+                    && request.resource.data.hub == 'legal';
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.lawyerId == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        MECHANICS  (mechanics.html directory)
        Same public-listing, owner-write pattern as lawyers.
     ══════════════════════════════════════════════════════════════ */
