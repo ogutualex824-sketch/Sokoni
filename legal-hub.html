@@ -1715,13 +1715,13 @@ function _renderLawyerCards(lawyers){
     const loc         = (l.location||"Kenya").charAt(0).toUpperCase()+(l.location||"kenya").slice(1);
     const skills      = (l.skills||[]).slice(0,3);
 
-    return `<div class="lawyer-card" onclick="bookLawyer('${l.id}')">
+    return `<div class="lawyer-card" onclick="bookLawyer('${_esc(l.id)}')">
       <div class="lc-header">
-        <div class="lc-avatar">${initials}</div>
+        <div class="lc-avatar">${_esc(initials)}</div>
         <div class="lc-info">
-          <div class="lc-name">${displayName}</div>
-          <div class="lc-spec">${l.spec||l.category||"General Practice"}</div>
-          ${l.firm ? `<div class="lc-firm">🏢 ${l.firm}</div>` : ""}
+          <div class="lc-name">${_esc(displayName)}</div>
+          <div class="lc-spec">${_esc(l.spec||l.category||"General Practice")}</div>
+          ${l.firm ? `<div class="lc-firm">🏢 ${_esc(l.firm)}</div>` : ""}
         </div>
         <div class="lc-badge ${l.verified?"lc-badge-lsk":"lc-badge-pending"}">${l.verified?"✅ LSK":"⏳ Pending"}</div>
       </div>
@@ -1730,19 +1730,19 @@ function _renderLawyerCards(lawyers){
         <div class="lc-meta-row">
           <div class="lc-stars">
             <span style="color:#ffc107;">${starStr}</span>
-            <span>${rating}  ${l.jobsCompleted||0} cases</span>
+            <span>${_esc(rating)}  ${Number(l.jobsCompleted||0)} cases</span>
           </div>
         </div>
-        ${skills.length ? `<div class="lc-skills">${skills.map(s=>`<span class="lc-skill">${s}</span>`).join("")}</div>` : ""}
-        ${l.bio ? `<div class="lc-bio">${l.bio}</div>` : ""}
+        ${skills.length ? `<div class="lc-skills">${skills.map(s=>`<span class="lc-skill">${_esc(s)}</span>`).join("")}</div>` : ""}
+        ${l.bio ? `<div class="lc-bio">${_esc(l.bio)}</div>` : ""}
       </div>
 
       <div class="lc-footer">
         <div>
-          <div class="lc-rate-num">KES ${Number(l.rate||0).toLocaleString()} <span class="lc-rate-type">${rateLabel}</span></div>
-          <div class="lc-location"><i class="fas fa-map-marker-alt" style="color:#a78bfa;font-size:9px;"></i> ${loc}${l.rollNo ? `  Roll #${l.rollNo}` : ""}</div>
+          <div class="lc-rate-num">KES ${Number(l.rate||0).toLocaleString()} <span class="lc-rate-type">${_esc(rateLabel)}</span></div>
+          <div class="lc-location"><i class="fas fa-map-marker-alt" style="color:#a78bfa;font-size:9px;"></i> ${_esc(loc)}${l.rollNo ? `  Roll #${_esc(l.rollNo)}` : ""}</div>
         </div>
-        <button type="button" class="lc-book-btn" onclick="event.stopPropagation();bookLawyer('${l.id}')">
+        <button type="button" class="lc-book-btn" onclick="event.stopPropagation();bookLawyer('${_esc(l.id)}')">
           💬 Book
         </button>
       </div>
@@ -1865,8 +1865,8 @@ function _openConsultModal(id){
   const initials=l.name.replace(/^Advocates*/i,'').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
   const modalTitle=document.getElementById('consultModalTitle');
   const modalBody=document.getElementById('consultModalBody');
-  if(modalTitle) modalTitle.textContent='Book  '+l.name;
-  if(modalBody) modalBody.innerHTML='<div style="padding:14px;background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+l.name+(l.verified?' <span style="font-size:9px;background:rgba(124,58,237,0.15);color:#a78bfa;padding:1px 6px;border-radius:3px;border:1px solid rgba(124,58,237,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(124,58,237,0.8);font-weight:700;">'+( l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+l.firm+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#a78bfa;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
+  if(modalTitle) modalTitle.textContent='Book  '+_esc(l.name);
+  if(modalBody) modalBody.innerHTML='<div style="padding:14px;background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+_esc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(124,58,237,0.15);color:#a78bfa;padding:1px 6px;border-radius:3px;border:1px solid rgba(124,58,237,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(124,58,237,0.8);font-weight:700;">'+_esc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+_esc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#a78bfa;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+_esc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
   const today=new Date().toISOString().slice(0,10);
   const dateEl=document.getElementById('cbDate');
   if(dateEl){dateEl.min=today;dateEl.value=today;}
@@ -3406,9 +3406,9 @@ function legalGlobalSearch(q) {
         return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(124,58,237,0.2);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(79,70,229,0.2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#a78bfa;flex-shrink:0;">${initials}</div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:14px;font-weight:800;color:white;">${l.name} ${l.verified?'<span style="font-size:9px;background:rgba(124,58,237,0.15);color:#a78bfa;padding:1px 6px;border-radius:4px;">✅ LSK</span>':'<span style="font-size:9px;background:rgba(255,152,0,0.12);color:#ff9800;padding:1px 6px;border-radius:4px;">⏳ Pending</span>'}</div>
-            <div style="font-size:11px;color:rgba(124,58,237,0.8);font-weight:700;">${l.spec||l.category}</div>
-            ${l.firm?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 ${l.firm}</div>`:''}
+            <div style="font-size:14px;font-weight:800;color:white;">${_esc(l.name)} ${l.verified?'<span style="font-size:9px;background:rgba(124,58,237,0.15);color:#a78bfa;padding:1px 6px;border-radius:4px;">✅ LSK</span>':'<span style="font-size:9px;background:rgba(255,152,0,0.12);color:#ff9800;padding:1px 6px;border-radius:4px;">⏳ Pending</span>'}</div>
+            <div style="font-size:11px;color:rgba(124,58,237,0.8);font-weight:700;">${_esc(l.spec||l.category)}</div>
+            ${l.firm?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 ${_esc(l.firm)}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
             <div style="font-size:15px;font-weight:900;color:#a78bfa;">KES ${Number(l.rate||0).toLocaleString()} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">${RATE_LBL[l.rateType]||'/ session'}</span></div>
