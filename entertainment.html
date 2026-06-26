@@ -1218,6 +1218,7 @@ const PERFORMERS = [
 
 let activeCat = "";
 let bookTarget = null;
+let _fsArtists = [];  /* approved artists from Firestore */
 
 const TYPE_LABEL   = { dj:"DJ / Disc Jockey", mc:"MC / Emcee", band:"Live Band", comedian:"Comedian", photographer:"Photographer", videographer:"Videographer", dancer:"Dancer", singer:"Singer / Vocalist", soundeng:"Sound Engineer", lighting:"Lighting Tech", voiceover:"Voice Artist", producer:"Music Producer", musician:"Musician", planner:"Event Planner", makeup:"Makeup Artist", magician:"Magician" };
 const BADGE_CLASS  = { dj:"badge-dj", mc:"badge-mc", band:"badge-band", comedian:"badge-comedian", photographer:"badge-photographer", videographer:"badge-videographer", dancer:"badge-dancer", singer:"badge-singer", soundeng:"badge-soundeng", lighting:"badge-lighting", voiceover:"badge-voiceover", producer:"badge-producer", musician:"badge-musician", planner:"badge-planner", makeup:"badge-makeup", magician:"badge-magician" };
@@ -1250,7 +1251,23 @@ function setCat(cat){
 
 function filterPerformers(scroll){
   const q = (document.getElementById("enSearch").value||"").toLowerCase();
-  let list = PERFORMERS;
+  /* Merge: Firestore approved artists first, then hardcoded fallbacks not already present */
+  const fsNorm = _fsArtists.map(a => ({
+    id: a._id, fsId: a._id,
+    name: a.name || '', type: a.type || 'dj',
+    location: a.city || a.location || 'Kenya',
+    desc: a.bio || '', rating: a.rating || 0,
+    reviews: a.reviewCount || 0,
+    genres: a.genres || [], equipment: a.equipment || [],
+    priceFrom: a.priceFrom || 0, priceSuffix: a.priceSuffix || 'per event',
+    emoji: '🎵', bannerBg: 'linear-gradient(135deg,rgba(168,85,247,0.18),rgba(236,72,153,0.1))',
+    available: a.available !== false,
+    instagram: a.instagram || '',
+    featured: a.featured || false,
+    fromFirestore: true,
+  }));
+  const hardcoded = PERFORMERS.filter(p => !fsNorm.some(f => f.name.toLowerCase() === p.name.toLowerCase()));
+  let list = [...fsNorm, ...hardcoded];
   if(activeCat) list = list.filter(p=>p.type===activeCat);
   if(q) list = list.filter(p=>
     p.name.toLowerCase().includes(q)||
@@ -1395,19 +1412,29 @@ function submitBooking(){
   const venue = document.getElementById("bookVenue").value.trim();
   if(!name||!phone||!date||!event){ (window._skToast||alert)("Please fill all required fields."); return; }
 
-  const booking = { id:"BKG"+Date.now(), performerId:bookTarget?.id, performerName:bookTarget?.name, type:bookTarget?.type, clientName:name, phone, date, time:document.getElementById("bookTime").value, eventType:event, venue, notes:document.getElementById("bookNotes").value, status:"pending", createdAt:new Date().toLocaleDateString() };
+  const bookingId = "BKG"+Date.now();
+  const booking = { id:bookingId, performerId:bookTarget?.id, performerName:bookTarget?.name, type:bookTarget?.type, clientName:name, phone, date, time:document.getElementById("bookTime").value, eventType:event, venue, notes:document.getElementById("bookNotes").value, status:"pending", createdAt:new Date().toLocaleDateString() };
   let bookings = [];
   try { bookings = JSON.parse(localStorage.getItem("sokoniBookings"))||[]; } catch(e){}
   bookings.push(booking);
   localStorage.setItem("sokoniBookings", JSON.stringify(bookings));
   if(typeof renderMyBookings === 'function') renderMyBookings();
-  /* Also save to Firestore entArtistBookings if EntHub is loaded */
-  if(window.EntHub && bookTarget?.fsId) {
-    EntHub.bookArtist(bookTarget.fsId, {
+  /* Always save to Firestore — use bookArtist for Firestore performers, bookArtistDirect for hardcoded */
+  if(window.EntHub) {
+    const bookData = {
+      artistName: bookTarget?.name, artistType: bookTarget?.type,
       bookerName: name, bookerPhone: phone, eventDate: date,
       eventTime: document.getElementById("bookTime").value,
-      eventType: event, venue, notes: document.getElementById("bookNotes").value,
-    }).catch(e => console.warn('[SOKONI] Artist booking save:', e.message));
+      eventType: event, eventVenue: venue,
+      notes: document.getElementById("bookNotes").value,
+    };
+    if(bookTarget?.fsId) {
+      EntHub.bookArtist(bookTarget.fsId, bookData)
+        .catch(e => console.warn('[SOKONI] Artist booking save:', e.message));
+    } else {
+      EntHub.bookArtistDirect({ ...bookData, artistId: bookTarget?.id })
+        .catch(e => console.warn('[SOKONI] Direct booking save:', e.message));
+    }
   }
 
   closeBooking();
@@ -2114,9 +2141,20 @@ function promoteEvent() {
   const phone = (document.getElementById('evtPhone')?.value||'').trim();
   const msgEl = document.getElementById('evtMsg');
   if (!name || !date || !phone) { if(msgEl) { msgEl.textContent='Fill event name, date and contact'; msgEl.style.color='#ff9800'; } return; }
-  const evt = { id:'EV'+Date.now(), name, date, venue, phone, price:Number(document.getElementById('evtPrice')?.value||0), type:document.getElementById('evtType')?.value||'other', emoji:'🎭', color:'rgba(168,85,247,0.08)', border:'rgba(168,85,247,0.2)', desc:'' };
+  const evtType = document.getElementById('evtType')?.value || 'other';
+  const evtPrice = Number(document.getElementById('evtPrice')?.value || 0);
+  const evt = { id:'EV'+Date.now(), name, date, venue, phone, price:evtPrice, type:evtType, emoji:'🎭', color:'rgba(168,85,247,0.08)', border:'rgba(168,85,247,0.2)', desc:'' };
   let local = []; try { local = JSON.parse(localStorage.getItem('sokoniEvents'))||[]; } catch(e) {}
   local.unshift(evt); localStorage.setItem('sokoniEvents', JSON.stringify(local));
+  /* Also save to Firestore so events persist across devices */
+  if(window.EntHub) {
+    EntHub.createEvent({
+      title: name, date, venueName: venue, organizerPhone: phone,
+      type: evtType, price: evtPrice,
+      ticketTypes: evtPrice > 0 ? [{ name:'General', price:evtPrice, capacity:500, sold:0 }] : [],
+      totalCapacity: 500,
+    }).catch(e => console.warn('[SOKONI] Event save:', e.message));
+  }
   renderEventsGrid();
   togglePromoteForm();
   if(msgEl) { msgEl.textContent='Event submitted!'; msgEl.style.color='#71ff00'; }
@@ -2171,6 +2209,7 @@ function postEntRequest() {
   let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_entertainment'))||[]; } catch(e) {}
   reqs.unshift({ id:'EREQ'+Date.now(), text, type: type||'General', phone, ts: Date.now() });
   localStorage.setItem('askHub_entertainment', JSON.stringify(reqs.slice(0,30)));
+  if(window.EntHub) EntHub.saveRequest({ text, type: type||'General', phone }).catch(()=>{});
   document.getElementById('entAskText').value = '';
   document.getElementById('entAskPhone').value = '';
   renderEntFeed();
@@ -2206,6 +2245,7 @@ function postEntRequestHome() {
   let reqs = []; try { reqs = JSON.parse(localStorage.getItem('askHub_entertainment'))||[]; } catch(e) {}
   reqs.unshift({ id:'EREQ'+Date.now(), text, type: type||'General', phone, ts: Date.now() });
   localStorage.setItem('askHub_entertainment', JSON.stringify(reqs.slice(0,30)));
+  if(window.EntHub) EntHub.saveRequest({ text, type: type||'General', phone }).catch(()=>{});
   document.getElementById('entAskTextHome').value = '';
   document.getElementById('entAskPhoneHome').value = '';
   renderEntFeedHome();
@@ -2243,8 +2283,19 @@ function _initFsEvents() {
     renderEventsGrid();
   });
 }
+
+/* Load approved Firestore artists — merges into performer grid */
+function _initFsArtists() {
+  if (!window.EntHub) return;
+  EntHub.listenArtists({}, artists => {
+    _fsArtists = artists;
+    filterPerformers();
+  });
+}
+
 /* Try immediately, retry once EntHub is ready */
 _initFsEvents();
+_initFsArtists();
 </script>
 <script src="scroll-memory.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
@@ -2268,8 +2319,9 @@ _initFsEvents();
 <script type="module">
 import EntHub from './entertainment-hub.js';
 window.EntHub = EntHub;
-/* Once EntHub is ready, boot real-time events */
-if (typeof _initFsEvents === 'function') _initFsEvents();
+/* Once EntHub is ready, boot real-time data */
+if (typeof _initFsEvents  === 'function') _initFsEvents();
+if (typeof _initFsArtists === 'function') _initFsArtists();
 </script>
 <!-- QR libraries -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>

@@ -63,13 +63,59 @@ const EntHub = {
   },
 
   listenArtists(filters, callback, limitN = 80) {
-    let q = query(collection(db, 'entArtists'), orderBy('createdAt', 'desc'), limit(limitN));
-    if (filters?.type) q = query(collection(db, 'entArtists'), where('type', '==', filters.type), orderBy('createdAt', 'desc'), limit(limitN));
-    if (filters?.city) q = query(collection(db, 'entArtists'), where('city', '==', filters.city), orderBy('createdAt', 'desc'), limit(limitN));
+    /* Public grid: only show approved/verified artists */
+    const statusFilter = filters?.all ? [] : [where('status', 'in', ['approved', 'active'])];
+    let q = query(collection(db, 'entArtists'), ...statusFilter, orderBy('createdAt', 'desc'), limit(limitN));
+    if (filters?.type) q = query(collection(db, 'entArtists'), where('type', '==', filters.type), ...statusFilter, orderBy('createdAt', 'desc'), limit(limitN));
+    if (filters?.city) q = query(collection(db, 'entArtists'), where('city', '==', filters.city), ...statusFilter, orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
       err => console.warn('[EntHub] artists:', err.message)
     );
+  },
+
+  /* Book a hardcoded/static performer (no Firestore artistId) */
+  async bookArtistDirect(data) {
+    const uid = _uid();
+    const u = _user();
+    const ref = await addDoc(collection(db, 'entArtistBookings'), {
+      uid: uid || 'guest',
+      artistId: data.artistId || 'static_' + (data.artistName || '').toLowerCase().replace(/\s+/g, '_'),
+      artistUid: '',
+      artistName: data.artistName || '',
+      artistType: data.artistType || '',
+      bookerName: data.bookerName || u.name || '',
+      bookerPhone: data.bookerPhone || u.phone || '',
+      bookerEmail: data.bookerEmail || u.email || '',
+      eventDate: data.eventDate || '',
+      eventTime: data.eventTime || '',
+      eventType: data.eventType || '',
+      eventVenue: data.eventVenue || '',
+      notes: data.notes || '',
+      budget: data.budget || 0,
+      status: 'pending',
+      source: 'static_performer',
+      depositPaid: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return ref.id;
+  },
+
+  /* Save an Ask-Hub entertainment request */
+  async saveRequest(data) {
+    const uid = _uid();
+    const u = _user();
+    const ref = await addDoc(collection(db, 'entRequests'), {
+      uid: uid || 'guest',
+      requesterName: u.name || '',
+      phone: data.phone || u.phone || '',
+      text: data.text || '',
+      type: data.type || 'General',
+      status: 'open',
+      createdAt: serverTimestamp(),
+    });
+    return ref.id;
   },
 
   async getMyArtistProfile() {
