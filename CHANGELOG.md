@@ -1,4 +1,44 @@
-﻿## [2026-06-26] — Offline Bar + Header Visibility: Fixed Banner Z-Index and Online Detection
+﻿## [2026-06-26] — Hero Layout Restore: Floating Card Over Background Image
+
+### Summary
+Restored the homepage hero to a compact floating-card design. Removed excessive vertical padding from the `.glass-hero` section and the `.glass-hero-card` internal padding across all breakpoints. Internal element spacing (badge→h1→subtitle→stat row) was tightened. On mobile (≤600px) the card now has rounded corners on all sides with a small section padding so the background image is visible around the card, giving a genuine floating effect instead of a full-bleed flush layout.
+
+### UI Fixes
+
+#### Desktop (≥769px) — sokoni-desktop.css
+- `.glass-hero` section padding: `56px 60px 44px` → `32px 40px`
+- `.glass-hero-card` internal padding: `36px 40px` → `28px 40px`
+
+#### Tablet (601–768px) — style.css base
+- `.glass-hero` section padding: `60px 20px` → `32px 20px`; removed `min-height:400px`
+- `.glass-hero-card` padding: `52px 64px` → `28px 48px`
+- Late-override `.glass-hero`: removed `min-height:340px`, normalized padding to `32px 20px`
+
+#### All viewports — internal spacing
+- `.glass-hero-badge` margin-bottom: `22px` → `12px`
+- `.glass-hero-card h1` margin-bottom: `18px` → `10px`
+- `.glass-hero-sub` margin-bottom: `36px` → `16px`
+
+#### Mobile (≤600px) — mobile.css + sokoni-premium-v2.css
+- `.glass-hero` section padding: `0` → `12px 16px` (background visible around card)
+- `.glass-hero-card` border-radius: `0 0 28px 28px` → `20px` (all corners)
+- `.glass-hero-card` border: restored full `1px solid rgba(255,255,255,0.12)` (was border-left/right/top none)
+- `.glass-hero-card` padding: `28px 20px 24px` → `22px 18px 18px`
+
+### Modified Files
+| File | Change |
+|---|---|
+| `style.css` | Hero section padding, card padding, badge/h1/sub margins, mobile @media block |
+| `mobile.css` | Floating card layout with rounded corners + section padding |
+| `sokoni-premium-v2.css` | Same floating card values for mobile media query |
+| `sokoni-desktop.css` | Desktop section and card padding reduced |
+
+### Breaking Changes
+None. Purely layout/spacing CSS changes.
+
+---
+
+## [2026-06-26] — Offline Bar + Header Visibility: Fixed Banner Z-Index and Online Detection
 
 ### Summary
 Two UI reliability fixes: (1) `#sokoniOfflineBanner` (sw-register.js) was positioned at `top:0; z-index:999999` — ABOVE the fixed nav (`z-index:100001`) — making the header disappear whenever SW triggered the banner. Repositioned to `top:var(--sk-header-h,64px)` with `z-index:9999` (below nav). (2) Both offline-bar detectors (`sokoni-ui.js`, `sw-register.js`) used a real fetch to confirm connectivity before hiding the bar. Fetch fails during SW activation even when the device has internet (`navigator.onLine=true`), keeping the bar visible. Fix: trust `navigator.onLine` immediately for the ONLINE→hide direction; only use fetch to verify before SHOWING the bar.
