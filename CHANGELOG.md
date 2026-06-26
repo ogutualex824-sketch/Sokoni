@@ -1,4 +1,26 @@
-﻿## [2026-06-26] — Digital Esoko: Full Digital Products Marketplace
+﻿## [2026-06-26] — Food Hub: Crash fixes, XSS hardening, checkout flow, Firestore backend
+
+### Summary
+Comprehensive food hub overhaul across 3 files. Fixed 2 runtime crashes in the restaurant dashboard (`delItem`/`delPromo` calling undefined helpers), applied XSS escaping via `esc()` to all Firestore-sourced and user-controlled fields, replaced localStorage-only checkout with a full M-Pesa → Firestore flow (foodOrders collection), wired real-time order status in `food-order.html` via `onSnapshot`, removed the auto-simulation timer, and replaced hardcoded rider data with dynamic order fields. Revenue chart in the dashboard now derives from actual orders.
+
+### Files Changed
+- `food-dashboard.html` — delItem/delPromo crash fix; esc() on all orderCard/renderMenu/editItem/renderPromos fields; real revenue chart; Firestore module (live orders feed, menu sync, status update)
+- `food-menu.html` — esc() on item names/desc/reviews; "Checkout" button with modal (name, phone, address, order summary); SokoniPay.platformBook → foodOrders Firestore write → commission + invoice + redirect; Firestore module (_saveFoodOrderFS)
+- `food-order.html` — esc() on all order fields; hardcoded rider replaced with dynamic o.riderName/riderPhone/riderRating; startSimulation() removed; onSnapshot listener for real restaurant-pushed status; Firestore module (_listenFoodOrderFS)
+- `firestore.rules` — 2 new collection rules: `foodOrders` (buyer create, buyer/restaurant read/update), `foodMenus` (public read, owner write)
+
+### Security Changes
+- XSS: 20+ innerHTML injection surfaces closed across 3 food pages via esc()
+- Firestore rules prevent unauthorized order reads or writes
+- foodOrders.status locked to 'placed' on create; updates restricted to status/rider fields only
+
+### Performance Changes
+- Dashboard chart no longer hardcoded — reads live orders (eliminates stale data)
+- onSnapshot replaces setTimeout polling for order status — true real-time with no wasted calls
+
+---
+
+## [2026-06-26] — Digital Esoko: Full Digital Products Marketplace
 
 ### Summary
 Built the complete Digital Esoko marketplace from scratch — Kenya's first digital products storefront inside SOKONI. Buyers can browse, filter, search and purchase downloadable digital products (eBooks, templates, music, courses, software, design assets) via M-Pesa with instant file delivery. Sellers get a full dashboard to upload products (file + cover to Firebase Storage), track sales and earnings. Full Firestore wiring with real-time feeds, commission tracking, invoicing, and 2 new security rule blocks.
