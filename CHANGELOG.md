@@ -1,4 +1,45 @@
-﻿## [2026-06-26] — Hero Floating Card + Offline Detection Reliability
+﻿## [2026-06-26] — Sports Hub: Firestore Persistence + Bug Fixes
+
+### Summary
+Wired `sokoni-sports.js` to write all user-generated sports data (venue bookings, coach bookings, tournament registrations, reviews, posts, orders, teams, players) to dedicated Firestore collections instead of the generic `applications` collection. Added cross-device sync, fixed three runtime bugs, and deployed security rules for all 9 new sports collections.
+
+### Files Changed
+- `sokoni-sports.js` — full Firestore wiring + 3 bug fixes
+- `firestore.rules` — 9 new sports collection rules added
+
+### sokoni-sports.js Changes
+- **`fsWrite()`** — replaced `SokoniDB.saveApplication()` hack (which stored sports data in the `applications` collection under a `category:'spt_xxx'` prefix) with proper Firestore writes to dedicated, named collections via `firebase.firestore().collection(fsCol).doc(id).set(data, {merge:true})`; localStorage kept as offline cache/fallback
+- **Collection map** — `teams→teams`, `tournaments→tournaments`, `players→sportsPlayers`, `coaches→sportsCoaches`, `venues→sportsVenues`, `coach_bookings→sportsCoachBookings`, `venue_bookings→sportsVenueBookings`, `tn_registrations→sportsTournamentRegs`, `posts→sportsPosts`, `reviews→sportsReviews`, `orders→sportsOrders`
+- **`syncUserDataFromFirestore()`** — new async function; pulls authenticated user's venue bookings, coach bookings, and tournament registrations from Firestore on page load; updates localStorage cache so checks remain fast; called automatically on init
+- **Bug fix: `checkVenueAvailability()`** — was returning a boolean (`!booked.some(...)`) but `sports-venue.html` expected an array of booked hour strings to pass to `.includes(h)`; runtime `TypeError: bookedSlots.includes is not a function` silently failed; fixed to return `[...hours]` (Set of booked slot strings)
+- **Bug fix: `ratePerSession` field missing** — `COACHES` data used `price` field but all HTML templates referenced `c.ratePerSession`, causing `S.fmt(undefined) → "0"` everywhere coach rates appeared; `getCoaches()` and `getCoachById()` now normalise the field: `ratePerSession: c.ratePerSession ?? c.price`
+- **Bug fix: `bookVenue()` notification** — body string referenced `data.venueName`, `data.startTime`, `data.endTime` which are never set by the caller; fixed to derive slot range from `bk.slots` array: `${bk.slots[0]}–${bk.slots[bk.slots.length-1]}`
+
+### Firestore Security Rules
+Nine new collections added to `firestore.rules`:
+| Collection | Who reads | Who creates |
+|---|---|---|
+| `sportsPlayers` | public | authenticated + `claimsOwner` |
+| `sportsCoaches` | public | authenticated + `claimsOwner` |
+| `sportsVenues` | public | authenticated + `claimsOwner` |
+| `sportsVenueBookings` | owner or admin | authenticated + required fields |
+| `sportsCoachBookings` | owner or admin | authenticated + required fields |
+| `sportsTournamentRegs` | public | authenticated + required fields |
+| `sportsReviews` | public | authenticated; body ≤ 2,000 chars; rating 1–5; immutable |
+| `sportsPosts` | public | authenticated; content ≤ 3,000 chars |
+| `sportsOrders` | owner or admin | authenticated + required fields |
+
+All write rules use `claimsOwner()` to prevent writing on behalf of another uid. Admin-only fields blocked via `noAdminFields()` on profile collections. Reviews are immutable (`allow update: if false`). Bookings/orders are admin-update-only to prevent client-side status manipulation.
+
+### Migration Notes
+- No data migration needed — existing localStorage caches remain valid as fallback
+- Deploy `firestore.rules` to activate the new rules before releasing
+- No new Firestore indexes required (queries are by `uid` + `createdAt` which use default indexes)
+- Authenticated users will get cross-device sync automatically on next page load
+
+---
+
+## [2026-06-26] — Hero Floating Card + Offline Detection Reliability
 
 ### Summary
 Converted the homepage glass hero from a full-bleed, edge-to-edge section into a properly floating premium card with visible side margins and full four-corner border-radius. Simultaneously replaced the unreliable `navigator.onLine`-event-only offline detection with a fetch-probe system that requires 3 consecutive real network failures before showing the persistent offline banner.

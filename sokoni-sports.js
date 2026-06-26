@@ -6,8 +6,23 @@
 ;(function(){
 'use strict';
 
+const _SPORTS_COLL = {
+  teams:'teams', tournaments:'tournaments',
+  players:'sportsPlayers', coaches:'sportsCoaches', venues:'sportsVenues',
+  coach_bookings:'sportsCoachBookings', venue_bookings:'sportsVenueBookings',
+  tn_registrations:'sportsTournamentRegs', posts:'sportsPosts',
+  reviews:'sportsReviews', orders:'sportsOrders',
+};
+function _db(){ try{ return window.firebase?.firestore ? window.firebase.firestore() : null; }catch(e){ return null; } }
 function fsWrite(col, data) {
-  try { if(window.SokoniDB?.saveApplication) return SokoniDB.saveApplication({...data, category:'spt_'+col}); } catch(e){}
+  const fsCol = _SPORTS_COLL[col];
+  if (fsCol) {
+    try {
+      const db = _db();
+      if (db) db.collection(fsCol).doc(data.id).set(data, {merge:true}).catch(e => console.warn('[Sports] Firestore write:', col, e));
+    } catch(e) {}
+  }
+  /* Always keep localStorage as offline cache / fallback */
   try {
     const key='spt_'+col; const arr=JSON.parse(localStorage.getItem(key)||'[]');
     const idx=arr.findIndex(x=>x.id===data.id);
@@ -162,14 +177,17 @@ function getPlayerById(id){ return [...PLAYERS,...fsRead('players')].find(p=>p.i
 
 /* ══ COACH FUNCTIONS ══ */
 function getCoaches(filter){
-  let list=[...COACHES,...fsRead('coaches')];
+  let list=[...COACHES,...fsRead('coaches')].map(c=>({...c, ratePerSession:c.ratePerSession??c.price}));
   if(!filter)return list;
   if(filter.sport&&filter.sport!=='all')list=list.filter(c=>c.sport===filter.sport||c.sport==='fitness');
   if(filter.q){const q=filter.q.toLowerCase();list=list.filter(c=>(c.name+c.sport+c.location).toLowerCase().includes(q));}
   if(filter.verified)list=list.filter(c=>c.verified);
   return list;
 }
-function getCoachById(id){ return [...COACHES,...fsRead('coaches')].find(c=>c.id===id); }
+function getCoachById(id){
+  const c=[...COACHES,...fsRead('coaches')].find(c=>c.id===id);
+  return c?{...c, ratePerSession:c.ratePerSession??c.price}:undefined;
+}
 
 function bookCoach(data){
   const id=genId('CB'); const bk={id,...data,status:'pending',createdAt:Date.now(),uid:uid(),ref:'SOKCOACH'+Math.random().toString(36).slice(2,6).toUpperCase()};
@@ -197,14 +215,18 @@ function bookVenue(data){
   const arr=JSON.parse(localStorage.getItem('spt_venue_bookings')||'[]'); arr.unshift(bk);
   localStorage.setItem('spt_venue_bookings',JSON.stringify(arr.slice(0,200)));
   fsWrite('venue_bookings',bk);
-  addNotification({type:'venue',title:'Venue Booked',body:`Your booking at ${data.venueName} on ${data.date} (${data.startTime}–${data.endTime}) has been submitted.`,ref:bk.ref});
+  const slotRange=(bk.slots||[]).length?`${bk.slots[0]}–${bk.slots[bk.slots.length-1]}`:'selected slots';
+  addNotification({type:'venue',title:'Venue Booked',body:`Booking for ${bk.date} (${slotRange}) submitted. Ref: ${bk.ref}`,ref:bk.ref});
   return bk;
 }
 function getVenueBookings(venueId){ const all=JSON.parse(localStorage.getItem('spt_venue_bookings')||'[]'); return venueId?all.filter(b=>b.venueId===venueId):all; }
 function getUserVenueBookings(){ return JSON.parse(localStorage.getItem('spt_venue_bookings')||'[]').filter(b=>b.uid===uid()); }
-function checkVenueAvailability(venueId,date,startTime){
-  const booked=getVenueBookings(venueId).filter(b=>b.date===date&&!['cancelled'].includes(b.status));
-  return !booked.some(b=>b.startTime===startTime);
+/* Returns an array of booked hour strings (e.g. ['09:00','10:00']) for a given venue+date */
+function checkVenueAvailability(venueId,date){
+  const booked=getVenueBookings(venueId).filter(b=>b.date===date&&b.status!=='cancelled');
+  const hours=new Set();
+  booked.forEach(b=>{if(Array.isArray(b.slots))b.slots.forEach(h=>hours.add(h));});
+  return[...hours];
 }
 
 /* ══ TOURNAMENT FUNCTIONS ══ */
@@ -287,6 +309,26 @@ function sportColor(sport){ return SPORT_CATEGORIES.find(s=>s.id===sport)?.color
 function sportIcon(sport){ return SPORT_CATEGORIES.find(s=>s.id===sport)?.icon||'🏆'; }
 function statusBadge(status){ const m={ongoing:{l:'Ongoing',c:'#22c55e'},upcoming:{l:'Upcoming',c:'#f59e0b'},registration:{l:'Registration Open',c:'#00aaff'},completed:{l:'Completed',c:'rgba(255,255,255,0.4)'},cancelled:{l:'Cancelled',c:'#ef4444'}}; return m[status]||{l:status,c:'white'}; }
 
+/* ══ FIRESTORE USER SYNC ══
+   Pulls the authenticated user's bookings/registrations from Firestore on page
+   load so data is consistent across devices. Falls back silently if offline or
+   firebase is not yet initialised. */
+async function syncUserDataFromFirestore(){
+  const userId=uid(); if(!userId||userId==='guest') return;
+  try {
+    const db=_db(); if(!db) return;
+    const q=col=>db.collection(col).where('uid','==',userId).orderBy('createdAt','desc').limit(50).get();
+    const[vnSnap,cbSnap,tnSnap]=await Promise.all([
+      q('sportsVenueBookings').catch(()=>null),
+      q('sportsCoachBookings').catch(()=>null),
+      q('sportsTournamentRegs').catch(()=>null),
+    ]);
+    if(vnSnap&&!vnSnap.empty) localStorage.setItem('spt_venue_bookings',JSON.stringify(vnSnap.docs.map(d=>d.data())));
+    if(cbSnap&&!cbSnap.empty) localStorage.setItem('spt_coach_bookings',JSON.stringify(cbSnap.docs.map(d=>d.data())));
+    if(tnSnap&&!tnSnap.empty) localStorage.setItem('spt_tn_registrations',JSON.stringify(tnSnap.docs.map(d=>d.data())));
+  } catch(e){ console.warn('[Sports] Sync from Firestore failed:',e); }
+}
+
 /* ── PUBLIC API ── */
 window.SokoniSports = {
   SPORT_CATEGORIES, TEAMS, PLAYERS, COACHES, VENUES, TOURNAMENTS, MARKETPLACE_ITEMS, COMMUNITY_POSTS_SEED,
@@ -300,6 +342,7 @@ window.SokoniSports = {
   addReview, getReviews, getAvgRating,
   saveItem, isSaved,
   addNotification, getNotifications, markNotifRead, getUnreadCount,
+  syncUserDataFromFirestore,
   fmt, timeSince, starsHTML, sportColor, sportIcon, statusBadge,
 };
 })();

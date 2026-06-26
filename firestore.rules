@@ -758,6 +758,161 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       SPORTS HUB — PLAYER PROFILES  (sportsPlayers collection)
+       • Public read — anyone can browse the player directory.
+       • create: owner uid must match auth uid; no privilege fields.
+       • update: owner may edit own profile (uid frozen); admin may moderate.
+       • delete: player owner or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsPlayers/{playerId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS HUB — COACH PROFILES  (sportsCoaches collection)
+       • Public read — coach directory visible to all.
+       • create: authenticated; uid must match; no privilege fields.
+       • update: coach owner (uid frozen) or admin.
+       • delete: admin only (unlink from teams first).
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsCoaches/{coachId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS HUB — VENUE PROFILES  (sportsVenues collection)
+       • Public read — venue directory searchable by all.
+       • create: venue owner uid must match; no privilege fields.
+       • update: venue owner (uid frozen) or admin.
+       • delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsVenues/{venueId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS VENUE BOOKINGS  (sportsVenueBookings collection)
+       • create: authenticated user; uid in payload must match auth uid;
+                 required booking fields must be present.
+       • read: booking owner or admin.
+       • update / delete: admin only (status changes, cancellations).
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsVenueBookings/{bookingId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(
+                         ['venueId','date','slots','name','phone','uid','status','createdAt']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS COACH BOOKINGS  (sportsCoachBookings collection)
+       • create: authenticated user; uid in payload must match auth uid;
+                 required booking fields must be present.
+       • read: booking owner or admin.
+       • update / delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsCoachBookings/{bookingId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(
+                         ['coachId','name','phone','date','uid','status','createdAt']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS TOURNAMENT REGISTRATIONS  (sportsTournamentRegs collection)
+       • Public read — organizers see all team registrations.
+       • create: authenticated; uid in payload must match auth uid;
+                 required fields must be present.
+       • update: admin only (approve / reject registrations).
+       • delete: admin or the registering user (withdrawal).
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsTournamentRegs/{regId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(
+                         ['tournamentId','teamName','captain','phone','uid','status','createdAt']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS REVIEWS  (sportsReviews collection)
+       • Public read — all reviews visible to everyone.
+       • create: authenticated; required fields present; rating 1–5;
+                 body ≤ 2,000 chars; immutable after posting.
+       • update: intentionally disabled (use delete + re-create).
+       • delete: admin moderation only.
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsReviews/{reviewId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(
+                         ['targetId','targetType','author','rating','body','uid','ts'])
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && request.resource.data.body.size() <= 2000;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS COMMUNITY POSTS  (sportsPosts collection)
+       • Public read — community feed visible to all.
+       • create: authenticated; required fields present; content ≤ 3,000 chars.
+       • update: post owner (edit content / likes) or admin; uid frozen.
+       • delete: post owner or admin.
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsPosts/{postId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(
+                         ['type','author','sport','content','uid','ts'])
+                    && request.resource.data.content.size() <= 3000;
+      allow update: if isAdmin()
+                    || (isOwner() && uidUnchanged()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['content','likes','comments','updatedAt']));
+      allow delete: if isAdmin() || isOwner();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SPORTS MARKETPLACE ORDERS  (sportsOrders collection)
+       • create: authenticated; uid in payload must match auth uid;
+                 required order fields must be present.
+       • read: order owner or admin.
+       • update: admin only (status management, fulfilment).
+       • delete: admin only.
+    ══════════════════════════════════════════════════════════════ */
+    match /sportsOrders/{orderId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(
+                         ['itemId','qty','total','phone','uid','status','createdAt']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        DISPUTES  (dispute.html — buyer/seller dispute resolution)
        • create: any authenticated user may submit a dispute.
        • read: submitter (uid match), moderator, or admin.
