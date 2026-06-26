@@ -261,7 +261,17 @@ import {
   getCountFromServer, serverTimestamp, addDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const PAGE = 12;
+const PAGE = 40;
+const _DEMO_ED = [
+  {_id:'DEMO_ED1',name:'Brighter Minds Academy',category:'School',location:'Nairobi',mode:'In-Person',price:15000,priceUnit:'term',description:'Nursery to Class 8. CBC curriculum. Strong performance in KCPE. Meals included.',contact:'info@brightminds.co.ke',active:true,featured:true},
+  {_id:'DEMO_ED2',name:'KCA University',category:'University',location:'Ruaraka, Nairobi',mode:'In-Person',price:45000,priceUnit:'semester',description:'Accredited degrees in Business, IT and Accounting. Evening classes available. CPA and ACCA preparation.',contact:'admissions@kca.ac.ke',active:true,featured:true},
+  {_id:'DEMO_ED3',name:'James Waweru — Maths & Physics Tutor',category:'Tutor',location:'Westlands, Nairobi',mode:'In-Person',price:1500,priceUnit:'session',description:'10 years experience. Form 1–4 Maths and Physics. KCSE exam prep. Home visits available.',whatsapp:'254712345678',active:true,featured:false},
+  {_id:'DEMO_ED4',name:'Coding for Kids Kenya',category:'Online Course',location:'Online',mode:'Online',price:3500,priceUnit:'course',description:'Scratch, Python and web basics for ages 8–16. Weekend live sessions. Certificate on completion.',whatsapp:'254723456789',active:true,featured:false},
+  {_id:'DEMO_ED5',name:'KCSE Exam Bootcamp',category:'Exam Prep',location:'CBD, Nairobi',mode:'In-Person',price:5000,priceUnit:'month',description:'Intensive KCSE prep for all eight subjects. Past papers, mock exams and targeted revision.',contact:'bootcamp@sokoni.co.ke',active:true,featured:false},
+  {_id:'DEMO_ED6',name:'ACCA & CPA Professional Classes',category:'Professional',location:'Upper Hill, Nairobi',mode:'In-Person',price:12000,priceUnit:'level',description:'Certified ACCA & CPA(K) tuition centre. Flexible weekend schedules. 85% pass rate.',contact:'finance@sokoni.co.ke',active:true,featured:false},
+  {_id:'DEMO_ED7',name:'Electrical Wiring — TVET Course',category:'Vocational',location:'Industrial Area, Nairobi',mode:'In-Person',price:8000,priceUnit:'course',description:'NITA-accredited 3-month electrical installation course. Certificate + job placement assistance.',whatsapp:'254734567890',active:true,featured:false},
+  {_id:'DEMO_ED8',name:'French & Mandarin Language Centre',category:'Language',location:'Westlands, Nairobi',mode:'In-Person',price:4000,priceUnit:'month',description:'Beginner to advanced classes. Native speakers. Small groups. Evening and weekend slots.',whatsapp:'254745678901',active:true,featured:false},
+];
 const CAT_ICONS = {
   'School':'🏫','University':'🎓','Tutor':'👨‍🏫','Online Course':'💻',
   'Exam Prep':'📝','Professional':'🏅','Vocational':'🔧','Language':'🌍',
@@ -315,15 +325,15 @@ async function _load() {
   grid.innerHTML = '<div class="ed-spinner"><div></div></div>';
 
   try {
-    let q = query(collection(db, 'education'), where('active','==',true));
-    if (_cat !== 'All') q = query(q, where('category','==',_cat));
-    q = query(q, orderBy('featured','desc'), orderBy('createdAt','desc'), limit(PAGE));
+    /* Single-field query — avoids composite index requirement */
+    const q = query(collection(db, 'education'), where('active','==',true), orderBy('createdAt','desc'), limit(PAGE));
 
     const snap  = await getDocs(q);
     let providers = snap.docs.map(d => ({ _id:d.id, ...d.data() }));
     providers.forEach(p => { _cache[p._id] = p; });
 
-    // Client-side keyword filter
+    /* client-side filters */
+    if (_cat !== 'All') providers = providers.filter(p => p.category === _cat);
     if (_kw) {
       const kw = _kw.toLowerCase();
       providers = providers.filter(p =>
@@ -331,6 +341,13 @@ async function _load() {
         (p.description||'').toLowerCase().includes(kw) ||
         (p.category||'').toLowerCase().includes(kw)
       );
+    }
+    providers.sort((a,b) => (b.featured?1:0) - (a.featured?1:0));
+
+    /* demo fallback when collection is empty */
+    if (!providers.length && _cat === 'All' && !_kw) {
+      _DEMO_ED.forEach(p => { _cache[p._id] = p; });
+      providers = _DEMO_ED;
     }
 
     grid.innerHTML = providers.length
@@ -387,6 +404,13 @@ window.EDApp = {
   async enrol(pid) {
     const p = _cache[pid];
     if (!p) return;
+    /* record enquiry in Firestore fire-and-forget */
+    const user = auth.currentUser;
+    addDoc(collection(db, 'educationEnquiries'), {
+      providerId: pid, providerName: p.name, category: p.category,
+      uid: user?.uid || null, userEmail: user?.email || null,
+      status: 'new', createdAt: serverTimestamp(),
+    }).catch(() => {});
     if (p.whatsapp) {
       window.open(`https://wa.me/${p.whatsapp.replace(/\D/g,'')}?text=Hi, I found you on SOKONI Education. I'd like to enquire about ${encodeURIComponent(p.name)}.`, '_blank');
       return;
