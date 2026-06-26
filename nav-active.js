@@ -45,7 +45,7 @@
     'entertainment.html':      'services.html',
     'food.html':               'services.html',
     'food-menu.html':          'services.html',
-    'food-cart.html':          'services.html',
+    'cart.html':               'services.html',
     'food-order.html':         'services.html',
     'food-dashboard.html':     'services.html',
     'food-rider.html':         'services.html',

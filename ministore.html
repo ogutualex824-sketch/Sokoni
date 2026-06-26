@@ -1373,10 +1373,10 @@ window._revealAdultCard=_revealAdultCard; window._msCardClick=_msCardClick;
 function addToCartFromStore(id){
   const p = getProds().find(x=>x.id===id);
   if(!p) return;
-  let cart = []; try{cart=JSON.parse(localStorage.getItem("sokoniCart"))||[];}catch(e){}
-  const ex = cart.find(c=>c.id===id);
+  let cart = []; try{cart=JSON.parse(localStorage.getItem("cart"))||[];}catch(e){}
+  const ex = cart.find(c=>c.id===id && c.type!=='food');
   if(ex){ ex.qty=(ex.qty||1)+1; } else { cart.push({...p,qty:1}); }
-  localStorage.setItem("sokoniCart",JSON.stringify(cart));
+  localStorage.setItem("cart",JSON.stringify(cart));
   toast(p.name.substring(0,25)+" added to cart!");
 }
 

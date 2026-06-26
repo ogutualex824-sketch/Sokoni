@@ -103,7 +103,7 @@
 
     /* ── FOOD HUB ── */
     'food-menu.html':      ['🍽️', 'Food Menu · Browse & Order',                     '#ea580c', 'rgba(234,88,12,0.16)',   '#281000', '#0e0600'],
-    'food-cart.html':      ['🛒', 'Food Cart · Review Your Order',                   '#f97316', 'rgba(249,115,22,0.16)',  '#1f0e00', '#0a0500'],
+    'cart.html':           ['🛒', 'Cart · Review Your Order',                        '#71ff00', 'rgba(113,255,0,0.12)',   '#0a1200', '#050800'],
     'food-order.html':     ['🍔', 'Food Order · Track Your Meal',                    '#ea580c', 'rgba(234,88,12,0.16)',   '#281000', '#0e0600'],
     'food-dashboard.html': ['📊', 'Food Dashboard · Manage Orders',                  '#f59e0b', 'rgba(245,158,11,0.16)',  '#1f1000', '#0a0600'],
     'food-rider.html':     ['🛵', 'Food Rider · Deliver & Earn',                     '#22c55e', 'rgba(34,197,94,0.15)',   '#002216', '#030e08'],
