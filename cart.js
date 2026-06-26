@@ -114,19 +114,23 @@ function renderProductSection(productItems){
         const catRaw = String(p.category||'');
         const catDisplay = catRaw ? _esc(catRaw.charAt(0).toUpperCase() + catRaw.slice(1)) : 'Product';
         const price = Number(p.price||0);
+        const qty = p.qty||1;
         return `
         <div class="cart-page-card" id="cart-item-${idx}">
             <img src="${_safeImgSrc(p.image)}" alt="${_esc(p.name)}" class="cart-card-img">
             <div class="cart-card-info">
                 <h3>${_esc(p.name)}</h3>
                 <p class="cart-card-cat">${catDisplay}</p>
-                <p class="cart-card-price">KES ${price.toLocaleString()}</p>
+                <p class="cart-card-price">KES ${(price*qty).toLocaleString()}</p>
             </div>
             <div class="cart-card-actions">
-                <button class="cart-move-wish" onclick="moveToWishlist(${idx})" title="Save for later">&#x2764;&#xFE0F;</button>
-                <button class="cart-remove-btn" onclick="removeFromCart(${idx})">
-                    <i class="fas fa-trash"></i> Remove
-                </button>
+                <div class="cart-food-qty">
+                    <button class="cart-qty-btn" onclick="productQty(${idx},${qty-1})">−</button>
+                    <span class="cart-qty-num">${qty}</span>
+                    <button class="cart-qty-btn" onclick="productQty(${idx},${qty+1})">+</button>
+                </div>
+                <button class="cart-move-wish" onclick="moveToWishlist(${idx})" title="Save for later">❤️</button>
+                <button class="cart-remove-btn" onclick="removeFromCart(${idx})"><i class="fas fa-trash"></i> Remove</button>
             </div>
         </div>`;
     }).join('');
@@ -197,6 +201,13 @@ function foodQty(cartId, qty){
     renderCart();
 }
 
+function productQty(index, qty){
+    if(qty <= 0){ removeFromCart(index); return; }
+    if(cart[index]){ cart[index].qty = qty; }
+    localStorage.setItem("cart", JSON.stringify(cart));
+    renderCart();
+}
+
 function moveToWishlist(index){
     const item = cart[index];
     let wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]");
@@ -221,6 +232,7 @@ function clearCart(){
 window.removeFromCart   = removeFromCart;
 window.removeFoodItem   = removeFoodItem;
 window.foodQty          = foodQty;
+window.productQty       = productQty;
 window.moveToWishlist   = moveToWishlist;
 window.clearCart        = clearCart;
 
