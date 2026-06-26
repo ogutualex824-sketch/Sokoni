@@ -873,8 +873,36 @@
     document.head.appendChild(st);
   }
 
-  /* ─── HOME FEED — 16 cards, no infinite scroll ─── */
-  const HOME_LIMIT = 16;
+  /* ─── HOME FEED — 10 cards, rotating ─── */
+  const HOME_LIMIT    = 10;
+  const HOME_ROTATE_MS = 4500; // swap one card every 4.5 s
+  let   _homeRotateTimer = null;
+
+  function _rotateOneHomeCard(el) {
+    if (!el || document.hidden) return;
+    const slots = Array.from(el.children);
+    if (!slots.length) return;
+    const next = _nextBatch(1);
+    if (!next.length) return;
+
+    const idx     = Math.floor(Math.random() * slots.length);
+    const oldCard = slots[idx];
+    const tmp     = document.createElement('div');
+    tmp.innerHTML = _cardHTML(next[0]);
+    const newCard = tmp.firstChild;
+    if (!newCard) return;
+
+    oldCard.style.transition = 'opacity 0.35s ease';
+    oldCard.style.opacity    = '0';
+    setTimeout(() => {
+      newCard.style.opacity    = '0';
+      newCard.style.transition = 'opacity 0.35s ease';
+      if (oldCard.parentNode === el) el.replaceChild(newCard, oldCard);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        newCard.style.opacity = '1';
+      }));
+    }, 350);
+  }
 
   function renderHome(containerId) {
     const el = document.getElementById(containerId);
@@ -896,6 +924,17 @@
     /* Show "Browse More" button */
     const more = document.getElementById('inspiqBrowseMore');
     if (more) more.style.display = 'block';
+
+    /* Start card rotation */
+    if (_homeRotateTimer) clearInterval(_homeRotateTimer);
+    _homeRotateTimer = setInterval(() => _rotateOneHomeCard(el), HOME_ROTATE_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearInterval(_homeRotateTimer);
+      } else {
+        _homeRotateTimer = setInterval(() => _rotateOneHomeCard(el), HOME_ROTATE_MS);
+      }
+    }, { once: false });
   }
 
   /* ─── PUBLIC API ─── */
