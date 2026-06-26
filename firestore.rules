@@ -3291,10 +3291,8 @@ service cloud.firestore {
                      request.auth.uid in resource.data.fleetManagers      ||
                      isAdmin()
                    );
-      allow create: if isAuthed()
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && !request.resource.data.keys().hasAny(['theftMode','status'])
-                        || isAdmin();
+      allow create: if (isAuthed() && request.resource.data.ownerUid == request.auth.uid)
+                    || isAdmin();
       allow update: if isAuthed()
                     && (resource.data.ownerUid == request.auth.uid || isAdmin())
                     && !request.resource.data.diff(resource.data)
@@ -3309,14 +3307,19 @@ service cloud.firestore {
        Only the vehicle owner (or admin) may write location updates.
     ══════════════════════════════════════════════════════════════ */
     match /vehicleLocations/{vehicleId} {
+      function _veh() {
+        return get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data;
+      }
       allow read:  if isAuthed() && (
-                     get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.ownerUid == request.auth.uid ||
-                     request.auth.uid in get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.authorizedDrivers ||
-                     request.auth.uid in get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.familyMembers   ||
+                     _veh().ownerUid == request.auth.uid ||
+                     request.auth.uid in _veh().authorizedDrivers ||
+                     request.auth.uid in _veh().familyMembers     ||
                      isAdmin()
                    );
+      /* Owner + authorised drivers write — drivers are physically in the vehicle */
       allow write: if isAuthed() && (
-                     get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.ownerUid == request.auth.uid ||
+                     _veh().ownerUid == request.auth.uid ||
+                     request.auth.uid in _veh().authorizedDrivers ||
                      isAdmin()
                    );
     }
