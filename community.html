@@ -732,6 +732,7 @@ const DEMO_GROUPS = [
 
 let _ccFilter = 'all';
 let _myGroups = [];
+let _fsGroups = [];  /* groups created by any user, from Firestore */
 
 try { _myGroups = JSON.parse(localStorage.getItem('ccMyGroups')||'[]'); } catch(e){}
 
@@ -748,7 +749,13 @@ window.filterGroups = filterGroups;
 function renderCCGroups() {
   const grid = document.getElementById('ccGroupsGrid'); if (!grid) return;
   let local = []; try { local = JSON.parse(localStorage.getItem('ccGroups')||'[]'); } catch(e){}
-  let list = [...local, ...DEMO_GROUPS.filter(d => !local.some(l=>l.id===d.id))];
+  /* Merge: Firestore groups first, then localStorage, then demo fallbacks */
+  const allIds = new Set([..._fsGroups.map(g=>g.id||g._id), ...local.map(g=>g.id)]);
+  let list = [
+    ..._fsGroups.map(g=>({...g, id:g._id||g.id})),
+    ...local.filter(g => !_fsGroups.some(f=>(f._id||f.id)===g.id)),
+    ...DEMO_GROUPS.filter(d => !allIds.has(d.id)),
+  ];
   if (_ccFilter !== 'all') list = list.filter(g => g.type === _ccFilter);
   grid.innerHTML = list.map(g => {
     const isJoined = _myGroups.includes(g.id);
@@ -807,7 +814,27 @@ function createGroup() {
 }
 window.createGroup = createGroup;
 
+/* ── FIRESTORE LISTENER — live community groups ── */
+async function _initFsGroups() {
+  try {
+    const db = window.firebaseDB || await new Promise(res => {
+      if (window.firebaseDB) return res(window.firebaseDB);
+      const iv = setInterval(() => { if (window.firebaseDB) { clearInterval(iv); res(window.firebaseDB); }}, 300);
+      setTimeout(() => clearInterval(iv), 8000);
+    });
+    if (!db) return;
+    const { collection, query, orderBy, limit, onSnapshot } = await import(FS_URL);
+    /* Single orderBy — no composite index needed; filter client-side if needed */
+    const q = query(collection(db, 'communityGroups'), orderBy('createdAt', 'desc'), limit(100));
+    onSnapshot(q, snap => {
+      _fsGroups = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      renderCCGroups();
+    }, () => {});
+  } catch(e) {}
+}
+
 renderCCGroups();
+_initFsGroups();
 </script>
 <!-- ══════════════════════════════════════════════════════
      EVENTS SECTION
