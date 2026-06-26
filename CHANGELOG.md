@@ -1,4 +1,45 @@
-﻿## [2026-06-26] — Fuel Estimator: ERC Prices Updated to June 2026 EPRA Revision
+﻿## [2026-06-26] — Fuel Estimator: Live EPRA Auto-Scraper (Real-Time via Firestore)
+
+### Summary
+Replaced the hardcoded fuel price constants in the delivery hub with a fully automated live system. A Cloud Function (`fetchEPRAFuelPrices`) scrapes the Kenya EPRA website every 4 hours and writes prices to `sysConfig/fuelPrices` in Firestore. The driver portal subscribes via `onSnapshot` so prices update on every driver's screen the moment EPRA announces — no app reload, no manual update needed. Drivers and admins can also force a refresh via the "Refresh from EPRA" button which calls `triggerEPRAFuelFetch`.
+
+### New Cloud Functions
+- `fetchEPRAFuelPrices` — scheduled every 4h; scrapes EPRA website; writes to Firestore
+- `triggerEPRAFuelFetch` — onCall; any authenticated user can trigger immediate refresh (admin or driver "refresh" button)
+- `_runEPRAScraper` — shared scraper logic with dual-strategy HTML parser + regional price interpolation
+- `_parseEPRAHtml` — two-strategy parser: (1) HTML table column mapping, (2) proximity text scan; falls back gracefully; never overwrites existing prices on failure
+
+### Architecture
+```
+EPRA Website → fetchEPRAFuelPrices (CF, every 4h)
+                      ↓ writes
+             sysConfig/fuelPrices (Firestore)
+                      ↓ onSnapshot
+             driver.html (live update, 0ms latency)
+```
+
+### driver.html Changes
+- `ERC_BASE_PRICES` and `ERC_PREV_PRICES` are now **live mutable objects** updated by Firestore
+- `_startFuelPricesListener()` subscribes to `sysConfig/fuelPrices` via `onSnapshot`
+- `refreshFuelPrices()` now calls `triggerEPRAFuelFetch` Cloud Function (not a fake setTimeout)
+- `fuelLastUpdated` label shows "🟢 Live EPRA · updated 3m ago" when Firestore data is present
+- Falls back to hardcoded June 2026 values until first Firestore read completes
+
+### Firestore Changes
+- New collection: `sysConfig/fuelPrices` — `{ current, previous, updatedAt, source, scraperStatus }`
+- New Firestore rule: `sysConfig/{doc}` — `read: isAuthed()`, `write: false` (CF/admin SDK only)
+
+### Modified Files
+| File | Change |
+|---|---|
+| `functions/index.js` | Added `fetchEPRAFuelPrices`, `triggerEPRAFuelFetch`, `_runEPRAScraper`, `_parseEPRAHtml` |
+| `driver.html` | Live Firestore listener, real refresh button, live timestamp label |
+| `firestore.rules` | Added `sysConfig` collection rule |
+| `CHANGELOG.md` | Updated |
+
+---
+
+## [2026-06-26] — Fuel Estimator: ERC Prices Updated to June 2026 EPRA Revision
 
 ### Summary
 Updated hardcoded Kenya EPRA/ERC fuel prices in the delivery hub fuel estimator (`driver.html`). Super Petrol Nairobi corrected from KES 176.70 to KES 214.00. All regional prices (Mombasa, Kisumu, Other) and fuel types (Diesel, Kerosene) updated using the same fixed regional differentials. Old base prices rolled into `ERC_PREV_PRICES` for trend display (up arrow will now show correctly).

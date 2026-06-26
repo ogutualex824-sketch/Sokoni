@@ -547,19 +547,60 @@ function platformShareFromFee(fee){ return Math.round(fee * 0.12); }
 
 const FUEL_DB_KEY = "sokoniFuelPrices";
 
-/* Base Kenya ERC prices — June 2026 EPRA revision */
+/* Fallback prices (used until Firestore live data arrives) — June 2026 EPRA */
 const ERC_BASE_PRICES = {
   super_petrol: { nairobi:214.00, mombasa:203.00, kisumu:217.00, other:217.00 },
   diesel:       { nairobi:200.71, mombasa:189.69, kisumu:203.69, other:203.69 },
   kerosene:     { nairobi:176.22, mombasa:165.20, kisumu:179.20, other:179.20 },
 };
-
-/* Previous month prices for trend comparison */
 const ERC_PREV_PRICES = {
   super_petrol: { nairobi:176.70, mombasa:165.68, kisumu:179.68, other:179.68 },
   diesel:       { nairobi:163.41, mombasa:152.39, kisumu:166.39, other:166.39 },
   kerosene:     { nairobi:138.92, mombasa:127.90, kisumu:141.90, other:141.90 },
 };
+
+/* Live Firestore sync — prices update the moment EPRA announces */
+var _fuelPricesUnsub = null;
+var _fuelLastUpdatedAt = null;
+function _startFuelPricesListener() {
+  if (_fuelPricesUnsub) return; // already subscribed
+  try {
+    const db = window.firebaseDB;
+    if (!db) return;
+    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(function(fs) {
+      const ref = fs.doc(db, "sysConfig", "fuelPrices");
+      _fuelPricesUnsub = fs.onSnapshot(ref, function(snap) {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        /* Merge Firestore prices over the in-memory objects */
+        if (data.current) {
+          ["super_petrol","diesel","kerosene"].forEach(function(fuel) {
+            if (data.current[fuel]) Object.assign(ERC_BASE_PRICES[fuel], data.current[fuel]);
+          });
+        }
+        if (data.previous) {
+          ["super_petrol","diesel","kerosene"].forEach(function(fuel) {
+            if (data.previous[fuel]) Object.assign(ERC_PREV_PRICES[fuel], data.previous[fuel]);
+          });
+        }
+        _fuelLastUpdatedAt = data.updatedAt ? data.updatedAt.toDate() : new Date();
+        /* Re-render fuel panel if it is currently visible */
+        if (document.getElementById("fuelPricePanel") &&
+            document.getElementById("fuelPricePanel").style.display !== "none") {
+          renderFuelPanel();
+        }
+        /* Update vehicle info cost/km pill too */
+        var v = document.getElementById("driverVehicleSelect");
+        if (v && v.value) updateVehicleInfo(v.value);
+      }, function(err) {
+        console.warn("[SOKONI] fuelPrices listener:", err.message);
+      });
+    }).catch(function(){});
+  } catch(_) {}
+}
+/* Subscribe as soon as Firebase is ready */
+document.addEventListener("sokoniFirebaseReady", _startFuelPricesListener);
+if (window.firebaseDB) _startFuelPricesListener();
 
 /* Vehicle fuel consumption (km per litre) + cargo metadata */
 const VEHICLE_CONSUMPTION = {
@@ -934,8 +975,16 @@ function renderFuelPanel(){
     ? now.toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"})
     : new Date(now.getFullYear(), now.getMonth(), 15).toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
 
-  document.getElementById("fuelLastUpdated").textContent =
-    `ERC revision: 15 ${now.toLocaleDateString("en-KE",{month:"long",year:"numeric"})} · ${zone.charAt(0).toUpperCase()+zone.slice(1)} prices`;
+  var _fuelUpdLabel;
+  if(_fuelLastUpdatedAt){
+    const diffMs = Date.now() - _fuelLastUpdatedAt.getTime();
+    const diffMin = Math.round(diffMs/60000);
+    const age = diffMin < 1 ? "just now" : diffMin < 60 ? diffMin+"m ago" : Math.round(diffMin/60)+"h ago";
+    _fuelUpdLabel = `🟢 Live EPRA · updated ${age} · ${zone.charAt(0).toUpperCase()+zone.slice(1)} prices`;
+  } else {
+    _fuelUpdLabel = `⏳ EPRA · ${now.toLocaleDateString("en-KE",{month:"long",year:"numeric"})} · ${zone.charAt(0).toUpperCase()+zone.slice(1)} prices (cached)`;
+  }
+  document.getElementById("fuelLastUpdated").textContent = _fuelUpdLabel;
 
   const grid = document.getElementById("fuelPriceGrid");
   grid.innerHTML = fuelTypes.map(ft=>{
@@ -993,16 +1042,29 @@ function renderFuelPanel(){
 }
 
 function refreshFuelPrices(){
-  /* In a real deployment this would call ERC's API or a scraper.
-     For now, simulate a network refresh with an optimistic AI message. */
   const btn = document.querySelector(".fuel-refresh-btn");
-  if(btn){ btn.textContent="↻ Checking ERC..."; btn.disabled=true; }
-  setTimeout(()=>{
-    renderFuelPanel();
-    if(btn){ btn.textContent="✅ Up to date"; btn.disabled=false;
-      setTimeout(()=>{ btn.textContent="↻ Check for Updates"; }, 2500);
+  if(btn){ btn.textContent="↻ Fetching EPRA..."; btn.disabled=true; }
+
+  import("https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js").then(function(ff){
+    const fn = ff.getFunctions(window._firebaseApp, "us-central1");
+    const trigger = ff.httpsCallable(fn, "triggerEPRAFuelFetch");
+    return trigger({});
+  }).then(function(result){
+    if(btn){
+      btn.textContent = "✅ EPRA prices updated";
+      setTimeout(()=>{ btn.textContent="↻ Refresh from EPRA"; btn.disabled=false; }, 3000);
     }
-  }, 1800);
+    /* onSnapshot will auto-refresh the panel; force immediate re-render too */
+    renderFuelPanel();
+  }).catch(function(err){
+    console.warn("[SOKONI] triggerEPRAFuelFetch:", err.message);
+    if(btn){
+      btn.textContent = "⚠️ Scraper unavailable — using cached";
+      btn.disabled = false;
+      setTimeout(()=>{ btn.textContent="↻ Refresh from EPRA"; }, 4000);
+    }
+    renderFuelPanel();
+  });
 }
 window.refreshFuelPrices = refreshFuelPrices;
 

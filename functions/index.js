@@ -6481,3 +6481,214 @@ exports.scheduledFirestoreBackup = onSchedule(
     return { success: true, operation: result.name, destination: outputUriPrefix };
   }
 );
+
+/* ══════════════════════════════════════════════════════════════════
+   EPRA / ERC FUEL PRICE SCRAPER
+   Scrapes Kenya EPRA website for current pump prices and stores
+   them in Firestore sysConfig/fuelPrices so every client gets
+   real-time updates via onSnapshot the moment EPRA announces.
+
+   Scheduled:  every 4 hours (catches same-day EPRA announcements)
+   Callable:   triggerEPRAFuelFetch — admin or driver "refresh" button
+   ══════════════════════════════════════════════════════════════════ */
+
+const EPRA_CANDIDATE_URLS = [
+  "https://www.epra.go.ke/category/petroleum/maximum-pump-prices/",
+  "https://epra.go.ke/category/petroleum/maximum-pump-prices/",
+  "https://www.epra.go.ke/petroleum/maximum-pump-prices/",
+  "https://www.epra.go.ke/",
+];
+
+const EPRA_PRICE_RANGE = { min: 80, max: 600 }; // KES/litre sanity bounds
+
+/* Baseline regional differentials (transport-cost-based, rarely change) */
+const REGION_DIFFS  = { mombasa: -11, kisumu: 3, other: 3 };
+/* Diesel and kerosene as a fraction of super-petrol (from historical data) */
+const DIESEL_RATIO  = 163.41 / 176.70;
+const KERO_RATIO    = 138.92 / 176.70;
+
+function _validatePrice(p) {
+  const n = parseFloat(p);
+  return (!isNaN(n) && n >= EPRA_PRICE_RANGE.min && n <= EPRA_PRICE_RANGE.max) ? Math.round(n * 100) / 100 : null;
+}
+
+/* Strip all HTML tags and normalise whitespace */
+function _stripHtml(html) {
+  return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
+}
+
+/* Parse a price out of a cell string */
+function _extractPrice(cell) {
+  const m = (cell || "").match(/(\d{2,3}(?:\.\d{1,2})?)/);
+  return m ? _validatePrice(m[1]) : null;
+}
+
+function _parseEPRAHtml(html) {
+  const prices = { super_petrol: {}, diesel: {}, kerosene: {} };
+
+  const FUEL_PATTERNS = {
+    super_petrol: /super.?petrol|petrol.?super/i,
+    diesel:       /\bdiesel\b|automotive gas oil|^ago\b/i,
+    kerosene:     /kerosene|illuminating kerosene|ihk/i,
+  };
+  const CITY_PATTERNS = {
+    nairobi: /nairobi/i,
+    mombasa: /mombasa/i,
+    kisumu:  /kisumu/i,
+  };
+
+  /* ── Strategy 1: HTML table parsing ── */
+  const cityColIdx = {};
+  const rowRe  = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+  let rowMatch;
+
+  while ((rowMatch = rowRe.exec(html)) !== null) {
+    const rowHtml = rowMatch[1];
+    const cells   = [];
+    let cellMatch;
+    const cr = new RegExp(cellRe.source, "gi");
+    while ((cellMatch = cr.exec(rowHtml)) !== null) {
+      cells.push(_stripHtml(cellMatch[1]).trim());
+    }
+    if (!cells.length) continue;
+
+    /* Header row — discover which column index maps to which city */
+    const isHeaderRow = cells.some(c => Object.values(CITY_PATTERNS).some(re => re.test(c)));
+    if (isHeaderRow) {
+      Object.keys(cityColIdx).forEach(k => delete cityColIdx[k]); // reset
+      cells.forEach((c, i) => {
+        for (const [city, re] of Object.entries(CITY_PATTERNS)) {
+          if (re.test(c)) cityColIdx[city] = i;
+        }
+      });
+      continue;
+    }
+
+    /* Data row — identify fuel type from first few cells */
+    const rowText = cells.join(" ");
+    let rowFuel = null;
+    for (const [fuel, re] of Object.entries(FUEL_PATTERNS)) {
+      if (re.test(rowText)) { rowFuel = fuel; break; }
+    }
+    if (!rowFuel || !Object.keys(cityColIdx).length) continue;
+
+    for (const [city, idx] of Object.entries(cityColIdx)) {
+      const p = _extractPrice(cells[idx]);
+      if (p) prices[rowFuel][city] = p;
+    }
+  }
+
+  /* ── Strategy 2: plain-text proximity search ── */
+  if (!prices.super_petrol.nairobi) {
+    const text = _stripHtml(html);
+    for (const [fuel, fuelRe] of Object.entries(FUEL_PATTERNS)) {
+      const segments = text.split(fuelRe);
+      for (let i = 1; i < segments.length; i++) {
+        const window = segments[i].substring(0, 600);
+        for (const [city, cityRe] of Object.entries(CITY_PATTERNS)) {
+          if (prices[fuel][city]) continue;
+          const cityMatch = cityRe.exec(window);
+          if (!cityMatch) continue;
+          const afterCity = window.substring(cityMatch.index);
+          const priceMatch = afterCity.match(/(\d{2,3}(?:\.\d{1,2})?)/);
+          if (priceMatch) {
+            const p = _validatePrice(priceMatch[1]);
+            if (p) prices[fuel][city] = p;
+          }
+        }
+      }
+    }
+  }
+
+  if (!prices.super_petrol.nairobi) {
+    throw new Error("Could not extract Super Petrol Nairobi price from EPRA HTML");
+  }
+
+  /* Fill missing regional prices using fixed differentials */
+  const sp = prices.super_petrol.nairobi;
+  for (const fuel of Object.keys(prices)) {
+    if (!prices[fuel].nairobi) {
+      const ratio = fuel === "diesel" ? DIESEL_RATIO : KERO_RATIO;
+      prices[fuel].nairobi = Math.round(sp * ratio * 100) / 100;
+    }
+    const base = prices[fuel].nairobi;
+    for (const [city, diff] of Object.entries(REGION_DIFFS)) {
+      if (!prices[fuel][city]) {
+        prices[fuel][city] = Math.round((base + diff) * 100) / 100;
+      }
+    }
+  }
+
+  return prices;
+}
+
+async function _fetchAndParseEPRA() {
+  let lastErr = null;
+  for (const url of EPRA_CANDIDATE_URLS) {
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "SOKONI-FuelBot/1.0 (+https://mysokoni.co.ke)" },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) continue;
+      const html   = await res.text();
+      const prices = _parseEPRAHtml(html);
+      return { prices, sourceUrl: url };
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("All EPRA URLs failed");
+}
+
+async function _runEPRAScraper(db) {
+  const ref = db.collection("sysConfig").doc("fuelPrices");
+
+  try {
+    const { prices, sourceUrl } = await _fetchAndParseEPRA();
+
+    const snap = await ref.get();
+    const prev = snap.exists ? (snap.data().current || null) : null;
+
+    await ref.set({
+      current:            prices,
+      previous:           prev || prices,
+      updatedAt:          admin.firestore.FieldValue.serverTimestamp(),
+      revisionDate:       new Date().toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" }),
+      source:             "EPRA Kenya (live)",
+      sourceUrl,
+      scraperStatus:      "success",
+      scraperError:       admin.firestore.FieldValue.delete(),
+      scraperLastSuccess: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return { success: true, prices, sourceUrl };
+  } catch (err) {
+    /* Don't overwrite existing prices on failure — just log the error */
+    await ref.set({
+      scraperStatus:      "failed",
+      scraperError:       err.message,
+      scraperLastAttempt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true }).catch(() => {});
+    throw err;
+  }
+}
+
+/* Scheduled: every 4 hours (Africa/Nairobi) */
+exports.fetchEPRAFuelPrices = onSchedule(
+  { schedule: "0 */4 * * *", timeZone: "Africa/Nairobi", timeoutSeconds: 60 },
+  async () => { await _runEPRAScraper(admin.firestore()); }
+);
+
+/* Callable: admin panel or driver refresh button */
+exports.triggerEPRAFuelFetch = onCall(
+  { timeoutSeconds: 30, cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app"] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+    try {
+      const result = await _runEPRAScraper(admin.firestore());
+      return result;
+    } catch (err) {
+      throw new HttpsError("internal", `EPRA scraper: ${err.message}`);
+    }
+  }
+);

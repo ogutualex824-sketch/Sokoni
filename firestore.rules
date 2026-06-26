@@ -3268,6 +3268,15 @@ service cloud.firestore {
       allow write: if false;    /* CF only — Admin SDK bypasses rules */
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       SYSTEM CONFIG — fuel prices, platform settings (read-only for
+       authenticated users; writes only via Admin SDK / Cloud Functions)
+    ══════════════════════════════════════════════════════════════ */
+    match /sysConfig/{doc} {
+      allow read:  if isAuthed();
+      allow write: if false;    /* CF only — fetchEPRAFuelPrices / triggerEPRAFuelFetch */
+    }
+
   }
 }
 
