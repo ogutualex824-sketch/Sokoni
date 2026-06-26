@@ -262,7 +262,16 @@ function _initMap(pickupLat, pickupLng) {
   const wrap = document.getElementById('dtMapWrap');
   if (!wrap || _map) return;
   wrap.style.display = 'block';
-  const center = pickupLat ? [pickupLat, pickupLng] : [-1.2864, 36.8172];
+  /* Use pickup coords if available; fall back to device location then Nairobi CBD */
+  let center = pickupLat ? [pickupLat, pickupLng] : null;
+  if (!center && navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      p => { if (_map) _map.setView([p.coords.latitude, p.coords.longitude], 14); },
+      () => {},
+      { timeout: 5000, maximumAge: 60000 }
+    );
+  }
+  center = center || [-1.2864, 36.8172]; /* Nairobi CBD — geolocation updates async */
   _map = L.map('dtMap', { zoomControl:false, fadeAnimation:false, zoomAnimation:false }).setView(center, 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     { attribution:'© OpenStreetMap', maxZoom:19, detectRetina:false }).addTo(_map);
@@ -408,6 +417,22 @@ function _renderActions(d, role) {
     }
   }
 
+  if (role === 'rider') {
+    if (['driver_assigned','ready_for_pickup'].includes(d.status)) {
+      btns.push(`<button class="dt-btn-primary" onclick="dtRiderAccept('${ref}')">✅ Accept Delivery</button>`);
+      btns.push(`<button class="dt-btn-secondary" onclick="dtRiderReject('${ref}')">✕ Reject</button>`);
+    }
+    if (d.status === 'driver_accepted') {
+      btns.push(`<button class="dt-btn-primary" onclick="dtRiderAtSeller('${ref}')">📍 I'm at the Seller</button>`);
+    }
+    if (d.status === 'driver_at_seller') {
+      btns.push(`<button class="dt-btn-primary" onclick="dtRiderPickedUp('${ref}')">📦 Item Picked Up</button>`);
+    }
+    if (d.status === 'in_transit') {
+      btns.push(`<button class="dt-btn-primary" onclick="dtRiderShowProof('${ref}')">🎉 Mark as Delivered</button>`);
+    }
+  }
+
   if (role === 'buyer') {
     if (d._src === 'hub') {
       /* Hub delivery — sender actions */
@@ -460,8 +485,9 @@ function _onDelivery(d) {
   if (!d) return;
   _currentData = d;
   const myUid = _uid();
-  const role  = myUid === d.buyerUid  ? 'buyer'
-              : myUid === d.sellerUid ? 'seller'
+  const role  = myUid === d.buyerUid        ? 'buyer'
+              : myUid === d.sellerUid       ? 'seller'
+              : myUid === (d.assignedDriverId || d.assignedRiderId) ? 'rider'
               : 'viewer';
 
   /* Header */
@@ -636,6 +662,76 @@ window.dtShareWA = function() {
 
 window.dtCopyLink = function() {
   navigator.clipboard?.writeText(location.href).then(() => toast('🔗 Link copied!'));
+};
+
+/* ── Rider action handlers ── */
+window.dtRiderAccept = async function(ref) {
+  const uid = _uid(); if (!uid) { toast('Sign in to update delivery', false); return; }
+  const btn = document.querySelector('#dtActions button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+  try {
+    await SokoniDelivery.driverAcceptDelivery(ref, uid);
+    toast('🟢 Delivery accepted — head to seller!');
+  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='✅ Accept Delivery'; } }
+};
+
+window.dtRiderReject = async function(ref) {
+  const uid = _uid(); if (!uid) return;
+  try {
+    await SokoniDelivery.driverRejectDelivery(ref, uid);
+    toast('Delivery returned to queue.');
+  } catch(e) { toast(e.message, false); }
+};
+
+window.dtRiderAtSeller = async function(ref) {
+  const uid = _uid(); if (!uid) { toast('Sign in required', false); return; }
+  const btn = document.querySelector('#dtActions button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+  try {
+    await SokoniDelivery.driverArrivedAtSeller(ref, uid);
+    toast('📍 Arrival recorded — collect the item');
+  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent="📍 I'm at the Seller"; } }
+};
+
+window.dtRiderPickedUp = async function(ref) {
+  const uid = _uid(); if (!uid) { toast('Sign in required', false); return; }
+  const btn = document.querySelector('#dtActions button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+  try {
+    await SokoniDelivery.driverPickedUp(ref, uid);
+    toast('📦 Picked up — head to customer!');
+  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='📦 Item Picked Up'; } }
+};
+
+window.dtRiderShowProof = function(ref) {
+  /* Inline proof form — ask for optional note */
+  const el = document.getElementById('dtActions');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:14px;padding:16px;">
+      <div style="font-size:12px;font-weight:800;color:#71ff00;margin-bottom:10px;">CONFIRM DELIVERY</div>
+      <input id="dtProofNote" class="dt-input" placeholder="Delivery note (optional)" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;">
+        <button class="dt-btn-primary" style="flex:1;" onclick="dtRiderDelivered('${ref}')">✅ Confirm Delivered</button>
+        <button class="dt-btn-secondary" onclick="dtRiderShowCancel()">✕</button>
+      </div>
+    </div>`;
+};
+
+window.dtRiderShowCancel = function() {
+  /* Re-render actions for current data */
+  if (_currentData) _renderActions(_currentData, 'rider');
+};
+
+window.dtRiderDelivered = async function(ref) {
+  const uid = _uid(); if (!uid) { toast('Sign in required', false); return; }
+  const note = document.getElementById('dtProofNote')?.value?.trim() || 'Delivered';
+  const btn  = document.querySelector('#dtActions button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Confirming…'; }
+  try {
+    await SokoniDelivery.driverDelivered(ref, uid, note);
+    toast('🎉 Delivery confirmed! Well done.');
+  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='✅ Confirm Delivered'; } }
 };
 
 /* ── Hub delivery actions ── */

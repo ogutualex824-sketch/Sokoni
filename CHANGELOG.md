@@ -1,4 +1,30 @@
-﻿## [2026-06-26] — Fuel Estimator: Live EPRA Auto-Scraper (Real-Time via Firestore)
+﻿## [2026-06-26] — Delivery Hub: 9-Issue Hardening Sprint
+
+### Summary
+Full sweep of the Delivery Hub following an independent GPS/code audit. Fixed M-Pesa error handling, added rate limiting and phone validation to booking, wired sessionStorage for GPS coord persistence, added complete rider role to the tracking page (accept/reject/at-seller/picked-up/proof submit), upgraded multi-stop routing to use OSRM per segment with per-stop GPS capture, improved map initialisation fallback, added a scheduled delivery Cloud Function, and added invoice failure toast.
+
+### Files Changed
+- `delivery.html` — phone validation, rate limit, M-Pesa/IntaSend error toast, invoice failure toast, GPS sessionStorage, multi-stop OSRM routing, per-stop GPS buttons
+- `delivery-tracking.html` — rider role detection & full action set (accept/reject/at-seller/pickup/proof), hardcoded map centre replaced with device geolocation fallback
+- `functions/index.js` — `processScheduledDeliveries` CF (every 5 min, transitions scheduled deliveries to `ready_for_pickup`)
+
+### New Cloud Functions
+- `processScheduledDeliveries` — scheduled every 5 minutes; queries `packageRequests` where `scheduledTime <= now` and `status == order_placed`; batch-updates them to `ready_for_pickup`
+
+### Security
+- Phone numbers now validated against Kenyan format (`07XX / 01XX / 254XX`) before booking
+- `bookDeliveryFS()` now rate-limited to 5 calls / 5 min via `SokoniSecurity.persistentRateLimit`
+
+### Performance
+- Multi-stop: OSRM road distance calculated per segment (not haversine × 1.3 approximation)
+- GPS coords persisted in `sessionStorage`; survive page refresh, not lost on tab switch
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-26] — Fuel Estimator: Live EPRA Auto-Scraper (Real-Time via Firestore)
 
 ### Summary
 Replaced the hardcoded fuel price constants in the delivery hub with a fully automated live system. A Cloud Function (`fetchEPRAFuelPrices`) scrapes the Kenya EPRA website every 4 hours and writes prices to `sysConfig/fuelPrices` in Firestore. The driver portal subscribes via `onSnapshot` so prices update on every driver's screen the moment EPRA announces — no app reload, no manual update needed. Drivers and admins can also force a refresh via the "Refresh from EPRA" button which calls `triggerEPRAFuelFetch`.

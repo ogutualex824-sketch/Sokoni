@@ -558,16 +558,28 @@ function useMyLocation(field){
       _pickupCoords = { lat, lng };
       const el = document.getElementById('pickupAddr');
       if(el) el.value = label;
+      try{ sessionStorage.setItem('dh_pickup_coords', JSON.stringify({lat,lng,label})); }catch{}
     } else {
       _dropoffCoords = { lat, lng };
       const el = document.getElementById('dropoffAddr');
       if(el) el.value = label;
+      try{ sessionStorage.setItem('dh_dropoff_coords', JSON.stringify({lat,lng,label})); }catch{}
     }
     calcDelivery();
     dhToast('📍 Location captured!');
   }, err => dhToast('Could not get location: ' + err.message, false),
   { timeout:8000, enableHighAccuracy:true });
 }
+
+function _restoreCoordsFromSession(){
+  try{
+    const p = JSON.parse(sessionStorage.getItem('dh_pickup_coords')||'null');
+    const d = JSON.parse(sessionStorage.getItem('dh_dropoff_coords')||'null');
+    if(p){ _pickupCoords = {lat:p.lat,lng:p.lng}; const el=document.getElementById('pickupAddr'); if(el&&!el.value) el.value=p.label; }
+    if(d){ _dropoffCoords={lat:d.lat,lng:d.lng}; const el=document.getElementById('dropoffAddr'); if(el&&!el.value) el.value=d.label; }
+  }catch{}
+}
+document.addEventListener('DOMContentLoaded', _restoreCoordsFromSession);
 
 function onAddrInput(){
   /* Clear captured coords when user types manually */
@@ -585,6 +597,19 @@ function addStop(type){
 function removeStop(idx){
   _stops.splice(idx, 1);
   renderStops();
+  _calcMultiStopOSRM();
+}
+function useStopGPS(idx){
+  if(!navigator.geolocation){ dhToast('GPS not supported', false); return; }
+  dhToast('📍 Getting location…', 'blue');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude:lat, longitude:lng } = pos.coords;
+    _stops[idx].coords  = { lat, lng };
+    _stops[idx].address = _stops[idx].address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    renderStops();
+    _calcMultiStopOSRM();
+    dhToast('📍 Stop location captured!');
+  }, err => dhToast('GPS error: ' + err.message, false), { timeout:8000, enableHighAccuracy:true });
 }
 function renderStops(){
   const el = document.getElementById('stopsList');
@@ -592,16 +617,48 @@ function renderStops(){
   el.innerHTML = _stops.map((s,i) => `
     <div class="stop-row">
       <div class="stop-seq ${s.type==='pickup'?'stop-pickup':'stop-dropoff'}">${s.type==='pickup'?'⬆':'⬇'}</div>
-      <div>
-        <div style="font-size:10px;font-weight:800;color:${s.type==='pickup'?'#71ff00':'#00aaff'};margin-bottom:4px;">${s.type.toUpperCase()} ${i+1}</div>
-        <input class="dh-input" style="margin-bottom:6px;" placeholder="${s.type==='pickup'?'Pickup':'Dropoff'} address"
-          value="${esc(s.address)}" oninput="_stops[${i}].address=this.value">
-        <input class="dh-input" placeholder="Contact name" value="${esc(s.contactName)}"
-          oninput="_stops[${i}].contactName=this.value">
+      <div style="flex:1;">
+        <div style="font-size:10px;font-weight:800;color:${s.type==='pickup'?'#71ff00':'#00aaff'};margin-bottom:4px;">${s.type.toUpperCase()} ${i+1}${s.coords?` <span style="color:#71ff00">📍</span>`:''}</div>
+        <input class="dh-input" style="margin-bottom:4px;" placeholder="${s.type==='pickup'?'Pickup':'Dropoff'} address"
+          value="${esc(s.address)}" oninput="_stops[${i}].address=this.value;_stops[${i}].coords=null;">
+        <div style="display:flex;gap:6px;margin-bottom:4px;">
+          <button type="button" style="font-size:11px;padding:4px 8px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:8px;color:#71ff00;cursor:pointer;font-weight:700;" onclick="useStopGPS(${i})">📍 GPS</button>
+          ${i>0?`<input class="dh-input" style="flex:1;" placeholder="Contact name" value="${esc(s.contactName)}" oninput="_stops[${i}].contactName=this.value;">`:''}
+        </div>
       </div>
       <button class="stop-remove" onclick="removeStop(${i})">✕</button>
     </div>`
   ).join('');
+}
+
+/* Async: chain OSRM per segment for multi-stop; fills distKm and reruns calcDelivery */
+let _osrmPending = false;
+async function _calcMultiStopOSRM(){
+  if(!window.SokoniRouting) return;
+  const stopsWithCoords = _stops.filter(s => s.coords);
+  if(stopsWithCoords.length < 2) return;
+
+  _osrmPending = true;
+  const msgEl = document.getElementById('calcMsg');
+  if(msgEl){ msgEl.textContent = '📡 Calculating route…'; msgEl.style.color = '#00aaff'; }
+
+  try{
+    let totalKm = 0;
+    for(let i = 0; i < stopsWithCoords.length - 1; i++){
+      const a = stopsWithCoords[i].coords;
+      const b = stopsWithCoords[i+1].coords;
+      const route = await SokoniRouting.getRoute(a.lat, a.lng, b.lat, b.lng);
+      totalKm += route ? route.distanceKm : 0;
+    }
+    const kmEl = document.getElementById('distKm');
+    if(kmEl && totalKm > 0){ kmEl.value = Math.round(totalKm * 10) / 10; }
+    if(msgEl){ msgEl.textContent = `📡 Route: ${totalKm.toFixed(1)} km (OSRM)`;  msgEl.style.color = '#71ff00'; }
+    calcDelivery();
+  }catch(e){
+    if(msgEl){ msgEl.textContent = 'Route calc failed — enter distance manually'; msgEl.style.color = '#f97316'; }
+  } finally {
+    _osrmPending = false;
+  }
 }
 
 /* ── Price calculation ── */
@@ -703,6 +760,15 @@ function _getBookingData(){
   if(!_selVehicle){ if(msgEl){msgEl.textContent='⚠️ Select a vehicle type'; msgEl.style.color='#f97316';} return null; }
   if(!km && _delivType!=='multi_stop'){ if(msgEl){msgEl.textContent='⚠️ Enter the distance'; msgEl.style.color='#f97316';} return null; }
 
+  /* Validate Kenyan phone numbers (07XX, 01XX, or 254XXXXXXXXX) */
+  const KE_PHONE = /^(?:0[17]\d{8}|254[17]\d{8}|\+254[17]\d{8})$/;
+  if(rPhone && !KE_PHONE.test(rPhone.replace(/\s/g,''))){
+    if(msgEl){msgEl.textContent='⚠️ Recipient phone must be a valid Kenyan number (07XX or 01XX)'; msgEl.style.color='#f97316';} return null;
+  }
+  if(phone && !KE_PHONE.test(phone.replace(/\s/g,''))){
+    if(msgEl){msgEl.textContent='⚠️ Your phone must be a valid Kenyan number (07XX or 01XX)'; msgEl.style.color='#f97316';} return null;
+  }
+
   const v   = VEHICLES[_selVehicle];
   const r   = _doCalc(_selVehicle, km||5, weight, _urgency) || { total:v.base };
   return { from, to, km:km||5, weight, urgency:_urgency, vehicle:_selVehicle, vehicleData:v,
@@ -735,6 +801,9 @@ function bookDeliveryWA(){
 
 /* ── Book via Firestore + M-Pesa ── */
 async function bookDeliveryFS(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('del_fs',5,300000)){
+    dhToast('Too many booking attempts. Wait 5 minutes.', false); return;
+  }
   const d = _getBookingData(); if(!d) return;
   if(!window.DeliveryHub){ dhToast('Delivery system loading, please wait…','blue'); return; }
 
@@ -791,19 +860,23 @@ async function bookDeliveryFS(){
       try{
         const IS = new window.IntaSend({ publicAPIKey:cfg.intasendKey, live:cfg.intasendLive!==false });
         IS.mpesa().stkPush({ amount:d.total, phone_number:sPhone, email:senderUser.email||'', narrative:`SOKONI Delivery ${result.deliveryRef}` })
-          .then(r=>{ if(r?.invoice?.invoice_id) dhToast('💚 M-Pesa payment initiated!'); })
-          .catch(e=>console.warn('[delivery] STK:', e.message));
-      }catch(e){ console.warn('[delivery] IntaSend not loaded:', e.message); }
+          .then(r=>{ if(r?.invoice?.invoice_id) dhToast('💚 M-Pesa payment initiated!'); else dhToast('Payment sent — check M-Pesa prompt', 'blue'); })
+          .catch(e=>{ console.warn('[delivery] STK:', e.message); dhToast('M-Pesa prompt failed: ' + (e.message||'try again'), false); });
+      }catch(e){ console.warn('[delivery] IntaSend not loaded:', e.message); dhToast('Payment library not ready — booking saved, pay manually', false); }
     }
 
     /* Invoice */
-    if(window.SokoniInvoice) SokoniInvoice.generate({
-      type:'delivery', buyerName:senderUser.name||'Customer', buyerPhone:d.phone||'',
-      items:[{name:`${VEHICLES[d.vehicle].icon} ${VEHICLES[d.vehicle].label} Delivery`,category:'Delivery',qty:1,price:d.total}],
-      subtotal:d.total, total:d.total, paymentMethod:'M-Pesa', paymentRef:result.deliveryRef,
-      sellerName:'SOKONI Delivery Partners', date:new Date().toISOString(),
-      notes:`${d.from} → ${d.to} (${d.km} km)`,
-    });
+    if(window.SokoniInvoice){
+      try{
+        SokoniInvoice.generate({
+          type:'delivery', buyerName:senderUser.name||'Customer', buyerPhone:d.phone||'',
+          items:[{name:`${VEHICLES[d.vehicle].icon} ${VEHICLES[d.vehicle].label} Delivery`,category:'Delivery',qty:1,price:d.total}],
+          subtotal:d.total, total:d.total, paymentMethod:'M-Pesa', paymentRef:result.deliveryRef,
+          sellerName:'SOKONI Delivery Partners', date:new Date().toISOString(),
+          notes:`${d.from} → ${d.to} (${d.km} km)`,
+        });
+      }catch(e){ console.warn('[delivery] invoice:', e.message); dhToast('Booking saved — receipt unavailable', 'blue'); }
+    }
 
     _successData = result;
     showSuccessModal(result);

@@ -6692,3 +6692,45 @@ exports.triggerEPRAFuelFetch = onCall(
     }
   }
 );
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SCHEDULED DELIVERY — process deliveries whose scheduledTime has arrived
+   Runs every 5 minutes. Picks up packageRequests with:
+     status == 'order_placed'  AND  scheduledTime <= now
+   Transitions them to 'ready_for_pickup' which triggers rider assignment.
+═══════════════════════════════════════════════════════════════════════════ */
+exports.processScheduledDeliveries = onSchedule(
+  { schedule: "*/5 * * * *", timeZone: "Africa/Nairobi", timeoutSeconds: 120 },
+  async () => {
+    const db  = admin.firestore();
+    const now = new Date().toISOString();
+
+    const snap = await db.collection("packageRequests")
+      .where("status", "==", "order_placed")
+      .where("scheduledTime", "<=", now)
+      .where("scheduledTime", "!=", null)
+      .limit(50)
+      .get();
+
+    if (snap.empty) return;
+
+    const batch = db.batch();
+    const nowIso = new Date().toISOString();
+    snap.docs.forEach(doc => {
+      batch.update(doc.ref, {
+        status:           "ready_for_pickup",
+        scheduledFiredAt: nowIso,
+        timeline: admin.firestore.FieldValue.arrayUnion({
+          status: "ready_for_pickup",
+          at:     nowIso,
+          by:     "system_scheduler",
+        }),
+        _lastTimelineEntry: { status: "ready_for_pickup", at: nowIso, by: "system_scheduler" },
+        updatedAt: nowIso,
+      });
+    });
+
+    await batch.commit();
+    console.log(`[scheduledDeliveries] activated ${snap.size} delivery/ies`);
+  }
+);
