@@ -1333,9 +1333,17 @@ function registerChama(){
     if(msgEl){msgEl.textContent="⚠️ Fill all required fields";msgEl.style.color="#ff9800";}
     return;
   }
+  const chamaId = "CHA"+Date.now();
   const chamas = JSON.parse(localStorage.getItem("sokoniChamas")||"[]");
-  chamas.unshift({ id:"CHA"+Date.now(), name, chair, phone, members, contrib, type, createdAt:Date.now() });
+  chamas.unshift({ id:chamaId, name, chair, phone, members, contrib, type, createdAt:Date.now() });
   localStorage.setItem("sokoniChamas", JSON.stringify(chamas));
+  (async()=>{try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="bnk-w")||initializeApp(_cfg,"bnk-w");
+    await addDoc(collection(getFirestore(_a),"bankChamas"),{id:chamaId,name,chair,phone,members,contrib,type,status:"active",createdAt:serverTimestamp()});
+  }catch(e){}})();
   if(msgEl){msgEl.innerHTML='✅ Chama registered! <strong style="color:#a855f7;">'+name+'</strong> is now digital.';msgEl.style.color="#10b981";}
   ["chamaName","chamaChair","chamaPhone","chamaMembers","chamaContrib"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
   setTimeout(()=>renderChamas(), 1000);
@@ -1392,13 +1400,21 @@ function submitApplication(){
     return;
   }
 
+  const appId = "BNK"+Date.now();
   const applications = JSON.parse(localStorage.getItem("sokoniBankApplications")||"[]");
   applications.unshift({
-    id:"BNK"+Date.now(), product:_applyProduct, bank:_applyBank,
+    id:appId, product:_applyProduct, bank:_applyBank,
     name, phone, email, amount:Number(amount), purpose, business, notes,
     status:"submitted", createdAt:Date.now()
   });
   localStorage.setItem("sokoniBankApplications", JSON.stringify(applications));
+  (async()=>{try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="bnk-w")||initializeApp(_cfg,"bnk-w");
+    await addDoc(collection(getFirestore(_a),"bankApplications"),{id:appId,product:_applyProduct,bank:_applyBank,clientName:name,phone,email,amount:Number(amount),purpose,business:business||null,notes:notes||null,status:"submitted",createdAt:serverTimestamp()});
+  }catch(e){}})();
   if(typeof SokoniPay !== 'undefined'){
     SokoniPay.saveFee({
       ref: 'BNK' + Date.now().toString(36).toUpperCase(),
