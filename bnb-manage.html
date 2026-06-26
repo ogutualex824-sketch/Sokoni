@@ -283,19 +283,21 @@
     loadBookings();
     loadStats();
     showNotif(`Booking ${status}`, "success");
+    if(window._updateBookingStatusFS) window._updateBookingStatusFS(id, status);
   }
 
   function loadEarnings(){
     const bks = getBookings();
     const confirmed = bks.filter(b => b.status === "confirmed" || b.status === "completed");
     const total = confirmed.reduce((s,b) => s + Number(b.total||0), 0);
-    const commission = Math.round(total * 0.05);
+    const commPct = (window.SokoniPay?.COMMISSION_RATES?.completion?.['bnb']) || 5;
+    const commission = Math.round(total * commPct / 100);
     const net = total - commission;
     const container = document.getElementById("earningsSummary");
     if(!container) return;
     container.innerHTML = `
       <div class="ll-earning-card"><div class="ll-ec-label">Gross Earnings</div><div class="ll-ec-value">KES ${total.toLocaleString()}</div></div>
-      <div class="ll-earning-card"><div class="ll-ec-label">Sokoni Commission (5%)</div><div class="ll-ec-value" style="color:#ff8800;">KES ${commission.toLocaleString()}</div></div>
+      <div class="ll-earning-card"><div class="ll-ec-label">Sokoni Commission (${commPct}%)</div><div class="ll-ec-value" style="color:#ff8800;">KES ${commission.toLocaleString()}</div></div>
       <div class="ll-earning-card ll-ec-net"><div class="ll-ec-label">Your Net Earnings</div><div class="ll-ec-value" style="color:#71ff00;">KES ${net.toLocaleString()}</div></div>
       <div class="ll-earning-card"><div class="ll-ec-label">Confirmed Bookings</div><div class="ll-ec-value">${confirmed.length}</div></div>
     `;
@@ -379,6 +381,21 @@
     if(_bnbPhotoDataURLs.length === 0){ showNotif("Add at least one photo","error"); return; }
     const amenities = [...document.querySelectorAll(".amenity-check input:checked")].map(c => c.value);
 
+    /* Upload photos to Firebase Storage */
+    let photoURLs = [];
+    if(window.SokoniUpload && _bnbPhotoDataURLs.length > 0){
+      showNotif("Uploading photos… please wait","info");
+      const results = await Promise.all(_bnbPhotoDataURLs.map(async(dataURL,i)=>{
+        try{
+          const blob = await fetch(dataURL).then(r=>r.blob());
+          const file = new File([blob],`photo_${i}.jpg`,{type:'image/jpeg'});
+          return await window.SokoniUpload.uploadToStorage(file,`bnb-photos/${Date.now()}_${i}.jpg`,null);
+        }catch(e){ return null; }
+      }));
+      photoURLs = results.filter(Boolean);
+    }
+    if(!photoURLs.length) photoURLs = _bnbPhotoDataURLs; /* fallback: keep dataURLs locally */
+
     /* Upload video to Firebase Storage if one was selected */
     let finalVideoURL = "";
     if(_bnbVideoFile && window.SokoniUpload){
@@ -397,21 +414,23 @@
       }
     }
 
-    const bnbs = getBnBs();
-    bnbs.unshift({
+    const _hostUid = (()=>{ try{ return JSON.parse(localStorage.getItem('sokoniUser')||'{}').uid||''; }catch(e){ return ''; } })();
+    const listing = {
       id: "bnb_" + Date.now(),
       name, type, location, price, pricePerNight: price, desc, description: desc, phone,
       amenities,
-      image:   _bnbPhotoDataURLs[0],
-      images:  _bnbPhotoDataURLs,
+      image:   photoURLs[0]||'',
+      images:  photoURLs,
       video:   finalVideoURL,
       available: true,
+      hostUid: _hostUid,
       maxGuests: Number(document.getElementById("bnbMaxGuests").value)||2,
       bedrooms:  Number(document.getElementById("bnbBedrooms").value)||1,
       bathrooms: Number(document.getElementById("bnbBathrooms").value)||1,
       createdAt: Date.now()
-    });
-    saveBnBs(bnbs);
+    };
+    saveBnBs([listing, ...getBnBs()]);
+    if(window._saveBnBListingFS) window._saveBnBListingFS(listing);
     /* reset */
     _bnbPhotoDataURLs = []; _bnbVideoDataURL = ""; _bnbVideoFile = null;
     document.getElementById("bnbPhotos").value = "";
@@ -432,12 +451,13 @@
   }
 
   function deleteBnBListing(id){
-    if(!_c){_skConfirm('Remove this listing? This cannot be undone.',()=>_doRmListing(_lid,true));return;}
+    if(!confirm('Remove this listing? This cannot be undone.')) return;
     const bnbs = getBnBs().filter(b => b.id !== id);
     saveBnBs(bnbs);
-    showNotif("Listing removed","error");
+    showNotif("Listing removed","info");
     loadMyListings();
     loadStats();
+    if(window._deleteBnBListingFS) window._deleteBnBListingFS(id);
   }
 
   function shareBnBListing(id){
@@ -489,7 +509,6 @@
   }catch(e){}
 })();
 </script>
-<script type="module" src="firebase.js"></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>
 <script src="sokoni-referral.js" defer></script>
@@ -498,6 +517,77 @@
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+<script type="module">
+import { db, auth } from './firebase.js';
+import {
+  collection, doc, setDoc, deleteDoc, onSnapshot,
+  query, where, orderBy, serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+let _uid = null;
+
+onAuthStateChanged(auth, u => {
+  _uid = u ? u.uid : null;
+  if(_uid){ loadFSListings(); loadFSBookings(); }
+});
+
+/* ── Save listing to Firestore ── */
+window._saveBnBListingFS = async function(listing){
+  if(!listing) return;
+  try {
+    await setDoc(doc(db,'bnbListings',listing.id), {...listing, hostUid:_uid||listing.hostUid||'', updatedAt:serverTimestamp()}, {merge:true});
+  } catch(e){ console.warn('[BnB] listing save failed:',e); }
+};
+
+/* ── Delete listing from Firestore ── */
+window._deleteBnBListingFS = async function(id){
+  try { await deleteDoc(doc(db,'bnbListings',id)); } catch(e){}
+};
+
+/* ── Sync booking status to Firestore ── */
+window._updateBookingStatusFS = async function(id, status){
+  try { await setDoc(doc(db,'bnbBookings',id), {status, updatedAt:serverTimestamp()}, {merge:true}); } catch(e){}
+};
+
+/* ── Load host's listings from Firestore ── */
+function loadFSListings(){
+  if(!_uid) return;
+  try {
+    onSnapshot(
+      query(collection(db,'bnbListings'), where('hostUid','==',_uid), orderBy('createdAt','desc')),
+      snap => {
+        if(snap.empty) return;
+        const live = snap.docs.map(d=>({...d.data(),id:d.id}));
+        const existing = new Map((JSON.parse(localStorage.getItem('sokoniBnBs')||'[]')).map(b=>[b.id,b]));
+        live.forEach(b=>existing.set(b.id,b));
+        localStorage.setItem('sokoniBnBs', JSON.stringify([...existing.values()]));
+        if(typeof loadMyListings==='function') loadMyListings();
+        if(typeof loadStats==='function') loadStats();
+      }
+    );
+  } catch(e){ console.warn('[BnB] loadFSListings failed:',e); }
+}
+
+/* ── Load bookings for host's listings ── */
+function loadFSBookings(){
+  if(!_uid) return;
+  try {
+    onSnapshot(
+      query(collection(db,'bnbBookings'), where('hostUid','==',_uid), orderBy('createdAt','desc')),
+      snap => {
+        if(snap.empty) return;
+        const live = snap.docs.map(d=>({...d.data(),id:d.id}));
+        const existing = new Map((JSON.parse(localStorage.getItem('sokoniBnBBookings')||'[]')).map(b=>[b.id,b]));
+        live.forEach(b=>existing.set(b.id,b));
+        localStorage.setItem('sokoniBnBBookings', JSON.stringify([...existing.values()]));
+        if(typeof loadBookings==='function') loadBookings();
+        if(typeof loadStats==='function') loadStats();
+      }
+    );
+  } catch(e){ console.warn('[BnB] loadFSBookings failed:',e); }
+}
+</script>
 </body>
 </html>
 

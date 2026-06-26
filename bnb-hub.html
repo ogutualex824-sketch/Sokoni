@@ -581,13 +581,16 @@ function submitBooking(listingId){
       providerName:p.hostName,
       category:'bnb',
       serviceDesc:desc,
-      amount:total,
-      providerPhone:p.phone
+      totalAmount:total,
+      providerPhone:p.phone,
+      onSuccess:function(ref){
+        if(window._saveBnBBooking){
+          window._saveBnBBooking({listingId:p.id,title:p.title,hostName:p.hostName,hostPhone:p.phone,hostUid:p.hostUid||'',guestName:name||'Guest',guestPhone:phone,checkIn:ci,checkOut:co,nights:nights,total:total,location:p.location,ref:ref,status:'confirmed'});
+        }
+        closeModal();
+        (window._skToast||alert)('✅ Booking confirmed! Ref: '+ref);
+      }
     });
-    /* save booking to Firestore */
-    if(window._saveBnBBooking){
-      window._saveBnBBooking({listingId:p.id,title:p.title,hostName:p.hostName,hostPhone:p.phone,guestName:name||'Guest',guestPhone:phone,checkIn:ci,checkOut:co,nights:nights,total:total,location:p.location});
-    }
   } else {
     (window._skToast||alert)('Payment module not loaded. Please refresh and try again.');
   }
@@ -817,14 +820,14 @@ init();
 <!-- FIRESTORE MODULE -->
 <script type="module">
 import { db, auth } from './firebase.js';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { collection, doc, addDoc, setDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 window._saveBnBListing = async function(data) {
-  try { await addDoc(collection(db,'bnbListings'), {...data, createdAt: serverTimestamp()}); } catch(e){}
+  try { await setDoc(doc(db,'bnbListings',data.id||('BL'+Date.now())), {...data, createdAt: serverTimestamp()}, {merge:true}); } catch(e){}
 };
 
 window._saveBnBBooking = async function(bk) {
-  try { await addDoc(collection(db,'bookings'), {...bk, hub:'bnb', createdAt: serverTimestamp()}); } catch(e){}
+  try { await addDoc(collection(db,'bnbBookings'), {...bk, hub:'bnb', createdAt: serverTimestamp()}); } catch(e){}
 };
 
 const q = query(collection(db,'bnbListings'), orderBy('createdAt','desc'));

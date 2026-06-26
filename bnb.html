@@ -114,11 +114,21 @@
   let allBnBs = [];
   let filtered = [];
 
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
   function loadBnBs(){
     try { allBnBs = JSON.parse(localStorage.getItem("sokoniBnBs")) || []; } catch(e) { allBnBs = []; }
     filtered = [...allBnBs];
     renderBnBs(filtered);
   }
+
+  window._mergeBnBFirestoreListings = function(live){
+    const existing = new Map(allBnBs.map(b=>[b.id,b]));
+    live.forEach(b=>existing.set(b.id,b));
+    allBnBs = [...existing.values()];
+    filtered = [...allBnBs];
+    renderBnBs(filtered);
+  };
 
   function renderBnBs(list){
     const grid = document.getElementById("bnbGrid");
@@ -134,22 +144,22 @@
       return;
     }
     grid.innerHTML = list.map(b => `
-      <div class="bnb-card" onclick="openBookModal('${b.id}')">
+      <div class="bnb-card" onclick="openBookModal('${esc(b.id)}')">
         <div class="bnb-card-img-wrap">
-          <img loading="lazy" src="${b.image || 'assets/backG1.jpeg'}" alt="${b.name}">
-          <div class="bnb-type-badge">${b.type || 'BnB'}</div>
+          <img loading="lazy" src="${esc(b.image || 'assets/backG1.jpeg')}" alt="${esc(b.name)}">
+          <div class="bnb-type-badge">${esc(b.type || 'BnB')}</div>
           ${b.featured ? '<div class="bnb-featured-badge">⭐ Featured</div>' : ''}
         </div>
         <div class="bnb-card-body">
-          <h3 class="bnb-card-title">${b.name}</h3>
-          <p class="bnb-card-location">📍 ${b.location}</p>
+          <h3 class="bnb-card-title">${esc(b.name)}</h3>
+          <p class="bnb-card-location">📍 ${esc(b.location)}</p>
           <div class="bnb-card-meta">
-            <span><i class="fas fa-bed"></i> ${b.bedrooms || 1} bed</span>
-            <span><i class="fas fa-bath"></i> ${b.bathrooms || 1} bath</span>
-            <span>👥 ${b.maxGuests || 2} guests</span>
+            <span><i class="fas fa-bed"></i> ${Number(b.bedrooms)||1} bed</span>
+            <span><i class="fas fa-bath"></i> ${Number(b.bathrooms)||1} bath</span>
+            <span>👥 ${Number(b.maxGuests)||2} guests</span>
           </div>
           <div class="bnb-amenity-row">
-            ${(b.amenities || []).slice(0,3).map(a => `<span class="bnb-amenity-tag">${a}</span>`).join("")}
+            ${(b.amenities || []).slice(0,3).map(a => `<span class="bnb-amenity-tag">${esc(a)}</span>`).join("")}
           </div>
           <div class="bnb-card-footer">
             <div class="bnb-price">
@@ -158,10 +168,10 @@
             </div>
             <div class="bnb-rating">
               <i class="fas fa-star" style="color:#ffc107"></i>
-              ${b.rating || "New"}
+              ${esc(b.rating || "New")}
             </div>
           </div>
-          <button type="button" class="bnb-book-btn" onclick="event.stopPropagation();openBookModal('${b.id}')">
+          <button type="button" class="bnb-book-btn" onclick="event.stopPropagation();openBookModal('${esc(b.id)}')">
             Book Now →
           </button>
 <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('bnb_'+(b.id||b.name),b.name||b.title||'BnB',this,'bnb')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'bnb'+('bnb_'+(b.id||b.name)),name:b.name||b.title||'BnB',category:'bnb',type:'bnb:'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
@@ -176,8 +186,8 @@
     document.getElementById("bookModalTitle").textContent = b.name;
     document.getElementById("bookModalContent").innerHTML = `
       <img loading="lazy" src="${b.image||'assets/backG1.jpeg'}" style="width:100%;height:200px;object-fit:cover;border-radius:14px;margin-bottom:16px;">
-      <p style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:16px;"><i class="fas fa-map-marker-alt" style="color:#71ff00;margin-right:6px;"></i>${b.location}</p>
-      <p style="color:rgba(255,255,255,0.7);font-size:14px;line-height:1.6;margin-bottom:16px;">${b.description || 'A wonderful place to stay in Kenya.'}</p>
+      <p style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:16px;"><i class="fas fa-map-marker-alt" style="color:#71ff00;margin-right:6px;"></i>${esc(b.location)}</p>
+      <p style="color:rgba(255,255,255,0.7);font-size:14px;line-height:1.6;margin-bottom:16px;">${esc(b.description || 'A wonderful place to stay in Kenya.')}</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
         <div><label style="color:rgba(255,255,255,0.45);font-size:11px;text-transform:uppercase;display:block;margin-bottom:6px;">Check In</label>
           <input type="date" id="bookIn" class="modal-input" style="margin:0;"></div>
@@ -227,8 +237,18 @@
       /* Save booking */
       let bookings = [];
       try { bookings = JSON.parse(localStorage.getItem("sokoniBnBBookings")) || []; } catch(e) {}
-      bookings.unshift({ id:ref, bnbId, bnbName:b?.name, name, phone, checkIn, checkOut, nights, total, status:"confirmed", mpesaCode, bookedAt: Date.now() });
+      const _bkData = { id:ref, bnbId, bnbName:b?.name, name, phone, checkIn, checkOut, nights, total, status:"confirmed", mpesaCode:mpesaCode||null, bookedAt: Date.now() };
+      bookings.unshift(_bkData);
       localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
+      /* Persist to Firestore */
+      if(window._saveBnBBookingFS){
+        window._saveBnBBookingFS({
+          ..._bkData,
+          listingId:bnbId,
+          hostUid:b?.hostUid||'',
+          hostPhone:b?.phone||b?.hostPhone||b?.contact||''
+        });
+      }
 
       /* Notify host via WhatsApp */
       const hostPhone = b?.phone || b?.hostPhone || b?.contact || "";
@@ -357,6 +377,27 @@
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+<script type="module">
+import { db, auth } from './firebase.js';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+let _uid = null;
+onAuthStateChanged(auth, u => { _uid = u ? u.uid : null; });
+
+/* ── Load listings from Firestore and merge with localStorage ── */
+try {
+  onSnapshot(query(collection(db,'bnbListings'), orderBy('createdAt','desc')), snap => {
+    const live = snap.docs.map(d=>({...d.data(),id:d.id}));
+    if(live.length && typeof window._mergeBnBFirestoreListings === 'function') window._mergeBnBFirestoreListings(live);
+  });
+} catch(e) {}
+
+/* ── Save booking to Firestore after confirmed payment ── */
+window._saveBnBBookingFS = async function(bk) {
+  try { await addDoc(collection(db,'bnbBookings'), {...bk, uid:_uid||null, createdAt:serverTimestamp()}); } catch(e) {}
+};
+</script>
 </body>
 </html>
 

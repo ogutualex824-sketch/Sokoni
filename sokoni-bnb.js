@@ -6,8 +6,19 @@
 ;(function(){
 'use strict';
 
+const _BNB_COLL = {
+  listings:'bnbListings', bookings:'bnbBookings',
+  reviews:'bnbReviews',  hosts:'bnbHosts',
+};
+function _db(){ try{ return window.firebase?.firestore ? window.firebase.firestore() : null; }catch(e){ return null; } }
 function fsWrite(col, data) {
-  try { if(window.SokoniDB?.saveApplication) return SokoniDB.saveApplication({...data, category:'bnb_'+col}); } catch(e){}
+  const fsCol = _BNB_COLL[col];
+  if (fsCol) {
+    try {
+      const db = _db();
+      if (db) db.collection(fsCol).doc(data.id).set(data, {merge:true}).catch(e => console.warn('[BnB] Firestore write:', col, e));
+    } catch(e) {}
+  }
   try {
     const key='bnb_'+col; const arr=JSON.parse(localStorage.getItem(key)||'[]');
     const idx=arr.findIndex(x=>x.id===data.id);
@@ -192,6 +203,15 @@ function starsHTML(r){ return[1,2,3,4,5].map(i=>`<span style="color:${i<=Math.ro
 function amenityBadge(a){ const l=AMENITIES_MAP[a]; return l?`<span style="font-size:10px;padding:3px 7px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:5px;color:#ef4444;">${l}</span>`:''; }
 function calcNightCost(price,checkIn,checkOut){ const n=Math.ceil((new Date(checkOut)-new Date(checkIn))/(1000*60*60*24)); return{nights:n,total:price*n}; }
 
+async function syncUserDataFromFirestore(){
+  const userId=uid(); if(!userId||userId==='guest') return;
+  try {
+    const db=_db(); if(!db) return;
+    const bkSnap=await db.collection('bnbBookings').where('uid','==',userId).orderBy('createdAt','desc').limit(50).get().catch(()=>null);
+    if(bkSnap&&!bkSnap.empty) localStorage.setItem('bnb_bookings',JSON.stringify(bkSnap.docs.map(d=>d.data())));
+  } catch(e){ console.warn('[BnB] Sync from Firestore failed:',e); }
+}
+
 /* ── PUBLIC API ── */
 window.SokoniBnB = {
   BNB_TYPES, BOOKING_STATUS, AMENITIES_MAP,
@@ -203,5 +223,6 @@ window.SokoniBnB = {
   addReview, getReviews, getAvgRating,
   addNotification, getNotifications, markNotifRead, getUnreadCount,
   fmt, fmtPrice, timeSince, starsHTML, amenityBadge, calcNightCost,
+  syncUserDataFromFirestore,
 };
 })();
