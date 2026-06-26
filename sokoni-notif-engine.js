@@ -208,15 +208,27 @@
       var self = this;
       if (!self._db || !self._userId) return;
       try {
-        self._db.collection('userNotifPrefs').doc(self._userId)
-          .get().then(function(snap) {
-            if (snap.exists) {
+        if (self._db._modular) {
+          var m = self._db._modular, fs = self._db._fs;
+          m.getDoc(m.doc(fs, 'userNotifPrefs', self._userId)).then(function(snap) {
+            if (snap.exists()) {
               var data = snap.data();
               self._prefs = Object.assign(_defaultPrefs(), data);
               try { localStorage.setItem('sk_notif_prefs_' + self._userId, JSON.stringify(self._prefs)); } catch(e) {}
               if (global.SokoniNotifEngine) global.SokoniNotifEngine._emit('prefs_changed', self._prefs);
             }
           }).catch(function() {});
+        } else if (self._db.collection) {
+          self._db.collection('userNotifPrefs').doc(self._userId)
+            .get().then(function(snap) {
+              if (snap.exists) {
+                var data = snap.data();
+                self._prefs = Object.assign(_defaultPrefs(), data);
+                try { localStorage.setItem('sk_notif_prefs_' + self._userId, JSON.stringify(self._prefs)); } catch(e) {}
+                if (global.SokoniNotifEngine) global.SokoniNotifEngine._emit('prefs_changed', self._prefs);
+              }
+            }).catch(function() {});
+        }
       } catch(e) {}
     },
 
@@ -224,9 +236,13 @@
       var self = this;
       if (!self._db || !self._userId) return;
       try {
-        self._db.collection('userNotifPrefs').doc(self._userId)
-          .set(self._prefs, { merge: true })
-          .catch(function() {});
+        if (self._db._modular) {
+          var m = self._db._modular, fs = self._db._fs;
+          m.setDoc(m.doc(fs, 'userNotifPrefs', self._userId), self._prefs, { merge: true }).catch(function() {});
+        } else if (self._db.collection) {
+          self._db.collection('userNotifPrefs').doc(self._userId)
+            .set(self._prefs, { merge: true }).catch(function() {});
+        }
       } catch(e) {}
     }
   };
@@ -774,9 +790,7 @@
         archived:   false,
         pinned:     false,
         metadata:   opts.metadata  || {},
-        createdAt:  global.firebase && global.firebase.firestore ?
-                    global.firebase.firestore.FieldValue.serverTimestamp() :
-                    new Date()
+        createdAt:  new Date()
       };
 
       /* Dedup check */
