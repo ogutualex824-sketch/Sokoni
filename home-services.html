@@ -424,7 +424,12 @@ function filterProviders(){
   const q=(document.getElementById('hsSearch')?.value||'').toLowerCase();
   const area=document.getElementById('hsArea')?.value||'';
   let local=[];try{local=JSON.parse(localStorage.getItem('sokoniHomeProviders')||'[]');}catch(e){}
-  let list=[...local,...DEMO_PROVIDERS.filter(d=>!local.some(l=>l.id===d.id))];
+  const allIds=new Set([..._fsProviders.map(d=>d.id||d._id),...local.map(d=>d.id)]);
+  let list=[
+    ..._fsProviders.map(d=>({...d,id:d._id||d.id})),
+    ...local.filter(d=>!_fsProviders.some(f=>(f._id||f.id)===d.id)),
+    ...DEMO_PROVIDERS.filter(d=>!allIds.has(d.id)),
+  ];
   if(_hsTypeFilter!=='all'){
     const mapped=window.HS_TYPE_MAP&&window.HS_TYPE_MAP[_hsTypeFilter];
     if(mapped)list=list.filter(p=>mapped.includes(p.type));
@@ -500,6 +505,7 @@ function requestQuotes(){
   const budget=document.getElementById('qtBudget')?.value||'';
   quotes.unshift({id:'QT'+Date.now(),service,loc,phone,desc,budget,ts:Date.now()});
   localStorage.setItem('hsQuoteRequests',JSON.stringify(quotes.slice(0,30)));
+  _hsFireWrite('homeServiceQuotes',{service,location:loc,phone,description:desc,budget,status:'open'});
   const msg=`💰 *SOKONI Home Services — Quote Request*\n\n🔧 Service: ${service}\n📍 Location: ${loc}\n📞 Contact: ${phone}${budget?'\n💰 Budget: '+budget:''}\n\n📝 ${desc}\n\nPlease send your best quote!`;
   window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
   if(msgEl){msgEl.innerHTML='✅ Quote request sent to providers!';msgEl.style.color='#f59e0b';}
@@ -533,6 +539,7 @@ function postHsRequest(){
   let reqs=[];try{reqs=JSON.parse(localStorage.getItem('askHub_homeservices')||'[]');}catch(e){}
   reqs.unshift({id:'HSR'+Date.now(),text,type,phone,ts:Date.now()});
   localStorage.setItem('askHub_homeservices',JSON.stringify(reqs.slice(0,30)));
+  _hsFireWrite('homeServiceRequests',{text,serviceType:type||'General',phone,status:'open'});
   document.getElementById('hsAskText').value='';
   document.getElementById('hsAskPhone').value='';
   renderHsAskFeed();
@@ -594,10 +601,13 @@ function showHsToast(msg){
   setTimeout(function(){t.style.opacity='0';setTimeout(function(){if(t.parentNode)t.remove();},300);},2800);
 }
 
+let _fsProviders=[];
+
 renderTypeChips();
 filterProviders();
 renderHsAskFeed();
 renderQuotesFeed();
+_initFsProviders();
 
 /* ── URL HASH DEEP-LINK ── */
 (function(){
@@ -607,6 +617,22 @@ renderQuotesFeed();
   if(types.indexOf(h)>=0){setTimeout(function(){goFindType(h);},200);}
   else if(['find','book','quotes','askhub','myjobs','register'].indexOf(h)>=0){setTimeout(function(){goToPanel(h);},200);}
 })();
+
+/* ── FIRESTORE LISTENER — live provider listings ── */
+async function _initFsProviders(){
+  try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,query,where,orderBy,limit,onSnapshot}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="hs-read")||initializeApp(_cfg,"hs-read");
+    /* Single orderBy — no composite index needed; filter status client-side */
+    const q=query(collection(getFirestore(_a),'homeServiceProviders'),orderBy('createdAt','desc'),limit(100));
+    onSnapshot(q,snap=>{
+      _fsProviders=snap.docs.map(d=>({_id:d.id,...d.data()})).filter(d=>d.registrationStatus==='approved'||d.registrationStatus==='active');
+      filterProviders();
+    },()=>{});
+  }catch(e){}
+}
 
 /* ── FIRESTORE FIRE-AND-FORGET ── */
 async function _hsFireWrite(coll, data) {

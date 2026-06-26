@@ -601,6 +601,15 @@ function submitBooking() {
   bookings.unshift(booking);
   localStorage.setItem('sokoniCleaningBookings', JSON.stringify(bookings));
 
+  /* Persist to Firestore */
+  (async()=>{try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="cln-write")||initializeApp(_cfg,"cln-write");
+    await addDoc(collection(getFirestore(_a),'homeServiceBookings'),{...booking,hub:'cleaning',createdAt:serverTimestamp()});
+  }catch(e){}})();
+
   /* Open WhatsApp to confirm */
   const provPhone = selectedProv?.phone || '0705726803';
   const msg = `Hi${selectedProv ? ' ' + selectedProv.name : ''}! I'd like to book a cleaning service via SOKONI.\n\n` +
