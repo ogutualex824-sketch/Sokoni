@@ -63,16 +63,14 @@ const EntHub = {
   },
 
   listenArtists(filters, callback, limitN = 80) {
-    /* Query only by single equality field to avoid composite index requirements.
-       Status filtering (approved/active) is applied client-side. */
-    let q = query(collection(db, 'entArtists'), orderBy('createdAt', 'desc'), limit(limitN));
-    if (filters?.type) q = query(collection(db, 'entArtists'), where('type', '==', filters.type), orderBy('createdAt', 'desc'), limit(limitN));
-    if (filters?.city) q = query(collection(db, 'entArtists'), where('city', '==', filters.city), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'entArtists'), orderBy('createdAt', 'desc'), limit(limitN));
     const allowAll = filters?.all;
     return onSnapshot(q,
       snap => {
         let artists = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
         if (!allowAll) artists = artists.filter(a => a.status === 'approved' || a.status === 'active');
+        if (filters?.type) artists = artists.filter(a => a.type === filters.type);
+        if (filters?.city) artists = artists.filter(a => a.city === filters.city);
         callback(artists);
       },
       err => console.warn('[EntHub] artists:', err.message)
@@ -168,12 +166,15 @@ const EntHub = {
   },
 
   listenEvents(filters, callback, limitN = 60) {
-    let q = query(collection(db, 'entEvents'), where('status', '==', 'published'), orderBy('date', 'asc'), limit(limitN));
-    if (filters?.type && filters.type !== 'all') {
-      q = query(collection(db, 'entEvents'), where('type', '==', filters.type), where('status', '==', 'published'), orderBy('date', 'asc'), limit(limitN));
-    }
+    const q = query(collection(db, 'entEvents'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => {
+        let evts = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        evts = evts.filter(e => e.status === 'published');
+        if (filters?.type && filters.type !== 'all') evts = evts.filter(e => e.type === filters.type);
+        evts.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+        callback(evts);
+      },
       err => console.warn('[EntHub] events:', err.message)
     );
   },
@@ -181,9 +182,12 @@ const EntHub = {
   getMyEvents(callback) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'entEvents'), where('uid', '==', uid), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'entEvents'), orderBy('createdAt', 'desc'), limit(100));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => {
+        const evts = snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(e => e.uid === uid);
+        callback(evts);
+      },
       err => console.warn('[EntHub] myEvents:', err.message)
     );
   },
@@ -297,9 +301,9 @@ const EntHub = {
   listenMyTickets(callback) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'entTickets'), where('uid', '==', uid), orderBy('purchasedAt', 'desc'));
+    const q = query(collection(db, 'entTickets'), orderBy('purchasedAt', 'desc'), limit(100));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(t => t.uid === uid)),
       err => console.warn('[EntHub] tickets:', err.message)
     );
   },
@@ -349,14 +353,15 @@ const EntHub = {
   },
 
   listenVenues(filters, callback, limitN = 40) {
-    let q = query(collection(db, 'entVenues'), where('status', '==', 'active'), orderBy('createdAt', 'desc'), limit(limitN));
-    if (filters?.type) {
-      q = query(collection(db, 'entVenues'), where('type', '==', filters.type), where('status', '==', 'active'), orderBy('createdAt', 'desc'), limit(limitN));
-    } else if (filters?.city) {
-      q = query(collection(db, 'entVenues'), where('city', '==', filters.city), where('status', '==', 'active'), orderBy('createdAt', 'desc'), limit(limitN));
-    }
+    const q = query(collection(db, 'entVenues'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => {
+        let venues = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        venues = venues.filter(v => v.status === 'active');
+        if (filters?.type) venues = venues.filter(v => v.type === filters.type);
+        if (filters?.city) venues = venues.filter(v => v.city === filters.city);
+        callback(venues);
+      },
       err => console.warn('[EntHub] venues:', err.message)
     );
   },
@@ -394,9 +399,9 @@ const EntHub = {
   listenMyVenueBookings(callback) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'entVenueBookings'), where('uid', '==', uid), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'entVenueBookings'), orderBy('createdAt', 'desc'), limit(100));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(b => b.uid === uid)),
       err => console.warn('[EntHub] venueBookings:', err.message)
     );
   },
@@ -440,17 +445,17 @@ const EntHub = {
   listenMyArtistBookings(callback) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'entArtistBookings'), where('uid', '==', uid), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'entArtistBookings'), orderBy('createdAt', 'desc'), limit(100));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(b => b.uid === uid)),
       err => console.warn('[EntHub] artistBookings:', err.message)
     );
   },
 
   getArtistBookings(artistId, callback) {
-    const q = query(collection(db, 'entArtistBookings'), where('artistId', '==', artistId), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'entArtistBookings'), orderBy('createdAt', 'desc'), limit(100));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() }))),
+      snap => callback(snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(b => b.artistId === artistId)),
       err => console.warn('[EntHub] artistInbox:', err.message)
     );
   },
