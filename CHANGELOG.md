@@ -1,4 +1,37 @@
-﻿## [2026-06-26] — Offline Detection: Reliable Dual-Probe System
+﻿## [2026-06-26] — Hero Floating Card + Offline Detection Reliability
+
+### Summary
+Converted the homepage glass hero from a full-bleed, edge-to-edge section into a properly floating premium card with visible side margins and full four-corner border-radius. Simultaneously replaced the unreliable `navigator.onLine`-event-only offline detection with a fetch-probe system that requires 3 consecutive real network failures before showing the persistent offline banner.
+
+### Hero Changes
+- `style.css` — `.glass-hero` now uses `width: calc(100% - 32px); max-width: 900px; margin: 16px auto; border-radius: 28px;` (primary and minified rule); mobile CLS guard updated to match
+- `premium.css` — removed `border-radius: 0 0 28px 28px !important` (was cutting off top corners on mobile); replaced with `border-radius: 24px !important` + margin/width
+- `mobile.css` — added `width: calc(100% - 32px); margin: 16px auto; border-radius: 24px` to mobile hero rule; updated stale "full-bleed" comment
+- `sokoni-desktop.css` — added `.glass-hero` specific desktop rule: `width: calc(100% - 80px); max-width: 960px; margin: 20px auto; border-radius: 32px`
+
+### Offline Detection Changes
+- `index.html` — added `#sk-offline-banner` persistent fixed-top element (hidden by default, `display:flex` only when `sk-offline-visible` class present); replaced browser-event-only offline logic with fetch-probe IIFE that pings `https://www.gstatic.com/generate_204` (external, not SW-cached) with 5 s AbortController timeout; requires 3 consecutive failures before showing banner; hides banner on first success + shows "Back online" toast
+
+### Scroll-to-Top Button
+- `index.html` — button now added as static HTML (`#sokoniScrollTop`) so it's in the DOM immediately on parse without JS dependency; `scroll-top.js` reuses existing element or creates one dynamically as fallback
+- `scroll-top.js` — v3: `getElementById` check before `createElement`; dynamic fallback path preserved for other pages
+
+### Files Changed
+- `style.css` — glass-hero base rule + minified rule + mobile CLS guard
+- `premium.css` — mobile hero override
+- `mobile.css` — mobile hero override + comment
+- `sokoni-desktop.css` — desktop hero rule
+- `index.html` — offline banner HTML/CSS + offline detection JS + static scroll-to-top button
+- `scroll-top.js` — v3 reuse-or-create pattern
+
+### Security / Performance
+- No new Firestore reads or writes introduced
+- External probe URL (`gstatic.com/generate_204`) is a HEAD request — ~zero payload
+- AbortController timeout prevents hung fetches from blocking anything
+
+---
+
+## [2026-06-26] — Offline Detection: Reliable Dual-Probe System
 
 ### Summary
 Replaced two competing, unreliable offline detection systems with one authoritative implementation in `sokoni-ui.js`. The previous code trusted `navigator.onLine` to both show and hide the banner — this flag goes `false` during SW install/update cycles even on a live connection, causing false-positive "No internet" banners. The new system never trusts `navigator.onLine` alone and requires 2 consecutive real probe failures before showing the banner.

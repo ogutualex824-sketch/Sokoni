@@ -7482,7 +7482,10 @@ body.light-mode{
 ========================= */
 
 .glass-hero{
-    width:100%;
+    width:calc(100% - 32px);
+    max-width:900px;
+    margin:16px auto;
+    border-radius:28px;
     position:relative;
     display:flex;
     align-items:center;
@@ -14790,7 +14793,7 @@ body.light-mode .feature-text p{color:rgba(0,0,0,0.4)!important;}
 .flash-label{background:linear-gradient(135deg,#ef4444,#dc2626);color:white;font-weight:900;font-size:11px;padding:5px 12px;border-radius:999px;letter-spacing:.05em;box-shadow:0 2px 12px rgba(239,68,68,0.4);animation:flashLabelPulse 1.8s ease-in-out infinite;}
 @keyframes flashLabelPulse{0%,100%{box-shadow:0 2px 12px rgba(239,68,68,0.35);}50%{box-shadow:0 4px 22px rgba(239,68,68,0.6);}}
 /* GLASS HERO */
-.glass-hero{position:relative;padding:32px 20px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.glass-hero{position:relative;padding:32px 20px;overflow:hidden;display:flex;align-items:center;justify-content:center;width:calc(100% - 32px);max-width:900px;margin:16px auto;border-radius:28px;}
 .glass-hero-bg{position:absolute;inset:0;background:url("assets/backG1.jpeg") center/cover no-repeat;filter:brightness(0.5);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;}
 .glass-btn-green{background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:13px;padding:13px 24px;border-radius:16px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 24px rgba(113,255,0,0.35);transition:transform .25s cubic-bezier(.34,1.56,.64,1),box-shadow .25s;}
 .glass-btn-green:hover{transform:translateY(-3px) scale(1.03);box-shadow:0 12px 36px rgba(113,255,0,0.5);}
@@ -15923,6 +15926,9 @@ select.p10-valid {
    the values are identical → no visual change → zero CLS contribution. */
 @media (max-width: 600px) {
   .glass-hero {
+    width: calc(100% - 32px);
+    margin: 16px auto;
+    border-radius: 24px;
     padding: 12px 16px;
     min-height: unset;
   }

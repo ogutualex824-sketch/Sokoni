@@ -2067,6 +2067,10 @@ html {
 
   /* Glass hero — floating card over background image */
   .glass-hero {
+    width: calc(100% - 32px) !important;
+    max-width: 900px !important;
+    margin: 16px auto !important;
+    border-radius: 24px !important;
     padding: 12px 16px !important;
     min-height: unset !important;
   }
@@ -4051,7 +4055,7 @@ button, .btn, [role="button"], a.btn { min-height: 44px; touch-action: manipulat
   /* Only match terminal hub-hero containers (e.g. .bk-hero, .fd-hero) — not
      sub-components whose class contains "-hero-" (like glass-hero-card,
      glass-hero-stat-row, glass-hero-stat-pill, glass-hero-btns, etc.) AND not
-     .glass-hero (home page hero) which uses full-bleed layout with padding:0. */
+     .glass-hero (home page hero) which uses its own floating-card layout. */
   [class*="-hero"]:not([class*="-hero-"]):not(.glass-hero) { padding: 28px 16px 20px !important; min-height: unset !important; }
   .bk-tabs, .rd-tabs, .eh-tabs, .hc-tabs, [class*="-tabs"] {
     flex-wrap: nowrap !important; overflow-x: auto !important;
