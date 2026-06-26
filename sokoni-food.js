@@ -294,10 +294,19 @@ window.SokoniFood = (function () {
     lsSet(k,Number(lsGet(k)||0)+1);
   }
 
-  /* ══ CART ══ */
-  const CART_KEY='sokoni_food_cart';
-  function getCart(){ return lsArr(CART_KEY); }
-  function saveCart(cart){ lsSet(CART_KEY,cart); _updateBadge(); }
+  /* ══ CART — unified with main "cart" key, type:'food' ══ */
+  const SHARED_CART_KEY='cart';
+
+  function _allItems(){ try{ return JSON.parse(localStorage.getItem(SHARED_CART_KEY)||'[]'); }catch{ return []; } }
+  function _saveAll(items){ localStorage.setItem(SHARED_CART_KEY,JSON.stringify(items)); }
+
+  function getCart(){ return _allItems().filter(i=>i.type==='food'); }
+
+  function saveCart(foodItems){
+    const rest=_allItems().filter(i=>i.type!=='food');
+    _saveAll([...rest,...foodItems]);
+    _updateBadge();
+  }
 
   function addToCart(restaurantId,restaurantName,restaurantEmoji,item,qty=1,note=''){
     const cart=getCart();
@@ -305,6 +314,7 @@ window.SokoniFood = (function () {
     if(ex){ ex.qty+=qty; }
     else{
       cart.push({
+        type:'food',
         cartId:'CI'+Date.now()+Math.random().toString(36).slice(2,6),
         restaurantId,restaurantName,restaurantEmoji,
         itemId:item.id,name:item.name,price:item.price,qty,note,
@@ -346,10 +356,12 @@ window.SokoniFood = (function () {
   }
 
   function _updateBadge(){
-    const count=getCartCount();
-    document.querySelectorAll('.food-cart-badge').forEach(el=>{
-      el.textContent=count||'';
-      el.style.display=count?'flex':'none';
+    /* Count ALL cart items (food + products) for the shared badge */
+    const all=_allItems();
+    const total=all.reduce((s,i)=>s+(i.qty||1),0);
+    document.querySelectorAll('.food-cart-badge,.sk-cart-pip').forEach(el=>{
+      el.textContent=total||'';
+      el.style.display=total?'flex':'none';
     });
   }
 

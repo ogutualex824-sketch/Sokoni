@@ -84,9 +84,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 .food-card-promo{margin-top:10px;font-size:10px;color:#f59e0b;font-weight:700;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);border-radius:6px;padding:4px 8px;display:inline-block;}
 .food-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,0.25);}
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
-.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;transition:color .2s;}
-.bnav-item i{font-size:18px;}
-.bnav-item:hover,.bnav-item.active{color:#22c55e;}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:700;min-width:52px;transition:color .18s;padding:2px 0;position:relative;}
+.bnav-emoji{font-size:20px;line-height:1.2;}
+.bnav-item:hover,.bnav-item.active{color:#71ff00;}
+.bnav-item.active .bnav-emoji{filter:drop-shadow(0 0 6px rgba(113,255,0,0.5));}
+.bnav-cart-wrap{position:relative;display:inline-flex;}
+.bnav-cart-pip{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;border-radius:8px;background:#71ff00;color:#000;font-size:9px;font-weight:900;display:none;align-items:center;justify-content:center;padding:0 3px;}
 .food-sort{padding:8px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;outline:none;}
 @media(max-width:600px){.food-grid{grid-template-columns:1fr;}}
 </style>
@@ -100,7 +103,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
   <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="fn-logo" alt="SOKONI"></a>
   <div class="fn-right">
     <a href="food-dashboard.html" class="fn-dash-btn">🍴 Restaurant Login</a>
-    <a href="food-cart.html" class="fn-cart-btn">
+    <a href="cart.html" class="fn-cart-btn">
       🛒 Cart
       <span class="food-cart-badge" id="cartBadge"></span>
     </a>
@@ -163,12 +166,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 
 </div>
 
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><i class="fas fa-home"></i><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><i class="fas fa-store"></i><span>Shop</span></a>
-  <a href="food.html" class="bnav-item active"><i class="fas fa-utensils"></i><span>Food</span></a>
-  <a href="food-cart.html" class="bnav-item"><i class="fas fa-shopping-cart"></i><span>Cart</span></a>
-  <a href="profile.html" class="bnav-item"><i class="fas fa-user"></i><span>Profile</span></a>
+<nav class="bottom-nav" role="navigation" aria-label="Main navigation">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="food.html" class="bnav-item active" aria-current="page"><span class="bnav-emoji">🍔</span><span>Food</span></a>
+  <a href="cart.html" class="bnav-item">
+    <span class="bnav-cart-wrap">
+      <span class="bnav-emoji">🛒</span>
+      <span class="bnav-cart-pip" id="bnavCartPip"></span>
+    </span>
+    <span>Cart</span>
+  </a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
 <script>
@@ -259,6 +268,21 @@ if(_urlCat&&SokoniFood.CATEGORIES.find(c=>c.id===_urlCat)) setCat(_urlCat);
     <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
     <button onclick="HubRegister.open({hub:'food', category:'restaurant'})" style="padding:12px 28px;background:#f97316;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
   </div>
+  <script>
+  /* ── bottom nav cart pip ── */
+  (function(){
+    function _upd(){
+      var all=[];try{all=JSON.parse(localStorage.getItem('cart')||'[]');}catch{}
+      var n=all.reduce(function(s,i){return s+(i.qty||1);},0);
+      var pip=document.getElementById('bnavCartPip');
+      if(pip){pip.textContent=n||'';pip.style.display=n?'flex':'none';}
+      var old=document.getElementById('cartBadge');
+      if(old){old.textContent=n||'';old.style.display=n?'flex':'none';}
+    }
+    _upd();
+    window.addEventListener('storage',function(e){if(e.key==='cart')_upd();});
+  })();
+  </script>
   <script defer src="hub-register.js"></script>
   <script defer src="kass-widget.js"></script>
   <!-- Enterprise v2.0: core stack -->

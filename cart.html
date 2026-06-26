@@ -209,6 +209,29 @@
       cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .2s;
     }
     .promo-apply:hover { background: rgba(113,255,0,0.2); }
+
+    /* ── Unified cart sections ── */
+    .cart-section-header{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.4);padding:18px 0 8px;margin-top:8px;}
+    .cart-section-header:first-child{margin-top:0;}
+    .cart-section-cta{padding:12px 0 4px;}
+    .cart-checkout-food,.cart-checkout-products{display:block;width:100%;padding:14px;border-radius:14px;text-align:center;font-size:14px;font-weight:900;text-decoration:none;transition:all .18s;}
+    .cart-checkout-food{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#22c55e;}
+    .cart-checkout-food:hover{background:rgba(34,197,94,.22);}
+    .cart-checkout-products{background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.28);color:#71ff00;}
+    .cart-checkout-products:hover{background:rgba(113,255,0,.2);}
+    /* Vendor group */
+    .cart-vendor-group{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:14px;margin-bottom:10px;overflow:hidden;}
+    .cart-vendor-header{display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(34,197,94,.04);border-bottom:1px solid rgba(255,255,255,.05);}
+    .cart-vendor-emoji{font-size:20px;}
+    .cart-vendor-name{flex:1;font-size:13px;font-weight:800;}
+    .cart-vendor-sub{font-size:13px;font-weight:900;color:#22c55e;}
+    /* Food item */
+    .cart-food-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.04);}
+    .cart-food-item:last-child{border-bottom:none;}
+    .cart-food-info{flex:1;min-width:0;}
+    .cart-food-qty{display:flex;align-items:center;gap:0;}
+    .cart-qty-btn{width:28px;height:28px;border-radius:7px;border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.08);color:#22c55e;font-size:16px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;}
+    .cart-qty-num{min-width:26px;text-align:center;font-size:13px;font-weight:900;}
   </style>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
