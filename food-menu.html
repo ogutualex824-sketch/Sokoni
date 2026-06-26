@@ -313,6 +313,14 @@ updateCartBar();
 function openCheckout(){
   const cart = SokoniFood.getCart().filter(c => c.restaurantId === _id);
   if(!cart.length){ return; }
+  const subtotal   = cart.reduce((s,c)=>s+c.price*c.qty,0);
+  const deliveryFee = _rest.deliveryFee || 50;
+  const total      = subtotal + deliveryFee;
+  const rn = document.getElementById('coRestName'); if(rn) rn.textContent = _rest.emoji+' '+_rest.name;
+  const summary = document.getElementById('coOrderSummary');
+  if(summary) summary.innerHTML = cart.map(c=>`<div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span>${esc(c.name)} ×${c.qty}</span><span style="color:#22c55e;">KES ${SokoniFood.fmt(c.price*c.qty)}</span></div>`).join('')+
+    `<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);"><span style="color:rgba(255,255,255,0.4);">Delivery</span><span style="color:rgba(255,255,255,0.6);">KES ${SokoniFood.fmt(deliveryFee)}</span></div>`+
+    `<div style="display:flex;justify-content:space-between;margin-top:4px;font-weight:900;font-size:14px;"><span>Total</span><span style="color:#22c55e;">KES ${SokoniFood.fmt(total)}</span></div>`;
   document.getElementById('checkoutModal').classList.add('open');
 }
 function closeCheckout(){ document.getElementById('checkoutModal').classList.remove('open'); }
@@ -388,12 +396,29 @@ function placeOrder(){
   });
 }
 </script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
 <script src="analytics.js" defer></script>
 <script src="sw-register.js" defer></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
+<script defer src="kass-widget.js"></script>
+<script defer src="sokoni-event-bus.js"></script>
+<script defer src="sokoni-observability.js"></script>
+<script defer src="sokoni-gateway.js"></script>
+
+<script type="module">
+import { db, auth } from './firebase.js';
+import { collection, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+window._saveFoodOrderFS = async function(order) {
+  try {
+    await setDoc(doc(db,'foodOrders',order.id), {
+      ...order,
+      placedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, {merge:true});
+  } catch(e) { console.warn('[Food] Order save failed:', e); }
+};
+</script>
 </body>
 </html>

@@ -110,6 +110,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s);"></script>
 <script>
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
 const _orderId = new URLSearchParams(window.location.search).get('id');
 let _order = null;
 let _map = null;
@@ -143,7 +145,8 @@ function load() {
     return;
   }
   renderOrder();
-  startSimulation();
+  /* Real-time status from Firestore — see module script below */
+  if (window._listenFoodOrderFS) window._listenFoodOrderFS(_orderId);
 }
 
 function renderOrder() {
@@ -158,7 +161,7 @@ function renderOrder() {
     <div class="fo-status-icon">${SokoniFood.STATUS_ICONS[o.status] || '📋'}</div>
     <div class="fo-status-label">${SokoniFood.STATUS_LABELS[o.status] || o.status}</div>
     <div class="fo-status-sub">${isDelivered ? 'Your order has arrived!' : 'We\'re working on your order'}</div>
-    <div class="fo-order-id">Order #${o.id}</div>
+    <div class="fo-order-id">Order #${esc(o.id)}</div>
     ${!isDelivered ? `<div class="fo-eta">${o.deliveryTime || '30-45 min'}</div><div class="fo-eta-lbl">Estimated ${o.deliveryMethod === 'pickup' ? 'pickup' : 'delivery'} time</div>` : ''}
   </div>
 
@@ -196,12 +199,12 @@ function renderOrder() {
   <div class="fo-rider-card">
     <div class="fo-rider-avatar">🛵</div>
     <div>
-      <div class="fo-rider-name">James Mwangi</div>
-      <div class="fo-rider-sub">⭐ 4.8 · 230+ deliveries · On the way</div>
+      <div class="fo-rider-name">${o.riderName ? esc(o.riderName) : 'Your Rider'}</div>
+      <div class="fo-rider-sub">${o.riderRating ? '⭐ '+esc(String(o.riderRating))+' · ' : ''}On the way to you</div>
     </div>
     <div class="fo-rider-actions">
-      <a href="tel:0712345678" class="fo-rider-btn fo-rider-call">📞</a>
-      <a href="https://wa.me/254712345678" class="fo-rider-btn fo-rider-wa" target="_blank">💬</a>
+      ${o.riderPhone ? `<a href="tel:${esc(o.riderPhone)}" class="fo-rider-btn fo-rider-call">📞</a>
+      <a href="https://wa.me/${esc(o.riderPhone.replace(/^0/,'254').replace(/\D/g,''))}" class="fo-rider-btn fo-rider-wa" target="_blank">💬</a>` : ''}
     </div>
   </div>` : ''}
 
@@ -210,12 +213,12 @@ function renderOrder() {
     <div class="fo-sh">📋 Order Details</div>
     ${(o.vendors||[]).map(v=>`
     <div style="margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:4px;">${v.restaurantEmoji||''} ${v.restaurantName}</div>
+      <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:4px;">${esc(v.restaurantEmoji||'')} ${esc(v.restaurantName)}</div>
       ${(v.items||[]).map(item=>`
-      <div class="fo-detail-row"><span class="lbl">${item.name} × ${item.qty}</span><span class="val">KES ${SokoniFood.fmt(item.price*item.qty)}</span></div>`).join('')}
+      <div class="fo-detail-row"><span class="lbl">${esc(item.name)} × ${Number(item.qty)}</span><span class="val">KES ${SokoniFood.fmt(item.price*item.qty)}</span></div>`).join('')}
     </div>`).join('')}
-    <div class="fo-detail-row"><span class="lbl">Delivery</span><span class="val">${o.deliveryMethod === 'pickup' ? '🏃 Pickup' : '🛵 Delivery — ' + (o.deliveryAddress || 'Your address')}</span></div>
-    <div class="fo-detail-row"><span class="lbl">Payment</span><span class="val green">M-Pesa ${o.phone||''}</span></div>
+    <div class="fo-detail-row"><span class="lbl">Delivery</span><span class="val">${o.deliveryMethod === 'pickup' ? '🏃 Pickup' : '🛵 ' + esc(o.deliveryAddress || 'Your address')}</span></div>
+    <div class="fo-detail-row"><span class="lbl">Payment</span><span class="val green">M-Pesa ${esc(o.phone||'')}</span></div>
     <div class="fo-detail-row" style="font-size:13px;font-weight:900;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);"><span class="lbl" style="color:white;">Total Paid</span><span class="val green" style="font-size:15px;">KES ${SokoniFood.fmt(o.total)}</span></div>
   </div>
 
@@ -318,12 +321,29 @@ load();
 </script>
 <script src="analytics.js" defer></script>
 <script src="sw-register.js" defer></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: payment stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-payment-engine.js"></script>
-  <script defer src="sokoni-fraud-engine.js"></script>
+<script defer src="kass-widget.js"></script>
+<script defer src="sokoni-event-bus.js"></script>
+<script defer src="sokoni-observability.js"></script>
+<script defer src="sokoni-gateway.js"></script>
+<script defer src="sokoni-payment-engine.js"></script>
+<script defer src="sokoni-fraud-engine.js"></script>
+
+<script type="module">
+import { db } from './firebase.js';
+import { doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+window._listenFoodOrderFS = function(orderId) {
+  if (!orderId) return;
+  try {
+    onSnapshot(doc(db, 'foodOrders', orderId), snap => {
+      if (!snap.exists()) return;
+      const data = { ...snap.data(), id: snap.id };
+      /* Merge into local state so renderOrder() shows real status */
+      _order = { ..._order, ...data };
+      renderOrder();
+    });
+  } catch(e) { console.warn('[FoodOrder] Firestore listener failed:', e); }
+};
+</script>
 </body>
 </html>

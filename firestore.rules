@@ -574,6 +574,39 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       FOOD ORDERS  (food-menu.html checkout → food-dashboard.html restaurant)
+       • read:   buyer (buyerUid), restaurant (restaurantId via isAuthed), admin
+       • create: any authenticated user; required fields + status=='placed'
+       • update: admin or restaurant owner (status + riderName only)
+       • delete: admin only
+    ══════════════════════════════════════════════════════════════ */
+    match /foodOrders/{orderId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.buyerUid     == request.auth.uid)
+                    || (isAuthed() && resource.data.restaurantId == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.keys().hasAll(['id','restaurantId','restaurantName','phone','items','total','status'])
+                    && request.resource.data.status   == 'placed'
+                    && request.resource.data.total     > 0;
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.restaurantId == request.auth.uid
+                        || resource.data.buyerUid == request.auth.uid)
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','riderName','riderPhone','riderRating','updatedAt','statusHistory']));
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FOOD MENUS  (food-dashboard.html → food-menu.html)
+       • read:   public (anyone can browse a restaurant's menu)
+       • write:  admin or restaurant owner
+    ══════════════════════════════════════════════════════════════ */
+    match /foodMenus/{restaurantId} {
+      allow read:   if true;
+      allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        LEGAL BOOKINGS  (legal-hub.html → lawyer consultation bookings)
        • read:   client (clientUid match), lawyer (lawyerId match via sellerUid), admin
        • create: authenticated; clientUid must match caller; status restricted
