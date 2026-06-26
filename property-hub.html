@@ -815,7 +815,7 @@ function submitListProperty() {
     arr.unshift(entry);
     localStorage.setItem('sokoniListedProperties', JSON.stringify(arr.slice(0,100)));
   } catch(e){}
-  if(typeof window._savePropertyBooking === 'function') window._savePropertyBooking({type:'property_listing', ...entry});
+  if(typeof window._savePropertyListing === 'function') window._savePropertyListing(entry);
   closeModal();
   (window._skToast||alert)('✅ Your property has been listed! Our team will review and publish it within 24 hours.');
 }
@@ -873,14 +873,20 @@ init();
 <!-- Firestore real-time module -->
 <script type="module">
 import { db, auth } from './firebase.js';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-// Save property bookings to Firestore
+/* Save a new property listing — writes to propertyListings so the
+   onSnapshot listener below picks it up immediately on all devices */
+window._savePropertyListing = async function(entry) {
+  try { await addDoc(collection(db,'propertyListings'), {...entry, status:'pending', createdAt: serverTimestamp()}); } catch(e){}
+};
+
+/* Keep the booking writer for inquiries/viewings that call it */
 window._savePropertyBooking = async function(bk) {
   try { await addDoc(collection(db,'bookings'), {...bk, hub:'property', createdAt: serverTimestamp()}); } catch(e){}
 };
 
-// Real-time property listings from Firestore (if any)
+// Real-time property listings from Firestore
 const q = query(collection(db,'propertyListings'), orderBy('createdAt','desc'));
 onSnapshot(q, snap => {
   const live = snap.docs.map(d=>({id:d.id,...d.data()}));
