@@ -484,7 +484,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 40;
 
 const _state = {
   filters: { type: new Set(), experience: new Set() },
@@ -523,12 +523,9 @@ function _ago(ts) {
 }
 
 function _buildQuery(limitN, afterDoc) {
-  let q = query(collection(db, 'jobs'), where('active', '==', true));
-  if (_state.category !== 'All') q = query(q, where('category', '==', _state.category));
-  if (_state.filters.type.size === 1) q = query(q, where('type', '==', [..._state.filters.type][0]));
-  if (_state.filters.experience.size === 1) q = query(q, where('experience', '==', [..._state.filters.experience][0]));
-  const sortField = _state.sort === 'salary' ? 'salaryMax' : _state.sort === 'featured' ? 'featured' : 'postedAt';
-  q = query(q, orderBy(sortField, 'desc'), limit(limitN));
+  /* Single-field query — avoids composite index requirement.
+     Category, type, experience and sort are applied client-side. */
+  let q = query(collection(db, 'jobs'), where('active', '==', true), orderBy('postedAt', 'desc'), limit(limitN));
   if (afterDoc) q = query(q, startAfter(afterDoc));
   return q;
 }
@@ -567,6 +564,17 @@ function _renderCard(job) {
   </div>`;
 }
 
+const _DEMO_JOBS = [
+  {_id:'DEMO_J1',title:'Sales Representative',company:'Safaricom PLC',location:'Nairobi',category:'Sales',type:'Full-Time',experience:'Entry Level',salaryMin:35000,salaryMax:55000,description:'Drive retail and enterprise sales across Nairobi region. Meet targets, manage accounts and grow the customer base.',postedAt:{toDate:()=>new Date(Date.now()-86400000*2)},active:true,featured:true},
+  {_id:'DEMO_J2',title:'Software Developer (React)',company:'Andela Kenya',location:'Nairobi (Remote)',category:'Technology',type:'Remote',experience:'Mid Level',salaryMin:80000,salaryMax:150000,description:'Build modern web applications for global clients. Strong React and Node.js skills required. Remote-first team.',postedAt:{toDate:()=>new Date(Date.now()-86400000*3)},active:true,featured:false},
+  {_id:'DEMO_J3',title:'Accountant',company:'Kenya Commercial Bank',location:'Mombasa',category:'Finance',type:'Full-Time',experience:'Mid Level',salaryMin:60000,salaryMax:90000,description:'Prepare financial statements, manage budgets and ensure compliance with IFRS standards. CPA(K) preferred.',postedAt:{toDate:()=>new Date(Date.now()-86400000*4)},active:true,featured:false},
+  {_id:'DEMO_J4',title:'Nurse (RN)',company:'Aga Khan Hospital',location:'Nairobi',category:'Healthcare',type:'Full-Time',experience:'Entry Level',salaryMin:45000,salaryMax:70000,description:'Provide quality patient care in a busy hospital ward. Registered Nurse with valid NCK licence required.',postedAt:{toDate:()=>new Date(Date.now()-86400000*1)},active:true,featured:true},
+  {_id:'DEMO_J5',title:'Digital Marketing Manager',company:'Jumia Kenya',location:'Nairobi',category:'Marketing',type:'Full-Time',experience:'Senior Level',salaryMin:90000,salaryMax:130000,description:'Lead paid campaigns, SEO, email marketing and social media strategy. 5+ years digital marketing experience.',postedAt:{toDate:()=>new Date(Date.now()-86400000*5)},active:true,featured:false},
+  {_id:'DEMO_J6',title:'Logistics Coordinator',company:'DHL Kenya',location:'Nairobi',category:'Logistics',type:'Full-Time',experience:'Mid Level',salaryMin:50000,salaryMax:75000,description:'Coordinate import/export shipments, manage customs documentation and liaise with freight partners.',postedAt:{toDate:()=>new Date(Date.now()-86400000*6)},active:true,featured:false},
+  {_id:'DEMO_J7',title:'Customer Experience Agent',company:'SOKONI',location:'Nairobi (Remote)',category:'Customer Service',type:'Remote',experience:'Entry Level',salaryMin:30000,salaryMax:45000,description:'Handle buyer and seller queries via chat, email and phone. Resolve disputes and ensure platform satisfaction.',postedAt:{toDate:()=>new Date(Date.now()-86400000*1)},active:true,featured:false},
+  {_id:'DEMO_J8',title:'Civil Engineer',company:'China Road & Bridge Corporation',location:'Kisumu',category:'Engineering',type:'Full-Time',experience:'Mid Level',salaryMin:100000,salaryMax:160000,description:'Supervise road construction projects. AutoCAD proficiency and infrastructure project experience required.',postedAt:{toDate:()=>new Date(Date.now()-86400000*7)},active:true,featured:false},
+];
+
 async function _loadJobs(append = false) {
   if (!append) {
     _state.lastDoc = null;
@@ -580,9 +588,12 @@ async function _loadJobs(append = false) {
     _state.hasMore = snap.docs.length > PAGE_SIZE;
     _state.lastDoc = docs[docs.length - 1] || null;
 
-    // client-side filters that Firestore can't do without extra indexes
+    // client-side filters — avoids composite Firestore indexes
     let jobs = docs.map(d => ({ _id: d.id, ...d.data() }));
 
+    if (_state.category !== 'All') jobs = jobs.filter(j => j.category === _state.category);
+    if (_state.filters.type.size > 0) jobs = jobs.filter(j => _state.filters.type.has(j.type));
+    if (_state.filters.experience.size > 0) jobs = jobs.filter(j => _state.filters.experience.has(j.experience));
     if (_state.titleQuery) {
       const kw = _state.titleQuery.toLowerCase();
       jobs = jobs.filter(j =>
@@ -597,6 +608,14 @@ async function _loadJobs(append = false) {
     }
     if (_state.salaryMin > 0) jobs = jobs.filter(j => (j.salaryMax || 0) >= _state.salaryMin);
     if (_state.salaryMax > 0) jobs = jobs.filter(j => (j.salaryMin || 0) <= _state.salaryMax);
+    if (_state.sort === 'salary') jobs.sort((a,b) => (b.salaryMax||0) - (a.salaryMax||0));
+    else if (_state.sort === 'featured') jobs.sort((a,b) => (b.featured?1:0) - (a.featured?1:0));
+
+    /* demo fallback — shown only when Firestore is empty */
+    if (jobs.length === 0 && !append && !_state.titleQuery && !_state.locationQuery &&
+        _state.category === 'All' && _state.filters.type.size === 0 && _state.filters.experience.size === 0) {
+      jobs = _DEMO_JOBS;
+    }
 
     const list = document.getElementById('jbList');
     if (!append) list.innerHTML = '';
