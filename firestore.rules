@@ -913,6 +913,176 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — BOOKINGS  (fitness-hub.html)
+       • read: owner or admin only (financial/personal data)
+       • create: authenticated, uid must match, required fields enforced
+       • update/delete: admin only (booking state managed server-side)
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_bookings/{bookingId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner()
+                    && request.resource.data.keys().hasAll(['type','provider','ref','uid','status','ts'])
+                    && request.resource.data.status == 'confirmed';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — PROGRESS  (workout log, weight log, goals, badges)
+       • read/write: owner only (personal health data); admin read
+       • create: authenticated with uid match
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_progress/{userId} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == userId);
+      allow create: if isAuthed() && request.auth.uid == userId;
+      allow update: if isAuthed() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — GYM PROFILES  (gym owner dashboard)
+       • read: public (gyms are public listings)
+       • create/update: owner only (uid == doc id)
+       • delete: admin only
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_gyms/{gymId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.auth.uid == gymId && noAdminFields();
+      allow update: if isAuthed() && request.auth.uid == gymId && uidUnchanged() && noAdminFields();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — CLASSES  (instructor-posted fitness classes)
+       • read: public
+       • create: authenticated with uid match, required fields enforced
+       • update: owner (limited fields) or admin
+       • delete: owner or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_classes/{classId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && noAdminFields()
+                    && request.resource.data.keys().hasAll(['name','type','instructor','phone','uid','ts']);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['name','loc','time','fee','slots','desc','type','updatedAt'])
+                        && uidUnchanged());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — CLUBS  (community fitness clubs)
+       • read: public
+       • create: authenticated with uid match
+       • update: owner (limited fields) or admin
+       • delete: owner or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_clubs/{clubId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && noAdminFields()
+                    && request.resource.data.keys().hasAll(['name','type','uid','ts']);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['name','desc','meet','members','updatedAt'])
+                        && uidUnchanged());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — COMMUNITY POSTS  (workout achievement posts)
+       • read: public
+       • create: authenticated with uid match, content size limited
+       • update: owner (content/likes only) or admin
+       • delete: owner or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_community_posts/{postId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && noAdminFields()
+                    && request.resource.data.keys().hasAll(['uid','ts'])
+                    && (request.resource.data.text == null || request.resource.data.text.size() <= 2000);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['text','likes','updatedAt'])
+                        && uidUnchanged());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — EQUIPMENT LISTINGS
+       • read: public (marketplace-style listings)
+       • create: authenticated with uid match
+       • update: owner (price/desc only) or admin
+       • delete: owner or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_equipment/{itemId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && noAdminFields()
+                    && request.resource.data.keys().hasAll(['uid','ts']);
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['price','desc','sold','updatedAt'])
+                        && uidUnchanged());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — REQUESTS  (Ask Hub — help requests to providers)
+       • read: public (providers browse requests)
+       • create: any authenticated user
+       • update: owner (edit text/phone) or admin
+       • delete: owner or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_requests/{requestId} {
+      allow read:   if true;
+      allow create: if claimsOwner()
+                    && noAdminFields()
+                    && request.resource.data.keys().hasAll(['text','uid','ts'])
+                    && request.resource.data.text.size() <= 1000;
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['text','phone','updatedAt'])
+                        && uidUnchanged());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — CHALLENGES  (challenge participation records)
+       • read: public (for leaderboards)
+       • create/update: owner only (doc id = uid_challengeId)
+       • delete: owner or admin
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_challenges/{entryId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAuthed() && resource.data.uid == request.auth.uid && uidUnchanged();
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       FITNESS HUB — CHECK-INS  (gym member check-in log)
+       • read: gym owner (gymUid == auth.uid) or admin
+       • create: gym owner only (gymUid must match auth.uid)
+       • update/delete: admin only
+    ══════════════════════════════════════════════════════════════ */
+    match /fitness_checkins/{checkinId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.gymUid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.gymUid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['memberName','gymUid','ts']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        DISPUTES  (dispute.html — buyer/seller dispute resolution)
        • create: any authenticated user may submit a dispute.
        • read: submitter (uid match), moderator, or admin.

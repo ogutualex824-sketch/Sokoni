@@ -1009,9 +1009,10 @@ function renderGymDashboard() {
     statsRow.innerHTML=stats.map(s=>`<div class="gm-stat-card"><div class="gm-stat-num">${s.num}</div><div class="gm-stat-label">${s.label}</div></div>`).join('');
   }
 
-  /* Chart */
+  /* Chart — real check-in counts per weekday (current week) */
   const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const vals=days.map(()=>Math.floor(Math.random()*40)+5);
+  const _now=new Date(),_dow=_now.getDay();
+  const vals=days.map((_,i)=>{const dayJS=(i+1)%7;const diff=((_dow-dayJS)+7)%7;const d=new Date(_now);d.setDate(_now.getDate()-diff);const ds=d.toDateString();return checkins.filter(c=>new Date(c.ts).toDateString()===ds).length;});
   const max=Math.max(...vals);
   const bar=document.getElementById('gmChartBar');
   const labels=document.getElementById('gmChartLabels');
@@ -1205,6 +1206,7 @@ window.filterClasses = filterClasses;
 
 function renderClasses() {
   let local = []; try{local=JSON.parse(localStorage.getItem('sokoniClasses')||'[]');}catch(e){}
+  (window._firestoreClasses||[]).forEach(c=>{if(!local.some(l=>l.id===c.id))local.unshift(c);});
   let list = [...local, ...DEMO_CLASSES.filter(d=>!local.some(l=>l.id===d.id))];
   if(_clsFilter !== 'all') list = list.filter(c=>c.type===_clsFilter);
   const grid = document.getElementById('clsGrid'); if(!grid) return;
@@ -1284,13 +1286,6 @@ function postClass() {
     desc:document.getElementById('clsDesc')?.value||''};
   let local=[];try{local=JSON.parse(localStorage.getItem('sokoniClasses')||'[]');}catch(e){}
   local.unshift(cls);localStorage.setItem('sokoniClasses',JSON.stringify(local.slice(0,30)));
-  /* Save to Firestore fitness_classes collection */
-  if(window.firebaseDB){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
-      const uid=(window.firebaseAuth&&window.firebaseAuth.currentUser)?window.firebaseAuth.currentUser.uid:'';
-      fs.addDoc(fs.collection(window.firebaseDB,'fitness_classes'),Object.assign({},cls,{uid,createdAt:fs.serverTimestamp?fs.serverTimestamp():Date.now()}));
-    }).catch(function(){});
-  }
   if(msgEl){msgEl.innerHTML='✅ Class listed!';msgEl.style.color='#39ff14';}
   document.getElementById('clsName').value='';document.getElementById('clsPhone').value='';
   renderClasses();
@@ -1577,6 +1572,7 @@ window.showCmSection=showCmSection;
 
 function renderClubs() {
   let local=[];try{local=JSON.parse(localStorage.getItem('sokoniClubs')||'[]');}catch(e){}
+  (window._firestoreClubs||[]).forEach(c=>{if(!local.some(l=>l.id===c.id))local.unshift(c);});
   let list=[...local,...DEMO_CLUBS.filter(d=>!local.some(l=>l.id===d.id))];
   const grid=document.getElementById('cmClubsGrid');if(!grid)return;
   grid.innerHTML=list.map(c=>`
@@ -1947,6 +1943,7 @@ function loadUserProgress() {
       if(p.weightLog)  localStorage.setItem('prWeightLog',  JSON.stringify(p.weightLog));
       if(p.goals)      localStorage.setItem('prGoals',       JSON.stringify(p.goals));
       if(p.earned)     localStorage.setItem('sokoniProgress',JSON.stringify({earned:p.earned}));
+      if(p.nutGoal)    localStorage.setItem('sokoniNutGoal', JSON.stringify(p.nutGoal));
       if(typeof renderProgressDashboard==='function') renderProgressDashboard();
     });
   } catch(e){}
@@ -2055,6 +2052,103 @@ window.checkBadges = function() {
     try {
       const earned = (JSON.parse(localStorage.getItem('sokoniProgress')||'{}')).earned||[];
       setDoc(doc(db,'fitness_progress',_uid), {earned, updatedAt:serverTimestamp()}, {merge:true});
+    } catch(e){}
+  }, 400);
+};
+
+/* ── Goal immediate sync: addGoal / deleteGoal / toggleGoalDone ── */
+function _syncGoals() {
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      setDoc(doc(db,'fitness_progress',_uid), {
+        goals: JSON.parse(localStorage.getItem('prGoals')||'[]'),
+        updatedAt: serverTimestamp()
+      }, {merge:true});
+    } catch(e){}
+  }, 400);
+}
+const _base_addGoal = window.addGoal;
+window.addGoal = function() { if(_base_addGoal) _base_addGoal(); _syncGoals(); };
+const _base_deleteGoal = window.deleteGoal;
+window.deleteGoal = function(id) { if(_base_deleteGoal) _base_deleteGoal(id); _syncGoals(); };
+const _base_toggleGoalDone = window.toggleGoalDone;
+window.toggleGoalDone = function(id) { if(_base_toggleGoalDone) _base_toggleGoalDone(id); _syncGoals(); };
+
+/* ── Community workout posts → fitness_community_posts ── */
+const _base_postWorkout = window.postWorkout;
+window.postWorkout = function() {
+  if(_base_postWorkout) _base_postWorkout();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      const posts = JSON.parse(localStorage.getItem('sokoniWorkouts')||'[]');
+      const latest = posts[0]; if(!latest) return;
+      addDoc(collection(db,'fitness_community_posts'), {...latest, uid:_uid, ts:serverTimestamp()});
+    } catch(e){}
+  }, 400);
+};
+
+/* ── Equipment listings → fitness_equipment ── */
+const _base_sellEquipment = window.sellEquipment;
+window.sellEquipment = function() {
+  if(_base_sellEquipment) _base_sellEquipment();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      const items = JSON.parse(localStorage.getItem('sokoniGymEquip')||'[]');
+      const latest = items[0]; if(!latest) return;
+      addDoc(collection(db,'fitness_equipment'), {...latest, uid:_uid, ts:serverTimestamp()});
+    } catch(e){}
+  }, 400);
+};
+
+/* ── Help requests → fitness_requests ── */
+const _base_postFitRequest = window.postFitRequest;
+window.postFitRequest = function() {
+  if(_base_postFitRequest) _base_postFitRequest();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      const reqs = JSON.parse(localStorage.getItem('askHub_fitness')||'[]');
+      const latest = reqs[0]; if(!latest) return;
+      addDoc(collection(db,'fitness_requests'), {...latest, uid:_uid, ts:serverTimestamp()});
+    } catch(e){}
+  }, 400);
+};
+
+/* ── Challenge participation → fitness_challenges ── */
+const _base_joinChallenge = window.joinChallenge;
+window.joinChallenge = function(id, name, btn) {
+  if(_base_joinChallenge) _base_joinChallenge(id, name, btn);
+  if(!_uid) return;
+  try {
+    setDoc(doc(db,'fitness_challenges',_uid+'_'+id), {
+      challengeId:id, name, uid:_uid, joinedAt:serverTimestamp()
+    }, {merge:true});
+  } catch(e){}
+};
+
+/* ── Gym check-ins → fitness_checkins ── */
+const _base_checkInMember = window.checkInMember;
+window.checkInMember = function() {
+  const memberName = (document.getElementById('gmMemberName')?.value||'').trim();
+  if(_base_checkInMember) _base_checkInMember();
+  if(!_uid || !memberName) return;
+  try {
+    addDoc(collection(db,'fitness_checkins'), {memberName, gymUid:_uid, ts:serverTimestamp()});
+  } catch(e){}
+};
+
+/* ── Nutrition goal → fitness_progress.nutGoal ── */
+const _base_saveNutGoal = window.saveNutGoal;
+window.saveNutGoal = function() {
+  if(_base_saveNutGoal) _base_saveNutGoal();
+  if(!_uid) return;
+  setTimeout(() => {
+    try {
+      const goal = JSON.parse(localStorage.getItem('sokoniNutGoal')||'{}');
+      setDoc(doc(db,'fitness_progress',_uid), {nutGoal:goal, updatedAt:serverTimestamp()}, {merge:true});
     } catch(e){}
   }, 400);
 };

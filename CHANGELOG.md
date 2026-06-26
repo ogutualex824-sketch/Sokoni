@@ -1,4 +1,57 @@
-﻿## [2026-06-26] — Sports Hub: Firestore Persistence + Bug Fixes
+﻿## [2026-06-26] — Fitness Hub: Bug Fixes + Full Firestore Wiring + Security Rules
+
+### Summary
+Fixed four runtime bugs in `fitness-hub.html` (Firestore data fetched but never rendered, random chart values, goal sync gap), extended Firestore persistence to six previously localStorage-only features, and added ten Firestore security rule blocks covering all fitness collections.
+
+### Files Changed
+- `fitness-hub.html` — 4 bug fixes + 8 new Firestore module wrappers
+- `firestore.rules` — 10 new fitness collection rules added
+
+### Bug Fixes
+- **`renderClasses()` ignored Firestore data** — module's `onSnapshot` wrote to `window._firestoreClasses` but `renderClasses()` only read `sokoniClasses` localStorage; Firestore classes never displayed. Fixed: merged `window._firestoreClasses` into local list before rendering.
+- **`renderClubs()` ignored Firestore data** — same pattern with `window._firestoreClubs`; clubs created on other devices never appeared. Fixed: merged live Firestore clubs into render list.
+- **`renderGymDashboard()` random chart** — weekly check-in bar chart used `Math.random()`, regenerating fake values on every render. Fixed: derives real counts from `gymCheckins` localStorage per weekday of the current week.
+- **`postClass()` double Firestore write** — inline script had a dynamic v10 `import()` write; module wrapper already handles this cleanly. Removed duplicate write; module wrapper is now the single source.
+- **Goal sync gap** — `addGoal()`, `deleteGoal()`, `toggleGoalDone()` updated `prGoals` localStorage but never triggered a Firestore write. Goals were only synced incidentally when `logWorkout()` next ran. Fixed: wrapped all three in module script → immediate `fitness_progress` write.
+
+### New Firestore Persistence (module wrappers added)
+| Function | Collection | Notes |
+|---|---|---|
+| `postWorkout()` | `fitness_community_posts` | Latest post pushed on each call |
+| `sellEquipment()` | `fitness_equipment` | Listing mirrored to Firestore |
+| `postFitRequest()` | `fitness_requests` | Visible to all providers |
+| `joinChallenge()` | `fitness_challenges` | Doc `uid_challengeId`, setDoc merge |
+| `checkInMember()` | `fitness_checkins` | Gym owner's UID stamped as `gymUid` |
+| `saveNutGoal()` | `fitness_progress.nutGoal` | Stored inside progress doc |
+
+### Cross-device Restore
+`loadUserProgress()` now also restores `nutGoal` from `fitness_progress` on sign-in.
+
+### Firestore Security Rules (10 new collections)
+| Collection | Public Read | Create Rule | Update | Delete |
+|---|---|---|---|---|
+| `fitness_bookings` | ✗ owner/admin | `claimsOwner` + required fields | admin | admin |
+| `fitness_progress` | ✗ owner/admin | `uid == userId` | owner | admin |
+| `fitness_gyms` | ✓ | `uid == gymId` | owner | admin |
+| `fitness_classes` | ✓ | `claimsOwner` + required | owner (limited) or admin | owner/admin |
+| `fitness_clubs` | ✓ | `claimsOwner` + required | owner (limited) or admin | owner/admin |
+| `fitness_community_posts` | ✓ | `claimsOwner` + content ≤ 2000 chars | owner (content/likes) or admin | owner/admin |
+| `fitness_equipment` | ✓ | `claimsOwner` | owner (price/desc) or admin | owner/admin |
+| `fitness_requests` | ✓ | `claimsOwner` + text ≤ 1000 chars | owner or admin | owner/admin |
+| `fitness_challenges` | ✓ | `uid == auth.uid` | owner | owner/admin |
+| `fitness_checkins` | ✗ gymOwner/admin | `gymUid == auth.uid` | admin | admin |
+
+### No New Firestore Indexes Required
+All fitness queries use single-field ordering on `ts` or `date`. No composite indexes needed.
+
+### Deployment Required
+```
+firebase deploy --only firestore:rules
+```
+
+---
+
+## [2026-06-26] — Sports Hub: Firestore Persistence + Bug Fixes
 
 ### Summary
 Wired `sokoni-sports.js` to write all user-generated sports data (venue bookings, coach bookings, tournament registrations, reviews, posts, orders, teams, players) to dedicated Firestore collections instead of the generic `applications` collection. Added cross-device sync, fixed three runtime bugs, and deployed security rules for all 9 new sports collections.
