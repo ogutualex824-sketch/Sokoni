@@ -2313,7 +2313,7 @@ html {
 ════════════════════════════════════════════════════ */
 @media (max-width: 767px) {
   .seller-navbar { padding: 0 12px !important; height: 56px !important; }
-  .seller-nav-logo-img { width: 100px !important; max-height: 34px !important; }
+  .seller-nav-logo-img { width: auto !important; height: 40px !important; max-height: 40px !important; max-width: 160px !important; }
   .seller-nav-right { gap: 5px !important; }
   .seller-nav-link { padding: 7px 10px !important; font-size: 11px !important; }
   .seller-nav-icon-btn { width: 34px !important; height: 34px !important; font-size: 14px !important; }
@@ -2331,7 +2331,7 @@ html {
     display: none !important;
   }
   .seller-navbar { padding: 0 10px !important; height: 52px !important; }
-  .seller-nav-logo-img { width: 82px !important; max-height: 28px !important; }
+  .seller-nav-logo-img { width: auto !important; height: 36px !important; max-height: 36px !important; max-width: 140px !important; }
   .main-content { padding-top: 60px !important; }
   .topbar { padding: 14px 14px !important; }
   .topbar-left h1 { font-size: 18px !important; }
@@ -2738,7 +2738,7 @@ html {
     padding: 10px 14px !important;
     gap: 8px !important;
   }
-  .ch-nav-logo { height: 26px !important; }
+  .ch-nav-logo { height: 40px !important; }
   .ch-nav-right { gap: 6px !important; }
   .ch-nav-btn {
     padding: 7px 11px !important;
@@ -3618,7 +3618,7 @@ html {
 
   /* Compact the provider navbar on phone */
   .pv-nav { padding: 10px 12px !important; gap: 6px !important; }
-  .pv-nav-logo { height: 26px !important; }
+  .pv-nav-logo { height: 40px !important; }
   .pv-nav-right { gap: 6px !important; }
   .pv-nav-link { padding: 6px 10px !important; font-size: 11px !important; }
   .pv-status-pill { padding: 5px 10px !important; font-size: 11px !important; }
@@ -4154,12 +4154,15 @@ img { max-width: 100%; height: auto; }
     flex-shrink: 0 !important;
   }
 
-  /* Every hub logo — prevents it overflowing on ultra-narrow phones */
+  /* Every hub logo — consistent size on mobile */
   [class*="-nav-logo"],
   [class*="-logo"] img,
   .nav-logo img {
-    max-width: 140px !important;
-    height: auto !important;
+    height: 40px !important;
+    width: auto !important;
+    max-width: 160px !important;
+    object-fit: contain !important;
+    display: block !important;
   }
 
   /* All hub hero CTA button rows — wrap and centre on phone */

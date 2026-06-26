@@ -174,9 +174,10 @@ html, body {
 }
 
 .wizard-logo img {
-  height: 48px;
-  margin-bottom: 10px;
-  filter: drop-shadow(0 0 18px rgba(113,255,0,0.4));
+  height: 64px;
+  width: auto;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 22px rgba(113,255,0,0.5));
   transition: filter .3s;
 }
 .wizard-logo img:hover { filter: drop-shadow(0 0 26px rgba(113,255,0,0.65)); }
@@ -375,7 +376,7 @@ html, body {
   z-index: 100;
 }
 
-.pos-header-logo { height: 28px; flex-shrink: 0; }
+.pos-header-logo { height: 40px; width: auto; flex-shrink: 0; object-fit: contain; filter: drop-shadow(0 0 10px rgba(113,255,0,0.25)); }
 .pos-brand { font-size: 13px; font-weight: 900; color: var(--green); letter-spacing: -.3px; }
 .pos-branch { font-size: 11px; color: var(--txt2); }
 .pos-header-spacer { flex: 1; }

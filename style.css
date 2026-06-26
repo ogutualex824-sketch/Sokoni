@@ -40,7 +40,8 @@ html:not(.sk-no-header) body {
   display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
 }
 #sk-nav-logo img {
-  height: 42px; width: auto; object-fit: contain; display: block;
+  height: 52px; width: auto; object-fit: contain; display: block;
+  filter: drop-shadow(0 0 12px rgba(113,255,0,0.28));
 }
 #sk-nav-logo-text {
   font-size: 20px; font-weight: 900; color: #71ff00; letter-spacing: .03em;
@@ -98,7 +99,7 @@ html:not(.sk-no-header) body {
     height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 6px;
   }
   #sk-nav-logo { order: 0; }
-  #sk-nav-logo img { height: 36px; }
+  #sk-nav-logo img { height: 46px; }
   #sk-nav-actions { order: 1; margin-left: auto; gap: 1px; }
   #sk-nav-search-wrap { order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; }
   #sk-msg-btn { display: none !important; }
@@ -5276,12 +5277,38 @@ body{
 
 }
 
+/* ── GLOBAL LOGO SIZE FLOOR ──
+   Every hub/page-specific *-nav-logo gets a minimum visible size.
+   More-specific page rules can still increase; they cannot go below this. */
+[class*="-nav-logo"],
+[class*="-nav-logo"] img,
+.nav-logo img {
+  height: 44px !important;
+  width: auto !important;
+  max-width: 200px !important;
+  display: block !important;
+  object-fit: contain !important;
+  filter: drop-shadow(0 0 10px rgba(113,255,0,0.2)) !important;
+}
+img.footer-logo, .footer-logo img {
+  height: 52px !important;
+  width: auto !important;
+  max-width: 200px !important;
+}
+.inv-nav-logo img,
+.so-nav-logo,
+.pos-header-logo {
+  height: 44px !important;
+  width: auto !important;
+  max-width: 200px !important;
+}
+
 /* LOGO */
 
 .splash-logo{
 
-    width: 200px;
-    max-width:70vw;
+    width: 240px;
+    max-width:72vw;
     height:auto;
     display:block;
     margin:0 auto 20px;

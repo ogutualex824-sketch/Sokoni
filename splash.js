@@ -153,7 +153,7 @@
         '.splash-content{position:relative;z-index:2;display:flex;flex-direction:column;' +
           'align-items:center;justify-content:center;text-align:center;color:white;' +
           'width:100%;max-width:340px;padding:0 16px;}' +
-        '.splash-logo{width:180px;max-width:60vw;height:auto;display:block;' +
+        '.splash-logo{width:220px;max-width:68vw;height:auto;display:block;' +
           'margin:0 auto 16px;animation:splashLogoIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both,' +
           'splashLogoPulse 2.4s ease-in-out 0.7s infinite;}' +
         '@keyframes splashLogoIn{from{opacity:0;transform:scale(0.8) translateY(14px);}to{opacity:1;transform:scale(1) translateY(0);}}' +
