@@ -1435,6 +1435,7 @@ window.updateDeliveryStatus = updateDeliveryStatus;
 </script>
 
 <!-- ═══ DRIVER PRODUCTION MODULE — Real GPS, Firestore, Live Requests ═══ -->
+<script src="sokoni-geo.js"></script>
 <script src="sokoni-routing.js"></script>
 <script type="module">
 import SokoniDB from './sokoni-db.js';
@@ -1461,14 +1462,15 @@ window.toggleOnline = async function() {
   if (!drv) return;
 
   if (window.isOnline) {
-    /* Get current GPS */
+    /* Get current GPS via safe wrapper (handles Safari synchronous throws) */
     let lat = null, lng = null;
-    if (navigator.geolocation) {
-      await new Promise(res => navigator.geolocation.getCurrentPosition(
-        pos => { lat=pos.coords.latitude; lng=pos.coords.longitude; res(); },
-        () => res(), { timeout:6000, enableHighAccuracy:true }
-      ));
-    }
+    const _gp = window.SokoniGeo
+      ? await SokoniGeo.getLocationAsync({ timeout:6000, enableHighAccuracy:true })
+      : await new Promise(res => {
+          try { navigator.geolocation?.getCurrentPosition(p=>res(p?.coords),()=>res(null),{timeout:6000}); }
+          catch(_){ res(null); }
+        }).then(c => c ? {lat:c.latitude,lng:c.longitude} : null);
+    if (_gp) { lat = _gp.lat; lng = _gp.lng; }
     /* Write to Firestore */
     try {
       await SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat, lng, {
@@ -2103,14 +2105,15 @@ window._dhSubmitProof = async function(fsId) {
     });
   }
 
-  /* GPS coords */
+  /* GPS coords — use safe wrapper to prevent Safari synchronous throw */
   let lat = null, lng = null;
-  if (navigator.geolocation) {
-    await new Promise(res => navigator.geolocation.getCurrentPosition(
-      p => { lat = p.coords.latitude; lng = p.coords.longitude; res(); },
-      () => res(), { timeout: 5000 }
-    ));
-  }
+  const _proofPos = window.SokoniGeo
+    ? await SokoniGeo.getLocationAsync({ timeout:5000 })
+    : await new Promise(res => {
+        try { navigator.geolocation?.getCurrentPosition(p=>res(p?.coords),()=>res(null),{timeout:5000}); }
+        catch(_){ res(null); }
+      }).then(c => c ? {lat:c.latitude,lng:c.longitude} : null);
+  if (_proofPos) { lat = _proofPos.lat; lng = _proofPos.lng; }
 
   try {
     await DeliveryHub.submitProof(fsId, _dhRiderId, { pin, photoB64, lat, lng });
@@ -2204,11 +2207,15 @@ window._dhOpenProof = function(fsId) { _showProofModal(fsId); };
 function _startDHLocationPush(riderId) {
   if (_dhLocInterval) return;
   _dhLocInterval = setInterval(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(pos => {
-      DeliveryHub.updateRiderLocation(riderId, pos.coords.latitude, pos.coords.longitude)
-        .catch(() => {});
-    }, () => {}, { timeout: 5000, enableHighAccuracy: true });
+    const _locFn = window.SokoniGeo
+      ? SokoniGeo.getLocationAsync({ timeout:5000, enableHighAccuracy:true })
+      : new Promise(res => {
+          try { navigator.geolocation?.getCurrentPosition(p=>res(p?.coords),()=>res(null),{timeout:5000}); }
+          catch(_){ res(null); }
+        }).then(c => c ? {lat:c.latitude,lng:c.longitude} : null);
+    _locFn.then(pos => {
+      if (pos) DeliveryHub.updateRiderLocation(riderId, pos.lat, pos.lng).catch(() => {});
+    });
   }, 15000); /* every 15 s */
 }
 function _stopDHLocationPush() {
@@ -2256,12 +2263,13 @@ window.toggleOnline = async function() {
   if (window.isOnline) {
     await _ensureRiderProfile(uid);
     let lat = null, lng = null;
-    if (navigator.geolocation) {
-      await new Promise(res => navigator.geolocation.getCurrentPosition(
-        p => { lat = p.coords.latitude; lng = p.coords.longitude; res(); },
-        () => res(), { timeout: 5000 }
-      ));
-    }
+    const _dhPos = window.SokoniGeo
+      ? await SokoniGeo.getLocationAsync({ timeout:5000 })
+      : await new Promise(res => {
+          try { navigator.geolocation?.getCurrentPosition(p=>res(p?.coords),()=>res(null),{timeout:5000}); }
+          catch(_){ res(null); }
+        }).then(c => c ? {lat:c.latitude,lng:c.longitude} : null);
+    if (_dhPos) { lat = _dhPos.lat; lng = _dhPos.lng; }
     await DeliveryHub.toggleRiderOnline(uid, true, lat, lng).catch(() => {});
     _startHub(uid);
   } else {

@@ -246,16 +246,28 @@ const SokoniDB = {
   startGPSTracking(driverId, onUpdate) {
     if (!navigator.geolocation) return;
     if (this._gpsWatchId !== null) navigator.geolocation.clearWatch(this._gpsWatchId);
-    this._gpsWatchId = navigator.geolocation.watchPosition(
-      pos => {
-        const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-        this.updateDriverLocation(driverId, lat, lng, { accuracy })
-          .catch(e => _log.warn('[SokoniDB] GPS write:', e.message));
-        if (onUpdate) onUpdate(lat, lng);
-      },
-      err => _log.warn('[SokoniDB] GPS error:', err.message),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-    );
+    /* Throttle Firestore writes: max 1 write per 5 seconds per driver */
+    let _lastGpsWrite = 0;
+    const _watchCb = pos => {
+      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+      if (onUpdate) onUpdate(lat, lng);
+      const now = Date.now();
+      if (now - _lastGpsWrite < 5000) return;
+      _lastGpsWrite = now;
+      this.updateDriverLocation(driverId, lat, lng, { accuracy })
+        .catch(e => _log.warn('[SokoniDB] GPS write:', e.message));
+    };
+    try {
+      /* Correct 3-arg signature — passing options as arg2 crashes Safari */
+      this._gpsWatchId = navigator.geolocation.watchPosition(
+        _watchCb,
+        err => _log.warn('[SokoniDB] GPS error:', err.message),
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      );
+    } catch (e) {
+      _log.warn('[SokoniDB] watchPosition threw:', e.message);
+      this._gpsWatchId = null;
+    }
     return this._gpsWatchId;
   },
 

@@ -1,4 +1,28 @@
-﻿## [2026-06-26] — Delivery Hub: 9-Issue Hardening Sprint
+﻿## [2026-06-26] — Car Hub GPS + Driver Safari Fix
+
+### Summary
+Fixed two production-blocking issues: (1) Car Hub vehicle tracking was completely inaccessible due to 8 Firestore collections having no security rules — all client reads/writes returned `permission-denied`. Added full rule set covering ownership, authorised drivers, family members, fleet managers and share tokens. (2) All four `getCurrentPosition` calls in driver.html bypassed the sokoni-geo.js Safari crash wrapper. Replaced with `SokoniGeo.getLocationAsync()` (safe try/catch, guaranteed error callback). Also added 5s write throttle to `SokoniDB.startGPSTracking()` — reduces GPS write cost from ~720 to ~12 writes/hr/driver.
+
+### Files Changed
+- `firestore.rules` — 10 new match blocks: `trackedVehicles`, `vehicleLocations`, `vehicleRoutes`, `vehicleAlerts`, `vehicleGeofences`, `gpsDevices`, `trackingShares`, `trackingSubscriptions`, `vehicleServiceHistory`, `driverSessions`
+- `driver.html` — added `<script src="sokoni-geo.js">` load; replaced 4 raw `getCurrentPosition` calls with `SokoniGeo.getLocationAsync()` (with fallback for load failure)
+- `sokoni-db.js` — `startGPSTracking()`: added 5s write throttle + try/catch around `watchPosition` for Safari
+
+### Security
+- `trackedVehicles`: owner + authorizedDrivers + familyMembers + fleetManagers can read; only owner writes; `ownerUid` field immutable
+- `vehicleLocations`: read gated on verifying ownership/auth against the parent vehicle doc (`get()`)
+- `trackingShares`: any authenticated user can validate a share token; only creator can delete
+- `trackingSubscriptions`: user owns their own doc; `adminOverride`/`freeTrial` fields blocked from client writes
+
+### Performance
+- GPS writes: 5s throttle reduces max writes from ~720/hr to ≤12/hr per active driver
+
+### Breaking Changes
+None — previously the rules were absent (default-deny). Adding explicit rules restores intended access.
+
+---
+
+## [2026-06-26] — Delivery Hub: 9-Issue Hardening Sprint
 
 ### Summary
 Full sweep of the Delivery Hub following an independent GPS/code audit. Fixed M-Pesa error handling, added rate limiting and phone validation to booking, wired sessionStorage for GPS coord persistence, added complete rider role to the tracking page (accept/reject/at-seller/picked-up/proof submit), upgraded multi-stop routing to use OSRM per segment with per-stop GPS capture, improved map initialisation fallback, added a scheduled delivery Cloud Function, and added invoice failure toast.

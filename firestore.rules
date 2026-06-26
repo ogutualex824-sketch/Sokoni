@@ -3277,6 +3277,143 @@ service cloud.firestore {
       allow write: if false;    /* CF only — fetchEPRAFuelPrices / triggerEPRAFuelFetch */
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — VEHICLE TRACKING (sokoni-tracking.js)
+       Owner: read/write own vehicle.
+       Authorized drivers / family members: read only.
+       Fleet managers (array on vehicle doc): read own.
+    ══════════════════════════════════════════════════════════════ */
+    match /trackedVehicles/{vehicleId} {
+      allow read:  if isAuthed() && (
+                     resource.data.ownerUid             == request.auth.uid ||
+                     request.auth.uid in resource.data.authorizedDrivers ||
+                     request.auth.uid in resource.data.familyMembers     ||
+                     request.auth.uid in resource.data.fleetManagers      ||
+                     isAdmin()
+                   );
+      allow create: if isAuthed()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && !request.resource.data.keys().hasAny(['theftMode','status'])
+                        || isAdmin();
+      allow update: if isAuthed()
+                    && (resource.data.ownerUid == request.auth.uid || isAdmin())
+                    && !request.resource.data.diff(resource.data)
+                        .affectedKeys().hasAny(['ownerUid']);
+      allow delete: if isAuthed() && resource.data.ownerUid == request.auth.uid
+                    || isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — LIVE VEHICLE LOCATIONS
+       Keyed by vehicleId. Owner and authorised parties read live GPS.
+       Only the vehicle owner (or admin) may write location updates.
+    ══════════════════════════════════════════════════════════════ */
+    match /vehicleLocations/{vehicleId} {
+      allow read:  if isAuthed() && (
+                     get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.ownerUid == request.auth.uid ||
+                     request.auth.uid in get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.authorizedDrivers ||
+                     request.auth.uid in get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.familyMembers   ||
+                     isAdmin()
+                   );
+      allow write: if isAuthed() && (
+                     get(/databases/$(database)/documents/trackedVehicles/$(vehicleId)).data.ownerUid == request.auth.uid ||
+                     isAdmin()
+                   );
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — ROUTE HISTORY
+       Owner reads/creates their own routes; no direct client deletes.
+    ══════════════════════════════════════════════════════════════ */
+    match /vehicleRoutes/{routeId} {
+      allow read:   if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — VEHICLE ALERTS
+       Owner reads their own alerts; admins see all.
+       Alerts are created by the client on events (speed, geofence, theft).
+    ══════════════════════════════════════════════════════════════ */
+    match /vehicleAlerts/{alertId} {
+      allow read:   if isAuthed() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isAuthed() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAuthed() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — GEOFENCE ZONES
+       Owner manages their own geofences.
+    ══════════════════════════════════════════════════════════════ */
+    match /vehicleGeofences/{geofenceId} {
+      allow read:   if isAuthed() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isAuthed() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAuthed() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.ownerUid == request.auth.uid || isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — GPS HARDWARE DEVICES
+       Owner manages their own registered trackers.
+    ══════════════════════════════════════════════════════════════ */
+    match /gpsDevices/{deviceId} {
+      allow read:   if isAuthed() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isAuthed() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAuthed() && resource.data.ownerUid == request.auth.uid || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — TEMPORARY SHARE TOKENS
+       Anyone authenticated can validate a token (for share-link tracking
+       page). Only the creator (owner) may create/delete their shares.
+    ══════════════════════════════════════════════════════════════ */
+    match /trackingShares/{shareId} {
+      allow read:   if isAuthed();           /* token validated client-side with where('token','==',t) */
+      allow create: if isAuthed() && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.createdBy == request.auth.uid || isAdmin();
+      allow update: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — TRACKING SUBSCRIPTIONS
+       Document ID == uid. User owns their own subscription record.
+    ══════════════════════════════════════════════════════════════ */
+    match /trackingSubscriptions/{uid} {
+      allow read:   if isAuthed() && (request.auth.uid == uid || isAdmin());
+      allow write:  if isAuthed() && request.auth.uid == uid
+                    && !request.resource.data.keys().hasAny(['adminOverride','freeTrial']);
+      allow write:  if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — VEHICLE SERVICE HISTORY
+       Owner reads/creates service records for their vehicles.
+    ══════════════════════════════════════════════════════════════ */
+    match /vehicleServiceHistory/{recordId} {
+      allow read:   if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CAR HUB — DRIVER SESSIONS (monitoring/fleet analytics)
+       Driver writes their own session; owner of the vehicle reads.
+    ══════════════════════════════════════════════════════════════ */
+    match /driverSessions/{sessionId} {
+      allow read:   if isAuthed() && (
+                      resource.data.driverUid == request.auth.uid ||
+                      isAdmin()
+                    );
+      allow create: if isAuthed() && request.resource.data.driverUid == request.auth.uid;
+      allow update: if isAuthed() && resource.data.driverUid == request.auth.uid || isAdmin();
+      allow delete: if isAdmin();
+    }
+
   }
 }
 
