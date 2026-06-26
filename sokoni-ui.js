@@ -631,43 +631,85 @@
     bar.textContent = '📡 No internet connection — some features may not work';
     document.body.insertBefore(bar, document.body.firstChild);
 
-    var _offlineTimer  = null;
-    var _uiPageLoadTs  = Date.now();
+    /* ── State ─────────────────────────────────────────── */
+    var _failures   = 0;     /* consecutive probe failures  */
+    var _showing    = false; /* is bar currently visible?   */
+    var _probing    = false; /* probe fetch in-flight?       */
+    var _probeTimer = null;  /* handle for next scheduled probe */
 
-    /* navigator.onLine is unreliable on VPN/proxy/captive portal and goes
-       false briefly during SW installation. Always verify with a real fetch. */
-    function _checkConnection(cb) {
-      fetch('/manifest.json?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
-        .then(function() { cb(true); })
-        .catch(function() { cb(false); });
+    /* ── Probe ─────────────────────────────────────────────────────────────
+       Two-stage:
+       1. HEAD https://www.gstatic.com/generate_204  (cross-origin — SW never
+          intercepts it; resolves with opaque response when network is live)
+       2. HEAD /manifest.json?_nc=<timestamp>        (own-origin cache-busted
+          fallback in case gstatic is blocked by a corporate firewall)
+       AbortController timeout on each stage prevents hung probes.
+    ─────────────────────────────────────────────────────────────────────── */
+    function _doProbe() {
+      var c1 = new AbortController();
+      var t1 = setTimeout(function() { c1.abort(); }, 4000);
+      return fetch('https://www.gstatic.com/generate_204', {
+        mode: 'no-cors', cache: 'no-store', signal: c1.signal,
+      }).then(function() {
+        clearTimeout(t1);
+        return true;
+      }).catch(function() {
+        clearTimeout(t1);
+        var c2 = new AbortController();
+        var t2 = setTimeout(function() { c2.abort(); }, 3000);
+        return fetch('/manifest.json?_nc=' + Date.now(), {
+          method: 'HEAD', cache: 'no-store', signal: c2.signal,
+        }).then(function() { clearTimeout(t2); return true;  })
+          .catch(function() { clearTimeout(t2); return false; });
+      });
     }
 
-    function _applyState(isOnline) {
-      bar.classList.toggle('sk-offline--visible', !isOnline);
+    function _scheduleProbe(delayMs) {
+      clearTimeout(_probeTimer);
+      _probeTimer = setTimeout(_probe, delayMs);
     }
 
-    function update() {
-      clearTimeout(_offlineTimer);
-      var elapsed = Date.now() - _uiPageLoadTs;
-      if (elapsed < 5000 && !navigator.onLine) return; /* SW install noise */
-      if (navigator.onLine) {
-        /* Browser reports online — trust it; hide bar without a fetch.
-           Fetch verification is unreliable during SW activation and on
-           some Android browsers with captive-portal detection disabled. */
-        _applyState(true);
-      } else {
-        /* Browser reports offline — verify with a real fetch (captive-portal
-           guard) before showing the bar, with a 2s debounce. */
-        _offlineTimer = setTimeout(function() {
-          _checkConnection(function(real) { _applyState(real); });
-        }, 2000);
+    function _probe() {
+      if (_probing) return;
+      _probing = true;
+      _doProbe()
+        .then(function(online) {
+          _probing = false;
+          if (online) {
+            _failures = 0;
+            _setBar(false);
+            _scheduleProbe(30000); /* slow poll while connected */
+          } else {
+            _failures += 1;
+            if (_failures >= 2) _setBar(true); /* 2 consecutive failures → show */
+            _scheduleProbe(10000); /* fast poll while disconnected */
+          }
+        })
+        .catch(function() { _probing = false; _scheduleProbe(15000); });
+    }
+
+    function _setBar(visible) {
+      if (_showing === visible) return;
+      _showing = visible;
+      bar.classList.toggle('sk-offline--visible', visible);
+      /* Sync the SW status dot (managed by sw-register.js) */
+      var dot = document.getElementById('sokoniOnlineDot');
+      if (dot) {
+        dot.style.background = visible ? '#ff4444' : '#71ff00';
+        dot.title = visible ? 'Offline — some features unavailable' : 'Online';
       }
+      /* Remove any duplicate banner left by older sw-register.js code */
+      var legacy = document.getElementById('sokoniOfflineBanner');
+      if (legacy) legacy.remove();
     }
 
-    global.addEventListener('online',  update);
-    global.addEventListener('offline', update);
-    /* Delay initial check 1s so DOM + SW settle before first fetch */
-    setTimeout(update, 1000);
+    /* online/offline events are hints only — always verify with a real probe.
+       Reset failure count on 'online' so recovery is immediate after 1 success. */
+    global.addEventListener('online',  function() { _failures = 0; _probe(); });
+    global.addEventListener('offline', function() { _probe(); });
+
+    /* First probe: 3 s delay so SW finishes installing before we hit the network */
+    setTimeout(_probe, 3000);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────

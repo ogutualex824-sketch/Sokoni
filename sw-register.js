@@ -647,61 +647,11 @@
 
   /* ══════════════════════════════════════════════════════
      6. ONLINE / OFFLINE STATUS DOT
+     NOTE: Banner logic lives exclusively in sokoni-ui.js _initOfflineBar().
+     sw-register.js no longer manages any offline banner — removing the
+     duplicate eliminated false positives during SW install/update cycles.
   ══════════════════════════════════════════════════════ */
-  let _swOfflineTimer  = null;
-  const _swPageLoadTs  = Date.now();
-
-  /* navigator.onLine is unreliable on VPN/proxy/captive portal and goes
-     false briefly during SW installation. Always verify with a real fetch. */
-  function _verifyConnection() {
-    return fetch('/manifest.json?_t=' + Date.now(), { cache: 'no-store', method: 'HEAD' })
-      .then(() => true)
-      .catch(() => false);
-  }
-
-  function _applyOnlineState(isOnline) {
-    const dot = document.getElementById("sokoniOnlineDot");
-    if (dot) {
-      dot.style.background = isOnline ? "#71ff00" : "#ff4444";
-      dot.title = isOnline ? "Online" : "Offline — some features unavailable";
-    }
-    if (!isOnline) {
-      _showOfflineBanner();
-    } else {
-      const b = document.getElementById("sokoniOfflineBanner");
-      if (b) b.remove();
-    }
-  }
-
-  function _updateOnlineStatus() {
-    clearTimeout(_swOfflineTimer);
-    const elapsed = Date.now() - _swPageLoadTs;
-    if (elapsed < 5000 && !navigator.onLine) return;
-    if (navigator.onLine) {
-      /* Trust browser's online signal — hide banner/dot without a fetch.
-         Avoids SW-activation race where fetch fails despite real connectivity. */
-      _applyOnlineState(true);
-    } else {
-      /* Verify offline with a real fetch before showing the banner. */
-      _swOfflineTimer = setTimeout(() => {
-        _verifyConnection().then(real => _applyOnlineState(real));
-      }, 2000);
-    }
-  }
-
-  function _showOfflineBanner() {
-    if (document.getElementById("sokoniOfflineBanner")) return;
-    const b = document.createElement("div");
-    b.id = "sokoniOfflineBanner";
-    b.style.cssText = `position:fixed;top:var(--sk-header-h,64px);left:0;right:0;z-index:9999;background:#1a0000;border-bottom:2px solid rgba(255,68,68,0.5);padding:8px 16px;text-align:center;font-size:12px;color:#ff8888;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;`;
-    b.innerHTML = `<span>📶 You're offline — some features may not work.</span><a href="offline.html" style="color:#ff4444;font-weight:700;text-decoration:none;">View cached pages →</a>`;
-    document.body.prepend(b);
-  }
-
-  window.addEventListener("online",  _updateOnlineStatus);
-  window.addEventListener("offline", _updateOnlineStatus);
-  /* Delay initial check 1s so DOM + SW settle before first fetch */
-  setTimeout(_updateOnlineStatus, 1000);
+  /* (dot is now updated by sokoni-ui.js _setBar() so state stays in sync) */
 
   /* ══════════════════════════════════════════════════════
      7. SW MESSAGE HANDLER

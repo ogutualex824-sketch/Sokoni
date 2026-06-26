@@ -1,4 +1,35 @@
-﻿## [2026-06-26] — Car Hub GPS + Driver Safari Fix
+﻿## [2026-06-26] — Offline Detection: Reliable Dual-Probe System
+
+### Summary
+Replaced two competing, unreliable offline detection systems with one authoritative implementation in `sokoni-ui.js`. The previous code trusted `navigator.onLine` to both show and hide the banner — this flag goes `false` during SW install/update cycles even on a live connection, causing false-positive "No internet" banners. The new system never trusts `navigator.onLine` alone and requires 2 consecutive real probe failures before showing the banner.
+
+### Root Causes Fixed
+1. **Duplicate implementations** — `sokoni-ui.js` (`#sk-offline-bar`) and `sw-register.js` (`#sokoniOfflineBanner`) both ran independently; they could contradict each other
+2. **`navigator.onLine` trusted for SHOW** — a single `false` reading immediately triggered the banner, including during SW install noise
+3. **No periodic probing** — relied solely on `online`/`offline` events, which Safari and Android PWA do not always fire
+4. **SW cache contaminating probe** — `/manifest.json` is in the SW precache; some code paths could return a cached success even with no network
+
+### New Behaviour
+- **Two-stage cross-origin probe**: (1) `HEAD https://www.gstatic.com/generate_204` — not intercepted by SOKONI's SW; (2) fallback `HEAD /manifest.json?_nc=<timestamp>` with cache-busting, 3 s timeout
+- **Consecutive failure gate**: 2 failed probes required before banner appears; 1 success immediately hides it
+- **Periodic probing**: every 30 s when online, every 10 s when showing banner — does not rely on browser events
+- **`online`/`offline` events** used as hints only — trigger immediate probe + reset failure counter; do NOT change state directly
+- **4 s AbortController timeout** on each probe stage — no hung fetch
+
+### Files Changed
+- `sokoni-ui.js` — `_initOfflineBar()` completely rewritten
+- `sw-register.js` — duplicate `_updateOnlineStatus`, `_showOfflineBanner`, `_verifyConnection`, `_applyOnlineState` and their event listeners removed; dot now synced by sokoni-ui.js
+
+### Acceptance Criteria
+- ✅ Wi-Fi ON with internet → Banner hidden
+- ✅ Mobile data ON with internet → Banner hidden
+- ❌ Wi-Fi OFF and mobile data OFF → Banner visible (after 2 failed probes ~20 s)
+- ❌ Airplane mode → Banner visible
+- ✅ Internet restored → Banner disappears on next probe (≤10 s)
+
+---
+
+## [2026-06-26] — Car Hub GPS + Driver Safari Fix
 
 ### Summary
 Fixed two production-blocking issues: (1) Car Hub vehicle tracking was completely inaccessible due to 8 Firestore collections having no security rules — all client reads/writes returned `permission-denied`. Added full rule set covering ownership, authorised drivers, family members, fleet managers and share tokens. (2) All four `getCurrentPosition` calls in driver.html bypassed the sokoni-geo.js Safari crash wrapper. Replaced with `SokoniGeo.getLocationAsync()` (safe try/catch, guaranteed error callback). Also added 5s write throttle to `SokoniDB.startGPSTracking()` — reduces GPS write cost from ~720 to ~12 writes/hr/driver.
