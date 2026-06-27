@@ -7410,3 +7410,22 @@ exports.reverseTransaction      = finos.reverseTransaction;
 exports.adjustWallet            = finos.adjustWallet;
 exports.getWalletStatement      = finos.getWalletStatement;
 exports.calculateTaxBreakdown   = finos.calculateTaxBreakdown;
+
+/* ══════════════════════════════════════════════════════════════════
+   SOKONI Business Communication System  v1.0
+   11 Cloud Functions: transaction-gated messaging, real-time inbox,
+   auto-moderation, abuse reporting, admin review, lifecycle cleanup.
+══════════════════════════════════════════════════════════════════ */
+const messages = require("./messages");
+
+exports.createConversation          = messages.createConversation;
+exports.markRead                    = messages.markRead;
+exports.reportConversation          = messages.reportConversation;
+exports.adminGetReports             = messages.adminGetReports;
+exports.adminReviewReport           = messages.adminReviewReport;
+exports.adminUpdateChatPolicy       = messages.adminUpdateChatPolicy;
+exports.adminGetChatStats           = messages.adminGetChatStats;
+exports.onMessageCreated            = messages.onMessageCreated;
+exports.moderateMessage             = messages.moderateMessage;
+exports.archiveCompletedConversations = messages.archiveCompletedConversations;
+exports.cleanupChatStorage          = messages.cleanupChatStorage;

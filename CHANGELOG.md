@@ -1,4 +1,73 @@
-﻿## [2026-06-27] — FinOS — Financial Operating System v1.0
+﻿## [2026-06-27] — Universal POS Print Engine v2.0 + POS Business Modules + Business Communication System v1.0
+
+### Summary
+Three parallel feature tracks committed together: (1) Universal POS Print Engine — offline-first, multi-transport receipt/label/barcode printing across BLE/USB/Serial/Network; (2) POS Business Modules — standalone customer management, inventory, sales, reports, and supplier modules; (3) Business Communication System — transaction-gated buyer↔seller messaging with 11 Cloud Functions, auto-moderation, and admin controls.
+
+### Universal POS Print Engine v2.0
+**New files:** `sokoni-printer-drivers.js`, `sokoni-printer-discovery.js`, `sokoni-receipt-engine.js`, `sokoni-label-engine.js`, `sokoni-pos-print.js`, `pos-printer-setup.html`
+
+- **Transport support**: BLE (Web Bluetooth), WebUSB, Web Serial, Wi-Fi/LAN, Ethernet, Windows print, Network (raw TCP), Android native, browser fallback — auto-detected and auto-reconnected
+- **Driver support**: ESC/POS (all major thermal brands), TSPL (TSC labels), ZPL (Zebra labels), CPCL (mobile printers) — auto-detected from printer model/name
+- **Template library** (`sokoni-receipt-engine.js`): sale receipt, refund receipt, order receipt, delivery note, quotation, invoice, Z-report, label, eTIMS receipt — auto-branded with merchant logo/name
+- **Label engine** (`sokoni-label-engine.js`): 58mm–100mm barcode+QR labels across 7 sizes; TSPL/ZPL/ESC-POS command output
+- **Offline queue**: IndexedDB print job queue with auto-retry on reconnect
+- **Printer Setup page** (`pos-printer-setup.html`): scan, pair, test, and configure printers; view print history
+- **pos.html wired**: printer button → `pos-printer-setup.html`; 5 new script tags; `SokoniPosprint.init()` auto-called on DOMContentLoaded; `printer:connected` / `printer:disconnected` events update status text
+
+### POS Business Modules v2.0
+**New files:** `pos-customers.html`, `pos-customers.js`, `pos-inventory.html`, `pos-inventory.js`, `pos-reports.js`, `pos-sales.js`, `pos-suppliers.js`
+
+- **Customer Management** (`pos-customers.html` + `pos-customers.js`): customer profiles, loyalty points, wallet balances, credit limits, purchase history, statements; real-time Firestore sync
+- **Inventory Management** (`pos-inventory.html` + `pos-inventory.js`): real-time, offline-first, multi-branch inventory; IndexedDB (offline) → Firestore (cloud) dual-layer; low-stock alerts; barcode lookup
+- **Sales Engine** (`pos-sales.js`): sale recording, parked sales, returns/exchanges, marketplace sync; offline-first — never loses a sale
+- **Reports & Analytics** (`pos-reports.js`): daily/weekly/monthly sales, P&L, tax summary, product performance, employee performance — works fully offline from IndexedDB
+- **Supplier Management** (`pos-suppliers.js`): supplier database, purchase orders, GRNs, invoices, outstanding balances
+
+### Business Communication System v1.0
+**New files:** `functions/messages.js`, `sokoni-chat-engine.js`
+**Updated:** `functions/index.js` (+11 exports), `messages.html` already wired
+
+**11 Cloud Functions** (`functions/messages.js`):
+| CF | Purpose |
+|---|---|
+| `createConversation` | Creates buyer↔seller thread; validates both parties have a completed transaction |
+| `markRead` | Marks messages read; updates unread count |
+| `reportConversation` | Buyer or seller files abuse report |
+| `adminGetReports` | Admin: lists open abuse reports |
+| `adminReviewReport` | Admin: resolve report (warn/suspend/dismiss) |
+| `adminUpdateChatPolicy` | Admin: update platform chat policy settings |
+| `adminGetChatStats` | Admin: volume metrics, flagged count, archived count |
+| `onMessageCreated` | Firestore trigger: FCM push + email notification on new message |
+| `moderateMessage` | Firestore trigger: auto-flag messages with prohibited content |
+| `archiveCompletedConversations` | Scheduled weekly: archives old inactive threads |
+| `cleanupChatStorage` | Scheduled weekly: purges storage for archived conversations |
+
+**Client library** (`sokoni-chat-engine.js`):
+- `SokoniChat.init(db, uid)` — bootstraps real-time listener
+- `sendMessage(conversationId, text, attachmentUrl)` — writes to Firestore `conversations/{id}/messages/`
+- `createConversation(sellerId, orderId)` — CF delegate
+- `markRead(conversationId)` — CF delegate; clears unread badge
+- `on('message', cb)` / `on('conversation', cb)` — event emitter for real-time updates
+- `uploadAttachment(file)` — uploads to Storage `chatAttachments/`
+- Voice message recording via MediaRecorder API
+- Typing indicators via Firestore `typingStatus` field with 3s debounce
+
+### Security
+- Messaging is transaction-gated: a `createConversation` call verifies both parties share a completed order (`packageRequests` with `status: 'delivered'`).
+- `moderateMessage` trigger runs auto-moderation on every message (keyword filter + pattern check).
+- Admin CFs require `token.admin || token.superAdmin`.
+- No client can write to `conversations` directly — all mutations via CF or controlled Firestore rules.
+
+### Files Updated
+- `functions/index.js` — +11 message CF exports (495 total after this commit)
+- `service-worker.js` — bumped to `sokoni-20260627230000`
+
+### SW Version
+`sokoni-20260627230000`
+
+---
+
+## [2026-06-27] — FinOS — Financial Operating System v1.0
 
 ### Summary
 Implements a complete enterprise-grade Financial Operating System replacing all placeholder and manual financial processes. Every transaction on the platform is now accounted for automatically via double-entry accounting ledger, commission engine, wallet management, automated payouts, refund processing, subscription & ad billing, fraud detection, daily snapshots, AI-powered insights via Claude, and an admin financial command center.
