@@ -1150,8 +1150,10 @@ const Checkout = (() => {
 
   /* ── Init ── */
   async function init() {
+    /* Open IndexedDB before any reads */
+    await PosDB.init();
     /* Load settings */
-    const settings = await PosDB.settings.get() || {};
+    const settings = await PosDB.settings.getAll() || {};
     _s.merchantId  = settings.merchantId || settings.businessName || 'merchant';
     _s.branchId    = settings.branchId   || 'default';
     _s.taxRate     = (settings.taxRate   ?? 16) / 100;
