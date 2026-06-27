@@ -1167,6 +1167,521 @@ window._toggleFlag=function(key,enabled){
   .catch(function(e){_toast(e.message,'red');document.getElementById('flag-'+key).checked=!enabled;});
 };
 
+/* ── Marketplace ── */
+function _loadProducts(){
+  var q=document.getElementById('mpQuery').value.trim()||undefined;
+  var status=document.getElementById('mpStatus').value||undefined;
+  document.getElementById('mpTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetProducts')({query:q,status,limit:50}).then(function(r){
+    var tb=document.getElementById('mpTbl');
+    var rows=r.data.products||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No products found</td></tr>';return;}
+    tb.innerHTML=rows.map(function(p){
+      var st=p.status||'active';
+      return '<tr>'+
+        '<td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(p.name||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_esc(p.sellerName||p.sellerId||'—')+'</td>'+
+        '<td>'+Math.round((p.price||0)/100).toLocaleString()+'</td>'+
+        '<td><span class="badge '+(st==='active'?'bg':st==='pending'?'bo':'br')+'">'+_esc(st)+'</span></td>'+
+        '<td>'+(p.featured?'<span class="badge bb">Featured</span>':'<span class="badge bs">—</span>')+'</td>'+
+        '<td style="display:flex;gap:4px">'+
+          (st==='pending'?'<button class="btn btn-g btn-sm" onclick="_setProductStatus(\''+p.id+'\',\'active\')">Approve</button>':'')+
+          (st!=='rejected'?'<button class="btn btn-r btn-sm" onclick="_setProductStatus(\''+p.id+'\',\'rejected\')">Reject</button>':'')+
+          '<button class="btn btn-b btn-sm" onclick="_toggleFeatured(\''+p.id+'\','+(p.featured?'false':'true')+')">'+( p.featured?'Unfeature':'Feature')+'</button>'+
+        '</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('mpTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._setProductStatus=function(id,status){
+  _cf('adminUpdateProductStatus')({productId:id,status}).then(function(){_toast('Product '+status,'green');_loadProducts();}).catch(function(e){_toast(e.message,'red');});
+};
+window._toggleFeatured=function(id,featured){
+  _cf('adminUpdateProductStatus')({productId:id,featured}).then(function(){_toast('Product updated','green');_loadProducts();}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Orders ── */
+var _activeOrderId=null;
+function _loadOrders(){
+  var status=document.getElementById('ordStatus').value||'pending';
+  document.getElementById('ordTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetOrders')({status,limit:50}).then(function(r){
+    var tb=document.getElementById('ordTbl');
+    var rows=r.data.orders||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="tbl-empty">No orders</td></tr>';return;}
+    tb.innerHTML=rows.map(function(o){
+      return '<tr>'+
+        '<td style="font-size:11px;color:var(--b)">'+_esc((o.id||'').slice(-8))+'</td>'+
+        '<td style="font-size:11px">'+_esc(o.buyerName||o.buyerEmail||'—')+'</td>'+
+        '<td>KES '+Math.round((o.totalCents||0)/100).toLocaleString()+'</td>'+
+        '<td style="font-size:11px">'+_esc((o.itemCount||1)+' item'+(o.itemCount===1?'':'s'))+'</td>'+
+        '<td><span class="badge '+(o.status==='delivered'?'bg':o.status==='cancelled'?'br':o.status==='shipped'?'bb':'bo')+'">'+_esc(o.status||'pending')+'</span></td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(o.createdAt)+'</td>'+
+        '<td><button class="btn btn-b btn-sm" onclick="_openOrder(\''+o.id+'\',\''+_esc(o.status||'pending')+'\','+JSON.stringify(_esc(o.buyerName||o.buyerEmail||o.id))+')">Manage</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('ordTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._openOrder=function(id,status,label){
+  _activeOrderId=id;
+  document.getElementById('om-id').value=id;
+  document.getElementById('omTitle').textContent='Order: '+label;
+  document.getElementById('omBody').innerHTML='<div style="font-size:12px;color:var(--sub)">Order ID: <code style="color:var(--b)">'+_esc(id)+'</code><br>Current status: <span class="badge bo">'+_esc(status)+'</span></div>';
+  document.getElementById('om-status').value=status;
+  document.getElementById('orderModal').classList.add('open');
+};
+window._updateOrderStatus=function(){
+  var id=document.getElementById('om-id').value;
+  var status=document.getElementById('om-status').value;
+  var btn=document.getElementById('omBtn');btn.disabled=true;btn.textContent='Saving…';
+  _cf('adminUpdateOrderStatus')({orderId:id,status})
+  .then(function(){_toast('Order updated to '+status,'green');document.getElementById('orderModal').classList.remove('open');_loadOrders();})
+  .catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Update Status';});
+};
+
+/* ── Bookings ── */
+function _loadBookings(){
+  var status=document.getElementById('bkgStatus').value||undefined;
+  document.getElementById('bkgTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetBookings')({status,limit:50}).then(function(r){
+    var tb=document.getElementById('bkgTbl');
+    var rows=r.data.bookings||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No bookings</td></tr>';return;}
+    tb.innerHTML=rows.map(function(b){
+      return '<tr>'+
+        '<td style="font-size:11px;color:var(--b)">'+_esc((b.id||'').slice(-8))+'</td>'+
+        '<td style="font-size:11px">'+_esc(b.customerName||b.customerEmail||'—')+'</td>'+
+        '<td>'+_esc(b.serviceName||b.serviceType||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(b.bookingDate||b.scheduledAt)+'</td>'+
+        '<td>KES '+Math.round((b.totalCents||0)/100).toLocaleString()+'</td>'+
+        '<td><span class="badge '+(b.status==='completed'?'bg':b.status==='cancelled'?'br':b.status==='confirmed'?'bb':'bo')+'">'+_esc(b.status||'pending')+'</span></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('bkgTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+
+/* ── Delivery ── */
+function _loadDelivery(){
+  _cf('adminGetDeliveryStats')({}).then(function(r){
+    var d=r.data||{};
+    document.getElementById('del-active').textContent=(d.activeDeliveries||0).toLocaleString();
+    document.getElementById('del-drivers').textContent=(d.activeDrivers||0).toLocaleString();
+    document.getElementById('del-today').textContent=(d.completedToday||0).toLocaleString();
+    document.getElementById('del-late').textContent=(d.lateDeliveries||0).toLocaleString();
+    var tb=document.getElementById('delTbl');
+    var rows=d.recentDeliveries||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No active deliveries</td></tr>';return;}
+    tb.innerHTML=rows.map(function(d){
+      return '<tr>'+
+        '<td style="font-size:11px;color:var(--b)">'+_esc((d.orderId||'').slice(-8))+'</td>'+
+        '<td>'+_esc(d.driverName||'Unassigned')+'</td>'+
+        '<td><span class="badge '+(d.deliveryStatus==='delivered'?'bg':d.deliveryStatus==='picked_up'?'bb':'bo')+'">'+_esc(d.deliveryStatus||'pending')+'</span></td>'+
+        '<td style="font-size:11px">'+_esc(d.eta||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(d.updatedAt)+'</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){_toast(e.message,'red');});
+}
+
+/* ── Payouts ── */
+var _selectedPayouts=[];
+function _loadPayouts(){
+  _selectedPayouts=[];document.getElementById('batchApproveBtn').style.display='none';
+  document.getElementById('payTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetPendingPayouts')({limit:50}).then(function(r){
+    var tb=document.getElementById('payTbl');
+    var rows=r.data.payouts||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No pending payouts</td></tr>';return;}
+    tb.innerHTML=rows.map(function(p){
+      return '<tr>'+
+        '<td><input type="checkbox" class="pay-chk" value="'+p.id+'" onchange="_payCheck()" style="accent-color:var(--g)"></td>'+
+        '<td>'+_esc(p.sellerName||p.sellerId||'—')+'</td>'+
+        '<td>KES '+Math.round((p.amountCents||0)/100).toLocaleString()+'</td>'+
+        '<td><span class="badge bs">'+_esc(p.method||'mpesa')+'</span></td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(p.createdAt)+'</td>'+
+        '<td>'+(_isSA?'<button class="btn btn-g btn-sm" onclick="_approveOne(\''+p.id+'\')">Approve</button>':'<span style="font-size:11px;color:var(--sub)">SuperAdmin</span>')+'</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('payTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._payCheck=function(){
+  _selectedPayouts=Array.from(document.querySelectorAll('.pay-chk:checked')).map(function(c){return c.value;});
+  document.getElementById('batchApproveBtn').style.display=(_isSA&&_selectedPayouts.length)?'inline-flex':'none';
+};
+window._toggleAllPay=function(checked){
+  document.querySelectorAll('.pay-chk').forEach(function(c){c.checked=checked;});
+  _payCheck();
+};
+window._approveOne=function(id){if(!_isSA)return _toast('SuperAdmin only','red');_cf('adminApprovePayouts')({payoutIds:[id]}).then(function(){_toast('Payout approved','green');_loadPayouts();}).catch(function(e){_toast(e.message,'red');});};
+window._batchApprove=function(){if(!_isSA||!_selectedPayouts.length)return;_cf('adminApprovePayouts')({payoutIds:_selectedPayouts}).then(function(){_toast(_selectedPayouts.length+' payouts approved','green');_loadPayouts();}).catch(function(e){_toast(e.message,'red');});};
+
+/* ── Disputes ── */
+function _loadDisputes(){
+  var status=document.getElementById('dspStatus').value||'open';
+  document.getElementById('dspTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetDisputes')({status,limit:50}).then(function(r){
+    var tb=document.getElementById('dspTbl');
+    var rows=r.data.disputes||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="tbl-empty">No disputes</td></tr>';return;}
+    tb.innerHTML=rows.map(function(d){
+      return '<tr>'+
+        '<td style="font-size:11px;color:var(--b)">'+_esc((d.orderId||d.id||'').slice(-8))+'</td>'+
+        '<td style="font-size:11px">'+_esc(d.buyerName||'—')+'</td>'+
+        '<td style="font-size:11px">'+_esc(d.sellerName||'—')+'</td>'+
+        '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(d.reason||'—')+'</td>'+
+        '<td>KES '+Math.round((d.amountCents||0)/100).toLocaleString()+'</td>'+
+        '<td><span class="badge '+(d.status==='resolved'?'bg':d.status==='under_review'?'bb':'br')+'">'+_esc(d.status||'open')+'</span></td>'+
+        '<td>'+(d.status!=='resolved'?'<button class="btn btn-p btn-sm" onclick="_openDispute(\''+d.id+'\','+JSON.stringify({buyer:d.buyerName||'',seller:d.sellerName||'',reason:d.reason||'',amount:Math.round((d.amountCents||0)/100)})+')">Resolve</button>':'—')+'</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('dspTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._openDispute=function(id,info){
+  document.getElementById('dm-id').value=id;
+  document.getElementById('dm-detail').innerHTML='Buyer: <strong>'+_esc(info.buyer||'—')+'</strong><br>Seller: <strong>'+_esc(info.seller||'—')+'</strong><br>Reason: <em>'+_esc(info.reason||'—')+'</em><br>Amount: <strong>KES '+(_esc(String(info.amount)))+'</strong>';
+  document.getElementById('dm-favor').value='true';
+  document.getElementById('dm-notes').value='';
+  document.getElementById('disputeModal').classList.add('open');
+};
+window._resolveDispute=function(){
+  var id=document.getElementById('dm-id').value;
+  var favorBuyer=document.getElementById('dm-favor').value==='true';
+  var notes=document.getElementById('dm-notes').value.trim();
+  var btn=document.getElementById('dspBtn');btn.disabled=true;btn.textContent='Resolving…';
+  _cf('adminResolveDispute')({disputeId:id,favorBuyer,notes})
+  .then(function(){_toast('Dispute resolved','green');document.getElementById('disputeModal').classList.remove('open');_loadDisputes();})
+  .catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Resolve';});
+};
+
+/* ── Reviews ── */
+function _loadReviews(){
+  var rating=document.getElementById('revFilter').value;
+  var params={limit:50};if(rating)params.minRating=parseInt(rating,10),params.maxRating=parseInt(rating,10);
+  document.getElementById('revTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetReviews')(params).then(function(r){
+    var tb=document.getElementById('revTbl');
+    var rows=r.data.reviews||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No reviews</td></tr>';return;}
+    tb.innerHTML=rows.map(function(rv){
+      var stars='★'.repeat(rv.rating||0)+'☆'.repeat(5-(rv.rating||0));
+      return '<tr>'+
+        '<td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(rv.targetName||rv.targetId||'—')+'</td>'+
+        '<td style="font-size:11px">'+_esc(rv.reviewerName||'Anonymous')+'</td>'+
+        '<td style="color:var(--y);letter-spacing:-1px">'+stars+'</td>'+
+        '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(rv.comment||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(rv.createdAt)+'</td>'+
+        '<td><button class="btn btn-r btn-sm" onclick="_removeReview(\''+rv.id+'\')">Remove</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('revTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._removeReview=function(id){
+  if(!confirm('Remove this review? This is permanent.'))return;
+  _cf('adminRemoveReview')({reviewId:id}).then(function(){_toast('Review removed','green');_loadReviews();}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Push Notifications ── */
+function _loadRecentNotifs(){
+  document.getElementById('recentNotifs').innerHTML='<div class="spin" style="margin:10px auto;display:block"></div>';
+  _cf('adminGetRecentNotifications')({limit:10}).then(function(r){
+    var rows=r.data.notifications||[];
+    if(!rows.length){document.getElementById('recentNotifs').innerHTML='<div style="color:var(--sub);padding:10px">No notifications yet</div>';return;}
+    document.getElementById('recentNotifs').innerHTML='<div style="display:grid;gap:8px;padding:12px">'+rows.map(function(n){
+      return '<div style="background:var(--sur2);border:1px solid var(--brd);border-radius:8px;padding:10px">'+
+        '<div style="font-weight:700;font-size:12px">'+_esc(n.title||'—')+'</div>'+
+        '<div style="font-size:11px;color:var(--sub);margin:2px 0">'+_esc(n.body||'—')+'</div>'+
+        '<div style="font-size:10px;color:var(--sub)">'+_relTime(n.createdAt)+' · '+_esc(n.target||'all')+'</div>'+
+      '</div>';
+    }).join('')+'</div>';
+  }).catch(function(e){document.getElementById('recentNotifs').innerHTML='<div style="color:var(--r);padding:10px">Error: '+_esc(e.message)+'</div>';});
+}
+window._sendPush=function(){
+  var title=document.getElementById('pn-title').value.trim();
+  var body=document.getElementById('pn-body').value.trim();
+  if(!title||!body)return _toast('Title and message required','red');
+  var target=document.getElementById('pn-target').value;
+  var url=document.getElementById('pn-url').value.trim()||undefined;
+  if(!confirm('Send push notification to '+target+'?'))return;
+  _cf('adminSendPushNotification')({title,body,target,url})
+  .then(function(r){_toast('Notification sent to '+(r.data.sent||0)+' devices','green');document.getElementById('pn-title').value='';document.getElementById('pn-body').value='';_loadRecentNotifs();})
+  .catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Announcements ── */
+function _loadAnnouncements(){
+  document.getElementById('annTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetAnnouncements')({limit:50}).then(function(r){
+    var tb=document.getElementById('annTbl');
+    var rows=r.data.announcements||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No announcements</td></tr>';return;}
+    tb.innerHTML=rows.map(function(a){
+      return '<tr>'+
+        '<td style="font-weight:600">'+_esc(a.title||'—')+'</td>'+
+        '<td><span class="badge '+(a.type==='warning'?'bo':a.type==='maintenance'?'br':a.type==='promotion'?'bp':'bb')+'">'+_esc(a.type||'info')+'</span></td>'+
+        '<td><span class="badge bs">'+_esc(a.target||'all')+'</span></td>'+
+        '<td><span class="badge '+(a.active!==false?'bg':'bs')+'">'+(a.active!==false?'Active':'Inactive')+'</span></td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(a.createdAt)+'</td>'+
+        '<td><button class="btn btn-o btn-sm" onclick="_openAnnModal('+JSON.stringify(a)+')">Edit</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('annTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._openAnnModal=function(ann){
+  document.getElementById('annMTitle').textContent=ann&&ann.id?'Edit Announcement':'New Announcement';
+  document.getElementById('ann-id').value=ann&&ann.id?ann.id:'';
+  document.getElementById('ann-title').value=ann?ann.title||'':'';
+  document.getElementById('ann-body').value=ann?ann.body||ann.message||'':'';
+  document.getElementById('ann-type').value=ann?ann.type||'info':'info';
+  document.getElementById('ann-target').value=ann?ann.target||'all':'all';
+  document.getElementById('ann-active').checked=ann?ann.active!==false:true;
+  document.getElementById('annModal').classList.add('open');
+};
+window._saveAnnouncement=function(){
+  var title=document.getElementById('ann-title').value.trim();
+  var body=document.getElementById('ann-body').value.trim();
+  if(!title||!body)return _toast('Title and message required','red');
+  var btn=document.getElementById('annBtn');btn.disabled=true;btn.textContent='Saving…';
+  _cf('adminSaveAnnouncement')({
+    announcementId:document.getElementById('ann-id').value||undefined,
+    title,body,type:document.getElementById('ann-type').value,
+    target:document.getElementById('ann-target').value,active:document.getElementById('ann-active').checked,
+  })
+  .then(function(){_toast('Announcement saved','green');document.getElementById('annModal').classList.remove('open');_loadAnnouncements();})
+  .catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Publish';});
+};
+
+/* ── Banners ── */
+function _loadBanners(){
+  document.getElementById('bannersGrid').innerHTML='<div class="spin" style="margin:24px auto;display:block"></div>';
+  _cf('adminGetBanners')({}).then(function(r){
+    var rows=r.data.banners||[];
+    if(!rows.length){document.getElementById('bannersGrid').innerHTML='<p style="color:var(--sub);font-size:12px">No banners yet</p>';return;}
+    document.getElementById('bannersGrid').innerHTML=rows.map(function(b){
+      return '<div class="card" style="overflow:hidden">'+
+        (b.imageUrl?'<img src="'+_esc(b.imageUrl)+'" style="width:100%;height:120px;object-fit:cover;border-radius:8px 8px 0 0" loading="lazy">':
+          '<div style="height:80px;background:var(--sur2);display:flex;align-items:center;justify-content:center"><span class="material-icons" style="font-size:32px;color:var(--brd2)">image</span></div>')+
+        '<div class="card-body" style="padding:10px">'+
+          '<div style="font-weight:700;font-size:13px">'+_esc(b.title||'—')+'</div>'+
+          (b.subtitle?'<div style="font-size:11px;color:var(--sub);margin-top:2px">'+_esc(b.subtitle)+'</div>':'')+
+          '<div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">'+
+            '<span class="badge bs">'+_esc(b.position||'hero')+'</span>'+
+            '<span class="badge bs">'+_esc(b.hub||'all')+'</span>'+
+            '<span class="badge '+(b.active?'bg':'bs')+'">'+(b.active?'Active':'Inactive')+'</span>'+
+          '</div>'+
+          '<div style="display:flex;gap:6px;margin-top:10px">'+
+            '<button class="btn btn-o btn-sm" onclick="_openBannerModal('+JSON.stringify(b)+')">Edit</button>'+
+            '<button class="btn btn-r btn-sm" onclick="_deleteBanner(\''+b.id+'\')">Delete</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }).catch(function(e){document.getElementById('bannersGrid').innerHTML='<p style="color:var(--r);font-size:12px">Error: '+_esc(e.message)+'</p>';});
+}
+window._openBannerModal=function(bnr){
+  document.getElementById('bnrTitle').textContent=bnr&&bnr.id?'Edit Banner':'New Banner';
+  document.getElementById('bnr-id').value=bnr&&bnr.id?bnr.id:'';
+  document.getElementById('bnr-title').value=bnr?bnr.title||'':'';
+  document.getElementById('bnr-sub').value=bnr?bnr.subtitle||'':'';
+  document.getElementById('bnr-img').value=bnr?bnr.imageUrl||'':'';
+  document.getElementById('bnr-url').value=bnr?bnr.actionUrl||'':'';
+  document.getElementById('bnr-pos').value=bnr?bnr.position||'hero':'hero';
+  document.getElementById('bnr-hub').value=bnr?bnr.hub||'all':'all';
+  document.getElementById('bnr-active').checked=bnr?bnr.active!==false:true;
+  document.getElementById('bannerModal').classList.add('open');
+};
+window._saveBanner=function(){
+  var title=document.getElementById('bnr-title').value.trim();
+  if(!title)return _toast('Title required','red');
+  var btn=document.getElementById('bnrBtn');btn.disabled=true;btn.textContent='Saving…';
+  _cf('adminSaveBanner')({
+    bannerId:document.getElementById('bnr-id').value||undefined,
+    title,subtitle:document.getElementById('bnr-sub').value.trim(),
+    imageUrl:document.getElementById('bnr-img').value.trim(),
+    actionUrl:document.getElementById('bnr-url').value.trim(),
+    position:document.getElementById('bnr-pos').value,hub:document.getElementById('bnr-hub').value,
+    active:document.getElementById('bnr-active').checked,
+  })
+  .then(function(){_toast('Banner saved','green');document.getElementById('bannerModal').classList.remove('open');_loadBanners();})
+  .catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Save Banner';});
+};
+window._deleteBanner=function(id){
+  if(!confirm('Delete this banner?'))return;
+  _cf('adminDeleteBanner')({bannerId:id}).then(function(){_toast('Banner deleted','green');_loadBanners();}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── FAQs ── */
+function _loadFaqs(){
+  document.getElementById('faqTbl').innerHTML='<tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetFaqs')({}).then(function(r){
+    var tb=document.getElementById('faqTbl');
+    var rows=r.data.faqs||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No FAQs yet</td></tr>';return;}
+    tb.innerHTML=rows.map(function(f){
+      return '<tr>'+
+        '<td style="font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(f.question||'—')+'</td>'+
+        '<td><span class="badge bs">'+_esc(f.category||'General')+'</span></td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_esc(String(f.order||0))+'</td>'+
+        '<td><span class="badge '+(f.active!==false?'bg':'bs')+'">'+(f.active!==false?'Active':'Inactive')+'</span></td>'+
+        '<td style="display:flex;gap:4px">'+
+          '<button class="btn btn-o btn-sm" onclick="_openFaqModal('+JSON.stringify(f)+')">Edit</button>'+
+          '<button class="btn btn-r btn-sm" onclick="_deleteFaq(\''+f.id+'\')">Del</button>'+
+        '</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('faqTbl').innerHTML='<tr><td colspan="5" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._openFaqModal=function(faq){
+  document.getElementById('faqMTitle').textContent=faq&&faq.id?'Edit FAQ':'New FAQ';
+  document.getElementById('faq-id').value=faq&&faq.id?faq.id:'';
+  document.getElementById('faq-q').value=faq?faq.question||'':'';
+  document.getElementById('faq-a').value=faq?faq.answer||'':'';
+  document.getElementById('faq-cat').value=faq?faq.category||'':'';
+  document.getElementById('faq-order').value=faq?faq.order||0:0;
+  document.getElementById('faq-active').checked=faq?faq.active!==false:true;
+  document.getElementById('faqModal').classList.add('open');
+};
+window._saveFaq=function(){
+  var q=document.getElementById('faq-q').value.trim();
+  var a=document.getElementById('faq-a').value.trim();
+  if(!q||!a)return _toast('Question and answer required','red');
+  var btn=document.getElementById('faqBtn');btn.disabled=true;btn.textContent='Saving…';
+  _cf('adminUpsertFaq')({
+    faqId:document.getElementById('faq-id').value||undefined,
+    question:q,answer:a,category:document.getElementById('faq-cat').value.trim()||'General',
+    order:parseInt(document.getElementById('faq-order').value)||0,active:document.getElementById('faq-active').checked,
+  })
+  .then(function(){_toast('FAQ saved','green');document.getElementById('faqModal').classList.remove('open');_loadFaqs();})
+  .catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Save FAQ';});
+};
+window._deleteFaq=function(id){
+  if(!confirm('Delete this FAQ?'))return;
+  _cf('adminDeleteFaq')({faqId:id}).then(function(){_toast('FAQ deleted','green');_loadFaqs();}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── SmartPOS ── */
+function _loadPosDevices(){
+  document.getElementById('posTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetPosDevices')({}).then(function(r){
+    var tb=document.getElementById('posTbl');
+    var rows=r.data.devices||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No devices registered</td></tr>';return;}
+    tb.innerHTML=rows.map(function(d){
+      return '<tr>'+
+        '<td style="font-size:11px;color:var(--b);font-family:monospace">'+_esc(d.id||'—')+'</td>'+
+        '<td>'+_esc(d.merchantName||d.merchantId||'—')+'</td>'+
+        '<td><span class="badge bs">'+_esc(d.deviceType||'pos')+'</span></td>'+
+        '<td style="font-size:11px">'+_esc(d.appVersion||'—')+'</td>'+
+        '<td><span class="badge '+(d.status==='active'?'bg':d.status==='offline'?'bs':'bo')+'">'+_esc(d.status||'active')+'</span></td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(d.lastSeen)+'</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('posTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+
+/* ── AI Operations ── */
+var AI_MODULES=[
+  {key:'kass_chat',label:'KASS AI Concierge',desc:'Customer chat assistant'},
+  {key:'search_ai',label:'AI Search (NLP)',desc:'Swahili intent parsing'},
+  {key:'fraud_ai',label:'Fraud Detection AI',desc:'Transaction risk scoring'},
+  {key:'recommendations',label:'Recommendations',desc:'Product recommendations'},
+  {key:'pricing_ai',label:'Dynamic Pricing AI',desc:'Market-aware pricing'},
+];
+function _loadAiStats(){
+  _cf('adminGetAiStats')({}).then(function(r){
+    var d=r.data||{};
+    document.getElementById('ai-tokens').textContent=(d.totalTokens||0).toLocaleString();
+    document.getElementById('ai-cost').textContent='$'+(d.estimatedCostUsd||0).toFixed(4);
+    document.getElementById('ai-reqs').textContent=(d.totalRequests||0).toLocaleString();
+    document.getElementById('ai-users').textContent=(d.activeUsers||0).toLocaleString();
+    var flags=d.moduleFlags||{};
+    document.getElementById('aiModuleList').innerHTML=AI_MODULES.map(function(m){
+      var enabled=flags[m.key]!==false;
+      return '<div class="flag-row">'+
+        '<div class="flag-key">'+_esc(m.label)+'</div>'+
+        '<div class="flag-desc">'+_esc(m.desc)+'</div>'+
+        '<label class="toggle"><input type="checkbox" '+(enabled?'checked':'')+' '+(!_isSA?'disabled':'')+' onchange="_toggleAiModule(\''+m.key+'\',this.checked)"><span class="toggle-sl"></span></label>'+
+      '</div>';
+    }).join('');
+  }).catch(function(e){_toast(e.message,'red');});
+}
+window._toggleAiModule=function(key,enabled){
+  if(!_isSA){_toast('SuperAdmin only','red');return;}
+  _cf('adminUpdateFeatureFlag')({key:'ai_module_'+key,enabled,description:'AI module: '+key})
+  .then(function(){_toast((enabled?'Enabled':'Disabled')+': '+key,'green');})
+  .catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Search Manager ── */
+function _loadSearch(){
+  _cf('adminGetSearchStats')({}).then(function(r){
+    var d=r.data||{};
+    document.getElementById('srch-total').textContent=(d.totalSearches||0).toLocaleString();
+    document.getElementById('srch-queue').textContent=(d.pendingQueue||0).toLocaleString();
+    var trending=d.trendingSearches||[];
+    document.getElementById('srch-trends').textContent=trending.length;
+    document.getElementById('trendingList').innerHTML=trending.length?trending.map(function(t,i){
+      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd);font-size:12px">'+
+        '<span style="color:var(--sub);width:20px;text-align:right">'+(i+1)+'</span>'+
+        '<span style="flex:1;font-weight:600">'+_esc(t.query||t.term||t)+'</span>'+
+        (t.count?'<span style="color:var(--sub);font-size:11px">'+t.count+' searches</span>':'')+'</div>';
+    }).join(''):'<div style="color:var(--sub)">No trending data yet</div>';
+    var queue=d.queueItems||[];
+    document.getElementById('queueList').innerHTML=queue.length?queue.map(function(q){
+      return '<div style="font-size:11px;padding:6px 0;border-bottom:1px solid var(--brd);color:var(--sub)">'+_esc(q.collection||'?')+' · <span style="color:var(--o)">'+_esc(q.action||'index')+'</span></div>';
+    }).join(''):'<div style="color:var(--g);font-size:12px">Queue is clear</div>';
+  }).catch(function(e){_toast(e.message,'red');});
+}
+
+/* ── Fraud Center ── */
+function _loadFraud(){
+  _cf('adminGetFraudAlerts')({}).then(function(r){
+    var d=r.data||{};
+    var flags=d.riskFlags||[];
+    var chargebacks=d.chargebacks||[];
+    var dupes=d.duplicateAccounts||[];
+    document.getElementById('fr-flags').textContent=flags.length;
+    document.getElementById('fr-chargebacks').textContent=chargebacks.length;
+    document.getElementById('fr-dupes').textContent=dupes.length;
+    document.getElementById('sbFraud').textContent=flags.length+chargebacks.length;
+    var tb=document.getElementById('fraudTbl');
+    if(!flags.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No risk flags — all clear</td></tr>';return;}
+    tb.innerHTML=flags.map(function(f){
+      return '<tr>'+
+        '<td style="font-size:11px">'+_esc(f.userEmail||f.userId||'—')+'</td>'+
+        '<td><span class="badge br">'+_esc(f.flagType||f.type||'risk')+'</span></td>'+
+        '<td style="font-weight:700;color:var(--r)">'+_esc(String(f.riskScore||0))+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(f.createdAt)+'</td>'+
+        '<td><button class="btn btn-b btn-sm" onclick="_openUser(\''+_esc(f.userId||'')+'\')">View User</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){_toast(e.message,'red');});
+}
+
+/* ── Audit Logs ── */
+function _loadAudit(){
+  var action=document.getElementById('auditAction').value||undefined;
+  document.getElementById('auditTbl').innerHTML='<tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetAuditLogs')({action,limit:100}).then(function(r){
+    var tb=document.getElementById('auditTbl');
+    var rows=r.data.logs||[];
+    if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No audit logs</td></tr>';return;}
+    tb.innerHTML=rows.map(function(l){
+      return '<tr>'+
+        '<td style="font-size:11px">'+_esc(l.adminEmail||l.adminId||'—')+'</td>'+
+        '<td><span class="badge bb">'+_esc(l.action||'—')+'</span></td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_esc(l.targetId||'—')+'</td>'+
+        '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(JSON.stringify(l.details||{}))+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(l.createdAt)+'</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('auditTbl').innerHTML='<tr><td colspan="5" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+
 /* ── Utils ── */
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function _relTime(ts){if(!ts)return'—';var t=ts.seconds?ts.seconds*1000:ts.toMillis?ts.toMillis():0;if(!t)return'—';var d=Math.round((Date.now()-t)/1000);return d<60?d+'s':d<3600?Math.round(d/60)+'m ago':d<86400?Math.round(d/3600)+'h ago':Math.round(d/86400)+'d ago';}
