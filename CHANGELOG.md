@@ -1,4 +1,41 @@
-﻿## [2026-06-28] — Payment Trust & Security Experience v1.0
+﻿## [2026-06-28] — Public Pages, Compliance & Trust Audit v1.0
+
+### Summary
+Complete public-page overhaul. 13 new pages created, `sokoni-legal.css` shared stylesheet (400+ lines), comprehensive footer system, sitemap updated with 20 legal/company URLs, robots.txt patched to disallow two admin-only pages mistakenly left open. All auth providers (Google, Facebook, Apple, Microsoft) now have the required public-facing Privacy, Terms, Data Deletion, and Community Guidelines pages. SEO-complete: title, description, og:, twitter:card, canonical, and Schema.org structured data on every new page.
+
+### Files Created
+- `sokoni-legal.css` — shared stylesheet for all legal/public pages (nav, hero, TOC, sections, contact cards, footer grid)
+- `about.html` — company story, mission, stats, values, legal entity (Schema.org Organization)
+- `contact.html` — 8 contact tiles, office info, response times, social links (Schema.org ContactPage)
+- `faq.html` — 20 Q&As across 6 categories with accordion + filter; Schema.org FAQPage
+- `cookie-policy.html` — cookie table, types, third-party list, browser control instructions
+- `refund-policy.html` — 10 sections covering marketplace, services, digital, subscriptions, payment errors
+- `returns-policy.html` — 10 sections covering return window, eligibility, condition, process, collection, dispute
+- `seller-terms.html` — eligibility, commission table (category-based), payouts, prohibited items, suspension
+- `provider-terms.html` — 13 sections for home/professional/healthcare/events providers; cancellation matrix
+- `community-guidelines.html` — 11 sections covering respect, honesty, safety, reviews, messaging, enforcement
+- `payment-security.html` — 9 trust pillars, payment methods, buyer protection (SokoniTrust module), scam awareness
+- `careers.html` — 9 open roles (engineering/product/design/business), structured JobPosting schema
+- `press.html` — company facts, media contact, brand assets, boilerplate
+
+### Files Modified
+- `help.html` — added `<link rel="canonical">` + comprehensive footer
+- `community.html` — added `<link rel="canonical">` + comprehensive footer
+- `robots.txt` — added `Disallow` for `trust-safety.html` (admin-only) and `payment-receipt.html` (Firestore-dependent, not indexable)
+- `sitemap.xml` — added 20 new URLs (company, legal, support), updated lastmod to 2026-06-28
+
+### SEO
+- Every page: unique title, description, og:title, og:description, og:image, twitter:card, canonical
+- Schema.org: Organization (about), ContactPage (contact), FAQPage (faq), JobPosting (careers)
+- sitemap.xml priorities: about/contact (0.80), payment-security/privacy/terms (0.70), cookies/guidelines (0.60)
+
+### Auth Provider Compliance
+- Google Sign-In: Privacy Policy + Terms of Service public and indexed ✓
+- Facebook Login: Privacy + Terms + Data Deletion + community standards ✓
+- Apple Sign-In: Privacy + Terms publicly accessible ✓
+- Microsoft Login: Privacy + Terms + data handling documented ✓
+
+## [2026-06-28] — Payment Trust & Security Experience v1.0
 
 ### Summary
 Platform-wide payment trust layer. Central module (`sokoni-payment-trust.js`) auto-discovers `data-trust` attributes and renders: IntaSend badge (shield SVG + PCI/SSL pills), payment status bar (7 phases), price breakdown, buyer protection lists (marketplace/service/digital/POS), seller verification badges (4 tiers), and trust footer. Digital receipt modal with QR code, download, email, and print. Public receipt viewer (`payment-receipt.html`) QR-verifiable via Firestore. Five new CFs: `generateTrustReceipt`, `emailTrustReceipt`, `verifyTrustReceipt`, `getPaymentSecurityAlerts`, `detectPaymentAnomalies` (scheduled daily — duplicate charge detection, failed payment spikes, velocity alerts). `checkout.html` updated with module CSS, trust badges, buyer protection, payment status bar, trust footer, and receipt modal auto-shown after successful payment.
