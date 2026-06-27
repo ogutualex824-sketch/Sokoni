@@ -26,7 +26,7 @@ const PRECACHE_PAGES = [
   "/flashsale.html", "/driver.html", "/food.html",
   "/food-menu.html", "/food-cart.html", "/food-order.html", "/food-dashboard.html", "/food-rider.html",
   "/healthcare.html", "/entertainment.html", "/car-hub.html",
-  "/car-rental.html", "/pos.html",
+  "/car-rental.html", "/pos.html", "/pos-checkout.html", "/pos-display.html",
   "/delivery.html", "/delivery-tracking.html",
   "/bnb.html", "/landlord.html", "/property.html",
   "/community.html", "/digital.html", "/b2b.html",

@@ -1,4 +1,43 @@
-﻿## [2026-06-27] — Platform Sprint: Availability Hub Integration + Reviews + Referral + Loyalty + Driver Earnings
+﻿## [2026-06-27] — SmartPOS Zero Friction Checkout System v1.0
+
+### Summary
+Complete zero-friction checkout system per SOKONI SmartPOS specification. One-screen cashier UI (`pos-checkout.html`) with F1–F12 keyboard shortcuts, universal scanner integration (keyboard wedge + camera), split payment, park/retrieve, real-time customer display via BroadcastChannel. Universal Loyalty Engine v1.0 (`pos-loyalty-engine.js`): points/cashback/punch cards/tiers/campaigns/coupons/gift cards, merchant-configurable, IndexedDB-first. Customer Display (`pos-display.html`): secondary screen via BroadcastChannel showing live cart, totals, loyalty, and thank-you animation. Server-authoritative checkout CFs (`functions/pos-zero-friction.js`): `posCompleteCheckout` (idempotent Firestore tx — price verify → inventory → loyalty → receipt → analytics), `posValidateCoupon`, `posLookupCustomer` (phone/QR/memberCard/email), `posProcessRefund` (inventory return), `posGetQueueMetrics` (cashier performance), `posCleanupIdempotency` (scheduled). SW updated to `sokoni-20260627-zfpos`.
+
+### Files Affected
+- `pos-checkout.html` — CREATED — one-screen zero-friction cashier UI
+- `pos-loyalty-engine.js` — CREATED — universal loyalty/coupons/gift cards/campaigns engine
+- `pos-display.html` — CREATED — customer-facing secondary display
+- `functions/pos-zero-friction.js` — CREATED — 6 CFs (5 callable + 1 scheduled)
+- `functions/index.js` — MODIFIED — 6 new CF exports
+- `service-worker.js` — MODIFIED — SW version bump, new files precached
+
+### New Cloud Functions
+- `posCompleteCheckout` — authoritative checkout chain (idempotent)
+- `posValidateCoupon` — server-side coupon validation
+- `posLookupCustomer` — multi-method customer lookup
+- `posProcessRefund` — refund with inventory return
+- `posGetQueueMetrics` — cashier speed & queue analytics
+- `posCleanupIdempotency` — daily scheduled cleanup
+
+### New Firestore Collections
+- `posIdempotency` — idempotency records (auto-cleaned after 7 days)
+- `posCheckoutMetrics` — per-sale checkout timing for queue analytics
+- `loyaltyPrograms` — per-merchant loyalty config
+- `loyaltyCampaigns` — time-based campaign/bonus definitions
+- `posReceipts` — sale receipt records
+- `coupons` — coupon definitions (shared with FinOS)
+- `giftCards` — gift card registry
+
+### Security
+- Server re-validates all item prices (±1 KES tolerance per item)
+- Server re-validates coupon eligibility (expiry, per-customer limits, merchant scope)
+- Idempotency key prevents duplicate charges on retry
+- All user strings pass `_sanitize()` before Firestore writes
+- XSS: all rendered user data via `_e()` DOM text nodes
+
+---
+
+## [2026-06-27] — Platform Sprint: Availability Hub Integration + Reviews + Referral + Loyalty + Driver Earnings
 
 ### Summary
 Full sprint completing all pending platform features: availability badges wired into 6 hub pages with "Open Now" live filter; Reviews & Ratings engine (5 CFs + client SDK + product page widget); loyalty points redemption toggle at checkout (KES 0.50/pt, max 25% of order, auto-deducted on order place); referral tracking Firestore trigger (KES 100 wallet credit to referrer on buyer's first completed order); driver earnings dashboard with today/week/month/total breakdown; App Check enforcement on 2 payment CFs; 10 dead dev/test scripts deleted; manual infra checklist written.
