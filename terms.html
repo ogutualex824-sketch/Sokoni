@@ -1,305 +1,380 @@
 <!DOCTYPE html>
-<html lang="en">
-<head><script src="security.js"></script>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Terms of Service — SOKONI</title>
-  <meta name="description" content="SOKONI Terms of Service — the rules governing use of Kenya's leading digital marketplace platform.">
-  <meta property="og:title" content="Terms of Service — SOKONI">
-  <meta property="og:description" content="Read the SOKONI Terms of Service — marketplace rules, buyer and seller responsibilities, payments, and more.">
-  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <title>Terms of Service — SOKONI | Kenya's Digital Marketplace</title>
+  <meta name="description" content="SOKONI Terms of Service — the rules and conditions governing use of Kenya's leading digital marketplace platform.">
   <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Terms of Service — SOKONI">
+  <meta property="og:description" content="SOKONI Terms of Service — governing marketplace use, buyer and seller rules, payments, and dispute resolution under Kenyan law.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:url" content="https://mysokoni.co.ke/terms">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://mysokoni.co.ke/terms">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="stylesheet" href="premium.css">
-  <link rel="stylesheet" href="mobile.css">
-  <script src="shared-header.js" defer></script>
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <style>
-    :root { --accent: #71ff00; }
-    body { background: #0a0a0a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
-    .legal-hero { background: linear-gradient(135deg,#0a0d1a 0%,#0a0a0a 60%); padding: 80px 24px 48px; text-align: center; border-bottom: 1px solid rgba(113,200,255,.08); }
-    .legal-hero h1 { font-size: clamp(28px,5vw,44px); color: #fff; margin: 0 0 12px; font-weight: 800; }
-    .legal-hero p  { color: rgba(255,255,255,.5); font-size: 14px; margin: 0; }
-    .legal-body    { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
-    .legal-toc { background: rgba(0,150,255,.05); border: 1px solid rgba(0,150,255,.12); border-radius: 14px; padding: 24px 28px; margin-bottom: 40px; }
-    .legal-toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #00b4ff; margin: 0 0 16px; }
-    .legal-toc ol  { margin: 0; padding-left: 20px; columns: 2; }
-    .legal-toc li  { margin-bottom: 6px; break-inside: avoid; }
-    .legal-toc a   { color: rgba(255,255,255,.7); text-decoration: none; font-size: 14px; }
-    .legal-toc a:hover { color: var(--accent); }
-    .legal-section { margin-bottom: 48px; }
-    .legal-section h2 { font-size: 22px; color: #fff; font-weight: 700; border-left: 3px solid #00b4ff; padding-left: 14px; margin: 0 0 20px; }
-    .legal-section h3 { font-size: 16px; color: rgba(255,255,255,.85); font-weight: 600; margin: 28px 0 10px; }
-    .legal-section p  { line-height: 1.75; font-size: 15px; color: rgba(255,255,255,.6); margin: 0 0 14px; }
-    .legal-section ul { padding-left: 22px; }
-    .legal-section li { line-height: 1.75; font-size: 15px; color: rgba(255,255,255,.6); margin-bottom: 6px; }
-    .legal-section a  { color: var(--accent); }
-    .prohibited-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 10px; margin: 16px 0; }
-    .prohibited-item { background: rgba(255,60,60,.07); border: 1px solid rgba(255,60,60,.15); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: rgba(255,180,180,.8); }
-    .prohibited-item::before { content: '✕ '; color: #ff4444; }
-    .divider { border: none; border-top: 1px solid rgba(255,255,255,.06); margin: 48px 0; }
-    .notice-box { background: rgba(255,200,0,.06); border: 1px solid rgba(255,200,0,.15); border-radius: 12px; padding: 16px 20px; margin: 16px 0; font-size: 14px; color: rgba(255,220,100,.8); }
-    @media (max-width:600px) { .legal-toc ol { columns: 1; } }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--accent:#71ff00;--bg:#0a0a0a;--surface:rgba(255,255,255,.04);--border:rgba(255,255,255,.08);--text:#e0e0e0;--muted:rgba(255,255,255,.55)}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.6;min-height:100vh}
+
+    /* ── Static top nav ───────────────────────────────────────────── */
+    .sk-nav{position:sticky;top:0;z-index:1000;background:rgba(10,10,10,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px}
+    .sk-nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:60px}
+    .sk-nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .sk-nav-logo img{width:32px;height:32px;border-radius:8px;object-fit:contain}
+    .sk-nav-logo span{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px}
+    .sk-nav-links{display:flex;align-items:center;gap:20px}
+    .sk-nav-links a{color:rgba(255,255,255,.6);text-decoration:none;font-size:14px;font-weight:500;transition:color .18s}
+    .sk-nav-links a:hover{color:#fff}
+    .sk-nav-links a.active{color:var(--accent)}
+    .sk-nav-home-btn{background:var(--accent);color:#000;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:opacity .18s}
+    .sk-nav-home-btn:hover{opacity:.85;color:#000}
+    @media(max-width:640px){.sk-nav-links{display:none}}
+
+    /* ── Hero ─────────────────────────────────────────────────────── */
+    .hero{background:linear-gradient(135deg,#0d1a00 0%,#0a0a0a 60%);padding:72px 24px 48px;text-align:center;border-bottom:1px solid rgba(113,255,0,.1)}
+    .hero-badge{display:inline-block;padding:5px 14px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);border-radius:20px;font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px}
+    .hero h1{font-size:clamp(28px,5vw,46px);color:#fff;font-weight:800;margin-bottom:12px;line-height:1.15}
+    .hero p{color:var(--muted);font-size:14px}
+
+    /* ── Layout ───────────────────────────────────────────────────── */
+    .page{max-width:880px;margin:0 auto;padding:48px 24px 80px}
+    .toc{background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.1);border-radius:14px;padding:24px 28px;margin-bottom:40px}
+    .toc-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:14px}
+    .toc ol{padding-left:18px;columns:2;gap:16px}
+    .toc li{margin-bottom:6px;break-inside:avoid}
+    .toc a{color:rgba(255,255,255,.65);text-decoration:none;font-size:14px;transition:color .18s}
+    .toc a:hover{color:var(--accent)}
+    .section{margin-bottom:52px}
+    .section h2{font-size:21px;color:#fff;font-weight:700;padding-left:14px;border-left:3px solid var(--accent);margin-bottom:20px}
+    .section h3{font-size:16px;color:rgba(255,255,255,.85);font-weight:600;margin:24px 0 10px}
+    .section p{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:14px}
+    .section ul,.section ol{padding-left:22px;margin-bottom:14px}
+    .section li{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:5px}
+    .section a{color:var(--accent)}
+    hr.divider{border:none;border-top:1px solid var(--border);margin:52px 0}
+    .highlight-box{background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.1);border-radius:12px;padding:18px 22px;margin:20px 0}
+    .highlight-box p{font-size:14px;color:rgba(255,255,255,.7);margin:0}
+    .contact-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-top:12px}
+    .contact-card p{font-size:15px;color:var(--muted);margin-bottom:8px}
+
+    /* ── Prohibited grid ──────────────────────────────────────────── */
+    .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
+    .grid-item{background:rgba(255,50,50,.05);border:1px solid rgba(255,50,50,.12);border-radius:8px;padding:10px 14px;font-size:14px;color:rgba(255,200,200,.7)}
+    @media(max-width:500px){.grid2{grid-template-columns:1fr}}
+    @media(max-width:640px){.toc ol{columns:1}}
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    footer{background:rgba(255,255,255,.02);border-top:1px solid var(--border);padding:32px 24px}
+    .footer-inner{max-width:1100px;margin:0 auto}
+    .footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 20px;margin-bottom:16px}
+    .footer-links a{color:rgba(255,255,255,.4);text-decoration:none;font-size:13px;transition:color .18s}
+    .footer-links a:hover,.footer-links a.active{color:var(--accent)}
+    .footer-copy{text-align:center;font-size:12px;color:rgba(255,255,255,.25)}
   </style>
 </head>
 <body>
-<div class="legal-hero">
+
+<!-- Static navigation — visible without JavaScript -->
+<nav class="sk-nav" aria-label="SOKONI navigation">
+  <div class="sk-nav-inner">
+    <a href="/" class="sk-nav-logo" aria-label="SOKONI Home">
+      <img src="assets/logosokoni.png" alt="SOKONI">
+      <span>SOKONI</span>
+    </a>
+    <div class="sk-nav-links">
+      <a href="/privacy">Privacy</a>
+      <a href="/terms" class="active" aria-current="page">Terms</a>
+      <a href="/data-deletion">Data Deletion</a>
+      <a href="mailto:support@mysokoni.co.ke">Contact</a>
+      <a href="/" class="sk-nav-home-btn">Back to Marketplace</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-badge">Legal</div>
   <h1>Terms of Service</h1>
-  <p>Last updated: 28 June 2026 &nbsp;|&nbsp; Effective: 28 June 2026</p>
-</div>
+  <p>Last updated: 28 June 2026 &nbsp;&bull;&nbsp; Effective: 28 June 2026</p>
+</header>
 
-<div class="legal-body">
+<main class="page">
 
-  <div class="legal-toc">
-    <h2>Contents</h2>
+  <div class="highlight-box">
+    <p><strong>Please read these Terms carefully.</strong> By accessing or using SOKONI, you agree to be bound by these Terms of Service and our <a href="/privacy">Privacy Policy</a>. If you do not agree, you must not use the platform.</p>
+  </div>
+
+  <nav class="toc" aria-label="Table of contents">
+    <div class="toc-label">Contents</div>
     <ol>
       <li><a href="#acceptance">Acceptance</a></li>
       <li><a href="#eligibility">Eligibility</a></li>
       <li><a href="#accounts">Accounts</a></li>
-      <li><a href="#marketplace-rules">Marketplace Rules</a></li>
-      <li><a href="#buyer">Buyer Responsibilities</a></li>
-      <li><a href="#seller">Seller Responsibilities</a></li>
-      <li><a href="#payments">Payments</a></li>
+      <li><a href="#marketplace">Marketplace Rules</a></li>
+      <li><a href="#buyers">Buyer Responsibilities</a></li>
+      <li><a href="#sellers">Seller Responsibilities</a></li>
+      <li><a href="#payments">Payments &amp; Fees</a></li>
       <li><a href="#refunds">Refunds &amp; Disputes</a></li>
       <li><a href="#prohibited">Prohibited Items</a></li>
-      <li><a href="#intellectual-property">Intellectual Property</a></li>
-      <li><a href="#suspension">Account Suspension</a></li>
+      <li><a href="#ip">Intellectual Property</a></li>
+      <li><a href="#suspension">Suspension &amp; Termination</a></li>
       <li><a href="#liability">Liability</a></li>
       <li><a href="#governing-law">Governing Law</a></li>
       <li><a href="#contact">Contact</a></li>
     </ol>
-  </div>
+  </nav>
 
   <!-- 1 -->
-  <div class="legal-section" id="acceptance">
+  <section class="section" id="acceptance">
     <h2>1. Acceptance of Terms</h2>
-    <p>By accessing or using SOKONI (accessible at <a href="https://mysokoni.co.ke">mysokoni.co.ke</a>) or any associated mobile application, you agree to be bound by these Terms of Service ("Terms"). If you do not agree, you must immediately stop using the platform.</p>
-    <p>These Terms constitute a legally binding agreement between you and <strong>Sokoni Digital Limited</strong> ("SOKONI", "we", "us", "our").</p>
-  </div>
+    <p>These Terms of Service ("Terms") form a legally binding contract between you ("User") and <strong>Sokoni Digital Limited</strong> ("SOKONI", "we", "us", "our"), a company registered in Kenya. By creating an account, browsing, purchasing, or listing on SOKONI, you accept these Terms in full.</p>
+    <p>We may update these Terms from time to time. Material changes will be communicated by email or in-app notice at least 14 days before taking effect. Continued use of the platform after changes take effect constitutes acceptance.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 2 -->
-  <div class="legal-section" id="eligibility">
+  <section class="section" id="eligibility">
     <h2>2. Eligibility</h2>
     <ul>
-      <li>You must be at least <strong>18 years of age</strong> to use SOKONI.</li>
-      <li>You must have the legal capacity to enter into a binding contract under Kenyan law.</li>
-      <li>Businesses must be duly registered and compliant with Kenyan law.</li>
-      <li>Access from jurisdictions where use is prohibited by local law is not permitted.</li>
+      <li>You must be at least <strong>18 years of age</strong> to create an account and conduct transactions.</li>
+      <li>Persons under 18 may not register or complete purchases.</li>
+      <li>Business accounts must be registered legal entities in Kenya or a jurisdiction we accept.</li>
+      <li>You must have the legal capacity to enter binding contracts under Kenyan law.</li>
+      <li>We reserve the right to refuse service to anyone for any lawful reason.</li>
     </ul>
-  </div>
+  </section>
 
   <hr class="divider">
 
   <!-- 3 -->
-  <div class="legal-section" id="accounts">
-    <h2>3. Accounts</h2>
+  <section class="section" id="accounts">
+    <h2>3. Accounts &amp; Security</h2>
+    <h3>Registration</h3>
+    <p>You may register with your email and password, Google account, Facebook account, or phone number (OTP). You are responsible for maintaining the confidentiality of your credentials. You must immediately notify us of any unauthorised access at <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a>.</p>
+    <h3>Account Integrity</h3>
     <ul>
-      <li>You are responsible for maintaining the confidentiality of your login credentials.</li>
-      <li>You must provide accurate, current, and complete registration information.</li>
-      <li>One natural person or business entity may hold one seller account. Multiple accounts are prohibited without written consent from SOKONI.</li>
-      <li>You must notify us immediately at <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a> if you suspect unauthorised access to your account.</li>
-      <li>We reserve the right to verify your identity at any time.</li>
+      <li>One account per person or registered business. Duplicate accounts may be suspended.</li>
+      <li>You must provide accurate, current, and complete information.</li>
+      <li>You must not share your account credentials with any other person.</li>
+      <li>Accounts inactive for 24 months may be archived; you will receive a 30-day notice.</li>
     </ul>
-  </div>
+    <h3>Verification</h3>
+    <p>Sellers and service providers must complete KYC (Know Your Customer) verification, including government-issued ID and business registration, before listing products or withdrawing funds.</p>
+    <h3>Account Deletion</h3>
+    <p>You may delete your account at any time from Profile → Settings → Privacy → Delete Account. Personal data is permanently purged within 30 days. Financial records required by law (eTIMS, tax records) are retained for 7 years. See our <a href="/data-deletion">Data Deletion Centre</a>.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 4 -->
-  <div class="legal-section" id="marketplace-rules">
+  <section class="section" id="marketplace">
     <h2>4. Marketplace Rules</h2>
+    <p>SOKONI is a two-sided marketplace. We connect buyers and sellers but are not a party to individual transactions unless otherwise stated. SOKONI is not responsible for the quality, accuracy, legality, or delivery of items listed by third-party sellers.</p>
     <ul>
-      <li>All listings must be accurate, honest, and not misleading.</li>
-      <li>Sellers must only list items they own or have the right to sell.</li>
-      <li>Duplicate listings are prohibited.</li>
-      <li>Manipulating reviews, ratings, or platform ranking signals is strictly prohibited.</li>
-      <li>Users may not contact other users for off-platform transactions to circumvent fees.</li>
-      <li>Impersonating another user, business, or SOKONI staff is prohibited.</li>
-      <li>Spam, unsolicited commercial messages, and phishing are prohibited.</li>
+      <li>Listings must accurately represent the product or service being offered.</li>
+      <li>Sellers must honour confirmed orders within the stated timeframe.</li>
+      <li>Communication between buyers and sellers must remain within the SOKONI messaging system for transactions arising from the platform.</li>
+      <li>Off-platform payments to circumvent SOKONI fees are prohibited and may result in permanent account suspension.</li>
+      <li>SOKONI reserves the right to mediate disputes and issue binding decisions on refunds and order completion.</li>
     </ul>
-  </div>
+  </section>
 
   <hr class="divider">
 
   <!-- 5 -->
-  <div class="legal-section" id="buyer">
+  <section class="section" id="buyers">
     <h2>5. Buyer Responsibilities</h2>
     <ul>
-      <li>Review listings thoroughly before placing an order.</li>
-      <li>Provide an accurate delivery address — SOKONI and the seller are not liable for failed deliveries due to incorrect addresses.</li>
-      <li>Pay the full amount shown at checkout, including all applicable fees and taxes.</li>
-      <li>Report issues with orders within <strong>48 hours</strong> of delivery through the platform's dispute system.</li>
-      <li>Treat sellers, drivers, and SOKONI staff with respect. Harassment will result in account suspension.</li>
-      <li>Do not request or accept cash or off-platform payments.</li>
+      <li>Review product descriptions, photos, and seller ratings before purchasing.</li>
+      <li>Provide accurate delivery address and contact information.</li>
+      <li>Be available to receive delivery and confirm receipt within 48 hours of delivery.</li>
+      <li>Report issues (damaged, wrong, or missing items) within <strong>48 hours</strong> of confirmed delivery.</li>
+      <li>Do not file fraudulent dispute claims. Abuse of the disputes system will result in account suspension.</li>
+      <li>Respect the seller's stated delivery timelines before escalating.</li>
     </ul>
-  </div>
+  </section>
 
   <hr class="divider">
 
   <!-- 6 -->
-  <div class="legal-section" id="seller">
+  <section class="section" id="sellers">
     <h2>6. Seller Responsibilities</h2>
     <ul>
-      <li>List only goods and services you are legally authorised to sell in Kenya.</li>
-      <li>Maintain accurate stock levels. Accepting orders you cannot fulfil is a policy violation.</li>
-      <li>Ship or fulfil orders within the stated processing time.</li>
-      <li>Respond to buyer messages within 24 hours on business days.</li>
-      <li>Issue KRA eTIMS-compliant receipts for all taxable sales through the platform.</li>
-      <li>Comply with all applicable Kenyan consumer protection laws, including the Consumer Protection Act 2012.</li>
-      <li>SOKONI collects a <strong>platform commission</strong> on each completed sale. Commission rates are published in your Seller Dashboard and may be updated with 30 days' notice.</li>
-      <li>Withholding Tax (WHT) of 5% is deducted from payouts as required by the Income Tax Act, Cap. 470.</li>
+      <li>List only items you have legal title or authority to sell.</li>
+      <li>Maintain accurate stock levels and remove sold-out listings promptly.</li>
+      <li>Process and dispatch orders within the stated handling time (default 2 business days).</li>
+      <li>Comply with Kenya's Consumer Protection Act, 2012 for all sales.</li>
+      <li>Issue KRA-compliant eTIMS receipts for all taxable sales through the SOKONI platform.</li>
+      <li>Respond to buyer queries within 24 hours.</li>
+      <li>Maintain a minimum 3.5-star rating to remain a featured seller. Ratings below 3.0 will trigger a quality review.</li>
+      <li>SOKONI may suspend listing privileges for repeated negative reviews, disputes, or policy violations.</li>
     </ul>
-  </div>
+    <h3>Commission</h3>
+    <p>SOKONI charges a platform commission on each completed transaction. Commission rates vary by category and subscription plan. Current rates are available in the Seller Dashboard. Commission is automatically deducted before payouts are processed.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 7 -->
-  <div class="legal-section" id="payments">
-    <h2>7. Payments</h2>
-    <h3>7.1 Buyer Payments</h3>
+  <section class="section" id="payments">
+    <h2>7. Payments &amp; Fees</h2>
+    <h3>Payment Methods</h3>
+    <p>SOKONI accepts: M-Pesa (STK Push via IntaSend), debit/credit cards, and SOKONI Wallet. All transactions are processed in <strong>Kenya Shillings (KES)</strong>.</p>
+    <h3>Payment Processing</h3>
+    <p>Payments are processed by <strong>IntaSend</strong>, licensed by the Central Bank of Kenya. SOKONI holds payments in escrow until order completion confirmation, then releases funds to the seller wallet minus commission.</p>
+    <h3>Seller Payouts</h3>
     <ul>
-      <li>Accepted methods: M-Pesa (STK push), debit/credit card, SOKONI Wallet.</li>
-      <li>Prices are displayed in Kenya Shillings (KES) and include VAT where applicable.</li>
-      <li>Payment is captured at the time of order placement. Funds are held in escrow until delivery is confirmed.</li>
+      <li>Payouts are processed every <strong>Wednesday and Friday</strong> for confirmed completed orders.</li>
+      <li>Minimum payout threshold: KES 500.</li>
+      <li><strong>Withholding Tax (WHT):</strong> 5% is deducted from seller payouts and remitted to KRA under Section 35 of the Income Tax Act, Cap. 470. A WHT certificate is issued to sellers monthly.</li>
+      <li>VAT-registered sellers: SOKONI deducts and remits 16% VAT on platform fees. Sellers are responsible for their own output VAT on goods sold.</li>
     </ul>
-    <h3>7.2 Seller Payouts</h3>
-    <ul>
-      <li>Payouts are processed within 48 hours of order completion confirmation.</li>
-      <li>Payouts are via M-Pesa B2C or bank transfer to your registered account.</li>
-      <li>SOKONI deducts platform commission, VAT on commission, and 5% WHT before disbursing.</li>
-    </ul>
-    <h3>7.3 Disputes on Payments</h3>
-    <p>If you believe a payment was processed incorrectly, contact <a href="mailto:payments@mysokoni.co.ke">payments@mysokoni.co.ke</a> within 7 days of the transaction. We will investigate within 5 business days.</p>
-  </div>
+    <h3>Platform Fees</h3>
+    <p>Platform fees (listing boosts, featured placements, subscriptions) are non-refundable unless SOKONI fails to deliver the service.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 8 -->
-  <div class="legal-section" id="refunds">
+  <section class="section" id="refunds">
     <h2>8. Refunds &amp; Disputes</h2>
-    <h3>8.1 Buyer Refund Rights</h3>
+    <h3>Buyer Refund Policy</h3>
     <ul>
-      <li><strong>Item not received:</strong> Full refund if delivery is not confirmed within 7 days of the estimated delivery date.</li>
-      <li><strong>Item not as described:</strong> Full or partial refund depending on severity; the seller bears return shipping costs.</li>
-      <li><strong>Change of mind:</strong> Subject to the individual seller's return policy as stated in their listing. SOKONI does not mandate change-of-mind returns.</li>
+      <li><strong>Item Not Received (INR):</strong> If your order is not delivered within 7 days of the estimated delivery date, you may open an INR dispute.</li>
+      <li><strong>Not As Described (NAD):</strong> If the item differs materially from the listing, report within 48 hours of delivery with photo evidence.</li>
+      <li><strong>Cancelled orders:</strong> Full refund within 3–5 business days for orders cancelled before dispatch.</li>
+      <li>Refunds are credited to your SOKONI Wallet or original payment method.</li>
     </ul>
-    <h3>8.2 Dispute Resolution Process</h3>
-    <ol style="padding-left:22px;">
-      <li>Buyer raises a dispute within 48 hours of delivery via the Order page.</li>
-      <li>Seller has 24 hours to respond with evidence.</li>
-      <li>SOKONI reviews within 3 business days and issues a binding decision.</li>
-      <li>Unresolved disputes may be escalated to the Kenya Consumer Protection Advisory Committee (KEPAC).</li>
+    <h3>Dispute Resolution Process</h3>
+    <ol>
+      <li>First contact the seller via SOKONI messaging and attempt resolution.</li>
+      <li>If unresolved after 48 hours, escalate to SOKONI via the dispute centre.</li>
+      <li>SOKONI will review evidence from both parties and issue a decision within 5 business days.</li>
+      <li>SOKONI's dispute decision is final and binding on both buyer and seller.</li>
     </ol>
-    <div class="notice-box">⚠️ Digital products, perishables, and custom orders are generally non-refundable once delivered unless defective.</div>
-  </div>
+    <h3>Non-Refundable Items</h3>
+    <ul>
+      <li>Digital goods once downloaded</li>
+      <li>Personalised or custom-made items</li>
+      <li>Perishable food items once delivered</li>
+      <li>Sealed health and hygiene products once opened</li>
+    </ul>
+  </section>
 
   <hr class="divider">
 
   <!-- 9 -->
-  <div class="legal-section" id="prohibited">
-    <h2>9. Prohibited Items &amp; Services</h2>
-    <p>The following are strictly prohibited on SOKONI. Listings will be immediately removed and accounts may be permanently banned:</p>
-    <div class="prohibited-grid">
-      <div class="prohibited-item">Illegal firearms, weapons &amp; ammunition</div>
-      <div class="prohibited-item">Controlled substances &amp; narcotics</div>
-      <div class="prohibited-item">Counterfeit &amp; pirated goods</div>
-      <div class="prohibited-item">Stolen property</div>
-      <div class="prohibited-item">Child sexual abuse material</div>
-      <div class="prohibited-item">Human trafficking services</div>
-      <div class="prohibited-item">Gambling services (unlicensed)</div>
-      <div class="prohibited-item">Fraudulent financial services</div>
-      <div class="prohibited-item">Unlicensed pharmaceuticals</div>
-      <div class="prohibited-item">Wildlife &amp; endangered species</div>
-      <div class="prohibited-item">Hacking &amp; malware tools</div>
-      <div class="prohibited-item">Hate speech content</div>
-      <div class="prohibited-item">Forged documents</div>
-      <div class="prohibited-item">Pyramid schemes &amp; MLM</div>
-      <div class="prohibited-item">Unsolicited bulk marketing</div>
-      <div class="prohibited-item">Items violating export controls</div>
+  <section class="section" id="prohibited">
+    <h2>9. Prohibited Items &amp; Activities</h2>
+    <p>The following are strictly prohibited on SOKONI. Violation results in immediate account suspension and may be reported to law enforcement:</p>
+    <div class="grid2">
+      <div class="grid-item">Weapons, firearms, or ammunition</div>
+      <div class="grid-item">Drugs, narcotics, or controlled substances</div>
+      <div class="grid-item">Counterfeit or pirated goods</div>
+      <div class="grid-item">Stolen property</div>
+      <div class="grid-item">Endangered wildlife or wildlife products</div>
+      <div class="grid-item">Human organs, tissue, or remains</div>
+      <div class="grid-item">Child sexual abuse material (CSAM)</div>
+      <div class="grid-item">Hate speech or incitement content</div>
+      <div class="grid-item">Pyramid or Ponzi schemes</div>
+      <div class="grid-item">Phishing or fraudulent listings</div>
+      <div class="grid-item">Malware, spyware, or hacking tools</div>
+      <div class="grid-item">Non-licensed financial or investment services</div>
     </div>
-    <p>SOKONI co-operates fully with law enforcement. All suspected illegal activity is reported to the Directorate of Criminal Investigations (DCI) and relevant regulatory bodies.</p>
-  </div>
+    <p>Prohibited <strong>activities</strong> include: account farming, review manipulation, click fraud, payment fraud, chargebacks on fulfilled orders, and any form of market manipulation.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 10 -->
-  <div class="legal-section" id="intellectual-property">
+  <section class="section" id="ip">
     <h2>10. Intellectual Property</h2>
-    <p>All platform software, design, trademarks, and content created by SOKONI are owned by Sokoni Digital Limited and protected under Kenyan and international intellectual property law.</p>
-    <p>When you upload content (product photos, descriptions, reviews) to SOKONI, you grant us a non-exclusive, royalty-free, worldwide licence to display, distribute, and promote that content on the platform and in marketing materials.</p>
-    <p>You warrant that all content you upload does not infringe the intellectual property rights of any third party. SOKONI will respond to valid DMCA or Kenyan Copyright Act takedown notices within 5 business days.</p>
-    <p>To submit a copyright complaint: <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></p>
-  </div>
+    <h3>SOKONI Platform</h3>
+    <p>All platform code, branding, design elements, logos, and proprietary content are owned by Sokoni Digital Limited. You may not copy, reverse-engineer, or create derivative works without our written permission.</p>
+    <h3>Your Content</h3>
+    <p>You retain ownership of content you upload (product photos, descriptions, business information). By uploading, you grant SOKONI a non-exclusive, royalty-free, worldwide licence to display your content on the platform and in related marketing materials. We will not sell your original content to third parties.</p>
+    <h3>Third-Party Rights</h3>
+    <p>You must not list items that infringe third-party intellectual property rights. Rights holders may submit takedown notices to <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a>. We respond within 3 business days.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 11 -->
-  <div class="legal-section" id="suspension">
-    <h2>11. Account Suspension &amp; Termination</h2>
-    <h3>Grounds for Suspension</h3>
+  <section class="section" id="suspension">
+    <h2>11. Suspension &amp; Termination</h2>
+    <p>SOKONI may suspend or permanently ban any account for:</p>
     <ul>
-      <li>Breach of any provision of these Terms</li>
-      <li>Listing prohibited items</li>
-      <li>Fraudulent activity, charge-backs abuse, or payment manipulation</li>
-      <li>Consistently poor seller metrics (cancellations, late fulfilment, poor ratings)</li>
-      <li>Harassment of users, drivers, or SOKONI staff</li>
-      <li>Attempting to circumvent platform security</li>
+      <li>Violation of these Terms or our community guidelines</li>
+      <li>Suspected fraudulent, abusive, or illegal activity</li>
+      <li>10 or more cancellations (drivers) or 3 confirmed fraud disputes (sellers) within 90 days</li>
+      <li>Failure to complete KYC verification when required</li>
+      <li>Court order, regulator instruction, or law enforcement request</li>
     </ul>
-    <h3>Process</h3>
-    <ul>
-      <li><strong>Warning:</strong> First offence (minor violations) — written warning via email.</li>
-      <li><strong>Temporary suspension:</strong> Repeated or moderate violations — account suspended for 7–30 days.</li>
-      <li><strong>Permanent ban:</strong> Serious or criminal violations — account permanently closed, funds withheld pending investigation.</li>
-    </ul>
-    <p>You may appeal a suspension by emailing <a href="mailto:appeals@mysokoni.co.ke">appeals@mysokoni.co.ke</a> within 7 days of notification.</p>
-  </div>
+    <p>Where possible, we will give 7 days' notice before termination (except for immediate fraud or safety concerns). You may appeal a suspension by emailing <a href="mailto:support@mysokoni.co.ke">support@mysokoni.co.ke</a> within 14 days.</p>
+    <p>On termination, any pending payouts above the minimum threshold will be processed within 30 days, minus outstanding fees. Funds held as security in active disputes will be released per the dispute outcome.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 12 -->
-  <div class="legal-section" id="liability">
+  <section class="section" id="liability">
     <h2>12. Limitation of Liability</h2>
-    <p>SOKONI provides its marketplace platform "as is." To the fullest extent permitted by Kenyan law:</p>
+    <p>To the maximum extent permitted by Kenyan law:</p>
     <ul>
-      <li>SOKONI is a marketplace facilitator and is not a party to transactions between buyers and sellers.</li>
-      <li>We do not guarantee the quality, safety, legality, or availability of any listed item or service.</li>
-      <li>Our total liability for any claim shall not exceed the amount of the specific transaction giving rise to the claim.</li>
-      <li>We are not liable for indirect, incidental, or consequential damages, including loss of profit.</li>
+      <li>SOKONI provides the marketplace platform "as is" and "as available" without warranty of any kind.</li>
+      <li>We are not liable for the quality, safety, legality, or delivery of goods or services listed by third-party sellers.</li>
+      <li>Our total liability for any claim arising from use of the platform is limited to the <strong>amount you paid to SOKONI</strong> in the 90 days preceding the event giving rise to the claim.</li>
+      <li>We are not liable for indirect, incidental, consequential, or punitive damages.</li>
+      <li>We are not liable for service interruptions caused by force majeure, third-party platform outages (including Firebase, M-Pesa, or IntaSend), or events beyond our reasonable control.</li>
     </ul>
-    <p>Nothing in these Terms limits liability for death or personal injury caused by our negligence, fraud, or as otherwise required by law.</p>
-  </div>
+    <p>Nothing in these Terms excludes liability for fraud, death, or personal injury caused by our negligence, which cannot be excluded under Kenyan law.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 13 -->
-  <div class="legal-section" id="governing-law">
-    <h2>13. Governing Law &amp; Jurisdiction</h2>
-    <p>These Terms are governed by and construed in accordance with the <strong>laws of Kenya</strong>. Any dispute arising out of or in connection with these Terms shall be subject to the exclusive jurisdiction of the courts of <strong>Nairobi, Kenya</strong>.</p>
-    <p>We encourage resolution of disputes through our internal dispute process before escalating to litigation. Parties agree to attempt mediation in good faith before commencing court proceedings.</p>
-  </div>
+  <section class="section" id="governing-law">
+    <h2>13. Governing Law &amp; Disputes</h2>
+    <p>These Terms are governed by and construed in accordance with the <strong>laws of Kenya</strong>. Both parties submit to the exclusive jurisdiction of the courts of <strong>Nairobi, Kenya</strong> for the resolution of any disputes arising from or relating to these Terms or use of the SOKONI platform.</p>
+    <p>Before commencing legal proceedings, both parties agree to attempt good-faith resolution through SOKONI's dispute centre (Section 8) and, if unsuccessful, non-binding mediation under the Mediation Act, 2012.</p>
+    <p>Consumer rights under the Kenya Consumer Protection Act, 2012 are unaffected by this agreement.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 14 -->
-  <div class="legal-section" id="contact">
-    <h2>14. Contact</h2>
-    <p>For questions about these Terms:</p>
-    <ul>
-      <li>📧 General: <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></li>
-      <li>📧 Seller support: <a href="mailto:sellers@mysokoni.co.ke">sellers@mysokoni.co.ke</a></li>
-      <li>📧 Buyer support: <a href="mailto:support@mysokoni.co.ke">support@mysokoni.co.ke</a></li>
-      <li>🌐 <a href="https://mysokoni.co.ke">mysokoni.co.ke</a></li>
-    </ul>
+  <section class="section" id="contact">
+    <h2>14. Contact Us</h2>
+    <div class="contact-card">
+      <p><strong>Sokoni Digital Limited</strong> &nbsp;&bull;&nbsp; Nairobi, Kenya</p>
+      <p>General support: <a href="mailto:support@mysokoni.co.ke">support@mysokoni.co.ke</a></p>
+      <p>Legal &amp; compliance: <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></p>
+      <p>IP takedowns: <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></p>
+      <p>Security: <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a></p>
+      <p>Platform: <a href="https://mysokoni.co.ke">mysokoni.co.ke</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-links">
+      <a href="/">Marketplace</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms" class="active">Terms of Service</a>
+      <a href="/data-deletion">Data Deletion</a>
+      <a href="mailto:support@mysokoni.co.ke">Contact Us</a>
+    </div>
+    <p class="footer-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.</p>
   </div>
-
-</div>
-
-<footer style="text-align:center;padding:32px 24px;border-top:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.3);font-size:13px;">
-  &copy; 2026 Sokoni Digital Limited &nbsp;|&nbsp;
-  <a href="/privacy" style="color:rgba(255,255,255,.4);">Privacy Policy</a> &nbsp;|&nbsp;
-  <a href="/terms" style="color:rgba(113,255,0,.7);">Terms of Service</a> &nbsp;|&nbsp;
-  <a href="/data-deletion" style="color:rgba(255,255,255,.4);">Data Deletion</a>
 </footer>
+
 </body>
 </html>

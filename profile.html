@@ -1752,30 +1752,32 @@ function deactivateAccount(_c){
 }
 
 async function deleteAccountPermanently(_c){
-  if(!_c){_skConfirm('⚠️ PERMANENTLY DELETE your account? This cannot be undone. All your data will be removed.',()=>deleteAccountPermanently(true));return;}
+  if(!_c){_skConfirm('⚠️ PERMANENTLY DELETE your account? This cannot be undone. All your data will be removed within 30 days.',()=>deleteAccountPermanently(true));return;}
   var confirm2 = prompt('Type DELETE to permanently delete your account:');
   if(confirm2 !== 'DELETE') return;
   try{
-    var {getAuth,deleteUser} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    var {getAuth} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    var {getFunctions,httpsCallable} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
     var auth = getAuth();
     var user = auth.currentUser;
     if(!user){ (window._skToast||alert)('Please sign in again before deleting your account.'); window.location.href='login.html'; return; }
-    /* Mark Firestore record for deletion (Cloud Function picks this up) */
-    saveToFirestore({deletionRequested:true, deletionRequestedAt: new Date().toISOString()});
-    /* Delete Firebase Auth user */
-    await deleteUser(user);
-    /* Wipe all local state */
+    /* Wipe local state before CF call so nothing lingers if CF is slow */
     ['sokoniUser','sokoniStore','sokoniMiniStore','sokoniNotifications',
      'sokoniRecentSearches','sokoniLoyaltyPoints','sokoniEvents',
      'sellerProducts','sokoniCart'].forEach(function(k){ localStorage.removeItem(k); });
-    (window._skToast||alert)('Your account has been deleted.');
+    /* Call server-side CF — disables Auth, anonymises user doc, revokes tokens, queues 30-day purge */
+    var fns = getFunctions(undefined, 'us-central1');
+    var deleteMyAccount = httpsCallable(fns, 'deleteMyAccount');
+    var result = await deleteMyAccount();
+    var purgeDate = result.data && result.data.purgeAfter ? new Date(result.data.purgeAfter).toLocaleDateString() : '30 days';
+    (window._skToast||alert)('Your account has been deleted. Personal data will be permanently purged by ' + purgeDate + '.');
     window.location.href = 'index.html';
   }catch(e){
     if(e.code === 'auth/requires-recent-login'){
       (window._skToast||alert)('For security, please sign out and sign back in before deleting your account.');
       window.location.href = 'login.html?next=profile.html';
     } else {
-      (window._skToast||alert)('Error: ' + e.message);
+      (window._skToast||alert)('Error deleting account: ' + (e.message||'Please try again or contact support@mysokoni.co.ke'));
     }
   }
 }
