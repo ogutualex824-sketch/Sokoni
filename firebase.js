@@ -159,6 +159,31 @@ onAuthStateChanged(auth, async (user) => {
           _refCode += _refChars[Math.floor(Math.random() * _refChars.length)];
         }
 
+        /* Capture inbound referral code from URL or localStorage */
+        const _inboundRef = (function() {
+          try {
+            const p = new URLSearchParams(window.location.search);
+            const urlRef = p.get("ref") || p.get("referral") || "";
+            if (urlRef) { localStorage.setItem("_pendingRef", urlRef); return urlRef; }
+            return localStorage.getItem("_pendingRef") || "";
+          } catch(_) { return ""; }
+        })();
+
+        /* Resolve inbound code → referrer UID via Firestore query */
+        let _referredByUid = "";
+        if (_inboundRef && _inboundRef !== _refCode) {
+          try {
+            const { collection: _col, query: _q, where: _w, limit: _lim, getDocs: _gd } =
+              await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+            const _refSnap = await _gd(_q(_col(db, "users"),
+              _w("referralCode", "==", _inboundRef.toUpperCase()), _lim(1)));
+            if (!_refSnap.empty) {
+              _referredByUid = _refSnap.docs[0].id;
+              localStorage.removeItem("_pendingRef");
+            }
+          } catch(_) {}
+        }
+
         const profile = {
           uid:                user.uid,
           name:               user.displayName || user.email.split("@")[0],
@@ -169,6 +194,8 @@ onAuthStateChanged(auth, async (user) => {
           onboardingCompleted: false,
           onboardingRequired: true,
           referralCode:       _refCode,
+          referredBy:         _referredByUid || null,
+          firstReferralOrderDone: false,
           joinedAt:           _now.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
           joinedTimestamp:    _now.getTime(),
           ...(isGoogle && {

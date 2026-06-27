@@ -254,6 +254,32 @@
     <!-- Stats row -->
     <div class="driver-stat-row" id="driverStats"></div>
 
+    <!-- Earnings Breakdown Panel -->
+    <div id="driverEarningsSummary" style="display:none;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.14);border-radius:18px;padding:18px;margin-bottom:18px;">
+      <div style="font-size:14px;font-weight:900;color:rgba(255,255,255,0.85);margin-bottom:14px;">💰 Earnings Breakdown</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">TODAY</div>
+          <div id="earnToday" style="font-size:20px;font-weight:900;color:#71ff00;">KES 0</div>
+          <div id="earnTodayTrips" style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">0 trips</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">THIS WEEK</div>
+          <div id="earnWeek" style="font-size:20px;font-weight:900;color:#00d4ff;">KES 0</div>
+          <div id="earnWeekTrips" style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">0 trips</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px;text-align:center;">
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">THIS MONTH</div>
+          <div id="earnMonth" style="font-size:20px;font-weight:900;color:#a855f7;">KES 0</div>
+          <div id="earnMonthTrips" style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">0 trips</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);">
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);">All-time total</div>
+        <div id="earnTotal" style="font-size:15px;font-weight:900;color:rgba(255,255,255,0.8);">KES 0</div>
+      </div>
+    </div>
+
     <!-- Weekly earnings goal -->
     <div class="weekly-goal" id="weeklyGoalBox"></div>
 
@@ -942,33 +968,79 @@ function showDriverDashboard(){
   renderLeaderboard();
 }
 
+/* ── Earnings computation helper ── */
+function _calcDriverEarnings(deliveries) {
+  const now   = new Date();
+  const todayStr  = now.toLocaleDateString("en-KE");
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0,0,0,0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  let todayEarnings = 0, weekEarnings = 0, monthEarnings = 0, totalEarnings = 0;
+  let todayTrips = 0, weekTrips = 0, monthTrips = 0, totalTrips = 0;
+
+  (deliveries || []).forEach(d => {
+    const fee = Number(d.fee || d.earnings || d.amount || 0);
+    const raw = d.date || d.createdAt || d.completedAt || "";
+    const dt  = raw ? new Date(raw) : null;
+    totalEarnings += fee;
+    totalTrips++;
+    if (dt) {
+      const dStr = dt.toLocaleDateString("en-KE");
+      if (dStr === todayStr)       { todayEarnings += fee; todayTrips++; }
+      if (dt >= weekStart)         { weekEarnings  += fee; weekTrips++;  }
+      if (dt >= monthStart)        { monthEarnings += fee; monthTrips++; }
+    }
+  });
+  return { todayEarnings, weekEarnings, monthEarnings, totalEarnings, todayTrips, weekTrips, monthTrips, totalTrips };
+}
+
 /* ── Stats ── */
 function renderDriverStats(){
   if(!currentDriver) return;
-  const earnings = currentDriver.earnings || 0;
-  const trips    = currentDriver.tripsCompleted || 0;
-  const rating   = currentDriver.rating || 5.0;
-  const activeOrders = (currentDriver.deliveries||[]).filter(d=>d.status!=="delivered").length;
-  const isEbike  = currentDriver.vehicle === "ebike";
+  const deliveries   = currentDriver.deliveries || [];
+  const earned       = _calcDriverEarnings(deliveries.filter(d => d.status === "delivered" || d.status === "completed"));
+  const trips        = currentDriver.tripsCompleted || earned.totalTrips;
+  const rating       = currentDriver.rating || 5.0;
+  const activeOrders = deliveries.filter(d=>d.status!=="delivered"&&d.status!=="completed").length;
+  const isEbike      = currentDriver.vehicle === "ebike";
 
-  const v = currentDriver.vehicle;
-  const kmToday = trips * 8;
+  const v       = currentDriver.vehicle;
+  const kmToday = earned.todayTrips * 8;
   const runCost = runningCostForTrip(v, kmToday);
-  const costIcon = isEbike ? "⚡" : v==="bicycle" ? "🚲" : "⛽";
+  const costIcon  = isEbike ? "⚡" : v==="bicycle" ? "🚲" : "⛽";
   const costLabel = isEbike ? "Charging Cost Today" : v==="bicycle" ? "No Fuel Costs" : "Fuel Cost Today";
 
   const stats = [
-    { icon:"💰", label:"Today's Earnings",  val:"KES "+earnings.toLocaleString() },
-    { icon:"🛵", label:"Trips Done",         val:trips },
-    { icon:"⭐", label:"Rating",             val:rating.toFixed(1)+"/5" },
-    { icon:"📦", label:"Active Orders",      val:activeOrders },
+    { icon:"💰", label:"Today",    val:"KES "+(earned.todayEarnings||currentDriver.earnings||0).toLocaleString() },
+    { icon:"📅", label:"This Week",  val:"KES "+earned.weekEarnings.toLocaleString() },
+    { icon:"🗓️", label:"This Month", val:"KES "+earned.monthEarnings.toLocaleString() },
+    { icon:"🛵", label:"Trips Today", val:earned.todayTrips },
+    { icon:"⭐", label:"Rating",      val:rating.toFixed(1)+"/5" },
+    { icon:"📦", label:"Active",      val:activeOrders },
   ];
-  if(currentDriver.vehicle !== "bicycle"){
+  if(v !== "bicycle"){
     stats.push({ icon:costIcon, label:costLabel, val:"KES "+runCost.toFixed(0) });
   }
   document.getElementById("driverStats").innerHTML = stats
     .map(s=>`<div class="driver-stat"><div class="ds-icon">${s.icon}</div><div class="ds-val">${s.val}</div><div class="ds-label">${s.label}</div></div>`)
     .join("");
+
+  /* Populate earnings breakdown panel */
+  const ep = document.getElementById("driverEarningsSummary");
+  if (ep) {
+    ep.style.display = "";
+    const _fmt = n => "KES " + Math.round(n).toLocaleString();
+    const _set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    _set("earnToday",      _fmt(earned.todayEarnings || currentDriver.earnings || 0));
+    _set("earnTodayTrips", (earned.todayTrips||0) + " trip" + (earned.todayTrips !== 1 ? "s" : ""));
+    _set("earnWeek",       _fmt(earned.weekEarnings));
+    _set("earnWeekTrips",  (earned.weekTrips||0) + " trip" + (earned.weekTrips !== 1 ? "s" : ""));
+    _set("earnMonth",      _fmt(earned.monthEarnings));
+    _set("earnMonthTrips", (earned.monthTrips||0) + " trip" + (earned.monthTrips !== 1 ? "s" : ""));
+    _set("earnTotal",      _fmt(earned.totalEarnings));
+  }
+
   const _seeds=[0.68,0.82,0.55,0.91,0.74,1.08,0.88,1.0];
   const _base=Math.max(earnings||400,400);
   const _weekEarn=_seeds.map((m,i)=>i===7?_base:Math.round(_base*m));

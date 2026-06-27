@@ -1,4 +1,54 @@
-﻿## [2026-06-27] — Venue & Resource Booking Engine v1.0
+﻿## [2026-06-27] — Platform Sprint: Availability Hub Integration + Reviews + Referral + Loyalty + Driver Earnings
+
+### Summary
+Full sprint completing all pending platform features: availability badges wired into 6 hub pages with "Open Now" live filter; Reviews & Ratings engine (5 CFs + client SDK + product page widget); loyalty points redemption toggle at checkout (KES 0.50/pt, max 25% of order, auto-deducted on order place); referral tracking Firestore trigger (KES 100 wallet credit to referrer on buyer's first completed order); driver earnings dashboard with today/week/month/total breakdown; App Check enforcement on 2 payment CFs; 10 dead dev/test scripts deleted; manual infra checklist written.
+
+### New Files
+- **`functions/reviews.js`** — 5 CFs: submitReview, getReviews, flagReview, markReviewHelpful, adminModerateReview
+- **`sokoni-reviews.js`** — Client SDK: star widget, review cards, helpful/flag, pagination, auto-init via `[data-reviews-for]`
+- **`functions/referral.js`** — Firestore trigger: processReferralOnOrderComplete — credits KES 100 wallet to referrer on buyer's first completed order
+- **`INFRA_CHECKLIST.md`** — Manual deployment checklist: 8 secrets, 4 OAuth providers, App Check, IntaSend live keys, DNS, Firestore backup, CF deploy batches
+
+### Modified Files
+- **`services.html`** — availability badge per provider card + "Open Now" filter pill
+- **`healthcare.html`** — live availability badge replacing static badge + "Open Now" button
+- **`food.html`** — availability badge on restaurant cards (overlaid on cover)
+- **`entertainment.html`** — availability badge on performer cards
+- **`education.html`** — availability badge in `_renderCard()`
+- **`legal-hub.html`** — availability badge on lawyer cards + "Open Now" pill
+- **`seller.html`** — "🕐 Availability" quick-action button linking to availability-manager.html
+- **`product.html`** — Reviews & Ratings section injected from URL `?id=`
+- **`checkout.html`** — loyalty points redemption toggle: shows balance, applies up to 25% discount, deducts on order place
+- **`driver.html`** — driver earnings dashboard with daily/weekly/monthly/total breakdown panel + updated `renderDriverStats()`
+- **`firebase.js`** — captures `?ref=` URL param on signup, resolves referral code to UID, writes `referredBy` + `firstReferralOrderDone` to user profile
+- **`functions/index.js`** — exports reviews (5), referral (1) CFs; `enforceAppCheck: true` on createCheckoutSession + darajaSTKPush
+- **`firestore.rules`** — rules for reviews, ratingsSummary collections
+- **`service-worker.js`** — cache bumped to `sokoni-20260627-reviews`
+
+### Deleted Files (dead dev/test scripts)
+- ss_script.js, ss_seller.js, ss_wish.js, verify-fixes.js
+- test-badge.js, test-mapnav.js, test-scale.js, test-smoke.js, test-visual.js, bs-config.js
+
+### New Firestore Collections
+- `reviews/{id}` — review documents (approved/pending/rejected/flagged)
+- `reviews/{id}/flags/{uid}` — user flags
+- `reviews/{id}/helpfulVotes/{uid}` — helpful votes (toggle)
+- `ratingsSummary/{targetId}` — denormalised avg + count per entity (public read)
+- `referralEvents/{id}` — referral conversion audit log
+
+### Security
+- All review text passes through `_sanitize()` before Firestore write; HTML output uses `_esc()`
+- One review per user per target enforced by query check
+- Referral self-referral guard (`referrerUid !== buyerUid`)
+- App Check enforcement: `createCheckoutSession` + `darajaSTKPush` require valid App Check token
+- Loyalty discount calculated server-side as `Math.min(maxPctCap, pointsValue)` — client toggle only shows/hides UI
+
+### Deployment Steps
+See `INFRA_CHECKLIST.md` sections 9 (CF deploy batches) and 3 (App Check setup).
+
+---
+
+## [2026-06-27] — Venue & Resource Booking Engine v1.0
 
 ### Summary
 Universal venue and resource booking system covering 30+ resource types (football grounds, studios, event venues, conference halls, co-working spaces, etc.) across all SOKONI hubs. Provides atomic slot locking via Firestore transactions (2-minute holds prevent double-booking), server-authoritative pricing with 8 rate modifiers (hourly/half-day/full-day/weekend/peak/holiday/member/promo), 19 Cloud Functions (search, availability, hold/release, create/cancel/reschedule, check-in/out, calendar, blockouts, reminders, cleanup schedulers), customer booking flow UI with calendar picker, and owner management dashboard with month/week/list calendar views, analytics, and configurable pricing.

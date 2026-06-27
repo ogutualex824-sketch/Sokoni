@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOKONI SmartPOS — Customer Display</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:   #00c853;
+    --blue:    #1565c0;
+    --orange:  #e65100;
+    --gray:    #f5f5f5;
+    --text:    #1a1a1a;
+    --muted:   #757575;
+    --border:  #e0e0e0;
+    --white:   #ffffff;
+    --radius:  12px;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: var(--white);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .display-header {
+    background: linear-gradient(135deg, #1565c0, #0d47a1);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .merchant-logo {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .merchant-logo span { color: var(--green); }
+  .display-time {
+    font-size: 20px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Main area ── */
+  .display-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* ── Cart panel ── */
+  .cart-panel {
+    background: #161b22;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .cart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  .cart-items {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .cart-items::-webkit-scrollbar { width: 4px; }
+  .cart-items::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+  .cart-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #1e2530;
+    border-radius: 8px;
+    border: 1px solid #2d3340;
+    transition: background 0.2s;
+    animation: slideIn 0.2s ease;
+  }
+  .cart-item.new-item { background: #1a2e1a; border-color: var(--green); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .item-name { font-size: 15px; font-weight: 500; flex: 1; }
+  .item-qty {
+    font-size: 13px;
+    background: #2d3340;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin: 0 12px;
+    color: #aaa;
+  }
+  .item-price { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .cart-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #444;
+    font-size: 18px;
+    gap: 12px;
+  }
+  .cart-empty .icon { font-size: 64px; opacity: 0.3; }
+
+  /* ── Totals panel ── */
+  .totals-panel {
+    background: #0d1117;
+    border-left: 1px solid #21262d;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .totals-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .totals-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #21262d;
+    font-size: 15px;
+  }
+  .totals-row.total-row {
+    border-bottom: none;
+    font-size: 28px;
+    font-weight: 800;
+    padding: 14px 0 10px;
+    color: var(--green);
+    font-variant-numeric: tabular-nums;
+  }
+  .totals-row.discount { color: #f57c00; }
+  .totals-row .label { color: #aaa; }
+
+  /* ── Loyalty strip ── */
+  .loyalty-strip {
+    background: linear-gradient(135deg, #1b5e20, #2e7d32);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .loyalty-strip .icon { font-size: 24px; }
+  .loyalty-info { flex: 1; }
+  .loyalty-info .points { font-size: 18px; font-weight: 700; }
+  .loyalty-info .label { font-size: 12px; color: #a5d6a7; }
+
+  /* ── Payment state ── */
+  .payment-state {
+    margin-top: 8px;
+    background: #1e2530;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .payment-state .method-icon { font-size: 28px; }
+  .payment-state .method-info .label { font-size: 12px; color: #aaa; }
+  .payment-state .method-info .value { font-size: 16px; font-weight: 600; }
+
+  /* ── Thank you screen ── */
+  .thankyou-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #0d47a1, #1b5e20);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    text-align: center;
+    padding: 40px;
+  }
+  .thankyou-screen.visible { display: flex; }
+  .thankyou-icon { font-size: 80px; animation: bounce 0.6s ease; }
+  @keyframes bounce {
+    0%   { transform: scale(0); }
+    60%  { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+  .thankyou-title { font-size: 48px; font-weight: 800; }
+  .thankyou-sub { font-size: 20px; color: rgba(255,255,255,0.8); }
+  .thankyou-points {
+    background: rgba(255,255,255,0.15);
+    padding: 16px 32px;
+    border-radius: 50px;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .thankyou-qr {
+    background: white;
+    padding: 16px;
+    border-radius: 12px;
+  }
+  #receipt-qr { width: 160px; height: 160px; }
+  .qr-label { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 8px; text-align: center; }
+
+  /* ── Idle screen ── */
+  .idle-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0d1117;
+    z-index: 50;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    text-align: center;
+  }
+  .idle-screen.visible { display: flex; }
+  .idle-logo { font-size: 64px; font-weight: 900; letter-spacing: -2px; }
+  .idle-logo span { color: var(--green); }
+  .idle-tagline { font-size: 24px; color: #aaa; }
+  .idle-promo {
+    max-width: 600px;
+    background: #1e2530;
+    border-radius: var(--radius);
+    padding: 24px;
+    border: 1px solid #2d3340;
+  }
+  .idle-promo h3 { font-size: 20px; margin-bottom: 8px; }
+  .idle-promo p  { color: #aaa; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="display-header">
+  <div class="merchant-logo" id="merchant-name">SOKONI <span>SmartPOS</span></div>
+  <div class="display-time" id="display-clock">--:--:--</div>
+</div>
+
+<!-- Main -->
+<div class="display-main">
+  <!-- Cart items -->
+  <div class="cart-panel">
+    <div class="cart-title">Your Items</div>
+    <div class="cart-items" id="cart-items">
+      <div class="cart-empty" id="cart-empty">
+        <div class="icon">🛒</div>
+        <div>Waiting for items…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Totals -->
+  <div class="totals-panel">
+    <div class="totals-title">Order Summary</div>
+
+    <div class="totals-row" id="row-subtotal">
+      <span class="label">Subtotal</span>
+      <span id="val-subtotal">KES 0.00</span>
+    </div>
+    <div class="totals-row discount" id="row-discount" style="display:none">
+      <span class="label">Discount</span>
+      <span id="val-discount">-KES 0.00</span>
+    </div>
+    <div class="totals-row" id="row-tax" style="display:none">
+      <span class="label">Tax (16%)</span>
+      <span id="val-tax">KES 0.00</span>
+    </div>
+    <div class="totals-row total-row">
+      <span>TOTAL</span>
+      <span id="val-total">KES 0.00</span>
+    </div>
+
+    <!-- Loyalty -->
+    <div class="loyalty-strip" id="loyalty-strip" style="display:none">
+      <div class="icon">⭐</div>
+      <div class="loyalty-info">
+        <div class="points" id="loyalty-earning">+0 pts</div>
+        <div class="label" id="loyalty-balance">You have 0 points</div>
+      </div>
+    </div>
+
+    <!-- Payment method -->
+    <div class="payment-state" id="payment-state" style="display:none">
+      <div class="method-icon" id="payment-icon">💳</div>
+      <div class="method-info">
+        <div class="label">Payment</div>
+        <div class="value" id="payment-label">Awaiting payment…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Thank You -->
+<div class="thankyou-screen" id="thankyou">
+  <div class="thankyou-icon">✅</div>
+  <div class="thankyou-title">Thank You!</div>
+  <div class="thankyou-sub" id="ty-customer">Come back soon.</div>
+  <div class="thankyou-points" id="ty-points" style="display:none">You earned 0 points!</div>
+  <div class="thankyou-qr" id="ty-qr-wrap" style="display:none">
+    <canvas id="receipt-qr"></canvas>
+    <div class="qr-label">Scan for digital receipt</div>
+  </div>
+</div>
+
+<!-- Idle -->
+<div class="idle-screen visible" id="idle">
+  <div class="idle-logo">SOKONI <span>POS</span></div>
+  <div class="idle-tagline">Ready to serve you</div>
+  <div class="idle-promo" id="idle-promo">
+    <h3>Earn Loyalty Points</h3>
+    <p>Shop with us and earn points on every purchase. Redeem for discounts on your next visit!</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ── Clock ── */
+setInterval(() => {
+  document.getElementById('display-clock').textContent =
+    new Date().toLocaleTimeString('en-KE', { hour12: false });
+}, 1000);
+
+/* ── State ── */
+let _state = {
+  merchantName: 'SOKONI SmartPOS',
+  items: [],
+  subtotal: 0, discount: 0, tax: 0, total: 0,
+  loyalty: null,
+  payment: null,
+  customer: null,
+};
+
+let _idleTimer = null;
+
+function _kes(n) { return 'KES ' + Number(n||0).toFixed(2); }
+function _e(s) {
+  const d = document.createElement('div'); d.textContent = s; return d.textContent;
+}
+
+/* ── Render ── */
+function render(state) {
+  _state = { ..._state, ...state };
+  clearIdleTimer();
+
+  const empty    = document.getElementById('cart-empty');
+  const itemsCon = document.getElementById('cart-items');
+
+  if (!_state.items?.length) {
+    if (!itemsCon.querySelector('.cart-empty')) {
+      itemsCon.innerHTML = '';
+      const e = document.createElement('div');
+      e.className = 'cart-empty';
+      e.innerHTML = '<div class="icon">🛒</div><div>Waiting for items…</div>';
+      itemsCon.appendChild(e);
+    }
+  } else {
+    itemsCon.innerHTML = '';
+    const currentIds = new Set(_state.items.map(i => i.productId));
+    _state.items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'cart-item';
+      if (item._isNew) row.classList.add('new-item');
+      row.innerHTML = `
+        <span class="item-name">${_e(item.name)}</span>
+        <span class="item-qty">×${item.qty}</span>
+        <span class="item-price">${_kes(item.unitPrice * item.qty)}</span>
+      `;
+      itemsCon.appendChild(row);
+    });
+  }
+
+  /* Totals */
+  document.getElementById('val-subtotal').textContent = _kes(_state.subtotal);
+  document.getElementById('val-total').textContent    = _kes(_state.total);
+
+  const discRow = document.getElementById('row-discount');
+  if (_state.discount > 0) {
+    discRow.style.display = '';
+    document.getElementById('val-discount').textContent = '-' + _kes(_state.discount);
+  } else {
+    discRow.style.display = 'none';
+  }
+
+  const taxRow = document.getElementById('row-tax');
+  if (_state.tax > 0) {
+    taxRow.style.display = '';
+    document.getElementById('val-tax').textContent = _kes(_state.tax);
+  } else {
+    taxRow.style.display = 'none';
+  }
+
+  /* Loyalty */
+  const lstrip = document.getElementById('loyalty-strip');
+  if (_state.loyalty) {
+    lstrip.style.display = '';
+    document.getElementById('loyalty-earning').textContent = `+${_state.loyalty.earning} pts`;
+    document.getElementById('loyalty-balance').textContent =
+      `You have ${_state.loyalty.available} points (KES ${_state.loyalty.availableValue?.toFixed(2)||0} value)`;
+  } else {
+    lstrip.style.display = 'none';
+  }
+
+  /* Payment */
+  const pstate = document.getElementById('payment-state');
+  if (_state.payment) {
+    pstate.style.display = '';
+    const icons = { mpesa: 'M-Pesa', cash: '💵', card: '💳', wallet: '👛', gift_card: '🎁', split: '✂️' };
+    document.getElementById('payment-icon').textContent = icons[_state.payment.method] || '💳';
+    document.getElementById('payment-label').textContent = _state.payment.label || 'Processing…';
+  } else {
+    pstate.style.display = 'none';
+  }
+
+  /* Hide idle */
+  document.getElementById('idle').classList.remove('visible');
+  document.getElementById('thankyou').classList.remove('visible');
+
+  /* Merchant name */
+  if (_state.merchantName) {
+    const el = document.getElementById('merchant-name');
+    el.innerHTML = `${_e(_state.merchantName)} <span>POS</span>`;
+  }
+}
+
+function showThankYou(opts = {}) {
+  const ty = document.getElementById('thankyou');
+  ty.classList.add('visible');
+
+  if (opts.customerName) {
+    document.getElementById('ty-customer').textContent = `Thank you, ${opts.customerName}!`;
+  }
+  if (opts.loyaltyEarned > 0) {
+    const el = document.getElementById('ty-points');
+    el.style.display = '';
+    el.textContent = `You earned ${opts.loyaltyEarned} points!`;
+  }
+  if (opts.receiptUrl) {
+    document.getElementById('ty-qr-wrap').style.display = '';
+    /* Simple QR via canvas — real implementation would use qrcode lib */
+    const canvas = document.getElementById('receipt-qr');
+    canvas.getContext('2d').fillStyle = '#000';
+    canvas.getContext('2d').fillRect(0,0,160,160);
+  }
+
+  /* Reset after 4 seconds */
+  setTimeout(() => {
+    ty.classList.remove('visible');
+    resetToIdle();
+  }, 4000);
+}
+
+function resetToIdle() {
+  _state = { merchantName: _state.merchantName, items: [], subtotal:0, discount:0, tax:0, total:0 };
+  document.getElementById('cart-items').innerHTML =
+    '<div class="cart-empty"><div class="icon">🛒</div><div>Waiting for items…</div></div>';
+  document.getElementById('val-subtotal').textContent = 'KES 0.00';
+  document.getElementById('val-total').textContent = 'KES 0.00';
+  document.getElementById('row-discount').style.display = 'none';
+  document.getElementById('row-tax').style.display = 'none';
+  document.getElementById('loyalty-strip').style.display = 'none';
+  document.getElementById('payment-state').style.display = 'none';
+  document.getElementById('ty-points').style.display = 'none';
+  document.getElementById('ty-qr-wrap').style.display = 'none';
+  _idleTimer = setTimeout(() => {
+    document.getElementById('idle').classList.add('visible');
+  }, 60000);
+}
+
+function clearIdleTimer() {
+  if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+}
+
+/* ── BroadcastChannel from main POS window ── */
+let _bc = null;
+if ('BroadcastChannel' in window) {
+  _bc = new BroadcastChannel('sokoni_pos_display');
+  _bc.onmessage = e => {
+    const { type, data } = e.data || {};
+    if (type === 'update')   render(data);
+    if (type === 'thankyou') showThankYou(data);
+    if (type === 'idle')     resetToIdle();
+    if (type === 'merchant') {
+      if (data.name) {
+        _state.merchantName = data.name;
+        const el = document.getElementById('merchant-name');
+        el.innerHTML = `${data.name.split(' ')[0]} <span>POS</span>`;
+      }
+      if (data.promo) {
+        const el = document.getElementById('idle-promo');
+        el.innerHTML = `<h3>${data.promo.title||''}</h3><p>${data.promo.body||''}</p>`;
+      }
+    }
+  };
+}
+
+/* Announce ready to main window */
+if (_bc) {
+  setTimeout(() => _bc.postMessage({ type: 'display_ready' }), 500);
+}
+
+/* Start idle timer on load */
+_idleTimer = setTimeout(() => {}, 0);
+</script>
+</body>
+</html>

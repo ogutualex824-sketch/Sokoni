@@ -1936,7 +1936,7 @@ function smsTemplates(o) {
    or controls the amount the STK Push charges.
 ============================================================ */
 exports.createCheckoutSession = onCall(
-  { timeoutSeconds: 30, minInstances: 1 },
+  { timeoutSeconds: 30, minInstances: 1, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
@@ -2637,7 +2637,7 @@ async function _darajaToken(consumerKey, consumerSecret, env) {
 
 /* ── darajaSTKPush — called from POS frontend ── */
 exports.darajaSTKPush = onCall(
-  { timeoutSeconds: 30, cors: true },
+  { timeoutSeconds: 30, cors: true, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
 
@@ -7855,3 +7855,17 @@ exports.bookingReject        = booking.bookingReject;
 exports.bookingSendReminders = booking.bookingSendReminders;
 exports.bookingCleanupHolds  = booking.bookingCleanupHolds;
 exports.bookingAutoComplete  = booking.bookingAutoComplete;
+
+/* ── Referral Tracking Engine v1.0 ──────────────────────────────────── */
+const referral = require("./referral");
+exports.processReferralOnOrderComplete = referral.processReferralOnOrderComplete;
+
+
+/* ── SmartPOS Zero Friction Checkout v1.0 ───────────────────────────── */
+const posZF = require('./pos-zero-friction');
+exports.posCompleteCheckout    = posZF.posCompleteCheckout;
+exports.posValidateCoupon      = posZF.posValidateCoupon;
+exports.posLookupCustomer      = posZF.posLookupCustomer;
+exports.posProcessRefund       = posZF.posProcessRefund;
+exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
+exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;

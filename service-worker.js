@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260627-reviews";
+const CACHE_VERSION = "sokoni-20260627-zfpos";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -119,6 +119,7 @@ const PRECACHE_STATIC = [
   "/pos-modules.js", "/pos-scanner.js", "/pos-mobile.js",
   "/pos-manager-auth.js",
   "/pos-device-manager.js",
+  "/pos-checkout.html", "/pos-display.html", "/pos-loyalty-engine.js",
   "/print-station.html", "/pos-printer-setup.html", "/manager-auth.html", "/commissioning.html",
   /* Self-checkout kiosk */
   "/pos-kiosk.html",
