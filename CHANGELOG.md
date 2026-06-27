@@ -1,4 +1,39 @@
-﻿## [2026-06-26] — Food Hub: Crash fixes, XSS hardening, checkout flow, Firestore backend
+﻿## [2026-06-27] — Universal Auth System: 5 New Providers, Phone OTP, Remember Me, First-Login Init
+
+### Summary
+Extends SOKONI authentication from Google-only OAuth to a full universal identity platform. Adds Apple, Microsoft, Facebook, GitHub, and Phone OTP sign-in alongside the existing Google and email/password methods. All providers share unified popup/redirect detection, cross-provider account linking, and a single post-auth result handler. First-login initialisation now creates wallet (balance: 0) and notification preferences documents automatically. A referral code is generated on signup. New users with `onboardingRequired: true` are redirected to the onboarding hub.
+
+### Files Changed
+- `auth.js` — added: _signInWithOAuth, signInWithApple/Microsoft/Facebook/GitHub, sendPhoneOTP, verifyPhoneOTP, resendPhoneOTP, _startOTPTimer, _setupOtpInputs (auto-advance/backspace/paste), _setPersistenceFromUI (Remember Me), toggleLoginPw, _handleOAuthResult, _handleProviderLinkError, _linkPendingProvider; updated: loginUser() calls persistence + links pending non-Google provider; event listeners now handle both sokoniGoogleRedirectDone (backward compat) and sokoniOAuthRedirectDone
+- `firebase.js` — added imports: OAuthProvider, FacebookAuthProvider, GithubAuthProvider; redirect handler dispatches both sokoniGoogleRedirectDone and sokoniOAuthRedirectDone with provider-specific credentialFromError; new-user init: referral code generation, onboardingRequired flag, wallet doc creation (balance:0), notificationPrefs doc creation
+- `login.html` — complete redesign: 2-row 3-column social grid (Google/Apple/Phone + Microsoft/Facebook/GitHub), collapsible phone OTP section with 6-digit inputs, Remember Me checkbox, password show/hide toggle
+- `signup.html` — Google button replaced with 3-provider grid (Google, Apple, Phone)
+- `auth.css` — social grid, provider accent colours, phone OTP section collapse animation, OTP digit inputs (.otp-digit, .otp-row), Remember Me row (.auth-remember)
+- `firestore.rules` — noProviderForgery() extended for apple/microsoft/facebook/github/phone/oauth; new notificationPrefs/{uid} collection (owner CRUD, admin read)
+
+### Database Changes
+- New collection: `notificationPrefs/{uid}` — orders, marketing, messages, security flags; created on first login
+- Wallet `wallets/{uid}` — now initialised from firebase.js on first login (previously had to be created manually)
+- New field: `users/{uid}.onboardingRequired` (boolean) — true for new OAuth users
+- New field: `users/{uid}.referralCode` — SKN + 7-char unique code generated on account creation
+
+### Security Changes
+- noProviderForgery() now validates apple.com, microsoft.com, facebook.com, github.com, phone providers — prevents provider spoofing from any of the 7 supported methods
+- Phone OTP uses Firebase invisible reCAPTCHA — bot protection without UX friction
+- Remember Me toggle sets browserSessionPersistence when unchecked — prevents session leakage on shared devices
+- Account linking verified server-side: credential must match token's sign_in_provider before linkWithCredential call
+
+### Deployment Requirements
+Firebase Console → Authentication → Sign-in method (enable before providers work):
+- Apple: requires Apple Developer Account, Service ID, private key p8 file
+- Microsoft: requires Azure AD App Registration (Client ID + Secret)
+- Facebook: requires Facebook App (App ID + App Secret)
+- GitHub: requires GitHub OAuth App (Client ID + Client Secret)
+- Phone: requires Blaze billing plan for SMS
+
+---
+
+## [2026-06-26] — Food Hub: Crash fixes, XSS hardening, checkout flow, Firestore backend
 
 ### Summary
 Comprehensive food hub overhaul across 3 files. Fixed 2 runtime crashes in the restaurant dashboard (`delItem`/`delPromo` calling undefined helpers), applied XSS escaping via `esc()` to all Firestore-sourced and user-controlled fields, replaced localStorage-only checkout with a full M-Pesa → Firestore flow (foodOrders collection), wired real-time order status in `food-order.html` via `onSnapshot`, removed the auto-simulation timer, and replaced hardcoded rider data with dynamic order fields. Revenue chart in the dashboard now derives from actual orders.
@@ -243,6 +278,110 @@ Converted the homepage glass hero from a full-bleed, edge-to-edge section into a
 - No new Firestore reads or writes introduced
 - External probe URL (`gstatic.com/generate_204`) is a HEAD request — ~zero payload
 - AbortController timeout prevents hung fetches from blocking anything
+
+---
+
+## [2026-06-27] — KRA eTIMS Integration v1.0
+
+### Summary
+Full Kenya Revenue Authority Electronic Tax Invoice Management System integration.
+Every eligible seller can generate, sign, and submit official KRA eTIMS invoices directly through SOKONI.
+SOKONI's own commissions and platform fees are invoiced separately under SOKONI's own KRA registration.
+
+### Architecture
+- **Per-seller isolation** — each seller has an independent eTIMS profile, encrypted credentials, and atomic invoice sequence. No cross-seller data mixing.
+- **SOKONI platform account** — commissions, subscriptions, advertising, delivery fees, and verification charges invoiced under `ETIMS_PLATFORM_PIN` (SOKONI's own KRA registration).
+- **Queue-based reliability** — failed submissions enter a Firestore queue with exponential-backoff retry (2 → 10 → 30 → 120 → 720 minutes, max 5 attempts).
+- **Idempotency** — every invoice has an `idempotencyKey`; resubmitting an already-accepted invoice returns the existing one without creating a duplicate.
+- **Atomic sequencing** — Firestore transactions on `etimsSequences/{uid}` guarantee sequential invoice numbers with no gaps and no races.
+- **Credential encryption** — AES-256-GCM with per-record IV; master key from `ETIMS_MASTER_KEY` Secret Manager secret. Credentials never readable by clients.
+- **Firestore trigger** — `etimsOnOrderCompleted` auto-generates invoice when any order reaches `completed`/`delivered` status and the seller has active eTIMS.
+- **Scheduled reconciliation** — `etimsReconcileDaily` at 03:00 EAT re-queues invoices stuck in `pending_submission` for >30 minutes.
+
+### KRA eTIMS API
+- **Endpoint**: Sandbox `etims-api-sandbox.kra.go.ke` / Production `etims-api.kra.go.ke`
+- **Auth**: HMAC-SHA256(tin + bhfId + timestamp, taxpayerSecret) — computed per-request
+- **VAT categories**: A = 16% standard, B = zero-rated, C = exempt
+- **Invoice types**: Sale, Bulk/Periodic, Credit Note (future)
+
+### New Files
+| File | Purpose |
+|---|---|
+| `functions/etims.js` | 15 Cloud Functions — full eTIMS backend |
+| `sokoni-etims.js` | Frontend SDK — callable wrappers, UI helpers, receipt download |
+| `etims-seller.html` | Seller eTIMS dashboard — register, stats, invoices, bulk |
+| `etims-admin.html` | Admin eTIMS dashboard — platform stats, compliance, platform invoice |
+
+### New Cloud Functions (15)
+| Function | Type | Purpose |
+|---|---|---|
+| `etimsRegisterSeller` | callable | Register/re-register seller eTIMS profile + encrypt credentials |
+| `etimsGetProfile` | callable | Return seller's eTIMS profile (no credentials) |
+| `etimsUpdateProfile` | callable | Update non-credential profile fields |
+| `etimsValidatePin` | callable | Validate KRA PIN format |
+| `etimsGenerateInvoice` | callable | Manual invoice for a specific order |
+| `etimsOnOrderCompleted` | Firestore trigger | Auto-invoice on order completion |
+| `etimsResubmitInvoice` | callable | Resubmit failed invoice |
+| `etimsProcessQueue` | scheduled (*/5 min) | Process submission queue with retry |
+| `etimsBulkGenerate` | callable | Bulk/periodic invoice for a date range |
+| `etimsPlatformInvoice` | callable (admin) | SOKONI platform fee invoice |
+| `etimsGetBuyerReceipts` | callable | Buyer's invoice history |
+| `etimsDownloadReceipt` | onRequest | Serve authenticated HTML receipt |
+| `etimsGetSellerStats` | callable | Seller eTIMS dashboard data |
+| `etimsGetAdminStats` | callable (admin) | Platform-wide eTIMS stats |
+| `etimsReconcileDaily` | scheduled (03:00) | Re-queue stuck pending invoices |
+
+### New Firestore Collections
+| Collection | Access | Purpose |
+|---|---|---|
+| `etimsProfiles/{uid}` | Seller read / CF write | Seller eTIMS configuration |
+| `etimsCredentials/{uid}` | CF only (no client) | AES-256-GCM encrypted device serial + secret |
+| `etimsSequences/{uid}` | CF only | Atomic invoice sequence counters |
+| `etimsInvoices/{id}` | Seller + buyer read / CF write | Immutable invoice records |
+| `etimsQueue/{id}` | CF only | Retry queue with exponential backoff |
+| `etimsBulkJobs/{id}` | Seller read / CF write | Bulk invoice job records |
+| `etimsAlerts/{id}` | Seller read / CF write | Failed submission notifications |
+| `etimsReconciliations/{id}` | CF only | Daily reconciliation audit log |
+
+### New Firestore Indexes (13)
+- `etimsInvoices`: sellerUid + status + createdAt DESC
+- `etimsInvoices`: sellerUid + createdAt DESC
+- `etimsInvoices`: buyerUid + createdAt DESC
+- `etimsInvoices`: orderId + createdAt DESC
+- `etimsInvoices`: isPlatformInvoice + status + createdAt DESC
+- `etimsInvoices`: status + updatedAt ASC (reconciliation query)
+- `etimsInvoices`: idempotencyKey (single-field, for duplicate detection)
+- `etimsQueue`: status + nextRetryAt + priority
+- `etimsQueue`: invoiceId + status
+- `etimsBulkJobs`: sellerUid + createdAt DESC
+- `etimsAlerts`: sellerUid + status + createdAt DESC
+
+### Required Secrets (set before deploying functions)
+```
+firebase functions:secrets:set ETIMS_MASTER_KEY       # openssl rand -hex 32
+firebase functions:secrets:set ETIMS_PLATFORM_PIN     # SOKONI's KRA PIN e.g. P051234567T
+firebase functions:secrets:set ETIMS_PLATFORM_SECRET  # SOKONI's eTIMS taxpayer secret
+```
+
+### Required Manual Steps
+1. Register SOKONI on the [KRA eTIMS portal](https://etims.kra.go.ke) as a Virtual VSCU taxpayer
+2. Obtain SOKONI's `deviceSerial` and `taxpayerSecret` from KRA
+3. Set the 3 secrets above via Firebase CLI
+4. Set `ETIMS_ENV=production` in Cloud Function environment (default is sandbox)
+5. Deploy functions: `firebase deploy --only functions`
+6. Deploy rules + indexes: `firebase deploy --only firestore`
+7. For seller onboarding: provide each seller instructions to visit `/etims-seller.html` and register with their KRA eTIMS VSCU credentials
+
+### Security Notes
+- `etimsCredentials` collection has `allow read, write: if false` — zero client access
+- `etimsSequences` and `etimsReconciliations` similarly blocked
+- `etimsInvoices` is append-only via CF; no client create/update/delete
+- All `onCall` functions validate `req.auth` before any operation
+- Admin-only functions (`etimsPlatformInvoice`, `etimsGetAdminStats`) check `req.auth.token.isAdmin`
+- KRA responses logged to Cloud Logging for audit trail; no sensitive credentials in logs
+
+### Tax Advisory Note
+Whether SOKONI or each individual seller is the merchant of record depends on your platform's legal tax model. In Kenya, if sellers are independent merchants (not SOKONI employees), each seller should issue invoices under their own KRA PIN. SOKONI invoices its own fees (commissions, subscriptions) under SOKONI's PIN. Confirm this structure with a Kenyan tax advisor or KRA guidance before going live.
 
 ---
 
