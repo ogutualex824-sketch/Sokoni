@@ -113,6 +113,7 @@
       <button class="dc-tab" data-panel="riders">Riders</button>
       <button class="dc-tab" data-panel="fraud">Fraud</button>
       <button class="dc-tab" data-panel="queue">Queue</button>
+      <button class="dc-tab" data-panel="analytics" onclick="_loadAnalyticsPanel()">Analytics</button>
     </div>
 
     <div class="dc-list" id="sidebarList"></div>
@@ -121,6 +122,21 @@
   <!-- ── Map pane ── -->
   <div style="position:relative;">
     <div id="dispatchMap"></div>
+
+    <!-- Map layer controls -->
+    <div style="position:absolute;top:14px;right:14px;z-index:1000;display:flex;flex-direction:column;gap:6px;">
+      <button onclick="_toggleLayer('deliveries')" id="btnLayerDel" style="padding:7px 11px;background:rgba(20,20,20,0.92);border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">Deliveries ON</button>
+      <button onclick="_toggleLayer('riders')"    id="btnLayerRid" style="padding:7px 11px;background:rgba(20,20,20,0.92);border:1px solid rgba(0,170,255,0.35);color:#00aaff;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">Riders ON</button>
+      <button onclick="_toggleHeatMap()"          id="btnHeat"     style="padding:7px 11px;background:rgba(20,20,20,0.92);border:1px solid rgba(255,140,0,0.35);color:#ff8c00;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;">Heat Map OFF</button>
+    </div>
+
+    <!-- Analytics panel overlay (hidden by default) -->
+    <div id="analyticsPanel" style="display:none;position:absolute;inset:0;background:rgba(13,13,13,0.97);z-index:900;overflow-y:auto;padding:24px 20px;">
+      <button onclick="document.getElementById('analyticsPanel').style.display='none'" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);border-radius:8px;padding:6px 10px;cursor:pointer;font-family:inherit;">&#x2715;</button>
+      <div style="font-size:17px;font-weight:900;color:white;margin-bottom:18px;">Delivery Analytics</div>
+      <div id="analyticsContent"><div style="color:rgba(255,255,255,0.4);font-size:13px;">Loading...</div></div>
+    </div>
+
     <!-- Detail overlay -->
     <div class="dc-detail-panel" id="detailPanel">
       <button class="dp-close" onclick="document.getElementById('detailPanel').classList.remove('open')">&#x2715;</button>
@@ -133,7 +149,9 @@
 
 <script src="firebase.js"></script>
 <script src="sokoni-dispatch.js"></script>
+<script src="sokoni-logistics.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 (function () {
   'use strict';
@@ -410,6 +428,109 @@
   /* ── XSS escape ── */
   function _esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+  }
+
+  /* ── Map layer toggles ── */
+  var _layerDeliveries = true, _layerRiders = true, _heatLayer = null, _heatVisible = false;
+
+  window._toggleLayer = function(type) {
+    if (type === 'deliveries') {
+      _layerDeliveries = !_layerDeliveries;
+      const btn = document.getElementById('btnLayerDel');
+      Object.values(_deliveryMarkers).forEach(function(m) { _layerDeliveries ? m.addTo(_map) : m.remove(); });
+      if (btn) btn.textContent = 'Deliveries ' + (_layerDeliveries ? 'ON' : 'OFF');
+    } else {
+      _layerRiders = !_layerRiders;
+      const btn = document.getElementById('btnLayerRid');
+      Object.values(_riderMarkers).forEach(function(m) { _layerRiders ? m.addTo(_map) : m.remove(); });
+      if (btn) btn.textContent = 'Riders ' + (_layerRiders ? 'ON' : 'OFF');
+    }
+  };
+
+  window._toggleHeatMap = function() {
+    if (!window.L || !L.heatLayer) return;
+    const btn = document.getElementById('btnHeat');
+    if (_heatVisible && _heatLayer) {
+      _map.removeLayer(_heatLayer);
+      _heatVisible = false;
+      if (btn) btn.textContent = 'Heat Map OFF';
+      return;
+    }
+    /* Build heat points from delivery drop-off coords */
+    var points = _deliveries
+      .filter(function(d) { return d.dropoffLat && d.dropoffLng; })
+      .map(function(d) { return [d.dropoffLat, d.dropoffLng, 0.5]; });
+    /* Add rider positions with higher weight */
+    _riders.forEach(function(r) {
+      if (r.lat && r.lng) points.push([r.lat, r.lng, 1.0]);
+    });
+    if (!points.length) { alert('No location data for heat map.'); return; }
+    if (_heatLayer) _map.removeLayer(_heatLayer);
+    _heatLayer = L.heatLayer(points, { radius: 28, blur: 18, maxZoom: 17,
+      gradient: { 0.2: '#00aaff', 0.5: '#ff8c00', 0.8: '#ff0000' } }).addTo(_map);
+    _heatVisible = true;
+    if (btn) btn.textContent = 'Heat Map ON';
+  };
+
+  /* ── Analytics panel ── */
+  window._loadAnalyticsPanel = function() {
+    const panel   = document.getElementById('analyticsPanel');
+    const content = document.getElementById('analyticsContent');
+    if (!panel) return;
+    panel.style.display = 'block';
+    if (!content) return;
+    /* Load last 7 days of daily rollups */
+    var rollups = [];
+    var fetches = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      var key = 'delivery_' + d.toISOString().slice(0,10).replace(/-/g,'');
+      fetches.push(firebase.firestore().collection('analyticsRollup').doc(key).get().then(function(snap) {
+        if (snap.exists) rollups.push(snap.data());
+      }).catch(function(){}));
+    }
+    Promise.all(fetches).then(function() {
+      rollups.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+      if (!rollups.length) { content.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">No analytics data yet. Rollups are generated daily at 01:00 EAT.</p>'; return; }
+      var totalDeliveries = rollups.reduce(function(s,r){ return s + (r.total||0); }, 0);
+      var totalRevenue    = rollups.reduce(function(s,r){ return s + (r.revenue||0); }, 0);
+      var totalRiderPay   = rollups.reduce(function(s,r){ return s + (r.riderPay||0); }, 0);
+      var avgSuccess      = rollups.length ? Math.round(rollups.reduce(function(s,r){ return s+(r.successRate||0); },0) / rollups.length) : 0;
+      var avgTime         = rollups.length ? Math.round(rollups.reduce(function(s,r){ return s+(r.avgTimeMin||0); },0) / rollups.length) : 0;
+
+      var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px;">' +
+        _aCard('📦', totalDeliveries, '7-Day Deliveries') +
+        _aCard('💰', 'KES '+totalRevenue.toLocaleString(), '7-Day Revenue') +
+        _aCard('🏍️', 'KES '+totalRiderPay.toLocaleString(), '7-Day Rider Pay') +
+        _aCard('✅', avgSuccess+'%', 'Avg Success Rate') +
+        _aCard('⏱️', avgTime+' min', 'Avg Delivery Time') +
+        _aCard('💹', 'KES '+(totalRevenue - totalRiderPay).toLocaleString(), 'Platform Cut') +
+      '</div>';
+
+      /* Daily trend table */
+      html += '<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px;">DAILY BREAKDOWN</div>';
+      html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+        '<tr style="color:rgba(255,255,255,0.4);"><th style="text-align:left;padding:6px 8px;">Date</th><th>Total</th><th>Done</th><th>Rate</th><th>Revenue</th><th>Avg Min</th></tr>';
+      rollups.forEach(function(r) {
+        var dateStr = r.date ? r.date.slice(0,4)+'-'+r.date.slice(4,6)+'-'+r.date.slice(6,8) : '—';
+        html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);">' +
+          '<td style="padding:7px 8px;color:rgba(255,255,255,0.7);">'+_esc(dateStr)+'</td>' +
+          '<td style="text-align:center;color:white;font-weight:700;">'+((r.total)||0)+'</td>' +
+          '<td style="text-align:center;color:#71ff00;">'+((r.completed)||0)+'</td>' +
+          '<td style="text-align:center;color:'+(r.successRate>=90?'#71ff00':r.successRate>=70?'#ff8c00':'#ff6b6b')+';">'+(r.successRate||0)+'%</td>' +
+          '<td style="text-align:center;color:rgba(255,255,255,0.7);">KES '+((r.revenue||0).toLocaleString())+'</td>' +
+          '<td style="text-align:center;color:rgba(255,255,255,0.5);">'+((r.avgTimeMin)||'—')+'</td></tr>';
+      });
+      html += '</table></div>';
+      content.innerHTML = html;
+    });
+  };
+
+  function _aCard(icon, val, label) {
+    return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;text-align:center;">' +
+      '<div style="font-size:20px;margin-bottom:6px;">'+icon+'</div>' +
+      '<div style="font-size:15px;font-weight:900;color:white;">'+_esc(String(val))+'</div>' +
+      '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">'+_esc(label)+'</div></div>';
   }
 })();
 </script>

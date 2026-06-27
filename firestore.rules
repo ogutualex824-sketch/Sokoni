@@ -4143,6 +4143,42 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       CSAT RATINGS  — buyer delivery satisfaction ratings
+       Buyer writes their own. Rider reads their own. Admin reads all.
+    ══════════════════════════════════════════════════════════════ */
+    match /csatRatings/{ratingId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.riderId == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.buyerUid == request.auth.uid
+                    && request.resource.data.rating   is number
+                    && request.resource.data.rating   >= 1
+                    && request.resource.data.rating   <= 5;
+      allow update, delete: if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       WHATSAPP QUEUE  — deep-link delivery notification queue
+       Admin read. CF write only.
+    ══════════════════════════════════════════════════════════════ */
+    match /whatsappQueue/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DELIVERY SIGNATURES  — signed URLs of canvas signature pads
+       Rider and buyer read. CF write only.
+    ══════════════════════════════════════════════════════════════ */
+    match /deliverySignatures/{docId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && (
+                       resource.data.riderId == request.auth.uid
+                       || resource.data.buyerUid == request.auth.uid));
+      allow write: if false;
+    }
+
   }
 }
 

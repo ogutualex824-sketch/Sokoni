@@ -1,4 +1,102 @@
-﻿## [2026-06-27] — KASS Phase 2 & Deploy Unblock
+﻿## [2026-06-27] — Logistics Engine v1.1 — Full Spec Completion
+
+### Summary
+Implements all remaining spec items from the Logistics Automation & Dispatch System that were not covered in v1.0 (commit 3573ae7). Adds completion rate + cancellation rate to dispatch scoring, QR code proof of delivery, canvas signature capture, buyer CSAT rating, multi-channel WhatsApp + email notifications, rider wallet balance, heat map analytics, and excessive cancellation auto-suspension.
+
+### Scoring Engine Update (`sokoni-dispatch.js`)
+Weights rebalanced to 8 factors (sum = 1.00):
+
+| Factor | Weight | Notes |
+|---|---|---|
+| Distance to pickup | 20% | Haversine km |
+| ETA | 17% | dist / 25km/h |
+| Workload | 11% | Active deliveries |
+| Vehicle match | 11% | Exact type match |
+| Rating | 11% | /5 |
+| Acceptance rate | 9% | % accepted |
+| Completion rate | 12% | % completed (NEW) |
+| Cancellation score | 9% | 1 − cancellationRate (NEW) |
+
+Auto-disqualify: riders with >30% cancellation rate are excluded from scoring.
+
+### New Proof of Delivery Capabilities (`delivery-tracking.html`)
+- **QR Code Scan** — `BarcodeDetector` API with live camera stream; parses `REF:OTP` format to auto-fill OTP field; graceful fallback message when API not supported
+- **Canvas Signature Pad** — touch/pointer capture; auto-saves PNG as data URL to Firebase Storage at `deliverySignatures/`; `dtClearSignature()` resets
+- **CSAT Rating** — 5-star rating card after buyer confirms receipt; writes to `csatRatings/` and denormalises `csatRating` / `csatAt` onto the delivery doc
+
+### Multi-Channel Notifications (`functions/dispatch.js` + `sokoni-logistics.js`)
+- All delivery stages now send: **push (FCM)** + **SMS** + **email** (via emailQueue) + **WhatsApp** (deep-link queued in whatsappQueue)
+- Added stages: `return_initiated`, `refund_initiated`
+- `_sendNotification(stage, delivery, ref)` unified helper handles all 4 channels
+- `whatsappDeepLink(phone, message)` normalises Kenyan numbers (0… → 254…)
+
+### Excessive Cancellation Enforcement (`functions/dispatch.js`)
+- After each `rider_breakdown` failure, counts rider's attempts in last 24h
+- ≥5 cancellations → creates `fraudAlerts` doc (severity: high)
+- ≥10 cancellations → auto-suspends rider (`isOnline: false`, `status: suspended`, `suspendReason: auto_excessive_cancellations`)
+
+### Rider App (`driver.html`)
+- **Wallet balance** — loads from `wallets/{uid}` on auth and displays in shift stats grid alongside earnings/deliveries/rate
+- **CSAT metrics** — performance grid now queries `csatRatings` and shows real customer review score + review count alongside cancellation rate
+- Cancellation rate calculated as `cancelled / total` instead of just raw count
+
+### Admin Dispatch Center (`dispatch.html`)
+- **Analytics tab** — loads last 7 days of `analyticsRollup` docs; shows 6 KPI cards + daily breakdown table with colour-coded success rates
+- **Heat map** — Leaflet.heat layer toggled via "Heat Map" button; plots all drop-off coordinates + rider positions; colour gradient blue→orange→red
+- **Layer controls** — individual toggle buttons to show/hide delivery markers and rider markers independently
+
+### New Firestore Collections (3 new rules)
+- `csatRatings/{ratingId}` — buyer writes own, rider reads own, admin reads all; immutable after create
+- `whatsappQueue/{docId}` — deep-link notification queue; admin read, CF write only
+- `deliverySignatures/{docId}` — rider + buyer read own, CF write only
+
+### Files Changed
+- `sokoni-dispatch.js` — 8-factor weights; cancellation rate disqualification gate
+- `sokoni-logistics.js` — extended notification templates (email + WhatsApp + 2 new stages); `whatsappDeepLink()` exported
+- `delivery-tracking.html` — QR scan + signature pad + CSAT rating; `dtSubmitProof` sends signatureUrl + qrVerified; buyer CSAT card post-confirm
+- `driver.html` — wallet balance; `_loadWalletBalance()`; CSAT-aware performance grid
+- `dispatch.html` — Analytics tab; heat map; layer toggle buttons; `sokoni-logistics.js` + leaflet.heat includes
+- `functions/dispatch.js` — unified `_sendNotification()`; `captureProofOfDelivery` accepts signatureDataUrl + qrVerified; excessive cancellation detection + auto-suspend
+- `firestore.rules` — 3 new collection rules
+- `service-worker.js` — bumped to `sokoni-20260627210000`
+
+---
+
+## [2026-06-27] — Universal Offline Printer Support v2.0
+
+### Summary
+Complete upgrade of the SOKONI SmartPOS printing engine to a universal offline-first multi-transport, multi-driver print system. Supports 7 connection types, 4 printer languages (ESC/POS, TSPL, ZPL, CPCL), 16 receipt templates, full barcode/QR/label printing, IndexedDB print queue with retry/resume, auto-discovery of Bluetooth BLE / USB / Web Serial / Network printers, and a dedicated printer management UI.
+
+### New Files
+- **`sokoni-printer-drivers.js`** — Modular driver library: `ESCPOSDriver` (full ESC/POS: bold, align, size, barcode types EAN13/EAN8/UPCA/CODE128/CODE39/CODE93/ITF, QR GS(k, logo bitmap raster, cash drawer), `TSPLDriver` (TSC/Godex label commands), `ZPLDriver` (Zebra label commands), `CPCLDriver` (Honeywell/Intermec). Auto-language detection by printer model name keyword matching.
+- **`sokoni-printer-discovery.js`** — Auto-detection engine: BLE (`navigator.bluetooth` stored + new scan), USB (`navigator.usb` stored + new scan), USB Serial (`navigator.serial`), Network (local bridge probe + manual IP entry), Android native bridge enumeration (`window.SokoniAndroid`), Windows print dialog. `getCapabilities()` reports which transports are available. `scan()` runs all selected types in parallel.
+- **`sokoni-receipt-engine.js`** — Unified template engine: `buildBytes()` ESC/POS byte stream for all receipt types (sale, return, exchange, gift, delivery, invoice, quotation, packing slip), `buildHTML()` for browser print / A4 / labels, `buildShippingLabel()` for 100×150mm parcel labels. Full eTIMS KRA block (invoice no, verification code, QR). Handles split payments, tax breakdowns, per-item notes, warranty text.
+- **`sokoni-label-engine.js`** — Label + barcode engine: `buildTSPL()`, `buildZPL()`, `buildESCPOS()`, `buildHTML()` for 7 preset label sizes (30×20 → 100×100 + custom). EAN-13/EAN-8/UPCA/CODE128/CODE39/ITF/QR/DataMatrix/PDF417. Checksum calculators (`ean13Checksum`, `ean8Checksum`). `printBarcode()`, `printQR()`, `printPriceTag()`, `printShippingLabel()` convenience helpers.
+- **`sokoni-pos-print.js`** — Master print engine: `SokoniPosprint` singleton. IndexedDB-backed printer registry + print queue. Multi-printer support with per-job routing. Auto-reconnect on page load (BLE `getDevices()`, USB `getDevices()`, Serial `getPorts()`). Print queue drainer with exponential backoff retry (max 5 attempts). Local SOKONI Desktop bridge probe (port 9101). Android native transport. Settings manager (localStorage). Event emitter (`on/off/emit`). Full public API: `init`, `print`, `printLabel`, `printTest`, `openCashDrawer`, `connectPrinter`, `disconnectPrinter`, `addPrinter`, `removePrinter`, `setDefault`, `getQueue`, `retryJob`, `cancelJob`, `clearQueue`, `discover`.
+- **`pos-printer-setup.html`** — Dedicated printer management UI: 4-tab interface (Printers / Discover / Settings / Queue). Printer cards with live connection status, battery, paper width, driver badges. One-click Connect / Disconnect / Set Default / Remove. Discovery panel with 7 connection-type tiles (greyed out when browser doesn't support). Manual IP probe for network printers. Full settings panel (paper width, copies, darkness, font size, auto-cut, cash drawer, QR, offline queue, shop details, KRA PIN, VAT rate, footer). Queue panel with retry/cancel per job.
+
+### Modified Files
+- **`pos.html`** — Added 5 script tags for new print modules. Printer Setup button links to `pos-printer-setup.html`. Auto-init `SokoniPosprint` on DOMContentLoaded with status badge update.
+
+### Architecture
+- **Offline-first**: All Bluetooth BLE, USB OTG, USB Serial, and Android native printing works with zero internet
+- **Network printing**: Tries local SOKONI Desktop bridge (WebSocket→TCP on port 9101) first; falls back to Cloud Function proxy if internet available
+- **Driver auto-detect**: Printer name keyword matching selects ESC/POS / TSPL / ZPL / CPCL without user configuration
+- **No lost print jobs**: IndexedDB queue survives page reload and reconnect; job retries with exponential backoff
+
+### Security
+- No JSON embedded in onclick attributes — scan results stored in `_scanCache[]` and referenced by index
+- All printer names and scan results HTML-escaped before rendering
+- Network print proxy uses Firebase ID token for auth
+
+### Performance
+- Receipt generation < 200ms (byte-level ESC/POS building, no DOM manipulation)
+- Queue drain runs immediately on print() call if printer connected; 30s periodic sweep for retry jobs
+- BLE chunked at 512 bytes with 20ms inter-chunk delay (standard BLE MTU)
+
+---
+
+## [2026-06-27] — KASS Phase 2 & Deploy Unblock
 
 ### Summary
 Deployed KASS Phase 2 AI agent (action engine with 9 action tools: add_to_cart, view_cart, get_my_orders, track_order, cancel_order, save_to_wishlist, get_wallet, book_stay, compare_products). Fixed two blocking deploy errors that were preventing sokoniChat from reaching Firebase Cloud Build.

@@ -288,38 +288,72 @@
   ──────────────────────────────────────────────────────────────*/
   var NOTIFICATION_TEMPLATES = {
     driver_assigned: {
-      push: function (d) { return { title: 'Rider Assigned', body: 'Your order is being picked up by ' + d.riderName + '. ETA: ' + d.etaMin + ' min.' }; },
-      sms:  function (d) { return 'SOKONI: ' + d.riderName + ' is picking up your order. Track: ' + d.trackUrl; },
+      push:     function (d) { return { title: 'Rider Assigned', body: d.riderName + ' is on the way to collect your order. ETA: ' + d.etaMin + ' min.' }; },
+      sms:      function (d) { return 'SOKONI: ' + d.riderName + ' is picking up your order. Track: ' + d.trackUrl; },
+      email:    function (d) { return { subject: 'Rider Assigned — Order #' + d.orderId, body: 'Your rider ' + d.riderName + ' (' + d.riderPhone + ') is on the way. ETA: ~' + d.etaMin + ' minutes.\n\nTrack live: ' + d.trackUrl }; },
+      whatsapp: function (d) { return 'Hi! Your SOKONI delivery has a rider assigned. ' + d.riderName + ' will collect your order soon. ETA: ~' + d.etaMin + ' min. Track here: ' + d.trackUrl; },
     },
     driver_at_seller: {
-      push: function (d) { return { title: 'Parcel Collected', body: d.riderName + ' has collected your parcel and is heading to you.' }; },
-      sms:  function (d) { return 'SOKONI: Your parcel has been picked up and is on its way!'; },
+      push:     function (d) { return { title: 'Parcel Collected', body: d.riderName + ' has collected your parcel and is heading to you.' }; },
+      sms:      function ()  { return 'SOKONI: Your parcel has been picked up and is on its way!'; },
+      whatsapp: function (d) { return 'Great news! Your SOKONI order has been collected by ' + d.riderName + ' and is heading your way!'; },
     },
     in_transit: {
-      push: function (d) { return { title: 'Out for Delivery', body: 'Your order is on the way. ETA: ' + d.etaMin + ' min.' }; },
-      sms:  function (d) { return 'SOKONI: Your order is out for delivery. ETA ~' + d.etaMin + ' min.'; },
+      push:     function (d) { return { title: 'Out for Delivery', body: 'Your order is on the way. ETA: ' + d.etaMin + ' min.' }; },
+      sms:      function (d) { return 'SOKONI: Your order is out for delivery. ETA ~' + d.etaMin + ' min. Track: ' + d.trackUrl; },
+      email:    function (d) { return { subject: 'Your Order is Out for Delivery', body: 'Your order is on its way! Estimated arrival: ~' + d.etaMin + ' minutes.\n\nTrack live: ' + d.trackUrl }; },
+      whatsapp: function (d) { return 'Your SOKONI order is out for delivery! Estimated arrival: ~' + d.etaMin + ' min. Track here: ' + d.trackUrl; },
     },
     arriving: {
-      push: function ()  { return { title: 'Almost There!', body: 'Your rider is arriving now. Please be ready to receive your order.' }; },
-      sms:  function ()  { return 'SOKONI: Your rider is arriving! Please be ready.'; },
+      push:     function ()  { return { title: 'Almost There!', body: 'Your rider is arriving now. Please be ready to receive your order.' }; },
+      sms:      function ()  { return 'SOKONI: Your rider is arriving! Please be ready.'; },
+      whatsapp: function ()  { return 'Your SOKONI rider is almost at your door! Please be ready to receive your order.'; },
     },
     delivered: {
-      push: function (d) { return { title: 'Order Delivered!', body: 'Your order has been delivered. Use code ' + d.otp + ' to confirm receipt.' }; },
-      sms:  function (d) { return 'SOKONI: Your order is delivered! Confirm with OTP: ' + d.otp + '. Do NOT share with anyone.'; },
+      push:     function (d) { return { title: 'Order Delivered!', body: 'Your order has been delivered. Use OTP ' + d.otp + ' to confirm receipt.' }; },
+      sms:      function (d) { return 'SOKONI: Your order is delivered! Confirm receipt with OTP: ' + d.otp + '. Do NOT share this code with anyone else.'; },
+      email:    function (d) { return { subject: 'Your Order Has Been Delivered!', body: 'Your SOKONI order has been delivered. Please confirm receipt using OTP: ' + d.otp + '\n\nDo NOT share this code. It confirms your delivery.' }; },
+      whatsapp: function (d) { return 'Your SOKONI order has been delivered! Please give your rider this OTP to confirm receipt: *' + d.otp + '*\n\nKeep this code private.'; },
     },
     failed_delivery: {
-      push: function (d) { return { title: 'Delivery Attempt Failed', body: d.failReason + '. We will contact you shortly.' }; },
-      sms:  function (d) { return 'SOKONI: Delivery attempt failed (' + d.failReason + '). Our team will assist. Ref: ' + d.deliveryRef; },
+      push:     function (d) { return { title: 'Delivery Attempt Failed', body: d.failReason + '. We will contact you shortly.' }; },
+      sms:      function (d) { return 'SOKONI: Delivery attempt failed (' + d.failReason + '). Our team will assist. Ref: ' + d.deliveryRef; },
+      email:    function (d) { return { subject: 'Delivery Attempt Failed — Action Required', body: 'We could not complete your delivery. Reason: ' + d.failReason + '\n\nRef: ' + d.deliveryRef + '\n\nOur support team will contact you.' }; },
+      whatsapp: function (d) { return 'SOKONI: We were unable to deliver your order. Reason: ' + d.failReason + '. Ref: ' + d.deliveryRef + '. Our team will contact you shortly to resolve this.'; },
+    },
+    return_initiated: {
+      push:     function (d) { return { title: 'Order Being Returned', body: 'Your order is being returned to the seller. A refund will be processed.' }; },
+      sms:      function (d) { return 'SOKONI: Your order ' + d.deliveryRef + ' is being returned. Refund will follow.'; },
+    },
+    refund_initiated: {
+      push:     function ()  { return { title: 'Refund Initiated', body: 'A refund has been initiated for your order. You will receive it within 3-5 business days.' }; },
+      sms:      function (d) { return 'SOKONI: Refund initiated for order ' + d.deliveryRef + '. Allow 3-5 business days for M-Pesa reversal.'; },
     },
   };
 
+  /*
+   * renderNotification(stage, data) → { push?, sms?, email?, whatsapp? }
+   */
   function renderNotification(stage, data) {
     var tpl = NOTIFICATION_TEMPLATES[stage];
     if (!tpl) return null;
     return {
-      push: tpl.push ? tpl.push(data) : null,
-      sms:  tpl.sms  ? tpl.sms(data)  : null,
+      push:     tpl.push     ? tpl.push(data)     : null,
+      sms:      tpl.sms      ? tpl.sms(data)      : null,
+      email:    tpl.email    ? tpl.email(data)    : null,
+      whatsapp: tpl.whatsapp ? tpl.whatsapp(data) : null,
     };
+  }
+
+  /*
+   * whatsappDeepLink(phone, message) → URL
+   * Opens WhatsApp chat with pre-filled message (wa.me deep link).
+   */
+  function whatsappDeepLink(phone, message) {
+    var cleaned = String(phone || '').replace(/\D/g, '');
+    /* Normalize Kenyan number to international format */
+    if (cleaned.startsWith('0') && cleaned.length === 10) cleaned = '254' + cleaned.slice(1);
+    return 'https://wa.me/' + cleaned + '?text=' + encodeURIComponent(message || '');
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -349,6 +383,7 @@
     /* Notifications */
     NOTIFICATION_TEMPLATES:NOTIFICATION_TEMPLATES,
     renderNotification:    renderNotification,
+    whatsappDeepLink:      whatsappDeepLink,
   };
 
   g.SokoniLogistics = SokoniLogistics;

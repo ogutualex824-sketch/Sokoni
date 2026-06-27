@@ -39,6 +39,44 @@ async function _sendSMS(phone, message) {
   catch(e) { console.warn('[dispatch] SMS queue write failed', e.message); }
 }
 
+async function _sendEmail(to, subject, body) {
+  if (!to) return;
+  try {
+    await _db().collection('emailQueue').add({ to, subject, body, createdAt: _now(), status: 'pending' });
+  } catch(e) { console.warn('[dispatch] Email queue write failed', e.message); }
+}
+
+function _whatsappLink(phone, message) {
+  if (!phone) return null;
+  const cleaned = String(phone).replace(/\D/g,'').replace(/^0/,'254');
+  return 'https://wa.me/'+cleaned+'?text='+encodeURIComponent(message);
+}
+
+async function _sendNotification(stage, delivery, deliveryRef) {
+  const notif = SokoniLogistics.renderNotification(stage, {
+    riderName:   delivery.driverName  || 'Your rider',
+    riderPhone:  delivery.driverPhone || '',
+    etaMin:      delivery.etaMin      || 20,
+    otp:         delivery.deliveryOTP || '',
+    trackUrl:    `https://mysokoni.co.ke/delivery-tracking.html?ref=${deliveryRef}`,
+    orderId:     delivery.orderId     || deliveryRef,
+    deliveryRef,
+    failReason:  delivery.failReason  || '',
+  });
+  if (!notif) return;
+  const { buyerFcmToken, buyerPhone, buyerEmail } = delivery;
+  if (notif.push   && buyerFcmToken) await _sendPush(buyerFcmToken, notif.push.title, notif.push.body);
+  if (notif.sms    && buyerPhone)    await _sendSMS(buyerPhone, notif.sms);
+  if (notif.email  && buyerEmail)    await _sendEmail(buyerEmail, notif.email.subject, notif.email.body);
+  /* WhatsApp: queue a deep-link record for the customer to tap */
+  if (notif.whatsapp && buyerPhone) {
+    await _db().collection('whatsappQueue').add({
+      phone: buyerPhone, link: _whatsappLink(buyerPhone, notif.whatsapp),
+      message: notif.whatsapp, deliveryRef, stage, createdAt: _now(), status: 'pending',
+    }).catch(() => {});
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────
    1. dispatchDelivery (callable)
    Called by seller / system when order becomes ready_for_pickup.
@@ -110,10 +148,13 @@ exports.dispatchDelivery = onCall(
       await _sendSMS(riderData.phone,
         `SOKONI: New delivery! Pickup: ${delivery.pickupAddress || 'N/A'}. Fee: KES ${delivery.deliveryFee || 0}. Accept in 90s on your app.`);
     }
-    if (delivery.buyerFcmToken) {
-      await _sendPush(delivery.buyerFcmToken, 'Rider Assigned!',
-        `${ranked[0].riderName} is on the way to pick up your order. ETA: ~${ranked[0].etaMin} min.`);
-    }
+    /* Multi-channel buyer notification: push + SMS + email + WhatsApp */
+    await _sendNotification('driver_assigned', {
+      ...delivery,
+      driverName:   ranked[0].riderName,
+      driverPhone:  ranked[0].riderPhone,
+      etaMin:       ranked[0].etaMin,
+    }, deliveryRef).catch(() => {});
 
     logger.info('[dispatch] Dispatch initiated', { deliveryRef, riderId: ranked[0].riderId, score: ranked[0].score });
     return { status: 'offered', riderId: ranked[0].riderId, etaMin: ranked[0].etaMin, ranked: ranked.length };
@@ -245,7 +286,7 @@ exports.captureProofOfDelivery = onCall(
   async (request) => {
     _assertAuth(request);
     const riderId = _uid(request);
-    const { deliveryRef, otp, photoUrl, gpsLat, gpsLng, gpsAccuracyM } = request.data;
+    const { deliveryRef, otp, qrVerified, photoUrl, signatureDataUrl, gpsLat, gpsLng, gpsAccuracyM } = request.data;
     if (!deliveryRef) throw new HttpsError('invalid-argument', 'deliveryRef required');
 
     const firestore    = _db();
@@ -257,33 +298,50 @@ exports.captureProofOfDelivery = onCall(
       throw new HttpsError('permission-denied', 'You are not assigned to this delivery');
     }
 
+    /* Accept QR verified as equivalent to OTP verified for proof requirements */
+    const proofOtp = (qrVerified === true) ? (delivery.deliveryOTP || otp || '') : otp;
     const requiredMethods = delivery.proofRequirements || ['otp'];
     const proofResult = SokoniLogistics.validateProof(
-      { otp, photoUrl, gpsLat, gpsLng },
-      { otp: delivery.deliveryOTP, dropoffLat: delivery.dropoffLat || delivery.deliveryCoords?.lat, dropoffLng: delivery.dropoffLng || delivery.deliveryCoords?.lng, requiredMethods }
+      { otp: proofOtp, photoUrl, gpsLat, gpsLng, signatureDataUrl },
+      {
+        otp:        delivery.deliveryOTP,
+        dropoffLat: delivery.dropoffLat || delivery.deliveryCoords?.lat,
+        dropoffLng: delivery.dropoffLng || delivery.deliveryCoords?.lng,
+        requiredMethods,
+      }
     );
     if (!proofResult.valid) throw new HttpsError('failed-precondition', proofResult.error);
 
-    const proofRecord = SokoniLogistics.buildProofRecord(deliveryRef, riderId, { otp, photoUrl, gpsLat, gpsLng, gpsAccuracyM });
+    const proofRecord = SokoniLogistics.buildProofRecord(deliveryRef, riderId, {
+      otp, photoUrl, gpsLat, gpsLng, gpsAccuracyM, signatureDataUrl: signatureDataUrl || null,
+      qrVerified: qrVerified === true,
+    });
     const batchOp = firestore.batch();
     batchOp.set(firestore.collection('deliveryProofs').doc(deliveryRef), { ...proofRecord, createdAt: _now() });
     batchOp.update(firestore.collection('packageRequests').doc(deliveryRef), {
-      status: 'delivered', deliveredAt: _now(), proofCaptured: true,
-      proofPhotoUrl: photoUrl || null, proofGpsLat: gpsLat || null, proofGpsLng: gpsLng || null,
-      sellerPayoutReady: true, updatedAt: _now(),
+      status:           'delivered',
+      deliveredAt:      _now(),
+      proofCaptured:    true,
+      proofPhotoUrl:    photoUrl       || null,
+      proofSignatureUrl:signatureDataUrl || null,
+      proofQrVerified:  qrVerified === true,
+      proofGpsLat:      gpsLat         || null,
+      proofGpsLng:      gpsLng         || null,
+      sellerPayoutReady:true,
+      updatedAt:        _now(),
     });
     batchOp.update(firestore.collection('rideDrivers').doc(riderId), {
       activeDeliveries: admin.firestore.FieldValue.increment(-1),
       totalDeliveries:  admin.firestore.FieldValue.increment(1),
       totalEarnings:    admin.firestore.FieldValue.increment(delivery.driverNet || 0),
-      updatedAt: _now(),
+      updatedAt:        _now(),
     });
     await batchOp.commit();
 
-    if (delivery.buyerFcmToken) await _sendPush(delivery.buyerFcmToken, 'Order Delivered!', 'Your order has been delivered. Enjoy!');
-    if (delivery.buyerPhone) await _sendSMS(delivery.buyerPhone, `SOKONI: Your order has been delivered! Ref: ${deliveryRef}`);
+    /* Unified multi-channel notification (push + SMS + email + WhatsApp) */
+    await _sendNotification('delivered', delivery, deliveryRef);
 
-    logger.info('[dispatch] Proof captured, delivery complete', { deliveryRef, riderId });
+    logger.info('[dispatch] Proof captured, delivery complete', { deliveryRef, riderId, qrVerified: !!qrVerified, hasSig: !!signatureDataUrl });
     return { status: 'delivered' };
   }
 );
@@ -315,7 +373,7 @@ exports.handleFailedDelivery = onCall(
     const action  = SokoniDispatch.getFailedDeliveryAction(reason, attemptCount);
     const updates = { failReason: reason, failNote: note || null, lastFailedAt: _now(), failAction: action.action, updatedAt: _now() };
 
-    if (action.action === 'retry')    { updates.status = 'retry_scheduled'; updates.retryAfter = new Date(Date.now() + (action.retryAfterMin || 30) * 60000); updates.retryCount = admin.firestore.FieldValue.increment(1); }
+    if (action.action === 'retry')      { updates.status = 'retry_scheduled'; updates.retryAfter = new Date(Date.now() + (action.retryAfterMin || 30) * 60000); updates.retryCount = admin.firestore.FieldValue.increment(1); }
     else if (action.action === 'reassign') { updates.status = 'ready_for_pickup'; updates.riderId = null; updates.driverId = null; }
     else if (action.action === 'return')   { updates.status = 'return_in_progress'; }
     else if (action.action === 'refund')   { updates.status = 'refund_initiated'; }
@@ -328,10 +386,47 @@ exports.handleFailedDelivery = onCall(
         activeDeliveries: admin.firestore.FieldValue.increment(-1), updatedAt: _now(),
       });
     }
-    if (delivery.buyerFcmToken) {
-      const notif = SokoniLogistics.renderNotification('failed_delivery', { failReason: reason, deliveryRef });
-      if (notif?.push) await _sendPush(delivery.buyerFcmToken, notif.push.title, notif.push.body);
+
+    /* Multi-channel customer notification */
+    await _sendNotification('failed_delivery', { ...delivery, failReason: reason }, deliveryRef).catch(() => {});
+
+    /* ── Excessive cancellation detection ── */
+    const riderId = delivery.riderId || delivery.driverId;
+    if (riderId && reason === 'rider_breakdown') {
+      /* Count cancellations for this rider in last 24h */
+      const since24h = new Date(Date.now() - 86400000);
+      const recentSnap = await firestore.collection('deliveryAttempts')
+        .where('riderId', '==', riderId)
+        .where('attemptAt', '>=', since24h)
+        .get()
+        .catch(() => null);
+      if (recentSnap && recentSnap.size >= 5) {
+        /* Flag for excessive cancellations */
+        await firestore.collection('fraudAlerts').add({
+          type:      'excessive_cancellations',
+          riderId,
+          count:     recentSnap.size,
+          windowH:   24,
+          threshold: 5,
+          severity:  recentSnap.size >= 10 ? 'critical' : 'high',
+          status:    'open',
+          reason:    `${recentSnap.size} cancellations in last 24h (threshold: 5)`,
+          createdAt: _now(),
+        });
+        /* Auto-suspend if 10+ in 24h */
+        if (recentSnap.size >= 10) {
+          await firestore.collection('rideDrivers').doc(riderId).update({
+            isOnline: false, status: 'suspended',
+            suspendedAt: _now(), suspendReason: 'auto_excessive_cancellations',
+          }).catch(() => {});
+          logger.warn('[dispatch] Rider auto-suspended for excessive cancellations', { riderId, count: recentSnap.size });
+        }
+      }
     }
+
+    /* Return/refund notifications */
+    if (action.action === 'return')  await _sendNotification('return_initiated',  delivery, deliveryRef).catch(() => {});
+    if (action.action === 'refund')  await _sendNotification('refund_initiated',  delivery, deliveryRef).catch(() => {});
 
     logger.warn('[dispatch] Failed delivery handled', { deliveryRef, reason, action: action.action, attempt: attemptCount + 1 });
     return { action: action.action, attemptsLeft: action.attemptsLeft || 0 };

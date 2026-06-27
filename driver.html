@@ -2385,6 +2385,7 @@ window.toggleOnline = async function() {
       if (!user) return;
       _riderUid = user.uid;
       _loadPerformanceMetrics();
+      _loadWalletBalance();
       _subscribeDispatch();
     });
 
@@ -2447,14 +2448,28 @@ window.toggleOnline = async function() {
       _renderIncentives();
     }
 
+    var _walletBalance = null; /* cached wallet balance */
+
+    function _loadWalletBalance() {
+      if (!_riderUid) return;
+      firebase.firestore().collection('wallets').doc(_riderUid).get()
+        .then(function(snap) {
+          var data = snap.data() || {};
+          _walletBalance = data.balance || 0;
+          _renderShiftStats();
+        }).catch(function() { /* wallet may not exist yet */ });
+    }
+
     function _renderShiftStats() {
       var el = document.getElementById('shiftStats');
       if (!el) return;
       var perHour = _shiftStart && _shiftDeliveries ? Math.round(_shiftDeliveries / ((Date.now() - _shiftStart) / 3600000) * 10) / 10 : 0;
+      var walletStr = _walletBalance !== null ? 'KES ' + Number(_walletBalance).toLocaleString() : '—';
       el.innerHTML = [
         _miniStat('💰', 'KES '+_shiftEarnings.toLocaleString(), 'Shift Earnings'),
         _miniStat('📦', _shiftDeliveries, 'Deliveries'),
         _miniStat('⚡', perHour.toFixed(1), 'Deliveries/hr'),
+        _miniStat('👛', walletStr, 'Wallet Balance'),
       ].join('');
     }
 
@@ -2512,16 +2527,33 @@ window.toggleOnline = async function() {
           var earnings  = deliveries.reduce(function (s,d){ return s+(d.driverNet||0); }, 0);
           var ratings   = deliveries.filter(function (d) { return d.riderRating; }).map(function (d) { return d.riderRating; });
           var avgRating = ratings.length ? (ratings.reduce(function(a,b){return a+b;},0)/ratings.length).toFixed(1) : '—';
-          var compRate  = total ? Math.round(done/total*100)+'%' : '—';
-          var accRate   = '—';
-          el.innerHTML = [
-            _perfCard('📦', total, '30-Day Deliveries'),
-            _perfCard('✅', compRate, 'Completion Rate'),
-            _perfCard('⭐', avgRating+'/5', 'Avg Rating'),
-            _perfCard('💰', 'KES '+earnings.toLocaleString(), '30-Day Earnings'),
-            _perfCard('❌', cancelled, 'Cancellations'),
-            _perfCard('⚡', accRate, 'Acceptance Rate'),
-          ].join('');
+          var compRate   = total ? Math.round(done/total*100)+'%' : '—';
+          var cancelRate = total ? Math.round(cancelled/total*100)+'%' : '—';
+          /* Load CSAT ratings from csatRatings collection */
+          firebase.firestore().collection('csatRatings')
+            .where('riderId', '==', _riderUid)
+            .get()
+            .then(function(csatSnap) {
+              var csatRatings = csatSnap.docs.map(function(d){ return d.data().rating; }).filter(function(r){ return r > 0; });
+              var csatAvg = csatRatings.length ? (csatRatings.reduce(function(a,b){return a+b;},0)/csatRatings.length).toFixed(1) : avgRating;
+              el.innerHTML = [
+                _perfCard('📦', total, '30-Day Deliveries'),
+                _perfCard('✅', compRate, 'Completion Rate'),
+                _perfCard('⭐', csatAvg+'/5', 'CSAT Rating'),
+                _perfCard('💰', 'KES '+earnings.toLocaleString(), '30-Day Earnings'),
+                _perfCard('❌', cancelRate, 'Cancel Rate'),
+                _perfCard('💬', csatRatings.length, 'Reviews'),
+              ].join('');
+            }).catch(function() {
+              el.innerHTML = [
+                _perfCard('📦', total, '30-Day Deliveries'),
+                _perfCard('✅', compRate, 'Completion Rate'),
+                _perfCard('⭐', avgRating+'/5', 'Avg Rating'),
+                _perfCard('💰', 'KES '+earnings.toLocaleString(), '30-Day Earnings'),
+                _perfCard('❌', cancelRate, 'Cancel Rate'),
+                _perfCard('📊', '—', 'CSAT'),
+              ].join('');
+            });
         }).catch(function () {
           el.innerHTML = '<p style="font-size:12px;color:rgba(255,255,255,0.3);">Could not load metrics.</p>';
         });

@@ -24,13 +24,15 @@
 
   /* ── Scoring weights (must sum to 1.0) ── */
   var WEIGHTS = {
-    distance:       0.25,
-    eta:            0.20,
-    workload:       0.15,
-    vehicleMatch:   0.15,
-    rating:         0.15,
-    acceptanceRate: 0.10,
-  };
+    distance:        0.20,  /* haversine km to pickup — closest preferred */
+    eta:             0.17,  /* dist / 25km/h — fastest preferred */
+    workload:        0.11,  /* current active deliveries (0 = best) */
+    vehicleMatch:    0.11,  /* exact vehicle type match */
+    rating:          0.11,  /* customer rating /5 */
+    acceptanceRate:  0.09,  /* % of offers accepted */
+    completionRate:  0.12,  /* % of accepted deliveries completed */
+    cancellationScore:0.09, /* 1 − cancellationRate (penalises high cancel rate) */
+  };  /* sum = 1.00 */
 
   /* ── Vehicle capacity registry ── */
   var VEHICLE_CAPACITY = {
@@ -121,15 +123,22 @@
     var workScore   = 1 - (active / CFG.maxConcurrentPerRider);
     var vehScore    = (rider.vehicleType || 'moto') === (delivery.vehicleType || 'moto') ? 1.0
                     : cap.sizeRank >= _sizeRankOf(delivery.parcelSize) ? 0.7 : 0.3;
-    var ratingScore = Math.min(1, (rider.rating || 4.0) / 5.0);
-    var accScore    = rider.acceptanceRate != null ? rider.acceptanceRate : 0.80;
+    var ratingScore      = Math.min(1, (rider.rating || 4.0) / 5.0);
+    var accScore         = rider.acceptanceRate   != null ? rider.acceptanceRate   : 0.80;
+    var compScore        = rider.completionRate   != null ? rider.completionRate   : 0.90;
+    var cancScore        = rider.cancellationRate != null ? Math.max(0, 1 - rider.cancellationRate) : 0.90;
 
-    var raw = WEIGHTS.distance       * distScore
-            + WEIGHTS.eta            * etaScore
-            + WEIGHTS.workload       * workScore
-            + WEIGHTS.vehicleMatch   * vehScore
-            + WEIGHTS.rating         * ratingScore
-            + WEIGHTS.acceptanceRate * accScore;
+    /* Automatic disqualification: excessive cancellations (> 30% in recent window) */
+    if (rider.cancellationRate != null && rider.cancellationRate > 0.30) return null;
+
+    var raw = WEIGHTS.distance         * distScore
+            + WEIGHTS.eta              * etaScore
+            + WEIGHTS.workload         * workScore
+            + WEIGHTS.vehicleMatch     * vehScore
+            + WEIGHTS.rating           * ratingScore
+            + WEIGHTS.acceptanceRate   * accScore
+            + WEIGHTS.completionRate   * compScore
+            + WEIGHTS.cancellationScore* cancScore;
 
     var final = Math.min(1, Math.max(0, raw + hubBonus - batteryPenalty - signalPenalty));
 
@@ -144,7 +153,7 @@
       etaMin:     Math.round(etaMin),
       components: {
         distScore, etaScore, workScore, vehScore, ratingScore, accScore,
-        hubBonus, batteryPenalty, signalPenalty,
+        compScore, cancScore, hubBonus, batteryPenalty, signalPenalty,
       },
     };
   }

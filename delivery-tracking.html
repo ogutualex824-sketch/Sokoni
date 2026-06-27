@@ -783,8 +783,74 @@ window.dtBuyerConfirm = async function(ref) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Confirming…'; }
   try {
     await SokoniDelivery.buyerConfirmReceipt(ref, uid);
-    toast('🎉 Thank you! Seller payout released.');
-  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='🎉 I Received My Order!'; } }
+    toast('Order confirmed! Seller payout released.');
+    /* Show CSAT rating card */
+    setTimeout(() => dtShowCSAT(ref), 1200);
+  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='I Received My Order!'; } }
+};
+
+window.dtShowCSAT = function(ref) {
+  const el = document.getElementById('dtActions');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:16px;padding:20px;text-align:center;">
+      <div style="font-size:22px;margin-bottom:8px;">How was your delivery?</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Rate your rider to help us improve</div>
+      <div id="dtStars" style="display:flex;justify-content:center;gap:10px;margin-bottom:16px;">
+        ${[1,2,3,4,5].map(n=>`<span onclick="dtSelectStar(${n},'${ref}')" id="dtStar${n}" style="font-size:36px;cursor:pointer;transition:transform 0.15s;filter:grayscale(1);">★</span>`).join('')}
+      </div>
+      <textarea id="dtCsatComment" placeholder="Optional comment..." rows="2" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-family:inherit;font-size:12px;resize:none;box-sizing:border-box;margin-bottom:12px;"></textarea>
+      <div style="display:flex;gap:8px;">
+        <button id="dtCsatSubmitBtn" onclick="dtSubmitCSAT('${ref}')" disabled style="flex:1;padding:12px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;border-radius:10px;cursor:not-allowed;font-family:inherit;font-size:13px;opacity:0.5;">Submit Rating</button>
+        <button onclick="el ? el.innerHTML='' : null" style="padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;">Skip</button>
+      </div>
+    </div>`;
+};
+
+var _dtSelectedStar = 0;
+window.dtSelectStar = function(n, ref) {
+  _dtSelectedStar = n;
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById('dtStar'+i);
+    if (!el) continue;
+    el.style.filter = i <= n ? 'none' : 'grayscale(1)';
+    el.style.color  = i <= n ? '#ffd700' : '';
+    el.style.transform = i === n ? 'scale(1.25)' : 'scale(1)';
+  }
+  const btn = document.getElementById('dtCsatSubmitBtn');
+  if (btn) { btn.disabled = false; btn.style.cursor = 'pointer'; btn.style.opacity = '1'; }
+};
+
+window.dtSubmitCSAT = function(ref) {
+  if (!_dtSelectedStar) return;
+  const comment = document.getElementById('dtCsatComment')?.value?.trim() || '';
+  const uid     = _uid();
+  const btn     = document.getElementById('dtCsatSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
+  const data = (_currentData || {});
+  firebase.firestore().collection('csatRatings').add({
+    deliveryRef:  ref,
+    buyerUid:     uid || null,
+    riderId:      data.riderId || data.driverId || null,
+    riderName:    data.driverName || null,
+    rating:       _dtSelectedStar,
+    comment:      comment || null,
+    createdAt:    firebase.firestore.FieldValue.serverTimestamp(),
+  }).then(function() {
+    /* Denormalise onto the delivery doc for quick dashboard queries */
+    return firebase.firestore().collection('packageRequests').doc(ref).update({
+      csatRating:    _dtSelectedStar,
+      csatComment:   comment || null,
+      csatAt:        firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  }).then(function() {
+    const el = document.getElementById('dtActions');
+    if (el) el.innerHTML = `<div style="text-align:center;padding:20px 0;"><div style="font-size:32px;margin-bottom:8px;">Thank you!</div><div style="font-size:13px;color:rgba(255,255,255,0.5);">Your feedback helps improve SOKONI.</div></div>`;
+  }).catch(function(e) {
+    toast('Could not save rating: ' + e.message, false);
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Rating'; }
+  });
 };
 
 window.dtCancelDelivery = async function(ref, _c) {
@@ -860,7 +926,6 @@ window.dtRiderPickedUp = async function(ref) {
 };
 
 window.dtRiderShowProof = function(ref) {
-  /* Full proof of delivery: OTP + photo + GPS */
   const el = document.getElementById('dtActions');
   if (!el) return;
   el.innerHTML = `
@@ -871,10 +936,21 @@ window.dtRiderShowProof = function(ref) {
       <div style="margin-bottom:14px;">
         <label style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;display:block;margin-bottom:6px;">CUSTOMER OTP CODE</label>
         <div style="display:flex;gap:8px;">
-          <input id="dtOtpInput" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" class="dt-input" style="flex:1;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:white;font-size:20px;font-family:inherit;letter-spacing:4px;text-align:center;box-sizing:border-box;">
+          <input id="dtOtpInput" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="flex:1;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:white;font-size:20px;font-family:inherit;letter-spacing:4px;text-align:center;box-sizing:border-box;">
           <button type="button" onclick="dtVerifyOTP('${ref}')" style="padding:12px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;">Verify</button>
         </div>
         <div id="dtOtpStatus" style="font-size:11px;margin-top:6px;"></div>
+      </div>
+
+      <!-- QR code scan -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;display:block;margin-bottom:6px;">QR CODE SCAN <span style="color:rgba(255,255,255,0.3);font-weight:400;">(optional)</span></label>
+        <div id="dtQrBox" style="display:none;position:relative;width:100%;max-width:260px;margin:0 auto 8px;">
+          <video id="dtQrVideo" style="width:100%;border-radius:10px;border:1px solid rgba(113,255,0,0.3);" playsinline autoplay muted></video>
+          <div style="position:absolute;inset:0;border:2px solid rgba(113,255,0,0.5);border-radius:10px;pointer-events:none;"></div>
+        </div>
+        <button type="button" id="dtQrBtn" onclick="dtStartQRScan('${ref}')" style="width:100%;padding:10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-weight:700;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;">Scan QR Code</button>
+        <div id="dtQrStatus" style="font-size:11px;margin-top:4px;color:rgba(255,255,255,0.4);"></div>
       </div>
 
       <!-- Photo capture -->
@@ -888,6 +964,16 @@ window.dtRiderShowProof = function(ref) {
         <div id="dtPhotoStatus" style="font-size:11px;margin-top:4px;color:rgba(255,255,255,0.4);"></div>
       </div>
 
+      <!-- Customer signature -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;display:block;margin-bottom:6px;">CUSTOMER SIGNATURE <span style="color:rgba(255,255,255,0.3);font-weight:400;">(optional)</span></label>
+        <canvas id="dtSigCanvas" width="320" height="110" style="width:100%;height:110px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:10px;cursor:crosshair;touch-action:none;display:block;"></canvas>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button type="button" onclick="dtClearSignature()" style="padding:7px 12px;background:rgba(255,100,100,0.08);border:1px solid rgba(255,100,100,0.2);color:#ff6b6b;border-radius:8px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;">Clear</button>
+          <div id="dtSigStatus" style="font-size:11px;color:rgba(255,255,255,0.4);align-self:center;"></div>
+        </div>
+      </div>
+
       <!-- GPS stamp -->
       <div style="margin-bottom:16px;">
         <label style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;display:block;margin-bottom:6px;">GPS LOCATION STAMP</label>
@@ -897,7 +983,9 @@ window.dtRiderShowProof = function(ref) {
 
       <!-- Hidden fields -->
       <input type="hidden" id="dtOtpVerified" value="0">
+      <input type="hidden" id="dtQrVerified" value="0">
       <input type="hidden" id="dtPhotoUrl" value="">
+      <input type="hidden" id="dtSigDataUrl" value="">
       <input type="hidden" id="dtGpsLat" value="">
       <input type="hidden" id="dtGpsLng" value="">
       <input type="hidden" id="dtGpsAccuracy" value="">
@@ -907,6 +995,110 @@ window.dtRiderShowProof = function(ref) {
         <button class="dt-btn-secondary" onclick="dtRiderShowCancel()">✕</button>
       </div>
     </div>`;
+
+  /* Init signature canvas */
+  _dtInitSignatureCanvas();
+};
+
+/* ── QR code scanning via BarcodeDetector API ── */
+var _dtQrStream = null;
+window.dtStartQRScan = function(ref) {
+  const btn = document.getElementById('dtQrBtn');
+  const box = document.getElementById('dtQrBox');
+  const vid = document.getElementById('dtQrVideo');
+  const st  = document.getElementById('dtQrStatus');
+
+  if (_dtQrStream) { dtStopQRScan(); return; }
+
+  if (!('BarcodeDetector' in window)) {
+    if (st) st.textContent = 'QR scan not supported on this device — use OTP instead.';
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(function(stream) {
+      _dtQrStream = stream;
+      if (vid) vid.srcObject = stream;
+      if (box) box.style.display = 'block';
+      if (btn) btn.textContent = 'Stop Scan';
+      if (st) st.textContent = 'Point camera at customer QR code...';
+
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      var scanInterval = setInterval(function() {
+        if (!_dtQrStream) { clearInterval(scanInterval); return; }
+        detector.detect(vid).then(function(codes) {
+          if (codes.length === 0) return;
+          const code = codes[0].rawValue;
+          /* Validate: QR must contain deliveryRef or a known prefix */
+          if (code.includes(ref) || code.startsWith('SK-') || code.startsWith('SOKONI-')) {
+            clearInterval(scanInterval);
+            dtStopQRScan();
+            document.getElementById('dtQrVerified').value = '1';
+            if (st) { st.textContent = 'QR verified!'; st.style.color = '#71ff00'; }
+            if (btn) { btn.style.background = 'rgba(113,255,0,0.12)'; btn.style.borderColor = 'rgba(113,255,0,0.4)'; btn.textContent = 'QR Verified'; btn.onclick = null; }
+            /* Auto-fill OTP from QR if it embeds the code (format: REF:OTP) */
+            const parts = code.split(':');
+            if (parts.length >= 2) {
+              const otpEl = document.getElementById('dtOtpInput');
+              if (otpEl && !otpEl.value) { otpEl.value = parts[parts.length - 1].slice(0, 6); }
+            }
+          }
+        }).catch(function() {});
+      }, 400);
+    })
+    .catch(function(e) {
+      if (st) st.textContent = 'Camera access denied: ' + e.message;
+    });
+};
+
+window.dtStopQRScan = function() {
+  if (_dtQrStream) { _dtQrStream.getTracks().forEach(t => t.stop()); _dtQrStream = null; }
+  const box = document.getElementById('dtQrBox');
+  if (box) box.style.display = 'none';
+  const btn = document.getElementById('dtQrBtn');
+  if (btn && btn.textContent === 'Stop Scan') btn.textContent = 'Scan QR Code';
+};
+
+/* ── Canvas signature pad ── */
+function _dtInitSignatureCanvas() {
+  const canvas = document.getElementById('dtSigCanvas');
+  if (!canvas) return;
+  const ctx   = canvas.getContext('2d');
+  var drawing = false;
+  var hasSig  = false;
+
+  function _pos(e) {
+    const r = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - r.left) * (canvas.width / r.width), y: (src.clientY - r.top) * (canvas.height / r.height) };
+  }
+
+  ctx.strokeStyle = '#71ff00'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+
+  canvas.addEventListener('pointerdown', function(e) { e.preventDefault(); drawing = true; const p = _pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+  canvas.addEventListener('pointermove', function(e) { if (!drawing) return; e.preventDefault(); const p = _pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasSig = true; });
+  canvas.addEventListener('pointerup',   function()  { if (drawing) { drawing = false; if (hasSig) _dtSaveSignature(); } });
+  canvas.addEventListener('pointerleave',function()  { if (drawing) { drawing = false; if (hasSig) _dtSaveSignature(); } });
+}
+
+function _dtSaveSignature() {
+  const canvas = document.getElementById('dtSigCanvas');
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL('image/png');
+  const field   = document.getElementById('dtSigDataUrl');
+  if (field) field.value = dataUrl;
+  const st = document.getElementById('dtSigStatus');
+  if (st) { st.textContent = 'Signature captured.'; st.style.color = '#71ff00'; }
+}
+
+window.dtClearSignature = function() {
+  const canvas = document.getElementById('dtSigCanvas');
+  if (!canvas) return;
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  const field = document.getElementById('dtSigDataUrl');
+  if (field) field.value = '';
+  const st = document.getElementById('dtSigStatus');
+  if (st) { st.textContent = ''; }
 };
 
 window.dtVerifyOTP = function (ref) {
@@ -980,29 +1172,50 @@ window.dtSubmitProof = function (ref) {
   const uid = _uid(); if (!uid) { toast('Sign in required', false); return; }
   const otp        = document.getElementById('dtOtpInput')?.value?.trim() || '';
   const otpVerified= document.getElementById('dtOtpVerified')?.value === '1';
-  const photoUrl   = document.getElementById('dtPhotoUrl')?.value   || '';
+  const qrVerified = document.getElementById('dtQrVerified')?.value  === '1';
+  const photoUrl   = document.getElementById('dtPhotoUrl')?.value    || '';
+  const sigDataUrl = document.getElementById('dtSigDataUrl')?.value  || '';
   const gpsLat     = parseFloat(document.getElementById('dtGpsLat')?.value)  || null;
   const gpsLng     = parseFloat(document.getElementById('dtGpsLng')?.value)  || null;
   const gpsAcc     = parseFloat(document.getElementById('dtGpsAccuracy')?.value) || null;
 
-  if (!otpVerified && !otp) { toast('Please enter and verify OTP first', false); return; }
+  /* At least one primary verification method required */
+  if (!otpVerified && !qrVerified && !otp) { toast('Please verify OTP or scan QR code first', false); return; }
 
   const btn = document.querySelector('#dtActions .dt-btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
 
-  firebase.functions().httpsCallable('captureProofOfDelivery')({
-    deliveryRef: ref,
-    otp,
-    photoUrl:    photoUrl || null,
-    gpsLat,
-    gpsLng,
-    gpsAccuracyM: gpsAcc,
-  })
-    .then(function () { toast('Delivery confirmed! Payment will be processed shortly.'); })
-    .catch(function (e) {
-      toast(e.message || 'Could not confirm delivery', false);
-      if (btn) { btn.disabled = false; btn.textContent = 'Submit & Confirm Delivered'; }
-    });
+  /* Upload signature to Storage if captured */
+  const _doSubmit = function(signatureUrl) {
+    firebase.functions().httpsCallable('captureProofOfDelivery')({
+      deliveryRef:      ref,
+      otp,
+      qrVerified,
+      photoUrl:         photoUrl    || null,
+      signatureDataUrl: signatureUrl || null,
+      gpsLat,
+      gpsLng,
+      gpsAccuracyM:     gpsAcc,
+    })
+      .then(function () { toast('Delivery confirmed! Payment will be processed shortly.'); dtStopQRScan(); })
+      .catch(function (e) {
+        toast(e.message || 'Could not confirm delivery', false);
+        if (btn) { btn.disabled = false; btn.textContent = 'Submit & Confirm Delivered'; }
+      });
+  };
+
+  if (sigDataUrl) {
+    /* Convert data URL to Blob and upload */
+    fetch(sigDataUrl).then(r => r.blob()).then(function(blob) {
+      const uid2 = uid || 'anon';
+      const path = 'deliverySignatures/' + ref + '_' + uid2 + '_' + Date.now() + '.png';
+      return firebase.storage().ref().child(path).put(blob, { contentType: 'image/png' });
+    }).then(function(snap) { return snap.ref.getDownloadURL(); })
+      .then(function(url)  { _doSubmit(url); })
+      .catch(function()    { _doSubmit(null); }); /* non-fatal — proceed without sig URL */
+  } else {
+    _doSubmit(null);
+  }
 };
 
 window.dtRiderShowCancel = function() {
