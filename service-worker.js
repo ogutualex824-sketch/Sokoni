@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260629000000";
+const CACHE_VERSION = "sokoni-20260629120000";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -113,13 +113,13 @@ const PRECACHE_STATIC = [
   "/etims.js", "/inspiq.js",
   /* SmartPOS core modules */
   "/pos.html", "/pos.css", "/pos-bos.css", "/pos-mobile.css",
-  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
+  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
   "/pos-ai.js", "/pos-analytics.js", "/pos-boss.js", "/pos-plugins.js",
   "/pos-voice.js", "/pos-ai-engine.js", "/pos-finance.js", "/pos-audit.js",
   "/pos-modules.js", "/pos-scanner.js", "/pos-mobile.js",
   "/pos-manager-auth.js",
   "/pos-device-manager.js",
-  "/print-station.html", "/manager-auth.html", "/commissioning.html",
+  "/print-station.html", "/pos-printer-setup.html", "/manager-auth.html", "/commissioning.html",
   /* Self-checkout kiosk */
   "/pos-kiosk.html",
   /* Inventory Management System V1+V2 */

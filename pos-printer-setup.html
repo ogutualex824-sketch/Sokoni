@@ -4,773 +4,612 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Printer Setup — SOKONI SmartPOS</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="sokoni-tokens.css">
+  <link rel="stylesheet" href="sokoni-quality.css">
   <style>
     :root {
-      --bg: #0d0d1a;
-      --bg2: #141426;
-      --card: #1a1a2e;
-      --card2: #22223b;
-      --border: #2a2a4a;
-      --accent: #7c3aed;
-      --accent2: #a855f7;
-      --green: #22c55e;
-      --red: #ef4444;
-      --yellow: #eab308;
-      --text: #f0f0ff;
-      --muted: #8888aa;
-      --radius: 12px;
+      --tok-primary:#1a73e8;--tok-green:#1e8e3e;--tok-red:#d32f2f;--tok-orange:#f57c00;
+      --tok-surface:#fff;--tok-bg:#f5f5f5;--tok-border:#e0e0e0;--tok-text:#212121;
+      --tok-muted:#757575;--tok-radius:8px;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Inter', 'Segoe UI', sans-serif;
-           font-size: 15px; min-height: 100vh; }
-
-    /* ── Layout ── */
-    .topbar {
-      background: var(--card); border-bottom: 1px solid var(--border);
-      padding: 0 20px; height: 60px; display: flex; align-items: center; gap: 12px;
-      position: sticky; top: 0; z-index: 100;
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;background:var(--tok-bg);color:var(--tok-text)}
+    .app-header{background:var(--tok-primary);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px}
+    .app-header h1{font-size:18px;font-weight:600}
+    .app-header a{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;margin-left:auto}
+    .status-bar{background:#fff;border-bottom:1px solid var(--tok-border);padding:10px 20px;display:flex;align-items:center;gap:12px}
+    .status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .status-dot.connected{background:var(--tok-green)}
+    .status-dot.disconnected{background:var(--tok-red)}
+    .status-dot.scanning{background:var(--tok-orange);animation:pulse 1s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .status-text{font-size:13px;color:var(--tok-muted);flex:1}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:var(--tok-radius);font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s}
+    .btn:hover{opacity:.88}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-primary{background:var(--tok-primary);color:#fff}
+    .btn-outline{background:#fff;color:var(--tok-primary);border:1px solid var(--tok-primary)}
+    .btn-danger{background:var(--tok-red);color:#fff}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn-green{background:var(--tok-green);color:#fff}
+    .tabs{display:flex;border-bottom:2px solid var(--tok-border);background:#fff;padding:0 20px;overflow-x:auto}
+    .tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--tok-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
+    .tab.active{color:var(--tok-primary);border-color:var(--tok-primary)}
+    .panel{display:none;padding:20px}
+    .panel.active{display:block}
+    .card{background:#fff;border:1px solid var(--tok-border);border-radius:var(--tok-radius);padding:16px;margin-bottom:12px}
+    .card-title{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--tok-text)}
+    .device-list{display:flex;flex-direction:column;gap:8px}
+    .device-item{border:1px solid var(--tok-border);border-radius:var(--tok-radius);padding:12px 14px;display:flex;align-items:center;gap:12px;background:#fff}
+    .device-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .device-name{font-weight:500;font-size:13px}
+    .device-sub{font-size:11px;color:var(--tok-muted)}
+    .device-actions{margin-left:auto;display:flex;gap:6px}
+    .transport-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+    .transport-btn{border:1px solid var(--tok-border);border-radius:var(--tok-radius);padding:14px 10px;text-align:center;cursor:pointer;background:#fff;transition:all .15s}
+    .transport-btn:hover{border-color:var(--tok-primary);background:#f0f4ff}
+    .transport-btn .t-icon{font-size:24px;display:block;margin-bottom:6px}
+    .transport-btn .t-label{font-size:12px;font-weight:500;color:var(--tok-text)}
+    .transport-btn .t-sub{font-size:11px;color:var(--tok-muted)}
+    .transport-btn.unavail{opacity:.5;cursor:default}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    .form-row.single{grid-template-columns:1fr}
+    .form-group{display:flex;flex-direction:column;gap:4px}
+    label{font-size:12px;font-weight:500;color:var(--tok-muted)}
+    input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--tok-border);border-radius:var(--tok-radius);font-size:13px;font-family:inherit;color:var(--tok-text);background:#fff}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--tok-primary)}
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0}
+    .toggle-row:last-child{border-bottom:none}
+    .toggle-row .t-label{font-size:13px}
+    .toggle-row .t-sub{font-size:11px;color:var(--tok-muted)}
+    .toggle{position:relative;display:inline-block;width:40px;height:22px}
+    .toggle input{opacity:0;width:0;height:0}
+    .slider{position:absolute;inset:0;background:#ccc;border-radius:22px;cursor:pointer;transition:.3s}
+    .slider:before{content:'';position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+    input:checked+.slider{background:var(--tok-primary)}
+    input:checked+.slider:before{transform:translateX(18px)}
+    .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#e8f0fe;color:var(--tok-primary);border-radius:20px;font-size:11px;font-weight:500}
+    .chip.green{background:#e8f5e9;color:var(--tok-green)}
+    .chip.red{background:#ffebee;color:var(--tok-red)}
+    .chip.orange{background:#fff3e0;color:var(--tok-orange)}
+    .queue-table{width:100%;border-collapse:collapse}
+    .queue-table th{font-size:11px;font-weight:600;color:var(--tok-muted);text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--tok-border);text-align:left}
+    .queue-table td{padding:8px 10px;border-bottom:1px solid #f5f5f5;font-size:12px;vertical-align:middle}
+    .queue-table tr:last-child td{border-bottom:none}
+    .empty-state{text-align:center;padding:32px;color:var(--tok-muted)}
+    .empty-state .e-icon{font-size:40px;display:block;margin-bottom:8px}
+    .preview-box{border:1px solid var(--tok-border);border-radius:var(--tok-radius);background:#fff;margin-top:8px;max-height:400px;overflow-y:auto;padding:10px;font-family:'Courier New',monospace;font-size:11px;white-space:pre}
+    .cap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px}
+    .cap-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--tok-border);border-radius:6px;background:#fafafa;cursor:pointer}
+    .cap-item.yes{border-color:var(--tok-green);background:#e8f5e9}
+    .cap-label{font-size:12px}
+    .net-form{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap}
+    .net-form .form-group{flex:1;min-width:120px}
+    .net-form .form-group:first-child{flex:1.5}
+    .actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    @media(max-width:600px){
+      .form-row{grid-template-columns:1fr}
+      .transport-grid{grid-template-columns:repeat(2,1fr)}
     }
-    .topbar-back { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 22px; padding: 4px 8px; }
-    .topbar-back:hover { color: var(--text); }
-    .topbar-title { font-size: 17px; font-weight: 600; flex: 1; }
-    .topbar-badge { background: var(--accent); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
-
-    .container { max-width: 900px; margin: 0 auto; padding: 20px 16px 100px; }
-
-    /* ── Tabs ── */
-    .tabs { display: flex; gap: 4px; background: var(--card); border-radius: var(--radius);
-            padding: 4px; margin-bottom: 20px; }
-    .tab { flex: 1; padding: 10px; text-align: center; border-radius: 9px; cursor: pointer;
-           font-size: 13px; font-weight: 500; color: var(--muted); border: none; background: none;
-           transition: all 0.15s; }
-    .tab.active { background: var(--accent); color: #fff; }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
-
-    /* ── Cards ── */
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-            padding: 16px; margin-bottom: 12px; }
-    .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-    .card-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--accent);
-                 display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-    .card-title { font-weight: 600; font-size: 15px; }
-    .card-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
-    /* ── Printer card ── */
-    .printer-card { background: var(--card2); border: 1px solid var(--border); border-radius: var(--radius);
-                    padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-    .printer-icon { font-size: 28px; width: 44px; text-align: center; }
-    .printer-info { flex: 1; }
-    .printer-name { font-weight: 600; font-size: 15px; }
-    .printer-meta { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
-            border-radius: 20px; font-size: 11px; font-weight: 500; }
-    .pill-green  { background: rgba(34,197,94,.15);  color: var(--green); }
-    .pill-red    { background: rgba(239,68,68,.15);   color: var(--red); }
-    .pill-yellow { background: rgba(234,179,8,.15);   color: var(--yellow); }
-    .pill-purple { background: rgba(124,58,237,.15);  color: var(--accent2); }
-    .pill-gray   { background: rgba(136,136,170,.15); color: var(--muted); }
-    .printer-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
-           font-size: 13px; font-weight: 500; transition: all 0.15s; }
-    .btn-primary  { background: var(--accent); color: #fff; }
-    .btn-primary:hover  { background: var(--accent2); }
-    .btn-outline  { background: none; border: 1px solid var(--border); color: var(--text); }
-    .btn-outline:hover  { background: var(--card); border-color: var(--accent); }
-    .btn-danger   { background: rgba(239,68,68,.1); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
-    .btn-danger:hover   { background: rgba(239,68,68,.2); }
-    .btn-sm { padding: 6px 12px; font-size: 12px; }
-    .btn-icon { width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;
-                border-radius: 8px; font-size: 16px; border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; }
-    .btn-icon:hover { color: var(--text); background: var(--card); }
-    .default-badge { background: var(--green); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 4px; }
-
-    /* ── Discovery section ── */
-    .scan-types { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 16px; }
-    .scan-type { background: var(--card2); border: 1px solid var(--border); border-radius: 10px;
-                 padding: 12px 10px; text-align: center; cursor: pointer; transition: all 0.15s; }
-    .scan-type:hover { border-color: var(--accent); }
-    .scan-type.selected { border-color: var(--accent); background: rgba(124,58,237,.15); }
-    .scan-type-icon { font-size: 24px; margin-bottom: 6px; }
-    .scan-type-label { font-size: 12px; font-weight: 500; }
-    .scan-type-sub   { font-size: 10px; color: var(--muted); margin-top: 2px; }
-    .scan-type.unsupported { opacity: 0.4; cursor: not-allowed; }
-
-    .scan-results { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
-                    padding: 12px; min-height: 80px; }
-    .scan-results-empty { text-align: center; color: var(--muted); padding: 20px; font-size: 13px; }
-    .scan-result-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-                        border-radius: 9px; margin-bottom: 6px; background: var(--card); border: 1px solid var(--border); }
-    .scan-result-item:hover { border-color: var(--accent); }
-    .scan-result-icon { font-size: 22px; }
-    .scan-result-info { flex: 1; }
-    .scan-result-name { font-weight: 600; font-size: 14px; }
-    .scan-result-sub  { font-size: 11px; color: var(--muted); }
-
-    /* ── Manual IP ── */
-    .input-row { display: flex; gap: 8px; }
-    .input-field { flex: 1; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
-                   padding: 10px 12px; color: var(--text); font-size: 14px; outline: none; }
-    .input-field:focus { border-color: var(--accent); }
-    .input-field::placeholder { color: var(--muted); }
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-    .form-group { margin-bottom: 14px; }
-    select.input-field { cursor: pointer; }
-
-    /* ── Settings ── */
-    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 600px) { .settings-grid { grid-template-columns: 1fr; } }
-    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0;
-                  border-bottom: 1px solid var(--border); }
-    .toggle-row:last-child { border-bottom: none; }
-    .toggle-label { font-size: 14px; font-weight: 500; }
-    .toggle-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .toggle { width: 44px; height: 24px; border-radius: 12px; background: var(--border); border: none;
-              cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
-    .toggle.on { background: var(--green); }
-    .toggle::after { content: ''; position: absolute; width: 18px; height: 18px; background: #fff;
-                     border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s; }
-    .toggle.on::after { left: 23px; }
-
-    /* ── Queue ── */
-    .queue-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-                  border-radius: 9px; margin-bottom: 6px; background: var(--card2); border: 1px solid var(--border); }
-    .queue-status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .queue-status.pending  { background: var(--yellow); }
-    .queue-status.done     { background: var(--green); }
-    .queue-status.failed   { background: var(--red); }
-    .queue-status.printing { background: var(--accent); animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
-    .queue-info { flex: 1; }
-    .queue-type { font-size: 13px; font-weight: 600; }
-    .queue-meta { font-size: 11px; color: var(--muted); }
-    .queue-error { font-size: 11px; color: var(--red); margin-top: 2px; }
-
-    /* ── Toast ── */
-    #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-             background: var(--card); border: 1px solid var(--border); padding: 10px 20px;
-             border-radius: 30px; font-size: 13px; z-index: 9999; white-space: nowrap;
-             opacity: 0; transition: opacity 0.2s; pointer-events: none; }
-    #toast.show { opacity: 1; }
-
-    /* ── Loading spinner ── */
-    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border);
-               border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Section header ── */
-    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-    .section-title { font-size: 16px; font-weight: 600; }
-
-    /* ── Test print area ── */
-    .test-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   </style>
 </head>
 <body>
+  <div class="app-header">
+    <span>&#128424;</span>
+    <h1>Printer Setup</h1>
+    <a href="pos.html">Back to POS</a>
+  </div>
 
-<!-- Top bar -->
-<div class="topbar">
-  <button class="topbar-back" onclick="history.back()">&#8592;</button>
-  <div class="topbar-title">&#128438; Printer Setup</div>
-  <div id="connBadge" class="topbar-badge" style="display:none"></div>
-</div>
+  <div class="status-bar">
+    <div class="status-dot disconnected" id="statusDot"></div>
+    <span class="status-text" id="statusText">No printer connected</span>
+    <button class="btn btn-sm btn-outline" id="btnDisconnect" style="display:none" onclick="disconnectPrinter()">Disconnect</button>
+    <button class="btn btn-sm btn-primary" onclick="testPrint()">Test Print</button>
+  </div>
 
-<div class="container">
-
-  <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" data-tab="printers">&#128438; Printers</button>
-    <button class="tab" data-tab="discover">&#128269; Discover</button>
-    <button class="tab" data-tab="settings">&#9881;&#65039; Settings</button>
-    <button class="tab" data-tab="queue">&#128221; Queue</button>
+    <div class="tab active" data-panel="discover" onclick="showPanel(this)">Discover</div>
+    <div class="tab" data-panel="setup" onclick="showPanel(this)">Setup &amp; Profile</div>
+    <div class="tab" data-panel="receipt" onclick="showPanel(this)">Receipt Config</div>
+    <div class="tab" data-panel="queue" onclick="showPanel(this)">Queue</div>
+    <div class="tab" data-panel="history" onclick="showPanel(this)">History</div>
   </div>
 
-  <!-- ══ TAB: PRINTERS ══ -->
-  <div class="tab-panel active" id="tab-printers">
-    <div class="section-header">
-      <div class="section-title">Paired Printers</div>
-      <button class="btn btn-primary btn-sm" onclick="switchTab('discover')">+ Add Printer</button>
-    </div>
-    <div id="printerList">
-      <div style="text-align:center;padding:40px;color:var(--muted)">
-        <div style="font-size:40px;margin-bottom:8px">&#128438;</div>
-        <div>No printers paired yet.</div>
-        <div style="font-size:13px;margin-top:4px">Tap "Discover" to find printers.</div>
-      </div>
-    </div>
-
-    <!-- Test print -->
-    <div class="card" style="margin-top:8px">
-      <div class="card-header">
-        <div class="card-icon">&#9881;&#65039;</div>
-        <div>
-          <div class="card-title">Test &amp; Diagnostics</div>
-          <div class="card-sub">Print test page, kick cash drawer, check status</div>
-        </div>
-      </div>
-      <div class="test-row">
-        <button class="btn btn-outline btn-sm" onclick="doTestPrint()">&#128438; Test Print</button>
-        <button class="btn btn-outline btn-sm" onclick="doCashDrawer()">&#128176; Open Cash Drawer</button>
-        <button class="btn btn-outline btn-sm" onclick="doTestLabel()">&#127991; Test Label</button>
-        <button class="btn btn-outline btn-sm" onclick="doTestQR()">&#9641; Test QR</button>
-        <button class="btn btn-outline btn-sm" onclick="doTestBarcode()">&#9646; Test Barcode</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ TAB: DISCOVER ══ -->
-  <div class="tab-panel" id="tab-discover">
+  <!-- DISCOVER -->
+  <div class="panel active" id="panel-discover">
     <div class="card">
-      <div class="card-header">
-        <div class="card-icon">&#128269;</div>
-        <div>
-          <div class="card-title">Find Printers</div>
-          <div class="card-sub">Select connection type then tap Scan</div>
-        </div>
-      </div>
-
-      <!-- Connection type grid -->
-      <div class="scan-types" id="scanTypes">
-        <div class="scan-type selected" data-type="bluetooth">
-          <div class="scan-type-icon">&#128250;</div>
-          <div class="scan-type-label">Bluetooth BLE</div>
-          <div class="scan-type-sub">Wireless</div>
-        </div>
-        <div class="scan-type" data-type="usb">
-          <div class="scan-type-icon">&#128190;</div>
-          <div class="scan-type-label">USB OTG</div>
-          <div class="scan-type-sub">Direct cable</div>
-        </div>
-        <div class="scan-type" data-type="serial">
-          <div class="scan-type-icon">&#128291;</div>
-          <div class="scan-type-label">USB Serial</div>
-          <div class="scan-type-sub">COM port</div>
-        </div>
-        <div class="scan-type" data-type="network">
-          <div class="scan-type-icon">&#127760;</div>
-          <div class="scan-type-label">Wi-Fi / LAN</div>
-          <div class="scan-type-sub">IP address</div>
-        </div>
-        <div class="scan-type" id="androidScanType" style="display:none" data-type="android">
-          <div class="scan-type-icon">&#129499;</div>
-          <div class="scan-type-label">Android BT</div>
-          <div class="scan-type-sub">Classic SPP</div>
-        </div>
-        <div class="scan-type" data-type="windows">
-          <div class="scan-type-icon">&#128760;</div>
-          <div class="scan-type-label">Windows</div>
-          <div class="scan-type-sub">OS printer</div>
-        </div>
-        <div class="scan-type" data-type="browser">
-          <div class="scan-type-icon">&#128251;</div>
-          <div class="scan-type-label">Browser Print</div>
-          <div class="scan-type-sub">PDF / dialog</div>
-        </div>
-      </div>
-
-      <div id="networkManual" style="display:none;margin-bottom:16px">
+      <div class="card-title">Scan for Printers</div>
+      <p style="font-size:12px;color:var(--tok-muted);margin-bottom:14px">
+        Select a transport to scan. Bluetooth and USB require a one-time browser permission prompt.
+      </p>
+      <div class="transport-grid" id="transportGrid"></div>
+      <div id="scanResult"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Wi-Fi / LAN Printer</div>
+      <div class="net-form">
         <div class="form-group">
-          <label>Printer IP Address</label>
-          <div class="input-row">
-            <input id="ipHost" class="input-field" type="text" placeholder="192.168.1.100" inputmode="decimal">
-            <input id="ipPort" class="input-field" type="number" placeholder="9100" style="width:90px" value="9100">
-            <button class="btn btn-primary btn-sm" onclick="probeManualIP()">Probe</button>
-          </div>
+          <label>Printer Name</label>
+          <input type="text" id="netName" placeholder="Counter Printer">
         </div>
+        <div class="form-group">
+          <label>Endpoint URL</label>
+          <input type="text" id="netEndpoint" placeholder="http://192.168.1.100:8080">
+        </div>
+        <button class="btn btn-primary" onclick="addNetworkPrinter()">Add &amp; Connect</button>
       </div>
-
-      <div style="display:flex;gap:8px;margin-bottom:14px">
-        <button id="scanBtn" class="btn btn-primary" onclick="startScan()" style="flex:1">
-          &#128269; Scan for Printers
-        </button>
-        <button class="btn btn-outline btn-sm" onclick="startScan(true)">Force New</button>
-      </div>
-
-      <div class="scan-results" id="scanResults">
-        <div class="scan-results-empty" id="scanEmpty">Select a connection type and tap Scan</div>
-      </div>
+      <div id="savedNetPrinters" class="device-list"></div>
     </div>
   </div>
 
-  <!-- ══ TAB: SETTINGS ══ -->
-  <div class="tab-panel" id="tab-settings">
+  <!-- SETUP & PROFILE -->
+  <div class="panel" id="panel-setup">
     <div class="card">
-      <div class="card-header">
-        <div class="card-icon">&#128438;</div>
-        <div>
-          <div class="card-title">Paper &amp; Printing</div>
-        </div>
-      </div>
-      <div class="settings-grid">
+      <div class="card-title">Printer Profile</div>
+      <div class="form-row">
         <div class="form-group">
           <label>Paper Width</label>
-          <select id="setPaperWidth" class="input-field" onchange="saveSetting()">
-            <option value="58">58mm (32 chars)</option>
-            <option value="80" selected>80mm (48 chars)</option>
+          <select id="paperWidth" onchange="saveProfile()">
+            <option value="58mm">58mm — 32 chars</option>
+            <option value="80mm" selected>80mm — 48 chars (most common)</option>
+            <option value="76mm">76mm — 42 chars</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Copies Per Sale</label>
-          <select id="setCopies" class="input-field" onchange="saveSetting()">
-            <option value="1" selected>1 copy</option>
-            <option value="2">2 copies</option>
-            <option value="3">3 copies</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Print Darkness (1-15)</label>
-          <input id="setDarkness" class="input-field" type="range" min="1" max="15" value="8" onchange="saveSetting()">
-        </div>
-        <div class="form-group">
-          <label>Font Size</label>
-          <select id="setFontSize" class="input-field" onchange="saveSetting()">
-            <option value="small">Small</option>
-            <option value="normal" selected>Normal</option>
-            <option value="large">Large</option>
+          <label>DPI / Dot Density</label>
+          <select id="dotDensity" onchange="saveProfile()">
+            <option value="203" selected>203 dpi (standard)</option>
+            <option value="300">300 dpi (high quality)</option>
           </select>
         </div>
       </div>
-      <div class="toggle-row">
-        <div><div class="toggle-label">Auto-cut after receipt</div><div class="toggle-sub">Cuts paper automatically</div></div>
-        <button class="toggle on" id="togAutoCut" onclick="toggleSetting(this,'autoCut')"></button>
-      </div>
-      <div class="toggle-row">
-        <div><div class="toggle-label">Open cash drawer on sale</div><div class="toggle-sub">Kicks drawer on each receipt</div></div>
-        <button class="toggle" id="togDrawer" onclick="toggleSetting(this,'openDrawerOnSale')"></button>
-      </div>
-      <div class="toggle-row">
-        <div><div class="toggle-label">Show QR code on receipt</div><div class="toggle-sub">Order tracking QR</div></div>
-        <button class="toggle on" id="togQR" onclick="toggleSetting(this,'showQR')"></button>
-      </div>
-      <div class="toggle-row">
-        <div><div class="toggle-label">Print queue (offline)</div><div class="toggle-sub">Queue jobs when printer disconnected</div></div>
-        <button class="toggle on" id="togQueue" onclick="toggleSetting(this,'printQueue')"></button>
-      </div>
-      <div class="toggle-row">
-        <div><div class="toggle-label">Auto-reconnect on load</div><div class="toggle-sub">Reconnect to last printer automatically</div></div>
-        <button class="toggle on" id="togReconnect" onclick="toggleSetting(this,'autoReconnect')"></button>
-      </div>
+      <div class="card-title" style="margin-top:8px">Capabilities</div>
+      <div class="cap-grid" id="capGrid"></div>
     </div>
-
     <div class="card">
-      <div class="card-header">
-        <div class="card-icon">&#127981;</div>
-        <div>
-          <div class="card-title">Shop Details</div>
-          <div class="card-sub">Printed on every receipt</div>
+      <div class="card-title">Connection Info</div>
+      <div id="connInfo" style="color:var(--tok-muted);font-size:13px">Not connected</div>
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-primary" onclick="testPrint()">Send Test Print</button>
+      <button class="btn btn-outline" onclick="openCashDrawer()">Open Cash Drawer</button>
+      <button class="btn btn-outline" onclick="refreshStatus()">Refresh Status</button>
+    </div>
+  </div>
+
+  <!-- RECEIPT CONFIG -->
+  <div class="panel" id="panel-receipt">
+    <div class="card">
+      <div class="card-title">Business Branding</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Header / Logo Text</label>
+          <input type="text" id="cfgLogoText" placeholder="SOKONI" oninput="previewReceipt()">
+        </div>
+        <div class="form-group">
+          <label>Copies per Sale</label>
+          <input type="number" id="cfgCopies" value="1" min="1" max="5" oninput="saveConfig()">
         </div>
       </div>
-      <div class="settings-grid">
+      <div class="form-row single">
         <div class="form-group">
-          <label>Shop Name</label>
-          <input id="setShopName" class="input-field" type="text" placeholder="My Shop" onchange="saveSetting()">
-        </div>
-        <div class="form-group">
-          <label>Phone</label>
-          <input id="setShopPhone" class="input-field" type="tel" placeholder="+254700000000" onchange="saveSetting()">
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label>Address</label>
-          <input id="setShopAddress" class="input-field" type="text" placeholder="Nairobi, Kenya" onchange="saveSetting()">
-        </div>
-        <div class="form-group">
-          <label>KRA PIN</label>
-          <input id="setShopPin" class="input-field" type="text" placeholder="P000000000A" onchange="saveSetting()">
-        </div>
-        <div class="form-group">
-          <label>VAT Rate (%)</label>
-          <input id="setTaxRate" class="input-field" type="number" value="16" min="0" max="100" onchange="saveSetting()">
-        </div>
-        <div class="form-group" style="grid-column:1/-1">
           <label>Footer Message</label>
-          <input id="setFooterMsg" class="input-field" type="text" placeholder="Thank you for shopping with us!" onchange="saveSetting()">
+          <input type="text" id="cfgFooter" placeholder="Thank you for shopping with us!" oninput="previewReceipt()">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label>Promotional Message</label>
+          <input type="text" id="cfgPromo" placeholder="Use code SAVE10 for 10% off next visit" oninput="previewReceipt()">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label>Return Policy</label>
+          <input type="text" id="cfgReturn" placeholder="Returns accepted within 7 days with receipt" oninput="previewReceipt()">
         </div>
       </div>
     </div>
-
-    <div style="text-align:right;margin-top:4px">
-      <button class="btn btn-primary" onclick="saveSetting()">&#10003; Save Settings</button>
-    </div>
-  </div>
-
-  <!-- ══ TAB: QUEUE ══ -->
-  <div class="tab-panel" id="tab-queue">
-    <div class="section-header">
-      <div class="section-title">Print Queue</div>
-      <button class="btn btn-outline btn-sm" onclick="clearDoneJobs()">Clear Done</button>
-    </div>
-    <div id="queueList">
-      <div style="text-align:center;padding:30px;color:var(--muted)">
-        <div style="font-size:36px;margin-bottom:8px">&#128221;</div>
-        <div>No jobs in queue</div>
+    <div class="card">
+      <div class="card-title">Print Behaviour</div>
+      <div class="toggle-row">
+        <div><div class="t-label">Auto-print on sale completion</div><div class="t-sub">Automatically send receipt when a sale is recorded</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgAutoPrint" onchange="saveConfig()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="t-label">Show receipt preview before printing</div><div class="t-sub">Display preview dialog for confirmation</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgPreview" onchange="saveConfig()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="t-label">Include platform fee on receipt</div><div class="t-sub">Show SOKONI commission as a line item</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgShowCommission" onchange="saveConfig()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="t-label">Auto-cut after each print</div><div class="t-sub">Send paper-cut command at end of receipt (requires cutter)</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgAutoCut" checked onchange="saveConfig()"><span class="slider"></span></label>
       </div>
     </div>
+    <div class="card">
+      <div class="card-title">Receipt Preview</div>
+      <div id="receiptPreview" class="preview-box">Configure settings above to see preview...</div>
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-primary" onclick="saveConfig();showToast('Config saved')">Save Settings</button>
+      <button class="btn btn-outline" onclick="previewReceipt()">Refresh Preview</button>
+    </div>
   </div>
 
-</div><!-- /container -->
-
-<!-- Toast -->
-<div id="toast"></div>
-
-<!-- Scripts -->
-<script src="firebase.js"></script>
-<script src="sokoni-config.js"></script>
-<script src="sokoni-printer-drivers.js"></script>
-<script src="sokoni-printer-discovery.js"></script>
-<script src="sokoni-receipt-engine.js"></script>
-<script src="sokoni-label-engine.js"></script>
-<script src="pos-printer.js"></script>
-<script src="sokoni-pos-print.js"></script>
-<script>
-/* ─────────────────────────────────────────────────────────
-   Printer Setup UI Controller
-───────────────────────────────────────────────────────── */
-const E = id => document.getElementById(id);
-
-/* ── Tabs ── */
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-});
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
-  if (name === 'queue') renderQueue();
-}
-
-/* ── Toast ── */
-function toast(msg, duration = 2500) {
-  const el = E('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove('show'), duration);
-}
-
-/* ── Printer type icons ── */
-function printerIcon(type) {
-  return { 'bluetooth-ble':'📶', 'usb':'🔌', 'usb-serial':'🔌', network:'🌐',
-           android:'📲', windows:'🖨️', browser:'🖨️' }[type] || '🖨️';
-}
-function statusPill(status) {
-  const m = { connected:'pill-green', disconnected:'pill-gray', error:'pill-red',
-              connecting:'pill-yellow', pairing:'pill-yellow', available:'pill-purple' };
-  return `<span class="pill ${m[status]||'pill-gray'}">${status||'unknown'}</span>`;
-}
-
-/* ── Render printer list ── */
-async function renderPrinters() {
-  const list = await SokoniPosprint.getPrinters();
-  const el   = E('printerList');
-  const settings = SokoniPosprint.getSettings();
-
-  if (!list.length) {
-    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
-      <div style="font-size:40px;margin-bottom:8px">🖨️</div>
-      <div>No printers paired yet.</div>
-      <div style="font-size:13px;margin-top:4px">Tap "Discover" to find printers.</div>
-    </div>`;
-    return;
-  }
-
-  const _e = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  el.innerHTML = list.map(p => {
-    const connStatus = SokoniPosprint.getConnectionStatus(p.id) || p.status || 'disconnected';
-    const isDefault  = settings.defaultPrinterId === p.id;
-    return `
-      <div class="printer-card" id="pc-${p.id}">
-        <div class="printer-icon">${printerIcon(p.type)}</div>
-        <div class="printer-info">
-          <div class="printer-name">
-            ${_e(p.name)}
-            ${isDefault ? '<span class="default-badge">DEFAULT</span>' : ''}
-          </div>
-          <div class="printer-meta">
-            ${statusPill(connStatus)}
-            <span class="pill pill-gray">${_e(p.type)}</span>
-            <span class="pill pill-gray">${p.paperWidth||80}mm</span>
-            <span class="pill pill-purple">${_e(p.driver||'auto')}</span>
-            ${p.batteryLevel !== null && p.batteryLevel !== undefined ? `<span class="pill pill-yellow">🔋${p.batteryLevel}%</span>` : ''}
-          </div>
+  <!-- QUEUE -->
+  <div class="panel" id="panel-queue">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">Print Queue</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-outline" id="btnPause" onclick="togglePause()">Pause</button>
+          <button class="btn btn-sm btn-danger" onclick="clearFailedJobs()">Clear Failed</button>
+          <button class="btn btn-sm btn-outline" onclick="renderQueue()">Refresh</button>
         </div>
-        <div class="printer-actions">
-          ${connStatus === 'connected'
-            ? `<button class="btn btn-outline btn-sm" onclick="doDisconnect('${_e(p.id)}')">Disconnect</button>`
-            : `<button class="btn btn-primary btn-sm" onclick="doConnect('${_e(p.id)}')">Connect</button>`
-          }
-          ${!isDefault ? `<button class="btn btn-outline btn-sm" onclick="doSetDefault('${_e(p.id)}')">Set Default</button>` : ''}
-          <button class="btn-icon" title="Settings" onclick="doEditPrinter('${_e(p.id)}')">⚙️</button>
-          <button class="btn-icon" title="Remove" onclick="doRemove('${_e(p.id)}')">🗑️</button>
-        </div>
-      </div>`;
-  }).join('');
+      </div>
+      <div id="queueContainer"><div class="empty-state"><span class="e-icon">&#128203;</span>Queue is empty</div></div>
+    </div>
+  </div>
 
-  /* Update topbar badge */
-  const connCount = list.filter(p => SokoniPosprint.getConnectionStatus(p.id) === 'connected').length;
-  const badge = E('connBadge');
-  if (connCount > 0) {
-    badge.style.display = '';
-    badge.textContent   = connCount + ' connected';
-  } else {
-    badge.style.display = 'none';
+  <!-- HISTORY -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">Print History</div>
+        <button class="btn btn-sm btn-outline" onclick="clearHistory()">Clear History</button>
+      </div>
+      <div id="historyContainer"><div class="empty-state"><span class="e-icon">&#128220;</span>No print history yet</div></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;display:none;z-index:9999;max-width:320px;text-align:center"></div>
+
+  <script src="sokoni-universal-printer.js"></script>
+  <script>
+  'use strict';
+  const P = window.SokoniPrinter;
+  let queuePaused = false;
+
+  const TRANSPORTS = [
+    { type:'bluetooth', label:'Bluetooth',  icon:'&#128246;', sub:'BLE / Classic', avail:() => !!navigator.bluetooth },
+    { type:'usb',       label:'USB',        icon:'&#128268;', sub:'WebUSB',        avail:() => !!navigator.usb },
+    { type:'serial',    label:'Serial',     icon:'&#128279;', sub:'COM / RS232',   avail:() => !!navigator.serial },
+    { type:'network',   label:'Wi-Fi/LAN',  icon:'&#127760;', sub:'Saved printers',avail:() => true },
+    { type:'browser',   label:'Browser',    icon:'&#128424;', sub:'System dialog', avail:() => true },
+  ];
+
+  /* ── Tabs ──────────────────────────────────────────────────── */
+  function showPanel (tab) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    const id = tab.dataset.panel;
+    document.getElementById('panel-' + id).classList.add('active');
+    tab.classList.add('active');
+    if (id === 'queue')   renderQueue();
+    if (id === 'history') renderHistory();
   }
-}
 
-async function doConnect(id) {
-  toast('Connecting...');
-  try {
-    await SokoniPosprint.connectPrinter(id);
-    toast('✅ Connected!');
-    renderPrinters();
-  } catch (err) {
-    toast('❌ ' + (err.message || 'Connection failed'));
-    renderPrinters();
+  /* ── Transport grid ─────────────────────────────────────────── */
+  function buildTransportGrid () {
+    document.getElementById('transportGrid').innerHTML = TRANSPORTS.map(t =>
+      `<div class="transport-btn${t.avail() ? '' : ' unavail'}" ${t.avail() ? `onclick="scanTransport('${t.type}')"` : ''}>
+         <span class="t-icon">${t.icon}</span>
+         <div class="t-label">${esc(t.label)}</div>
+         <div class="t-sub">${t.avail() ? esc(t.sub) : 'Not supported'}</div>
+       </div>`
+    ).join('');
   }
-}
 
-function doDisconnect(id) {
-  SokoniPosprint.disconnectPrinter(id);
-  toast('Disconnected');
-  setTimeout(renderPrinters, 200);
-}
-
-async function doSetDefault(id) {
-  await SokoniPosprint.setDefault(id);
-  toast('✅ Set as default printer');
-  renderPrinters();
-}
-
-async function doRemove(id) {
-  if (!confirm('Remove this printer?')) return;
-  await SokoniPosprint.removePrinter(id);
-  toast('Printer removed');
-  renderPrinters();
-}
-
-function doEditPrinter(id) {
-  /* Inline edit: paper width */
-  const w = prompt('Paper width (58 or 80):');
-  if (w === '58' || w === '80') {
-    SokoniPosprint.updatePrinter(id, { paperWidth: Number(w) });
-    toast('✅ Updated');
-    renderPrinters();
-  }
-}
-
-/* ── Test actions ── */
-async function doTestPrint()  { toast('Sending test print...'); await SokoniPosprint.printTest(); toast('✅ Test sent'); }
-async function doCashDrawer() { const ok = await SokoniPosprint.openCashDrawer(); toast(ok ? '✅ Drawer kicked' : '❌ No printer connected'); }
-async function doTestLabel()  {
-  if (!window.SokoniLabelEngine) { toast('Label engine not loaded'); return; }
-  SokoniLabelEngine.printLabel([{ name: 'Test Product', price: 99.99, barcode: '6281234567890' }], { showBarcode: true, size: '40x30' });
-  toast('📤 Label printed');
-}
-async function doTestQR() {
-  if (!window.SokoniLabelEngine) { toast('Label engine not loaded'); return; }
-  SokoniLabelEngine.printQR('https://mysokoni.co.ke', { name: 'SOKONI' });
-  toast('📤 QR printed');
-}
-async function doTestBarcode() {
-  if (!window.SokoniLabelEngine) { toast('Label engine not loaded'); return; }
-  SokoniLabelEngine.printBarcode('6281234567890', 'EAN13', { name: 'Test Product' });
-  toast('📤 Barcode printed');
-}
-
-/* ── Discovery ── */
-let _selectedScanType = 'bluetooth';
-document.querySelectorAll('.scan-type').forEach(el => {
-  el.addEventListener('click', () => {
-    if (el.classList.contains('unsupported')) return;
-    document.querySelectorAll('.scan-type').forEach(s => s.classList.remove('selected'));
-    el.classList.add('selected');
-    _selectedScanType = el.dataset.type;
-    E('networkManual').style.display = _selectedScanType === 'network' ? '' : 'none';
-  });
-});
-
-async function startScan(forceNew = false) {
-  const btn = E('scanBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Scanning...';
-  E('scanEmpty').style.display = '';
-  E('scanEmpty').textContent   = 'Scanning for printers...';
-  E('scanResults').innerHTML   = `<div class="scan-results-empty"><span class="spinner"></span> Scanning for ${_selectedScanType} printers...</div>`;
-
-  try {
-    const caps = SokoniPrinterDiscovery.getCapabilities();
-    const types = [_selectedScanType];
-    const { found, errors } = await SokoniPrinterDiscovery.scan(types, { forceNew });
-
-    if (found.length === 0) {
-      E('scanResults').innerHTML = `<div class="scan-results-empty">
-        No printers found.<br>
-        <span style="font-size:12px;color:var(--muted)">
-          ${errors[_selectedScanType] || 'Make sure printer is on and in range, then scan again.'}
-        </span>
-      </div>`;
-    } else {
-      renderScanResults(found);
+  async function scanTransport (type) {
+    setStatus('scanning', 'Scanning ' + type + ' printers...');
+    document.getElementById('scanResult').innerHTML = '';
+    try {
+      const devices = await P.discoverBy(type);
+      if (!devices.length) {
+        document.getElementById('scanResult').innerHTML = '<p style="color:var(--tok-muted);font-size:13px;padding:8px 0">No printers found via ' + esc(type) + '.</p>';
+        setStatus('disconnected', 'No printer connected');
+        return;
+      }
+      renderDeviceList(devices, 'scanResult');
+      setStatus('disconnected', devices.length + ' printer(s) found — click Connect');
+    } catch(e) {
+      document.getElementById('scanResult').innerHTML = '<p style="color:var(--tok-red);font-size:13px;padding:8px 0">Error: ' + esc(e.message) + '</p>';
+      setStatus('disconnected', 'Scan failed');
     }
-  } catch (err) {
-    E('scanResults').innerHTML = `<div class="scan-results-empty" style="color:var(--red)">Error: ${err.message}</div>`;
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '🔍 Scan for Printers';
-  }
-}
-
-/* _scanCache stores raw scan results by index — avoids embedding JSON in onclick */
-let _scanCache = [];
-
-function renderScanResults(found) {
-  _scanCache = found;
-  const _e = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  E('scanResults').innerHTML = found.map((p, i) => `
-    <div class="scan-result-item">
-      <div class="scan-result-icon">${printerIcon(p.type)}</div>
-      <div class="scan-result-info">
-        <div class="scan-result-name">${_e(p.name)}</div>
-        <div class="scan-result-sub">${_e(p.type)} · ${_e(p.status)}</div>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="pairPrinter(${i})">Pair</button>
-    </div>`).join('');
-}
-
-async function pairPrinter(idx) {
-  try {
-    const p = _scanCache[idx];
-    if (!p) { toast('❌ Printer not found'); return; }
-    const id = await SokoniPosprint.addPrinter(p);
-    toast('✅ ' + (p.name || 'Printer') + ' paired!');
-    SokoniPosprint.connectPrinter(id).then(() => renderPrinters()).catch(() => renderPrinters());
-    switchTab('printers');
-  } catch (err) {
-    toast('❌ ' + err.message);
-  }
-}
-
-async function probeManualIP() {
-  const host = E('ipHost').value.trim();
-  const port  = parseInt(E('ipPort').value) || 9100;
-  if (!host) { toast('Enter IP address'); return; }
-  toast('Probing ' + host + ':' + port + '...');
-  try {
-    const p = SokoniPrinterDiscovery.buildNetworkPrinter(host, port);
-    const id = await SokoniPosprint.addPrinter(p);
-    toast('✅ Network printer added');
-    switchTab('printers');
-    renderPrinters();
-  } catch (err) {
-    toast('❌ ' + err.message);
-  }
-}
-
-/* ── Settings ── */
-function loadSettings() {
-  const s = SokoniPosprint.getSettings();
-  E('setPaperWidth').value = String(s.paperWidth || 80);
-  E('setCopies').value     = String(s.copies || 1);
-  E('setDarkness').value   = String(s.darkness || 8);
-  E('setFontSize').value   = s.fontSize || 'normal';
-  E('setShopName').value   = s.shopName || '';
-  E('setShopPhone').value  = s.shopPhone || '';
-  E('setShopAddress').value= s.shopAddress || '';
-  E('setShopPin').value    = s.shopPin || '';
-  E('setTaxRate').value    = String(s.taxRate || 16);
-  E('setFooterMsg').value  = s.footerMessage || '';
-  _applyToggle(E('togAutoCut'),   s.autoCut !== false);
-  _applyToggle(E('togDrawer'),    !!s.openDrawerOnSale);
-  _applyToggle(E('togQR'),        s.showQR !== false);
-  _applyToggle(E('togQueue'),     s.printQueue !== false);
-  _applyToggle(E('togReconnect'), s.autoReconnect !== false);
-}
-
-function _applyToggle(el, on) { el.classList.toggle('on', on); }
-
-function toggleSetting(el, key) {
-  const on = !el.classList.contains('on');
-  _applyToggle(el, on);
-  SokoniPosprint.saveSettings({ [key]: on });
-  toast(key + ': ' + (on ? 'On' : 'Off'));
-}
-
-function saveSetting() {
-  SokoniPosprint.saveSettings({
-    paperWidth:     parseInt(E('setPaperWidth').value) || 80,
-    copies:         parseInt(E('setCopies').value) || 1,
-    darkness:       parseInt(E('setDarkness').value) || 8,
-    fontSize:       E('setFontSize').value,
-    shopName:       E('setShopName').value,
-    shopPhone:      E('setShopPhone').value,
-    shopAddress:    E('setShopAddress').value,
-    shopPin:        E('setShopPin').value,
-    taxRate:        parseFloat(E('setTaxRate').value) || 16,
-    footerMessage:  E('setFooterMsg').value,
-  });
-  toast('✅ Settings saved');
-}
-
-/* ── Queue ── */
-async function renderQueue() {
-  const jobs = await SokoniPosprint.getQueue();
-  const el   = E('queueList');
-  const _e   = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  if (!jobs.length) {
-    el.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted)">
-      <div style="font-size:36px;margin-bottom:8px">📋</div><div>No jobs in queue</div></div>`;
-    return;
   }
 
-  el.innerHTML = jobs.slice().reverse().map(j => `
-    <div class="queue-item">
-      <div class="queue-status ${j.status}"></div>
-      <div class="queue-info">
-        <div class="queue-type">${_e(j.type)} receipt</div>
-        <div class="queue-meta">${new Date(j.createdAt).toLocaleTimeString()} · ${_e(j.status)} · Attempt ${j.retries||0}/${j.maxRetries||5}</div>
-        ${j.error ? `<div class="queue-error">Error: ${_e(j.error)}</div>` : ''}
-      </div>
-      <div style="display:flex;gap:6px">
-        ${j.status==='failed'||j.status==='retry' ? `<button class="btn btn-outline btn-sm" onclick="SokoniPosprint.retryJob('${_e(j.id)}').then(renderQueue)">Retry</button>` : ''}
-        ${j.status!=='done'&&j.status!=='printing' ? `<button class="btn btn-danger btn-sm" onclick="SokoniPosprint.cancelJob('${_e(j.id)}').then(renderQueue)">Cancel</button>` : ''}
-      </div>
-    </div>`).join('');
-}
+  function renderDeviceList (devices, containerId) {
+    document.getElementById(containerId).innerHTML = '<div class="device-list">' + devices.map(d => {
+      const serialized = esc(JSON.stringify(d));
+      return `<div class="device-item">
+        <div class="device-icon">${iconForType(d.type)}</div>
+        <div>
+          <div class="device-name">${esc(d.name)}</div>
+          <div class="device-sub">${esc(d.type)}${d.endpoint ? ' &middot; ' + esc(d.endpoint) : ''}</div>
+        </div>
+        <div class="device-actions">
+          <button class="btn btn-sm btn-primary" onclick='connectDevice(${JSON.stringify(JSON.stringify(d))})'>Connect</button>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+  }
 
-async function clearDoneJobs() {
-  await SokoniPosprint.clearQueue();
-  renderQueue();
-  toast('Queue cleared');
-}
+  function iconForType (t) {
+    return { bluetooth:'&#128246;', usb:'&#128268;', serial:'&#128279;', network:'&#127760;', browser:'&#128424;' }[t] || '&#128424;';
+  }
 
-/* ── Capability check & init ── */
-function checkCapabilities() {
-  const caps = SokoniPrinterDiscovery.getCapabilities();
-  document.querySelectorAll('.scan-type').forEach(el => {
-    const t = el.dataset.type;
-    if (t === 'android' && !caps.android)   { el.style.display = 'none'; return; }
-    if (t === 'android' && caps.android)     { el.style.display = ''; }
-    if (t === 'bluetooth' && !caps.bluetooth){ el.classList.add('unsupported'); el.querySelector('.scan-type-sub').textContent = 'Not supported'; }
-    if (t === 'usb'       && !caps.usb)      { el.classList.add('unsupported'); el.querySelector('.scan-type-sub').textContent = 'Not supported'; }
-    if (t === 'serial'    && !caps.serial)   { el.classList.add('unsupported'); el.querySelector('.scan-type-sub').textContent = 'Desktop only'; }
-  });
-}
+  async function connectDevice (jsonStr) {
+    const info = JSON.parse(jsonStr);
+    setStatus('scanning', 'Connecting to ' + esc(info.name) + '...');
+    try {
+      await P.connect(info);
+    } catch(e) {
+      setStatus('disconnected', 'Connection failed');
+      showToast('Failed: ' + e.message, true);
+    }
+  }
 
-/* ── Listen to print engine events ── */
-SokoniPosprint.on('printer:connected',   () => renderPrinters());
-SokoniPosprint.on('printer:disconnected',() => renderPrinters());
-SokoniPosprint.on('printer:added',       () => renderPrinters());
-SokoniPosprint.on('printer:removed',     () => renderPrinters());
-SokoniPosprint.on('queue:updated',       () => { if (document.getElementById('tab-queue').classList.contains('active')) renderQueue(); });
+  async function addNetworkPrinter () {
+    const name = document.getElementById('netName').value.trim();
+    const ep   = document.getElementById('netEndpoint').value.trim();
+    if (!name || !ep) return showToast('Enter name and endpoint', true);
+    P.saveNetworkPrinter(name, ep);
+    await connectDevice(JSON.stringify({ id: 'net', name, endpoint: ep, type: 'network' }));
+    loadSavedNetPrinters();
+  }
 
-/* ── Startup ── */
-SokoniPosprint.init().then(() => {
-  loadSettings();
-  renderPrinters();
-  checkCapabilities();
-});
-</script>
+  function loadSavedNetPrinters () {
+    const saved = JSON.parse(localStorage.getItem('spp_net_printers') || '[]');
+    const el = document.getElementById('savedNetPrinters');
+    if (!saved.length) { el.innerHTML = ''; return; }
+    el.innerHTML = saved.map(p => `
+      <div class="device-item">
+        <div class="device-icon">&#127760;</div>
+        <div>
+          <div class="device-name">${esc(p.name)}</div>
+          <div class="device-sub">${esc(p.endpoint)}</div>
+        </div>
+        <div class="device-actions">
+          <button class="btn btn-sm btn-primary" onclick='connectDevice(${JSON.stringify(JSON.stringify(p))})'>Connect</button>
+          <button class="btn btn-sm btn-outline" onclick="removeNetPrinter('${esc(p.endpoint)}')">Remove</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function removeNetPrinter (ep) { P.removeNetworkPrinter(ep); loadSavedNetPrinters(); }
+
+  /* ── Status ─────────────────────────────────────────────────── */
+  function setStatus (state, text) {
+    document.getElementById('statusDot').className = 'status-dot ' + state;
+    document.getElementById('statusText').textContent = text;
+    document.getElementById('btnDisconnect').style.display = state === 'connected' ? '' : 'none';
+  }
+
+  async function refreshStatus () {
+    const s = await P.getStatus();
+    setStatus(s.connected ? 'connected' : 'disconnected', s.connected ? 'Printer connected' : 'No printer connected');
+  }
+
+  async function disconnectPrinter () {
+    await P.disconnect();
+    showToast('Printer disconnected');
+  }
+
+  function updateConnInfo (info) {
+    const el = document.getElementById('connInfo');
+    if (!info) { el.innerHTML = '<span style="color:var(--tok-muted)">Not connected</span>'; return; }
+    el.innerHTML = `<strong>${esc(info.name)}</strong><br>Type: ${esc(info.type)}${info.endpoint ? '<br>Endpoint: ' + esc(info.endpoint) : ''}`;
+  }
+
+  /* ── Profile ─────────────────────────────────────────────────── */
+  const CAPS = [
+    { key:'hasQR',        label:'QR Codes',     icon:'&#x2B1B;' },
+    { key:'hasBarcode',   label:'Barcodes',      icon:'&#x2588;' },
+    { key:'hasCutter',    label:'Auto Cutter',   icon:'&#x2702;' },
+    { key:'hasCashDrawer',label:'Cash Drawer',   icon:'&#128179;' },
+    { key:'hasImage',     label:'Image Print',   icon:'&#128444;' },
+  ];
+
+  function buildCapGrid (profile) {
+    document.getElementById('capGrid').innerHTML = CAPS.map(c => `
+      <div class="cap-item ${profile[c.key] ? 'yes' : ''}" onclick="toggleCap('${c.key}')">
+        <span>${c.icon}</span>
+        <span class="cap-label">${c.label}</span>
+        <label class="toggle" style="margin-left:auto">
+          <input type="checkbox" id="cap_${c.key}" ${profile[c.key] ? 'checked' : ''} onchange="saveProfile()">
+          <span class="slider"></span>
+        </label>
+      </div>`).join('');
+  }
+
+  function toggleCap (key) {
+    const cb = document.getElementById('cap_' + key);
+    if (cb) { cb.checked = !cb.checked; saveProfile(); }
+  }
+
+  function saveProfile () {
+    const profile = {
+      paperWidth: document.getElementById('paperWidth').value,
+      dotDensity: parseInt(document.getElementById('dotDensity').value, 10),
+    };
+    CAPS.forEach(c => { const cb = document.getElementById('cap_' + c.key); if (cb) profile[c.key] = cb.checked; });
+    P.setCapabilities(profile);
+    P.setConfig({ paperWidth: profile.paperWidth });
+    buildCapGrid(profile);
+    previewReceipt();
+  }
+
+  function loadProfile () {
+    const p = P.getCapabilities();
+    if (p.paperWidth) document.getElementById('paperWidth').value = p.paperWidth;
+    if (p.dotDensity) document.getElementById('dotDensity').value = String(p.dotDensity);
+    buildCapGrid(p);
+  }
+
+  /* ── Receipt config ─────────────────────────────────────────── */
+  function saveConfig () {
+    P.setConfig({
+      logoText:        document.getElementById('cfgLogoText').value,
+      footer:          document.getElementById('cfgFooter').value,
+      promoMessage:    document.getElementById('cfgPromo').value,
+      returnPolicy:    document.getElementById('cfgReturn').value,
+      copies:          parseInt(document.getElementById('cfgCopies').value, 10) || 1,
+      autoPrintOnSale: document.getElementById('cfgAutoPrint').checked,
+      showPreview:     document.getElementById('cfgPreview').checked,
+      showCommission:  document.getElementById('cfgShowCommission').checked,
+      autoCut:         document.getElementById('cfgAutoCut').checked,
+    });
+  }
+
+  function loadConfig () {
+    const c = P.getConfig();
+    document.getElementById('cfgLogoText').value         = c.logoText || '';
+    document.getElementById('cfgFooter').value           = c.footer || '';
+    document.getElementById('cfgPromo').value            = c.promoMessage || '';
+    document.getElementById('cfgReturn').value           = c.returnPolicy || '';
+    document.getElementById('cfgCopies').value           = String(c.copies || 1);
+    document.getElementById('cfgAutoPrint').checked      = !!c.autoPrintOnSale;
+    document.getElementById('cfgPreview').checked        = !!c.showPreview;
+    document.getElementById('cfgShowCommission').checked = !!c.showCommission;
+    document.getElementById('cfgAutoCut').checked        = c.autoCut !== false;
+  }
+
+  function previewReceipt () {
+    saveConfig();
+    const html = P.preview('receipt', {
+      businessName: document.getElementById('cfgLogoText').value || 'SOKONI SmartPOS',
+      businessAddress: 'Nairobi, Kenya', businessPhone: '+254 700 000 000', businessPin: 'P051234567A',
+      receiptNumber: 'RCP-0001', cashierName: 'Jane Mwangi', customerName: 'John Kamau',
+      items: [
+        { name: 'Chapati Flour 2kg', quantity: 2, unitPrice: 220 },
+        { name: 'Cooking Oil 1L',    quantity: 1, unitPrice: 350 },
+        { name: 'Sugar 1kg',         quantity: 3, unitPrice: 120 },
+      ],
+      totals: { subtotal: 1150, vat: 184, grandTotal: 1334 },
+      payment: { method: 'M-Pesa', mpesaCode: 'SBK123XYZ' },
+      receiptUrl: 'https://sokoni.co.ke/r/0001',
+      returnPolicy:  document.getElementById('cfgReturn').value,
+      promoMessage:  document.getElementById('cfgPromo').value,
+    });
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    document.getElementById('receiptPreview').textContent = tmp.textContent || '';
+  }
+
+  /* ── Queue ─────────────────────────────────────────────────── */
+  function renderQueue () {
+    const jobs = P.getQueue();
+    const el = document.getElementById('queueContainer');
+    if (!jobs.length) { el.innerHTML = '<div class="empty-state"><span class="e-icon">&#128203;</span>Queue is empty</div>'; return; }
+    el.innerHTML = `<table class="queue-table">
+      <thead><tr><th>Job ID</th><th>Type</th><th>Status</th><th>Attempts</th><th>Copies</th><th>Age</th><th>Actions</th></tr></thead>
+      <tbody>${jobs.map(j => `<tr>
+        <td style="font-family:monospace">${esc(j.id)}</td>
+        <td>${esc(j.docType)}</td><td>${statusChip(j.status)}</td>
+        <td>${j.attempts}/${j.maxAttempts}</td><td>${j.copies}</td>
+        <td style="color:var(--tok-muted)">${relTime(j.createdAt)}</td>
+        <td style="display:flex;gap:4px">
+          <button class="btn btn-sm btn-outline" onclick="P.retryJob('${esc(j.id)}');setTimeout(renderQueue,200)">Retry</button>
+          <button class="btn btn-sm btn-danger"  onclick="P.cancelJob('${esc(j.id)}');setTimeout(renderQueue,200)">Cancel</button>
+        </td></tr>
+        ${j.error ? `<tr><td colspan="7" style="color:var(--tok-red);font-size:11px;padding:2px 10px 8px">${esc(j.error)}</td></tr>` : ''}`
+      ).join('')}</tbody></table>`;
+  }
+
+  function clearFailedJobs () {
+    P.getQueue().filter(j => j.status === 'failed').forEach(j => P.cancelJob(j.id));
+    renderQueue();
+  }
+
+  function togglePause () {
+    queuePaused = !queuePaused;
+    if (queuePaused) P.pauseQueue(); else P.resumeQueue();
+    const btn = document.getElementById('btnPause');
+    btn.textContent = queuePaused ? 'Resume' : 'Pause';
+    btn.className = queuePaused ? 'btn btn-sm btn-green' : 'btn btn-sm btn-outline';
+  }
+
+  /* ── History ─────────────────────────────────────────────────── */
+  function renderHistory () {
+    const hist = P.getHistory();
+    const el = document.getElementById('historyContainer');
+    if (!hist.length) { el.innerHTML = '<div class="empty-state"><span class="e-icon">&#128220;</span>No print history yet</div>'; return; }
+    el.innerHTML = `<table class="queue-table">
+      <thead><tr><th>Job ID</th><th>Type</th><th>Status</th><th>Copies</th><th>Time</th><th></th></tr></thead>
+      <tbody>${hist.map(j => `<tr>
+        <td style="font-family:monospace">${esc(j.id)}</td>
+        <td>${esc(j.docType)}</td><td>${statusChip(j.status)}</td>
+        <td>${j.copies}</td><td style="color:var(--tok-muted)">${relTime(j.updatedAt)}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="P.retryJob('${esc(j.id)}');showToast('Requeued')">Reprint</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  }
+
+  function clearHistory () { localStorage.removeItem('spp_history'); renderHistory(); }
+
+  /* ── Print actions ─────────────────────────────────────────── */
+  async function testPrint () {
+    if (!P.connected) return showToast('No printer connected', true);
+    try { await P.testPrint(); showToast('Test print sent'); } catch(e) { showToast(e.message, true); }
+  }
+
+  async function openCashDrawer () {
+    if (!P.connected) return showToast('No printer connected', true);
+    try { await P.openCashDrawer(); showToast('Cash drawer signal sent'); } catch(e) { showToast(e.message, true); }
+  }
+
+  /* ── Helpers ─────────────────────────────────────────────────── */
+  function esc (s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function statusChip (s) {
+    const col = { done:'green', failed:'red', cancelled:'', pending:'orange', processing:'', error:'red' }[s] || '';
+    return `<span class="chip ${col}">${esc(s)}</span>`;
+  }
+
+  function relTime (iso) {
+    if (!iso) return '-';
+    const d = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (d < 60)   return d + 's ago';
+    if (d < 3600) return Math.floor(d / 60) + 'm ago';
+    return Math.floor(d / 3600) + 'h ago';
+  }
+
+  function showToast (msg, err) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = err ? '#c62828' : '#323232';
+    t.style.display = 'block';
+    clearTimeout(t._tid);
+    t._tid = setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  /* ── Printer events ─────────────────────────────────────────── */
+  P.on('connected',    d  => { setStatus('connected', 'Connected: ' + d.name + ' (' + d.type + ')'); updateConnInfo(d); });
+  P.on('disconnected', () => { setStatus('disconnected', 'No printer connected'); updateConnInfo(null); });
+  P.on('printed',      () => { renderQueue(); });
+  P.on('error',        ev => showToast(ev.error, true));
+  P.on('failed',       () => renderQueue());
+
+  /* ── Init ─────────────────────────────────────────────────── */
+  async function init () {
+    buildTransportGrid();
+    loadProfile();
+    loadConfig();
+    loadSavedNetPrinters();
+    previewReceipt();
+    const reconnected = await P.autoReconnect();
+    if (!reconnected) setStatus('disconnected', 'No printer connected — select a transport above to scan');
+    setInterval(() => {
+      if (document.getElementById('panel-queue').classList.contains('active')) renderQueue();
+    }, 5000);
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+  </script>
 </body>
 </html>
