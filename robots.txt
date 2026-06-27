@@ -7,6 +7,8 @@ Allow: /
 # Private / admin / dashboard pages — do not index
 Disallow: /monitor.html
 Disallow: /admin.html
+Disallow: /trust-safety.html
+Disallow: /payment-receipt.html
 Disallow: /verification-admin.html
 Disallow: /profile.html
 Disallow: /checkout.html
