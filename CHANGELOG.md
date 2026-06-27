@@ -1,4 +1,51 @@
-﻿## [2026-06-27] — Full Platform Deployment: Functions, PITR, Monitoring
+﻿## [2026-06-27] — Comprehensive Platform Security & Performance Audit
+
+### Summary
+Full audit-and-fix sprint across all 156 HTML pages. Resolved XSS vectors, silent Firestore compound query failures, legacy compat SDK calls, error message disclosure, missing bottom navigation, and a UI button overflow bug. Restored Firestore query efficiency with 4 new composite indexes.
+
+### Security Fixes
+- **XSS** — Added `_esc()` / `safeHtml()` escaping across 30+ pages; fixed all innerHTML usages that accepted user-controlled or Firestore-sourced strings:
+  `checkout`, `track`, `cart`, `driver`, `success`, `food-order`, `store`, `provider`, `support`, `ministore`, `legal-hub`, `mechanics`, `wallet`, `tech-hub`, `requests`, `home-services`, `cleaning`, `plumbing`, `electrical`, `phone-repair`, `car-hub`, `landlord`
+- **Error disclosure** — Replaced `e.message` in innerHTML with generic user messages across: `revenue`, `seller-revenue`, `seller-success`, `admin`
+
+### Firestore Bug Fixes (Compound Queries)
+Queries with `where(fieldA) + orderBy(fieldB)` on different fields require composite indexes. Fixed by removing `orderBy` and sorting client-side where no index existed:
+- `fitness-hub` — restored with new composite index
+- `bnb-manage` — restored with new composite indexes (listings + bookings)
+- `verification` — restored with new composite index
+- `revenue`, `business`, `ecc`, `subscription-os`, `admin` — client-side sort applied
+
+### Firestore Indexes
+Added 4 composite indexes (195 → 199/200):
+- `fitness_bookings`: `uid(ASC) + date(ASC)`
+- `bnbListings`: `hostUid(ASC) + createdAt(DESC)`
+- `bnbBookings`: `hostUid(ASC) + createdAt(DESC)`
+- `verifications`: `status(ASC) + approvedAt(DESC)`
+
+**Deploy required:** `firebase deploy --only firestore:indexes`
+
+### Compat SDK Fixes
+Replaced compat-style `window.db.collection()` / `firebase.firestore()` calls (silent no-ops on modular SDK) with modular fire-and-forget IIFEs:
+- `digital.html` (withdrawals), `car-hub.html` (carRatings), `business-os.html` (businessOS sync + load), `admin.html` (contentFlags)
+
+### UI Fixes
+- `services.html` — Provider card buttons clipped by `overflow:hidden`; fixed `.pv-foot` flex layout
+- `sokoni-social.js` — `patchServicesFollowBtns()` inserted follow button inside flex row; fixed to insert after `.pv-foot`
+- Missing bottom nav added to: `search`, `property-listing`, `revenue`, `sports-tournament`, `sports-venue`, `help`, `support`
+
+### Files Affected
+Consumer pages (30+): checkout, track, cart, driver, success, food-order, store, provider, support, ministore, legal-hub, mechanics, wallet, tech-hub, requests, home-services, cleaning, plumbing, electrical, phone-repair, car-hub, landlord, fitness-hub, bnb-manage, verification, revenue, business, digital, search, property-listing, sports-tournament, sports-venue, help, services, inspiq, referral, ent-organizer, b2b-chat, b2b-supplier, unboxing
+
+Admin/tool pages: admin, ecc, subscription-os, seller-revenue, seller-success, business-os
+
+Infrastructure: `firestore.indexes.json` (4 new indexes), `sokoni-social.js`, `service-worker.js` (SW bumped to `sokoni-20260627120000`)
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-27] — Full Platform Deployment: Functions, PITR, Monitoring
 
 ### Summary
 Complete infrastructure deployment: all 636 Cloud Functions deployed (Blaze billing active), 16 Firebase Secrets provisioned in Secret Manager, Firestore PITR enabled, 18 Cloud Monitoring alert policies applied (notificationRateLimit fixed on log-based policies), email notification channel created for ogutualex824@gmail.com.
