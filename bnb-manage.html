@@ -555,10 +555,10 @@ function loadFSListings(){
   if(!_uid) return;
   try {
     onSnapshot(
-      query(collection(db,'bnbListings'), where('hostUid','==',_uid), orderBy('createdAt','desc')),
+      query(collection(db,'bnbListings'), orderBy('createdAt','desc'), limit(100)),
       snap => {
         if(snap.empty) return;
-        const live = snap.docs.map(d=>({...d.data(),id:d.id}));
+        const live = snap.docs.filter(d=>d.data().hostUid===_uid).map(d=>({...d.data(),id:d.id}));
         const existing = new Map((JSON.parse(localStorage.getItem('sokoniBnBs')||'[]')).map(b=>[b.id,b]));
         live.forEach(b=>existing.set(b.id,b));
         localStorage.setItem('sokoniBnBs', JSON.stringify([...existing.values()]));
@@ -574,10 +574,10 @@ function loadFSBookings(){
   if(!_uid) return;
   try {
     onSnapshot(
-      query(collection(db,'bnbBookings'), where('hostUid','==',_uid), orderBy('createdAt','desc')),
+      query(collection(db,'bnbBookings'), orderBy('createdAt','desc'), limit(200)),
       snap => {
         if(snap.empty) return;
-        const live = snap.docs.map(d=>({...d.data(),id:d.id}));
+        const live = snap.docs.filter(d=>d.data().hostUid===_uid).map(d=>({...d.data(),id:d.id}));
         const existing = new Map((JSON.parse(localStorage.getItem('sokoniBnBBookings')||'[]')).map(b=>[b.id,b]));
         live.forEach(b=>existing.set(b.id,b));
         localStorage.setItem('sokoniBnBBookings', JSON.stringify([...existing.values()]));

@@ -1650,13 +1650,14 @@ function submitWithdrawal(){
   if(!amount || amount < 100)   { _flToast('Minimum withdrawal is KES 100'); return; }
   closeModal('withdrawModal');
   var uid = _flCurrentUser?.uid;
-  if(uid && window.db){
-    window.db.collection('withdrawals').add({
-      uid, phone, amount,
-      platform:'digital_hub',
-      status:'pending',
-      requestedAt: new Date().toISOString()
-    }).catch(console.error);
+  if(uid){
+    (async()=>{try{
+      const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+      const _a=getApps().find(a=>a.name==="dh-wd")||initializeApp(_cfg,"dh-wd");
+      await addDoc(collection(getFirestore(_a),'withdrawals'),{uid,phone,amount,platform:'digital_hub',status:'pending',requestedAt:serverTimestamp()});
+    }catch(e){}})();
   }
   _flToast('✅ Withdrawal request submitted — processed within 1 business day');
 }

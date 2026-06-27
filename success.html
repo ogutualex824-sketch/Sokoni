@@ -227,13 +227,14 @@
 </section>
 
 <script>
+  const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   /* ── Order ID ── */
   let orders = [];
   try { orders = JSON.parse(localStorage.getItem("sokoniOrders")) || []; } catch(e) {}
   const latest = orders[0];
   const idEl = document.getElementById("successOrderId");
   if(latest && idEl){
-    idEl.innerHTML = `Order ID: <strong>${latest.id}</strong>`;
+    idEl.innerHTML = `Order ID: <strong>${_esc(latest.id)}</strong>`;
     idEl.onclick = () => window.location.href = `track.html?id=${latest.id}`;
     idEl.style.cursor = "pointer";
   }

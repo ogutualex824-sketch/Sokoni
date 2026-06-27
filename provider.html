@@ -730,6 +730,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 <div class="pv-toast" id="pvToast"></div>
 
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 /* ═══ CATEGORY CONFIGURATIONS ═══ */
 const CATS = {
   /* ── PERSONAL SERVICES ── */
@@ -1226,7 +1227,7 @@ function openAddBookingForm(){
   modal.style.display='flex';
   const today=new Date().toISOString().slice(0,10);
   document.getElementById('abDate').min=today; document.getElementById('abDate').value=today;
-  document.getElementById('abService').innerHTML=_services.filter(s=>s.active).map(s=>`<option value="${s.name}">${s.name} — KES ${s.price.toLocaleString()}</option>`).join('');
+  document.getElementById('abService').innerHTML=_services.filter(s=>s.active).map(s=>`<option value="${_esc(s.name)}">${_esc(s.name)} — KES ${Number(s.price||0).toLocaleString()}</option>`).join('');
 }
 window.openAddBookingForm=openAddBookingForm;
 
@@ -1329,7 +1330,7 @@ window.removeBlockDate=removeBlockDate;
 function _renderBlockedDates(){
   const el=document.getElementById('blockedDatesList'); if(!el) return;
   const dates=(_profile&&_profile.blockedDates)||[];
-  el.innerHTML=dates.length?dates.map(d=>`<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.2);border-radius:6px;padding:3px 8px;font-size:11px;color:#ff6464;">${d}<button type="button" onclick="removeBlockDate('${d}')" style="background:none;border:none;color:rgba(255,100,100,0.6);cursor:pointer;padding:0;font-size:12px;line-height:1;">✕</button></span>`).join(''):`<span style="font-size:12px;color:rgba(255,255,255,0.25);">No blocked dates</span>`;
+  el.innerHTML=dates.length?dates.map(d=>`<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.2);border-radius:6px;padding:3px 8px;font-size:11px;color:#ff6464;">${_esc(d)}<button type="button" onclick="removeBlockDate('${_esc(d)}')" style="background:none;border:none;color:rgba(255,100,100,0.6);cursor:pointer;padding:0;font-size:12px;line-height:1;">✕</button></span>`).join(''):`<span style="font-size:12px;color:rgba(255,255,255,0.25);">No blocked dates</span>`;
 }
 
 /* ═══ SERVICES ═══ */

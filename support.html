@@ -217,6 +217,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:#fff;m
 
 <script src="sokoni-launch.js"></script>
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 function showTab(name, btn) {
   document.querySelectorAll('.sp-tab').forEach(function(t){ t.classList.remove('active'); });
   document.querySelectorAll('.sp-pane').forEach(function(p){ p.classList.remove('active'); });
@@ -274,7 +275,7 @@ function trackTicket() {
       return;
     }
   } catch {}
-  result.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.4);">Ticket not found locally. Please <a href="https://wa.me/254700000000?text=Ticket+' + id + '" target="_blank" style="color:#25d366;">follow up on WhatsApp</a> with your ticket ID.</div>';
+  result.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.4);">Ticket not found locally. Please <a href="https://wa.me/254700000000?text=Ticket+' + encodeURIComponent(id) + '" target="_blank" style="color:#25d366;">follow up on WhatsApp</a> with your ticket ID.</div>';
 }
 
 /* Show last ticket if any */
@@ -284,7 +285,7 @@ window.addEventListener('DOMContentLoaded', function() {
     if (last.id) {
       var el = document.getElementById('spLastTicket');
       var age = Math.round((Date.now()-last.ts)/3600000);
-      document.getElementById('spLastTicketContent').innerHTML = '<div style="font-size:12px;font-family:monospace;color:#71ff00;font-weight:800;">'+last.id+'</div><div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">Submitted '+age+'h ago · Status: <span style="color:#f59e0b;font-weight:800;">Under Review</span></div>';
+      document.getElementById('spLastTicketContent').innerHTML = '<div style="font-size:12px;font-family:monospace;color:#71ff00;font-weight:800;">'+_esc(last.id)+'</div><div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;">Submitted '+age+'h ago · Status: <span style="color:#f59e0b;font-weight:800;">Under Review</span></div>';
       el.style.display = 'block';
     }
   } catch {}
@@ -327,6 +328,14 @@ function toggleFaq(i, btn) {
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+
+<nav class="bnav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="help.html" class="bnav-item"><span class="bnav-emoji">❓</span><span>Help</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
 </body>
 </html>
 

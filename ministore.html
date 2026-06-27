@@ -743,6 +743,7 @@
 /* ══════════════════════════════════════════════
    STATE & HELPERS
 ══════════════════════════════════════════════ */
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const CAT_EMOJI = {electronics:"📱",fashion:"👕",beauty:"💄",food:"🥦",shoes:"👟",computers:"💻",appliances:"🔌",furniture:"🛋️",sports:"⚽",books:"📚",printing:"🖨️","graphic-design":"🎨",laundry:"🧺",alcohol:"🍺",vape:"💨",tobacco:"🚬",adult:"🔞","food-restaurant":"🍽️",services:"🛠️",general:"🛍️",other:"🔧"};
 const STORE_COLORS = [
   {name:"Lime",val:"linear-gradient(135deg,#0d2010,#0a1a0d)"},
@@ -1301,13 +1302,13 @@ function renderStorefront(tab){
       hotStrip.style.display="block";
       hotList.innerHTML = hotItems.map(p=>{
         const emoji = CAT_EMOJI[p.category||"other"]||"🛍️";
-        return `<div onclick="openStoreProduct('${p.id}')" style="flex-shrink:0;width:110px;cursor:pointer;">
+        return `<div onclick="openStoreProduct('${_esc(p.id)}')" style="flex-shrink:0;width:110px;cursor:pointer;">
           <div style="width:110px;height:90px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);background:linear-gradient(135deg,rgba(113,255,0,0.06),rgba(0,170,255,0.04));display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:6px;">
             ${p.image&&!p.image.startsWith("data:")
-              ?`<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.innerHTML='${emoji}'">`
+              ?`<img src="${_esc(p.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.textContent='${emoji}'">`
               :emoji}
           </div>
-          <div style="font-size:11px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
+          <div style="font-size:11px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(p.name)}</div>
           <div style="font-size:12px;font-weight:900;color:#71ff00;">KES ${Number(p.price||0).toLocaleString()}</div>
         </div>`;
       }).join("");

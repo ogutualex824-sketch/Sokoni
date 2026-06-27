@@ -536,13 +536,13 @@ window.loadInvoices = async function() {
   const list = document.getElementById("invoicesList");
   list.innerHTML = "<div class='rev-empty'>Loading...</div>";
   try {
-    let q = query(collection(_db,"invoices"), orderBy("createdAt","desc"), limit(50));
     const statusVal = document.getElementById("invStatusFilter").value;
-    if (statusVal) q = query(collection(_db,"invoices"), where("status","==",statusVal), orderBy("createdAt","desc"), limit(50));
+    const q = query(collection(_db,"invoices"), orderBy("createdAt","desc"), limit(200));
     const snap = await getDocs(q);
     if (snap.empty) { list.innerHTML="<div class='rev-empty'>No invoices</div>"; return; }
-    const rows = [];
-    snap.forEach(d => rows.push({id:d.id,...d.data()}));
+    const allRows = [];
+    snap.forEach(d => allRows.push({id:d.id,...d.data()}));
+    const rows = statusVal ? allRows.filter(r => r.status === statusVal) : allRows;
     list.innerHTML = rows.map(r => `
       <div class="inv-row">
         <div>
@@ -785,6 +785,14 @@ window.pauseAd = async function(adId, current) {
   <script defer src="sokoni-gateway.js"></script>
   <script defer src="sokoni-payment-engine.js"></script>
   <script defer src="sokoni-fraud-engine.js"></script>
+
+<nav class="bnav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="seller.html" class="bnav-item"><span class="bnav-emoji">🏪</span><span>Seller</span></a>
+  <a href="seller-analytics.html" class="bnav-item"><span class="bnav-emoji">📊</span><span>Analytics</span></a>
+  <a href="revenue.html" class="bnav-item active-bnav"><span class="bnav-emoji">💰</span><span>Revenue</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
 </body>
 </html>
 

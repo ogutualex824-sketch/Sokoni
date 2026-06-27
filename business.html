@@ -983,11 +983,11 @@ async function loadProducts() {
     const q = query(
       collection(_db, 'products'),
       where('businessId', '==', BIZ_ID),
-      orderBy('createdAt', 'desc'),
       limit(60)
     );
     const snap = await getDocs(q);
-    _allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.createdAt?.toMillis?.()||0) - (a.createdAt?.toMillis?.()||0));
   } catch (e) {
     console.warn('[biz] products:', e);
     _allProducts = [];
@@ -1080,11 +1080,11 @@ async function loadServices() {
     const q = query(
       collection(_db, 'services'),
       where('businessId', '==', BIZ_ID),
-      orderBy('createdAt', 'desc'),
       limit(40)
     );
     const snap = await getDocs(q);
-    _allServices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _allServices = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.createdAt?.toMillis?.()||0) - (a.createdAt?.toMillis?.()||0));
   } catch (e) {
     console.warn('[biz] services:', e);
     _allServices = [];
@@ -1142,11 +1142,11 @@ async function loadReviews() {
     const q = query(
       collection(_db, 'reviews'),
       where('businessId', '==', BIZ_ID),
-      orderBy('ts', 'desc'),
       limit(50)
     );
     const snap = await getDocs(q);
-    reviews = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    reviews = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.ts?.toMillis?.()||0) - (a.ts?.toMillis?.()||0));
   } catch (e) {
     console.warn('[biz] reviews:', e);
   }
@@ -1339,11 +1339,11 @@ async function loadAnalytics() {
     const q = query(
       collection(_db, 'orders'),
       where('businessId', '==', BIZ_ID),
-      orderBy('createdAt', 'desc'),
       limit(100)
     );
     const snap = await getDocs(q);
-    orders = snap.docs.map(d => d.data());
+    orders = snap.docs.map(d => d.data())
+      .sort((a,b) => (b.createdAt?.toMillis?.()||0) - (a.createdAt?.toMillis?.()||0));
   } catch { /* silent */ }
 
   const totalRevenue = orders

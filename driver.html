@@ -504,6 +504,7 @@
 </nav>
 
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 let currentDriver = null;
 let isOnline = false;
 
@@ -795,7 +796,7 @@ function registerDriver(){
     /* Show success banner with PIN before logging in */
     var banner=document.createElement('div');
     banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#71ff00;color:black;padding:18px 20px;font-weight:900;font-size:14px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-    banner.innerHTML='✅ Welcome '+name+'! Your PIN: <span style="background:black;color:#71ff00;padding:2px 8px;border-radius:6px;font-size:16px;letter-spacing:3px;">'+pin+'</span>&nbsp; Save this PIN — you\'ll need it to log in.';
+    banner.innerHTML='✅ Welcome '+_esc(name)+'! Your PIN: <span style="background:black;color:#71ff00;padding:2px 8px;border-radius:6px;font-size:16px;letter-spacing:3px;">'+_esc(pin)+'</span>&nbsp; Save this PIN — you\'ll need it to log in.';
     document.body.prepend(banner);
     setTimeout(function(){banner.remove();},6000);
     loginDriverWith(phone, pin);

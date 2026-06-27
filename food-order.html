@@ -128,12 +128,12 @@ function load() {
     const body = document.getElementById('foBody');
     if (!orders.length) { body.innerHTML = `<div style="text-align:center;padding:60px;color:rgba(255,255,255,0.3);"><div style="font-size:48px;margin-bottom:14px;">📋</div><p>No orders yet.</p><a href="food.html" style="display:inline-block;margin-top:16px;padding:12px 24px;background:linear-gradient(135deg,#22c55e,#16a34a);color:black;font-weight:900;border-radius:12px;text-decoration:none;">Browse Food</a></div>`; return; }
     body.innerHTML = `<div style="margin:16px 0 10px;font-size:15px;font-weight:800;">📋 Your Recent Orders</div>` + orders.map(o=>`
-    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;" onclick="window.location.href='food-order.html?id=${o.id}'">
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;" onclick="window.location.href='food-order.html?id=${esc(o.id)}'">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <span style="font-size:13px;font-weight:800;color:white;">#${o.id.slice(-8)}</span>
-        <span style="font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#22c55e;">${SokoniFood.STATUS_LABELS[o.status]||o.status}</span>
+        <span style="font-size:13px;font-weight:800;color:white;">#${esc(o.id).slice(-8)}</span>
+        <span style="font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#22c55e;">${esc(SokoniFood.STATUS_LABELS[o.status]||o.status)}</span>
       </div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.4);">${(o.vendors||[]).map(v=>v.restaurantName).join(', ')}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.4);">${(o.vendors||[]).map(v=>esc(v.restaurantName||'')).join(', ')}</div>
       <div style="font-size:14px;font-weight:900;color:#22c55e;margin-top:4px;">KES ${SokoniFood.fmt(o.total)}</div>
     </div>`).join('');
     return;

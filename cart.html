@@ -198,6 +198,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 <!-- cart.js handles all rendering — no override -->
 <script src="cart.js"></script>
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 /* ── Hero count — updated after cart.js renders ── */
 function _updateHeroCount(){
   var cart=[]; try{cart=JSON.parse(localStorage.getItem('cart')||'[]');}catch(e){}
@@ -255,7 +256,7 @@ function applyCartPromo(){
   if(msg){
     var sub=_cartSubtotal();
     var saving=found.discount>0?Math.round(sub*found.discount/100):0;
-    msg.innerHTML='✅ <strong>'+found.code+'</strong> — '+(found.discount>0?found.discount+'% off · saving KES '+saving.toLocaleString():'Free delivery applied!');
+    msg.innerHTML='✅ <strong>'+_esc(found.code)+'</strong> — '+(found.discount>0?found.discount+'% off · saving KES '+saving.toLocaleString():'Free delivery applied!');
     msg.style.color='#71ff00';
   }
 }
