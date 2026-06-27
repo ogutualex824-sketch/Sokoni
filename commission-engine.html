@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commission Engine — SOKONI Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="sokoni-tokens.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--surface:#111;--surface2:#161616;--border:#1e1e1e;--border2:#2a2a2a;
+  --g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;
+  --text:#e5e7eb;--sub:#6b7280;
+  --radius:12px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* ── Layout ── */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sidebar-logo span{font-size:15px;font-weight:900;color:var(--g)}
+.nav-group{padding:10px 8px 4px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em;padding-left:14px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;margin:1px 8px;font-size:13px;font-weight:500;color:var(--sub);cursor:pointer;transition:.12s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(113,255,0,.1);color:var(--g)}
+.nav-item .material-icons{font-size:18px}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:18px;font-weight:900;color:var(--g);flex:1}
+.content{padding:24px;flex:1}
+
+/* ── Panel system ── */
+.panel{display:none}
+.panel.active{display:block}
+
+/* ── Stats ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.stat-val{font-size:24px;font-weight:900;color:var(--g);line-height:1}
+.stat-val.blue{color:var(--b)}.stat-val.orange{color:var(--o)}.stat-val.red{color:var(--r)}.stat-val.purple{color:var(--p)}
+.stat-lbl{font-size:11px;color:var(--sub);margin-top:6px;text-transform:uppercase;letter-spacing:.05em}
+.stat-sub{font-size:11px;color:#444;margin-top:3px}
+
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px}
+.card-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.card-title{font-size:14px;font-weight:700;color:var(--text);flex:1}
+.card-body{padding:20px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.12s;font-family:inherit}
+.btn-primary{background:var(--g);color:#000}
+.btn-primary:hover{background:#5dcc00}
+.btn-outline{background:none;border:1.5px solid var(--border2);color:var(--text)}
+.btn-outline:hover{background:var(--surface2)}
+.btn-danger{background:rgba(255,68,68,.15);color:var(--r);border:1px solid rgba(255,68,68,.25)}
+.btn-danger:hover{background:rgba(255,68,68,.25)}
+.btn-sm{padding:5px 10px;font-size:12px}
+
+/* ── Table ── */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--surface2)}
+.tbl-empty{text-align:center;padding:40px;color:var(--sub)}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-pct{background:rgba(113,255,0,.1);color:var(--g)}
+.badge-fixed{background:rgba(0,212,255,.1);color:var(--b)}
+.badge-tiered{background:rgba(168,85,247,.1);color:var(--p)}
+.badge-holiday{background:rgba(255,149,0,.1);color:var(--o)}
+.badge-hybrid{background:rgba(255,68,68,.1);color:var(--r)}
+.badge-on{background:rgba(113,255,0,.1);color:var(--g)}
+.badge-off{background:rgba(255,255,255,.05);color:var(--sub)}
+
+/* ── Form ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.form-hint{font-size:11px;color:#444;margin-top:2px}
+.form-input{background:var(--surface2);border:1.5px solid var(--border2);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:.15s;width:100%}
+.form-input:focus{border-color:var(--g)}
+.form-select{background:var(--surface2);border:1.5px solid var(--border2);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:100%;cursor:pointer}
+.form-select:focus{border-color:var(--g)}
+textarea.form-input{resize:vertical;min-height:72px}
+.form-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+
+/* ── Priority badge ── */
+.priority{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);font-size:11px;font-weight:700;color:var(--sub)}
+.priority.high{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.3);color:var(--g)}
+
+/* ── Preview panel ── */
+.preview-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.preview-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.preview-row:last-child{border-bottom:none}
+.preview-row.total{font-weight:700;font-size:15px;color:var(--g)}
+.preview-row.sub{color:var(--sub);font-size:12px}
+.preview-label{color:var(--sub)}
+.preview-value{font-weight:600;color:var(--text)}
+.preview-empty{text-align:center;padding:32px;color:var(--sub);font-size:13px}
+
+/* ── Tiers builder ── */
+.tier-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.tier-row input{flex:1;min-width:80px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid var(--border2);color:var(--text);padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
+.toast.show{opacity:1}
+
+/* ── Spinner ── */
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.search-box{display:flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--border2);border-radius:8px;padding:0 10px;height:36px;flex:1;min-width:180px}
+.search-box input{flex:1;border:none;background:none;font-size:13px;color:var(--text);outline:none;font-family:inherit}
+.search-box .material-icons{font-size:18px;color:var(--sub)}
+
+/* ── Category grid ── */
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.cat-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:.15s}
+.cat-card:hover{border-color:var(--border2)}
+.cat-card-name{font-size:12px;font-weight:700;color:var(--text)}
+.cat-card-rate{font-size:20px;font-weight:900;color:var(--g);margin-top:4px}
+.cat-card-sub{font-size:11px;color:var(--sub);margin-top:2px}
+.cat-card-edit{font-size:11px;color:var(--b);margin-top:6px;cursor:pointer}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:min(560px,95vw);max-height:90vh;overflow-y:auto}
+.modal-header{display:flex;align-items:center;gap:10px;padding:20px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:10}
+.modal-header h2{font-size:16px;font-weight:900;color:var(--text);flex:1}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--surface);position:sticky;bottom:0}
+
+@media(max-width:768px){
+  .sidebar{display:none}
+  .form-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="material-icons" style="color:var(--g);font-size:22px">monetization_on</span>
+      <span>Commission Engine</span>
+    </div>
+    <div class="nav-group">Engine</div>
+    <div class="nav-item active" data-panel="overview" onclick="_nav(this)"><span class="material-icons">dashboard</span>Overview</div>
+    <div class="nav-item" data-panel="rules" onclick="_nav(this)"><span class="material-icons">rule</span>Rules</div>
+    <div class="nav-item" data-panel="categories" onclick="_nav(this)"><span class="material-icons">category</span>Categories</div>
+    <div class="nav-group">Tools</div>
+    <div class="nav-item" data-panel="preview" onclick="_nav(this)"><span class="material-icons">calculate</span>Preview</div>
+    <div class="nav-item" data-panel="holidays" onclick="_nav(this)"><span class="material-icons">celebration</span>Campaigns</div>
+    <div style="margin-top:auto;padding:12px 8px;border-top:1px solid var(--border)">
+      <a href="revenue.html" class="nav-item" style="margin:0"><span class="material-icons">bar_chart</span>Revenue</a>
+      <a href="admin.html"   class="nav-item" style="margin:0;margin-top:2px"><span class="material-icons">arrow_back</span>Admin</a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="pageTitle">Commission Overview</h1>
+      <button class="btn btn-primary btn-sm" onclick="_openRuleModal()">
+        <span class="material-icons" style="font-size:15px">add</span> New Rule
+      </button>
+      <button class="btn btn-outline btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:15px">refresh</span></button>
+      <a href="revenue.html" class="btn btn-outline btn-sm"><span class="material-icons" style="font-size:15px">bar_chart</span>Revenue</a>
+    </div>
+
+    <div class="content">
+
+      <!-- ══ OVERVIEW ══ -->
+      <div id="panel-overview" class="panel active">
+        <div class="stats-row">
+          <div class="stat"><div class="stat-val" id="s-active">…</div><div class="stat-lbl">Active Rules</div></div>
+          <div class="stat"><div class="stat-val blue" id="s-cats">…</div><div class="stat-lbl">Categories Configured</div></div>
+          <div class="stat"><div class="stat-val orange" id="s-seller">…</div><div class="stat-lbl">Seller Overrides</div></div>
+          <div class="stat"><div class="stat-val purple" id="s-campaigns">…</div><div class="stat-lbl">Active Campaigns</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Rule Hierarchy</span></div>
+            <div class="card-body" style="padding:0">
+              <table class="tbl" id="hierarchyTbl">
+                <thead><tr><th>Priority</th><th>Scope</th><th>Category</th><th>Rate</th><th>Status</th></tr></thead>
+                <tbody><tr><td colspan="5" class="tbl-empty"><div class="spinner"></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Category Effective Rates</span></div>
+            <div class="card-body" id="effectiveRates">
+              <div class="tbl-empty"><div class="spinner"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">Default Rate Table</span><span style="font-size:11px;color:var(--sub)">Applied when no Firestore rule matches</span></div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>Hub / Category</th><th>Rate (%)</th><th>VAT Exempt?</th><th></th></tr></thead>
+              <tbody id="defaultRatesTbl"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ RULES ══ -->
+      <div id="panel-rules" class="panel">
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="material-icons">search</span>
+            <input type="text" id="ruleSearch" placeholder="Search rules…" oninput="_filterRules()">
+          </div>
+          <select class="form-select" style="width:auto;height:36px" id="ruleTypeFilter" onchange="_filterRules()">
+            <option value="">All types</option>
+            <option value="percentage">Percentage</option>
+            <option value="fixed">Fixed</option>
+            <option value="percentage_plus_fixed">Hybrid</option>
+            <option value="tiered">Tiered</option>
+            <option value="commission_holiday">Campaign</option>
+          </select>
+          <select class="form-select" style="width:auto;height:36px" id="ruleCatFilter" onchange="_filterRules()">
+            <option value="">All categories</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);cursor:pointer">
+            <input type="checkbox" id="showInactive" onchange="_loadRules()"> Show inactive
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="_openRuleModal()">
+            <span class="material-icons" style="font-size:14px">add</span> New Rule
+          </button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>P</th><th>Type</th><th>Category</th><th>Scope</th><th>Rate / Amount</th><th>Cap</th><th>Status</th><th></th></tr></thead>
+            <tbody id="rulesTbody"><tr><td colspan="8" class="tbl-empty"><div class="spinner"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══ CATEGORIES ══ -->
+      <div id="panel-categories" class="panel">
+        <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Each category shows its effective commission rate. Click to create or edit a category-level rule.</p>
+        <div class="cat-grid" id="catGrid"><div style="text-align:center;padding:40px"><div class="spinner"></div></div></div>
+      </div>
+
+      <!-- ══ PREVIEW ══ -->
+      <div id="panel-preview" class="panel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Commission Calculator</span></div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group full">
+                  <label class="form-label">Order Amount (KES)</label>
+                  <input type="number" class="form-input" id="pvAmount" min="1" placeholder="e.g. 5000" oninput="_previewCalc()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Category</label>
+                  <select class="form-select" id="pvCategory" onchange="_previewCalc()">
+                    <option value="">Select…</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Seller UID (optional)</label>
+                  <input type="text" class="form-input" id="pvSeller" placeholder="For override lookup" oninput="_debouncedPreview()">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Breakdown</span></div>
+            <div class="card-body">
+              <div id="previewResult" class="preview-empty">Enter an amount and category to preview</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ CAMPAIGNS ══ -->
+      <div id="panel-holidays" class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <p style="font-size:13px;color:var(--sub)">Commission holidays set the rate to 0% for a category or seller during a time window.</p>
+          <button class="btn btn-primary btn-sm" onclick="_openRuleModal('commission_holiday')">
+            <span class="material-icons" style="font-size:14px">add</span> New Campaign
+          </button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Description</th><th>Category</th><th>Scope</th><th>Active From</th><th>Active To</th><th>Status</th><th></th></tr></thead>
+            <tbody id="holidaysTbody"><tr><td colspan="7" class="tbl-empty"><div class="spinner"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- Rule Modal -->
+<div class="modal-overlay" id="ruleModal" onclick="_closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">New Commission Rule</h2>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('ruleModal').classList.remove('open')">
+        <span class="material-icons" style="font-size:16px">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editRuleId">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Rule Type *</label>
+          <select class="form-select" id="ruleType" onchange="_onTypeChange()">
+            <option value="percentage">Percentage (%)</option>
+            <option value="fixed">Fixed Fee (KES)</option>
+            <option value="percentage_plus_fixed">Hybrid (% + Fixed)</option>
+            <option value="tiered">Tiered (volume brackets)</option>
+            <option value="commission_holiday">Campaign (0% window)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category *</label>
+          <select class="form-select" id="ruleCategory">
+            <option value="all">All categories</option>
+          </select>
+        </div>
+
+        <!-- Percentage -->
+        <div class="form-group" id="fRate">
+          <label class="form-label">Commission Rate (%)</label>
+          <input type="number" class="form-input" id="ruleRate" min="0" max="100" step="0.1" placeholder="e.g. 10">
+          <span class="form-hint">0–100%</span>
+        </div>
+
+        <!-- Fixed / Hybrid -->
+        <div class="form-group" id="fFixed" style="display:none">
+          <label class="form-label">Fixed Fee (KES cents)</label>
+          <input type="number" class="form-input" id="ruleFixed" min="0" step="1" placeholder="e.g. 5000 = KES 50">
+          <span class="form-hint">Value in cents (100 = KES 1)</span>
+        </div>
+
+        <!-- Caps -->
+        <div class="form-group">
+          <label class="form-label">Min Commission (KES cents)</label>
+          <input type="number" class="form-input" id="ruleMin" min="0" placeholder="Leave blank for no minimum">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Commission (KES cents)</label>
+          <input type="number" class="form-input" id="ruleMax" min="0" placeholder="Leave blank for no cap">
+        </div>
+
+        <!-- Entity override -->
+        <div class="form-group">
+          <label class="form-label">Entity Type (optional)</label>
+          <select class="form-select" id="ruleEntityType">
+            <option value="">— Platform-wide —</option>
+            <option value="seller">Seller</option>
+            <option value="hub">Hub</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Entity UID (optional)</label>
+          <input type="text" class="form-input" id="ruleEntityId" placeholder="Seller or Hub UID">
+          <span class="form-hint">Leave blank for category-wide rule</span>
+        </div>
+
+        <!-- Campaign dates -->
+        <div class="form-group" id="fFrom" style="display:none">
+          <label class="form-label">Active From *</label>
+          <input type="datetime-local" class="form-input" id="ruleFrom">
+        </div>
+        <div class="form-group" id="fTo" style="display:none">
+          <label class="form-label">Active To *</label>
+          <input type="datetime-local" class="form-input" id="ruleTo">
+        </div>
+
+        <!-- Priority -->
+        <div class="form-group">
+          <label class="form-label">Priority (higher = checked first)</label>
+          <input type="number" class="form-input" id="rulePriority" min="0" max="1000" value="0">
+          <span class="form-hint">0 = lowest priority</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="ruleActive">
+            <option value="1">Active</option>
+            <option value="0">Inactive</option>
+          </select>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group full">
+          <label class="form-label">Description / Internal Note</label>
+          <textarea class="form-input" id="ruleDescription" placeholder="e.g. Negotiated rate for VIP seller Alex — agreed 2026-06-28"></textarea>
+        </div>
+      </div>
+
+      <!-- Tiered brackets -->
+      <div id="tiersSection" style="display:none;margin-top:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <label class="form-label" style="margin:0">Volume Tiers</label>
+          <button type="button" class="btn btn-outline btn-sm" onclick="_addTier()">+ Add Tier</button>
+        </div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:10px">Each tier defines a rate for orders within a KES amount range.</div>
+        <div id="tiersList"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('ruleModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" id="saveRuleBtn" onclick="_saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="firebase.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ── Auth guard ── */
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){location.href='login.html?redirect=commission-engine.html';return;}
+  user.getIdTokenResult().then(function(t){
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='index.html';return;}
+    _init();
+  });
+});
+
+var _fns=null;
+var _allRules=[];
+var _tiersCount=0;
+var _debounceTimer=null;
+
+var DEFAULT_RATES={
+  marketplace:10,services:15,food_delivery:8,bookings:12,events:10,
+  digital_products:20,property:3,vehicles:5,jobs:15,classifieds:8,
+  healthcare:12,education:15,legal:12,insurance:10,logistics:8,
+  financial_services:8,pharmacy:8,freelancers:15,hotels:12,hub:8,default:10
+};
+var VAT_EXEMPT=new Set(['property','jobs','healthcare','education']);
+
+var CATEGORIES=[
+  {v:'all',l:'All Categories'},{v:'marketplace',l:'Marketplace'},{v:'services',l:'Services'},
+  {v:'food_delivery',l:'Food Delivery'},{v:'pharmacy',l:'Pharmacy'},{v:'bookings',l:'Bookings'},
+  {v:'events',l:'Events'},{v:'digital_products',l:'Digital Products'},{v:'property',l:'Property'},
+  {v:'vehicles',l:'Vehicles'},{v:'jobs',l:'Jobs'},{v:'freelancers',l:'Freelancers'},
+  {v:'hotels',l:'Hotels & BnBs'},{v:'logistics',l:'Logistics'},{v:'healthcare',l:'Healthcare'},
+  {v:'education',l:'Education'},{v:'legal',l:'Legal'},{v:'insurance',l:'Insurance'},
+  {v:'financial_services',l:'Financial Services'},{v:'hub',l:'Hub (general)'},
+  {v:'classifieds',l:'Classifieds'},{v:'subscriptions',l:'Subscriptions'},{v:'advertising',l:'Advertising'},
+];
+
+function _cf(name){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(name);}
+
+/* ── Nav ── */
+var _panelTitles={overview:'Commission Overview',rules:'Commission Rules',categories:'Category Rates',preview:'Rate Preview Calculator',holidays:'Zero-Commission Campaigns'};
+window._nav=function(el){
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  el.classList.add('active');
+  var p=el.dataset.panel;
+  document.querySelectorAll('.panel').forEach(function(x){x.classList.remove('active');});
+  document.getElementById('panel-'+p).classList.add('active');
+  document.getElementById('pageTitle').textContent=_panelTitles[p]||p;
+  _loadPanel(p);
+};
+window._refresh=function(){
+  var a=document.querySelector('.panel.active');
+  if(a)_loadPanel(a.id.replace('panel-',''));
+};
+
+function _init(){
+  _populateCategorySelects();
+  _loadPanel('overview');
+}
+
+function _loadPanel(p){
+  ({overview:_loadOverview,rules:_loadRules,categories:_loadCategories,
+    preview:function(){},holidays:_loadHolidays})[p]&&
+  ({overview:_loadOverview,rules:_loadRules,categories:_loadCategories,
+    preview:function(){},holidays:_loadHolidays})[p]();
+}
+
+/* ── Category selects ── */
+function _populateCategorySelects(){
+  var opts=CATEGORIES.filter(function(c){return c.v!=='all';}).map(function(c){
+    return '<option value="'+c.v+'">'+c.l+'</option>';
+  }).join('');
+  ['ruleCatFilter','pvCategory'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el)el.insertAdjacentHTML('beforeend',opts);
+  });
+  var modalCat=document.getElementById('ruleCategory');
+  if(modalCat)modalCat.innerHTML=CATEGORIES.map(function(c){return '<option value="'+c.v+'">'+c.l+'</option>';}).join('');
+}
+
+/* ── Overview ── */
+function _loadOverview(){
+  _cf('listCommissionRules')({}).then(function(r){
+    var rules=r.data.rules||[];
+    _allRules=rules;
+    var active=rules.filter(function(x){return x.isActive;});
+    var sellers=active.filter(function(x){return x.entityType==='seller';});
+    var campaigns=active.filter(function(x){return x.type==='commission_holiday';});
+    var cats=new Set(active.filter(function(x){return !x.entityId&&x.category!=='all';}).map(function(x){return x.category;}));
+    document.getElementById('s-active').textContent=active.length;
+    document.getElementById('s-cats').textContent=cats.size;
+    document.getElementById('s-seller').textContent=sellers.length;
+    document.getElementById('s-campaigns').textContent=campaigns.length;
+
+    /* Hierarchy table — top 10 by priority */
+    var top=active.slice(0,10);
+    var tbody=document.querySelector('#hierarchyTbl tbody');
+    tbody.innerHTML=top.length?top.map(function(r){
+      return '<tr>'+
+        '<td><span class="priority'+(r.priority>0?' high':'')+'">'+r.priority+'</span></td>'+
+        '<td>'+_typeBadge(r.type)+'</td>'+
+        '<td>'+_esc(r.category||'all')+'</td>'+
+        '<td>'+_rateStr(r)+'</td>'+
+        '<td><span class="badge '+(r.isActive?'badge-on':'badge-off')+'">'+(r.isActive?'Active':'Off')+'</span></td>'+
+      '</tr>';
+    }).join(''):'<tr><td colspan="5" class="tbl-empty">No rules — using default rate table</td></tr>';
+
+    /* Effective rates */
+    var catRates=document.getElementById('effectiveRates');
+    var mainCats=['marketplace','services','food_delivery','property','vehicles','jobs','healthcare','education','legal'];
+    catRates.innerHTML=mainCats.map(function(cat){
+      var rule=active.find(function(r){return !r.entityId&&(r.category===cat||r.category==='all');});
+      var rate=rule?_rateStr(rule):(DEFAULT_RATES[cat]||DEFAULT_RATES.default)+'%';
+      var src=rule?'custom rule':'default table';
+      return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">'+
+        '<span>'+_esc(cat)+'</span>'+
+        '<span style="font-weight:700;color:var(--g)">'+_esc(rate)+'</span>'+
+        '<span style="font-size:11px;color:var(--sub)">'+_esc(src)+'</span>'+
+      '</div>';
+    }).join('');
+
+    /* Default rate table */
+    var tbody2=document.getElementById('defaultRatesTbl');
+    tbody2.innerHTML=Object.entries(DEFAULT_RATES).filter(function(e){return e[0]!=='default';}).map(function(e){
+      return '<tr>'+
+        '<td>'+_esc(e[0])+'</td>'+
+        '<td style="font-weight:700;color:var(--g)">'+e[1]+'%</td>'+
+        '<td>'+(VAT_EXEMPT.has(e[0])?'<span class="badge badge-on">Exempt</span>':'')+'</td>'+
+        '<td><button class="btn btn-outline btn-sm" onclick="_openRuleModal(null,\''+_esc(e[0])+'\')">Override</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){_toast('Error loading rules: '+e.message,'red');});
+}
+
+/* ── Rules ── */
+function _loadRules(){
+  var incl=document.getElementById('showInactive')&&document.getElementById('showInactive').checked;
+  document.getElementById('rulesTbody').innerHTML='<tr><td colspan="8" class="tbl-empty"><div class="spinner"></div></td></tr>';
+  _cf('listCommissionRules')({includeInactive:!!incl}).then(function(r){
+    _allRules=r.data.rules||[];
+    _renderRules(_allRules);
+  }).catch(function(e){
+    document.getElementById('rulesTbody').innerHTML='<tr><td colspan="8" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';
+  });
+}
+
+function _renderRules(list){
+  var tbody=document.getElementById('rulesTbody');
+  if(!list.length){tbody.innerHTML='<tr><td colspan="8" class="tbl-empty">No rules found</td></tr>';return;}
+  tbody.innerHTML=list.map(function(r){
+    var scope=r.entityId?'<span style="font-size:11px;color:var(--b)">'+_esc(r.entityType)+': '+_esc(r.entityId.slice(0,10))+'…</span>':'<span style="color:var(--sub)">platform-wide</span>';
+    var cap=(r.maxCommissionCents?'max '+_kes(r.maxCommissionCents):'')+(r.minCommissionCents?' min '+_kes(r.minCommissionCents):'');
+    return '<tr>'+
+      '<td><span class="priority'+(r.priority>0?' high':'')+'">'+r.priority+'</span></td>'+
+      '<td>'+_typeBadge(r.type)+'</td>'+
+      '<td>'+_esc(r.category||'—')+'</td>'+
+      '<td>'+scope+'</td>'+
+      '<td style="font-weight:700;color:var(--g)">'+_rateStr(r)+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc(cap||'—')+'</td>'+
+      '<td><span class="badge '+(r.isActive?'badge-on':'badge-off')+'">'+(r.isActive?'Active':'Off')+'</span></td>'+
+      '<td style="display:flex;gap:4px">'+
+        '<button class="btn btn-outline btn-sm" onclick="_editRule(\''+_esc(r.id)+'\')">Edit</button>'+
+        '<button class="btn btn-danger btn-sm" onclick="_deleteRule(\''+_esc(r.id)+'\')">Del</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+
+window._filterRules=function(){
+  var q=(document.getElementById('ruleSearch').value||'').toLowerCase();
+  var type=document.getElementById('ruleTypeFilter').value;
+  var cat=document.getElementById('ruleCatFilter').value;
+  _renderRules(_allRules.filter(function(r){
+    var mq=!q||(r.description+r.category+r.type+(r.entityId||'')).toLowerCase().includes(q);
+    var mt=!type||r.type===type;
+    var mc=!cat||r.category===cat||r.category==='all';
+    return mq&&mt&&mc;
+  }));
+};
+
+/* ── Categories ── */
+function _loadCategories(){
+  _cf('listCommissionRules')({}).then(function(r){
+    var active=r.data.rules||[];
+    var grid=document.getElementById('catGrid');
+    grid.innerHTML=CATEGORIES.filter(function(c){return c.v!=='all'&&c.v!=='subscriptions'&&c.v!=='advertising';}).map(function(c){
+      var rule=active.find(function(r){return !r.entityId&&(r.category===c.v||r.category==='all');});
+      var rate=rule?_rateStr(rule):(DEFAULT_RATES[c.v]||DEFAULT_RATES.default)+'%';
+      var src=rule?'Custom rule':'Default';
+      return '<div class="cat-card" onclick="_openRuleModal(null,\''+c.v+'\')">'+
+        '<div class="cat-card-name">'+_esc(c.l)+'</div>'+
+        '<div class="cat-card-rate">'+_esc(rate)+'</div>'+
+        '<div class="cat-card-sub">'+_esc(src)+(VAT_EXEMPT.has(c.v)?' · VAT exempt':'')+'</div>'+
+        '<div class="cat-card-edit">Click to add override →</div>'+
+      '</div>';
+    }).join('');
+  });
+}
+
+/* ── Holidays/campaigns ── */
+function _loadHolidays(){
+  _cf('listCommissionRules')({type:'commission_holiday',includeInactive:true}).then(function(r){
+    var rules=r.data.rules||[];
+    var tbody=document.getElementById('holidaysTbody');
+    if(!rules.length){tbody.innerHTML='<tr><td colspan="7" class="tbl-empty">No campaigns yet</td></tr>';return;}
+    var now=Date.now();
+    tbody.innerHTML=rules.map(function(r){
+      var from=r.activeFrom?new Date(r.activeFrom).toLocaleDateString('en-KE'):'—';
+      var to=r.activeTo?new Date(r.activeTo).toLocaleDateString('en-KE'):'—';
+      var live=r.isActive&&r.activeFrom&&r.activeTo&&now>=r.activeFrom&&now<=r.activeTo;
+      return '<tr>'+
+        '<td>'+_esc(r.description||'—')+'</td>'+
+        '<td>'+_esc(r.category)+'</td>'+
+        '<td>'+(r.entityId?_esc(r.entityType)+': '+_esc(r.entityId.slice(0,12))+'…':'platform-wide')+'</td>'+
+        '<td>'+_esc(from)+'</td>'+
+        '<td>'+_esc(to)+'</td>'+
+        '<td><span class="badge '+(live?'badge-on':r.isActive?'badge-pct':'badge-off')+'">'+(live?'LIVE':r.isActive?'Scheduled':'Off')+'</span></td>'+
+        '<td><button class="btn btn-outline btn-sm" onclick="_editRule(\''+_esc(r.id)+'\')">Edit</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){_toast('Error: '+e.message,'red');});
+}
+
+/* ── Preview ── */
+window._previewCalc=function(){
+  var amt=parseFloat(document.getElementById('pvAmount').value);
+  var cat=document.getElementById('pvCategory').value;
+  var seller=document.getElementById('pvSeller').value.trim()||null;
+  if(!amt||!cat){document.getElementById('previewResult').innerHTML='<div class="preview-empty">Enter an amount and category to preview</div>';return;}
+  document.getElementById('previewResult').innerHTML='<div class="preview-empty"><div class="spinner"></div></div>';
+  _cf('previewCommission')({orderAmountKES:amt,category:cat,sellerId:seller||undefined}).then(function(r){
+    var d=r.data;
+    document.getElementById('previewResult').innerHTML=
+      '<div class="preview-box">'+
+        '<div class="preview-row"><span class="preview-label">Order Amount</span><span class="preview-value">'+_kes2(d.orderAmountKES)+'</span></div>'+
+        '<div class="preview-row"><span class="preview-label">Commission Rate</span><span class="preview-value" style="color:var(--o)">'+d.effectiveRate+'%</span></div>'+
+        '<div class="preview-row"><span class="preview-label">Platform Commission</span><span class="preview-value" style="color:var(--r)">−'+_kes2(d.commissionKES)+'</span></div>'+
+        '<div class="preview-row sub"><span class="preview-label">VAT on commission ('+d.vatRate+'%'+(d.vatExempt?' — exempt':'')+')</span><span class="preview-value">'+_kes2(d.vatKES)+'</span></div>'+
+        '<div class="preview-row"><span class="preview-label">Seller Net (before WHT)</span><span class="preview-value">'+_kes2(d.sellerNetKES)+'</span></div>'+
+        '<div class="preview-row sub"><span class="preview-label">WHT ('+d.whtRate+'%)</span><span class="preview-value">−'+_kes2(d.whtKES)+'</span></div>'+
+        '<div class="preview-row total"><span>Seller Receives</span><span>'+_kes2(d.sellerReceivesKES)+'</span></div>'+
+        '<div style="margin-top:12px;font-size:11px;color:var(--sub)">Rule: '+_esc(d.ruleSource)+' ('+_esc(d.ruleId)+')</div>'+
+      '</div>';
+  }).catch(function(e){
+    document.getElementById('previewResult').innerHTML='<div class="preview-empty" style="color:var(--r)">'+_esc(e.message)+'</div>';
+  });
+};
+window._debouncedPreview=function(){clearTimeout(_debounceTimer);_debounceTimer=setTimeout(_previewCalc,500);};
+
+/* ── Modal ── */
+window._openRuleModal=function(type,category){
+  document.getElementById('editRuleId').value='';
+  document.getElementById('modalTitle').textContent='New Commission Rule';
+  document.getElementById('saveRuleBtn').textContent='Save Rule';
+  /* Reset form */
+  ['ruleRate','ruleFixed','ruleMin','ruleMax','ruleEntityId','ruleDescription'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  document.getElementById('rulePriority').value='0';
+  document.getElementById('ruleActive').value='1';
+  document.getElementById('ruleType').value=type||'percentage';
+  if(category)document.getElementById('ruleCategory').value=category;
+  document.getElementById('ruleEntityType').value='';
+  document.getElementById('tiersList').innerHTML='';
+  _tiersCount=0;
+  _onTypeChange();
+  document.getElementById('ruleModal').classList.add('open');
+};
+
+window._editRule=function(id){
+  var r=_allRules.find(function(x){return x.id===id;});
+  if(!r)return;
+  document.getElementById('editRuleId').value=id;
+  document.getElementById('modalTitle').textContent='Edit Commission Rule';
+  document.getElementById('saveRuleBtn').textContent='Update Rule';
+  document.getElementById('ruleType').value=r.type||'percentage';
+  document.getElementById('ruleCategory').value=r.category||'all';
+  document.getElementById('ruleRate').value=r.rate!=null?r.rate:'';
+  document.getElementById('ruleFixed').value=r.amountCents!=null?r.amountCents:'';
+  document.getElementById('ruleMin').value=r.minCommissionCents!=null?r.minCommissionCents:'';
+  document.getElementById('ruleMax').value=r.maxCommissionCents!=null?r.maxCommissionCents:'';
+  document.getElementById('ruleEntityType').value=r.entityType||'';
+  document.getElementById('ruleEntityId').value=r.entityId||'';
+  document.getElementById('rulePriority').value=r.priority||0;
+  document.getElementById('ruleActive').value=r.isActive?'1':'0';
+  document.getElementById('ruleDescription').value=r.description||'';
+  if(r.activeFrom)document.getElementById('ruleFrom').value=new Date(r.activeFrom).toISOString().slice(0,16);
+  if(r.activeTo)document.getElementById('ruleTo').value=new Date(r.activeTo).toISOString().slice(0,16);
+  /* Tiers */
+  document.getElementById('tiersList').innerHTML='';_tiersCount=0;
+  if(r.tiers)(r.tiers||[]).forEach(function(t){_addTier(t);});
+  _onTypeChange();
+  document.getElementById('ruleModal').classList.add('open');
+};
+
+window._onTypeChange=function(){
+  var t=document.getElementById('ruleType').value;
+  document.getElementById('fRate').style.display=(t==='percentage'||t==='percentage_plus_fixed')?'':'none';
+  document.getElementById('fFixed').style.display=(t==='fixed'||t==='percentage_plus_fixed')?'':'none';
+  document.getElementById('tiersSection').style.display=t==='tiered'?'':'none';
+  document.getElementById('fFrom').style.display=t==='commission_holiday'?'':'none';
+  document.getElementById('fTo').style.display=t==='commission_holiday'?'':'none';
+};
+
+window._addTier=function(t){
+  _tiersCount++;
+  var i=_tiersCount;
+  var min=t?t.minCents||'':'';var max=t?t.maxCents||'':'';var rate=t?t.rate||'':'';
+  document.getElementById('tiersList').insertAdjacentHTML('beforeend',
+    '<div class="tier-row" id="tier-'+i+'">'+
+      '<input type="number" class="form-input" placeholder="Min (cents)" id="tier-min-'+i+'" value="'+min+'" style="flex:1">'+
+      '<input type="number" class="form-input" placeholder="Max (cents)" id="tier-max-'+i+'" value="'+max+'" style="flex:1">'+
+      '<input type="number" class="form-input" placeholder="Rate %" id="tier-rate-'+i+'" value="'+rate+'" min="0" max="100" style="flex:1">'+
+      '<button class="btn btn-danger btn-sm" onclick="this.closest(\'.tier-row\').remove()">×</button>'+
+    '</div>'
+  );
+};
+
+window._saveRule=function(){
+  var id=document.getElementById('editRuleId').value;
+  var type=document.getElementById('ruleType').value;
+  var rate=parseFloat(document.getElementById('ruleRate').value);
+  var fixed=parseInt(document.getElementById('ruleFixed').value)||undefined;
+  var min=parseInt(document.getElementById('ruleMin').value)||undefined;
+  var max=parseInt(document.getElementById('ruleMax').value)||undefined;
+  var entityType=document.getElementById('ruleEntityType').value||undefined;
+  var entityId=document.getElementById('ruleEntityId').value.trim()||undefined;
+  var priority=parseInt(document.getElementById('rulePriority').value)||0;
+  var isActive=document.getElementById('ruleActive').value==='1';
+  var description=document.getElementById('ruleDescription').value.trim();
+  var from=document.getElementById('ruleFrom').value;
+  var to=document.getElementById('ruleTo').value;
+
+  /* Build tiers */
+  var tiers=[];
+  if(type==='tiered'){
+    document.querySelectorAll('#tiersList .tier-row').forEach(function(row){
+      var idx=row.id.replace('tier-','');
+      tiers.push({
+        minCents:parseInt(document.getElementById('tier-min-'+idx).value)||0,
+        maxCents:parseInt(document.getElementById('tier-max-'+idx).value)||Infinity,
+        rate:parseFloat(document.getElementById('tier-rate-'+idx).value)||0,
+      });
+    });
+  }
+
+  var payload={
+    type,
+    category:document.getElementById('ruleCategory').value,
+    rate:isNaN(rate)?undefined:rate,
+    amountCents:fixed,
+    tiers:tiers.length?tiers:undefined,
+    minCommissionCents:min,maxCommissionCents:max,
+    entityType,entityId,priority,isActive,description,
+    activeFrom:from||undefined,activeTo:to||undefined,
+  };
+
+  var btn=document.getElementById('saveRuleBtn');
+  btn.disabled=true;btn.textContent='Saving…';
+
+  var fn=id?_cf('updateCommissionRule'):_cf('createCommissionRule');
+  if(id)payload.ruleId=id;
+
+  fn(payload).then(function(){
+    _toast((id?'Rule updated':'Rule created'),'green');
+    document.getElementById('ruleModal').classList.remove('open');
+    _loadPanel(document.querySelector('.panel.active').id.replace('panel-',''));
+    _loadOverview();
+  }).catch(function(e){
+    _toast('Error: '+e.message,'red');
+  }).finally(function(){btn.disabled=false;btn.textContent=id?'Update Rule':'Save Rule';});
+};
+
+window._deleteRule=function(id){
+  if(!confirm('Deactivate this rule?'))return;
+  _cf('deleteCommissionRule')({ruleId:id}).then(function(){
+    _toast('Rule deactivated','green');
+    _loadRules();_loadOverview();
+  }).catch(function(e){_toast('Error: '+e.message,'red');});
+};
+
+window._closeModal=function(e){
+  if(e.target===document.getElementById('ruleModal'))
+    document.getElementById('ruleModal').classList.remove('open');
+};
+
+/* ── Toast ── */
+function _toast(msg,color){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderColor=color==='red'?'rgba(255,68,68,.3)':color==='green'?'rgba(113,255,0,.3)':'var(--border2)';
+  t.style.color=color==='red'?'var(--r)':color==='green'?'var(--g)':'var(--text)';
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},2500);
+}
+
+/* ── Helpers ── */
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _kes(cents){return 'KES '+(cents/100).toLocaleString();}
+function _kes2(kes){return 'KES '+Number(kes||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function _rateStr(r){
+  if(r.type==='percentage'||r.type==='commission_holiday')return(r.rate||0)+'%';
+  if(r.type==='fixed')return _kes(r.amountCents||0);
+  if(r.type==='percentage_plus_fixed')return(r.rate||0)+'% + '+_kes(r.amountCents||0);
+  if(r.type==='tiered')return'Tiered ('+(r.tiers||[]).length+' brackets)';
+  return '—';
+}
+function _typeBadge(t){
+  var cls={percentage:'badge-pct',fixed:'badge-fixed',percentage_plus_fixed:'badge-hybrid',tiered:'badge-tiered',commission_holiday:'badge-holiday'}[t]||'';
+  var label={percentage:'%',fixed:'Fixed',percentage_plus_fixed:'Hybrid',tiered:'Tiered',commission_holiday:'Campaign'}[t]||t;
+  return '<span class="badge '+cls+'">'+_esc(label)+'</span>';
+}
+
+})();
+</script>
+</body>
+</html>

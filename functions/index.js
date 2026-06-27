@@ -7442,3 +7442,39 @@ exports.sendPOSReceipt             = posRetail.sendPOSReceipt;
 exports.sendPurchaseOrder          = posRetail.sendPurchaseOrder;
 exports.posLowStockAlert           = posRetail.posLowStockAlert;
 exports.posMarketplaceOrderSync    = posRetail.posMarketplaceOrderSync;
+
+/* ══════════════════════════════════════════════════════════════════
+   Commission Engine  v1.0
+   5 Cloud Functions: CRUD for commissionRules + live preview
+══════════════════════════════════════════════════════════════════ */
+const commission = require('./commission');
+
+exports.createCommissionRule  = commission.createCommissionRule;
+exports.updateCommissionRule  = commission.updateCommissionRule;
+exports.deleteCommissionRule  = commission.deleteCommissionRule;
+exports.listCommissionRules   = commission.listCommissionRules;
+exports.previewCommission     = commission.previewCommission;
+
+/* ══════════════════════════════════════════════════════════════════
+   Subscription & Billing Engine  v1.0
+   15 Cloud Functions: plans, status, activate, cancel, reactivate,
+   billing history, admin CRUD, analytics, manual actions, refunds,
+   export, hourly expiration processor, daily renewal reminders
+══════════════════════════════════════════════════════════════════ */
+const subBilling = require('./sub-billing');
+
+exports.subGetPlans               = subBilling.subGetPlans;
+exports.subGetStatus              = subBilling.subGetStatus;
+exports.subActivate               = subBilling.subActivate;
+exports.subCancel                 = subBilling.subCancel;
+exports.subReactivate             = subBilling.subReactivate;
+exports.subGetBillingHistory      = subBilling.subGetBillingHistory;
+exports.adminSubCreatePlan        = subBilling.adminSubCreatePlan;
+exports.adminSubUpdatePlan        = subBilling.adminSubUpdatePlan;
+exports.adminSubListSubscriptions = subBilling.adminSubListSubscriptions;
+exports.adminSubGetAnalytics      = subBilling.adminSubGetAnalytics;
+exports.adminSubManualAction      = subBilling.adminSubManualAction;
+exports.adminSubProcessRefund     = subBilling.adminSubProcessRefund;
+exports.adminSubExportBilling     = subBilling.adminSubExportBilling;
+exports.subProcessExpirations     = subBilling.subProcessExpirations;
+exports.subSendRenewalReminders   = subBilling.subSendRenewalReminders;

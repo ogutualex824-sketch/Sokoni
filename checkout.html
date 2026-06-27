@@ -1111,6 +1111,8 @@
       <hr class="os-divider">
       <div class="os-row"><span class="os-row-label">Subtotal</span><span class="os-row-val" id="summarySubtotal">KES 0</span></div>
       <div class="os-row"><span class="os-row-label">Delivery</span><span class="os-free" id="summaryDelivery">FREE</span></div>
+      <div class="os-row" id="platformFeeRow" style="display:none"><span class="os-row-label" style="display:flex;align-items:center;gap:5px;">Platform Fee <span id="platformFeeRate" style="font-size:10px;background:rgba(113,255,0,0.1);color:#71ff00;border-radius:4px;padding:1px 5px;font-weight:700;"></span></span><span class="os-row-val" id="platformFeeVal">KES 0</span></div>
+      <div class="os-row" id="promoRow" style="display:none"><span class="os-row-label" style="color:#71ff00;">Promo Discount</span><span class="os-row-val" style="color:#71ff00;" id="promoSavingRow">—</span></div>
       <div class="os-row"><span class="os-row-label">M-PESA Fee</span><span class="os-row-val" id="mpesaFeeRow">KES 0</span></div>
       <div class="os-total-row">
         <span class="os-total-label">Total</span>
@@ -1430,17 +1432,53 @@ itemsEl.innerHTML = _itemsHTML.join("");
   } catch(e){}
 })();
 
+/* Platform fee: 10% default — overridden by server-side commission engine */
+var _platformFeeRate = 0;   /* set to 0 so buyers only see it when non-zero */
+var _platformFee     = 0;
+
+function setPlatformFee(ratePct){
+  _platformFeeRate = ratePct;
+  updateTotals();
+}
+
 function updateTotals(){
-  const fee = selectedPayment === "mpesa" ? Math.round(subtotal * 0.01) : 0;
+  const mpesaFee    = selectedPayment === "mpesa" ? Math.round(subtotal * 0.01) : 0;
   const promoSaving = Math.round(subtotal * (promoDiscount/100));
-  orderTotal = subtotal + fee + deliveryFee - promoSaving;
+  _platformFee      = _platformFeeRate > 0 ? Math.round(subtotal * _platformFeeRate / 100) : 0;
+  orderTotal        = subtotal + mpesaFee + deliveryFee + _platformFee - promoSaving;
+
   if(subtotalEl) subtotalEl.textContent = "KES " + subtotal.toLocaleString();
-  if(totalEl) totalEl.textContent = "KES " + orderTotal.toLocaleString();
+  if(totalEl)    totalEl.textContent    = "KES " + orderTotal.toLocaleString();
   if(btnTotalEl) btnTotalEl.textContent = "KES " + orderTotal.toLocaleString();
-  if(mpesaFeeEl) mpesaFeeEl.textContent = fee > 0 ? "KES " + fee.toLocaleString() : "—";
+  if(mpesaFeeEl) mpesaFeeEl.textContent = mpesaFee > 0 ? "KES " + mpesaFee.toLocaleString() : "—";
+
+  /* Platform fee row */
+  const pfRow = document.getElementById("platformFeeRow");
+  if(pfRow){
+    if(_platformFee > 0){
+      pfRow.style.display = "";
+      document.getElementById("platformFeeVal").textContent  = "KES " + _platformFee.toLocaleString();
+      document.getElementById("platformFeeRate").textContent = _platformFeeRate + "%";
+    } else {
+      pfRow.style.display = "none";
+    }
+  }
+
+  /* Promo row */
+  const promoEl = document.getElementById("promoRow");
+  if(promoEl){
+    if(promoSaving > 0){
+      promoEl.style.display = "";
+      document.getElementById("promoSavingRow").textContent = "−KES " + promoSaving.toLocaleString();
+    } else {
+      promoEl.style.display = "none";
+    }
+  }
+
   document.getElementById("mpesaAmountDisplay").textContent = "KES " + orderTotal.toLocaleString();
-  document.getElementById("cardAmountDisplay").textContent = "KES " + orderTotal.toLocaleString();
+  document.getElementById("cardAmountDisplay").textContent  = "KES " + orderTotal.toLocaleString();
   document.getElementById("paypalAmountDisplay").textContent = "KES " + orderTotal.toLocaleString();
+
   const delivEl = document.getElementById("summaryDelivery");
   if(delivEl){
     if(deliveryFee > 0){ delivEl.className = "os-row-val"; delivEl.textContent = "KES " + deliveryFee.toLocaleString(); }
