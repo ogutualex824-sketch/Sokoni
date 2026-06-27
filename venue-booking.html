@@ -243,6 +243,7 @@
 
 <script src="firebase.js"></script>
 <script src="sokoni-config.js"></script>
+<script src="sokoni-pay.js"></script>
 <script src="sokoni-booking-engine.js"></script>
 <script>
 const E   = id => document.getElementById(id);
@@ -584,30 +585,77 @@ function startHoldCountdown(secs) {
 }
 
 async function payWith(method) {
-  toast('💳 Processing payment…', 10000);
-  /* Integrate with SokoniPay / IntaSend — simplified placeholder */
-  try {
-    const endMins = _selectedEnd?.endMins || _selectedEnd?.startMins+30;
-    const dayStart = new Date(_selectedDate+'T00:00:00').getTime();
-    const startTs  = dayStart + _selectedStart.startMins * 60000;
-    const endTs    = dayStart + endMins * 60000;
+  const v      = _activeVenue;
+  const endMins = _selectedEnd?.endMins || _selectedEnd?.startMins + 30;
+  const p       = SokoniBooking.calculatePrice(v, _selectedStart.startMins, endMins, _selectedDate, { addOns: _selectedAddOns });
+  const notes   = E('bookingNotes')?.value || '';
 
-    /* Real implementation: call SokoniPay.initiatePayment() then on success call bookingCreate */
-    const result = await SokoniBooking.createBooking({
-      venueId:    _activeVenue.id,
-      holdId:     _hold?.holdId,
-      date:       _selectedDate,
-      startTime:  _selectedStart.startTime,
-      endTime:    SokoniBooking._minsToTime(endMins),
-      addOns:     _selectedAddOns,
-      notes:      E('bookingNotes')?.value || '',
-      paymentId:  'pay_' + Date.now(), // Replace with real payment ID from SokoniPay
+  async function _finalise(paymentId) {
+    try {
+      const result = await SokoniBooking.createBooking({
+        venueId:   v.id,
+        holdId:    _hold?.holdId,
+        date:      _selectedDate,
+        startTime: _selectedStart.startTime,
+        endTime:   SokoniBooking._minsToTime(endMins),
+        addOns:    _selectedAddOns,
+        notes,
+        paymentId,
+      });
+      clearInterval(_holdCountdownInterval);
+      closeModal();
+      showBookingSuccess(result);
+    } catch(err) {
+      toast('❌ ' + (err.message || 'Booking failed — please try again'));
+    }
+  }
+
+  if (method === 'mpesa') {
+    /* Real M-Pesa STK push via SokoniPay.platformBook() — deposit-first, balance on check-in */
+    if (typeof SokoniPay === 'undefined') { toast('❌ Payment system not loaded — refresh and try again'); return; }
+    SokoniPay.platformBook({
+      providerName:  v.name,
+      category:      'booking',
+      serviceDesc:   `Venue booking: ${v.name} · ${_selectedDate} ${_selectedStart.startTime}–${SokoniBooking._minsToTime(endMins)}`,
+      totalAmount:   p.total,
+      depositPct:    v.pricing?.deposit ? Math.round((v.pricing.deposit / p.total) * 100) : 50,
+      providerPhone: v.ownerPhone || '',
+      bookingDetails: {
+        venueId:   v.id,
+        date:      _selectedDate,
+        startTime: _selectedStart.startTime,
+        endTime:   SokoniBooking._minsToTime(endMins),
+      },
+      onSuccess: function(ref) { _finalise(ref); },
     });
-    clearInterval(_holdCountdownInterval);
-    closeModal();
-    showBookingSuccess(result);
-  } catch(err) {
-    toast('❌ ' + (err.message || 'Booking failed'));
+    return;
+  }
+
+  if (method === 'wallet') {
+    /* SOKONI Wallet deduction */
+    if (typeof SokoniPay === 'undefined') { toast('❌ Payment system not loaded'); return; }
+    SokoniPay.gateway({
+      providerName: v.name,
+      category:    'booking',
+      serviceDesc: `Venue: ${v.name} · ${_selectedDate}`,
+      amount:       p.total,
+      method:       'wallet',
+      onSuccess:    function(ref) { _finalise(ref); },
+    });
+    return;
+  }
+
+  /* Card / other — show gateway */
+  if (typeof SokoniPay !== 'undefined') {
+    SokoniPay.gateway({
+      providerName: v.name,
+      category:    'booking',
+      serviceDesc: `Venue: ${v.name} · ${_selectedDate}`,
+      amount:       p.total,
+      onSuccess:    function(ref) { _finalise(ref); },
+    });
+  } else {
+    toast('❌ Payment system not loaded — refresh and try again');
   }
 }
 

@@ -249,22 +249,57 @@ service cloud.firestore {
        • delete:  admin-only.
     ══════════════════════════════════════════════════════════════ */
     match /bookings/{bookingId} {
-      allow create: if claimsOwner();
+      /* Service bookings (old) + Venue bookings (new) — unified rule */
+      allow create: if isAuthed();
       allow read:   if isAdmin()
-                    || (isAuthed() && resource.data.uid        == request.auth.uid)
-                    || (isAuthed() && resource.data.buyerId    == request.auth.uid)
-                    || (isAuthed() && resource.data.userId     == request.auth.uid)
-                    || (isAuthed() && resource.data.providerId == request.auth.uid);
-      /* Booker may cancel/reschedule; provider may update status only */
+                    || (isAuthed() && resource.data.uid          == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerId      == request.auth.uid)
+                    || (isAuthed() && resource.data.userId       == request.auth.uid)
+                    || (isAuthed() && resource.data.providerId   == request.auth.uid)
+                    || (isAuthed() && resource.data.customerId   == request.auth.uid)
+                    || (isAuthed() && resource.data.ownerId      == request.auth.uid);
       allow update: if isAdmin()
-                    || (isOwner() && uidUnchanged()
+                    || (isAuthed() && resource.data.customerId == request.auth.uid
                         && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['status','cancelReason','updatedAt','date','time','notes']))
+                             .hasOnly(['status','cancelReason','cancellationReason','cancelledAt','cancelledBy','updatedAt','date','time','notes']))
+                    || (isAuthed() && resource.data.ownerId == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status','providerNote','updatedAt','confirmedAt','completedAt','approvedAt','rejectedAt','rejectionReason','checkIn','checkOut','reminders','autoCompletedAt']))
                     || (isAuthed() && resource.data.providerId == request.auth.uid
-                        && uidUnchanged()
                         && request.resource.data.diff(resource.data).affectedKeys()
                              .hasOnly(['status','providerNote','updatedAt','confirmedAt','completedAt']));
       allow delete: if isAdmin();
+    }
+
+    /* ── Venue & Resource Booking Engine ─────────────────────────── */
+    match /venues/{venueId} {
+      /* Anyone can browse active venues; only the owner (via CF) may write */
+      allow read:   if resource.data.status == 'active' || isAdmin()
+                    || (isAuthed() && resource.data.ownerId == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0;
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.ownerId == request.auth.uid
+                        && request.resource.data.ownerId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    match /venueBlockouts/{blockId} {
+      allow read:   if isAuthed();
+      allow create: if isAuthed();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.createdBy == request.auth.uid);
+      allow delete: if isAdmin()
+                    || (isAuthed() && resource.data.createdBy == request.auth.uid);
+    }
+
+    match /bookingHolds/{holdId} {
+      /* Slot holds: auth users can create; CF cleanup deletes expired; owner can delete their own */
+      allow read:   if isAuthed();
+      allow create: if isAuthed() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.userId == request.auth.uid || isAdmin();
     }
 
     /* ══════════════════════════════════════════════════════════════
