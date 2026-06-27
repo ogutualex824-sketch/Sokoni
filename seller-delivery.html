@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Seller Delivery Dashboard</title>
+  <meta name="description" content="Manage your active deliveries, track riders, and view delivery analytics.">
+  <script src="sokoni-permissions.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <style>
+    .sd-page { padding: 24px 4% 100px; min-height: 100vh; }
+
+    /* ── Tab bar ── */
+    .sd-tabs { display: flex; gap: 6px; margin-bottom: 24px; overflow-x: auto; scrollbar-width: none; }
+    .sd-tabs::-webkit-scrollbar { display: none; }
+    .sd-tab { padding: 9px 18px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; color: rgba(255,255,255,0.55); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; transition: .2s; }
+    .sd-tab.active { background: rgba(113,255,0,0.12); border-color: rgba(113,255,0,0.35); color: #71ff00; }
+
+    /* ── Stats row ── */
+    .sd-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px; margin-bottom: 24px; }
+    .sd-stat { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; text-align: center; }
+    .sd-stat-val { font-size: 22px; font-weight: 900; color: #71ff00; }
+    .sd-stat-label { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 3px; }
+
+    /* ── Delivery cards ── */
+    .sd-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 18px; margin-bottom: 12px; }
+    .sd-card:hover { border-color: rgba(113,255,0,0.22); }
+    .sd-card-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .sd-card-id { font-weight: 800; color: white; font-size: 14px; }
+    .sd-card-time { font-size: 11px; color: rgba(255,255,255,0.35); }
+    .sd-card-body { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.7; margin-bottom: 10px; }
+    .sd-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+    .badge-green  { background: rgba(113,255,0,0.1); color: #71ff00; border: 1px solid rgba(113,255,0,0.2); }
+    .badge-blue   { background: rgba(0,170,255,0.1); color: #00aaff; border: 1px solid rgba(0,170,255,0.2); }
+    .badge-orange { background: rgba(255,140,0,0.1); color: #ff8c00; border: 1px solid rgba(255,140,0,0.2); }
+    .badge-red    { background: rgba(255,61,61,0.1);  color: #ff6b6b; border: 1px solid rgba(255,61,61,0.2); }
+    .badge-grey   { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.45); border: 1px solid rgba(255,255,255,0.1); }
+
+    /* ── Map container ── */
+    .sd-map { width: 100%; height: 200px; border-radius: 14px; overflow: hidden; margin-top: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
+
+    /* ── Rider info strip ── */
+    .sd-rider { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(113,255,0,0.05); border: 1px solid rgba(113,255,0,0.12); border-radius: 12px; margin-top: 8px; }
+    .sd-rider-icon { font-size: 20px; }
+    .sd-rider-name { font-weight: 700; color: white; font-size: 13px; }
+    .sd-rider-sub { font-size: 11px; color: rgba(255,255,255,0.4); }
+    .sd-rider-eta { margin-left: auto; font-weight: 900; color: #71ff00; font-size: 14px; }
+
+    /* ── Card actions ── */
+    .sd-card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .btn-track { flex: 1; padding: 10px; background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2); color: #71ff00; font-weight: 700; border-radius: 10px; cursor: pointer; font-size: 12px; font-family: inherit; text-align: center; text-decoration: none; }
+    .btn-report { padding: 10px 14px; background: rgba(255,140,0,0.08); border: 1px solid rgba(255,140,0,0.2); color: #ff8c00; font-weight: 700; border-radius: 10px; cursor: pointer; font-size: 12px; font-family: inherit; }
+
+    /* ── Analytics ── */
+    .sd-chart-placeholder { height: 140px; background: rgba(113,255,0,0.03); border: 1px dashed rgba(113,255,0,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.25); font-size: 13px; margin-top: 16px; }
+    .sd-metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 12px; margin-top: 16px; }
+    .sd-metric { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; }
+    .sd-metric-title { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .sd-metric-val { font-size: 22px; font-weight: 900; color: white; }
+    .sd-metric-sub { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+
+    /* ── Empty state ── */
+    .sd-empty { text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.3); }
+    .sd-empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .sd-empty-text { font-size: 14px; }
+
+    /* ── Report modal ── */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: flex-end; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal-box { background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px 24px 0 0; width: 100%; max-width: 540px; padding: 28px; max-height: 80vh; overflow-y: auto; }
+    .modal-title { font-size: 17px; font-weight: 800; color: white; margin-bottom: 16px; }
+    .modal-input { width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white; font-size: 16px; font-family: inherit; margin-bottom: 10px; }
+    .modal-input:focus { outline: none; border-color: rgba(113,255,0,0.4); }
+    .modal-btn { width: 100%; padding: 13px; background: linear-gradient(135deg,#71ff00,#4fc800); color: black; font-weight: 800; border: none; border-radius: 12px; cursor: pointer; font-size: 15px; font-family: inherit; }
+    .modal-close { background: none; border: none; color: rgba(255,255,255,0.4); font-size: 22px; cursor: pointer; float: right; }
+  </style>
+</head>
+<body>
+<div class="sd-page">
+  <h1 style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;">Delivery Dashboard</h1>
+  <p style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;">Real-time view of all your deliveries</p>
+
+  <!-- Stats -->
+  <div class="sd-stats" id="sdStats">
+    <div class="sd-stat"><div class="sd-stat-val" id="statActive">—</div><div class="sd-stat-label">Active</div></div>
+    <div class="sd-stat"><div class="sd-stat-val" id="statToday">—</div><div class="sd-stat-label">Today</div></div>
+    <div class="sd-stat"><div class="sd-stat-val" id="statSuccessRate">—%</div><div class="sd-stat-label">Success Rate</div></div>
+    <div class="sd-stat"><div class="sd-stat-val" id="statAvgTime">—</div><div class="sd-stat-label">Avg Time</div></div>
+    <div class="sd-stat"><div class="sd-stat-val" id="statRevenue">—</div><div class="sd-stat-label">Revenue KES</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="sd-tabs">
+    <button class="sd-tab active" data-tab="active">Active</button>
+    <button class="sd-tab" data-tab="pending">Pending</button>
+    <button class="sd-tab" data-tab="history">History</button>
+    <button class="sd-tab" data-tab="failed">Failed/Returns</button>
+    <button class="sd-tab" data-tab="analytics">Analytics</button>
+  </div>
+
+  <!-- Tab panels -->
+  <div id="tabActive">
+    <div id="activeList"></div>
+  </div>
+  <div id="tabPending" style="display:none">
+    <div id="pendingList"></div>
+  </div>
+  <div id="tabHistory" style="display:none">
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input id="histSearch" type="search" placeholder="Search by order ID or address..." style="flex:1;padding:11px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;font-family:inherit;outline:none;">
+    </div>
+    <div id="historyList"></div>
+  </div>
+  <div id="tabFailed" style="display:none">
+    <div id="failedList"></div>
+  </div>
+  <div id="tabAnalytics" style="display:none">
+    <div class="sd-metrics-grid" id="analyticsGrid"></div>
+    <div class="sd-chart-placeholder">Analytics charts available in the full analytics dashboard</div>
+  </div>
+</div>
+
+<!-- Report failed delivery modal -->
+<div class="modal-overlay" id="reportModal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('reportModal').classList.remove('open')">&#x2715;</button>
+    <div class="modal-title">Report Delivery Issue</div>
+    <input type="hidden" id="reportDeliveryRef">
+    <select id="reportReason" class="modal-input">
+      <option value="">Select reason...</option>
+      <option value="customer_unavailable">Customer unavailable</option>
+      <option value="wrong_address">Wrong address</option>
+      <option value="rider_breakdown">Rider breakdown</option>
+      <option value="seller_delay">Seller delay</option>
+      <option value="rejected_order">Order rejected by customer</option>
+    </select>
+    <textarea id="reportNote" class="modal-input" rows="3" placeholder="Additional notes (optional)..."></textarea>
+    <button class="modal-btn" onclick="_submitReport()">Submit Report</button>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="firebase.js"></script>
+<script src="sokoni-dispatch.js"></script>
+<script src="sokoni-logistics.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var _sellerUid = null;
+  var _unsubActive = null;
+  var _unsubPending = null;
+  var _unsubHistory = null;
+  var _unsubFailed = null;
+  var _activeDeliveries = [];
+  var _miniMaps = {};
+
+  /* ── Bootstrap ── */
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user) return;
+    _sellerUid = user.uid;
+    _initTabs();
+    _loadActive();
+    _loadStats();
+  });
+
+  /* ── Tab switching ── */
+  function _initTabs() {
+    document.querySelectorAll('.sd-tab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var tab = btn.dataset.tab;
+        document.querySelectorAll('.sd-tab').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        ['active','pending','history','failed','analytics'].forEach(function (t) {
+          document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
+        });
+        if (tab === 'pending'   && !_unsubPending)  _loadPending();
+        if (tab === 'history'   && !_unsubHistory)  _loadHistory();
+        if (tab === 'failed'    && !_unsubFailed)   _loadFailed();
+        if (tab === 'analytics')                    _loadAnalytics();
+      });
+    });
+    document.getElementById('histSearch').addEventListener('input', _filterHistory);
+  }
+
+  /* ── Active deliveries (real-time) ── */
+  function _loadActive() {
+    if (_unsubActive) _unsubActive();
+    _unsubActive = firebase.firestore()
+      .collection('packageRequests')
+      .where('sellerUid', '==', _sellerUid)
+      .where('status', 'in', ['driver_assigned','driver_accepted','driver_at_seller','in_transit','arriving'])
+      .onSnapshot(function (snap) {
+        _activeDeliveries = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+        _renderActive();
+        _updateStats();
+      });
+  }
+
+  function _renderActive() {
+    var el = document.getElementById('activeList');
+    if (!_activeDeliveries.length) {
+      el.innerHTML = '<div class="sd-empty"><div class="sd-empty-icon">🏍️</div><div class="sd-empty-text">No active deliveries right now</div></div>';
+      return;
+    }
+    el.innerHTML = _activeDeliveries.map(_buildCard).join('');
+    _activeDeliveries.forEach(function (d) { if (d.riderId || d.driverId) _initMiniMap(d); });
+  }
+
+  function _buildCard(d) {
+    var status   = d.status || 'unknown';
+    var badgeCls = { driver_assigned:'badge-blue', driver_accepted:'badge-blue', driver_at_seller:'badge-orange', in_transit:'badge-orange', arriving:'badge-green', delivered:'badge-green', failed:'badge-red', returned:'badge-red' }[status] || 'badge-grey';
+    var statusLabel = { driver_assigned:'Rider Assigned', driver_accepted:'Rider En Route', driver_at_seller:'Parcel Collected', in_transit:'Out for Delivery', arriving:'Arriving Now', delivered:'Delivered', failed:'Failed', returned:'Returned' }[status] || status.replace(/_/g,' ');
+    var createdStr = d.createdAt ? new Date(d.createdAt.seconds ? d.createdAt.seconds*1000 : d.createdAt).toLocaleString('en-KE',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'}) : '—';
+    var riderHtml = '';
+    if (d.assignedRiderName || d.riderName) {
+      riderHtml = `<div class="sd-rider"><span class="sd-rider-icon">🏍️</span><div><div class="sd-rider-name">${_esc(d.assignedRiderName||d.riderName||'Rider')}</div><div class="sd-rider-sub">${_esc(d.assignedRiderPhone||d.riderPhone||'')} ${d.dispatchDistKm ? '· '+d.dispatchDistKm+'km away' : ''}</div></div><div class="sd-rider-eta">${d.dispatchEtaMin ? d.dispatchEtaMin+'min' : 'ETA —'}</div></div>`;
+    }
+    return `
+      <div class="sd-card">
+        <div class="sd-card-head">
+          <div>
+            <div class="sd-card-id">Order #${_esc(d.id.slice(-8).toUpperCase())}</div>
+            <div class="sd-card-time">${createdStr}</div>
+          </div>
+          <span class="sd-badge ${badgeCls}">${statusLabel}</span>
+        </div>
+        <div class="sd-card-body">
+          <div>To: ${_esc(d.deliveryAddress || d.dropoffAddress || '—')}</div>
+          <div>Buyer: ${_esc(d.buyerName || '—')} ${d.buyerPhone ? '· '+_esc(d.buyerPhone) : ''}</div>
+          <div>Fee: KES ${(d.deliveryFee||0).toLocaleString()} ${d.vehicleType ? '· '+d.vehicleType : ''}</div>
+        </div>
+        ${riderHtml}
+        <div id="map_${d.id}" class="sd-map" style="display:${d.assignedRiderId||d.riderId?'block':'none'}"></div>
+        <div class="sd-card-actions">
+          <a class="btn-track" href="delivery-tracking.html?ref=${_esc(d.id)}" target="_blank">Track Live</a>
+          <button class="btn-report" onclick="_openReport('${_esc(d.id)}')">Report Issue</button>
+        </div>
+      </div>`;
+  }
+
+  /* ── Mini map per active delivery ── */
+  function _initMiniMap(d) {
+    var mapId = 'map_' + d.id;
+    if (_miniMaps[mapId]) return;
+    var riderId = d.riderId || d.assignedRiderId;
+    if (!riderId) return;
+    /* Subscribe to rider GPS */
+    firebase.firestore().collection('rideDrivers').doc(riderId)
+      .onSnapshot(function (snap) {
+        var riderData = snap.data() || {};
+        if (!riderData.lat || !riderData.lng) return;
+        /* Lazy-init map */
+        if (!_miniMaps[mapId]) {
+          if (!window.L) return; /* Leaflet not yet loaded */
+          var el = document.getElementById(mapId);
+          if (!el) return;
+          el.style.display = 'block';
+          var m = L.map(mapId, { zoomControl:false, attributionControl:false }).setView([riderData.lat, riderData.lng], 14);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+          var icon = L.divIcon({ html:'<div style="font-size:22px;line-height:1">🏍️</div>', iconSize:[28,28], iconAnchor:[14,14], className:'' });
+          _miniMaps[mapId] = { map: m, marker: L.marker([riderData.lat, riderData.lng], { icon }).addTo(m) };
+        } else {
+          _miniMaps[mapId].marker.setLatLng([riderData.lat, riderData.lng]);
+          _miniMaps[mapId].map.panTo([riderData.lat, riderData.lng]);
+        }
+      });
+  }
+
+  /* ── Pending deliveries ── */
+  function _loadPending() {
+    _unsubPending = firebase.firestore()
+      .collection('packageRequests')
+      .where('sellerUid', '==', _sellerUid)
+      .where('status', 'in', ['order_placed','ready_for_pickup','retry_scheduled'])
+      .onSnapshot(function (snap) {
+        var items = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+        var el = document.getElementById('pendingList');
+        el.innerHTML = items.length ? items.map(_buildCard).join('') : '<div class="sd-empty"><div class="sd-empty-icon">✅</div><div class="sd-empty-text">No pending deliveries</div></div>';
+      });
+  }
+
+  /* ── History ── */
+  var _historyAll = [];
+  function _loadHistory() {
+    _unsubHistory = firebase.firestore()
+      .collection('packageRequests')
+      .where('sellerUid', '==', _sellerUid)
+      .where('status', 'in', ['delivered','buyer_confirmed'])
+      .limit(80)
+      .onSnapshot(function (snap) {
+        _historyAll = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+        _filterHistory();
+      });
+  }
+
+  function _filterHistory() {
+    var q = (document.getElementById('histSearch').value || '').toLowerCase();
+    var filtered = q ? _historyAll.filter(function (d) {
+      return d.id.toLowerCase().includes(q) || (d.deliveryAddress||'').toLowerCase().includes(q) || (d.buyerName||'').toLowerCase().includes(q);
+    }) : _historyAll;
+    var el = document.getElementById('historyList');
+    el.innerHTML = filtered.length ? filtered.map(_buildCard).join('') : '<div class="sd-empty"><div class="sd-empty-icon">📦</div><div class="sd-empty-text">No delivery history yet</div></div>';
+  }
+
+  /* ── Failed / returns ── */
+  function _loadFailed() {
+    _unsubFailed = firebase.firestore()
+      .collection('packageRequests')
+      .where('sellerUid', '==', _sellerUid)
+      .where('status', 'in', ['failed','returned','return_in_progress','refund_initiated','support_required'])
+      .onSnapshot(function (snap) {
+        var items = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+        var el = document.getElementById('failedList');
+        el.innerHTML = items.length ? items.map(_buildCard).join('') : '<div class="sd-empty"><div class="sd-empty-icon">✅</div><div class="sd-empty-text">No failed deliveries</div></div>';
+      });
+  }
+
+  /* ── Stats ── */
+  function _updateStats() {
+    document.getElementById('statActive').textContent = _activeDeliveries.length;
+  }
+
+  function _loadStats() {
+    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    firebase.firestore().collection('packageRequests')
+      .where('sellerUid', '==', _sellerUid)
+      .where('createdAt', '>=', todayStart)
+      .get()
+      .then(function (snap) {
+        var deliveries = snap.docs.map(function (d) { return d.data(); });
+        var total    = deliveries.length;
+        var success  = deliveries.filter(function (d) { return ['delivered','buyer_confirmed'].includes(d.status); }).length;
+        var revenue  = deliveries.reduce(function (s,d) { return s + (d.deliveryFee||0); }, 0);
+        var times    = deliveries.filter(function (d) { return d.createdAt && d.deliveredAt; })
+                                 .map(function (d) {
+                                   var c = d.createdAt.seconds ? d.createdAt.seconds*1000 : d.createdAt;
+                                   var e = d.deliveredAt.seconds ? d.deliveredAt.seconds*1000 : d.deliveredAt;
+                                   return (e-c)/60000;
+                                 });
+        var avgMin   = times.length ? Math.round(times.reduce(function(a,b){return a+b;},0)/times.length) : 0;
+        document.getElementById('statToday').textContent       = total;
+        document.getElementById('statSuccessRate').textContent = (total ? Math.round(success/total*100) : 0) + '%';
+        document.getElementById('statAvgTime').textContent     = avgMin ? avgMin+'m' : '—';
+        document.getElementById('statRevenue').textContent     = revenue.toLocaleString();
+      }).catch(function() {});
+  }
+
+  /* ── Analytics tab ── */
+  function _loadAnalytics() {
+    var el = document.getElementById('analyticsGrid');
+    /* 30-day rollup */
+    var since = new Date(); since.setDate(since.getDate()-30);
+    firebase.firestore().collection('packageRequests')
+      .where('sellerUid', '==', _sellerUid)
+      .where('createdAt', '>=', since)
+      .get()
+      .then(function (snap) {
+        var deliveries = snap.docs.map(function (d) { return d.data(); });
+        var total     = deliveries.length;
+        var success   = deliveries.filter(function (d) { return ['delivered','buyer_confirmed'].includes(d.status); }).length;
+        var failed    = deliveries.filter(function (d) { return ['failed','returned'].includes(d.status); }).length;
+        var revenue   = deliveries.reduce(function (s,d) { return s + (d.deliveryFee||0); }, 0);
+        var riderPay  = deliveries.reduce(function (s,d) { return s + (d.driverNet||0); }, 0);
+        var vehicles  = {};
+        deliveries.forEach(function (d) {
+          var v = d.vehicleType||'moto';
+          vehicles[v] = (vehicles[v]||0)+1;
+        });
+        var topVehicle = Object.entries(vehicles).sort(function(a,b){return b[1]-a[1];})[0];
+        el.innerHTML = [
+          _metric('Total Deliveries', total, '30 days'),
+          _metric('Successful', success, total ? Math.round(success/total*100)+'% success' : '—'),
+          _metric('Failed/Returned', failed, total ? Math.round(failed/total*100)+'% failure' : '—'),
+          _metric('Revenue', 'KES '+revenue.toLocaleString(), 'Total delivery fees'),
+          _metric('Rider Pay', 'KES '+riderPay.toLocaleString(), 'Total paid to riders'),
+          _metric('Top Vehicle', topVehicle ? topVehicle[0] : '—', topVehicle ? topVehicle[1]+' deliveries' : '—'),
+        ].join('');
+      }).catch(function () { el.innerHTML = '<p style="color:rgba(255,255,255,0.4);font-size:13px;">Could not load analytics.</p>'; });
+  }
+
+  function _metric(title, val, sub) {
+    return `<div class="sd-metric"><div class="sd-metric-title">${_esc(String(title))}</div><div class="sd-metric-val">${_esc(String(val))}</div><div class="sd-metric-sub">${_esc(String(sub))}</div></div>`;
+  }
+
+  /* ── Report issue modal ── */
+  window._openReport = function (deliveryRef) {
+    document.getElementById('reportDeliveryRef').value = deliveryRef;
+    document.getElementById('reportReason').value = '';
+    document.getElementById('reportNote').value = '';
+    document.getElementById('reportModal').classList.add('open');
+  };
+
+  window._submitReport = function () {
+    var deliveryRef = document.getElementById('reportDeliveryRef').value;
+    var reason = document.getElementById('reportReason').value;
+    var note   = document.getElementById('reportNote').value.trim();
+    if (!reason) { alert('Please select a reason'); return; }
+    var handleFailed = firebase.functions().httpsCallable('handleFailedDelivery');
+    handleFailed({ deliveryRef, reason, note })
+      .then(function (result) {
+        document.getElementById('reportModal').classList.remove('open');
+        alert('Report submitted. Action: ' + result.data.action);
+      })
+      .catch(function (err) { alert('Error: ' + err.message); });
+  };
+
+  /* ── XSS escape ── */
+  function _esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+  }
+})();
+</script>
+<!-- Leaflet for mini-maps -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Bottom nav -->
+<nav style="position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid rgba(255,255,255,0.06);display:flex;z-index:90;">
+  <a href="seller.html" style="flex:1;padding:12px 0;text-align:center;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">🏪</span>Shop</a>
+  <a href="seller-delivery.html" style="flex:1;padding:12px 0;text-align:center;color:#71ff00;text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">🚚</span>Deliveries</a>
+  <a href="seller-success.html" style="flex:1;padding:12px 0;text-align:center;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">📊</span>Analytics</a>
+  <a href="profile.html" style="flex:1;padding:12px 0;text-align:center;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">👤</span>Profile</a>
+</nav>
+</body>
+</html>
