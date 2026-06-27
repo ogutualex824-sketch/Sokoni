@@ -956,16 +956,26 @@
       <!-- Delivery Calculator -->
       <div class="co-card">
         <div class="co-card-title">🚛 Delivery Cost Estimator</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div>
             <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">To Zone</label>
             <select id="deliveryZone" class="co-input" style="margin-bottom:0;cursor:pointer;" onchange="calcDelivery()">
               <option value="">Select zone</option>
-              <option value="50">CBD / Town</option>
-              <option value="100">Suburbs (5-15km)</option>
-              <option value="150">Outskirts (15-30km)</option>
-              <option value="250">Outside Nairobi</option>
-              <option value="500">Nationwide</option>
+              <option value="cbd">CBD / Town (~3 km)</option>
+              <option value="suburbs">Suburbs (5–15 km)</option>
+              <option value="outskirts">Outskirts (15–30 km)</option>
+              <option value="outside">Outside Nairobi (~50 km)</option>
+              <option value="nationwide">Nationwide (~150 km)</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">Vehicle</label>
+            <select id="deliveryVehicle" class="co-input" style="margin-bottom:0;cursor:pointer;" onchange="calcDelivery()">
+              <option value="moto">🏍️ Motorcycle</option>
+              <option value="bicycle">🚲 Bicycle</option>
+              <option value="tuktuk">🛺 Tuk-Tuk</option>
+              <option value="car">🚗 Car</option>
+              <option value="van">🚐 Van</option>
             </select>
           </div>
           <div>
@@ -973,17 +983,21 @@
             <input class="co-input" style="margin-bottom:0;" type="number" id="deliveryWeight" placeholder="e.g. 2" min="0.1" step="0.1" value="1" oninput="calcDelivery()">
           </div>
           <div>
-            <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">Size</label>
+            <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">Parcel Size</label>
             <select id="deliverySize" class="co-input" style="margin-bottom:0;cursor:pointer;" onchange="calcDelivery()">
-              <option value="1">📦 Small</option>
-              <option value="1.5">📫 Medium</option>
-              <option value="2">🗳️ Large</option>
-              <option value="3">🚛 Oversized</option>
+              <option value="small">📦 Small (bag-sized)</option>
+              <option value="medium">📫 Medium (shoebox)</option>
+              <option value="large">🗳️ Large (luggage)</option>
+              <option value="extra_large">🚛 Extra-large / bulky</option>
             </select>
           </div>
         </div>
-        <div id="deliveryCostResult" style="font-size:13px;color:#71ff00;font-weight:700;padding:8px 0;"></div>
+        <!-- Transparent fee breakdown -->
+        <div id="deliveryBreakdown" style="display:none;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 14px;margin-bottom:8px;"></div>
+        <div id="deliveryCostResult" style="font-size:13px;color:#71ff00;font-weight:700;padding:4px 0;"></div>
         <div id="deliveryEtaResult" style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px;min-height:16px;"></div>
+        <!-- Surge notice -->
+        <div id="deliverySurge" style="display:none;font-size:11px;color:rgba(251,191,36,0.85);font-weight:700;margin-top:6px;padding:6px 10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:8px;"></div>
       </div>
 
       <!-- Installment Option -->
@@ -1343,6 +1357,7 @@
 
 <script src="sokoni-invoice.js"></script>
 <script src="sokoni-pay.js"></script>
+<script src="sokoni-delivery-pricing.js"></script>
 <script src="sokoni-routing.js"></script>
 <script type="module" src="sokoni-delivery.js"></script>
 <script src="checkout.js"></script>
@@ -2309,37 +2324,83 @@ function applyDiscount(){
    DELIVERY CALCULATOR
 ============================ */
 
-function calcDelivery(){
-  const zoneBase = Number(document.getElementById("deliveryZone")?.value||0);
-  const weight   = Number(document.getElementById("deliveryWeight")?.value||1);
-  const sizeMult = Number(document.getElementById("deliverySize")?.value||1);
-  const resultEl = document.getElementById("deliveryCostResult");
-  const etaEl    = document.getElementById("deliveryEtaResult");
+/* Zone → distance/time estimates and ETA labels */
+const _ZONE_MAP = {
+  cbd:        { distanceKm: 3,   durationMin: 20,  isRural:false, eta:'1–2 hours',             days:0, label:'CBD / Town'       },
+  suburbs:    { distanceKm: 10,  durationMin: 40,  isRural:false, eta:'2–4 hours',             days:0, label:'Suburbs'          },
+  outskirts:  { distanceKm: 22,  durationMin: 70,  isRural:false, eta:'Same day or next AM',   days:1, label:'Outskirts'        },
+  outside:    { distanceKm: 50,  durationMin: 150, isRural:true,  eta:'1–2 business days',     days:2, label:'Outside Nairobi'  },
+  nationwide: { distanceKm: 150, durationMin: 480, isRural:true,  eta:'2–5 business days',     days:5, label:'Nationwide'      },
+};
 
-  if(!zoneBase){
+function calcDelivery(){
+  const zoneKey   = document.getElementById("deliveryZone")?.value || '';
+  const weight    = Math.max(0.1, Number(document.getElementById("deliveryWeight")?.value||1));
+  const parcel    = document.getElementById("deliverySize")?.value  || 'small';
+  const vehicle   = document.getElementById("deliveryVehicle")?.value || 'moto';
+  const resultEl  = document.getElementById("deliveryCostResult");
+  const etaEl     = document.getElementById("deliveryEtaResult");
+  const bkEl      = document.getElementById("deliveryBreakdown");
+  const surgeEl   = document.getElementById("deliverySurge");
+
+  if(!zoneKey){
     if(resultEl) resultEl.textContent = "Select delivery zone for estimate";
-    if(etaEl) etaEl.textContent = "";
+    if(etaEl)    etaEl.textContent = "";
+    if(bkEl)     bkEl.style.display = 'none';
+    if(surgeEl)  surgeEl.style.display = 'none';
     return;
   }
-  const fee = Math.round(zoneBase * sizeMult + (weight-1)*30);
-  deliveryFee = fee;
-  if(resultEl) resultEl.textContent = `Estimated delivery: KES ${fee.toLocaleString()}`;
-  const etaMap = {"50":"1–2 hours","100":"2–4 hours","150":"Same day or next morning","250":"1–2 business days","500":"2–5 business days"};
-  const etaDays = {"50":0,"100":0,"150":1,"250":2,"500":5};
-  const zone = document.getElementById("deliveryZone")?.value;
-  if(etaEl) etaEl.innerHTML = (zone && etaMap[zone]) ? `⏰ Est. arrival: <strong style="color:white;">${etaMap[zone]}</strong>` : "";
+
+  const zone = _ZONE_MAP[zoneKey];
+
+  /* Intelligent pricing */
+  if(window.SokoniDeliveryPricing){
+    const result = window.SokoniDeliveryPricing.calculate({
+      vehicleType:  vehicle,
+      distanceKm:   zone.distanceKm,
+      durationMin:  zone.durationMin,
+      weightKg:     weight,
+      parcelSize:   parcel,
+      isRural:      zone.isRural,
+      timestamp:    Date.now(),
+    });
+    deliveryFee = result.customerPaysFee;
+    if(resultEl) resultEl.textContent = `Estimated delivery: KES ${result.customerPaysFee.toLocaleString()}`;
+    if(bkEl){
+      bkEl.style.display = 'block';
+      bkEl.innerHTML = `<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);letter-spacing:.6px;margin-bottom:8px;">FEE BREAKDOWN</div>`
+                     + window.SokoniDeliveryPricing.renderBreakdown(result);
+    }
+    if(surgeEl){
+      if(result.isPeakHour || result.isSurging){
+        surgeEl.style.display = 'block';
+        surgeEl.textContent = '🔥 ' + (result.primaryReason || 'Surge pricing active');
+      } else {
+        surgeEl.style.display = 'none';
+      }
+    }
+  } else {
+    /* Fallback */
+    deliveryFee = Math.round(80 + zone.distanceKm * 15);
+    if(resultEl) resultEl.textContent = `Estimated delivery: KES ${deliveryFee.toLocaleString()}`;
+    if(bkEl) bkEl.style.display = 'none';
+    if(surgeEl) surgeEl.style.display = 'none';
+  }
+
+  if(etaEl) etaEl.innerHTML = `⏰ Est. arrival: <strong style="color:white;">${zone.eta}</strong>`;
 
   /* Update estimated delivery date in summary */
   const estRow  = document.getElementById("estDeliveryRow");
   const estDate = document.getElementById("estDeliveryDate");
   const estNote = document.getElementById("estDeliveryNote");
-  if(estRow && zone){
-    const days = etaDays[zone]||0;
-    const d = new Date(); d.setDate(d.getDate()+days);
-    const label = days===0 ? "Today, "+d.toLocaleDateString("en-KE",{weekday:"long"}) : d.toLocaleDateString("en-KE",{weekday:"long",day:"numeric",month:"long"});
-    estRow.style.display="block";
+  if(estRow){
+    const d = new Date(); d.setDate(d.getDate() + zone.days);
+    const label = zone.days === 0
+      ? "Today, " + d.toLocaleDateString("en-KE",{weekday:"long"})
+      : d.toLocaleDateString("en-KE",{weekday:"long",day:"numeric",month:"long"});
+    estRow.style.display = "block";
     if(estDate) estDate.textContent = label;
-    if(estNote) estNote.textContent = etaMap[zone];
+    if(estNote) estNote.textContent = zone.eta;
   }
   updateTotals();
 }

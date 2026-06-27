@@ -483,20 +483,53 @@ function _renderBanner(status) {
 
 /* ── Details card renderer ── */
 function _renderDetails(d) {
-  const el = document.getElementById('dtDetails');
+  const el   = document.getElementById('dtDetails');
   const card = document.getElementById('dtDetailsCard');
   if (!el || !card) return;
   const fee   = Number(d.deliveryFee || 0).toLocaleString();
   const total = Number(d.orderTotal  || 0).toLocaleString();
   const items = (d.items||[]).map(i=>`${i.qty||1}× ${i.name||'Item'}`).join(', ') || '—';
+  const surgeHtml = (d.pricingSurgeReasons||[]).length
+    ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">'
+      + (d.pricingSurgeReasons||[]).map(r =>
+          `<span style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.22);border-radius:7px;padding:2px 7px;font-size:10px;color:rgba(251,191,36,0.85);font-weight:700;">${r}</span>`
+        ).join('')
+      + '</div>'
+    : '';
   el.innerHTML = `
     <div class="dt-row"><span class="dt-row-key">From</span><span class="dt-row-val">${d.pickupAddress||'—'}</span></div>
     <div class="dt-row"><span class="dt-row-key">To</span><span class="dt-row-val">${d.deliveryAddress||'—'}</span></div>
     <div class="dt-row"><span class="dt-row-key">Items</span><span class="dt-row-val">${items}</span></div>
     <div class="dt-row"><span class="dt-row-key">Order Total</span><span class="dt-row-val">KES ${total}</span></div>
-    <div class="dt-row"><span class="dt-row-key">Delivery Fee</span><span class="dt-row-val">KES ${fee}</span></div>
-    <div class="dt-row"><span class="dt-row-key">Speed</span><span class="dt-row-val">${(d.speed||'same_day').replace('_',' ')}</span></div>
-    ${d.distanceKm ? `<div class="dt-row"><span class="dt-row-key">Distance</span><span class="dt-row-val">${Number(d.distanceKm).toFixed(1)} km</span></div>` : ''}`;
+    <div class="dt-row"><span class="dt-row-key">Delivery Fee</span><span class="dt-row-val">KES ${fee}${surgeHtml ? ' 🔥' : ''}</span></div>
+    ${surgeHtml}
+    <div class="dt-row"><span class="dt-row-key">Speed</span><span class="dt-row-val">${(d.speed||'same_day').replace(/_/g,' ')}</span></div>
+    ${d.distanceKm ? `<div class="dt-row"><span class="dt-row-key">Distance</span><span class="dt-row-val">${Number(d.distanceKm).toFixed(1)} km${d.durationMin ? ' · ~' + d.durationMin + ' min' : ''}</span></div>` : ''}
+    ${d.vehicleType ? `<div class="dt-row"><span class="dt-row-key">Vehicle</span><span class="dt-row-val">${d.vehicleType}</span></div>` : ''}`;
+
+  /* Pricing breakdown expansion (collapsible) */
+  if (d.pricingBreakdown && window.SokoniDeliveryPricing) {
+    const synthetic = {
+      customerPaysFee: d.deliveryFee || 0,
+      customerFee:     d.deliveryFee || 0,
+      subsidyKES:      d.subsidyKES  || 0,
+      reasons:         d.pricingSurgeReasons || [],
+      vehicleLabel:    d.vehicleType || 'Rider',
+      vehicleIcon:     '🏍️',
+      components:      d.pricingBreakdown,
+    };
+    const bkHtml = window.SokoniDeliveryPricing.renderBreakdown(synthetic);
+    el.innerHTML += `
+      <details style="margin-top:10px;">
+        <summary style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.35);cursor:pointer;letter-spacing:.5px;list-style:none;">
+          ▸ PRICING BREAKDOWN
+        </summary>
+        <div style="margin-top:8px;padding:10px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06);">
+          ${bkHtml}
+        </div>
+      </details>`;
+  }
+
   card.style.display = 'block';
 }
 
@@ -505,16 +538,20 @@ function _renderDriver(d) {
   const el   = document.getElementById('dtDriverInfo');
   const card = document.getElementById('dtDriverCard');
   if (!el || !card || !d.driverName) return;
-  const eta  = d.etaMin ? '~' + d.etaMin + ' min away' : '';
+  const initEta = d.etaMin ? '~' + d.etaMin + ' min' : 'Calculating…';
   el.innerHTML = `
-    <div class="dt-row"><span class="dt-row-key">Name</span><span class="dt-row-val">${d.driverName}</span></div>
-    ${d.driverPhone?`<div class="dt-row"><span class="dt-row-key">Phone</span><span class="dt-row-val">${d.driverPhone}</span></div>`:''}
-    ${d.driverPlate?`<div class="dt-row"><span class="dt-row-key">Plate</span><span class="dt-row-val">${d.driverPlate}</span></div>`:''}
-    ${eta?`<div class="dt-row"><span class="dt-row-key">ETA</span><span class="dt-row-val">${eta}</span></div>`:''}
-    ${d.driverPhone?`
-    <a href="tel:${d.driverPhone}" style="display:block;margin-top:8px;padding:10px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);border-radius:10px;color:var(--blue);font-weight:700;font-size:12px;text-align:center;text-decoration:none;">
+    <div class="dt-row"><span class="dt-row-key">Rider</span><span class="dt-row-val">${d.driverName}</span></div>
+    ${d.driverPhone ? `<div class="dt-row"><span class="dt-row-key">Phone</span><span class="dt-row-val">${d.driverPhone}</span></div>` : ''}
+    ${d.driverPlate ? `<div class="dt-row"><span class="dt-row-key">Plate</span><span class="dt-row-val">${d.driverPlate}</span></div>` : ''}
+    <div class="dt-row">
+      <span class="dt-row-key">ETA</span>
+      <span class="dt-row-val" id="dtLiveETA">${initEta}</span>
+    </div>
+    ${d.riderSharePct ? `<div style="font-size:10px;color:rgba(113,255,0,0.5);margin-top:4px;">Rider earns ${d.riderSharePct}% of delivery fee</div>` : ''}
+    ${d.driverPhone ? `
+    <a href="tel:${d.driverPhone}" style="display:block;margin-top:10px;padding:10px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);border-radius:10px;color:var(--blue);font-weight:700;font-size:12px;text-align:center;text-decoration:none;">
       📞 Call Rider
-    </a>`:''}`;
+    </a>` : ''}`;
   card.style.display = 'block';
 }
 
@@ -878,6 +915,7 @@ window.dtHubCancel = async function(fsId, _c) {
 window.addEventListener('beforeunload', () => {
   _deliveryUnsub?.();
   _gpsUnsub?.();
+  if (_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
 });
 </script>
 <script src="sokoni-social.js" defer></script>

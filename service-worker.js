@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260627120000";
+const CACHE_VERSION = "sokoni-20260627180000";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -79,7 +79,7 @@ const PRECACHE_STATIC = [
   "/product.css", "/profile.css", "/seller.css",
   "/landlord.css", "/compact-grid.css", "/sokoni-premium-v2.css",
   "/auth.js", "/sokoni-db.js", "/sokoni-pay.js", "/sokoni-social.js", "/sokoni-referral.js",
-  "/sokoni-desktop.css", "/sokoni-routing.js", "/sokoni-delivery.js", "/sokoni-invoice.js", "/sokoni-config.js", "/sokoni-mpesa.js", "/sokoni-revenue.js", "/sokoni-featured.js",
+  "/sokoni-desktop.css", "/sokoni-routing.js", "/sokoni-delivery.js", "/sokoni-delivery-pricing.js", "/sokoni-invoice.js", "/sokoni-config.js", "/sokoni-mpesa.js", "/sokoni-revenue.js", "/sokoni-featured.js",
   "/category.js", "/profile.js", "/product.js", "/analytics.js",
   "/security.js", "/nav-active.js", "/splash.js", "/scroll-top.js",
   "/auth-guard.js", "/shared-header.js", "/entertainment-hub.js", "/delivery-hub.js",

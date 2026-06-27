@@ -84,6 +84,19 @@ service cloud.firestore {
     }
 
     /*
+     * _validGPS(lat, lng)
+     * Validates GPS coordinates fall within Kenya's bounding box.
+     * Applied to rideDrivers and packageRequests GPS fields to prevent
+     * location spoofing or impossible coordinate values.
+     * Kenya approx bounds: lat −5.0 to 5.0, lng 33.9 to 42.0
+     */
+    function _validGPS(lat, lng) {
+      return lat is number && lng is number
+          && lat >= -5.0  && lat <= 5.0
+          && lng >= 33.9  && lng <= 42.0;
+    }
+
+    /*
      * noAdminFields()
      * Rejects writes that try to set admin-only privilege fields.
      * Applied to create/update rules for users, products, and orders
@@ -1568,20 +1581,24 @@ service cloud.firestore {
        RIDE DRIVERS  (online/offline driver registry + live GPS)
        Public read — passengers and the matching algorithm need
        to see which drivers are online and their GPS coordinates.
-       • create/update: driver can only write their own document
-         (uid field must match auth uid on both old and new data).
+       • create/update: driver can only write their own document.
+       • GPS fields (lat/lng) are validated to Kenya bounding box
+         to prevent location spoofing.
        • delete: admin only.
     ══════════════════════════════════════════════════════════════ */
     match /rideDrivers/{driverId} {
       allow read:   if true;
       allow create: if isAuthed()
                     && request.resource.data.uid == request.auth.uid
-                    && noAdminFields();
+                    && noAdminFields()
+                    && _validGPS(request.resource.data.lat, request.resource.data.lng);
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.uid         == request.auth.uid
                         && request.resource.data.uid == request.auth.uid
-                        && noAdminFields());
+                        && noAdminFields()
+                        && (!request.resource.data.keys().hasAny(['lat','lng'])
+                            || _validGPS(request.resource.data.lat, request.resource.data.lng)));
       allow delete: if isAdmin();
     }
 
@@ -1618,9 +1635,15 @@ service cloud.firestore {
        • create:  claimsOwner() — uid in payload must match auth uid.
        • read:    buyer (uid / buyerUid), seller (sellerUid),
                   assigned driver, or admin.
-       • update:  buyer (cancel, confirm receipt), seller (confirm
-                  ready), assigned driver (pickup / in-transit /
-                  deliver), or admin.  uid frozen on all user writes.
+       • update:  field-locked per role:
+                  - Buyer:  cancel only (status, cancelReason)
+                            or confirm receipt (status, buyerConfirmedAt, sellerPayoutReady)
+                  - Seller: confirm ready (status, sellerNote, readyAt)
+                  - Driver: status transitions + GPS fields only
+                            (cannot alter addresses, fees, or buyer/seller data)
+                  - Admin:  full write
+       • GPS fields written by driver are validated to Kenya bounding
+         box to prevent location spoofing.
        • delete:  admin only.
     ══════════════════════════════════════════════════════════════ */
     match /packageRequests/{pkgId} {
@@ -1630,21 +1653,30 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.buyerUid         == request.auth.uid)
                     || (isAuthed() && resource.data.sellerUid        == request.auth.uid)
                     || (isAuthed() && resource.data.assignedDriverId == request.auth.uid);
-      /* SECURITY: field-locked per role — seller cannot alter delivery fee paid by buyer;
-         driver cannot alter package contents, price, or addresses. */
       allow update: if isAdmin()
+                    /* Buyer: cancel or confirm receipt */
                     || (isOwner() && uidUnchanged()
                         && request.resource.data.diff(resource.data)
-                             .affectedKeys().hasOnly(['status','cancelReason','confirmedAt','updatedAt']))
+                             .affectedKeys().hasOnly(['status','cancelReason','confirmedAt',
+                                                      'buyerConfirmedAt','sellerPayoutReady',
+                                                      'timeline','_lastTimelineEntry','updatedAt']))
+                    /* Seller: confirm ready */
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid
                         && uidUnchanged()
                         && request.resource.data.diff(resource.data)
-                             .affectedKeys().hasOnly(['status','sellerNote','readyAt','updatedAt']))
+                             .affectedKeys().hasOnly(['status','sellerNote','readyAt',
+                                                      'timeline','_lastTimelineEntry','updatedAt']))
+                    /* Driver: status transitions + GPS — cannot touch fees or addresses */
                     || (isAuthed() && resource.data.assignedDriverId == request.auth.uid
                         && uidUnchanged()
                         && request.resource.data.diff(resource.data)
                              .affectedKeys().hasOnly(['status','driverNote','updatedAt',
-                                                      'pickedUpAt','deliveredAt','etaMin']));
+                                                      'pickedUpAt','deliveredAt','arrivedAtSellerAt',
+                                                      'acceptedAt','etaMin','payoutDue','proofNote',
+                                                      'driverLat','driverLng','driverSpeed',
+                                                      'timeline','_lastTimelineEntry'])
+                        && (!request.resource.data.keys().hasAny(['driverLat','driverLng'])
+                            || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
       allow delete: if isAdmin();
     }
 

@@ -1,4 +1,90 @@
-﻿## [2026-06-27] — Phase 1–20 Production Completion Directive Sprint (commit 22b8c37)
+﻿## [2026-06-27] — Delivery Pricing & Live Tracking Upgrade v2.0
+
+### Summary
+Complete overhaul of the SOKONI delivery pricing model and live tracking experience.
+Introduced an intelligent, rider-first pricing engine with full component transparency,
+smooth GPS animation, split-route visualization, live ETA, and a 9-stage delivery timeline.
+
+### New Files
+- **`sokoni-delivery-pricing.js`** — Intelligent pricing engine (240 lines)
+  - Dynamic formula: base + distance × perKm + time × perMin + weight surcharge + size surcharge
+  - Combined multiplier: speed tier × peak-hour × demand (1.0–2.0×)
+  - Rider payout protection: `MIN_RIDER_PAYOUT = KES 180`; target share 82% (floor 75%)
+  - Platform subsidy support: up to 40% of customer fee absorbed by SOKONI
+  - `renderBreakdown(result)` — returns HTML price breakdown card for UI injection
+  - Human-readable surge reasons: "Evening peak", "High demand", "Long distance", etc.
+
+### Modified Files
+
+#### `sokoni-delivery.js`
+- Replaced flat `DELIVERY_BASE=150 + DELIVERY_PER_KM=20` with `_calcPricing()` using the new engine
+- `createOrderDelivery()` now accepts `vehicleType`, `weightKg`, `parcelSize`, `isRural`,
+  `demandMultiplier`, `subsidyKES`; stores `pricingBreakdown` + `pricingSurgeReasons` in Firestore
+- `driverNet` now equals `pricing.riderPayout` (guaranteed minimum, not flat %)
+- `buildStatusTimeline()` expanded to 9 stages:
+  Order Confirmed → Preparing (optional) → Ready for Pickup → Rider Assigned →
+  Rider En Route to Seller → Parcel Picked Up → Heading to You → Arriving (computed) → Delivered
+- Exposed `calcPricing()` for external UI use
+
+#### `sokoni-routing.js`
+- `calcFare()` now delegates to `SokoniDeliveryPricing.calculate()` when loaded,
+  passing `durationMin` for full time-based pricing; falls back to legacy table if unavailable
+- `calcRoute()` passes `durationMin` through to `calcFare()`
+
+#### `delivery-tracking.html`
+- **Smooth rider animation**: RAF interpolation with ease-in-out cubic between GPS updates (3 s)
+- **Anti-teleport guard**: jumps > 2 km are snapped, not animated (prevents spoofing artifacts)
+- **Split route**: completed path (green/dimmed) vs remaining path (blue/dashed) — updated every GPS tick
+- **Live ETA**: distance recalculated on each GPS update; "Arriving now!" triggered at < 200 m
+- **9-stage timeline** with optional (preparing) and computed (arriving) steps
+- **Pricing breakdown card**: collapsible `<details>` in delivery details when `pricingBreakdown` present
+- **Surge reason tags** displayed under delivery fee
+- Added `sokoni-delivery-pricing.js` script load
+
+#### `checkout.html`
+- `calcDelivery()` now calls `SokoniDeliveryPricing.calculate()` with zone → km/min estimates
+- Zone values updated: `cbd` → 3 km / 20 min, `suburbs` → 10 km / 40 min, etc.
+- Added **vehicle type selector** (moto / bicycle / tuk-tuk / car / van)
+- Parcel size options mapped to engine enums (`small` / `medium` / `large` / `extra_large`)
+- New **fee breakdown panel** (`deliveryBreakdown`) with full component transparency
+- Surge notice badge shown when `isPeakHour` or `isSurging`
+- Added `sokoni-delivery-pricing.js` script load
+
+#### `firestore.rules`
+- Added `_validGPS(lat, lng)` helper — validates coords to Kenya bounding box (lat −5→5, lng 33.9→42)
+- `rideDrivers`: GPS validation applied to `lat`/`lng` on create and update
+- `packageRequests` driver update rule expanded to include:
+  `driverLat`, `driverLng`, `driverSpeed`, `arrivedAtSellerAt`, `acceptedAt`, `payoutDue`, `proofNote`, `timeline`, `_lastTimelineEntry`
+- Buyer update rule expanded to include `buyerConfirmedAt`, `sellerPayoutReady`, `timeline`, `_lastTimelineEntry`
+- Seller update rule expanded to include `timeline`, `_lastTimelineEntry`
+
+#### `service-worker.js`
+- CACHE_VERSION bumped to `"sokoni-20260627180000"`
+- `sokoni-delivery-pricing.js` added to PRECACHE_STATIC
+
+### Security
+- Server-side GPS validation in Firestore rules prevents location spoofing on driver GPS updates
+- Driver cannot alter buyer/seller fields, addresses, fees, or commission fields via Firestore rules
+- No new admin fields exposed
+
+### Performance
+- Smooth animation uses `requestAnimationFrame` — zero blocking; no `setInterval` loops
+- GPS listener cleanup on `beforeunload` + delivery completion
+- Split-route update runs inline with animation frame — single DOM operation per tick
+- No Firestore reads added; all live tracking via existing `onSnapshot` listeners
+
+### Rider Earnings (minimum guarantee examples)
+- 3 km trip, moto, same-day: customer KES 154, rider KES 180 (floor applied, SOKONI covers gap)
+- 10 km trip, moto, same-day: customer KES 290, rider KES 238
+- 10 km trip, moto, peak hour (5–8 PM): customer KES 391, rider KES 321
+
+### Breaking Changes
+- None. `calcDeliveryFee(distanceKm, speed)` legacy signature still works via backwards-compat shim.
+- Existing delivery docs in Firestore continue to work; new fields are additive.
+
+---
+
+## [2026-06-27] — Phase 1–20 Production Completion Directive Sprint (commit 22b8c37)
 
 ### Summary
 Continued 20-phase production readiness audit. 3 additional XSS vectors closed in seller.js, auth ?next= redirect param fixed, missing inv-ai.html page created, 34 dev/screenshot files removed from production hosting, Firestore rules reviewed and rules deployed.
