@@ -170,6 +170,7 @@
 </nav>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s);"></script>
+<script src="sokoni-delivery-pricing.js"></script>
 <script src="sokoni-routing.js"></script>
 <script type="module">
 import SokoniDelivery from './sokoni-delivery.js';
@@ -195,18 +196,19 @@ function toast(msg, ok) {
   t._timer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-/* ── Timeline steps definition ── */
+/* ── 9-Stage Timeline ── */
 const STEPS = [
-  { key:'order_placed',    icon:'🛒', label:'Order Placed'           },
-  { key:'ready_for_pickup',icon:'✅', label:'Ready for Pickup'       },
-  { key:'driver_assigned', icon:'🏍️', label:'Rider Assigned'         },
-  { key:'driver_accepted', icon:'🟢', label:'Rider Heading to Seller'},
-  { key:'driver_at_seller',icon:'📍', label:'Rider at Seller'        },
-  { key:'in_transit',      icon:'🚗', label:'In Transit'             },
-  { key:'delivered',       icon:'📦', label:'Delivered'              },
-  { key:'buyer_confirmed', icon:'🎉', label:'Receipt Confirmed'      },
+  { key:'order_placed',    icon:'🛒', label:'Order Confirmed'            },
+  { key:'preparing',       icon:'👨‍🍳', label:'Preparing',   optional:true  },
+  { key:'ready_for_pickup',icon:'✅', label:'Ready for Pickup'           },
+  { key:'driver_assigned', icon:'🏍️', label:'Rider Assigned'             },
+  { key:'driver_accepted', icon:'🛵', label:'Rider En Route to Seller'   },
+  { key:'driver_at_seller',icon:'📍', label:'Parcel Picked Up'           },
+  { key:'in_transit',      icon:'🚗', label:'Heading to You'             },
+  { key:'arriving',        icon:'📲', label:'Arriving',    computed:true  },
+  { key:'delivered',       icon:'📦', label:'Delivered'                  },
+  { key:'buyer_confirmed', icon:'🎉', label:'Complete',  hideIfPending:true},
 ];
-const CANCELLED = { key:'cancelled', icon:'❌', label:'Cancelled' };
 
 /* Hub-only timeline steps (deliveries collection) */
 const STEPS_HUB = [
@@ -220,21 +222,23 @@ const STEPS_HUB = [
 ];
 
 const STATUS_BANNER = {
-  order_placed:     { label:'Order Placed',            sub:'Waiting for seller to confirm the item is ready', color:'rgba(251,191,36,0.12)', border:'rgba(251,191,36,0.3)', icon:'🛒' },
-  ready_for_pickup: { label:'Ready for Pickup',        sub:'Item is ready — searching for nearest rider',    color:'rgba(113,255,0,0.08)',  border:'rgba(113,255,0,0.3)',  icon:'✅' },
-  driver_assigned:  { label:'Rider Assigned',          sub:'Rider has been notified — waiting for acceptance', color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🏍️' },
-  driver_accepted:  { label:'Rider En Route to Seller',sub:'Your rider is on the way to pick up the item',   color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🛵' },
-  driver_at_seller: { label:'Rider at Seller',         sub:'Rider has arrived — item being handed over',     color:'rgba(255,165,0,0.08)', border:'rgba(255,165,0,0.3)', icon:'📍' },
-  in_transit:       { label:'In Transit',              sub:'Your item is on the way to you right now!',      color:'rgba(0,170,255,0.1)',  border:'rgba(0,170,255,0.4)', icon:'🚗' },
-  delivered:        { label:'Delivered!',              sub:'Item delivered — please confirm receipt below',  color:'rgba(113,255,0,0.1)',  border:'rgba(113,255,0,0.4)', icon:'📦' },
-  buyer_confirmed:  { label:'Receipt Confirmed',       sub:'Delivery complete. Thank you for using SOKONI!', color:'rgba(113,255,0,0.1)',  border:'rgba(113,255,0,0.35)','icon':'🎉' },
-  cancelled:        { label:'Delivery Cancelled',      sub:'This delivery was cancelled',                    color:'rgba(255,61,61,0.08)', border:'rgba(255,61,61,0.2)', icon:'❌' },
+  order_placed:     { label:'Order Confirmed',          sub:'Waiting for seller to confirm the item is ready',     color:'rgba(251,191,36,0.12)', border:'rgba(251,191,36,0.3)',  icon:'🛒' },
+  preparing:        { label:'Preparing Your Order',     sub:'Seller is preparing your item — rider search starts soon', color:'rgba(251,191,36,0.10)', border:'rgba(251,191,36,0.28)', icon:'👨‍🍳' },
+  ready_for_pickup: { label:'Ready for Pickup',         sub:'Item is ready — searching for the nearest rider',    color:'rgba(113,255,0,0.08)',  border:'rgba(113,255,0,0.3)',   icon:'✅' },
+  driver_assigned:  { label:'Rider Assigned',           sub:'Rider has been notified — waiting for acceptance',   color:'rgba(0,170,255,0.08)',  border:'rgba(0,170,255,0.3)',   icon:'🏍️' },
+  driver_accepted:  { label:'Rider En Route to Seller', sub:'Your rider is on the way to pick up your item',      color:'rgba(0,170,255,0.08)',  border:'rgba(0,170,255,0.3)',   icon:'🛵' },
+  driver_at_seller: { label:'Parcel Picked Up',         sub:'Rider has collected the item — heading to you!',     color:'rgba(255,165,0,0.08)',  border:'rgba(255,165,0,0.3)',   icon:'📍' },
+  in_transit:       { label:'Heading to You',           sub:'Your item is on the way — live tracking active',     color:'rgba(0,170,255,0.1)',   border:'rgba(0,170,255,0.4)',   icon:'🚗' },
+  arriving:         { label:'Arriving Now!',            sub:'Your rider is less than 200 m away — get ready!',    color:'rgba(113,255,0,0.12)',  border:'rgba(113,255,0,0.45)',  icon:'📲' },
+  delivered:        { label:'Delivered!',               sub:'Item delivered — please confirm receipt below',      color:'rgba(113,255,0,0.10)',  border:'rgba(113,255,0,0.4)',   icon:'📦' },
+  buyer_confirmed:  { label:'Delivery Complete',        sub:'Thank you for using SOKONI! See you next time.',     color:'rgba(113,255,0,0.10)',  border:'rgba(113,255,0,0.35)',  icon:'🎉' },
+  cancelled:        { label:'Delivery Cancelled',       sub:'This delivery has been cancelled',                   color:'rgba(255,61,61,0.08)',  border:'rgba(255,61,61,0.2)',   icon:'❌' },
   /* Hub (deliveries collection) statuses */
-  pending:          { label:'Delivery Created',        sub:'Looking for the nearest available rider',        color:'rgba(251,191,36,0.1)', border:'rgba(251,191,36,0.3)', icon:'⏳' },
-  rider_assigned:   { label:'Rider Assigned',          sub:'Your rider has been notified — awaiting acceptance', color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🏍️' },
-  rider_en_route:   { label:'Rider En Route to Pickup',sub:'Your rider is heading to collect the package',  color:'rgba(0,170,255,0.08)', border:'rgba(0,170,255,0.3)', icon:'🛵' },
-  picked_up:        { label:'Package Picked Up',       sub:'Rider has collected your package — heading to you!', color:'rgba(255,165,0,0.08)', border:'rgba(255,165,0,0.3)', icon:'📍' },
-  completed:        { label:'Delivery Complete',       sub:'Receipt confirmed. Thank you for using SOKONI!', color:'rgba(113,255,0,0.1)',  border:'rgba(113,255,0,0.35)', icon:'🎉' },
+  pending:          { label:'Delivery Created',         sub:'Looking for the nearest available rider',            color:'rgba(251,191,36,0.10)', border:'rgba(251,191,36,0.3)',  icon:'⏳' },
+  rider_assigned:   { label:'Rider Assigned',           sub:'Your rider has been notified — awaiting acceptance', color:'rgba(0,170,255,0.08)',  border:'rgba(0,170,255,0.3)',   icon:'🏍️' },
+  rider_en_route:   { label:'Rider En Route to Pickup', sub:'Your rider is heading to collect the package',       color:'rgba(0,170,255,0.08)',  border:'rgba(0,170,255,0.3)',   icon:'🛵' },
+  picked_up:        { label:'Package Picked Up',        sub:'Rider has collected your package — heading to you!', color:'rgba(255,165,0,0.08)',  border:'rgba(255,165,0,0.3)',   icon:'📍' },
+  completed:        { label:'Delivery Complete',        sub:'Receipt confirmed. Thank you for using SOKONI!',     color:'rgba(113,255,0,0.10)',  border:'rgba(113,255,0,0.35)',  icon:'🎉' },
 };
 
 /* ── Source flag — 'pkg' (packageRequests) or 'hub' (deliveries) ── */
@@ -255,32 +259,39 @@ function _normalizeHub(d) {
 }
 
 /* ── Map state ── */
-let _map = null, _riderMarker = null, _routeLine = null;
+let _map = null, _riderMarker = null;
 let _pickupMarker = null, _dropoffMarker = null;
+/* Route layers */
+let _completedLine = null, _remainingLine = null;
+let _fullRouteCoords = []; /* [[lat,lng], ...] */
+/* Smooth animation */
+let _animFrame = null, _prevRiderLat = null, _prevRiderLng = null;
+const _ANIM_MS = 3000; /* interpolation duration between GPS updates */
 
 function _initMap(pickupLat, pickupLng) {
   const wrap = document.getElementById('dtMapWrap');
   if (!wrap || _map) return;
   wrap.style.display = 'block';
-  /* Use pickup coords if available; fall back to device location then Nairobi CBD */
   let center = pickupLat ? [pickupLat, pickupLng] : null;
   if (!center && navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       p => { if (_map) _map.setView([p.coords.latitude, p.coords.longitude], 14); },
       () => {},
-      { timeout: 5000, maximumAge: 60000 }
+      { timeout:5000, maximumAge:60000 }
     );
   }
-  center = center || [-1.2864, 36.8172]; /* Nairobi CBD — geolocation updates async */
+  center = center || [-1.2864, 36.8172];
   _map = L.map('dtMap', { zoomControl:false, fadeAnimation:false, zoomAnimation:false }).setView(center, 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     { attribution:'© OpenStreetMap', maxZoom:19, detectRetina:false }).addTo(_map);
   L.control.zoom({ position:'bottomright' }).addTo(_map);
   [100,300,700,1400,2600].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));
-  window.addEventListener('resize',()=>_map?.invalidateSize(true));
-  window.addEventListener('orientationchange',()=>setTimeout(()=>_map?.invalidateSize(true),350));
-  try{screen.orientation.addEventListener('change',()=>setTimeout(()=>_map?.invalidateSize(true),350));}catch{}
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')[0,100,400].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));});
+  window.addEventListener('resize', ()=>_map?.invalidateSize(true));
+  window.addEventListener('orientationchange', ()=>setTimeout(()=>_map?.invalidateSize(true),350));
+  try { screen.orientation.addEventListener('change',()=>setTimeout(()=>_map?.invalidateSize(true),350)); } catch {}
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.visibilityState==='visible') [0,100,400].forEach(ms=>setTimeout(()=>_map?.invalidateSize(true),ms));
+  });
 }
 
 function _placeMarker(lat, lng, htmlIcon, popup) {
@@ -291,29 +302,121 @@ function _placeMarker(lat, lng, htmlIcon, popup) {
   return m;
 }
 
+/* Haversine (km) used for anti-teleport check and ETA */
+function _hav(lat1,lng1,lat2,lng2){
+  const R=6371, dL=(lat2-lat1)*Math.PI/180, dG=(lng2-lng1)*Math.PI/180,
+    a=Math.sin(dL/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+/* ── Update split route (completed=green / remaining=blue) ── */
+function _updateSplitRoute(riderLat, riderLng) {
+  if (!_map || _fullRouteCoords.length < 2) return;
+  /* Find closest point on route */
+  let minDist = Infinity, minIdx = 0;
+  for (let i = 0; i < _fullRouteCoords.length; i++) {
+    const d = _hav(riderLat, riderLng, _fullRouteCoords[i][0], _fullRouteCoords[i][1]);
+    if (d < minDist) { minDist = d; minIdx = i; }
+  }
+  const completed = _fullRouteCoords.slice(0, minIdx + 1);
+  const remaining = _fullRouteCoords.slice(minIdx);
+  if (_completedLine) { _map.removeLayer(_completedLine); _completedLine = null; }
+  if (_remainingLine) { _map.removeLayer(_remainingLine); _remainingLine = null; }
+  if (completed.length > 1) {
+    _completedLine = L.polyline(completed, { color:'#71ff00', weight:4, opacity:0.45 }).addTo(_map);
+  }
+  if (remaining.length > 1) {
+    _remainingLine = L.polyline(remaining, { color:'#00aaff', weight:4, opacity:0.85, dashArray:'8 4' }).addTo(_map);
+  }
+}
+
+/* ── Live ETA update ── */
+function _updateLiveETA(riderLat, riderLng) {
+  const d = _currentData;
+  if (!d?.deliveryCoords?.lat) return;
+  const remainKm = _hav(riderLat, riderLng, d.deliveryCoords.lat, d.deliveryCoords.lng) * 1.35;
+  /* Nairobi moto avg ~25 km/h = 0.416 km/min */
+  const etaMin = Math.max(1, Math.ceil(remainKm / 0.416));
+  /* Update ETA in driver card */
+  const etaEl = document.getElementById('dtLiveETA');
+  if (etaEl) etaEl.textContent = etaMin <= 1 ? 'Arriving now' : '~' + etaMin + ' min';
+  /* Update map badge */
+  const badge = document.getElementById('dtMapBadge');
+  if (badge) badge.textContent = 'Live GPS · ETA ' + (etaMin <= 1 ? 'now' : etaMin + ' min');
+  /* Auto-trigger "arriving" visual when within 200 m */
+  if (remainKm < 0.20 && d.status === 'in_transit') {
+    const lbl = document.getElementById('dtStatusLabel');
+    const sub = document.getElementById('dtStatusSub');
+    if (lbl) lbl.textContent = '📲 Arriving now!';
+    if (sub) sub.textContent = 'Your rider is less than 200 m away — get ready!';
+    /* Animate timeline to "arriving" step */
+    _renderTimeline('arriving', d.timeline, d._src);
+  }
+}
+
+/* ── Smooth rider marker animation along route ── */
+function _animateRiderTo(fromLat, fromLng, toLat, toLng, name) {
+  if (_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
+  /* Anti-teleport guard: ignore jumps > 2 km (GPS error / spoofing) */
+  if (fromLat !== null && _hav(fromLat, fromLng, toLat, toLng) > 2.0) {
+    /* Just snap to new position */
+    if (_riderMarker) _riderMarker.setLatLng([toLat, toLng]);
+    else _riderMarker = _placeMarker(toLat, toLng,
+      '<div style="font-size:22px;filter:drop-shadow(0 0 8px rgba(0,170,255,0.9));">🏍️</div>',
+      '🏍️ ' + (name || 'Your Rider'));
+    _updateSplitRoute(toLat, toLng);
+    _updateLiveETA(toLat, toLng);
+    return;
+  }
+  const startLat = fromLat !== null ? fromLat : toLat;
+  const startLng = fromLng !== null ? fromLng : toLng;
+  const t0 = performance.now();
+  function step(now) {
+    const raw = Math.min((now - t0) / _ANIM_MS, 1);
+    /* Ease-in-out cubic */
+    const t = raw < 0.5 ? 4*raw*raw*raw : 1 - Math.pow(-2*raw+2,3)/2;
+    const lat = startLat + (toLat - startLat) * t;
+    const lng = startLng + (toLng - startLng) * t;
+    if (!_riderMarker) {
+      _riderMarker = _placeMarker(lat, lng,
+        '<div style="font-size:22px;filter:drop-shadow(0 0 8px rgba(0,170,255,0.9));">🏍️</div>',
+        '🏍️ ' + (name || 'Your Rider'));
+    } else {
+      _riderMarker.setLatLng([lat, lng]);
+    }
+    _updateSplitRoute(lat, lng);
+    if (raw < 1) {
+      _animFrame = requestAnimationFrame(step);
+    } else {
+      _animFrame = null;
+      _updateLiveETA(toLat, toLng);
+      _map.panTo([toLat, toLng], { animate:true, duration:1.2, easeLinearity:0.5 });
+    }
+  }
+  _animFrame = requestAnimationFrame(step);
+}
+
 function _updateRiderMarker(lat, lng, name) {
   if (!_map) return;
-  if (!_riderMarker) {
-    _riderMarker = _placeMarker(lat, lng,
-      '<div style="font-size:22px;filter:drop-shadow(0 0 6px rgba(0,170,255,0.8));">🏍️</div>',
-      '🏍️ ' + (name || 'Your Rider'));
-  } else {
-    _riderMarker.setLatLng([lat, lng]);
-  }
-  _map.panTo([lat, lng], { animate:true, duration:1.5 });
-  document.getElementById('dtMapBadge').textContent = 'Live GPS · ' + lat.toFixed(4) + ', ' + lng.toFixed(4);
+  _animateRiderTo(_prevRiderLat, _prevRiderLng, lat, lng, name);
+  _prevRiderLat = lat;
+  _prevRiderLng = lng;
 }
 
 function _drawRoute(geom, fromLat, fromLng, toLat, toLng) {
   if (!_map) return;
-  if (_routeLine) { _map.removeLayer(_routeLine); _routeLine = null; }
+  /* Clear old layers */
+  if (_completedLine) { _map.removeLayer(_completedLine); _completedLine = null; }
+  if (_remainingLine) { _map.removeLayer(_remainingLine); _remainingLine = null; }
   if (geom?.coordinates) {
-    const coords = geom.coordinates.map(([lng,lat]) => [lat,lng]);
-    _routeLine = L.polyline(coords, { color:'#00aaff', weight:4, opacity:0.55, dashArray:'8 4' }).addTo(_map);
-    _map.fitBounds(_routeLine.getBounds(), { padding:[30,30] });
+    _fullRouteCoords = geom.coordinates.map(([lng, lat]) => [lat, lng]);
   } else if (fromLat && toLat) {
-    _routeLine = L.polyline([[fromLat,fromLng],[toLat,toLng]], { color:'#00aaff', weight:3, opacity:0.4, dashArray:'6 4' }).addTo(_map);
-    _map.fitBounds(_routeLine.getBounds(), { padding:[40,40] });
+    _fullRouteCoords = [[fromLat, fromLng], [toLat, toLng]];
+  }
+  /* Render full route as remaining (blue) initially */
+  if (_fullRouteCoords.length > 1) {
+    _remainingLine = L.polyline(_fullRouteCoords, { color:'#00aaff', weight:4, opacity:0.75, dashArray:'8 4' }).addTo(_map);
+    _map.fitBounds(_remainingLine.getBounds(), { padding:[30,30] });
   }
 }
 
@@ -330,12 +433,26 @@ function _renderTimeline(currentStatus, timelineData, src) {
     return;
   }
   const stepList = src === 'hub' ? STEPS_HUB : STEPS;
+  const tArr = timelineData || [];
+  /* Determine which optional/computed steps to include */
+  const hasStep = key => tArr.some(t => t.status === key);
+  const inCurrentOrPast = (key, currentIdx, list) => {
+    const idx = list.findIndex(s => s.key === key);
+    return idx !== -1 && idx <= currentIdx;
+  };
   const currentIdx = stepList.findIndex(s => s.key === currentStatus);
-  el.innerHTML = stepList.map((step, i) => {
-    const done    = i <  currentIdx;
-    const current = i === currentIdx;
-    const pending = i >  currentIdx;
-    const ts = (timelineData||[]).find(t => t.status === step.key)?.at;
+  const visibleSteps = stepList.filter(step => {
+    if (step.optional)     return hasStep(step.key) || inCurrentOrPast(step.key, currentIdx, stepList);
+    if (step.computed)     return inCurrentOrPast(step.key, currentIdx, stepList);
+    if (step.hideIfPending) return inCurrentOrPast(step.key, currentIdx, stepList);
+    return true;
+  });
+  const visibleIdx = visibleSteps.findIndex(s => s.key === currentStatus);
+  el.innerHTML = visibleSteps.map((step, i) => {
+    const done    = i < visibleIdx;
+    const current = i === visibleIdx;
+    const pending = i > visibleIdx;
+    const ts = tArr.find(t => t.status === step.key)?.at;
     const timeStr = ts ? new Date(ts).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}) : '';
     const cls = done ? 'done' : current ? 'current' : 'pending';
     return `

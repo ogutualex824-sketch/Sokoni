@@ -41,13 +41,12 @@ const CATEGORY_CONFIG = {
   general:     { label:'General Package',      icon:'📦', defaultSpeed:'same_day' },
 };
 
-/* ── Delivery fee rates ── */
-const DELIVERY_BASE   = 150; /* KES flat */
-const DELIVERY_PER_KM = 20;  /* KES per km */
-
-/* ── Commission split ── */
+/* ── Commission ── */
 const COMMISSION_PCT = 12;
-const DRIVER_SHARE   = 0.88;
+
+/* ── Fallback pricing (used only if SokoniDeliveryPricing not loaded) ── */
+const _FALLBACK_BASE   = 100;
+const _FALLBACK_PER_KM = 18;
 
 /* ─────────────────────────────────────────────────────────────
    INTERNAL helpers
@@ -58,9 +57,32 @@ function haversine(lat1,lng1,lat2,lng2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-function _calcDeliveryFee(distanceKm, speedTier) {
-  const tier = SPEED_TIERS[speedTier] || SPEED_TIERS.same_day;
-  return Math.round((DELIVERY_BASE + distanceKm * DELIVERY_PER_KM) * tier.multiplier);
+/*
+ * _calcPricing(opts) → PricingResult
+ * Uses SokoniDeliveryPricing engine when loaded; falls back to flat rate.
+ */
+function _calcPricing(opts) {
+  if (window.SokoniDeliveryPricing) {
+    return window.SokoniDeliveryPricing.calculate(opts);
+  }
+  /* Fallback: flat base + perKm */
+  const speedMult = { express:1.55, same_day:1.00, scheduled:0.85 };
+  const sm = speedMult[opts.speedTier] || 1.0;
+  const fee = Math.round((_FALLBACK_BASE + (opts.distanceKm || 3) * _FALLBACK_PER_KM) * sm);
+  const riderPayout = Math.max(180, Math.round(fee * 0.82));
+  return {
+    customerPaysFee: fee,
+    customerFee:     fee,
+    riderPayout:     riderPayout,
+    platformCut:     fee - riderPayout,
+    subsidyKES:      0,
+    riderSharePct:   Math.round((riderPayout / fee) * 100),
+    reasons:         [],
+    primaryReason:   null,
+    riderMinEarning: 180,
+    meetsRiderMinimum: riderPayout >= 180,
+    components:      {},
+  };
 }
 
 function _delRef() {
@@ -128,48 +150,71 @@ const SokoniDelivery = {
   ───────────────────────────────────────── */
   async createOrderDelivery(opts) {
     const {
-      orderId        = null,
-      orderRef       = null,
+      orderId          = null,
+      orderRef         = null,
       buyerName,
       buyerPhone,
-      buyerUid       = null,
+      buyerUid         = null,
       sellerName,
       sellerPhone,
-      sellerUid      = null,
+      sellerUid        = null,
       pickupAddress,
-      pickupCoords   = null,
+      pickupCoords     = null,
       deliveryAddress,
-      deliveryCoords  = null,
-      items          = [],
-      orderTotal     = 0,
-      category       = 'general',
-      speed          = 'same_day',
-      scheduledTime  = null,
-      notes          = '',
+      deliveryCoords   = null,
+      items            = [],
+      orderTotal       = 0,
+      category         = 'general',
+      speed            = 'same_day',
+      scheduledTime    = null,
+      notes            = '',
+      /* New intelligent pricing fields */
+      vehicleType      = 'moto',
+      weightKg         = 1,
+      parcelSize       = 'small',
+      isRural          = false,
+      demandMultiplier = 1.0,
+      subsidyKES       = 0,
     } = opts;
 
-    /* Road-distance estimate */
-    let distanceKm = 5;
+    /* Road-distance estimate via haversine × 1.35 road factor */
+    let distanceKm  = 5;
+    let durationMin = 20;
     if (pickupCoords && deliveryCoords) {
       distanceKm = Math.round(
         haversine(pickupCoords.lat, pickupCoords.lng, deliveryCoords.lat, deliveryCoords.lng)
         * 1.35 * 10
       ) / 10;
       if (distanceKm < 0.3) distanceKm = 0.3;
+      durationMin = Math.round(distanceKm * 3);
     }
 
-    /* Try OSRM for accurate road distance */
+    /* Try OSRM for accurate road distance + duration */
     if (window.SokoniRouting && pickupCoords && deliveryCoords) {
       try {
         const route = await SokoniRouting.getRoute(
           pickupCoords.lat, pickupCoords.lng,
           deliveryCoords.lat, deliveryCoords.lng
         );
-        if (route) distanceKm = route.distanceKm;
-      } catch(e) { /* fall through to haversine estimate */ }
+        if (route) { distanceKm = route.distanceKm; durationMin = route.durationMin; }
+      } catch(e) { /* use haversine estimate */ }
     }
 
-    const deliveryFee   = _calcDeliveryFee(distanceKm, speed);
+    /* Intelligent pricing */
+    const pricing = _calcPricing({
+      vehicleType,
+      distanceKm,
+      durationMin,
+      weightKg,
+      parcelSize,
+      speedTier:       speed,
+      demandMultiplier,
+      isRural,
+      subsidyKES,
+      timestamp:       Date.now(),
+    });
+
+    const deliveryFee   = pricing.customerPaysFee;
     const commissionAmt = Math.round(orderTotal * COMMISSION_PCT / 100);
     const deliveryComm  = Math.round(deliveryFee * COMMISSION_PCT / 100);
     const deliveryRef   = _delRef();
@@ -177,7 +222,6 @@ const SokoniDelivery = {
     const timelineEntry = { status:'order_placed', at:now, by:'buyer' };
 
     const deliveryDoc = {
-      /* ref field is required by savePackageRequest as Firestore doc ID */
       ref:            deliveryRef,
       deliveryRef,
       orderId,
@@ -195,34 +239,43 @@ const SokoniDelivery = {
       deliveryAddress,
       deliveryCoords,
       distanceKm,
+      durationMin,
       /* Order details */
       items,
       orderTotal,
-      category:       CATEGORY_CONFIG[category] ? category : 'general',
+      category:         CATEGORY_CONFIG[category] ? category : 'general',
       /* Delivery config */
-      speed:          SPEED_TIERS[speed] ? speed : 'same_day',
+      speed:            SPEED_TIERS[speed] ? speed : 'same_day',
+      vehicleType,
+      weightKg,
+      parcelSize,
       scheduledTime,
+      /* Pricing */
       deliveryFee,
+      pricingBreakdown: pricing.components || null,
+      pricingSurgeReasons: pricing.reasons || [],
+      isPeakHour:       pricing.isPeakHour || false,
+      isSurging:        pricing.isSurging  || false,
       /* Financials */
-      commissionPct:   COMMISSION_PCT,
+      commissionPct:    COMMISSION_PCT,
       commissionAmt,
       deliveryComm,
-      sokoniTotalCut:  commissionAmt + deliveryComm,
-      sellerNet:       orderTotal - commissionAmt,
-      driverNet:       Math.round(deliveryFee * DRIVER_SHARE),
+      sokoniTotalCut:   commissionAmt + deliveryComm,
+      sellerNet:        orderTotal - commissionAmt,
+      driverNet:        pricing.riderPayout,
+      riderSharePct:    pricing.riderSharePct,
+      subsidyKES:       pricing.subsidyKES || 0,
       /* Status */
-      status:          'order_placed',
+      status:           'order_placed',
       notes,
-      /* Proof PIN — buyer shows this to driver at delivery */
-      proofPin:        _generatePIN(),
-      timeline:        [timelineEntry],
+      proofPin:         _generatePIN(),
+      timeline:         [timelineEntry],
       _lastTimelineEntry: timelineEntry,
-      createdAt:       now,
+      createdAt:        now,
     };
 
     await SokoniDB.savePackageRequest(deliveryDoc);
 
-    /* Patch the linked marketplace order */
     if (orderId) {
       await SokoniDB.updateOrder(orderId, {
         deliveryRef,
@@ -231,7 +284,15 @@ const SokoniDelivery = {
       }).catch(() => {});
     }
 
-    return { deliveryRef, deliveryFee, distanceKm, status:'order_placed' };
+    return {
+      deliveryRef,
+      deliveryFee,
+      distanceKm,
+      durationMin,
+      riderPayout: pricing.riderPayout,
+      pricing,
+      status: 'order_placed',
+    };
   },
 
   /* ─────────────────────────────────────────
@@ -308,7 +369,7 @@ const SokoniDelivery = {
   ───────────────────────────────────────── */
   async driverArrivedAtSeller(deliveryRef, driverId) {
     await _updateDelivery(deliveryRef, {
-      status:            'driver_at_seller',
+      status:            'driver_at_seller', /* "Parcel Picked Up" stage */
       arrivedAtSellerAt: new Date().toISOString(),
     }, driverId);
   },
@@ -443,25 +504,43 @@ const SokoniDelivery = {
   },
 
   /* ─────────────────────────────────────────
-     15. calcDeliveryFee(distanceKm, speed) → integer KES
+     15. calcDeliveryFee(opts) → integer KES
          Exposed for UI fee previews before order creation.
+         opts: { distanceKm, speedTier, vehicleType, weightKg,
+                 parcelSize, durationMin, isRural, demandMultiplier }
   ───────────────────────────────────────── */
-  calcDeliveryFee: _calcDeliveryFee,
+  calcDeliveryFee(opts) {
+    if (typeof opts === 'number') {
+      /* Legacy call: calcDeliveryFee(distanceKm, speed) */
+      return _calcPricing({ distanceKm: opts, speedTier: arguments[1] || 'same_day' }).customerPaysFee;
+    }
+    return _calcPricing(opts || {}).customerPaysFee;
+  },
+
+  /* ─────────────────────────────────────────
+     15b. calcPricing(opts) → full PricingResult
+  ───────────────────────────────────────── */
+  calcPricing: _calcPricing,
 
   /* ─────────────────────────────────────────
      16. buildStatusTimeline(status)
-         Returns step data for timeline UI components.
+         Returns 9-stage step data for timeline UI.
+         Stages: Order Confirmed → Preparing (optional) →
+         Ready for Pickup → Rider Assigned → Rider En Route →
+         Parcel Picked Up → Heading to You → Arriving → Delivered
   ───────────────────────────────────────── */
   buildStatusTimeline(status) {
     const steps = [
-      { key:'order_placed',    icon:'🛒', label:'Order Placed'            },
-      { key:'ready_for_pickup',icon:'✅', label:'Ready for Pickup'        },
-      { key:'driver_assigned', icon:'🏍️', label:'Rider Assigned'          },
-      { key:'driver_accepted', icon:'🟢', label:'Rider Heading to Seller' },
-      { key:'driver_at_seller',icon:'📍', label:'Rider at Seller'         },
-      { key:'in_transit',      icon:'🚗', label:'In Transit'              },
-      { key:'delivered',       icon:'📦', label:'Delivered'               },
-      { key:'buyer_confirmed', icon:'🎉', label:'Receipt Confirmed'       },
+      { key:'order_placed',    icon:'🛒', label:'Order Confirmed'          },
+      { key:'preparing',       icon:'👨‍🍳', label:'Preparing',    optional:true },
+      { key:'ready_for_pickup',icon:'✅', label:'Ready for Pickup'         },
+      { key:'driver_assigned', icon:'🏍️', label:'Rider Assigned'           },
+      { key:'driver_accepted', icon:'🛵', label:'Rider En Route to Seller' },
+      { key:'driver_at_seller',icon:'📍', label:'Parcel Picked Up'         },
+      { key:'in_transit',      icon:'🚗', label:'Heading to You'           },
+      { key:'arriving',        icon:'📲', label:'Arriving',    computed:true },
+      { key:'delivered',       icon:'📦', label:'Delivered'                },
+      { key:'buyer_confirmed', icon:'🎉', label:'Complete',    hideIfPending:true },
     ];
     const idx = steps.findIndex(s => s.key === status);
     return {

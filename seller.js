@@ -4088,7 +4088,7 @@ function renderPremiumPlans(){
     if(bannerEl && currentPlan !== "starter"){
         const plan = PREMIUM_PLANS.find(p=>p.id===currentPlan);
         bannerEl.style.display = "block";
-        bannerEl.innerHTML = `<div style="background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.2);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;">✨ You are on <strong style="color:#ffc107;">${plan?.name||currentPlan}</strong>. All premium features are active. (Beta: FREE)</div>`;
+        bannerEl.innerHTML = `<div style="background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.2);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13px;">✨ You are on <strong style="color:#ffc107;">${_esc(plan?.name||currentPlan)}</strong>. All premium features are active. (Beta: FREE)</div>`;
     }
 
     el.innerHTML = PREMIUM_PLANS.map(plan=>`

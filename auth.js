@@ -6,6 +6,17 @@
    signup.html can call them directly.
 ================================================================ */
 
+/* ── On load: capture ?next= or ?redirect= URL param into sessionStorage ── */
+(function(){
+    try {
+        const sp = new URLSearchParams(window.location.search);
+        const next = sp.get('next') || sp.get('redirect');
+        if (next && /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(next) && !next.includes('//')) {
+            sessionStorage.setItem('sokoniLoginRedirect', next);
+        }
+    } catch(e) {}
+})();
+
 /* ── UI helpers ── */
 function showAuthMsg(msg, type){
     const el = document.getElementById("authMsg");

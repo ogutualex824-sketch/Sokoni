@@ -42,7 +42,14 @@
       "scripts/**",
       "monitoring/**",
       "docs/**",
-      "functions/**"
+      "functions/**",
+      "sokoni-dev-mock.js",
+      "sokoni-mock-data.js",
+      "jest.config.js",
+      "decoded",
+      "ss_*.png",
+      "tmp_*.png",
+      "*.jsonl"
     ],
     "cleanUrls": true,
     "trailingSlash": false,

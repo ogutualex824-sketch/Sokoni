@@ -21,14 +21,14 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  /* ── Fare table — delivery vehicle fare rates ── */
+  /* ── Legacy fare table — used only when SokoniDeliveryPricing is not loaded ── */
   var FARE_TABLE = {
-    moto:   { base: 80,  perKm: 15 },
-    car:    { base: 200, perKm: 35 },
-    tuktuk: { base: 120, perKm: 20 },
-    ebike:  { base: 60,  perKm: 10 },
-    van:    { base: 400, perKm: 50 },
-    pickup: { base: 600, perKm: 70 },
+    moto:   { base:100, perKm:18 },
+    car:    { base:220, perKm:38 },
+    tuktuk: { base:130, perKm:22 },
+    ebike:  { base: 70, perKm:12 },
+    van:    { base:450, perKm:58 },
+    pickup: { base:600, perKm:70 },
   };
 
   /* ── Fetch with explicit timeout (AbortController, not AbortSignal.timeout) ── */
@@ -111,10 +111,28 @@
     },
 
     /* ─────────────────────────────────────────
-       calcFare(vehicleId, distanceKm) → integer KES
-       Deterministic — same route always same fare.
+       calcFare(vehicleId, distanceKm, opts?) → integer KES
+       Uses SokoniDeliveryPricing when available for full
+       intelligent pricing; falls back to legacy table.
+
+       opts = { durationMin, weightKg, parcelSize, speedTier,
+                demandMultiplier, isRural, timestamp }
     ───────────────────────────────────────── */
-    calcFare: function (vehicleId, distanceKm) {
+    calcFare: function (vehicleId, distanceKm, opts) {
+      if (g.SokoniDeliveryPricing) {
+        var o = opts || {};
+        return g.SokoniDeliveryPricing.calculate({
+          vehicleType:      vehicleId,
+          distanceKm:       distanceKm,
+          durationMin:      o.durationMin      || Math.round(distanceKm * 3),
+          weightKg:         o.weightKg         || 1,
+          parcelSize:       o.parcelSize        || 'small',
+          speedTier:        o.speedTier         || 'same_day',
+          demandMultiplier: o.demandMultiplier  || 1.0,
+          isRural:          o.isRural           || false,
+          timestamp:        o.timestamp         || Date.now(),
+        }).customerPaysFee;
+      }
       var v = FARE_TABLE[vehicleId] || FARE_TABLE.moto;
       return Math.round(v.base + distanceKm * v.perKm);
     },
@@ -159,7 +177,7 @@
         to: to,
         distanceKm: distanceKm,
         durationMin: durationMin,
-        fare: this.calcFare(vehicleId, distanceKm),
+        fare: this.calcFare(vehicleId, distanceKm, { durationMin: durationMin }),
         geometry: geometry,
         fallback: fallback || false,
       };
