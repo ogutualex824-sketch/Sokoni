@@ -10,6 +10,7 @@ Disallow: /admin.html
 Disallow: /trust-safety.html
 Disallow: /payment-receipt.html
 Disallow: /automation-engine.html
+Disallow: /dispute-portal.html
 Disallow: /verification-admin.html
 Disallow: /profile.html
 Disallow: /checkout.html

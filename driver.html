@@ -200,6 +200,35 @@
     .leader-trips{ font-size:12px; color:rgba(255,255,255,0.4); }
     .leader-earn{ font-size:14px; font-weight:900; color:#71ff00; }
     @media(max-width:600px){ .drv-nav-links { display:none !important; } }
+
+    /* ── Mobile-first driver improvements ── */
+    @media(max-width:768px){
+      /* Bigger touch targets for accept/decline */
+      .dc-accept-btn{ padding:15px!important; font-size:15px!important; min-height:52px; letter-spacing:.2px; }
+      .dc-decline-btn{ padding:12px 18px!important; min-height:48px; }
+      /* Delivery card full-width */
+      .delivery-card{ border-radius:14px; margin-bottom:10px; }
+      .dc-actions{ flex-direction:column; gap:8px!important; }
+      .dc-actions button{ width:100%; }
+      /* Status update buttons */
+      .dc-status-btn{ min-height:48px!important; width:100%; margin-bottom:8px; font-size:14px!important; border-radius:12px!important; }
+      /* Cost breakdown — wrap on small screens */
+      .cost-result{ grid-template-columns:1fr 1fr!important; }
+    }
+    /* Active delivery floating widget — shows when driver has active trip */
+    #activeTripWidget{
+      position:fixed;bottom:calc(70px + env(safe-area-inset-bottom));left:0;right:0;
+      background:linear-gradient(135deg,#71ff00,#4fc800);
+      color:#000;padding:12px 16px;z-index:150;
+      display:none;align-items:center;gap:12px;
+      border-top:2px solid #3da800;box-shadow:0 -2px 20px rgba(113,255,0,.3);
+    }
+    #activeTripWidget .atw-icon{font-size:22px;flex-shrink:0}
+    #activeTripWidget .atw-info{flex:1;min-width:0}
+    #activeTripWidget .atw-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;opacity:.7}
+    #activeTripWidget .atw-order{font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #activeTripWidget .atw-earn{font-size:12px;font-weight:700;opacity:.8}
+    #activeTripWidget button{background:rgba(0,0,0,.15);border:1px solid rgba(0,0,0,.2);border-radius:8px;color:#000;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0}
   </style>
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -560,6 +589,17 @@
 
   </div><!-- /driverDashboard -->
 </div><!-- /driver-page -->
+
+<!-- ── Active Trip Widget (mobile sticky bar) ────────────────────────────── -->
+<div id="activeTripWidget">
+  <div class="atw-icon">🚴</div>
+  <div class="atw-info">
+    <div class="atw-label">Active Delivery</div>
+    <div class="atw-order" id="atwOrder">—</div>
+    <div class="atw-earn" id="atwEarn"></div>
+  </div>
+  <button onclick="window.scrollTo({top:document.getElementById('myDeliveries')?.offsetTop||0,behavior:'smooth'})">View Trip ↓</button>
+</div>
 
 <nav class="bottom-nav">
   <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
@@ -1338,6 +1378,21 @@ function acceptDelivery(orderId, distKm){
   _drvToast(`✅ Order ${orderId} accepted · ${distKm}km · Net KES ${net}${costLine} — pick up from seller.`);
   renderDriverStats();
   renderDeliveries();
+  _updateActiveTripWidget();
+}
+
+/* ── Active trip mobile widget ── */
+function _updateActiveTripWidget(){
+  const w = document.getElementById('activeTripWidget');
+  if(!w || !currentDriver) return;
+  const active = (currentDriver.deliveries||[]).find(d => d.status==='picked' || d.status==='en_route');
+  if(active){
+    document.getElementById('atwOrder').textContent = 'Order ' + active.orderId;
+    document.getElementById('atwEarn').textContent  = 'Net: KES ' + (active.net||active.driverCut||0) + ' · ' + active.distKm + 'km';
+    w.style.display = 'flex';
+  } else {
+    w.style.display = 'none';
+  }
 }
 
 /* ── Update delivery status ── */
@@ -1365,6 +1420,7 @@ function updateDeliveryStatus(orderId, newStatus){
   renderDriverStats();
   renderWeeklyGoal();
   renderDeliveries();
+  _updateActiveTripWidget();
 }
 
 /* ── Persist driver ── */

@@ -4448,6 +4448,45 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    /* ── MiniShop & Social Commerce v1.0 ──────────────────────────────── */
+    match /shopHandles/{handle} {
+      allow read:  if true;   // public — URL resolution for any visitor
+      allow write: if false;  // CF Admin SDK only (claimMinishopHandle)
+    }
+    match /minishopConfig/{shopId} {
+      allow read:  if true;   // public — storefront data loaded by visitors
+      allow write: if false;  // CF Admin SDK only (saveMinishopConfig)
+    }
+    match /minishopAnalytics/{shopId} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == resource.data.ownerUid);
+      allow write: if false;  // CF Admin SDK only (trackMinishopView, followShop)
+    }
+    match /shopFollowers/{docId} {
+      allow read:  if true;   // public — follower count visible on storefront
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+    match /msViewRL/{docId} {
+      allow read:  if false;
+      allow write: if false;  // CF Admin SDK only (rate limit counters)
+    }
+    match /aiGenRL/{docId} {
+      allow read:  if false;
+      allow write: if false;  // CF Admin SDK only (AI generation rate limits)
+    }
+
+    /* ── MiniShop Campaigns v1.0 ───────────────────────────────────────── */
+    match /minishopCampaigns/{campaignId} {
+      // Sellers can read their own campaigns; public can read active campaign metadata
+      allow read:  if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;  // CF Admin SDK only (createMinishopCampaign, pauseMinishopCampaign, deleteMinishopCampaign)
+    }
+    match /campaignClickRL/{docId} {
+      allow read:  if false;
+      allow write: if false;  // CF Admin SDK only (rate limit counters for trackCampaignClick)
+    }
+
   }
 }
 

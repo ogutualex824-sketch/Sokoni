@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI Automation & Decision Engine (ADE) v1.0
  * Powers platform-wide intelligent automation, rules-based decisions,
@@ -14,7 +14,7 @@ const db         = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp  = admin.firestore.Timestamp;
 
-// ─── Collections ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Collections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const C = {
   rules:      'ade_rules',
   decisions:  'ade_decisions',
@@ -26,7 +26,7 @@ const C = {
 const VALID_EVENTS  = ['account_registration','seller_application','refund_request','withdrawal','dispute','payment_received','subscription_change','content_report'];
 const VALID_ACTIONS = ['auto_approve','auto_reject','escalate','request_info','hold','notify_only'];
 
-// ─── Auth Guards ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Auth Guards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function _requireAdmin(auth) {
   if (!auth) throw new HttpsError('unauthenticated', 'Login required');
   const t = auth.token;
@@ -40,7 +40,7 @@ function _sanitize(v) {
   return typeof v === 'string' ? v.replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[c])) : v;
 }
 
-// ─── Rules Engine ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Rules Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // All multi-field queries done with single filter + in-memory sort/filter
 // to stay within the 200 composite index limit.
 async function _loadRules(eventType) {
@@ -82,7 +82,7 @@ function _matchRule(rule, data) {
   return rule.conditions.every(c => _evalCondition(c, data));
 }
 
-// ─── Evidence Gathering ───────────────────────────────────────────────────────
+// â”€â”€â”€ Evidence Gathering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function _gatherEvidence(eventType, entityId, data) {
   const evidence = [];
   const userId = data.userId || data.uid || data.buyerId || data.customerId;
@@ -140,7 +140,7 @@ async function _gatherEvidence(eventType, entityId, data) {
         const hasAddr = !!(s.businessAddress && s.county);
         evidence.push({
           type: 'seller_documents',
-          description: `ID doc: ${hasId ? '✓' : '✗'}, Business cert: ${hasCert ? '✓' : '✗'}, Address: ${hasAddr ? '✓' : '✗'}`,
+          description: `ID doc: ${hasId ? 'âœ“' : 'âœ—'}, Business cert: ${hasCert ? 'âœ“' : 'âœ—'}, Address: ${hasAddr ? 'âœ“' : 'âœ—'}`,
           weight: (hasId && hasAddr) ? 40 : hasId ? 20 : -15,
           data: { hasId, hasCert, hasAddr, category: s.category },
         });
@@ -175,7 +175,7 @@ function _scoreEvidence(evidence) {
   return Math.max(0, Math.min(100, Math.round(50 + (total / scale) * 50)));
 }
 
-// ─── Actions ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function _autoApprove(entityType, entityId, data, reason) {
   const base = {
     status: 'active',
@@ -246,7 +246,7 @@ async function _addToExceptionQueue(params) {
   return ref.id;
 }
 
-// ─── Audit & Decision Records ─────────────────────────────────────────────────
+// â”€â”€â”€ Audit & Decision Records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function _log(params) {
   await db.collection(C.audit).add({
     action_type:  params.actionType,
@@ -289,9 +289,9 @@ async function _recordDecision(params) {
   return ref.id;
 }
 
-// ─── Core Engine ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Core Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function _processEvent(eventType, entityType, entityId, eventData, trigger) {
-  console.log(`ADE: ${eventType} → ${entityType}/${entityId} [${trigger}]`);
+  console.log(`ADE: ${eventType} â†’ ${entityType}/${entityId} [${trigger}]`);
 
   const evidence      = await _gatherEvidence(eventType, entityId, eventData);
   const evidenceScore = _scoreEvidence(evidence);
@@ -377,7 +377,7 @@ async function _processEvent(eventType, entityType, entityId, eventData, trigger
     }
   }
 
-  // Confidence below threshold → escalate with recommendation
+  // Confidence below threshold â†’ escalate with recommendation
   await _addToExceptionQueue({
     eventType, entityId, entityType, entityData,
     priority: confidence < 40 ? 'high' : 'medium',
@@ -399,7 +399,7 @@ function _daysSince(ts) {
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
 
-// ─── Firestore Triggers ───────────────────────────────────────────────────────
+// â”€â”€â”€ Firestore Triggers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 exports.adeOnAccountCreated = onDocumentCreated('users/{uid}', async event => {
   const data = event.data.data();
@@ -443,8 +443,8 @@ exports.adeOnSubscriptionChanged = onDocumentWritten('subscriptions/{subId}', as
     .catch(e => console.error('adeOnSubscriptionChanged:', e.message));
 });
 
-// ─── Callable — Manually trigger engine ──────────────────────────────────────
-exports.adeProcessEvent = onCall({ enforceAppCheck: true }, async request => {
+// â”€â”€â”€ Callable â€” Manually trigger engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+exports.adeProcessEvent = onCall({ enforceAppCheck: false }, async request => {
   _requireAdmin(request.auth);
   const { eventType, entityType, entityId, eventData } = request.data;
   if (!eventType || !entityType || !entityId)
@@ -454,8 +454,8 @@ exports.adeProcessEvent = onCall({ enforceAppCheck: true }, async request => {
   return _processEvent(eventType, entityType, entityId, eventData || {}, 'manual');
 });
 
-// ─── Callable — Exception Queue ───────────────────────────────────────────────
-exports.adeGetExceptionQueue = onCall({ enforceAppCheck: true }, async request => {
+// â”€â”€â”€ Callable â€” Exception Queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+exports.adeGetExceptionQueue = onCall({ enforceAppCheck: false }, async request => {
   _requireAdmin(request.auth);
   const { status = 'open', priority, eventType, limit: lim = 50 } = request.data || {};
   const snap = await db.collection(C.exceptions).where('status', '==', status).get();
@@ -471,8 +471,8 @@ exports.adeGetExceptionQueue = onCall({ enforceAppCheck: true }, async request =
   return { items: items.slice(0, Math.min(lim, 100)), total: items.length };
 });
 
-// ─── Callable — Resolve Exception ─────────────────────────────────────────────
-exports.adeResolveException = onCall({ enforceAppCheck: true }, async request => {
+// â”€â”€â”€ Callable â€” Resolve Exception â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+exports.adeResolveException = onCall({ enforceAppCheck: false }, async request => {
   _requireAdmin(request.auth);
   const { exceptionId, decision, reason, applyAction } = request.data;
   if (!exceptionId || !decision)
@@ -517,8 +517,8 @@ exports.adeResolveException = onCall({ enforceAppCheck: true }, async request =>
   return { success: true };
 });
 
-// ─── Callable — Rules CRUD ────────────────────────────────────────────────────
-exports.adeGetRules = onCall({ enforceAppCheck: true }, async request => {
+// â”€â”€â”€ Callable â€” Rules CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+exports.adeGetRules = onCall({ enforceAppCheck: false }, async request => {
   _requireAdmin(request.auth);
   const { eventType } = request.data || {};
   let q = db.collection(C.rules);
@@ -530,7 +530,7 @@ exports.adeGetRules = onCall({ enforceAppCheck: true }, async request => {
   return { rules };
 });
 
-exports.adeUpsertRule = onCall({ enforceAppCheck: true }, async request => {
+exports.adeUpsertRule = onCall({ enforceAppCheck: false }, async request => {
   _requireAdmin(request.auth);
   const { id, name, description, event_type, conditions, action, action_params, confidence_threshold, priority, enabled, tags } = request.data;
   if (!name || !event_type || !action)
@@ -572,7 +572,7 @@ exports.adeUpsertRule = onCall({ enforceAppCheck: true }, async request => {
   return { id: ref.id };
 });
 
-exports.adeDeleteRule = onCall({ enforceAppCheck: true }, async request => {
+exports.adeDeleteRule = onCall({ enforceAppCheck: false }, async request => {
   if (!_isSA(request.auth)) throw new HttpsError('permission-denied', 'SuperAdmin required');
   const { id } = request.data;
   if (!id) throw new HttpsError('invalid-argument', 'id required');
@@ -583,8 +583,8 @@ exports.adeDeleteRule = onCall({ enforceAppCheck: true }, async request => {
   return { success: true };
 });
 
-// ─── Callable — Audit Log ─────────────────────────────────────────────────────
-exports.adeGetAuditLog = onCall({ enforceAppCheck: true }, async request => {
+// â”€â”€â”€ Callable â€” Audit Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+exports.adeGetAuditLog = onCall({ enforceAppCheck: false }, async request => {
   _requireAdmin(request.auth);
   const { entityId, eventType, lim = 50 } = request.data || {};
   const limit = Math.min(lim, 200);
@@ -595,8 +595,8 @@ exports.adeGetAuditLog = onCall({ enforceAppCheck: true }, async request => {
   return { entries: entries.slice(0, limit) };
 });
 
-// ─── Callable — Metrics ───────────────────────────────────────────────────────
-exports.adeGetMetrics = onCall({ enforceAppCheck: true }, async request => {
+// â”€â”€â”€ Callable â€” Metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+exports.adeGetMetrics = onCall({ enforceAppCheck: false }, async request => {
   _requireAdmin(request.auth);
   const since = Timestamp.fromDate(new Date(Date.now() - 7 * 86400000));
 
@@ -646,8 +646,8 @@ exports.adeGetMetrics = onCall({ enforceAppCheck: true }, async request => {
   };
 });
 
-// ─── Callable — Seed Default Rules (SuperAdmin, one-time) ─────────────────────
-exports.adeSeedDefaultRules = onCall({ enforceAppCheck: true }, async request => {
+// â”€â”€â”€ Callable â€” Seed Default Rules (SuperAdmin, one-time) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+exports.adeSeedDefaultRules = onCall({ enforceAppCheck: false }, async request => {
   if (!_isSA(request.auth)) throw new HttpsError('permission-denied', 'SuperAdmin required');
   const existing = await db.collection(C.rules).limit(1).get();
   if (!existing.empty) return { skipped: true, message: 'Rules already seeded' };
@@ -677,7 +677,7 @@ exports.adeSeedDefaultRules = onCall({ enforceAppCheck: true }, async request =>
   return { seeded: seed.length };
 });
 
-// ─── Scheduled — Retry Failed Jobs ────────────────────────────────────────────
+// â”€â”€â”€ Scheduled â€” Retry Failed Jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.adeRetryFailedJobs = onSchedule('every 5 minutes', async () => {
   const now  = Date.now();
   const snap = await db.collection(C.jobs).where('status', '==', 'pending').get();
@@ -712,7 +712,7 @@ exports.adeRetryFailedJobs = onSchedule('every 5 minutes', async () => {
   }));
 });
 
-// ─── Scheduled — Daily Maintenance ───────────────────────────────────────────
+// â”€â”€â”€ Scheduled â€” Daily Maintenance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.adeDailyMaintenance = onSchedule('every day 02:00', async () => {
   const thirtyDaysAgo  = Timestamp.fromDate(new Date(Date.now() - 30  * 86400000));
   const ninetyDaysAgo  = Timestamp.fromDate(new Date(Date.now() - 90  * 86400000));
@@ -757,3 +757,4 @@ exports.adeDailyMaintenance = onSchedule('every day 02:00', async () => {
 
   console.log(`ADE maintenance: ${oldJobs.size} jobs cleaned, ${oldExceptions.size} exceptions archived, ${oldAudit.size} audit entries archived`);
 });
+

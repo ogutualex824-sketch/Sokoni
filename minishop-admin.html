@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My MiniShop — SOKONI Seller</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{
+      --ms-bg:#0f1117;
+      --ms-surface:#1a1d2e;
+      --ms-surface2:#222540;
+      --ms-border:rgba(255,255,255,.08);
+      --ms-accent:#00bcd4;
+      --ms-accent2:#7c4dff;
+      --ms-success:#4caf50;
+      --ms-warn:#ff9800;
+      --ms-danger:#f44336;
+      --ms-text:#e0e0e0;
+      --ms-muted:#888;
+      --ms-radius:8px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--ms-bg);color:var(--ms-text);font-size:14px;line-height:1.5}
+
+    /* ── Auth Gate ── */
+    #msaAuthGate{position:fixed;inset:0;background:var(--ms-bg);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px}
+    .msa-spinner{width:36px;height:36px;border:3px solid var(--ms-border);border-top-color:var(--ms-accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Top Bar ── */
+    .msa-topbar{display:flex;align-items:center;gap:16px;padding:12px 24px;background:var(--ms-surface);border-bottom:1px solid var(--ms-border);position:sticky;top:0;z-index:100}
+    .msa-back{color:var(--ms-muted);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;transition:color .15s;flex-shrink:0}
+    .msa-back:hover{color:var(--ms-accent)}
+    .msa-topbar h1{flex:1;font-size:16px;font-weight:700;letter-spacing:.3px}
+    .msa-topbar-shop-url{font-size:12px;color:var(--ms-muted);font-family:monospace;display:none}
+    .msa-topbar-shop-url.visible{display:block}
+    .msa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--ms-radius);border:1px solid var(--ms-border);background:var(--ms-surface2);color:var(--ms-text);cursor:pointer;font-size:13px;font-weight:500;transition:background .15s,border-color .15s;text-decoration:none;white-space:nowrap}
+    .msa-btn:hover{border-color:var(--ms-accent);background:rgba(0,188,212,.1)}
+    .msa-btn.primary{background:var(--ms-accent);border-color:var(--ms-accent);color:#000;font-weight:700}
+    .msa-btn.primary:hover{background:#00acc1;border-color:#00acc1}
+    .msa-btn.success{background:rgba(76,175,80,.15);border-color:rgba(76,175,80,.4);color:#a5d6a7}
+    .msa-btn.danger{background:rgba(244,67,54,.1);border-color:rgba(244,67,54,.4);color:#ef9a9a}
+    .msa-btn:disabled{opacity:.5;cursor:not-allowed}
+    .msa-btn-sm{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:6px;border:1px solid var(--ms-border);background:var(--ms-surface2);color:var(--ms-text);cursor:pointer;font-size:12px;font-weight:500;transition:background .15s;text-decoration:none}
+    .msa-btn-sm:hover{background:rgba(255,255,255,.1)}
+
+    /* ── Tab Navigation ── */
+    .msa-tabs{display:flex;gap:0;border-bottom:1px solid var(--ms-border);background:var(--ms-surface);padding:0 24px;overflow-x:auto;scrollbar-width:none}
+    .msa-tabs::-webkit-scrollbar{display:none}
+    .msa-tab{padding:12px 18px;border:none;background:none;color:var(--ms-muted);cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;margin-bottom:-1px}
+    .msa-tab:hover{color:var(--ms-text)}
+    .msa-tab.active{color:var(--ms-accent);border-bottom-color:var(--ms-accent)}
+
+    /* ── Content ── */
+    .msa-content{padding:24px;max-width:1100px;margin:0 auto}
+    .msa-panel{display:block}
+    .msa-panel[hidden]{display:none!important}
+
+    /* ── Cards ── */
+    .msa-card{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:20px;margin-bottom:20px}
+    .msa-card h2{font-size:15px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    .msa-card h3{font-size:13px;font-weight:600;margin-bottom:12px;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px}
+
+    /* ── Handle Section ── */
+    .msa-handle-claim{text-align:center;padding:32px 20px}
+    .msa-handle-claim h2{font-size:22px;font-weight:800;margin-bottom:8px;background:linear-gradient(135deg,var(--ms-accent),var(--ms-accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .msa-handle-claim p{color:var(--ms-muted);font-size:14px;margin-bottom:24px}
+    .msa-handle-input-row{display:flex;align-items:stretch;max-width:480px;margin:0 auto;gap:0}
+    .msa-handle-prefix{background:var(--ms-surface2);border:1px solid var(--ms-border);border-right:none;border-radius:var(--ms-radius) 0 0 var(--ms-radius);padding:10px 14px;font-size:14px;color:var(--ms-muted);white-space:nowrap;display:flex;align-items:center}
+    #msaHandleInput{flex:1;background:var(--ms-surface2);border:1px solid var(--ms-border);border-left:none;border-right:none;padding:10px 12px;color:var(--ms-text);font-size:16px;outline:none}
+    #msaHandleInput:focus{border-color:var(--ms-accent)}
+    #msaClaimBtn{border-radius:0 var(--ms-radius) var(--ms-radius) 0;padding:10px 20px;border:1px solid var(--ms-accent);background:var(--ms-accent);color:#000;font-weight:700;cursor:pointer;font-size:14px;transition:background .15s;white-space:nowrap}
+    #msaClaimBtn:hover{background:#00acc1}
+    #msaHandleDisplay{display:none}
+    #msaHandleDisplay.visible{display:block}
+    .msa-handle-url-row{display:flex;align-items:center;gap:10px;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px 16px}
+    #msaHandleUrl{flex:1;font-family:monospace;font-size:14px;color:var(--ms-accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .msa-handle-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+    /* ── Quick Stats ── */
+    #msaViewStats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .msa-stat{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:14px 16px;text-align:center;transition:border-color .2s}
+    .msa-stat:hover{border-color:var(--ms-accent)}
+    .msa-stat-label{font-size:11px;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+    .msa-stat-value{font-size:26px;font-weight:800;line-height:1}
+
+    /* ── Preview Card ── */
+    .msa-preview-card{border:1px solid var(--ms-border);border-radius:12px;overflow:hidden;max-width:320px}
+    .msa-preview-cover{height:80px;background:linear-gradient(135deg,var(--ms-accent),var(--ms-accent2));position:relative}
+    .msa-preview-logo{width:48px;height:48px;border-radius:50%;background:var(--ms-surface);border:3px solid var(--ms-bg);position:absolute;bottom:-20px;left:16px;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden}
+    .msa-preview-logo img{width:100%;height:100%;object-fit:cover}
+    .msa-preview-body{padding:28px 16px 16px}
+    .msa-preview-name{font-weight:700;font-size:14px}
+    .msa-preview-tagline{font-size:12px;color:var(--ms-muted);margin-top:2px}
+
+    /* ── Share Dropdown ── */
+    .msa-share-wrap{position:relative;display:inline-block}
+    .msa-share-dropdown{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);min-width:180px;z-index:200;overflow:hidden}
+    .msa-share-wrap.open .msa-share-dropdown{display:block}
+    .msa-share-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;font-size:13px;transition:background .15s;text-decoration:none;color:var(--ms-text)}
+    .msa-share-item:hover{background:rgba(255,255,255,.06)}
+
+    /* ── Form Inputs ── */
+    .msa-form-row{margin-bottom:16px}
+    .msa-form-row label{display:block;font-size:12px;font-weight:600;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+    .msa-input,.msa-textarea,.msa-select{width:100%;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:10px 12px;color:var(--ms-text);font-size:16px;font-family:inherit;outline:none;transition:border-color .15s}
+    .msa-input:focus,.msa-textarea:focus,.msa-select:focus{border-color:var(--ms-accent)}
+    .msa-input:read-only{opacity:.6;cursor:not-allowed}
+    .msa-textarea{resize:vertical;min-height:80px;line-height:1.5}
+    .msa-select option{background:var(--ms-surface)}
+    .msa-char-count{font-size:11px;color:var(--ms-muted);text-align:right;margin-top:4px}
+    .msa-input-hint{font-size:11px;color:var(--ms-muted);margin-top:4px}
+
+    /* ── Two-col layout ── */
+    .msa-two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    @media(max-width:700px){.msa-two-col{grid-template-columns:1fr}}
+
+    /* ── Color Swatches ── */
+    #msaColorSwatches{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+    .msa-swatch{width:30px;height:30px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s,border-color .15s;flex-shrink:0}
+    .msa-swatch:hover{transform:scale(1.15)}
+    .msa-swatch.selected{border-color:#fff}
+    .msa-color-custom{display:flex;align-items:center;gap:8px;margin-top:4px}
+    .msa-color-custom input[type=color]{width:36px;height:36px;border:1px solid var(--ms-border);border-radius:6px;padding:2px;background:var(--ms-surface2);cursor:pointer}
+    .msa-color-hex{width:100px;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:8px 10px;color:var(--ms-text);font-size:13px;font-family:monospace;outline:none}
+    .msa-color-hex:focus{border-color:var(--ms-accent)}
+
+    /* ── Image Preview ── */
+    .msa-img-preview{width:100%;height:120px;border-radius:var(--ms-radius);border:1px dashed var(--ms-border);margin-top:8px;object-fit:cover;display:none;background:var(--ms-surface2)}
+    .msa-img-preview.visible{display:block}
+
+    /* ── Business Hours ── */
+    #msaHours{display:flex;flex-direction:column;gap:8px}
+    .msa-hours-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .msa-hours-day{width:56px;font-size:13px;font-weight:600;color:var(--ms-text)}
+    .msa-hours-row input[type=time]{background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:6px;padding:6px 10px;color:var(--ms-text);font-size:14px;outline:none;width:120px}
+    .msa-hours-row input[type=time]:focus{border-color:var(--ms-accent)}
+    .msa-hours-row label.closed-lbl{font-size:12px;color:var(--ms-muted);display:flex;align-items:center;gap:5px;cursor:pointer}
+    .msa-hours-row input[type=checkbox]{accent-color:var(--ms-accent);width:14px;height:14px;cursor:pointer}
+
+    /* ── Payment Checkboxes ── */
+    .msa-check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+    .msa-check-item{display:flex;align-items:center;gap:8px;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:10px 12px;cursor:pointer;transition:border-color .15s;font-size:13px}
+    .msa-check-item:hover{border-color:var(--ms-accent)}
+    .msa-check-item input{accent-color:var(--ms-accent);width:14px;height:14px;cursor:pointer;flex-shrink:0}
+    .msa-check-item.checked{border-color:rgba(0,188,212,.4);background:rgba(0,188,212,.05)}
+
+    /* ── Section Divider ── */
+    .msa-section{margin-bottom:28px}
+    .msa-section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--ms-accent);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--ms-border)}
+
+    /* ── Analytics ── */
+    .msa-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+    .msa-kpi{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:16px;transition:border-color .2s}
+    .msa-kpi:hover{border-color:var(--ms-accent)}
+    .msa-kpi-label{font-size:11px;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+    .msa-kpi-value{font-size:28px;font-weight:800;line-height:1;margin-bottom:2px}
+    .msa-kpi-sub{font-size:11px;color:var(--ms-muted)}
+    .msa-kpi.accent{border-color:rgba(0,188,212,.3);background:rgba(0,188,212,.05)}
+    .msa-kpi.success{border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05)}
+
+    /* ── Date Range ── */
+    .msa-date-tabs{display:flex;gap:4px;margin-bottom:20px}
+    .msa-date-tab{padding:6px 14px;border-radius:20px;border:1px solid var(--ms-border);background:none;color:var(--ms-muted);cursor:pointer;font-size:12px;font-weight:500;transition:all .15s}
+    .msa-date-tab:hover{color:var(--ms-text)}
+    .msa-date-tab.active{background:var(--ms-accent);border-color:var(--ms-accent);color:#000;font-weight:700}
+
+    /* ── Traffic Source Bars ── */
+    .msa-traffic-list{display:flex;flex-direction:column;gap:10px}
+    .msa-traffic-item{display:flex;align-items:center;gap:10px}
+    .msa-traffic-label{width:90px;font-size:12px;color:var(--ms-text);flex-shrink:0}
+    .msa-traffic-bar-wrap{flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:8px;overflow:hidden}
+    .msa-traffic-bar{height:100%;border-radius:4px;background:var(--ms-accent);transition:width .6s ease}
+    .msa-traffic-pct{width:40px;text-align:right;font-size:12px;color:var(--ms-muted)}
+
+    /* ── Top Products / Visitors ── */
+    .msa-item-list{display:flex;flex-direction:column;gap:2px}
+    .msa-list-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;transition:background .15s;font-size:13px}
+    .msa-list-item:hover{background:rgba(255,255,255,.04)}
+    .msa-list-rank{width:20px;font-size:11px;color:var(--ms-muted);flex-shrink:0;text-align:center}
+    .msa-list-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .msa-list-val{font-size:12px;color:var(--ms-muted);white-space:nowrap}
+    .msa-empty{padding:32px;text-align:center;color:var(--ms-muted);font-size:13px}
+
+    /* ── QR Section ── */
+    .msa-qr-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px}
+    #msaQrDisplay{width:200px;height:200px;border-radius:12px;border:2px solid var(--ms-border);background:var(--ms-surface2);display:flex;align-items:center;justify-content:center;overflow:hidden}
+    #msaQrDisplay img{width:100%;height:100%}
+    .msa-qr-placeholder{font-size:13px;color:var(--ms-muted);text-align:center;padding:20px}
+    .msa-qr-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+
+    /* ── Share Links ── */
+    #msaShareLinks{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+    .msa-share-card{background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:14px;display:flex;align-items:center;gap:12px}
+    .msa-share-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .msa-share-info{flex:1;overflow:hidden}
+    .msa-share-platform{font-size:13px;font-weight:600}
+    .msa-share-text-preview{font-size:11px;color:var(--ms-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+    .msa-share-card .msa-btn-sm{flex-shrink:0}
+
+    /* ── Promo Assets ── */
+    .msa-promo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+    .msa-promo-item{background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:16px;text-align:center;cursor:pointer;transition:border-color .15s}
+    .msa-promo-item:hover{border-color:var(--ms-accent)}
+    .msa-promo-icon{font-size:32px;margin-bottom:8px}
+    .msa-promo-label{font-size:13px;font-weight:600;margin-bottom:4px}
+    .msa-promo-desc{font-size:11px;color:var(--ms-muted)}
+
+    /* ── AI Marketing ── */
+    .msa-ai-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:20px}
+    .msa-ai-type-btn{padding:10px 12px;border-radius:var(--ms-radius);border:1px solid var(--ms-border);background:var(--ms-surface2);color:var(--ms-muted);cursor:pointer;font-size:12px;font-weight:500;text-align:center;transition:all .15s}
+    .msa-ai-type-btn:hover{color:var(--ms-text)}
+    .msa-ai-type-btn.active{border-color:var(--ms-accent);background:rgba(0,188,212,.1);color:var(--ms-accent);font-weight:700}
+    #msaAiOutput{min-height:140px;font-size:14px;line-height:1.6}
+    .msa-ai-history-item{background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px;margin-bottom:8px;font-size:12px;cursor:pointer;transition:border-color .15s}
+    .msa-ai-history-item:hover{border-color:var(--ms-accent)}
+    .msa-ai-history-type{font-weight:700;color:var(--ms-accent);font-size:11px;margin-bottom:4px;text-transform:uppercase}
+    .msa-ai-history-text{color:var(--ms-muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .msa-ai-output-wrap{position:relative}
+    .msa-ai-copy-btn{position:absolute;top:8px;right:8px}
+    .msa-ai-loading{display:flex;align-items:center;gap:10px;color:var(--ms-muted);font-size:13px;padding:20px}
+    .msa-ai-dots span{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ms-accent);animation:dot-pulse 1.4s ease-in-out infinite}
+    .msa-ai-dots span:nth-child(2){animation-delay:.2s}
+    .msa-ai-dots span:nth-child(3){animation-delay:.4s}
+    @keyframes dot-pulse{0%,80%,100%{transform:scale(0);opacity:.5}40%{transform:scale(1);opacity:1}}
+
+    /* ── Toast ── */
+    .msa-toast-container{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:10000;pointer-events:none}
+    .msa-toast{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:toast-in .25s ease;min-width:220px;max-width:340px}
+    .msa-toast.success{border-color:rgba(76,175,80,.4)}
+    .msa-toast.error{border-color:rgba(244,67,54,.4)}
+    .msa-toast.info{border-color:rgba(0,188,212,.3)}
+    @keyframes toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── Modal ── */
+    .msa-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:20px}
+    .msa-modal-backdrop.open{display:flex}
+    .msa-modal{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:12px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto}
+    .msa-modal-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--ms-border)}
+    .msa-modal-head h3{flex:1;font-size:15px;font-weight:700}
+    .msa-modal-close{background:none;border:none;color:var(--ms-muted);cursor:pointer;font-size:20px;line-height:1;padding:0 4px}
+    .msa-modal-close:hover{color:var(--ms-text)}
+    .msa-modal-body{padding:20px}
+    .msa-modal-foot{padding:14px 20px;border-top:1px solid var(--ms-border);display:flex;gap:10px;justify-content:flex-end}
+
+    /* ── Print Poster ── */
+    @media print{
+      body>*{display:none!important}
+      #msa-print-area{display:block!important;position:fixed;inset:0;background:#fff;color:#000;padding:40px;text-align:center}
+      #msa-print-area img{max-width:240px}
+    }
+    #msa-print-area{display:none}
+
+    /* ── Responsive ── */
+    @media(max-width:600px){
+      .msa-topbar{padding:10px 14px}
+      .msa-topbar h1{font-size:14px}
+      .msa-content{padding:14px}
+      #msaViewStats{grid-template-columns:repeat(2,1fr)}
+      .msa-stats-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:420px){
+      #msaViewStats{grid-template-columns:1fr 1fr}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth Gate -->
+<div id="msaAuthGate">
+  <div class="msa-spinner"></div>
+  <span style="color:var(--ms-muted);font-size:13px">Loading your MiniShop&hellip;</span>
+</div>
+
+<!-- Print Area -->
+<div id="msa-print-area">
+  <img id="msa-print-qr" src="" alt="QR Code">
+  <h2 id="msa-print-name" style="margin-top:20px;font-size:24px"></h2>
+  <p id="msa-print-url" style="font-size:16px;color:#555;margin-top:8px;font-family:monospace"></p>
+  <p style="margin-top:24px;font-size:13px;color:#888">Scan to visit our shop on SOKONI</p>
+</div>
+
+<!-- Top Bar -->
+<div class="msa-topbar">
+  <a href="seller.html" class="msa-back">&#8592; Seller Dashboard</a>
+  <h1>My MiniShop</h1>
+  <span class="msa-topbar-shop-url" id="msaTopbarUrl"></span>
+  <a href="#" id="msaViewShop" target="_blank" class="msa-btn" style="font-size:12px">Open MiniShop &#8599;</a>
+</div>
+
+<!-- Tabs -->
+<div class="msa-tabs" role="tablist">
+  <button class="msa-tab active" data-tab="overview" role="tab" aria-selected="true">My MiniShop</button>
+  <button class="msa-tab" data-tab="customize" role="tab" aria-selected="false">Customize</button>
+  <button class="msa-tab" data-tab="analytics" role="tab" aria-selected="false">Analytics</button>
+  <button class="msa-tab" data-tab="share" role="tab" aria-selected="false">Share &amp; Promote</button>
+  <button class="msa-tab" data-tab="ai" role="tab" aria-selected="false">AI Marketing</button>
+</div>
+
+<!-- ══════════ PANEL: OVERVIEW ══════════ -->
+<div class="msa-content">
+  <div class="msa-panel" id="panel-overview" role="tabpanel">
+
+    <!-- Handle Claim (shown when no handle) -->
+    <div class="msa-card" id="msaHandleClaim">
+      <div class="msa-handle-claim">
+        <h2>Claim Your MiniShop URL</h2>
+        <p>Create a unique link for your shop that customers can easily remember and share.</p>
+        <div class="msa-handle-input-row">
+          <span class="msa-handle-prefix">mysokoni.co.ke/shop/</span>
+          <input type="text" id="msaHandleInput" placeholder="yourshopname" maxlength="30" autocomplete="off" spellcheck="false">
+          <button id="msaClaimBtn">Claim</button>
+        </div>
+        <p class="msa-input-hint" style="margin-top:10px;text-align:center">Lowercase letters, numbers and hyphens only. Cannot be changed after 48 hours.</p>
+      </div>
+    </div>
+
+    <!-- Handle Display (shown when handle claimed) -->
+    <div class="msa-card" id="msaHandleDisplay">
+      <h2>&#127760; Your MiniShop URL</h2>
+      <div class="msa-handle-url-row">
+        <span id="msaHandleUrl">mysokoni.co.ke/shop/</span>
+        <button class="msa-btn-sm" id="msaCopyHandle" title="Copy URL">Copy</button>
+      </div>
+      <div class="msa-handle-actions">
+        <button class="msa-btn" id="msaQrBtn">&#9644; Show QR Code</button>
+        <button class="msa-btn-sm" id="msaEditHandleBtn" title="Edit handle (within 48h)">Edit Handle</button>
+        <a href="#" id="msaViewShopBtn" target="_blank" class="msa-btn success">Open Shop &#8599;</a>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div id="msaViewStats">
+      <div class="msa-stat">
+        <div class="msa-stat-label">Views Today</div>
+        <div class="msa-stat-value" id="msaViewsToday">&#8212;</div>
+      </div>
+      <div class="msa-stat">
+        <div class="msa-stat-label">Total Visits</div>
+        <div class="msa-stat-value" id="msaTotalViews">&#8212;</div>
+      </div>
+      <div class="msa-stat">
+        <div class="msa-stat-label">Followers</div>
+        <div class="msa-stat-value" id="msaFollowers">&#8212;</div>
+      </div>
+      <div class="msa-stat">
+        <div class="msa-stat-label">Shop Orders</div>
+        <div class="msa-stat-value" id="msaOrdersFromShop">&#8212;</div>
+      </div>
+    </div>
+
+    <!-- Preview + Actions -->
+    <div class="msa-two-col">
+      <div class="msa-card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--ms-border);font-size:13px;font-weight:600;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px">Shop Preview</div>
+        <div style="padding:16px">
+          <div class="msa-preview-card">
+            <div class="msa-preview-cover" id="msaPreviewCover">
+              <div class="msa-preview-logo" id="msaPreviewLogo">&#128722;</div>
+            </div>
+            <div class="msa-preview-body">
+              <div class="msa-preview-name" id="msaPreviewName">Your Shop Name</div>
+              <div class="msa-preview-tagline" id="msaPreviewTagline">Add a tagline in Customize</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msa-card">
+        <h2>Share My Shop</h2>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="msa-share-wrap" id="msaShareDropWrap">
+            <button class="msa-btn" style="width:100%;justify-content:center" id="msaShareDropBtn">
+              Share My Shop &#9660;
+            </button>
+            <div class="msa-share-dropdown" id="msaShareDrop">
+              <a class="msa-share-item" data-platform="whatsapp" href="#">&#128241; WhatsApp</a>
+              <a class="msa-share-item" data-platform="facebook" href="#">&#128279; Facebook</a>
+              <a class="msa-share-item" data-platform="x" href="#">&#10005; X (Twitter)</a>
+              <a class="msa-share-item" data-platform="telegram" href="#">&#9992; Telegram</a>
+              <a class="msa-share-item" data-platform="copy" href="#">&#128203; Copy Link</a>
+            </div>
+          </div>
+          <button class="msa-btn" id="msaGoCustomize">&#127912; Customize Appearance</button>
+          <button class="msa-btn" id="msaGoAnalytics">&#128202; View Analytics</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panel-overview -->
+
+  <!-- ══════════ PANEL: CUSTOMIZE ══════════ -->
+  <div class="msa-panel" id="panel-customize" hidden role="tabpanel">
+
+    <!-- Appearance -->
+    <div class="msa-card">
+      <h2>&#127912; Appearance</h2>
+
+      <div class="msa-section">
+        <div class="msa-section-title">Cover Image</div>
+        <div class="msa-form-row">
+          <label for="msaCoverInput">Cover Image URL</label>
+          <input type="url" id="msaCoverInput" class="msa-input" placeholder="https://example.com/cover.jpg">
+          <img class="msa-img-preview" id="msaCoverPreview" alt="Cover preview" style="height:100px">
+        </div>
+      </div>
+
+      <div class="msa-section">
+        <div class="msa-section-title">Logo / Profile Photo</div>
+        <div class="msa-form-row">
+          <label for="msaLogoInput">Logo Image URL</label>
+          <input type="url" id="msaLogoInput" class="msa-input" placeholder="https://example.com/logo.jpg">
+          <img class="msa-img-preview" id="msaLogoPreview" alt="Logo preview" style="height:80px;width:80px;border-radius:50%;object-fit:cover">
+        </div>
+      </div>
+
+      <div class="msa-section">
+        <div class="msa-section-title">Accent Color</div>
+        <div id="msaColorSwatches">
+          <div class="msa-swatch selected" data-color="#00bcd4" style="background:#00bcd4" title="Cyan"></div>
+          <div class="msa-swatch" data-color="#7c4dff" style="background:#7c4dff" title="Purple"></div>
+          <div class="msa-swatch" data-color="#4caf50" style="background:#4caf50" title="Green"></div>
+          <div class="msa-swatch" data-color="#ff5722" style="background:#ff5722" title="Coral"></div>
+          <div class="msa-swatch" data-color="#ff9800" style="background:#ff9800" title="Orange"></div>
+          <div class="msa-swatch" data-color="#2196f3" style="background:#2196f3" title="Blue"></div>
+        </div>
+        <div class="msa-color-custom">
+          <input type="color" id="msaColorPicker" value="#00bcd4" title="Custom color">
+          <input type="text" class="msa-color-hex" id="msaColorHex" value="#00bcd4" maxlength="7" placeholder="#00bcd4">
+          <span style="font-size:12px;color:var(--ms-muted)">Custom hex</span>
+        </div>
+      </div>
+
+      <div class="msa-form-row">
+        <label for="msaAnnouncement">Announcement Banner <span style="font-weight:400">(optional — shown at top of shop)</span></label>
+        <textarea id="msaAnnouncement" class="msa-textarea" maxlength="200" placeholder="E.g. Free delivery this week on orders over KES 1,000!"></textarea>
+        <div class="msa-char-count"><span id="msaAnnouncementCount">0</span>/200</div>
+      </div>
+    </div>
+
+    <!-- Business Info -->
+    <div class="msa-card">
+      <h2>&#128203; Business Info</h2>
+      <div class="msa-two-col">
+        <div class="msa-form-row">
+          <label for="msaTagline">Business Tagline</label>
+          <input type="text" id="msaTagline" class="msa-input" placeholder="Quality products at the best prices" maxlength="80">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaLocation">Location</label>
+          <input type="text" id="msaLocation" class="msa-input" placeholder="Nairobi, Westlands">
+        </div>
+      </div>
+      <div class="msa-form-row">
+        <label for="msaDescription">Business Description</label>
+        <textarea id="msaDescription" class="msa-textarea" maxlength="500" placeholder="Tell customers what makes your shop special..."></textarea>
+        <div class="msa-char-count"><span id="msaDescCount">0</span>/500</div>
+      </div>
+      <div class="msa-two-col">
+        <div class="msa-form-row">
+          <label for="msaCategory">Category</label>
+          <input type="text" id="msaCategory" class="msa-input" readonly>
+        </div>
+        <div class="msa-form-row">
+          <label for="msaResponseTime">Typical Response Time</label>
+          <select id="msaResponseTime" class="msa-select">
+            <option value="1h">Usually within 1 hour</option>
+            <option value="few">Within a few hours</option>
+            <option value="24h">Within 24 hours</option>
+            <option value="2-3d">Within 2&ndash;3 days</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact & Social -->
+    <div class="msa-card">
+      <h2>&#128222; Contact &amp; Social</h2>
+      <div class="msa-two-col">
+        <div class="msa-form-row">
+          <label for="msaPhone">Contact Phone</label>
+          <input type="tel" id="msaPhone" class="msa-input" placeholder="+254 700 000 000">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaEmail">Contact Email</label>
+          <input type="email" id="msaEmail" class="msa-input" placeholder="shop@example.com">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaWhatsapp">WhatsApp Number</label>
+          <input type="tel" id="msaWhatsapp" class="msa-input" placeholder="+254 700 000 000">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaWebsite">Website URL</label>
+          <input type="url" id="msaWebsite" class="msa-input" placeholder="https://yoursite.com">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaInstagram">Instagram Handle</label>
+          <input type="text" id="msaInstagram" class="msa-input" placeholder="@yourshop">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaFacebook">Facebook Page URL</label>
+          <input type="url" id="msaFacebook" class="msa-input" placeholder="https://facebook.com/yourpage">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaTiktok">TikTok Handle</label>
+          <input type="text" id="msaTiktok" class="msa-input" placeholder="@yourshop">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaTwitter">X (Twitter) Handle</label>
+          <input type="text" id="msaTwitter" class="msa-input" placeholder="@yourshop">
+        </div>
+        <div class="msa-form-row">
+          <label for="msaYoutube">YouTube Channel URL</label>
+          <input type="url" id="msaYoutube" class="msa-input" placeholder="https://youtube.com/@yourchannel">
+        </div>
+      </div>
+    </div>
+
+    <!-- Business Hours -->
+    <div class="msa-card">
+      <h2>&#128336; Business Hours</h2>
+      <div id="msaHours">
+        <!-- Rendered by JS -->
+        <div class="msa-empty">Loading hours&hellip;</div>
+      </div>
+    </div>
+
+    <!-- Payment Methods -->
+    <div class="msa-card">
+      <h2>&#128179; Payment Methods Accepted</h2>
+      <div class="msa-check-grid" id="msaPaymentMethods">
+        <label class="msa-check-item"><input type="checkbox" value="mpesa"> M-Pesa</label>
+        <label class="msa-check-item"><input type="checkbox" value="card"> Visa / Mastercard</label>
+        <label class="msa-check-item"><input type="checkbox" value="bank"> Bank Transfer</label>
+        <label class="msa-check-item"><input type="checkbox" value="cod"> Cash on Delivery</label>
+        <label class="msa-check-item"><input type="checkbox" value="wallet"> SOKONI Wallet</label>
+        <label class="msa-check-item"><input type="checkbox" value="paypal"> PayPal</label>
+      </div>
+    </div>
+
+    <!-- Delivery -->
+    <div class="msa-card">
+      <h2>&#128666; Delivery</h2>
+      <div class="msa-form-row">
+        <label for="msaDeliveryAreas">Delivery Areas <span style="font-weight:400">(comma-separated)</span></label>
+        <input type="text" id="msaDeliveryAreas" class="msa-input" placeholder="Nairobi CBD, Westlands, Kilimani, Ngong Road">
+      </div>
+      <div class="msa-form-row">
+        <label for="msaDeliveryPolicy">Delivery Policy</label>
+        <textarea id="msaDeliveryPolicy" class="msa-textarea" maxlength="300" placeholder="E.g. Free delivery within Nairobi for orders over KES 2,000. Same-day delivery available."></textarea>
+        <div class="msa-char-count"><span id="msaDeliveryCount">0</span>/300</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:24px;display:flex;gap:12px;flex-wrap:wrap">
+      <button class="msa-btn primary" id="msaSaveBtn" style="min-width:160px">
+        <span id="msaSaveBtnText">Save Changes</span>
+      </button>
+      <button class="msa-btn" id="msaPreviewBtn">Preview Shop</button>
+    </div>
+
+  </div><!-- /panel-customize -->
+
+  <!-- ══════════ PANEL: ANALYTICS ══════════ -->
+  <div class="msa-panel" id="panel-analytics" hidden role="tabpanel">
+
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+      <h2 style="font-size:16px;font-weight:700;flex:1">Analytics</h2>
+      <div class="msa-date-tabs" role="group" aria-label="Date range">
+        <button class="msa-date-tab active" data-range="today">Today</button>
+        <button class="msa-date-tab" data-range="7d">7 Days</button>
+        <button class="msa-date-tab" data-range="30d">30 Days</button>
+        <button class="msa-date-tab" data-range="90d">90 Days</button>
+      </div>
+    </div>
+
+    <div id="msaAnalyticsBody">
+
+      <!-- KPIs -->
+      <div class="msa-stats-grid">
+        <div class="msa-kpi accent">
+          <div class="msa-kpi-label">Total Views</div>
+          <div class="msa-kpi-value" id="anaViews">&#8212;</div>
+          <div class="msa-kpi-sub">shop page views</div>
+        </div>
+        <div class="msa-kpi">
+          <div class="msa-kpi-label">Unique Visitors</div>
+          <div class="msa-kpi-value" id="anaUnique">&#8212;</div>
+          <div class="msa-kpi-sub">distinct sessions</div>
+        </div>
+        <div class="msa-kpi success">
+          <div class="msa-kpi-label">Orders</div>
+          <div class="msa-kpi-value" id="anaOrders">&#8212;</div>
+          <div class="msa-kpi-sub">from MiniShop</div>
+        </div>
+        <div class="msa-kpi">
+          <div class="msa-kpi-label">Revenue</div>
+          <div class="msa-kpi-value" id="anaRevenue">&#8212;</div>
+          <div class="msa-kpi-sub">KES from MiniShop</div>
+        </div>
+        <div class="msa-kpi">
+          <div class="msa-kpi-label">Conversion</div>
+          <div class="msa-kpi-value" id="anaConversion">&#8212;</div>
+          <div class="msa-kpi-sub">visitors to orders</div>
+        </div>
+        <div class="msa-kpi">
+          <div class="msa-kpi-label">Followers</div>
+          <div class="msa-kpi-value" id="anaFollowers">&#8212;</div>
+          <div class="msa-kpi-sub">total followers</div>
+        </div>
+      </div>
+
+      <!-- Traffic + Top Products -->
+      <div class="msa-two-col">
+        <div class="msa-card">
+          <h2>Traffic Sources</h2>
+          <div class="msa-traffic-list" id="anaTrafficSources">
+            <div class="msa-empty">No data yet</div>
+          </div>
+        </div>
+        <div class="msa-card">
+          <h2>Top Products Viewed</h2>
+          <div class="msa-item-list" id="anaTopProducts">
+            <div class="msa-empty">No data yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visitors Timeline -->
+      <div class="msa-card">
+        <h2>Recent Visitors</h2>
+        <div class="msa-item-list" id="anaVisitors">
+          <div class="msa-empty">No visitors recorded yet</div>
+        </div>
+      </div>
+
+    </div><!-- /msaAnalyticsBody -->
+  </div><!-- /panel-analytics -->
+
+  <!-- ══════════ PANEL: SHARE & PROMOTE ══════════ -->
+  <div class="msa-panel" id="panel-share" hidden role="tabpanel">
+
+    <div class="msa-two-col">
+
+      <!-- QR Code -->
+      <div class="msa-card">
+        <h2>&#9644; QR Code</h2>
+        <div class="msa-qr-wrap">
+          <div id="msaQrDisplay">
+            <div class="msa-qr-placeholder">Claim your handle to generate a QR code</div>
+          </div>
+          <div class="msa-qr-actions">
+            <button class="msa-btn" id="msaDownloadQr" disabled>Download QR</button>
+            <button class="msa-btn" id="msaPrintPoster" disabled>Print Poster</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Share by Platform -->
+      <div class="msa-card">
+        <h2>&#127760; Share Links</h2>
+        <div id="msaShareLinks">
+          <div class="msa-empty">Claim your handle to enable sharing</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Promotional Assets -->
+    <div class="msa-card">
+      <h2>&#127381; Promotional Assets</h2>
+      <div class="msa-promo-grid">
+        <div class="msa-promo-item" id="msaGenBusinessCard">
+          <div class="msa-promo-icon">&#128196;</div>
+          <div class="msa-promo-label">Business Card</div>
+          <div class="msa-promo-desc">Printable card with QR &amp; shop details</div>
+        </div>
+        <div class="msa-promo-item" id="msaGenFlyer">
+          <div class="msa-promo-icon">&#128203;</div>
+          <div class="msa-promo-label">Promotional Flyer</div>
+          <div class="msa-promo-desc">A4 flyer with your shop highlights</div>
+        </div>
+        <div class="msa-promo-item" id="msaGenSocialImage">
+          <div class="msa-promo-icon">&#128247;</div>
+          <div class="msa-promo-label">Social Media Image</div>
+          <div class="msa-promo-desc">Square image for Instagram &amp; Facebook</div>
+        </div>
+        <div class="msa-promo-item" id="msaGenWhatsappStatus">
+          <div class="msa-promo-icon">&#128241;</div>
+          <div class="msa-promo-label">WhatsApp Status</div>
+          <div class="msa-promo-desc">Share-ready status image</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panel-share -->
+
+  <!-- ══════════ PANEL: AI MARKETING ══════════ -->
+  <div class="msa-panel" id="panel-ai" hidden role="tabpanel">
+
+    <div class="msa-card">
+      <h2>&#129302; AI Content Generator</h2>
+      <p style="font-size:13px;color:var(--ms-muted);margin-bottom:20px">Generate professional marketing content for your shop using AI. Edit the result before using it.</p>
+
+      <!-- Type Selector -->
+      <div class="msa-section-title">Content Type</div>
+      <div class="msa-ai-type-grid" id="msaAiTypeGrid">
+        <button class="msa-ai-type-btn active" data-type="product_description">Product Description</button>
+        <button class="msa-ai-type-btn" data-type="social_caption">Social Caption</button>
+        <button class="msa-ai-type-btn" data-type="hashtags">Hashtags</button>
+        <button class="msa-ai-type-btn" data-type="promo_offer">Promotional Offer</button>
+        <button class="msa-ai-type-btn" data-type="business_bio">Business Bio</button>
+      </div>
+
+      <!-- Context Form -->
+      <div style="margin-top:20px">
+        <div class="msa-section-title">Context</div>
+        <div class="msa-two-col">
+          <div class="msa-form-row">
+            <label for="msaAiBusinessName">Business Name</label>
+            <input type="text" id="msaAiBusinessName" class="msa-input" placeholder="Your Shop Name">
+          </div>
+          <div class="msa-form-row">
+            <label for="msaAiCategory">Category</label>
+            <input type="text" id="msaAiCategory" class="msa-input" placeholder="e.g. Fashion, Electronics">
+          </div>
+          <div class="msa-form-row">
+            <label for="msaAiProductName">Product / Service Name <span style="font-weight:400;text-transform:none">(optional)</span></label>
+            <input type="text" id="msaAiProductName" class="msa-input" placeholder="e.g. Men's Leather Wallet">
+          </div>
+          <div class="msa-form-row">
+            <label for="msaAiPrice">Price <span style="font-weight:400;text-transform:none">(optional)</span></label>
+            <input type="text" id="msaAiPrice" class="msa-input" placeholder="e.g. KES 1,500">
+          </div>
+        </div>
+        <div class="msa-form-row">
+          <label for="msaAiContext">Additional Context <span style="font-weight:400;text-transform:none">(optional)</span></label>
+          <textarea id="msaAiContext" class="msa-textarea" maxlength="300" placeholder="Any extra details: target audience, unique features, tone, etc."></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+        <button class="msa-btn primary" id="msaAiGenerate" style="min-width:160px">
+          <span id="msaAiGenerateText">&#129302; Generate with AI</span>
+        </button>
+        <button class="msa-btn" id="msaAiGenerateAnother" style="display:none">Generate Another</button>
+      </div>
+
+      <!-- Output -->
+      <div class="msa-section-title">Generated Content</div>
+      <div class="msa-ai-output-wrap">
+        <textarea id="msaAiOutput" class="msa-textarea" style="min-height:140px;font-size:14px" placeholder="Your AI-generated content will appear here&hellip;" readonly></textarea>
+        <button class="msa-btn-sm msa-ai-copy-btn" id="msaAiCopy" style="display:none">Copy</button>
+      </div>
+    </div>
+
+    <!-- Recent Generations -->
+    <div class="msa-card">
+      <h2>&#128203; Recent Generations</h2>
+      <div id="msaAiHistory">
+        <div class="msa-empty">No generations yet. Create your first piece of content above.</div>
+      </div>
+    </div>
+
+  </div><!-- /panel-ai -->
+
+</div><!-- /msa-content -->
+
+<!-- Toast Container -->
+<div class="msa-toast-container" id="msaToasts" aria-live="polite"></div>
+
+<!-- Modal: Business Card -->
+<div class="msa-modal-backdrop" id="msaCardModal">
+  <div class="msa-modal">
+    <div class="msa-modal-head">
+      <h3>Business Card Preview</h3>
+      <button class="msa-modal-close" data-close="msaCardModal">&#215;</button>
+    </div>
+    <div class="msa-modal-body" id="msaCardModalBody">
+      <div id="msaBusinessCard" style="border:1px solid var(--ms-border);border-radius:12px;padding:24px;display:flex;gap:20px;align-items:center;max-width:380px;margin:0 auto;background:var(--ms-surface2)">
+        <div id="bc-logo" style="width:60px;height:60px;border-radius:10px;background:linear-gradient(135deg,var(--ms-accent),var(--ms-accent2));flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden"></div>
+        <div>
+          <div id="bc-name" style="font-size:16px;font-weight:800;margin-bottom:2px"></div>
+          <div id="bc-tagline" style="font-size:12px;color:var(--ms-muted);margin-bottom:8px"></div>
+          <div id="bc-url" style="font-size:11px;font-family:monospace;color:var(--ms-accent)"></div>
+          <div id="bc-phone" style="font-size:12px;color:var(--ms-muted);margin-top:4px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="msa-modal-foot">
+      <button class="msa-btn" id="msaPrintCard">Print Card</button>
+      <button class="msa-btn" data-close="msaCardModal">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Flyer -->
+<div class="msa-modal-backdrop" id="msaFlyerModal">
+  <div class="msa-modal">
+    <div class="msa-modal-head">
+      <h3>Promotional Flyer</h3>
+      <button class="msa-modal-close" data-close="msaFlyerModal">&#215;</button>
+    </div>
+    <div class="msa-modal-body" id="msaFlyerModalBody">
+      <div id="msaFlyer" style="border:1px solid var(--ms-border);border-radius:12px;overflow:hidden;max-width:400px;margin:0 auto">
+        <div id="fl-cover" style="height:120px;background:linear-gradient(135deg,var(--ms-accent),var(--ms-accent2));display:flex;align-items:center;justify-content:center">
+          <div style="text-align:center">
+            <div id="fl-shop-name" style="font-size:22px;font-weight:900;color:#fff"></div>
+            <div id="fl-tagline" style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px"></div>
+          </div>
+        </div>
+        <div style="padding:20px;background:var(--ms-surface2)">
+          <div id="fl-desc" style="font-size:13px;color:var(--ms-muted);margin-bottom:16px;line-height:1.6"></div>
+          <div style="display:flex;align-items:center;gap:16px">
+            <div id="fl-qr" style="width:80px;height:80px;flex-shrink:0;background:var(--ms-surface);border-radius:8px;overflow:hidden">
+              <img id="fl-qr-img" src="" alt="QR" style="width:100%;height:100%">
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--ms-muted);margin-bottom:4px">Scan to visit our shop</div>
+              <div id="fl-url" style="font-size:12px;font-family:monospace;color:var(--ms-accent)"></div>
+              <div id="fl-phone" style="font-size:12px;color:var(--ms-muted);margin-top:4px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="msa-modal-foot">
+      <button class="msa-btn" id="msaPrintFlyer">Print Flyer</button>
+      <button class="msa-btn" data-close="msaFlyerModal">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script src="/__/firebase/init.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// MiniShop Admin — Inline Controller
+// Delegates to SokoniMiniShop.initAdmin() when available;
+// handles all UI wiring independently for resilience.
+// ═══════════════════════════════════════════════════════
+
+(function() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────
+  var _state = {
+    uid: null,
+    shopId: null,
+    handle: null,
+    shopUrl: null,
+    shopName: null,
+    config: {},
+    accentColor: '#00bcd4',
+    aiType: 'product_description',
+    analyticsRange: 'today'
+  };
+
+  // ── Helpers ────────────────────────────────────────
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function toast(msg, type) {
+    type = type || 'info';
+    var c = document.getElementById('msaToasts');
+    if (!c) return;
+    var t = document.createElement('div');
+    var icons = {success:'✓', error:'✕', info:'ℹ'};
+    t.className = 'msa-toast ' + type;
+    t.innerHTML = '<span>' + (icons[type]||'') + '</span><span>' + esc(msg) + '</span>';
+    c.appendChild(t);
+    setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(function(){ t.remove(); },300); }, 3500);
+  }
+
+  function setLoading(btn, loading, text) {
+    if (!btn) return;
+    btn.disabled = loading;
+    if (text && btn.querySelector) {
+      var s = btn.querySelector('span') || btn;
+      s.textContent = loading ? 'Please wait…' : text;
+    }
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function(){ toast('Copied!', 'success'); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      toast('Copied!', 'success');
+    }
+  }
+
+  function buildShopUrl(handle) {
+    return 'https://mysokoni.co.ke/shop/' + handle;
+  }
+
+  // ── Auth Gate ──────────────────────────────────────
+  function hideAuthGate() {
+    var g = document.getElementById('msaAuthGate');
+    if (g) { g.style.opacity = '0'; g.style.transition = 'opacity .3s'; setTimeout(function(){ g.remove(); }, 300); }
+  }
+
+  function checkAuth() {
+    // Wait for Firebase Auth
+    if (typeof firebase === 'undefined' || !firebase.auth) {
+      setTimeout(checkAuth, 300);
+      return;
+    }
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (!user) {
+        window.location.href = 'login.html?redirect=minishop-admin.html';
+        return;
+      }
+      _state.uid = user.uid;
+      loadShopData(user.uid);
+    });
+  }
+
+  // ── Load Shop Data ─────────────────────────────────
+  function loadShopData(uid) {
+    if (typeof firebase === 'undefined' || !firebase.firestore) {
+      hideAuthGate();
+      initUI();
+      return;
+    }
+    var db = firebase.firestore();
+    db.collection('shops').where('ownerId','==',uid).limit(1).get()
+      .then(function(snap) {
+        if (!snap.empty) {
+          var doc = snap.docs[0];
+          var data = doc.data();
+          _state.shopId = doc.id;
+          _state.shopName = data.name || 'My Shop';
+          _state.handle = data.minishopHandle || null;
+          _state.config = data.minishopConfig || {};
+          if (_state.handle) {
+            _state.shopUrl = buildShopUrl(_state.handle);
+          }
+        }
+        hideAuthGate();
+        initUI();
+      })
+      .catch(function(err) {
+        console.error('[MSA] loadShopData:', err);
+        hideAuthGate();
+        initUI();
+      });
+  }
+
+  // ── Tab Navigation ─────────────────────────────────
+  function initTabs() {
+    var tabs = document.querySelectorAll('.msa-tab');
+    tabs.forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = this.dataset.tab;
+        tabs.forEach(function(t){ t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+        this.classList.add('active');
+        this.setAttribute('aria-selected','true');
+        document.querySelectorAll('.msa-panel').forEach(function(p){ p.hidden = true; });
+        var panel = document.getElementById('panel-' + target);
+        if (panel) panel.hidden = false;
+        if (target === 'analytics') loadAnalytics(_state.analyticsRange);
+        if (target === 'share') renderSharePanel();
+        window.scrollTo(0,0);
+      });
+    });
+  }
+
+  // ── Overview Tab ───────────────────────────────────
+  function initOverview() {
+    if (_state.handle) {
+      showHandleDisplay();
+    } else {
+      document.getElementById('msaHandleClaim').style.display = 'block';
+      document.getElementById('msaHandleDisplay').classList.remove('visible');
+    }
+    updatePreviewCard();
+    loadQuickStats();
+  }
+
+  function showHandleDisplay() {
+    var claimEl = document.getElementById('msaHandleClaim');
+    var displayEl = document.getElementById('msaHandleDisplay');
+    if (claimEl) claimEl.style.display = 'none';
+    if (displayEl) displayEl.classList.add('visible');
+    var urlEl = document.getElementById('msaHandleUrl');
+    if (urlEl) urlEl.textContent = _state.shopUrl || buildShopUrl(_state.handle);
+    var topUrl = document.getElementById('msaTopbarUrl');
+    if (topUrl) { topUrl.textContent = 'mysokoni.co.ke/shop/' + _state.handle; topUrl.classList.add('visible'); }
+    var viewShop = document.getElementById('msaViewShop');
+    var viewShopBtn = document.getElementById('msaViewShopBtn');
+    if (viewShop && _state.shopUrl) viewShop.href = _state.shopUrl;
+    if (viewShopBtn && _state.shopUrl) viewShopBtn.href = _state.shopUrl;
+    refreshQr();
+  }
+
+  function claimHandle() {
+    var input = document.getElementById('msaHandleInput');
+    var btn = document.getElementById('msaClaimBtn');
+    if (!input) return;
+    var handle = input.value.trim().toLowerCase().replace(/[^a-z0-9\-]/g,'');
+    if (!handle || handle.length < 3) { toast('Handle must be at least 3 characters', 'error'); return; }
+    if (handle.length > 30) { toast('Handle too long (max 30 characters)', 'error'); return; }
+    if (!/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/.test(handle) && handle.length > 1) {
+      toast('Use only letters, numbers and hyphens', 'error'); return;
+    }
+    setLoading(btn, true);
+    // Delegate to SokoniMiniShop if available
+    if (window.SokoniMiniShop && window.SokoniMiniShop.claimHandle) {
+      window.SokoniMiniShop.claimHandle(handle)
+        .then(function(){ _state.handle = handle; _state.shopUrl = buildShopUrl(handle); showHandleDisplay(); toast('Handle claimed!', 'success'); })
+        .catch(function(e){ toast(e.message || 'Handle already taken', 'error'); })
+        .finally(function(){ setLoading(btn, false); btn.textContent = 'Claim'; });
+      return;
+    }
+    // Fallback: write to Firestore directly
+    if (!_state.shopId || typeof firebase === 'undefined') {
+      toast('Shop not found. Please reload.', 'error');
+      setLoading(btn, false); btn.textContent = 'Claim'; return;
+    }
+    var db = firebase.firestore();
+    db.collection('minishopHandles').doc(handle).get()
+      .then(function(snap) {
+        if (snap.exists) { throw new Error('That handle is already taken'); }
+        return db.runTransaction(function(tx) {
+          var handleRef = db.collection('minishopHandles').doc(handle);
+          var shopRef = db.collection('shops').doc(_state.shopId);
+          tx.set(handleRef, { shopId: _state.shopId, uid: _state.uid, claimedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          tx.update(shopRef, { minishopHandle: handle, minishopClaimedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        });
+      })
+      .then(function() {
+        _state.handle = handle;
+        _state.shopUrl = buildShopUrl(handle);
+        showHandleDisplay();
+        toast('Handle @' + handle + ' claimed!', 'success');
+      })
+      .catch(function(e){ toast(e.message || 'Could not claim handle', 'error'); })
+      .finally(function(){ setLoading(btn, false); btn.textContent = 'Claim'; });
+  }
+
+  function loadQuickStats() {
+    // Delegate to SokoniMiniShop or show skeleton
+    var ids = ['msaViewsToday','msaTotalViews','msaFollowers','msaOrdersFromShop'];
+    if (window.SokoniMiniShop && window.SokoniMiniShop.getQuickStats) {
+      window.SokoniMiniShop.getQuickStats(_state.shopId)
+        .then(function(stats) {
+          document.getElementById('msaViewsToday').textContent = fmt(stats.viewsToday);
+          document.getElementById('msaTotalViews').textContent = fmt(stats.totalViews);
+          document.getElementById('msaFollowers').textContent = fmt(stats.followers);
+          document.getElementById('msaOrdersFromShop').textContent = fmt(stats.orders);
+        }).catch(function(){ ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent='0'; }); });
+    } else {
+      ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent='0'; });
+    }
+  }
+
+  function fmt(n) { return n != null ? Number(n).toLocaleString() : '0'; }
+
+  function updatePreviewCard() {
+    var cfg = _state.config || {};
+    var nameEl = document.getElementById('msaPreviewName');
+    var tagEl = document.getElementById('msaPreviewTagline');
+    var coverEl = document.getElementById('msaPreviewCover');
+    var logoEl = document.getElementById('msaPreviewLogo');
+    if (nameEl) nameEl.textContent = _state.shopName || 'Your Shop';
+    if (tagEl) tagEl.textContent = cfg.tagline || 'Add a tagline in Customize';
+    if (coverEl && cfg.coverImage) coverEl.style.backgroundImage = 'url(' + cfg.coverImage + ')';
+    if (logoEl && cfg.logoImage) logoEl.innerHTML = '<img src="' + esc(cfg.logoImage) + '" alt="logo" style="width:100%;height:100%;object-fit:cover">';
+  }
+
+  // ── Handle Claim input sanitise ────────────────────
+  function initHandleInput() {
+    var input = document.getElementById('msaHandleInput');
+    if (!input) return;
+    input.addEventListener('input', function() {
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9\-]/g,'');
+    });
+    document.getElementById('msaClaimBtn').addEventListener('click', claimHandle);
+    var copyBtn = document.getElementById('msaCopyHandle');
+    if (copyBtn) copyBtn.addEventListener('click', function(){ copyText(_state.shopUrl || ''); });
+    var qrBtn = document.getElementById('msaQrBtn');
+    if (qrBtn) qrBtn.addEventListener('click', function(){ switchTab('share'); });
+    var editBtn = document.getElementById('msaEditHandleBtn');
+    if (editBtn) editBtn.addEventListener('click', function(){
+      if (_state.handle) {
+        var newH = prompt('Enter new handle (only editable within 48h of claiming):', _state.handle);
+        if (newH) { document.getElementById('msaHandleInput').value = newH; claimHandle(); }
+      }
+    });
+  }
+
+  // ── Share Dropdown ─────────────────────────────────
+  function initShareDropdown() {
+    var btn = document.getElementById('msaShareDropBtn');
+    var wrap = document.getElementById('msaShareDropWrap');
+    if (!btn || !wrap) return;
+    btn.addEventListener('click', function(e){ e.stopPropagation(); wrap.classList.toggle('open'); });
+    document.addEventListener('click', function(){ wrap.classList.remove('open'); });
+    document.querySelectorAll('.msa-share-item').forEach(function(item) {
+      item.addEventListener('click', function(e){
+        e.preventDefault();
+        var platform = this.dataset.platform;
+        shareOn(platform);
+        wrap.classList.remove('open');
+      });
+    });
+  }
+
+  function shareOn(platform) {
+    var url = _state.shopUrl || 'https://mysokoni.co.ke';
+    var name = _state.shopName || 'my shop';
+    var msg = 'Check out ' + name + ' on SOKONI — Kenya\'s #1 marketplace! ' + url;
+    var targets = {
+      whatsapp: 'https://wa.me/?text=' + encodeURIComponent(msg),
+      facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url),
+      x: 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(msg),
+      telegram: 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(msg)
+    };
+    if (platform === 'copy') { copyText(url); return; }
+    if (targets[platform]) window.open(targets[platform], '_blank', 'width=600,height=400');
+  }
+
+  // ── Quick nav ──────────────────────────────────────
+  function switchTab(name) {
+    var tab = document.querySelector('.msa-tab[data-tab="' + name + '"]');
+    if (tab) tab.click();
+  }
+
+  // ── Customize Tab ──────────────────────────────────
+  function initCustomize() {
+    var cfg = _state.config || {};
+
+    // Populate fields
+    var fields = ['msaCoverInput','msaLogoInput','msaAnnouncement','msaTagline','msaDescription','msaLocation','msaPhone','msaEmail','msaWhatsapp','msaInstagram','msaFacebook','msaTiktok','msaTwitter','msaYoutube','msaWebsite','msaDeliveryAreas','msaDeliveryPolicy'];
+    var cfgKeys = ['coverImage','logoImage','announcement','tagline','description','location','phone','email','whatsapp','instagram','facebook','tiktok','twitter','youtube','website','deliveryAreas','deliveryPolicy'];
+    fields.forEach(function(id, i) {
+      var el = document.getElementById(id);
+      if (el && cfg[cfgKeys[i]] !== undefined) el.value = cfg[cfgKeys[i]];
+    });
+    var catEl = document.getElementById('msaCategory');
+    if (catEl) catEl.value = (_state.config && _state.config.category) || '';
+    var rtEl = document.getElementById('msaResponseTime');
+    if (rtEl && cfg.responseTime) rtEl.value = cfg.responseTime;
+
+    // Color
+    if (cfg.accentColor) setAccentColor(cfg.accentColor);
+
+    // Image previews
+    initImgPreview('msaCoverInput', 'msaCoverPreview');
+    initImgPreview('msaLogoInput', 'msaLogoPreview');
+
+    // Char counts
+    initCharCount('msaAnnouncement','msaAnnouncementCount');
+    initCharCount('msaDescription','msaDescCount');
+    initCharCount('msaDeliveryPolicy','msaDeliveryCount');
+
+    // Color swatches
+    document.querySelectorAll('.msa-swatch').forEach(function(sw) {
+      sw.addEventListener('click', function() {
+        document.querySelectorAll('.msa-swatch').forEach(function(s){ s.classList.remove('selected'); });
+        this.classList.add('selected');
+        setAccentColor(this.dataset.color);
+      });
+    });
+    var picker = document.getElementById('msaColorPicker');
+    var hexInp = document.getElementById('msaColorHex');
+    if (picker) picker.addEventListener('input', function(){ setAccentColor(this.value); if(hexInp) hexInp.value = this.value; });
+    if (hexInp) hexInp.addEventListener('change', function(){
+      var v = this.value.trim();
+      if(/^#[0-9a-fA-F]{6}$/.test(v)){ setAccentColor(v); if(picker) picker.value=v; }
+    });
+
+    // Payment checkboxes
+    var pmethods = cfg.paymentMethods || [];
+    document.querySelectorAll('#msaPaymentMethods input[type=checkbox]').forEach(function(cb) {
+      cb.checked = pmethods.indexOf(cb.value) > -1;
+      if (cb.checked) cb.closest('.msa-check-item').classList.add('checked');
+      cb.addEventListener('change', function(){
+        this.closest('.msa-check-item').classList.toggle('checked', this.checked);
+      });
+    });
+
+    // Hours
+    renderHours(cfg.hours || {});
+
+    // Save
+    var saveBtn = document.getElementById('msaSaveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', saveConfig);
+
+    // Preview btn
+    var prevBtn = document.getElementById('msaPreviewBtn');
+    if (prevBtn) prevBtn.addEventListener('click', function(){
+      if (_state.shopUrl) window.open(_state.shopUrl, '_blank'); else toast('Claim your handle first', 'info');
+    });
+
+    // Quick nav from overview
+    var gc = document.getElementById('msaGoCustomize');
+    var ga = document.getElementById('msaGoAnalytics');
+    if (gc) gc.addEventListener('click', function(){ switchTab('customize'); });
+    if (ga) ga.addEventListener('click', function(){ switchTab('analytics'); });
+  }
+
+  function initImgPreview(inputId, previewId) {
+    var input = document.getElementById(inputId);
+    var preview = document.getElementById(previewId);
+    if (!input || !preview) return;
+    // Show existing
+    if (input.value) { preview.src = input.value; preview.classList.add('visible'); }
+    input.addEventListener('change', function(){
+      var v = this.value.trim();
+      if (v) { preview.src = v; preview.classList.add('visible'); }
+      else { preview.src = ''; preview.classList.remove('visible'); }
+    });
+    preview.addEventListener('error', function(){ this.classList.remove('visible'); });
+  }
+
+  function initCharCount(textareaId, countId) {
+    var ta = document.getElementById(textareaId);
+    var ct = document.getElementById(countId);
+    if (!ta || !ct) return;
+    ct.textContent = ta.value.length;
+    ta.addEventListener('input', function(){ ct.textContent = this.value.length; });
+  }
+
+  function setAccentColor(color) {
+    _state.accentColor = color;
+    document.documentElement.style.setProperty('--ms-accent', color);
+    var picker = document.getElementById('msaColorPicker');
+    var hexInp = document.getElementById('msaColorHex');
+    if (picker) picker.value = color;
+    if (hexInp) hexInp.value = color;
+  }
+
+  function renderHours(hoursData) {
+    var days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    var defaults = {Mon:{open:'08:00',close:'18:00'},Tue:{open:'08:00',close:'18:00'},Wed:{open:'08:00',close:'18:00'},Thu:{open:'08:00',close:'18:00'},Fri:{open:'08:00',close:'18:00'},Sat:{open:'09:00',close:'14:00'},Sun:{open:'',close:'',closed:true}};
+    var container = document.getElementById('msaHours');
+    if (!container) return;
+    container.innerHTML = '';
+    days.forEach(function(day) {
+      var d = hoursData[day] || defaults[day] || {};
+      var row = document.createElement('div');
+      row.className = 'msa-hours-row';
+      var isClosed = !!d.closed;
+      row.innerHTML =
+        '<span class="msa-hours-day">' + day + '</span>' +
+        '<input type="time" data-day="' + day + '" data-field="open" value="' + (d.open||'08:00') + '"' + (isClosed?' disabled':'') + '>' +
+        '<span style="color:var(--ms-muted);font-size:12px">to</span>' +
+        '<input type="time" data-day="' + day + '" data-field="close" value="' + (d.close||'18:00') + '"' + (isClosed?' disabled':'') + '>' +
+        '<label class="closed-lbl"><input type="checkbox" data-day="' + day + '" class="hours-closed-cb"' + (isClosed?' checked':'') + '> Closed</label>';
+      container.appendChild(row);
+    });
+    // Toggle disabled on closed checkbox
+    container.querySelectorAll('.hours-closed-cb').forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        var day = this.dataset.day;
+        var row = this.closest('.msa-hours-row');
+        row.querySelectorAll('input[type=time]').forEach(function(t){ t.disabled = cb.checked; });
+      });
+    });
+  }
+
+  function collectConfig() {
+    var cfg = {};
+    var fields = {
+      coverImage: 'msaCoverInput', logoImage: 'msaLogoInput', announcement: 'msaAnnouncement',
+      tagline: 'msaTagline', description: 'msaDescription', location: 'msaLocation',
+      phone: 'msaPhone', email: 'msaEmail', whatsapp: 'msaWhatsapp',
+      instagram: 'msaInstagram', facebook: 'msaFacebook', tiktok: 'msaTiktok',
+      twitter: 'msaTwitter', youtube: 'msaYoutube', website: 'msaWebsite',
+      deliveryAreas: 'msaDeliveryAreas', deliveryPolicy: 'msaDeliveryPolicy'
+    };
+    Object.keys(fields).forEach(function(key) {
+      var el = document.getElementById(fields[key]);
+      cfg[key] = el ? el.value.trim() : '';
+    });
+    var rt = document.getElementById('msaResponseTime');
+    cfg.responseTime = rt ? rt.value : '24h';
+    cfg.accentColor = _state.accentColor;
+
+    // Payment methods
+    cfg.paymentMethods = [];
+    document.querySelectorAll('#msaPaymentMethods input[type=checkbox]:checked').forEach(function(cb){ cfg.paymentMethods.push(cb.value); });
+
+    // Hours
+    cfg.hours = {};
+    var days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    days.forEach(function(day) {
+      var openEl = document.querySelector('input[type=time][data-day="' + day + '"][data-field="open"]');
+      var closeEl = document.querySelector('input[type=time][data-day="' + day + '"][data-field="close"]');
+      var closedEl = document.querySelector('.hours-closed-cb[data-day="' + day + '"]');
+      cfg.hours[day] = {
+        open: openEl ? openEl.value : '',
+        close: closeEl ? closeEl.value : '',
+        closed: closedEl ? closedEl.checked : false
+      };
+    });
+
+    return cfg;
+  }
+
+  function saveConfig() {
+    var btn = document.getElementById('msaSaveBtn');
+    var textEl = document.getElementById('msaSaveBtnText');
+    if (textEl) textEl.textContent = 'Saving…';
+    if (btn) btn.disabled = true;
+
+    var cfg = collectConfig();
+    _state.config = cfg;
+    updatePreviewCard();
+
+    if (window.SokoniMiniShop && window.SokoniMiniShop.saveConfig) {
+      window.SokoniMiniShop.saveConfig(cfg)
+        .then(function(){ toast('Changes saved!', 'success'); })
+        .catch(function(e){ toast(e.message || 'Save failed', 'error'); })
+        .finally(function(){ if(textEl) textEl.textContent='Save Changes'; if(btn) btn.disabled=false; });
+      return;
+    }
+
+    if (!_state.shopId || typeof firebase === 'undefined') {
+      toast('Shop not loaded', 'error');
+      if(textEl) textEl.textContent='Save Changes'; if(btn) btn.disabled=false;
+      return;
+    }
+    firebase.firestore().collection('shops').doc(_state.shopId)
+      .update({ minishopConfig: cfg, minishopUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .then(function(){ toast('Changes saved!', 'success'); })
+      .catch(function(e){ toast(e.message || 'Save failed', 'error'); })
+      .finally(function(){ if(textEl) textEl.textContent='Save Changes'; if(btn) btn.disabled=false; });
+  }
+
+  // ── Analytics Tab ──────────────────────────────────
+  function initAnalytics() {
+    document.querySelectorAll('.msa-date-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.msa-date-tab').forEach(function(t){ t.classList.remove('active'); });
+        this.classList.add('active');
+        _state.analyticsRange = this.dataset.range;
+        loadAnalytics(_state.analyticsRange);
+      });
+    });
+  }
+
+  function loadAnalytics(range) {
+    if (window.SokoniMiniShop && window.SokoniMiniShop.getAnalytics) {
+      window.SokoniMiniShop.getAnalytics(_state.shopId, range)
+        .then(function(data){ renderAnalytics(data); })
+        .catch(function(){ renderAnalytics(null); });
+      return;
+    }
+    // No-op: show zeroed-out state
+    renderAnalytics(null);
+  }
+
+  function renderAnalytics(data) {
+    var d = data || {};
+    var set = function(id, val){ var el=document.getElementById(id); if(el) el.textContent=val!=null?val:'0'; };
+    set('anaViews', fmt(d.views));
+    set('anaUnique', fmt(d.unique));
+    set('anaOrders', fmt(d.orders));
+    set('anaRevenue', d.revenue != null ? 'KES ' + fmt(d.revenue) : 'KES 0');
+    set('anaConversion', d.conversion != null ? (Number(d.conversion).toFixed(1) + '%') : '0%');
+    set('anaFollowers', fmt(d.followers));
+
+    // Traffic sources
+    var ts = d.traffic || {WhatsApp:0,Instagram:0,Facebook:0,Direct:0,QR:0,Other:0};
+    var tsEl = document.getElementById('anaTrafficSources');
+    if (tsEl) {
+      var total = Object.values(ts).reduce(function(a,b){ return a+b; }, 0) || 1;
+      tsEl.innerHTML = Object.keys(ts).map(function(src) {
+        var pct = Math.round((ts[src]/total)*100);
+        return '<div class="msa-traffic-item">' +
+          '<span class="msa-traffic-label">' + esc(src) + '</span>' +
+          '<div class="msa-traffic-bar-wrap"><div class="msa-traffic-bar" style="width:' + pct + '%"></div></div>' +
+          '<span class="msa-traffic-pct">' + pct + '%</span>' +
+          '</div>';
+      }).join('') || '<div class="msa-empty">No data yet</div>';
+    }
+
+    // Top products
+    var tp = d.topProducts || [];
+    var tpEl = document.getElementById('anaTopProducts');
+    if (tpEl) {
+      if (tp.length === 0) { tpEl.innerHTML = '<div class="msa-empty">No product views yet</div>'; }
+      else { tpEl.innerHTML = tp.slice(0,8).map(function(p,i){ return '<div class="msa-list-item"><span class="msa-list-rank">' + (i+1) + '</span><span class="msa-list-name">' + esc(p.name) + '</span><span class="msa-list-val">' + fmt(p.views) + ' views</span></div>'; }).join(''); }
+    }
+
+    // Visitors
+    var vis = d.visitors || [];
+    var visEl = document.getElementById('anaVisitors');
+    if (visEl) {
+      if (vis.length === 0) { visEl.innerHTML = '<div class="msa-empty">No visitors recorded yet</div>'; }
+      else { visEl.innerHTML = vis.slice(0,20).map(function(v){ return '<div class="msa-list-item"><span class="msa-list-rank">&#128100;</span><span class="msa-list-name">' + esc(v.location||'Unknown') + '</span><span class="msa-list-val">' + esc(v.time||'') + '</span></div>'; }).join(''); }
+    }
+  }
+
+  // ── Share & Promote Tab ────────────────────────────
+  function renderSharePanel() {
+    refreshQr();
+    renderShareCards();
+  }
+
+  function refreshQr() {
+    var qrEl = document.getElementById('msaQrDisplay');
+    var dlBtn = document.getElementById('msaDownloadQr');
+    var printBtn = document.getElementById('msaPrintPoster');
+    if (!qrEl) return;
+    if (!_state.shopUrl) {
+      qrEl.innerHTML = '<div class="msa-qr-placeholder">Claim your handle to generate a QR code</div>';
+      if (dlBtn) dlBtn.disabled = true;
+      if (printBtn) printBtn.disabled = true;
+      return;
+    }
+    var qrUrl = 'https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=' + encodeURIComponent(_state.shopUrl) + '&choe=UTF-8';
+    qrEl.innerHTML = '<img src="' + esc(qrUrl) + '" alt="QR Code for ' + esc(_state.shopUrl) + '" style="width:100%;height:100%">';
+    if (dlBtn) { dlBtn.disabled = false; dlBtn.onclick = function(){ downloadQr(qrUrl); }; }
+    if (printBtn) { printBtn.disabled = false; printBtn.onclick = printPoster; }
+    // Update print area
+    var pqr = document.getElementById('msa-print-qr');
+    var pname = document.getElementById('msa-print-name');
+    var purl = document.getElementById('msa-print-url');
+    if (pqr) pqr.src = qrUrl;
+    if (pname) pname.textContent = _state.shopName || '';
+    if (purl) purl.textContent = _state.shopUrl || '';
+  }
+
+  function downloadQr(qrUrl) {
+    var a = document.createElement('a');
+    a.href = qrUrl;
+    a.download = 'sokoni-qr-' + (_state.handle||'shop') + '.png';
+    a.target = '_blank';
+    a.click();
+    toast('QR download started', 'info');
+  }
+
+  function printPoster() {
+    document.getElementById('msa-print-area').style.display = 'block';
+    window.print();
+    setTimeout(function(){ document.getElementById('msa-print-area').style.display = 'none'; }, 1000);
+  }
+
+  function renderShareCards() {
+    var container = document.getElementById('msaShareLinks');
+    if (!container) return;
+    if (!_state.shopUrl) {
+      container.innerHTML = '<div class="msa-empty">Claim your handle to enable sharing</div>';
+      return;
+    }
+    var url = _state.shopUrl;
+    var name = _state.shopName || 'My Shop';
+    var msg = 'Check out ' + name + ' on SOKONI! ' + url;
+    var platforms = [
+      {name:'WhatsApp', icon:'&#128241;', color:'#25d366', href:'https://wa.me/?text=' + encodeURIComponent(msg)},
+      {name:'Instagram', icon:'&#128247;', color:'#e1306c', href:'https://www.instagram.com/'},
+      {name:'Facebook', icon:'&#128279;', color:'#1877f2', href:'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url)},
+      {name:'X (Twitter)', icon:'&#10005;', color:'#1da1f2', href:'https://twitter.com/intent/tweet?text=' + encodeURIComponent(msg)},
+      {name:'Telegram', icon:'&#9992;', color:'#0088cc', href:'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(msg)},
+      {name:'LinkedIn', icon:'&#128188;', color:'#0a66c2', href:'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(url)}
+    ];
+    container.innerHTML = platforms.map(function(p) {
+      return '<div class="msa-share-card">' +
+        '<div class="msa-share-icon" style="background:' + p.color + '22;color:' + p.color + '">' + p.icon + '</div>' +
+        '<div class="msa-share-info">' +
+          '<div class="msa-share-platform">' + esc(p.name) + '</div>' +
+          '<div class="msa-share-text-preview">' + esc(msg.substring(0,60)) + '&hellip;</div>' +
+        '</div>' +
+        '<a href="' + esc(p.href) + '" target="_blank" class="msa-btn-sm">Share</a>' +
+        '</div>';
+    }).join('');
+    // Copy link row
+    container.innerHTML += '<div class="msa-share-card" style="grid-column:1/-1">' +
+      '<div class="msa-share-icon" style="background:rgba(0,188,212,.15);color:var(--ms-accent)">&#128279;</div>' +
+      '<div class="msa-share-info"><div class="msa-share-platform">Direct Link</div><div class="msa-share-text-preview">' + esc(url) + '</div></div>' +
+      '<button class="msa-btn-sm" id="msaCopyShopUrl">Copy Link</button>' +
+      '</div>';
+    var cl = document.getElementById('msaCopyShopUrl');
+    if (cl) cl.addEventListener('click', function(){ copyText(url); });
+  }
+
+  // ── Promotional Assets ─────────────────────────────
+  function initPromoAssets() {
+    var bcBtn = document.getElementById('msaGenBusinessCard');
+    var flyerBtn = document.getElementById('msaGenFlyer');
+    if (bcBtn) bcBtn.addEventListener('click', openBusinessCard);
+    if (flyerBtn) flyerBtn.addEventListener('click', openFlyer);
+    var siBtn = document.getElementById('msaGenSocialImage');
+    var wsBtn = document.getElementById('msaGenWhatsappStatus');
+    if (siBtn) siBtn.addEventListener('click', function(){ toast('Social image generator coming soon', 'info'); });
+    if (wsBtn) wsBtn.addEventListener('click', function(){ toast('WhatsApp status generator coming soon', 'info'); });
+  }
+
+  function openBusinessCard() {
+    var cfg = _state.config || {};
+    document.getElementById('bc-name').textContent = _state.shopName || 'My Shop';
+    document.getElementById('bc-tagline').textContent = cfg.tagline || '';
+    document.getElementById('bc-url').textContent = _state.shopUrl || 'mysokoni.co.ke/shop/';
+    document.getElementById('bc-phone').textContent = cfg.phone || '';
+    var logoEl = document.getElementById('bc-logo');
+    if (logoEl && cfg.logoImage) logoEl.innerHTML = '<img src="' + esc(cfg.logoImage) + '" alt="logo" style="width:100%;height:100%;object-fit:cover;border-radius:10px">';
+    openModal('msaCardModal');
+  }
+
+  function openFlyer() {
+    var cfg = _state.config || {};
+    document.getElementById('fl-shop-name').textContent = _state.shopName || 'My Shop';
+    document.getElementById('fl-tagline').textContent = cfg.tagline || '';
+    document.getElementById('fl-desc').textContent = cfg.description || 'Visit our MiniShop on SOKONI for great products and deals.';
+    document.getElementById('fl-url').textContent = _state.shopUrl || '';
+    document.getElementById('fl-phone').textContent = cfg.phone || '';
+    var qrEl = document.getElementById('fl-qr-img');
+    if (qrEl && _state.shopUrl) {
+      qrEl.src = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=' + encodeURIComponent(_state.shopUrl) + '&choe=UTF-8';
+    }
+    openModal('msaFlyerModal');
+  }
+
+  // ── Modal helpers ──────────────────────────────────
+  function openModal(id) {
+    var m = document.getElementById(id);
+    if (m) m.classList.add('open');
+  }
+  function closeModal(id) {
+    var m = document.getElementById(id);
+    if (m) m.classList.remove('open');
+  }
+
+  function initModals() {
+    document.querySelectorAll('[data-close]').forEach(function(btn) {
+      btn.addEventListener('click', function(){ closeModal(this.dataset.close); });
+    });
+    document.querySelectorAll('.msa-modal-backdrop').forEach(function(backdrop) {
+      backdrop.addEventListener('click', function(e){
+        if (e.target === this) this.classList.remove('open');
+      });
+    });
+    var printCard = document.getElementById('msaPrintCard');
+    if (printCard) printCard.addEventListener('click', function(){
+      closeModal('msaCardModal');
+      setTimeout(window.print, 300);
+    });
+    var printFlyer = document.getElementById('msaPrintFlyer');
+    if (printFlyer) printFlyer.addEventListener('click', function(){
+      closeModal('msaFlyerModal');
+      setTimeout(window.print, 300);
+    });
+  }
+
+  // ── AI Marketing Tab ───────────────────────────────
+  function initAiTab() {
+    // Pre-fill business name & category
+    var nameEl = document.getElementById('msaAiBusinessName');
+    var catEl = document.getElementById('msaAiCategory');
+    if (nameEl) nameEl.value = _state.shopName || '';
+    if (catEl) catEl.value = (_state.config && _state.config.category) || '';
+
+    // Type selector
+    document.querySelectorAll('.msa-ai-type-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.msa-ai-type-btn').forEach(function(b){ b.classList.remove('active'); });
+        this.classList.add('active');
+        _state.aiType = this.dataset.type;
+      });
+    });
+
+    // Generate
+    var genBtn = document.getElementById('msaAiGenerate');
+    if (genBtn) genBtn.addEventListener('click', generateAiContent);
+
+    var anotherBtn = document.getElementById('msaAiGenerateAnother');
+    if (anotherBtn) anotherBtn.addEventListener('click', generateAiContent);
+
+    // Copy
+    var copyBtn = document.getElementById('msaAiCopy');
+    if (copyBtn) copyBtn.addEventListener('click', function(){
+      var out = document.getElementById('msaAiOutput');
+      if (out && out.value) copyText(out.value);
+    });
+
+    // Load history
+    renderAiHistory();
+  }
+
+  function generateAiContent() {
+    var genBtn = document.getElementById('msaAiGenerate');
+    var genText = document.getElementById('msaAiGenerateText');
+    var output = document.getElementById('msaAiOutput');
+    var copyBtn = document.getElementById('msaAiCopy');
+    var anotherBtn = document.getElementById('msaAiGenerateAnother');
+
+    var businessName = (document.getElementById('msaAiBusinessName') || {}).value || _state.shopName || 'My Shop';
+    var category = (document.getElementById('msaAiCategory') || {}).value || 'marketplace';
+    var productName = (document.getElementById('msaAiProductName') || {}).value || '';
+    var price = (document.getElementById('msaAiPrice') || {}).value || '';
+    var context = (document.getElementById('msaAiContext') || {}).value || '';
+
+    if (genBtn) genBtn.disabled = true;
+    if (genText) genText.textContent = 'Generating…';
+    if (output) { output.readOnly = true; output.value = ''; }
+    if (copyBtn) copyBtn.style.display = 'none';
+    if (anotherBtn) anotherBtn.style.display = 'none';
+
+    var payload = {
+      type: _state.aiType,
+      businessName: businessName,
+      category: category,
+      productName: productName,
+      price: price,
+      context: context,
+      handle: _state.handle || ''
+    };
+
+    if (window.SokoniMiniShop && window.SokoniMiniShop.generateContent) {
+      window.SokoniMiniShop.generateContent(payload)
+        .then(function(result){ finishAiGeneration(result, payload); })
+        .catch(function(e){ toast(e.message || 'AI generation failed', 'error'); })
+        .finally(function(){ if(genBtn) genBtn.disabled=false; if(genText) genText.textContent='&#129302; Generate with AI'; });
+      return;
+    }
+
+    // Fallback: local template generation
+    setTimeout(function() {
+      var result = buildLocalAiTemplate(payload);
+      finishAiGeneration(result, payload);
+      if (genBtn) genBtn.disabled = false;
+      if (genText) genText.textContent = '\u{1F916} Generate with AI';
+    }, 900);
+  }
+
+  function buildLocalAiTemplate(p) {
+    var name = p.businessName, cat = p.category, prod = p.productName, price = p.price;
+    var templates = {
+      product_description: (prod ? prod + ' — ' : '') + 'Discover top quality ' + (cat||'products') + ' at ' + name + '. ' + (price ? 'Priced at just ' + price + '. ' : '') + 'Shop now on SOKONI and enjoy fast delivery across Kenya.',
+      social_caption: (prod ? '✨ Introducing ' + prod + '! ' : '✨ Big news from ' + name + '! ') + (price ? 'Starting at ' + price + '. ' : '') + 'Shop the best ' + (cat||'products') + ' in Kenya. Link in bio or visit our SOKONI MiniShop! ⤵️',
+      hashtags: '#' + (name||'').replace(/\s+/g,'') + ' #' + (cat||'Kenya').replace(/\s+/g,'') + ' #SOKONI #ShopKenya #Nairobi #OnlineShopping #KenyaMade #MadeInKenya #BuyKenya #KenyanBusiness',
+      promo_offer: '\u{1F525} SPECIAL OFFER from ' + name + '! ' + (prod ? 'Get ' + prod + ' ' : '') + (price ? 'for just ' + price + ' ' : '') + '— limited time only. Order now on our SOKONI MiniShop and get it delivered to your doorstep!',
+      business_bio: name + ' is your go-to destination for premium ' + (cat||'products') + ' in Kenya. We are committed to quality, affordability and exceptional service. Find us on SOKONI — Kenya\'s #1 marketplace.'
+    };
+    return templates[p.type] || templates.product_description;
+  }
+
+  function finishAiGeneration(result, payload) {
+    var output = document.getElementById('msaAiOutput');
+    var copyBtn = document.getElementById('msaAiCopy');
+    var anotherBtn = document.getElementById('msaAiGenerateAnother');
+    if (output) { output.value = result; output.readOnly = false; }
+    if (copyBtn) copyBtn.style.display = 'inline-flex';
+    if (anotherBtn) anotherBtn.style.display = 'inline-flex';
+    saveAiHistory(payload.type, result);
+    renderAiHistory();
+    toast('Content generated!', 'success');
+  }
+
+  var AI_HISTORY_KEY = 'sokoni_minishop_ai_history';
+
+  function saveAiHistory(type, text) {
+    try {
+      var history = JSON.parse(localStorage.getItem(AI_HISTORY_KEY) || '[]');
+      history.unshift({ type: type, text: text, ts: Date.now() });
+      history = history.slice(0, 5);
+      localStorage.setItem(AI_HISTORY_KEY, JSON.stringify(history));
+    } catch(e) {}
+  }
+
+  function renderAiHistory() {
+    var container = document.getElementById('msaAiHistory');
+    if (!container) return;
+    try {
+      var history = JSON.parse(localStorage.getItem(AI_HISTORY_KEY) || '[]');
+      if (!history.length) {
+        container.innerHTML = '<div class="msa-empty">No generations yet. Create your first piece of content above.</div>';
+        return;
+      }
+      var typeLabels = {product_description:'Product Description',social_caption:'Social Caption',hashtags:'Hashtags',promo_offer:'Promotional Offer',business_bio:'Business Bio'};
+      container.innerHTML = history.map(function(item) {
+        var d = new Date(item.ts);
+        var dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        return '<div class="msa-ai-history-item" data-text="' + esc(item.text) + '">' +
+          '<div class="msa-ai-history-type">' + esc(typeLabels[item.type]||item.type) + ' &bull; ' + esc(dateStr) + '</div>' +
+          '<div class="msa-ai-history-text">' + esc(item.text) + '</div>' +
+          '</div>';
+      }).join('');
+      // Click to restore
+      container.querySelectorAll('.msa-ai-history-item').forEach(function(item) {
+        item.addEventListener('click', function(){
+          var out = document.getElementById('msaAiOutput');
+          if (out) out.value = this.dataset.text;
+          var copyBtn = document.getElementById('msaAiCopy');
+          if (copyBtn) copyBtn.style.display = 'inline-flex';
+          toast('Content restored', 'info');
+        });
+      });
+    } catch(e) {
+      container.innerHTML = '<div class="msa-empty">Could not load history</div>';
+    }
+  }
+
+  // ── Main Init ──────────────────────────────────────
+  function initUI() {
+    initTabs();
+    initHandleInput();
+    initShareDropdown();
+    initOverview();
+    initCustomize();
+    initAnalytics();
+    initPromoAssets();
+    initModals();
+    initAiTab();
+  }
+
+  // ── Boot ───────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', function() {
+    checkAuth();
+
+    // Keyboard: Escape closes modals
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') document.querySelectorAll('.msa-modal-backdrop.open').forEach(function(m){ m.classList.remove('open'); });
+    });
+  });
+
+})();
+</script>
+
+<script src="sokoni-minishop.js" onerror="console.info('[MSA] sokoni-minishop.js not yet present; built-in controller active')"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.SokoniMiniShop && window.SokoniMiniShop.initAdmin) {
+      window.SokoniMiniShop.initAdmin();
+    }
+  });
+</script>
+
+</body>
+</html>

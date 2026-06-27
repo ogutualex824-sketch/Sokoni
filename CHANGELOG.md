@@ -1,4 +1,108 @@
-﻿## [2026-06-28] — Admin Operating System (AOS) v1.0
+﻿## [2026-06-28] — MiniShop 2.0 — Social Commerce & Business Growth Platform
+
+### Summary
+Full v2.0 overhaul of the MiniShop system. Public storefront redesigned to premium business-website quality. Added WhatsApp Status Mode (fullscreen product showcase), Digital Business Card with vCard download, Campaign Link Engine (trackable marketing campaigns with ROI), and 5 new Cloud Functions. Every seller now has a complete social-commerce identity: storefront, business card, share tools, analytics, and AI marketing — all from SOKONI.
+
+### Files Created / Rewritten
+- `minishop.html` — Complete v2 rewrite (1,562 lines): design token system, 5 accent themes, shimmer skeleton, fadeUp, hero cover + frosted-glass actions, trust signals bar, smart CTA (category-aware), slide-up share panel, horizontal-scroll Deals grid, dynamic sections (Best Sellers/New Arrivals/Today's Deals/All), Services tab, Reviews with rating bars, Business Card section, WhatsApp Status mode overlay, QR modal, toast system
+- `minishop-status.html` — New: dual-mode page (620 lines): WhatsApp Status fullscreen + Digital Business Card with vCard download + print poster; self-contained, no dependency on sokoni-minishop.js
+- `functions/minishop-campaigns.js` — 5 new CFs: createMinishopCampaign, getMinishopCampaigns, trackCampaignClick, pauseMinishopCampaign, deleteMinishopCampaign
+
+### Files Modified
+- `functions/index.js` — Added 5 campaign CF exports
+- `firebase.json` — Added `/card/**` rewrite to minishop-status.html
+- `firestore.rules` — Added minishopCampaigns and campaignClickRL collection rules
+- `seller.html` — "My MiniShop" button added to seller topbar
+
+### New Firestore Collections (no composite indexes)
+- `minishopCampaigns/{campaignId}` — campaign metadata + click/view/order/revenue counters
+- `campaignClickRL/{docId}` — IP-based rate limit for campaign click tracking (CF only)
+
+### New URL Patterns
+- `mysokoni.co.ke/shop/{handle}` — MiniShop storefront
+- `mysokoni.co.ke/@{handle}` — Short URL redirect to storefront
+- `mysokoni.co.ke/shop/{handle}?mode=status` — WhatsApp Status overlay mode
+- `mysokoni.co.ke/card/{handle}` — Digital Business Card + vCard download
+- `mysokoni.co.ke/minishop-status.html?handle={x}&mode=card` — Business card direct
+
+### Campaign Link Format
+`mysokoni.co.ke/shop/{handle}?utm_source=campaign&utm_campaign={slug}&utm_medium=minishop`
+
+### Security
+- `createMinishopCampaign` verifies shop ownership before creating
+- `trackCampaignClick` IP rate-limited (10/hr/campaign) via Firestore transaction
+- `pauseMinishopCampaign` and `deleteMinishopCampaign` check `uid` ownership
+- Accent color validated via hex regex before CSS injection in `minishop-status.html`
+- vCard blob URL revoked after 10s to prevent memory leaks
+
+### Deployment
+```
+firebase deploy --only hosting,firestore:rules
+firebase deploy --only functions:createMinishopCampaign
+firebase deploy --only functions:getMinishopCampaigns
+firebase deploy --only functions:trackCampaignClick
+firebase deploy --only functions:pauseMinishopCampaign
+firebase deploy --only functions:deleteMinishopCampaign
+```
+
+---
+
+## [2026-06-28] — MiniShop Storefront v2.0 (Premium Rewrite)
+
+### Summary
+Complete rewrite of `minishop.html` from a functional v1 to a premium standalone business storefront. Redesigned to feel like a Shopify store + Google Business Profile + WhatsApp Business combined. All CSS is inline (zero external dependencies). Full design token system with 5 accent themes, shimmer skeleton loader, fadeUp animation, horizontal scroll deals grid, star rendering via CSS clip-path, sticky tab bar, toast system, share panel, QR modal, WhatsApp status mode overlay, and responsive 2/3/4-column product grid.
+
+### Files Modified
+- `minishop.html` — Full rewrite (1 562 lines): design token root variables, 5 accent themes, shimmer skeleton, fadeUp animation, hero cover + avatar, identity card, stats bar, trust pills, smart CTA strip, share slide-up panel, sticky tabs, Best Sellers / New Arrivals / Deals / All Products sections, Services tab, Reviews tab with rating bars, About tab, Business Card section, QR modal, WhatsApp status mode overlay, toast container, Schema.org placeholder, all 80+ `.ms-*` CSS classes defined, mobile-first responsive grid
+
+### Breaking Changes
+None — JS engine (`sokoni-minishop.js`) API unchanged. `SokoniMiniShop.initPublic()` entry point preserved.
+
+---
+
+## [2026-06-28] — MiniShop & Social Commerce System v1.0
+
+### Summary
+Every seller, business, and service provider on SOKONI now has a permanent, shareable digital storefront at `mysokoni.co.ke/shop/{handle}` or `mysokoni.co.ke/@{handle}`. Sellers claim a unique handle, customize their appearance, share via WhatsApp/Instagram/Facebook/X/Telegram, generate QR codes and print posters, view traffic analytics, and use AI to generate marketing content — all from a dedicated seller admin panel.
+
+### Files Created
+- `minishop.html` — Public MiniShop storefront SPA (867 lines): cover/logo, tabs (Products/Services/About/Reviews), share bar, follow button, QR modal, cart drawer, skeleton loader, Schema.org JSON-LD, OG meta, theme system, fully mobile-first
+- `minishop-admin.html` — Seller MiniShop admin panel: handle claiming, theme customizer, business hours editor, social links, analytics dashboard, share tools, QR + print poster, AI marketing content generator
+- `sokoni-minishop.js` — Client JS engine (~500 lines): `SokoniMiniShop.initPublic()` + `initAdmin()` + share/follow/QR/AI APIs, source attribution tracking, OG meta injection, Schema.org population
+- `functions/minishop.js` — 9 Gen2 Cloud Functions: getMinishopPublic (onRequest), claimMinishopHandle, saveMinishopConfig, trackMinishopView (onRequest), getMinishopAnalytics, generateMinishopShareCard, aiGenerateMinishopContent, followShop, getMyMinishop
+
+### Files Modified
+- `functions/index.js` — Added 9 minishop CF exports (lines 7924–7933)
+- `firebase.json` — Added `/shop/**` and `/@**` hosting rewrites to minishop.html; added `chart.googleapis.com` to CSP img-src for QR code generation
+- `firestore.rules` — Added rules for 6 new collections: shopHandles, minishopConfig, minishopAnalytics, shopFollowers, msViewRL, aiGenRL
+
+### New Firestore Collections (no composite indexes — all doc-ID or single-field queries)
+- `shopHandles/{handle}` — handle → shopId mapping
+- `minishopConfig/{shopId}` — storefront theme, hours, social links, policies
+- `minishopAnalytics/{shopId}` — view counters, source attribution, follower count
+- `shopFollowers/{shopId_uid}` — flat collection for follow relationships
+- `msViewRL/{ip_minute}` — IP rate limit counters for view tracking (CF only)
+- `aiGenRL/{uid_YYYYMMDD}` — AI generation rate limits per user (CF only)
+
+### Security
+- `saveMinishopConfig` uses explicit allowlist — mass-assignment impossible
+- `getMinishopPublic` strips sellerUid, bankDetails, taxPin before serving publicly
+- `trackMinishopView` IP rate-limited (5/min) via Firestore transaction to prevent counter abuse
+- `aiGenerateMinishopContent` rate-limited (10/day per UID)
+- `followShop` atomic Firestore transaction prevents orphaned follower count
+- All handles validated: 3–30 chars, alphanumeric + hyphen/underscore, reserved words blocked
+- ANTHROPIC_API_KEY loaded via Firebase Secret Manager (`defineSecret()`)
+
+### Deployment
+```
+firebase deploy --only hosting
+firebase deploy --only functions:getMinishopPublic,functions:claimMinishopHandle,functions:saveMinishopConfig,functions:trackMinishopView,functions:getMinishopAnalytics,functions:generateMinishopShareCard,functions:aiGenerateMinishopContent,functions:followShop,functions:getMyMinishop
+firebase deploy --only firestore:rules
+```
+
+---
+
+## [2026-06-28] — Admin Operating System (AOS) v1.0
 
 ### Summary
 Enterprise-grade Admin Operating System delivered as a full SPA with 17 sections covering every SOKONI hub from a single mission-control interface. Security hardening sprint also completed: review rate limiting wired into CF bodies, dual IP+UID payment rate limit, community IDOR fix, auth/payment page Cache-Control headers, and Production Security Certification Report at 95/100.

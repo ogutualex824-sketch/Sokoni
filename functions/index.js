@@ -7932,6 +7932,14 @@ exports.aiGenerateMinishopContent  = minishop.aiGenerateMinishopContent;
 exports.followShop                 = minishop.followShop;
 exports.getMyMinishop              = minishop.getMyMinishop;
 
+/* ── MiniShop Campaign Engine v1.0 ──────────────────────────────────────── */
+const minishopCampaigns = require('./minishop-campaigns');
+exports.createMinishopCampaign  = minishopCampaigns.createMinishopCampaign;
+exports.getMinishopCampaigns    = minishopCampaigns.getMinishopCampaigns;
+exports.trackCampaignClick      = minishopCampaigns.trackCampaignClick;
+exports.pauseMinishopCampaign   = minishopCampaigns.pauseMinishopCampaign;
+exports.deleteMinishopCampaign  = minishopCampaigns.deleteMinishopCampaign;
+
 /* ── Automation & Decision Engine (ADE) v1.0 ────────────────────────────── */
 const ade = require('./ade');
 // Firestore triggers
@@ -7956,3 +7964,13 @@ exports.adeGetMetrics            = ade.adeGetMetrics;
 // Scheduled
 exports.adeRetryFailedJobs       = ade.adeRetryFailedJobs;
 exports.adeDailyMaintenance      = ade.adeDailyMaintenance;
+
+/* ── Buyer Dispute Portal v1.0 ──────────────────────────────────────────── */
+const disputes = require('./disputes');
+exports.createDispute           = disputes.createDispute;
+exports.getMyDisputes           = disputes.getMyDisputes;
+exports.getDisputeDetail        = disputes.getDisputeDetail;
+exports.addDisputeEvidence      = disputes.addDisputeEvidence;
+exports.sellerRespondToDispute  = disputes.sellerRespondToDispute;
+exports.cancelDispute           = disputes.cancelDispute;
+exports.getSellerDisputes       = disputes.getSellerDisputes;

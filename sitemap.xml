@@ -99,6 +99,7 @@
   <url><loc>https://mysokoni.co.ke/trust.html</loc>               <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.60</priority></url>
   <url><loc>https://mysokoni.co.ke/foundation.html</loc>          <lastmod>2026-06-16</lastmod><changefreq>monthly</changefreq><priority>0.55</priority></url>
   <url><loc>https://mysokoni.co.ke/wallet.html</loc>              <lastmod>2026-06-16</lastmod><changefreq>weekly</changefreq> <priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/minishop.html</loc>           <lastmod>2026-06-28</lastmod><changefreq>daily</changefreq>   <priority>0.82</priority></url>
 
   <!-- ══ COMPANY PAGES ══ -->
   <url><loc>https://mysokoni.co.ke/about</loc>                    <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.80</priority></url>
