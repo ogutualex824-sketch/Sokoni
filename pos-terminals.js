@@ -567,11 +567,12 @@ window.PosTerminals = (() => {
       if (!ip) { if (el) el.textContent = 'Enter an IP address first'; return; }
       if (el) el.innerHTML = '<span style="color:var(--txt2)">Testing…</span>';
       const info = await NetworkAdapter.probe(ip, port);
+      const _e = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       if (info) {
-        if (el) el.innerHTML = `<span style="color:var(--green)">✅ Connected — ${info.model||'Terminal'} (${info.firmware||''})</span>`;
+        if (el) el.innerHTML = `<span style="color:var(--green)">✅ Connected — ${_e(info.model)||'Terminal'} (${_e(info.firmware||'')})</span>`;
         wizard._next({ ip, port, networkInfo: info });
       } else {
-        if (el) el.innerHTML = `<span style="color:var(--red)">❌ Cannot reach ${ip}:${port} — check IP, port, and network</span>`;
+        if (el) el.innerHTML = `<span style="color:var(--red)">❌ Cannot reach ${_e(ip)}:${parseInt(port)||8080} — check IP, port, and network</span>`;
       }
     },
 

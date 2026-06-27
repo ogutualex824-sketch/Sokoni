@@ -905,7 +905,7 @@ function displaySellerProducts(){
                         style="flex:1;height:32px;padding:0;background:rgba(113,255,0,0.09);border:1px solid rgba(113,255,0,0.22);border-radius:9px;color:#71ff00;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;"
                         onmouseover="this.style.background='rgba(113,255,0,0.2)'"
                         onmouseout="this.style.background='rgba(113,255,0,0.09)'">📣</button>
-                    <button type="button" onclick="boostProduct('${product.id}','${(product.name||'').replace(/'/g,''')}')" title="Boost listing"
+                    <button type="button" onclick="boostProduct('${_esc(product.id)}','${_esc(product.name||'')}')" title="Boost listing"
                         style="flex:1;height:32px;padding:0;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:9px;color:#fbbf24;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;"
                         onmouseover="this.style.background='rgba(251,191,36,0.2)'"
                         onmouseout="this.style.background='rgba(251,191,36,0.08)'">⚡</button>
@@ -937,7 +937,7 @@ function boostProduct(productId, productName){
     /* Show boost picker */
     const prices = SokoniPay.BOOST_PRICES;
     const opts = Object.entries(prices).map(([k,v])=>
-        `<button type="button" onclick="window._doBoost('${productId}','${k}','${(productName||'').replace(/'/g,'\\'')}')" style="width:100%;text-align:left;padding:12px 14px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:11px;color:white;font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+        `<button type="button" onclick="window._doBoost('${_esc(productId)}','${_esc(k)}','${_esc(productName||'')}')" style="width:100%;text-align:left;padding:12px 14px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:11px;color:white;font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
             <span><strong>${v.label}</strong><br><span style="color:rgba(255,255,255,0.4);font-size:10px;">${v.description} · ${v.duration} days</span></span>
             <span style="color:#fbbf24;font-weight:900;font-size:13px;">KES ${v.price}</span>
         </button>`
@@ -3449,8 +3449,8 @@ function toggleTheme(){
     /* Write to both keys for backward compat */
     localStorage.setItem("sokoni-theme", isLight ? "light" : "dark");
     localStorage.setItem("theme", isLight ? "light" : "dark");
-    const btn = document.getElementById("sellerThemeBtn");
-    if(btn) btn.textContent = isLight ? "☀️" : "🌙";
+    var themeBtn = document.getElementById("sellerThemeBtn");
+    if(themeBtn) themeBtn.textContent = isLight ? "☀️" : "🌙";
 }
 
 /* Restore theme on page load — check both keys (unified sokoni-theme takes priority) */

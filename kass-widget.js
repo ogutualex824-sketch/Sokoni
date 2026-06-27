@@ -15,6 +15,19 @@
   var _greeted = false;
   var _busy    = false;
 
+  /* ── Get Firebase ID token (optional — enables action tools) ── */
+  function _getAuthToken() {
+    return new Promise(function(resolve) {
+      try {
+        var auth = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth() : null;
+        if (!auth) { resolve(null); return; }
+        var user = auth.currentUser;
+        if (!user) { resolve(null); return; }
+        user.getIdToken(false).then(resolve).catch(function() { resolve(null); });
+      } catch(e) { resolve(null); }
+    });
+  }
+
   /* ── Escape HTML ── */
   function _esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -50,13 +63,16 @@
 
   /* ── Result card HTML ── */
   function _cardHtml(r) {
-    var icons = { product:'🛍️', service:'🔧', bnb:'🏠', hotel:'🏨', event:'🎫', job:'💼', restaurant:'🍽️' };
+    var icons = { product:'🛍️', service:'🔧', bnb:'🏠', hotel:'🏨', event:'🎫', job:'💼', restaurant:'🍽️', order:'📦' };
     var icon  = icons[r.type] || '📦';
     var price = '';
     if (r.price) {
       price = 'KES ' + Number(r.price).toLocaleString();
       if (r.type === 'bnb' || r.type === 'hotel') price += '/night';
     }
+    var statusBadge = r.status
+      ? '<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:rgba(113,255,0,0.12);color:#71ff00;font-weight:700;margin-left:4px;">' + _esc(r.status) + '</span>'
+      : '';
     var rating = r.rating ? '★'.repeat(Math.min(5, Math.round(Number(r.rating)))) : '';
     var meta   = [r.city, r.company, rating].filter(Boolean).join(' · ');
     var url    = _esc(r.url || 'index.html');
@@ -69,12 +85,17 @@
           ? '<img class="kc-card-img" src="' + _esc(r.image) + '" loading="lazy" alt="' + _esc(r.name||'') + '" onerror="this.style.display=\'none\'">'
           : '<div class="kc-card-ph">' + icon + '</div>',
         '<div class="kc-card-body">',
-          '<div class="kc-card-name">' + _esc(r.name || 'Listing') + '</div>',
+          '<div class="kc-card-name">' + _esc(r.name || 'Listing') + statusBadge + '</div>',
           price ? '<div class="kc-card-price">' + price + '</div>' : '',
           meta  ? '<div class="kc-card-meta">' + _esc(meta) + '</div>' : '',
         '</div>',
       '</div>',
     ].join('');
+  }
+
+  /* ── Detect if a response text indicates a successful action ── */
+  function _isSuccessMsg(text) {
+    return /\b(added|saved|booked|cancelled|confirmed|sent|created)\b/i.test(text || '');
   }
 
   /* ── Inject styles ── */
@@ -144,6 +165,16 @@
     'border-radius:20px;font-size:11.5px;color:#71ff00;cursor:pointer;',
     'font-weight:700;text-decoration:none;transition:background .15s;}',
     '.kc-action:hover{background:rgba(113,255,0,0.2);color:#71ff00;}',
+    /* Action success banner */
+    '.kc-success{display:flex;align-items:flex-start;gap:8px;background:rgba(113,255,0,0.08);',
+    'border:1px solid rgba(113,255,0,0.25);border-radius:10px;padding:10px 12px;margin-top:8px;}',
+    '.kc-success-icon{font-size:18px;flex-shrink:0;margin-top:1px;}',
+    '.kc-success-body{flex:1;min-width:0;font-size:12.5px;color:rgba(255,255,255,0.88);}',
+    /* Login prompt */
+    '.kc-login{background:rgba(255,170,0,0.08);border:1px solid rgba(255,170,0,0.25);',
+    'border-radius:10px;padding:10px 12px;margin-top:8px;font-size:12.5px;',
+    'color:rgba(255,255,255,0.7);}',
+    '.kc-login a{color:#ffaa00;text-decoration:underline;font-weight:700;}',
     /* Suggestion chips */
     '#kassChips{padding:4px 12px 10px;display:flex;flex-wrap:wrap;gap:6px;flex-shrink:0;}',
     '.kchip{padding:5px 11px;background:rgba(113,255,0,0.07);',
@@ -199,9 +230,9 @@
     '<div id="kassMsgs" role="log" aria-live="polite" aria-atomic="false"></div>',
     '<div id="kassChips">',
     '  <span class="kchip" data-q="I want a BnB in Nairobi">Find a BnB</span>',
+    '  <span class="kchip" data-q="Track my latest order">Track order</span>',
     '  <span class="kchip" data-q="Show me restaurants near Westlands">Restaurants</span>',
-    '  <span class="kchip" data-q="How do I sell on Sokoni?">Sell on Sokoni</span>',
-    '  <span class="kchip" data-q="Show me job listings in Nairobi">Jobs</span>',
+    '  <span class="kchip" data-q="What\'s in my cart?">View cart</span>',
     '</div>',
     '<div id="kassInput">',
     '  <input type="text" id="kassField"',
@@ -281,12 +312,23 @@
   /* ── Render rich response ── */
   function _renderResponse(data) {
     var html = '';
-    if (data.response) html += _md(data.response);
+    var responseText = data.response || '';
+
+    /* Detect successful action and wrap in a success card */
+    if (_isSuccessMsg(responseText) && (!data.results || !data.results.length)) {
+      html += '<div class="kc-success"><div class="kc-success-icon">✅</div><div class="kc-success-body">' + _md(responseText) + '</div></div>';
+    } else if (responseText) {
+      html += _md(responseText);
+    }
+
+    /* Result cards (products, stays, events, orders, etc.) */
     if (data.results && data.results.length) {
       html += '<div class="kc-results">';
-      for (var i = 0; i < Math.min(data.results.length, 4); i++) html += _cardHtml(data.results[i]);
+      for (var i = 0; i < Math.min(data.results.length, 5); i++) html += _cardHtml(data.results[i]);
       html += '</div>';
     }
+
+    /* Action chips */
     if (data.actions && data.actions.length) {
       html += '<div class="kc-actions">';
       for (var j = 0; j < data.actions.length; j++) {
@@ -295,31 +337,36 @@
       }
       html += '</div>';
     }
+
     _addBot(html || _md("I'm here to help! What are you looking for on Sokoni?"));
   }
 
-  /* ── API call ── */
+  /* ── API call (sends auth token if available) ── */
   function _callKass(text) {
     _history.push({ role: 'user', content: text });
-    var controller = new AbortController();
-    var timeoutId  = setTimeout(function() { controller.abort(); }, 30000);
-    return fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: _history.slice(-20) }),
-      signal: controller.signal,
-    }).then(function(resp) {
-      clearTimeout(timeoutId);
-      return resp.json().then(function(data) {
-        if (!resp.ok) throw new Error(data.error || 'KASS is temporarily unavailable.');
-        _history.push({ role: 'assistant', content: data.response || '' });
-        return data;
+    return _getAuthToken().then(function(token) {
+      var controller = new AbortController();
+      var timeoutId  = setTimeout(function() { controller.abort(); }, 35000);
+      var body = { messages: _history.slice(-20) };
+      if (token) body.auth_token = token;
+      return fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      }).then(function(resp) {
+        clearTimeout(timeoutId);
+        return resp.json().then(function(data) {
+          if (!resp.ok) throw new Error(data.error || 'KASS is temporarily unavailable.');
+          _history.push({ role: 'assistant', content: data.response || '' });
+          return data;
+        });
+      }).catch(function(err) {
+        clearTimeout(timeoutId);
+        _history.pop(); /* remove failed user message so retry is clean */
+        if (err.name === 'AbortError') throw new Error('Request timed out — please try again.');
+        throw err;
       });
-    }).catch(function(err) {
-      clearTimeout(timeoutId);
-      _history.pop(); /* remove user message so retry works */
-      if (err.name === 'AbortError') throw new Error('Request timed out — please try again.');
-      throw err;
     });
   }
 
@@ -360,7 +407,7 @@
       var name = '';
       try { name = (JSON.parse(localStorage.getItem('sokoniUser') || '{}')).name || ''; } catch(e) {}
       var greet = name ? 'Hey **' + name.split(' ')[0] + '**!' : 'Hey there!';
-      _addBot(_md(greet + " I'm **KASS**, your Sokoni AI concierge.\n\nI can search for **BnBs**, **restaurants**, **products**, **jobs**, **events** — or help with anything on the platform. What are you looking for?"));
+      _addBot(_md(greet + " I'm **KASS**, your Sokoni AI agent.\n\nI can search the marketplace, **book stays**, **track orders**, **manage your cart**, check your wallet — or help with anything on SOKONI. What would you like to do?"));
     }
     setTimeout(function() { _field.focus(); }, 60);
   }

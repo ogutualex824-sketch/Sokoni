@@ -948,6 +948,113 @@ const _CHAT_TOOLS = [
       required: ["intent"],
     },
   },
+
+  /* ── ACTION TOOLS (write operations — require auth) ── */
+  {
+    name: "add_to_cart",
+    description: "Add a product to the user's shopping cart. ALWAYS state the item name, price, and quantity to the user and get confirmation before calling this.",
+    input_schema: {
+      type: "object",
+      properties: {
+        productId:   { type: "string",  description: "Product ID from search results" },
+        productName: { type: "string",  description: "Product name for confirmation display" },
+        quantity:    { type: "number",  description: "Quantity to add (default 1)" },
+        price:       { type: "number",  description: "Unit price in KES" },
+        sellerUid:   { type: "string",  description: "Seller UID from search results" },
+      },
+      required: ["productId", "productName"],
+    },
+  },
+  {
+    name: "view_cart",
+    description: "View the user's current cart contents, item count, and total. Call when user asks 'what's in my cart', 'show my cart', 'view cart'.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_my_orders",
+    description: "Retrieve the user's recent orders with status. Call when user asks about orders, order history, or wants to see past purchases.",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit:  { type: "number", description: "Number of orders (default 5, max 10)" },
+        status: { type: "string", description: "Filter: pending, confirmed, processing, shipped, delivered, cancelled" },
+      },
+    },
+  },
+  {
+    name: "track_order",
+    description: "Get live tracking for a specific order — status, driver info, ETA. Call for 'where is my order', 'track order', or when user provides an order ID.",
+    input_schema: {
+      type: "object",
+      properties: {
+        orderId: { type: "string", description: "The order ID to track" },
+      },
+      required: ["orderId"],
+    },
+  },
+  {
+    name: "cancel_order",
+    description: "Cancel an order. ONLY call after user explicitly confirms they want to cancel by that order ID. Only pending/confirmed orders can be cancelled.",
+    input_schema: {
+      type: "object",
+      properties: {
+        orderId: { type: "string", description: "Order ID to cancel" },
+        reason:  { type: "string", description: "Cancellation reason" },
+      },
+      required: ["orderId"],
+    },
+  },
+  {
+    name: "save_to_wishlist",
+    description: "Save a product, service, stay, or event to the user's wishlist. Call for 'save', 'favourite', 'bookmark', 'add to wishlist'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        itemId:   { type: "string", description: "Item ID from search results" },
+        itemType: { type: "string", enum: ["product", "service", "stay", "hotel", "event", "job", "restaurant"] },
+        itemName: { type: "string", description: "Item name" },
+        itemUrl:  { type: "string", description: "Item page URL" },
+      },
+      required: ["itemId", "itemType", "itemName"],
+    },
+  },
+  {
+    name: "get_wallet",
+    description: "Get the user's SOKONI wallet balance, loyalty points, and recent transactions.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "book_stay",
+    description: "Book a BnB or hotel. ALWAYS confirm listing name, check-in, check-out, guests, and total cost with the user BEFORE calling. Dates must be YYYY-MM-DD.",
+    input_schema: {
+      type: "object",
+      properties: {
+        listingId:     { type: "string", description: "Listing ID from search results" },
+        listingName:   { type: "string", description: "Listing name" },
+        listingType:   { type: "string", enum: ["bnb", "hotel"] },
+        checkIn:       { type: "string", description: "Check-in date YYYY-MM-DD" },
+        checkOut:      { type: "string", description: "Check-out date YYYY-MM-DD" },
+        guests:        { type: "number", description: "Number of guests (default 1)" },
+        pricePerNight: { type: "number", description: "Price per night in KES" },
+      },
+      required: ["listingId", "listingName", "checkIn", "checkOut", "pricePerNight"],
+    },
+  },
+  {
+    name: "compare_products",
+    description: "Compare 2–3 products side by side on price, rating, and specs. Call for 'compare', 'which is better', 'show difference between'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        productIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "2–3 product IDs from previous search results",
+        },
+      },
+      required: ["productIds"],
+    },
+  },
 ];
 
 const _PAGE_MAP = {
@@ -975,6 +1082,20 @@ const _PAGE_MAP = {
   'track':'track.html', 'order status':'track.html', 'where is my order':'track.html',
   'cart':'cart.html', 'checkout':'cart.html',
 };
+
+/* Verify Firebase ID token and return uid, or null on failure. */
+async function _verifyKassToken(token) {
+  if (!token) return null;
+  try {
+    const decoded = await admin.auth().verifyIdToken(String(token).slice(0, 4096));
+    return decoded.uid || null;
+  } catch(e) { return null; }
+}
+
+/* Standard auth-required response for action tools. */
+function _authRequired() {
+  return { requiresAuth: true, error: "This action requires you to be logged in. Please sign in at login.html to continue." };
+}
 
 async function _execChatTool(name, input, ctx) {
   try {
@@ -1110,6 +1231,123 @@ async function _execChatTool(name, input, ctx) {
       return { found: rows.length, jobs: rows.map(d => ({ title:d.data().title, company:d.data().company, location:d.data().location, salary:d.data().salary||"Negotiable", type:d.data().type })) };
     }
 
+    /* ── ACTION: add_to_cart ── */
+    if (name === "add_to_cart") {
+      if (!ctx.uid) return _authRequired();
+      const { productId, productName, quantity = 1, price, sellerUid } = input;
+      const itemRef = db.collection("carts").doc(ctx.uid).collection("items").doc(productId);
+      const existing = await itemRef.get().catch(() => null);
+      const prevQty = existing?.exists ? (existing.data().quantity || 0) : 0;
+      await itemRef.set({ productId, productName, quantity: prevQty + quantity, price, sellerUid,
+        updatedAt: new Date().toISOString(), addedByKASS: true }, { merge: true });
+      ctx.addAction({ label: "🛒 View Cart", url: "cart.html" });
+      ctx.addAction({ label: "💳 Checkout", url: "cart.html?checkout=1" });
+      return { success: true, message: `Added ${quantity}x **${productName}** to your cart.`, newQty: prevQty + quantity };
+    }
+
+    /* ── ACTION: view_cart ── */
+    if (name === "view_cart") {
+      if (!ctx.uid) return _authRequired();
+      const snap = await db.collection("carts").doc(ctx.uid).collection("items").limit(15).get().catch(() => ({ docs: [] }));
+      if (snap.empty) {
+        ctx.addAction({ label: "🛍️ Browse Marketplace", url: "marketplace.html" });
+        return { empty: true, message: "Your cart is empty. Start shopping!" };
+      }
+      const items = snap.docs.map(d => d.data());
+      const total = items.reduce((s, i) => s + (Number(i.price || 0) * (Number(i.quantity) || 1)), 0);
+      items.forEach(i => ctx.addResult({ type: "product", id: i.productId, name: i.productName, price: i.price, url: `product.html?id=${i.productId}` }));
+      ctx.addAction({ label: "🛒 Open Cart", url: "cart.html" });
+      ctx.addAction({ label: "💳 Checkout Now", url: "cart.html?checkout=1" });
+      return { itemCount: items.length, total: `KES ${total.toLocaleString()}`, items: items.map(i => ({ name: i.productName, qty: i.quantity, price: i.price ? `KES ${Number(i.price).toLocaleString()}` : null })) };
+    }
+
+    /* ── ACTION: get_my_orders ── */
+    if (name === "get_my_orders") {
+      if (!ctx.uid) return _authRequired();
+      const lim = Math.min(Number(input.limit) || 5, 10);
+      let q = db.collection("orders").where("uid", "==", ctx.uid).orderBy("createdAt", "desc").limit(lim);
+      if (input.status) q = q.where("status", "==", input.status);
+      const snap = await q.get().catch(() => ({ docs: [] }));
+      if (snap.empty) return { found: 0, message: "No orders found." };
+      snap.docs.forEach(d => {
+        const r = d.data();
+        ctx.addResult({ type: "order", id: d.id, name: r.itemSummary || `Order #${d.id.slice(0,8).toUpperCase()}`, price: r.total, status: r.status, url: `track.html?orderId=${d.id}` });
+      });
+      ctx.addAction({ label: "📦 View All Orders", url: "profile.html" });
+      return { found: snap.docs.length, orders: snap.docs.map(d => ({ id: d.id.slice(0,8).toUpperCase(), summary: d.data().itemSummary, total: `KES ${Number(d.data().total||0).toLocaleString()}`, status: d.data().status, date: d.data().createdAt })) };
+    }
+
+    /* ── ACTION: track_order ── */
+    if (name === "track_order") {
+      if (!ctx.uid) return _authRequired();
+      const orderDoc = await db.collection("orders").doc(input.orderId).get().catch(() => null);
+      if (!orderDoc?.exists) return { error: "Order not found. Check the order ID and try again." };
+      if (orderDoc.data().uid !== ctx.uid) return { error: "You can only track your own orders." };
+      const r = orderDoc.data();
+      const delivSnap = await db.collection("deliveries").where("orderId", "==", input.orderId).limit(1).get().catch(() => ({ docs: [] }));
+      const delivery = delivSnap.docs[0]?.data() || null;
+      ctx.addAction({ label: "📍 Live Map", url: `track.html?orderId=${input.orderId}` });
+      return { orderId: input.orderId.slice(0,8).toUpperCase(), status: r.status, items: r.itemSummary, total: `KES ${Number(r.total||0).toLocaleString()}`, orderDate: r.createdAt, estimatedDelivery: r.estimatedDelivery || null, delivery: delivery ? { status: delivery.status, driverName: delivery.driverName || null, eta: delivery.eta || null, stage: delivery.stage || null } : null };
+    }
+
+    /* ── ACTION: cancel_order ── */
+    if (name === "cancel_order") {
+      if (!ctx.uid) return _authRequired();
+      const orderDoc = await db.collection("orders").doc(input.orderId).get().catch(() => null);
+      if (!orderDoc?.exists) return { error: "Order not found." };
+      if (orderDoc.data().uid !== ctx.uid) return { error: "You can only cancel your own orders." };
+      const st = orderDoc.data().status;
+      if (!["pending", "confirmed"].includes(st)) return { error: `Order cannot be cancelled — current status is "${st}". Only pending or confirmed orders qualify.` };
+      await db.collection("orders").doc(input.orderId).update({ status: "cancelled", cancelledAt: new Date().toISOString(), cancelledBy: ctx.uid, cancelReason: input.reason || "Cancelled via KASS", cancellationSource: "kass_ai" });
+      return { success: true, message: `Order #${input.orderId.slice(0,8).toUpperCase()} has been cancelled. If you paid, a refund will be processed within 3–5 business days.` };
+    }
+
+    /* ── ACTION: save_to_wishlist ── */
+    if (name === "save_to_wishlist") {
+      if (!ctx.uid) return _authRequired();
+      const { itemId, itemType, itemName, itemUrl } = input;
+      await db.collection("wishlists").doc(ctx.uid).collection("items").doc(itemId).set({ itemId, itemType, itemName, itemUrl: itemUrl || null, savedAt: new Date().toISOString(), savedByKASS: true }, { merge: true });
+      ctx.addAction({ label: "❤️ View Wishlist", url: "wishlist.html" });
+      return { success: true, message: `Saved **${itemName}** to your wishlist.` };
+    }
+
+    /* ── ACTION: get_wallet ── */
+    if (name === "get_wallet") {
+      if (!ctx.uid) return _authRequired();
+      const walletDoc = await db.collection("wallets").doc(ctx.uid).get().catch(() => null);
+      ctx.addAction({ label: "💳 Open Wallet", url: "wallet.html" });
+      if (!walletDoc?.exists) return { balance: "KES 0", loyaltyPoints: 0, message: "No wallet found. Visit wallet.html to set one up." };
+      const w = walletDoc.data();
+      const loyaltyDoc = await db.collection("loyaltyAccounts").doc(ctx.uid).get().catch(() => null);
+      const points = loyaltyDoc?.exists ? (loyaltyDoc.data().points || 0) : (w.loyaltyPoints || 0);
+      return { balance: `KES ${Number(w.balance || 0).toLocaleString()}`, loyaltyPoints: points, currency: "KES", lastUpdated: w.updatedAt || null };
+    }
+
+    /* ── ACTION: book_stay ── */
+    if (name === "book_stay") {
+      if (!ctx.uid) return _authRequired();
+      const { listingId, listingName, listingType = "bnb", checkIn, checkOut, guests = 1, pricePerNight } = input;
+      const cin = new Date(checkIn), cout = new Date(checkOut);
+      const nights = Math.round((cout - cin) / 86400000);
+      if (nights <= 0) return { error: "Check-out must be after check-in." };
+      const totalPrice = pricePerNight * nights;
+      const ref = await db.collection("bookings").add({ uid: ctx.uid, listingId, listingName, listingType, checkIn, checkOut, nights, guests: Number(guests), pricePerNight, totalPrice, status: "pending", bookedAt: new Date().toISOString(), bookedByKASS: true, paymentStatus: "unpaid" });
+      ctx.addAction({ label: "📋 View Booking", url: "profile.html?tab=bookings" });
+      ctx.addAction({ label: "💳 Pay Now", url: `wallet.html?bookingId=${ref.id}` });
+      return { success: true, bookingRef: ref.id.slice(0,8).toUpperCase(), listingName, checkIn, checkOut, nights, guests, totalPrice: `KES ${totalPrice.toLocaleString()}`, status: "pending", message: `Booking created for **${listingName}** — ${checkIn} to ${checkOut} (${nights} night${nights>1?"s":""}), ${guests} guest${guests>1?"s":""}. Total: **KES ${totalPrice.toLocaleString()}**. Status: pending host confirmation. Please pay to secure your booking.` };
+    }
+
+    /* ── ACTION: compare_products ── */
+    if (name === "compare_products") {
+      const ids = (input.productIds || []).slice(0, 3);
+      if (ids.length < 2) return { error: "Need at least 2 product IDs to compare. Try searching first." };
+      const docs = await Promise.all(ids.map(id => db.collection("products").doc(id).get().catch(() => null)));
+      const products = docs.filter(d => d?.exists).map(d => ({ id: d.id, ...d.data() }));
+      if (products.length < 2) return { error: "Could not find enough products to compare. Search first to find valid product IDs." };
+      products.forEach(p => ctx.addResult({ type: "product", id: p.id, name: p.name, price: p.price, category: p.category, image: p.imageUrl || p.image, rating: p.avgRating || p.rating, url: `product.html?id=${p.id}` }));
+      return { comparison: products.map(p => ({ name: p.name, price: `KES ${Number(p.price||0).toLocaleString()}`, rating: p.avgRating || p.rating || "No rating", seller: p.sellerName || p.shopName || "Unknown", inStock: p.stock > 0 || p.active !== false })) };
+    }
+
     return { error: `Unknown tool: ${name}` };
   } catch (err) {
     console.error(`[sokoniChat] tool ${name} error:`, err.message);
@@ -1137,11 +1375,14 @@ exports.sokoniChat = onRequest(
       return;
     }
 
-    const { messages } = req.body;
+    const { messages, auth_token } = req.body;
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: "messages array required" });
       return;
     }
+
+    /* Verify auth token (optional — enables action tools) */
+    const uid = auth_token ? await _verifyKassToken(auth_token) : null;
 
     /* Sanitize: keep last 20 turns, text only */
     const history = messages.slice(-20).map(m => ({
@@ -1151,13 +1392,14 @@ exports.sokoniChat = onRequest(
 
     const today = new Date().toLocaleDateString("en-KE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     const systemPrompt = `You are KASS, the intelligent AI concierge for SOKONI — Kenya's premier digital marketplace at mysokoni.co.ke. You serve buyers, sellers, service seekers, and vendors across Kenya.
+${uid ? `\nCurrent user is authenticated (uid: ${uid}). Action tools (cart, orders, wishlist, bookings, wallet) are available.` : "\nUser is not authenticated. Action tools will prompt them to log in."}
 
 ## SOKONI Services & Pages
 
 **Shopping:** Marketplace (marketplace.html) — products, electronics, fashion, home goods, books
 **Services:** Services (services.html) — plumbers, electricians, cleaners, tutors, designers, photographers, mechanics
 **Accommodation:** Short Stays (short-stays.html) — BnBs, Airbnb-style, furnished apartments, serviced apartments, vacation rentals, self-catering; Hotels (hotels.html) — full-service hotels, lodges, resorts
-**Food:** Food Hub (food-hub.html) — restaurants, delivery, fast food, takeaway, groceries
+**Food:** Food Hub (food-hub.html) — restaurants, food delivery, takeaway, groceries, pharmacy
 **Health:** Healthcare (healthcare.html) — doctors, clinics, pharmacy, specialists, lab tests
 **Transport:** Rides (ride.html) — boda, taxi, cab; Car Hub (car-hub.html) — rental cars, NTSA, garages
 **Property:** Property Hub (property-hub.html) — houses, apartments, land, commercial spaces
@@ -1168,20 +1410,41 @@ exports.sokoniChat = onRequest(
 **Rewards:** Loyalty (loyalty.html) — earn points on every purchase; Referrals (referral.html) — earn for inviting friends
 **Account:** Wallet (wallet.html) — M-Pesa, Visa, Mastercard, PayPal; Order Tracking (track.html)
 
-## Intent Mapping (critical — you MUST recognise these)
-- bnb / BnB / airbnb / short stay / vacation rental / furnished apartment / place to stay / place to sleep / accommodation / weekend getaway / self-catering → **Short Stays** (short-stays.html)
-- hotel / lodge / resort / full-service hotel → **Hotels** (hotels.html)
-- boda / taxi / cab / lift / uber / bolt alternative → **Rides** (ride.html)
-- food delivery / restaurant / nyama choma / ugali / pizza / takeaway / grocery → **Food Hub** (food-hub.html)
+## Intent Mapping (CRITICAL — recognise all aliases)
+- bnb / BnB / airbnb / short stay / vacation rental / furnished / place to stay / accommodation / weekend → **Short Stays** (short-stays.html)
+- hotel / lodge / resort → **Hotels** (hotels.html)
+- boda / taxi / cab / lift / uber / bolt → **Rides** (ride.html)
+- food / restaurant / nyama choma / ugali / pizza / takeaway / grocery → **Food Hub** (food-hub.html)
 
 ## Rules
-1. **Always call a search tool first** — before answering about specific products, BnBs, hotels, restaurants, events, or jobs. Never make up listings.
-2. **Never say "I don't know"** without searching. If nothing found, say so clearly and provide an action link.
-3. **Never say "browse index.html" or "check messages.html"** — those are internal routes, never mention them.
-4. **Call get_page_url** to generate action links when a user wants to navigate somewhere.
-5. **Maintain context** — if user refines a previous search, carry forward their intent.
-6. **Format prices as KES** with thousands separators. Use **bold** and bullet lists sparingly.
-7. Keep responses concise (under 150 words unless listing results). Be warm, confident, and proactive.
+1. **Search first** — call a search tool before describing any specific product, listing, event, or job. Never invent data.
+2. **Never say "I don't know"** without searching first.
+3. **Never mention index.html or messages.html** — those are internal routes.
+4. **Always call get_page_url** when a user wants to navigate somewhere.
+5. **Maintain conversation context** — carry forward intent across multiple turns.
+6. **Format prices as KES** with thousand separators. Use **bold** sparingly.
+7. **For action requests** (add to cart, book, cancel): state the exact details, ask for confirmation ("Shall I?"), wait for yes, THEN call the action tool.
+8. **Proactive value** — after a search, mention cheaper alternatives (20%+ savings), bundle opportunities, or faster delivery options when relevant.
+
+## Action Tools (${uid ? "ENABLED — user is logged in" : "available but will prompt login"})
+You can perform real actions for users:
+- **add_to_cart** — add a product (confirm name, price, quantity first)
+- **view_cart** — show cart contents and total
+- **get_my_orders** — list recent orders
+- **track_order** — live order tracking with driver ETA
+- **cancel_order** — cancel pending/confirmed orders (confirm with user first)
+- **save_to_wishlist** — save any item to favourites
+- **get_wallet** — check wallet balance and loyalty points
+- **book_stay** — book BnBs and hotels (confirm all details first)
+- **compare_products** — side-by-side product comparison
+
+For food ordering, ride booking, event tickets, car hire — use get_page_url to navigate with context.
+
+## Proactive Intelligence
+- After marketplace search: highlight best-value option if significant price spread exists
+- After booking a stay: ask if they need restaurant/transport recommendations nearby
+- After tracking an order: offer to help if there's a problem
+- When wallet balance is checked: mention loyalty points redemption if points > 100
 
 ## Platform facts
 - Payments: M-Pesa STK push, Visa, Mastercard, PayPal
@@ -1195,7 +1458,8 @@ Today: ${today}`;
     const collectedResults = [];
     const collectedActions = [];
     const ctx = {
-      addResult: (r) => { if (collectedResults.length < 6) collectedResults.push(r); },
+      uid,
+      addResult: (r) => { if (collectedResults.length < 8) collectedResults.push(r); },
       addAction: (a) => { if (!collectedActions.some(x => x.url === a.url)) collectedActions.push(a); },
     };
 
@@ -1208,7 +1472,7 @@ Today: ${today}`;
       for (let iter = 0; iter < MAX_ITER; iter++) {
         const aiRes = await anthropic.messages.create({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 800,
+          max_tokens: 1024,
           system: systemPrompt,
           tools: _CHAT_TOOLS,
           messages: currentMessages,
@@ -1913,13 +2177,24 @@ exports.onOrderStatusChange = onDocumentUpdated(
   }
 );
 
-/* ── Shared rider-assignment helper (called by onOrderStatusChange) ── */
+/* ── Shared rider-assignment helper — weighted dispatch v2 ── */
+const _sokoniDispatch = require("./sokoni-dispatch");
+
 async function _autoAssignRider(orderId, after) {
-  console.log("[_autoAssignRider] Assigning rider for order", orderId);
+  console.log("[_autoAssignRider] Weighted dispatch for order", orderId);
+
+  const delivery = {
+    pickupLat:   after.pickupLat    || after.shopLat    || null,
+    pickupLng:   after.pickupLng    || after.shopLng    || null,
+    weightKg:    after.weightKg     || 1,
+    parcelSize:  after.parcelSize   || "small",
+    vehicleType: after.vehicleType  || "moto",
+    hubId:       after.hubId        || null,
+  };
 
   const driversSnap = await db.collection("rideDrivers")
     .where("isOnline", "==", true)
-    .limit(10)
+    .limit(100)
     .get()
     .catch(() => null);
 
@@ -1928,27 +2203,17 @@ async function _autoAssignRider(orderId, after) {
     return;
   }
 
-  let pickedDriver = null;
-  for (const dDoc of driversSnap.docs) {
-    const activeSnap = await db.collection("orders")
-      .where("assignedDriverUid", "==", dDoc.id)
-      .where("status", "in", ["rider_assigned", "rider_en_route", "picked_up", "in_transit"])
-      .limit(1)
-      .get()
-      .catch(() => ({ empty: false }));
+  const riders  = driversSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  const ranked  = _sokoniDispatch.rankRiders(riders, delivery);
 
-    if (activeSnap.empty) {
-      pickedDriver = { uid: dDoc.id, ...dDoc.data() };
-      break;
-    }
-  }
-
-  if (!pickedDriver) {
-    console.log("[_autoAssignRider] All drivers busy for order", orderId);
+  if (!ranked.length) {
+    console.log("[_autoAssignRider] No eligible drivers (weight/size/distance) for order", orderId);
     return;
   }
 
+  const pickedDriver = ranked[0];
   const orderRef = db.collection("orders").doc(orderId);
+
   try {
     await db.runTransaction(async (txn) => {
       const snap = await txn.get(orderRef);
@@ -1957,18 +2222,22 @@ async function _autoAssignRider(orderId, after) {
       if (current.status !== "confirmed" || current.assignedDriverUid) return;
 
       txn.update(orderRef, {
-        assignedDriverUid: pickedDriver.uid,
-        assignedDriverId:  pickedDriver.uid,
-        driverName:    pickedDriver.name || pickedDriver.displayName || "Rider",
-        driverPhone:   pickedDriver.phone || pickedDriver.phoneNumber || "",
-        driverPlate:   pickedDriver.plate || "",
-        driverVehicle: pickedDriver.vehicleType || "motorcycle",
-        status:           "rider_assigned",
-        riderAssignedAt:  admin.firestore.FieldValue.serverTimestamp(),
-        statusHistory:    admin.firestore.FieldValue.arrayUnion({
+        assignedDriverUid: pickedDriver.riderId,
+        assignedDriverId:  pickedDriver.riderId,
+        driverName:        pickedDriver.riderName,
+        driverPhone:       pickedDriver.riderPhone,
+        driverPlate:       pickedDriver.riderPlate || "",
+        driverVehicle:     pickedDriver.vehicleType || "moto",
+        dispatchScore:     pickedDriver.score,
+        dispatchDistKm:    pickedDriver.distKm,
+        dispatchEtaMin:    pickedDriver.etaMin,
+        status:            "rider_assigned",
+        riderAssignedAt:   admin.firestore.FieldValue.serverTimestamp(),
+        statusHistory:     admin.firestore.FieldValue.arrayUnion({
           status: "rider_assigned",
           at:     Date.now(),
-          by:     "auto-assign",
+          by:     "auto-assign-weighted",
+          meta:   { score: pickedDriver.score, distKm: pickedDriver.distKm },
         }),
       });
     });
@@ -1978,22 +2247,22 @@ async function _autoAssignRider(orderId, after) {
   }
 
   await db.collection("orderEvents").doc(orderId).collection("events").add({
-    from: "confirmed", to: "rider_assigned", by: "auto-assign",
-    meta: { driverUid: pickedDriver.uid, automatic: true },
+    from: "confirmed", to: "rider_assigned", by: "auto-assign-weighted",
+    meta: { driverUid: pickedDriver.riderId, score: pickedDriver.score, distKm: pickedDriver.distKm, automatic: true },
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   }).catch(() => {});
 
-  const driverToken = await getFcmToken(pickedDriver.uid);
+  const driverToken = await getFcmToken(pickedDriver.riderId);
   if (driverToken) {
     await sendFcm(
       driverToken,
-      "🏍️ New Delivery Assigned!",
-      `Order ${orderId} is waiting for pickup. Open your driver app.`,
+      "New Delivery Assigned",
+      `Order ${orderId} is waiting for pickup. You are ${pickedDriver.distKm}km away.`,
       "driver.html"
     ).catch(() => {});
   }
 
-  console.log(`[_autoAssignRider] Assigned driver ${pickedDriver.uid} to order ${orderId}`);
+  console.log(`[_autoAssignRider] Weighted dispatch → ${pickedDriver.riderId} (score ${pickedDriver.score}, ${pickedDriver.distKm}km) for order ${orderId}`);
 }
 
 /* ============================================================
@@ -7093,3 +7362,20 @@ exports.hubResubmitInvoice  = hubEtims.hubResubmitInvoice;
 exports.hubGetAuditTrail    = hubEtims.hubGetAuditTrail;
 exports.hubGetStats         = hubEtims.hubGetStats;
 exports.hubAdminGetAllStats = hubEtims.hubAdminGetAllStats;
+
+/* ══════════════════════════════════════════════════════════════════
+   SOKONI INTELLIGENT DISPATCH  v1.0
+   8 Cloud Functions: weighted scoring, cascade dispatch, proof of
+   delivery, failed delivery workflows, GPS fraud detection,
+   batch route optimisation, daily analytics rollup.
+══════════════════════════════════════════════════════════════════ */
+const dispatch = require("./dispatch");
+
+exports.dispatchDelivery          = dispatch.dispatchDelivery;
+exports.respondToDispatch         = dispatch.respondToDispatch;
+exports.processCascadeTimeouts    = dispatch.processCascadeTimeouts;
+exports.captureProofOfDelivery    = dispatch.captureProofOfDelivery;
+exports.handleFailedDelivery      = dispatch.handleFailedDelivery;
+exports.detectGPSFraud            = dispatch.detectGPSFraud;
+exports.optimizeBatchRoute        = dispatch.optimizeBatchRoute;
+exports.aggregateDeliveryAnalytics= dispatch.aggregateDeliveryAnalytics;

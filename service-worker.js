@@ -1,13 +1,13 @@
 ﻿/* ============================================================
    SOKONI SERVICE WORKER  v12.11
    Strategy:
-     APP SHELL      â†’ Cache First  (index.html as app shell)
-     STATIC ASSETS  â†’ Cache First  (CSS, JS â€” fast load)
-     HTML PAGES     â†’ Network First with Cache Fallback
-     CDN RESOURCES  â†’ Stale While Revalidate
-     IMAGES         â†’ Cache First (capped at 300 entries)
-     Firebase/API   â†’ Network Only (never cached)
-   Offline fallback â†’ /offline.html
+     APP SHELL      â†' Cache First  (index.html as app shell)
+     STATIC ASSETS  â†' Cache First  (CSS, JS â€” fast load)
+     HTML PAGES     â†' Network First with Cache Fallback
+     CDN RESOURCES  â†' Stale While Revalidate
+     IMAGES         â†' Cache First (capped at 300 entries)
+     Firebase/API   â†' Network Only (never cached)
+   Offline fallback â†' /offline.html
    PWA: fullscreen, fast, installable
 ============================================================ */
 
@@ -218,7 +218,7 @@ self.addEventListener("fetch", event => {
   if (url.protocol === "file:") return;
   if (!["https:", "http:"].includes(url.protocol)) return;
 
-  /* CDN â†’ Stale While Revalidate */
+  /* CDN â†' Stale While Revalidate */
   if (CDN_ORIGINS.some(o => url.hostname.includes(o))) {
     event.respondWith(staleWhileRevalidate(request));
     return;
@@ -230,13 +230,13 @@ self.addEventListener("fetch", event => {
      Tile domains: OpenStreetMap, CartoDB, ESRI ArcGIS, OpenTopoMap.
      Stale tiles served offline; fresh tiles replace cache in the background. */
   const MAP_TILE_HOSTS = [
-    ‘tile.openstreetmap.org’,
-    ‘basemaps.cartocdn.com’,
-    ‘server.arcgisonline.com’,
-    ‘opentopomap.org’,
+    'tile.openstreetmap.org',
+    'basemaps.cartocdn.com',
+    'server.arcgisonline.com',
+    'opentopomap.org',
   ];
   if (MAP_TILE_HOSTS.some(h => url.hostname.includes(h))) {
-    const TILE_CACHE = ‘sokoni-tiles-v1’;
+    const TILE_CACHE = 'sokoni-tiles-v1';
     event.respondWith((async () => {
       const cache  = await caches.open(TILE_CACHE);
       const cached = await cache.match(request);
@@ -250,19 +250,19 @@ self.addEventListener("fetch", event => {
         if (res && res.ok) cache.put(request, res.clone());
         return res;
       } catch (e) {
-        return new Response(‘’, { status: 503, statusText: ‘Tile unavailable offline’ });
+        return new Response('', { status: 503, statusText: 'Tile unavailable offline' });
       }
     })());
     return;
   }
 
-  /* Images â†’ Cache First */
+  /* Images â†' Cache First */
   if (["png","jpg","jpeg","gif","svg","webp","ico"].includes(ext)) {
     event.respondWith(cacheFirstImage(request));
     return;
   }
 
-  /* Frequently-updated UI scripts â†’ Network First so changes are instant */
+  /* Frequently-updated UI scripts â†' Network First so changes are instant */
   const ALWAYS_FRESH = ["scroll-top.js","contact-guard.js","script.js","style.css","mobile.css","premium.css","seller.css","adult-gate.js",
     "sokoni-desktop.css","security.js","sokoni-permissions.js","sokoni-pay.js","sokoni-db.js","sokoni-config.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
@@ -270,19 +270,19 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  /* Other CSS / JS â†’ Cache First */
+  /* Other CSS / JS â†' Cache First */
   if (["css","js","woff","woff2","ttf","eot"].includes(ext)) {
     event.respondWith(cacheFirst(request, STATIC_CACHE));
     return;
   }
 
-  /* HTML â†’ Network First with Offline Fallback */
+  /* HTML â†' Network First with Offline Fallback */
   if (request.headers.get("accept")?.includes("text/html") || ext === "html" || url.pathname === "/") {
     event.respondWith(networkFirstPage(request));
     return;
   }
 
-  /* Everything else â†’ Network First */
+  /* Everything else â†' Network First */
   event.respondWith(networkFirst(request, STATIC_CACHE));
 });
 
@@ -447,7 +447,7 @@ async function _checkScheduledNotifications() {
       },
       {
         id:    "cart-reminder",
-        title: "ðŸ›’ Items waiting in your cart!",
+        title: "ðŸ›' Items waiting in your cart!",
         body:  "Complete your purchase before items sell out.",
         url:   "/cart.html",
         icon:  "/assets/logosokoni.png",

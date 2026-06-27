@@ -746,7 +746,8 @@ window.CarHubPro = (function(){
       const wa=encodeURIComponent(`💰 *SOKONI — Loan Application*\n\nRef: ${app.id}\nApplicant: ${name}\nPhone: ${phone}\nMonthly Income: ${kes(income)}\nVehicle Price: ${kes(vehiclePrice)}\nTerm: ${app.loanTerm} months\n\nPlease contact the applicant.`);
       setTimeout(()=>window.open(`https://wa.me/${ph}?text=${wa}`,'_blank'),400);
     }
-    if(msgEl){msgEl.innerHTML=`✅ Application <strong>${app.id}</strong> sent to ${partner}! A loan officer will contact you within 24 hours.`;msgEl.style.color='#71ff00';}
+    const _ce=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    if(msgEl){msgEl.innerHTML=`✅ Application <strong>${_ce(app.id)}</strong> sent to ${_ce(partner)}! A loan officer will contact you within 24 hours.`;msgEl.style.color='#71ff00';}
     toast('✅ Financing application submitted!');
   }
 
