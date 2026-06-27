@@ -139,20 +139,48 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 
     <div class="ng">Operations</div>
     <div class="ni" onclick="_nav(this,'users')"><span class="material-icons">people</span>Users</div>
+    <div class="ni" onclick="_nav(this,'marketplace')"><span class="material-icons">shopping_bag</span>Marketplace</div>
+    <div class="ni" onclick="_nav(this,'orders')"><span class="material-icons">receipt_long</span>Orders <span class="bc" id="sbOrders">…</span></div>
+    <div class="ni" onclick="_nav(this,'bookings')"><span class="material-icons">event_note</span>Bookings</div>
+    <div class="ni" onclick="_nav(this,'delivery')"><span class="material-icons">local_shipping</span>Delivery</div>
+    <div class="ni" onclick="_nav(this,'pos-devices')"><span class="material-icons">point_of_sale</span>SmartPOS</div>
+
+    <div class="ng">Financial</div>
+    <a href="financial-os.html" class="ni"><span class="material-icons">account_balance</span>Financial OS</a>
+    <div class="ni" onclick="_nav(this,'payouts')"><span class="material-icons">payments</span>Payouts <span class="bc" id="sbPayouts">…</span></div>
+    <a href="commission-engine.html" class="ni"><span class="material-icons">percent</span>Commission</a>
+    <a href="subscription-billing.html" class="ni"><span class="material-icons">subscriptions</span>Billing</a>
+
+    <div class="ng">Customer</div>
     <div class="ni" onclick="_nav(this,'tickets')"><span class="material-icons">support_agent</span>Support <span class="bc" id="sbTickets">…</span></div>
+    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons">gavel</span>Disputes <span class="bc" id="sbDisputes">…</span></div>
+    <div class="ni" onclick="_nav(this,'reviews')"><span class="material-icons">star</span>Reviews</div>
+
+    <div class="ng">Communications</div>
+    <div class="ni" onclick="_nav(this,'push-notif')"><span class="material-icons">notifications_active</span>Push Notifications</div>
+    <div class="ni" onclick="_nav(this,'announcements')"><span class="material-icons">campaign</span>Announcements</div>
+    <a href="email-center.html" class="ni"><span class="material-icons">email</span>Email Center</a>
+
+    <div class="ng">Content</div>
+    <div class="ni" onclick="_nav(this,'banners')"><span class="material-icons">image</span>Banners</div>
     <div class="ni" onclick="_nav(this,'categories')"><span class="material-icons">category</span>Categories</div>
+    <div class="ni" onclick="_nav(this,'faqs')"><span class="material-icons">quiz</span>FAQs</div>
+
+    <div class="ng">AI & Search</div>
+    <div class="ni" onclick="_nav(this,'ai-ops')"><span class="material-icons">smart_toy</span>AI Operations</div>
+    <div class="ni" onclick="_nav(this,'search')"><span class="material-icons">manage_search</span>Search Manager</div>
+
+    <div class="ng">Security</div>
+    <a href="trust-safety.html" class="ni"><span class="material-icons">shield</span>Trust & Safety</a>
+    <div class="ni" onclick="_nav(this,'fraud')"><span class="material-icons">report_problem</span>Fraud Center <span class="bc" id="sbFraud">…</span></div>
+    <div class="ni" onclick="_nav(this,'audit')"><span class="material-icons">history</span>Audit Logs</div>
 
     <div class="ng">Config</div>
-    <div class="ni" onclick="_nav(this,'settings')"><span class="material-icons">settings</span>Platform Settings</div>
+    <div class="ni" onclick="_nav(this,'settings')"><span class="material-icons">settings</span>Settings</div>
     <div class="ni" onclick="_nav(this,'flags')"><span class="material-icons">flag</span>Feature Flags</div>
 
     <div class="sidebar-foot">
-      <div class="ng" style="padding-left:6px;margin-bottom:4px">Specialized Tools</div>
-      <a href="financial-os.html"        class="ni" style="margin:0"><span class="material-icons">account_balance</span>Financial OS</a>
-      <a href="commission-engine.html"   class="ni" style="margin:0;margin-top:1px"><span class="material-icons">percent</span>Commission</a>
-      <a href="subscription-billing.html" class="ni" style="margin:0;margin-top:1px"><span class="material-icons">subscriptions</span>Billing</a>
-      <a href="trust-safety.html"        class="ni" style="margin:0;margin-top:1px"><span class="material-icons">shield</span>Trust & Safety</a>
-      <a href="admin.html"               class="ni" style="margin:0;margin-top:4px"><span class="material-icons">arrow_back</span>Legacy Admin</a>
+      <a href="admin.html" class="ni" style="margin:0"><span class="material-icons">arrow_back</span>Legacy Admin</a>
     </div>
   </aside>
 
@@ -174,6 +202,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
           <div class="stat alert"><div class="sv r" id="ov-tickets">…</div><div class="sl">Open Tickets</div></div>
           <div class="stat alert"><div class="sv r" id="ov-reports">…</div><div class="sl">Pending Reports</div></div>
           <div class="stat"><div class="sv p" id="ov-banned">…</div><div class="sl">Banned Users</div></div>
+          <div class="stat"><div class="sv g" id="ov-revenue">…</div><div class="sl">Revenue Today</div></div>
+          <div class="stat"><div class="sv b" id="ov-commission">…</div><div class="sl">Commission Today</div></div>
+          <div class="stat"><div class="sv p" id="ov-subs">…</div><div class="sl">Active Subs</div></div>
+          <div class="stat warn"><div class="sv o" id="ov-payouts">…</div><div class="sl">Pending Payouts</div></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <div class="card">
@@ -290,6 +322,266 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
         </div>
       </div>
 
+      <!-- MARKETPLACE -->
+      <div id="panel-marketplace" class="panel">
+        <div class="toolbar">
+          <div class="search-box"><span class="material-icons">search</span><input type="text" id="mpQuery" placeholder="Product name or seller…" onkeydown="if(event.key==='Enter')_loadProducts()"></div>
+          <select id="mpStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadProducts()">
+            <option value="">All statuses</option><option value="active">Active</option><option value="pending">Pending</option><option value="rejected">Rejected</option>
+          </select>
+          <button class="btn btn-g btn-sm" onclick="_loadProducts()"><span class="material-icons" style="font-size:14px">refresh</span>Load</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Product</th><th>Seller</th><th>Price (KES)</th><th>Status</th><th>Featured</th><th></th></tr></thead>
+            <tbody id="mpTbl"><tr><td colspan="6" class="tbl-empty">Click Load to fetch products</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ORDERS -->
+      <div id="panel-orders" class="panel">
+        <div class="toolbar">
+          <select id="ordStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadOrders()">
+            <option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="processing">Processing</option>
+            <option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-g btn-sm" onclick="_loadOrders()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Order ID</th><th>Buyer</th><th>Total (KES)</th><th>Items</th><th>Status</th><th>Created</th><th></th></tr></thead>
+            <tbody id="ordTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- BOOKINGS -->
+      <div id="panel-bookings" class="panel">
+        <div class="toolbar">
+          <select id="bkgStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadBookings()">
+            <option value="">All statuses</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option>
+            <option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-g btn-sm" onclick="_loadBookings()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>Date</th><th>Total (KES)</th><th>Status</th></tr></thead>
+            <tbody id="bkgTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DELIVERY -->
+      <div id="panel-delivery" class="panel">
+        <div class="stats">
+          <div class="stat"><div class="sv b" id="del-active">…</div><div class="sl">Active Deliveries</div></div>
+          <div class="stat"><div class="sv g" id="del-drivers">…</div><div class="sl">Active Drivers</div></div>
+          <div class="stat"><div class="sv" id="del-today">…</div><div class="sl">Completed Today</div></div>
+          <div class="stat warn"><div class="sv o" id="del-late">…</div><div class="sl">Late / At Risk</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Recent Deliveries</span><button class="btn btn-o btn-sm" onclick="_loadDelivery()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
+          <table class="tbl">
+            <thead><tr><th>Order</th><th>Driver</th><th>Status</th><th>ETA</th><th>Updated</th></tr></thead>
+            <tbody id="delTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PAYOUTS -->
+      <div id="panel-payouts" class="panel">
+        <p style="font-size:12px;color:var(--sub);margin-bottom:14px">Pending seller payout requests. Approving requires SuperAdmin.</p>
+        <div class="toolbar">
+          <button class="btn btn-g btn-sm" onclick="_loadPayouts()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+          <button class="btn btn-r btn-sm" id="batchApproveBtn" onclick="_batchApprove()" style="display:none"><span class="material-icons" style="font-size:14px">check_circle</span>Approve Selected</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th><input type="checkbox" id="payAll" onchange="_toggleAllPay(this.checked)" style="accent-color:var(--g)"></th><th>Seller</th><th>Amount (KES)</th><th>Method</th><th>Requested</th><th></th></tr></thead>
+            <tbody id="payTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DISPUTES -->
+      <div id="panel-disputes" class="panel">
+        <div class="toolbar">
+          <select id="dspStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadDisputes()">
+            <option value="open">Open</option><option value="under_review">Under Review</option><option value="resolved">Resolved</option>
+          </select>
+          <button class="btn btn-g btn-sm" onclick="_loadDisputes()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Order</th><th>Buyer</th><th>Seller</th><th>Reason</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+            <tbody id="dspTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- REVIEWS -->
+      <div id="panel-reviews" class="panel">
+        <div class="toolbar">
+          <select id="revFilter" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadReviews()">
+            <option value="">All ratings</option><option value="1">1 star</option><option value="2">2 stars</option>
+            <option value="3">3 stars</option><option value="4">4 stars</option><option value="5">5 stars</option>
+          </select>
+          <button class="btn btn-g btn-sm" onclick="_loadReviews()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Item</th><th>Reviewer</th><th>Rating</th><th>Comment</th><th>Date</th><th></th></tr></thead>
+            <tbody id="revTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PUSH NOTIFICATIONS -->
+      <div id="panel-push-notif" class="panel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Send Push Notification</span></div>
+            <div class="card-body">
+              <div class="fg"><label class="fl">Title *</label><input type="text" class="fi" id="pn-title" placeholder="Important update"></div>
+              <div class="fg"><label class="fl">Message *</label><textarea class="fi" id="pn-body" rows="3" placeholder="Your message here…"></textarea></div>
+              <div class="fg"><label class="fl">Target Audience</label>
+                <select class="fs" id="pn-target">
+                  <option value="all">All users</option><option value="buyers">Buyers only</option>
+                  <option value="sellers">Sellers only</option><option value="drivers">Drivers only</option>
+                </select>
+              </div>
+              <div class="fg"><label class="fl">Action URL (optional)</label><input type="text" class="fi" id="pn-url" placeholder="https://mysokoni.co.ke/"></div>
+              <button class="btn btn-g" onclick="_sendPush()"><span class="material-icons" style="font-size:14px">send</span>Send Notification</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Recent Notifications</span><button class="btn btn-o btn-sm" onclick="_loadRecentNotifs()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
+            <div id="recentNotifs" style="padding:14px;font-size:12px"><div class="spin"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ANNOUNCEMENTS -->
+      <div id="panel-announcements" class="panel">
+        <div class="toolbar">
+          <button class="btn btn-g btn-sm" onclick="_openAnnModal(null)"><span class="material-icons" style="font-size:14px">add</span>New Announcement</button>
+          <button class="btn btn-o btn-sm" onclick="_loadAnnouncements()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Title</th><th>Type</th><th>Target</th><th>Active</th><th>Created</th><th></th></tr></thead>
+            <tbody id="annTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- BANNERS -->
+      <div id="panel-banners" class="panel">
+        <div class="toolbar">
+          <button class="btn btn-g btn-sm" onclick="_openBannerModal(null)"><span class="material-icons" style="font-size:14px">add</span>New Banner</button>
+          <button class="btn btn-o btn-sm" onclick="_loadBanners()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div id="bannersGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"><div class="spin" style="margin:24px auto;display:block"></div></div>
+      </div>
+
+      <!-- FAQs -->
+      <div id="panel-faqs" class="panel">
+        <div class="toolbar">
+          <button class="btn btn-g btn-sm" onclick="_openFaqModal(null)"><span class="material-icons" style="font-size:14px">add</span>New FAQ</button>
+          <button class="btn btn-o btn-sm" onclick="_loadFaqs()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Question</th><th>Category</th><th>Order</th><th>Active</th><th></th></tr></thead>
+            <tbody id="faqTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- POS DEVICES -->
+      <div id="panel-pos-devices" class="panel">
+        <div class="toolbar">
+          <button class="btn btn-g btn-sm" onclick="_loadPosDevices()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Device ID</th><th>Merchant</th><th>Type</th><th>Version</th><th>Status</th><th>Last Seen</th></tr></thead>
+            <tbody id="posTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AI OPERATIONS -->
+      <div id="panel-ai-ops" class="panel">
+        <div class="stats">
+          <div class="stat"><div class="sv b" id="ai-tokens">…</div><div class="sl">Total Tokens</div></div>
+          <div class="stat"><div class="sv o" id="ai-cost">…</div><div class="sl">Est. Cost (USD)</div></div>
+          <div class="stat"><div class="sv" id="ai-reqs">…</div><div class="sl">Total Requests</div></div>
+          <div class="stat"><div class="sv g" id="ai-users">…</div><div class="sl">Active AI Users</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">AI Module Status</span><button class="btn btn-o btn-sm" onclick="_loadAiStats()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
+          <div class="card-body" id="aiModuleList"><div class="spin"></div></div>
+        </div>
+      </div>
+
+      <!-- SEARCH MANAGER -->
+      <div id="panel-search" class="panel">
+        <div class="stats">
+          <div class="stat"><div class="sv g" id="srch-total">…</div><div class="sl">Total Searches</div></div>
+          <div class="stat warn"><div class="sv o" id="srch-queue">…</div><div class="sl">Queue Pending</div></div>
+          <div class="stat"><div class="sv b" id="srch-trends">…</div><div class="sl">Trending Terms</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Trending Searches</span><button class="btn btn-o btn-sm" onclick="_loadSearch()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
+            <div class="card-body" id="trendingList"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Index Queue</span></div>
+            <div class="card-body" id="queueList"><div class="spin"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FRAUD CENTER -->
+      <div id="panel-fraud" class="panel">
+        <div class="stats">
+          <div class="stat alert"><div class="sv r" id="fr-flags">…</div><div class="sl">Risk Flags</div></div>
+          <div class="stat alert"><div class="sv r" id="fr-chargebacks">…</div><div class="sl">Chargebacks</div></div>
+          <div class="stat warn"><div class="sv o" id="fr-dupes">…</div><div class="sl">Duplicate Accounts</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Active Risk Flags</span><button class="btn btn-o btn-sm" onclick="_loadFraud()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
+          <table class="tbl">
+            <thead><tr><th>User</th><th>Flag Type</th><th>Risk Score</th><th>Flagged</th><th></th></tr></thead>
+            <tbody id="fraudTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AUDIT LOGS -->
+      <div id="panel-audit" class="panel">
+        <div class="toolbar">
+          <select id="auditAction" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadAudit()">
+            <option value="">All actions</option>
+            <option value="ban_user">Ban User</option><option value="role_change">Role Change</option>
+            <option value="payout_approve">Payout Approve</option><option value="dispute_resolve">Dispute Resolve</option>
+            <option value="product_reject">Product Reject</option><option value="review_remove">Review Remove</option>
+            <option value="flag_toggle">Flag Toggle</option><option value="settings_update">Settings Update</option>
+          </select>
+          <button class="btn btn-g btn-sm" onclick="_loadAudit()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Admin</th><th>Action</th><th>Target</th><th>Detail</th><th>Time</th></tr></thead>
+            <tbody id="auditTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -381,6 +673,118 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
   </div>
 </div>
 
+<!-- Order detail / status modal -->
+<div class="overlay" id="orderModal" onclick="_closeOv(event,'orderModal')">
+  <div class="modal">
+    <div class="mhd"><h2 id="omTitle">Order Detail</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('orderModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody" id="omBody"><div class="spin"></div></div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('orderModal').classList.remove('open')">Close</button>
+      <input type="hidden" id="om-id">
+      <select class="fs" id="om-status" style="width:auto;height:36px;padding:0 10px;display:inline-block">
+        <option value="confirmed">Confirmed</option><option value="processing">Processing</option>
+        <option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
+      </select>
+      <button class="btn btn-g" id="omBtn" onclick="_updateOrderStatus()">Update Status</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dispute resolve modal -->
+<div class="overlay" id="disputeModal" onclick="_closeOv(event,'disputeModal')">
+  <div class="modal">
+    <div class="mhd"><h2>Resolve Dispute</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('disputeModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <input type="hidden" id="dm-id">
+      <div id="dm-detail" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;font-size:12px;line-height:1.9;margin-bottom:14px"></div>
+      <div class="fg"><label class="fl">Decision *</label>
+        <select class="fs" id="dm-favor">
+          <option value="true">Favor Buyer — issue refund</option>
+          <option value="false">Favor Seller — release payment</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Resolution Notes</label><textarea class="fi" id="dm-notes" rows="3" placeholder="Explain the resolution…"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('disputeModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-g" id="dspBtn" onclick="_resolveDispute()">Resolve</button>
+    </div>
+  </div>
+</div>
+
+<!-- Banner create/edit modal -->
+<div class="overlay" id="bannerModal" onclick="_closeOv(event,'bannerModal')">
+  <div class="modal">
+    <div class="mhd"><h2 id="bnrTitle">New Banner</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('bannerModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <input type="hidden" id="bnr-id">
+      <div class="fg"><label class="fl">Title *</label><input type="text" class="fi" id="bnr-title" placeholder="Summer Sale"></div>
+      <div class="fg"><label class="fl">Subtitle</label><input type="text" class="fi" id="bnr-sub" placeholder="Up to 50% off"></div>
+      <div class="fg"><label class="fl">Image URL</label><input type="text" class="fi" id="bnr-img" placeholder="https://…"></div>
+      <div class="fg"><label class="fl">Action URL</label><input type="text" class="fi" id="bnr-url" placeholder="https://mysokoni.co.ke/marketplace"></div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">Position</label>
+          <select class="fs" id="bnr-pos"><option value="hero">Hero</option><option value="mid">Mid-page</option><option value="sidebar">Sidebar</option></select>
+        </div>
+        <div class="fg"><label class="fl">Hub</label>
+          <select class="fs" id="bnr-hub"><option value="all">All</option><option value="marketplace">Marketplace</option><option value="food">Food</option><option value="events">Events</option><option value="property">Property</option></select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="bnr-active" checked style="accent-color:var(--g)"> Active</label>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('bannerModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-g" id="bnrBtn" onclick="_saveBanner()">Save Banner</button>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ create/edit modal -->
+<div class="overlay" id="faqModal" onclick="_closeOv(event,'faqModal')">
+  <div class="modal">
+    <div class="mhd"><h2 id="faqMTitle">New FAQ</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('faqModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <input type="hidden" id="faq-id">
+      <div class="fg"><label class="fl">Question *</label><input type="text" class="fi" id="faq-q" placeholder="How do I track my order?"></div>
+      <div class="fg"><label class="fl">Answer *</label><textarea class="fi" id="faq-a" rows="4" placeholder="You can track your order by…"></textarea></div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">Category</label><input type="text" class="fi" id="faq-cat" placeholder="Payments"></div>
+        <div class="fg"><label class="fl">Sort Order</label><input type="number" class="fi" id="faq-order" value="0"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="faq-active" checked style="accent-color:var(--g)"> Active</label>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('faqModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-g" id="faqBtn" onclick="_saveFaq()">Save FAQ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Announcement create/edit modal -->
+<div class="overlay" id="annModal" onclick="_closeOv(event,'annModal')">
+  <div class="modal">
+    <div class="mhd"><h2 id="annMTitle">New Announcement</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('annModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <input type="hidden" id="ann-id">
+      <div class="fg"><label class="fl">Title *</label><input type="text" class="fi" id="ann-title" placeholder="Platform Update"></div>
+      <div class="fg"><label class="fl">Message *</label><textarea class="fi" id="ann-body" rows="4" placeholder="We are excited to announce…"></textarea></div>
+      <div class="fg2">
+        <div class="fg"><label class="fl">Type</label>
+          <select class="fs" id="ann-type"><option value="info">Info</option><option value="warning">Warning</option><option value="maintenance">Maintenance</option><option value="promotion">Promotion</option></select>
+        </div>
+        <div class="fg"><label class="fl">Target</label>
+          <select class="fs" id="ann-target"><option value="all">All users</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option></select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="ann-active" checked style="accent-color:var(--g)"> Active</label>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('annModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-g" id="annBtn" onclick="_saveAnnouncement()">Publish</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -411,7 +815,7 @@ firebase.auth().onAuthStateChanged(function(u){
 function _cf(n){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(n);}
 function _fs(){if(!_db)_db=firebase.firestore();return _db;}
 
-var TITLES={overview:'Platform Overview',links:'All Admin Tools',users:'User Management',tickets:'Support Tickets',categories:'Categories',settings:'Platform Settings',flags:'Feature Flags'};
+var TITLES={overview:'Executive Dashboard',links:'All Admin Tools',users:'User Management',marketplace:'Marketplace',orders:'Orders',bookings:'Bookings',delivery:'Delivery Operations',payouts:'Pending Payouts','pos-devices':'SmartPOS Devices',tickets:'Support Tickets',disputes:'Disputes',reviews:'Reviews','push-notif':'Push Notifications',announcements:'Announcements',banners:'Banners & Content',categories:'Categories',faqs:'FAQs','ai-ops':'AI Operations',search:'Search Manager',fraud:'Fraud Center',audit:'Audit Logs',settings:'Platform Settings',flags:'Feature Flags'};
 
 window._nav=function(el,p){
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});
