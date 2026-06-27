@@ -1437,14 +1437,15 @@ function loadMyHealthDash(){
 
   const apptEl=document.getElementById('hdApptList');
   if(apptEl){
+    const _e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     if(!appts.length) apptEl.innerHTML='<div style="text-align:center;padding:40px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">📅</div><p style="font-size:12px;">No appointments yet.</p></div>';
-    else apptEl.innerHTML=appts.slice(0,4).map(a=>`<div class="hc-record-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${a.providerName||'Provider'} — ${a.service||''}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">${a.date||''} ${a.time||''} · Ref: ${a.id||''}</div></div>`).join('');
+    else apptEl.innerHTML=appts.slice(0,4).map(a=>`<div class="hc-record-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${_e(a.providerName||'Provider')} — ${_e(a.service||'')}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">${_e(a.date||'')} ${_e(a.time||'')} · Ref: ${_e(a.id||'')}</div></div>`).join('');
   }
 
   const medEl=document.getElementById('hdMedList');
   if(medEl){
     if(!meds.length) medEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">💊</div><p style="font-size:12px;">No medicine orders.</p></div>';
-    else medEl.innerHTML=meds.slice(0,3).map(m=>`<div class="hc-record-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${m.medicine||'Medicine'}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">📍 ${m.address||''} · Ref: ${m.id||''}</div></div>`).join('');
+    else medEl.innerHTML=meds.slice(0,3).map(m=>`<div class="hc-record-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${_e(m.medicine||'Medicine')}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">📍 ${_e(m.address||'')} · Ref: ${_e(m.id||'')}</div></div>`).join('');
   }
 }
 

@@ -1173,7 +1173,11 @@ function _openBookingDetails(providerId){
   if(!p) return;
 
   const infoEl = document.getElementById("bookModalProviderInfo");
-  if(infoEl) infoEl.innerHTML = `Booking: <strong style="color:white;">${p.name}</strong> · ${CAT_EMOJI[p.category]||"🛠️"} ${CAT_LABEL[p.category]||p.category} · <span style="color:#71ff00;">KES ${Number(p.rate).toLocaleString()} ${RATE_LABEL[p.rateType]||""}</span>${_currentBookingRef?` · <span style="color:#00aaff;font-size:10px;">Ref: ${_currentBookingRef}</span>`:""}`;
+  if(infoEl){
+    const _e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const catLabel=CAT_LABEL[p.category]||p.category;
+    infoEl.innerHTML='Booking: <strong style="color:white;">'+_e(p.name)+'</strong> · '+(CAT_EMOJI[p.category]||'🛠️')+' '+_e(catLabel)+' · <span style="color:#71ff00;">KES '+_e(Number(p.rate).toLocaleString())+' '+_e(RATE_LABEL[p.rateType]||'')+' </span>'+(_currentBookingRef?' · <span style="color:#00aaff;font-size:10px;">Ref: '+_e(_currentBookingRef)+'</span>':'');
+  }
 
   /* Pre-fill from logged-in user */
   const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");

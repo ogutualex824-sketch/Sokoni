@@ -4545,7 +4545,7 @@ function renderPayouts(){
           +'</tr>';
         }).join('');
       }
-    }, function(e){ pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">'+e.message+'</td></tr>'; });
+    }, function(e){ var _em=String(e&&e.message||'Unknown error').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">'+_em+'</td></tr>'; });
   }).catch(function(e){ pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">Failed to load Firestore</td></tr>'; });
 }
 
@@ -6190,7 +6190,7 @@ async function _admLoadMpesa() {
       </tr>`;
     }).join('');
   } catch(e) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:24px;">Error: '+e.message+'</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ff6b6b;padding:24px;">Error: '+esc(e.message||'Unknown error')+'</td></tr>';
   }
 }
 

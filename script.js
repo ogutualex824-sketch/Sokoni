@@ -1678,7 +1678,10 @@ function addBotMessage(text){
     if(!messages) return;
     const wrap = document.createElement("div");
     wrap.className = "bot-msg-wrap";
-    wrap.innerHTML = `<div class="bot-bubble">${text}</div>`;
+    const bubble = document.createElement("div");
+    bubble.className = "bot-bubble";
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
     messages.appendChild(wrap);
     messages.scrollTop = messages.scrollHeight;
 }

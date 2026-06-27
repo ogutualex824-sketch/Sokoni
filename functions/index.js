@@ -1600,7 +1600,7 @@ async function sendSms(apiKey, username, to, message) {
       body:    form.toString(),
     });
     const data = await res.json();
-    console.log("[SMS]", phone, data.SMSMessageData?.Message || data);
+    console.log("[SMS]", phone.slice(0,4)+"****"+phone.slice(-2), data.SMSMessageData?.Message || data);
   } catch (e) {
     console.warn("[SMS] Error:", e.message);
   }
@@ -1815,7 +1815,7 @@ exports.createCheckoutSession = onCall(
       createdAt:   admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log(`[createCheckoutSession] session=${sessionId} uid=${request.auth.uid} total=${serverTotal}`);
+    console.log(`[createCheckoutSession] session=${sessionId} uid=${request.auth.uid.slice(0,8)}… items=${sessionItems.length}`);
     return {
       sessionId,
       serverTotal,
@@ -2306,7 +2306,7 @@ exports.onNewOrderCreated = onDocumentCreated(
     const total     = Number(data.orderTotal || data.total || 0).toLocaleString("en-KE");
     const sellerPhone = data.sellerPhone || "";
 
-    console.log(`[onNewOrderCreated] orderId=${orderId} seller=${sellerUid} total=KES ${total}`);
+    console.log(`[onNewOrderCreated] orderId=${orderId} seller=${(sellerUid||'').slice(0,8)}…`);
 
     if (!sellerUid) {
       console.warn("[onNewOrderCreated] No sellerUid on order", orderId);
@@ -2552,7 +2552,7 @@ exports.darajaSTKPush = onCall(
       ts,
     }).catch(() => {});
 
-    console.log(`[darajaSTKPush] ${checkoutId} → KES ${amount} → ${normPhone} (hub:${hub||"marketplace"}, env:${darajaEnv})`);
+    console.log(`[darajaSTKPush] ${checkoutId} hub:${hub||"marketplace"} env:${darajaEnv}`);
     return { success: true, checkoutId, message: stkData.CustomerMessage || "STK push sent" };
   }
 );
@@ -3006,7 +3006,7 @@ exports.onSellerPaymentCreated = onDocumentCreated(
       status: "open",
     }, { merge: true });
 
-    console.log(`[revenue] KES ${totalOwed} (${pct}%) recorded — seller ${sellerUid} payment ${paymentId}`);
+    console.log(`[revenue] commission recorded seller=${(sellerUid||'').slice(0,8)}… payment=${paymentId}`);
   }
 );
 
@@ -5907,7 +5907,7 @@ exports.processSettlementQueue = onSchedule(
       const docRef = snap.docs[i];
       const item   = docRef.data();
       await docRef.ref.update({ status: "processing" }).catch(() => {});
-      console.log("[Settlement] Processing " + docRef.id + " seller:" + item.sellerId + " KES " + item.amount);
+      console.log("[Settlement] Processing " + docRef.id + " seller:" + (item.sellerId||'').slice(0,8) + "…");
       await docRef.ref.update({
         status: "completed",
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -5934,6 +5934,19 @@ exports.sendInvoiceEmail = onCall(
     const { toEmail, toName, invoice } = req.data || {};
     if (!toEmail || !invoice) {
       throw new HttpsError("invalid-argument", "toEmail and invoice are required");
+    }
+
+    /* Ownership guard: only allow sending to the caller's own verified email or
+       the platform admin address. Prevents an authenticated user from sending
+       fake SOKONI invoices to arbitrary addresses. */
+    const PLATFORM_ADMIN_EMAIL = "orders@mysokoni.co.ke";
+    const callerEmail = (req.auth.token.email || "").toLowerCase().trim();
+    const destEmail   = toEmail.toLowerCase().trim();
+    if (destEmail !== callerEmail && destEmail !== PLATFORM_ADMIN_EMAIL) {
+      throw new HttpsError(
+        "permission-denied",
+        "Invoice email may only be sent to your own registered email address."
+      );
     }
 
     const fmt = (n) => "KES " + Number(n || 0).toLocaleString("en-KE");
