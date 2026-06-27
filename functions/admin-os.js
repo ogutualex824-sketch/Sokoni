@@ -405,3 +405,363 @@ exports.adminUpsertCategory = onCall({ region: 'us-central1', maxInstances: 10 }
   const ref = await db.collection('categories').add(data);
   return { categoryId: ref.id };
 });
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Executive Dashboard (extended KPIs)
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [users, ordersToday, activeOrders, txToday, openTickets, openDisputes, activeSubs, pendingPayouts, activeDeliveries] = await Promise.all([
+    db.collection('users').limit(10000).get(),
+    db.collection('orders').where('createdAt', '>=', Timestamp.fromDate(todayStart)).get().catch(() => ({ size: 0, docs: [] })),
+    db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).get().catch(() => ({ size: 0 })),
+    db.collection('transactions').where('createdAt', '>=', Timestamp.fromDate(todayStart)).where('status', '==', 'completed').get().catch(() => ({ docs: [] })),
+    db.collection('supportTickets').where('status', '==', 'open').get().catch(() => ({ size: 0 })),
+    db.collection('disputes').where('status', '==', 'open').get().catch(() => ({ size: 0 })),
+    db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).get().catch(() => ({ size: 0 })),
+    db.collection('payouts').where('status', '==', 'pending').get().catch(() => ({ size: 0 })),
+    db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).limit(200).get().catch(() => ({ size: 0 })),
+  ]);
+
+  const revenueToday = (txToday.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0);
+  const commissionToday = (txToday.docs || []).reduce((s, d) => s + (d.data().platformFee || d.data().commission || 0), 0);
+  const todayTs = todayStart.getTime() / 1000;
+  const newUsersToday = users.docs.filter(d => (d.data().createdAt?.seconds || 0) >= todayTs).length;
+  const roleBreakdown = { buyer: 0, seller: 0, provider: 0, driver: 0, admin: 0 };
+  users.docs.forEach(d => { const r = d.data().role || 'buyer'; if (roleBreakdown[r] !== undefined) roleBreakdown[r]++; });
+
+  return {
+    totalUsers: users.size, newUsersToday, ordersToday: ordersToday.size,
+    activeOrders: activeOrders.size, revenueToday, commissionToday,
+    openTickets: openTickets.size, openDisputes: openDisputes.size,
+    activeSubscriptions: activeSubs.size, pendingPayouts: pendingPayouts.size,
+    activeDeliveries: activeDeliveries.size, roleBreakdown,
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Orders
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { status, hubType, limit: lim } = req.data;
+  const db = getFirestore();
+  let q = db.collection('orders').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
+  if (status) q = q.where('status', '==', status);
+  const snap = await q.get();
+  let orders = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  if (hubType) orders = orders.filter(o => o.hubType === hubType || o.type === hubType);
+  return { orders };
+});
+
+exports.adminUpdateOrderStatus = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { orderId, status, note } = req.data;
+  if (!orderId || !status) throw new Error('orderId and status required');
+  const db = getFirestore();
+  await db.collection('orders').doc(orderId).update({ status, adminNote: note || null, updatedAt: FieldValue.serverTimestamp(), updatedBy: req.auth.uid });
+  await db.collection('adminAudit').add({ action: 'order_status_updated', orderId, status, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
+  return { success: true };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Marketplace (Products)
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetProducts = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { status, query, limit: lim } = req.data;
+  const db = getFirestore();
+  let q = db.collection('products').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
+  if (status && status !== 'all') q = q.where('status', '==', status);
+  const snap = await q.get();
+  let items = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  if (query) { const ql = query.toLowerCase(); items = items.filter(p => (p.name||'').toLowerCase().includes(ql) || (p.sellerId||'') === query); }
+  return { products: items };
+});
+
+exports.adminUpdateProductStatus = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { productId, status, featured, reason } = req.data;
+  if (!productId || !status) throw new Error('productId and status required');
+  const db = getFirestore();
+  const upd = { status, updatedAt: FieldValue.serverTimestamp(), updatedBy: req.auth.uid };
+  if (featured !== undefined) upd.featured = featured;
+  if (reason) upd.adminNote = reason;
+  await db.collection('products').doc(productId).update(upd);
+  await db.collection('adminAudit').add({ action: 'product_status_updated', productId, status, featured, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
+  return { success: true };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Bookings
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { status, limit: lim } = req.data;
+  const db = getFirestore();
+  let q = db.collection('bookings').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
+  if (status) q = q.where('status', '==', status);
+  const snap = await q.get();
+  return { bookings: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Delivery Operations
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetDeliveryStats = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const [inTransit, activeDrivers, completedToday] = await Promise.all([
+    db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).limit(100).get().catch(() => ({ docs: [], size: 0 })),
+    db.collection('drivers').where('onlineStatus', '==', 'online').limit(200).get().catch(() => ({ size: 0, docs: [] })),
+    db.collection('orders').where('deliveryStatus', '==', 'delivered').where('deliveredAt', '>=', Timestamp.fromDate(todayStart)).get().catch(() => ({ size: 0 })),
+  ]);
+  return {
+    activeDeliveries: inTransit.size,
+    activeDrivers: activeDrivers.size,
+    completedToday: completedToday.size,
+    recentDeliveries: (inTransit.docs || []).slice(0, 20).map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })),
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Payouts
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const snap = await getFirestore().collection('payouts').where('status', '==', 'pending').orderBy('createdAt', 'desc').limit(100).get().catch(() => ({ docs: [] }));
+  return { payouts: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+});
+
+exports.adminApprovePayouts = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireSuperAdmin(req);
+  const { payoutIds } = req.data;
+  if (!Array.isArray(payoutIds) || !payoutIds.length) throw new Error('payoutIds array required');
+  const db = getFirestore();
+  const batch = db.batch();
+  payoutIds.forEach(id => { batch.update(db.collection('payouts').doc(id), { status: 'approved', approvedBy: req.auth.uid, approvedAt: FieldValue.serverTimestamp() }); });
+  await batch.commit();
+  await db.collection('adminAudit').add({ action: 'payouts_approved', count: payoutIds.length, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
+  return { success: true, count: payoutIds.length };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Disputes
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { status, limit: lim } = req.data;
+  const db = getFirestore();
+  let q = db.collection('disputes').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
+  if (status) q = q.where('status', '==', status);
+  const snap = await q.get().catch(() => ({ docs: [] }));
+  return { disputes: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+});
+
+exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { disputeId, resolution, favorBuyer } = req.data;
+  if (!disputeId || !resolution) throw new Error('disputeId and resolution required');
+  const db = getFirestore();
+  await db.collection('disputes').doc(disputeId).update({ status: 'resolved', resolution, favorBuyer: !!favorBuyer, resolvedBy: req.auth.uid, resolvedAt: FieldValue.serverTimestamp() });
+  await db.collection('adminAudit').add({ action: 'dispute_resolved', disputeId, favorBuyer, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
+  return { success: true };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Reviews
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { flagged, limit: lim } = req.data;
+  const db = getFirestore();
+  const q = flagged
+    ? db.collection('reviews').where('flagged', '==', true).limit(Math.min(lim || 50, 200))
+    : db.collection('reviews').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
+  const snap = await q.get().catch(() => ({ docs: [] }));
+  return { reviews: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+});
+
+exports.adminRemoveReview = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { reviewId, reason } = req.data;
+  if (!reviewId) throw new Error('reviewId required');
+  const db = getFirestore();
+  await db.collection('reviews').doc(reviewId).update({ status: 'removed', removedBy: req.auth.uid, removedReason: reason || '', removedAt: FieldValue.serverTimestamp() });
+  await db.collection('adminAudit').add({ action: 'review_removed', reviewId, reason, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
+  return { success: true };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Push Notifications
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminSendPushNotification = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { title, body, targetRole, targetAll, data: extraData, imageUrl } = req.data;
+  if (!title || !body) throw new Error('title and body required');
+  const db = getFirestore();
+  const doc = await db.collection('platformNotifications').add({
+    title: title.slice(0, 100), body: body.slice(0, 500),
+    targetRole: targetRole || null, targetAll: targetAll !== false,
+    imageUrl: imageUrl || null, data: extraData || {},
+    sentBy: req.auth.uid, status: 'queued', createdAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection('adminAudit').add({ action: 'push_notification_sent', notificationId: doc.id, title, targetRole: targetRole || 'all', performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
+  return { success: true, notificationId: doc.id };
+});
+
+exports.adminGetRecentNotifications = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const snap = await getFirestore().collection('platformNotifications').orderBy('createdAt', 'desc').limit(30).get().catch(() => ({ docs: [] }));
+  return { notifications: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Banners / Content
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetBanners = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const snap = await getFirestore().collection('banners').orderBy('order').limit(50).get().catch(() => ({ docs: [] }));
+  return { banners: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+});
+
+exports.adminSaveBanner = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { id, title, imageUrl, linkUrl, active, order: ord, hub, subtitle } = req.data;
+  if (!title || !imageUrl) throw new Error('title and imageUrl required');
+  const db = getFirestore();
+  const data = { title: title.slice(0, 100), subtitle: (subtitle || '').slice(0, 200), imageUrl, linkUrl: linkUrl || '', active: active !== false, hub: hub || 'all', order: ord || 0, updatedBy: req.auth.uid, updatedAt: FieldValue.serverTimestamp() };
+  if (id) { await db.collection('banners').doc(id).update(data); return { id }; }
+  data.createdAt = FieldValue.serverTimestamp();
+  const ref = await db.collection('banners').add(data);
+  return { id: ref.id };
+});
+
+exports.adminDeleteBanner = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { id } = req.data;
+  if (!id) throw new Error('id required');
+  await getFirestore().collection('banners').doc(id).delete();
+  return { success: true };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FAQs
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetFaqs = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const snap = await getFirestore().collection('faqs').orderBy('order').limit(200).get().catch(() => ({ docs: [] }));
+  return { faqs: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+});
+
+exports.adminUpsertFaq = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { id, question, answer, category, order: ord, active } = req.data;
+  if (!question || !answer) throw new Error('question and answer required');
+  const db = getFirestore();
+  const data = { question: question.slice(0, 300), answer: answer.slice(0, 2000), category: category || 'general', order: ord || 0, active: active !== false, updatedBy: req.auth.uid, updatedAt: FieldValue.serverTimestamp() };
+  if (id) { await db.collection('faqs').doc(id).update(data); return { id }; }
+  data.createdAt = FieldValue.serverTimestamp();
+  const ref = await db.collection('faqs').add(data);
+  return { id: ref.id };
+});
+
+exports.adminDeleteFaq = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { id } = req.data;
+  if (!id) throw new Error('id required');
+  await getFirestore().collection('faqs').doc(id).delete();
+  return { success: true };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Announcements
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetAnnouncements = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const snap = await getFirestore().collection('announcements').orderBy('createdAt', 'desc').limit(50).get().catch(() => ({ docs: [] }));
+  return { announcements: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+});
+
+exports.adminSaveAnnouncement = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { id, title, body, targetRole, active, urgent } = req.data;
+  if (!title || !body) throw new Error('title and body required');
+  const db = getFirestore();
+  const data = { title: title.slice(0, 100), body: body.slice(0, 1000), targetRole: targetRole || 'all', active: active !== false, urgent: urgent || false, updatedBy: req.auth.uid, updatedAt: FieldValue.serverTimestamp() };
+  if (id) { await db.collection('announcements').doc(id).update(data); return { id }; }
+  data.createdAt = FieldValue.serverTimestamp();
+  const ref = await db.collection('announcements').add(data);
+  return { id: ref.id };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SmartPOS
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetPosDevices = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const snap = await getFirestore().collection('posDevices').orderBy('lastSeen', 'desc').limit(100).get().catch(() => ({ docs: [] }));
+  return { devices: snap.docs.map(d => ({ id: d.id, ...d.data(), lastSeen: d.data().lastSeen?.toDate?.()?.toISOString() || null })) };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   AI Operations
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetAiStats = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const usageSnap = await db.collection('aiUsage').orderBy('date', 'desc').limit(14).get().catch(() => ({ docs: [] }));
+  const totalTokens = usageSnap.docs.reduce((s, d) => s + (d.data().totalTokens || 0), 0);
+  return { usageByDay: usageSnap.docs.map(d => ({ date: d.id, ...d.data() })), totalTokens, estimatedCostUsd: Math.round(totalTokens * 0.00000025 * 100) / 100 };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Search Management
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetSearchStats = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const [trendingSnap, queueSnap] = await Promise.all([
+    db.collection('searchInsights').orderBy('count', 'desc').limit(20).get().catch(() => ({ docs: [] })),
+    db.collection('searchQueue').where('status', '==', 'pending').limit(1).get().catch(() => ({ size: 0 })),
+  ]);
+  return { trendingSearches: trendingSnap.docs.map(d => ({ term: d.id, ...d.data() })), pendingQueue: queueSnap.size };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Fraud Center
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetFraudAlerts = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const [riskSnap, chargebackSnap, dupSnap] = await Promise.all([
+    db.collection('riskFlags').where('resolved', '==', false).orderBy('createdAt', 'desc').limit(30).get().catch(() => ({ docs: [] })),
+    db.collection('transactions').where('status', '==', 'chargeback').orderBy('createdAt', 'desc').limit(20).get().catch(() => ({ docs: [] })),
+    db.collection('users').where('isDuplicate', '==', true).limit(20).get().catch(() => ({ docs: [] })),
+  ]);
+  return {
+    riskFlags: riskSnap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })),
+    chargebacks: chargebackSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+    duplicateAccounts: dupSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Audit Logs
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+  _requireAdmin(req);
+  const { action, limit: lim } = req.data;
+  const db = getFirestore();
+  let q = db.collection('adminAudit').orderBy('createdAt', 'desc').limit(Math.min(lim || 100, 500));
+  if (action) q = q.where('action', '==', action);
+  const snap = await q.get().catch(() => ({ docs: [] }));
+  return { logs: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+});
