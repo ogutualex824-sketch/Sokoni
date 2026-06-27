@@ -337,12 +337,15 @@
     }
     .pv-rate span { font-size: 11px; color: rgba(255,255,255,0.35); font-weight: 400; }
     .pv-book-btn {
-      width: 100%; padding: 11px; border: none; border-radius: 12px;
+      padding: 11px; border: none; border-radius: 12px;
       background: linear-gradient(135deg,#71ff00,#4fc800); color: black;
       font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit;
-      transition: filter .2s;
+      transition: filter .2s; min-width: 0;
     }
     .pv-book-btn:hover { filter: brightness(1.1); }
+    .pv-foot {
+      display: flex; gap: 6px; align-items: stretch;
+    }
     .pv-unavail { opacity: .4; pointer-events: none; }
     @media(max-width:600px){
       #providersGrid { grid-template-columns: repeat(2,1fr); gap: 10px; }
@@ -1132,9 +1135,9 @@ function renderProviders(){
         <div class="pv-skills">${(p.skills||[]).slice(0,3).map(s=>`<span class="pv-skill">${s}</span>`).join("")}</div>
         ${bioText?`<div class="pv-bio">"${bioText}"</div>`:""}
         <div class="pv-rate">KES ${Number(p.rate||0).toLocaleString()} <span>${rateLabel}</span></div>
-        <div style="display:flex;gap:6px;">
+        <div class="pv-foot">
           <button type="button" class="pv-book-btn" style="flex:1;" onclick="openBookingModal('${p.id}')">📩 Book ${firstName}</button>
-          <button type="button" class="pv-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;flex-shrink:0;padding:9px 14px;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'${p.uid||p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'${(CAT_LABEL[p.category]||p.category).replace(/'/g,"\\'")} · SOKONI Services'}):location.href='messages.html'" title="Message ${firstName}">💬</button>
+          <button type="button" class="pv-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;flex-shrink:0;width:42px;padding:0;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'${p.uid||p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'${(CAT_LABEL[p.category]||p.category).replace(/'/g,"\\'")} · SOKONI Services'}):location.href='messages.html'" title="Message ${firstName}">💬</button>
         </div>
       </div>
     </div>`;

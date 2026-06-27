@@ -557,7 +557,9 @@ function patchServicesFollowBtns(){
       row.className='_skFollowRow';
       row.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;';
       renderFollowBtn(storeId,name,row,'service');
-      bookBtn.parentNode.insertBefore(row, bookBtn.nextSibling);
+      /* Insert AFTER the button container (pv-foot), not inside it */
+      var foot=bookBtn.closest('.pv-foot')||bookBtn.parentNode;
+      foot.parentNode.insertBefore(row,foot.nextSibling);
     });
   },100);
 }
