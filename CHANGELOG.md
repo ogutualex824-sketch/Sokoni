@@ -1,4 +1,38 @@
-﻿## [2026-06-28] — SmartPOS Instant Payment & Guided Checkout v1.1
+﻿## [2026-06-28] — Payment Trust & Security Experience v1.0
+
+### Summary
+Platform-wide payment trust layer. Central module (`sokoni-payment-trust.js`) auto-discovers `data-trust` attributes and renders: IntaSend badge (shield SVG + PCI/SSL pills), payment status bar (7 phases), price breakdown, buyer protection lists (marketplace/service/digital/POS), seller verification badges (4 tiers), and trust footer. Digital receipt modal with QR code, download, email, and print. Public receipt viewer (`payment-receipt.html`) QR-verifiable via Firestore. Five new CFs: `generateTrustReceipt`, `emailTrustReceipt`, `verifyTrustReceipt`, `getPaymentSecurityAlerts`, `detectPaymentAnomalies` (scheduled daily — duplicate charge detection, failed payment spikes, velocity alerts). `checkout.html` updated with module CSS, trust badges, buyer protection, payment status bar, trust footer, and receipt modal auto-shown after successful payment.
+
+### Files
+- `sokoni-trust.css` — CREATED — 400-line trust design system
+- `sokoni-payment-trust.js` — CREATED — central trust module (auto-init + programmatic API)
+- `payment-receipt.html` — CREATED — public QR-verifiable receipt viewer
+- `functions/payment-trust.js` — CREATED — 5 CFs (receipt/email/verify/alerts/anomaly detection)
+- `functions/index.js` — MODIFIED — 5 new CF exports
+- `checkout.html` — MODIFIED — trust module wired (CSS + data attributes + receipt modal + status bar)
+
+### New Cloud Functions (all live)
+- `generateTrustReceipt` — creates `posReceipts/{receiptNo}` with QR URL
+- `emailTrustReceipt` — SendGrid HTML receipt email (graceful fallback if key not set)
+- `verifyTrustReceipt` — public receipt authenticity verification
+- `getPaymentSecurityAlerts` — admin: paginated security alert list
+- `detectPaymentAnomalies` — scheduled daily: duplicate payments, failed spikes → `paymentSecurityAlerts`
+
+### New Firestore Collections
+- `posReceipts` — one doc per receipt, keyed by receiptNo
+- `receiptEvents` — audit log (generated/emailed/verified events)
+- `paymentSecurityAlerts` — fraud/anomaly alerts for admin review
+- `paymentFailures` — failure log consumed by anomaly scanner
+- `adminNotifications` — security summary notifications for admins
+
+### Security
+- `_sanitize()` on all user strings before Firestore writes in CFs
+- Receipt viewer uses DOM text nodes only (no innerHTML with user data)
+- `verifyTrustReceipt` is public (no auth required) — returns only non-sensitive fields
+- `getPaymentSecurityAlerts` requires `admin` or `superAdmin` role
+- Duplicate payment detection runs server-side (idempotency) AND client-side (5-min window guard)
+
+## [2026-06-28] — SmartPOS Instant Payment & Guided Checkout v1.1
 
 ### Summary
 Upgraded `pos-checkout.html` with a guided cashier experience: explicit state machine (IDLE→ITEMS→PAYMENT→CONFIRMING→SUCCESS→PRINTING→COMPLETE→ERROR), full-width cashier guidance strip, M-Pesa auto-detection via 3-second polling loop (no more `confirm()` dialog), 90-second countdown bar, one-touch payment recovery card (Retry M-Pesa / Accept Cash / Try Card / Keep Items), queue mode (Ctrl+Q toggle — instant reset, reduced animations), preferred payment method highlighting per merchant setting, and `posCheckPaymentStatus` CF for IntaSend webhook-backed polling. All payment-path `confirm()` dialogs removed; only destructive-operation confirms remain.
