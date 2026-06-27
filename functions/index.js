@@ -56,11 +56,11 @@ function hasMFASatisfied(decodedToken) {
   );
 }
 
-/* Set of roles that MUST have MFA. Enforce when MFA_REQUIRED env is "true". */
-const MFA_REQUIRED_ENV = process.env.MFA_REQUIRED === "true";
+/* MFA enforcement: defaults ON in production. Set MFA_REQUIRED=false to disable (dev only). */
+const MFA_REQUIRED_ENV = process.env.MFA_REQUIRED !== "false";
 
 function assertMFA(decodedToken, role = "admin") {
-  if (!MFA_REQUIRED_ENV) return; /* Soft-enforce — set MFA_REQUIRED=true to harden */
+  if (!MFA_REQUIRED_ENV) return; /* Only skip if explicitly disabled via env var */
   if (!hasMFASatisfied(decodedToken)) {
     console.warn(JSON.stringify({
       severity: "WARNING",
@@ -871,7 +871,7 @@ Today's date: ${new Date().toLocaleDateString("en-KE", { weekday: "long", year: 
    returns { response, results?, actions? }.
    No auth required. Rate-limited: 30 req/IP/minute.
 ══════════════════════════════════════════════════════════════ */
-const _chatRateMap = new Map(); /* ip → { count, resetAt } */
+/* sokoniChat uses Firestore-backed checkRateLimitDurable — no in-memory map needed */
 
 const _CHAT_TOOLS = [
   {
@@ -1363,14 +1363,10 @@ exports.sokoniChat = onRequest(
       return;
     }
 
-    /* Rate limit: 30 messages per IP per minute */
+    /* Rate limit: 30 messages per IP per minute — Firestore-backed so it works across all CF instances */
     const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip || "unknown";
-    const now = Date.now();
-    const bucket = _chatRateMap.get(ip) || { count: 0, resetAt: now + 60000 };
-    if (now > bucket.resetAt) { bucket.count = 0; bucket.resetAt = now + 60000; }
-    bucket.count++;
-    _chatRateMap.set(ip, bucket);
-    if (bucket.count > 30) {
+    const _chatRl = await checkRateLimitDurable(`chat_${ip}`, 30, 60);
+    if (!_chatRl.allowed) {
       res.status(429).json({ error: "Too many messages — please wait a moment before trying again." });
       return;
     }
@@ -1938,9 +1934,10 @@ exports.verifyIntasendPayment = onRequest(
       const clientAmount = Number(amount) || 0;
 
       /* When a session is present compare against session.serverTotal (server-authoritative).
-         When no session fall back to the client amount (e.g., service/subscription payments). */
-      const expectedTotal   = sessionTotal || clientAmount;
-      const confirmedAmount = apiAmount || clientAmount;
+         When no session AND no orderItems to verify against catalogue, we cannot safely confirm
+         the amount — reject unless the payment API amount matches what the client claimed. */
+      const expectedTotal   = sessionTotal || (apiAmount > 0 ? apiAmount : clientAmount);
+      const confirmedAmount = apiAmount > 0 ? apiAmount : 0; // never trust client amount as confirmed
 
       /* ── Amount integrity check ── */
       if (apiAmount > 0 && expectedTotal > 0 && confirmedAmount < expectedTotal - 1) {
@@ -2557,6 +2554,12 @@ exports.darajaSTKPush = onCall(
   }
 );
 
+/* Safaricom published IP ranges for STK Push callbacks */
+const SAFARICOM_CALLBACK_IPS = new Set([
+  "196.201.214.200","196.201.214.206","196.201.213.100","196.201.214.207",
+  "196.201.214.208","196.201.213.109","196.201.213.115","196.201.214.202",
+]);
+
 /* ── darajaSTKCallback — Safaricom posts payment result here ── */
 exports.darajaSTKCallback = onRequest(
   { timeoutSeconds: 30, invoker: "public" },
@@ -2565,6 +2568,18 @@ exports.darajaSTKCallback = onRequest(
     res.status(200).json({ ResultCode: 0, ResultDesc: "Success" });
 
     try {
+      /* Validate origin IP against Safaricom's published callback IP list.
+         In development (non-prod) we allow bypass so ngrok tunnels work. */
+      const callerIp = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+      if (process.env.NODE_ENV !== "development" && !SAFARICOM_CALLBACK_IPS.has(callerIp)) {
+        console.warn(`[darajaSTKCallback] Rejected request from unexpected IP: ${callerIp}`);
+        db.collection("auditLogs").add({
+          type: "stk_callback_ip_rejected", ip: callerIp,
+          ts: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+        return;
+      }
+
       const body = req.body?.Body?.stkCallback;
       if (!body) return;
 
@@ -3195,6 +3210,21 @@ exports.purchaseFeaturedListing = onCall({ timeoutSeconds: 20, cors: true }, asy
   const endDate   = admin.firestore.Timestamp.fromMillis(Date.now() + days * 86400000);
   const period    = new Date().toISOString().slice(0, 7);
 
+  /* Verify payment is completed before activating the listing */
+  let paymentVerified = false;
+  if (paymentRef) {
+    const paySnap = await db.collection("posPayments").doc(paymentRef).get().catch(() => null);
+    if (paySnap && paySnap.exists) {
+      const payData = paySnap.data();
+      if (payData.status === "completed" && payData.uid === uid) {
+        paymentVerified = true;
+      }
+    }
+    if (!paymentVerified) {
+      throw new HttpsError("permission-denied", "Payment could not be verified. Please try again after your payment completes.");
+    }
+  }
+
   const ref = await db.collection("featuredListings").add({
     sellerUid:  uid,
     itemType:   itemType   || "product",
@@ -3204,7 +3234,7 @@ exports.purchaseFeaturedListing = onCall({ timeoutSeconds: 20, cors: true }, asy
     priceKES,
     startDate,
     endDate,
-    status:     paymentRef ? "active" : "pending_payment",
+    status:     paymentVerified ? "active" : "pending_payment",
     hub:        hub        || "marketplace",
     placement:  placement  || "category",
     paymentRef: paymentRef || null,
@@ -3224,12 +3254,20 @@ exports.purchaseFeaturedListing = onCall({ timeoutSeconds: 20, cors: true }, asy
 });
 
 /* ── createAdCampaign — seller callable ── */
+const _isHttpsUrl = (s) => typeof s === "string" && /^https:\/\/[^\s<>"']{4,512}$/.test(s);
+
 exports.createAdCampaign = onCall({ timeoutSeconds: 20, cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const uid = request.auth.uid;
   const { adType, title, description, imageUrl, ctaUrl, targetHub, budgetKES, cpm } = request.data;
   if (!adType || !title || !budgetKES) {
     throw new HttpsError("invalid-argument", "adType, title, budgetKES required.");
+  }
+  if (imageUrl && !_isHttpsUrl(imageUrl)) {
+    throw new HttpsError("invalid-argument", "imageUrl must be a valid HTTPS URL.");
+  }
+  if (ctaUrl && !_isHttpsUrl(ctaUrl)) {
+    throw new HttpsError("invalid-argument", "ctaUrl must be a valid HTTPS URL.");
   }
 
   const ref = await db.collection("sokoAds").add({
@@ -3270,6 +3308,21 @@ exports.updateSellerSubscription = onCall({ timeoutSeconds: 15, cors: true }, as
   }
 
   const { priceKES, tier, maxListings } = SUBSCRIPTION_PLANS[plan];
+
+  /* Paid plans require a verified payment reference */
+  if (priceKES > 0 && !isAdmin) {
+    if (!paymentRef) {
+      throw new HttpsError("invalid-argument", "paymentRef is required for paid subscription plans.");
+    }
+    const paySnap = await db.collection("posPayments").doc(paymentRef).get().catch(() => null);
+    if (!paySnap || !paySnap.exists) {
+      throw new HttpsError("not-found", "Payment record not found.");
+    }
+    const payData = paySnap.data();
+    if (payData.status !== "completed" || payData.uid !== uid) {
+      throw new HttpsError("permission-denied", "Payment is not completed or does not belong to this account.");
+    }
+  }
   const startDate = admin.firestore.Timestamp.now();
   const endDate   = admin.firestore.Timestamp.fromMillis(Date.now() + Number(months) * 30 * 86400000);
   const period    = new Date().toISOString().slice(0, 7);

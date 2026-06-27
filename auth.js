@@ -17,6 +17,56 @@
     } catch(e) {}
 })();
 
+/* ── Session inactivity auto-logout ───────────────────────────────────────
+   Regular users: 60 min idle → auto sign-out.
+   Admin / SuperAdmin: 20 min idle → auto sign-out (tighter window for
+   high-privilege sessions). The timer resets on any user interaction.
+─────────────────────────────────────────────────────────────────────────── */
+(function(){
+    const IDLE_MS_USER  = 60 * 60 * 1000;  // 60 min
+    const IDLE_MS_ADMIN = 20 * 60 * 1000;  // 20 min
+    let _idleTimer = null;
+
+    function _getIdleLimit(){
+        try {
+            const u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+            const role = u?.role || '';
+            return (role === 'admin' || role === 'superAdmin') ? IDLE_MS_ADMIN : IDLE_MS_USER;
+        } catch(e){ return IDLE_MS_USER; }
+    }
+
+    async function _signOutNow(){
+        try {
+            localStorage.removeItem('sokoniUser');
+            localStorage.removeItem('loggedIn');
+            if(window.firebaseAuth){
+                const { signOut } = await import(
+                    'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
+                );
+                await signOut(window.firebaseAuth);
+            }
+        } catch(e){}
+        window.location.href = 'login.html?reason=idle';
+    }
+
+    function _resetIdleTimer(){
+        clearTimeout(_idleTimer);
+        _idleTimer = setTimeout(_signOutNow, _getIdleLimit());
+    }
+
+    ['click','keydown','mousemove','touchstart','scroll'].forEach(function(ev){
+        document.addEventListener(ev, _resetIdleTimer, { passive: true });
+    });
+
+    /* Only start timer once user is actually logged in */
+    document.addEventListener('DOMContentLoaded', function(){
+        if(localStorage.getItem('loggedIn') === 'true') _resetIdleTimer();
+    });
+
+    /* Re-arm when user logs in (SokoniSecurity.setSession calls this) */
+    window._armIdleTimer = _resetIdleTimer;
+})();
+
 /* ── UI helpers ── */
 function showAuthMsg(msg, type){
     const el = document.getElementById("authMsg");
