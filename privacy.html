@@ -1,365 +1,400 @@
 <!DOCTYPE html>
-<html lang="en">
-<head><script src="security.js"></script>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy — SOKONI</title>
-  <meta name="description" content="SOKONI Privacy Policy — how we collect, use, and protect your personal data on Kenya's leading digital marketplace.">
-  <meta property="og:title" content="Privacy Policy — SOKONI">
-  <meta property="og:description" content="Learn how SOKONI collects, uses, and protects your personal information.">
-  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <title>Privacy Policy — SOKONI | Kenya's Digital Marketplace</title>
+  <meta name="description" content="SOKONI Privacy Policy — how we collect, use, and protect your personal data on Kenya's leading digital marketplace platform.">
   <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Privacy Policy — SOKONI">
+  <meta property="og:description" content="Learn how SOKONI collects, uses, and protects your personal information. Kenya Data Protection Act 2019 compliant.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:url" content="https://mysokoni.co.ke/privacy">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://mysokoni.co.ke/privacy">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="stylesheet" href="premium.css">
-  <link rel="stylesheet" href="mobile.css">
-  <script src="shared-header.js" defer></script>
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <style>
-    :root { --accent: #71ff00; }
-    body { background: #0a0a0a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
-    .legal-hero {
-      background: linear-gradient(135deg,#0d1a00 0%,#0a0a0a 60%);
-      padding: 80px 24px 48px;
-      text-align: center;
-      border-bottom: 1px solid rgba(113,255,0,.1);
-    }
-    .legal-hero h1 { font-size: clamp(28px,5vw,44px); color: #fff; margin: 0 0 12px; font-weight: 800; }
-    .legal-hero p  { color: rgba(255,255,255,.5); font-size: 14px; margin: 0; }
-    .legal-body    { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
-    .legal-toc {
-      background: rgba(113,255,0,.05);
-      border: 1px solid rgba(113,255,0,.12);
-      border-radius: 14px;
-      padding: 24px 28px;
-      margin-bottom: 40px;
-    }
-    .legal-toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin: 0 0 16px; }
-    .legal-toc ol  { margin: 0; padding-left: 20px; }
-    .legal-toc li  { margin-bottom: 6px; }
-    .legal-toc a   { color: rgba(255,255,255,.7); text-decoration: none; font-size: 14px; }
-    .legal-toc a:hover { color: var(--accent); }
-    .legal-section { margin-bottom: 48px; }
-    .legal-section h2 {
-      font-size: 22px; color: #fff; font-weight: 700;
-      border-left: 3px solid var(--accent);
-      padding-left: 14px; margin: 0 0 20px;
-    }
-    .legal-section h3 { font-size: 16px; color: rgba(255,255,255,.85); font-weight: 600; margin: 28px 0 10px; }
-    .legal-section p  { line-height: 1.75; font-size: 15px; color: rgba(255,255,255,.6); margin: 0 0 14px; }
-    .legal-section ul { padding-left: 22px; }
-    .legal-section li { line-height: 1.75; font-size: 15px; color: rgba(255,255,255,.6); margin-bottom: 6px; }
-    .legal-section a  { color: var(--accent); }
-    .data-table {
-      width: 100%; border-collapse: collapse; margin: 16px 0;
-      background: rgba(255,255,255,.03); border-radius: 10px; overflow: hidden;
-    }
-    .data-table th { background: rgba(113,255,0,.1); color: var(--accent); text-align: left; padding: 12px 16px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
-    .data-table td { padding: 12px 16px; font-size: 14px; color: rgba(255,255,255,.6); border-top: 1px solid rgba(255,255,255,.05); vertical-align: top; }
-    .badge {
-      display: inline-block; padding: 3px 9px; border-radius: 20px;
-      font-size: 11px; font-weight: 700; letter-spacing: .3px;
-    }
-    .badge-green  { background: rgba(113,255,0,.12); color: #71ff00; }
-    .badge-blue   { background: rgba(0,180,255,.12); color: #00b4ff; }
-    .badge-orange { background: rgba(255,160,0,.12); color: #ffa000; }
-    .contact-card {
-      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
-      border-radius: 14px; padding: 24px; margin-top: 12px;
-    }
-    .contact-card p { margin: 0 0 6px; }
-    .divider { border: none; border-top: 1px solid rgba(255,255,255,.06); margin: 48px 0; }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--accent:#71ff00;--bg:#0a0a0a;--surface:rgba(255,255,255,.04);--border:rgba(255,255,255,.08);--text:#e0e0e0;--muted:rgba(255,255,255,.55)}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.6;min-height:100vh}
+
+    /* ── Static top nav ───────────────────────────────────────────── */
+    .sk-nav{position:sticky;top:0;z-index:1000;background:rgba(10,10,10,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px}
+    .sk-nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:60px}
+    .sk-nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .sk-nav-logo img{width:32px;height:32px;border-radius:8px;object-fit:contain}
+    .sk-nav-logo span{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px}
+    .sk-nav-links{display:flex;align-items:center;gap:20px}
+    .sk-nav-links a{color:rgba(255,255,255,.6);text-decoration:none;font-size:14px;font-weight:500;transition:color .18s}
+    .sk-nav-links a:hover{color:#fff}
+    .sk-nav-links a.active{color:var(--accent)}
+    .sk-nav-home-btn{background:var(--accent);color:#000;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:opacity .18s}
+    .sk-nav-home-btn:hover{opacity:.85;color:#000}
+    @media(max-width:640px){.sk-nav-links{display:none}}
+
+    /* ── Hero ─────────────────────────────────────────────────────── */
+    .hero{background:linear-gradient(135deg,#0d1a00 0%,#0a0a0a 60%);padding:72px 24px 48px;text-align:center;border-bottom:1px solid rgba(113,255,0,.1)}
+    .hero-badge{display:inline-block;padding:5px 14px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);border-radius:20px;font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px}
+    .hero h1{font-size:clamp(28px,5vw,46px);color:#fff;font-weight:800;margin-bottom:12px;line-height:1.15}
+    .hero p{color:var(--muted);font-size:14px}
+
+    /* ── Layout ───────────────────────────────────────────────────── */
+    .page{max-width:880px;margin:0 auto;padding:48px 24px 80px}
+    .toc{background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.1);border-radius:14px;padding:24px 28px;margin-bottom:40px}
+    .toc-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:14px}
+    .toc ol{padding-left:18px;columns:2;gap:16px}
+    .toc li{margin-bottom:6px;break-inside:avoid}
+    .toc a{color:rgba(255,255,255,.65);text-decoration:none;font-size:14px;transition:color .18s}
+    .toc a:hover{color:var(--accent)}
+    .section{margin-bottom:52px}
+    .section h2{font-size:21px;color:#fff;font-weight:700;padding-left:14px;border-left:3px solid var(--accent);margin-bottom:20px}
+    .section h3{font-size:16px;color:rgba(255,255,255,.85);font-weight:600;margin:24px 0 10px}
+    .section p{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:14px}
+    .section ul{padding-left:22px;margin-bottom:14px}
+    .section li{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:5px}
+    .section a{color:var(--accent)}
+    hr.divider{border:none;border-top:1px solid var(--border);margin:52px 0}
+
+    /* ── Table ─────────────────────────────────────────────────────── */
+    .sk-table{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden;margin:16px 0}
+    .sk-table th{background:rgba(113,255,0,.08);color:var(--accent);text-align:left;padding:12px 16px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    .sk-table td{padding:12px 16px;font-size:14px;color:var(--muted);border-top:1px solid var(--border);vertical-align:top}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+    .badge-g{background:rgba(113,255,0,.12);color:#71ff00}
+    .badge-b{background:rgba(0,180,255,.12);color:#00b4ff}
+    .badge-o{background:rgba(255,160,0,.12);color:#ffa000}
+
+    /* ── Contact card ──────────────────────────────────────────────── */
+    .contact-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-top:12px}
+    .contact-card p{font-size:15px;color:var(--muted);margin-bottom:8px}
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    footer{background:rgba(255,255,255,.02);border-top:1px solid var(--border);padding:32px 24px}
+    .footer-inner{max-width:1100px;margin:0 auto}
+    .footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 20px;margin-bottom:16px}
+    .footer-links a{color:rgba(255,255,255,.4);text-decoration:none;font-size:13px;transition:color .18s}
+    .footer-links a:hover,.footer-links a.active{color:var(--accent)}
+    .footer-copy{text-align:center;font-size:12px;color:rgba(255,255,255,.25)}
+    @media(max-width:640px){.toc ol{columns:1}}
   </style>
 </head>
 <body>
-<div class="legal-hero">
+
+<!-- Static navigation — visible without JavaScript -->
+<nav class="sk-nav" aria-label="SOKONI navigation">
+  <div class="sk-nav-inner">
+    <a href="/" class="sk-nav-logo" aria-label="SOKONI Home">
+      <img src="assets/logosokoni.png" alt="SOKONI">
+      <span>SOKONI</span>
+    </a>
+    <div class="sk-nav-links">
+      <a href="/privacy" class="active" aria-current="page">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/data-deletion">Data Deletion</a>
+      <a href="mailto:support@mysokoni.co.ke">Contact</a>
+      <a href="/" class="sk-nav-home-btn">Back to Marketplace</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-badge">Legal</div>
   <h1>Privacy Policy</h1>
-  <p>Last updated: 28 June 2026 &nbsp;|&nbsp; Effective: 28 June 2026</p>
-</div>
+  <p>Last updated: 28 June 2026 &nbsp;&bull;&nbsp; Effective: 28 June 2026</p>
+</header>
 
-<div class="legal-body">
+<main class="page">
 
-  <div class="legal-toc">
-    <h2>Contents</h2>
+  <nav class="toc" aria-label="Table of contents">
+    <div class="toc-label">Contents</div>
     <ol>
       <li><a href="#who-we-are">Who We Are</a></li>
       <li><a href="#data-collected">Data We Collect</a></li>
       <li><a href="#auth-providers">Authentication Providers</a></li>
       <li><a href="#how-we-use">How We Use Your Data</a></li>
-      <li><a href="#cookies">Cookies &amp; Tracking</a></li>
-      <li><a href="#payments">Payments &amp; Financial Data</a></li>
+      <li><a href="#cookies">Cookies &amp; Storage</a></li>
+      <li><a href="#payments">Payments</a></li>
       <li><a href="#analytics">Analytics</a></li>
       <li><a href="#sharing">Data Sharing</a></li>
       <li><a href="#retention">Data Retention</a></li>
       <li><a href="#your-rights">Your Rights</a></li>
       <li><a href="#security">Security</a></li>
       <li><a href="#children">Children</a></li>
-      <li><a href="#changes">Changes to This Policy</a></li>
+      <li><a href="#changes">Policy Changes</a></li>
       <li><a href="#contact">Contact &amp; DPO</a></li>
     </ol>
-  </div>
+  </nav>
 
   <!-- 1 -->
-  <div class="legal-section" id="who-we-are">
+  <section class="section" id="who-we-are">
     <h2>1. Who We Are</h2>
-    <p>SOKONI is a digital marketplace platform operated by <strong>Sokoni Digital Limited</strong>, a company registered in Kenya. Our platform connects buyers, sellers, service providers, vendors, drivers, and businesses across Kenya through one unified digital ecosystem.</p>
-    <p>This Privacy Policy describes how we collect, use, store, and protect personal data in accordance with the <strong>Kenya Data Protection Act, 2019 (No. 24 of 2019)</strong> and all applicable regulations.</p>
-    <p><strong>Data Controller:</strong> Sokoni Digital Limited<br>
-    <strong>Registered Address:</strong> Nairobi, Kenya<br>
-    <strong>DPO Email:</strong> <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a></p>
-  </div>
+    <p>SOKONI is a digital marketplace platform operated by <strong>Sokoni Digital Limited</strong>, a company registered in Kenya. Our platform connects buyers, sellers, service providers, vendors, drivers, and businesses across Kenya through one unified digital ecosystem available at <a href="https://mysokoni.co.ke">mysokoni.co.ke</a>.</p>
+    <p>This Privacy Policy describes how we collect, use, store, and protect personal data in accordance with the <strong>Kenya Data Protection Act, 2019 (No. 24 of 2019)</strong> and all applicable regulations. By using SOKONI, you agree to this policy.</p>
+    <p><strong>Data Controller:</strong> Sokoni Digital Limited &nbsp;&bull;&nbsp; Nairobi, Kenya<br>
+    <strong>DPO:</strong> <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a></p>
+  </section>
 
   <hr class="divider">
 
   <!-- 2 -->
-  <div class="legal-section" id="data-collected">
+  <section class="section" id="data-collected">
     <h2>2. Data We Collect</h2>
-
-    <h3>2.1 Account &amp; Identity Data</h3>
-    <table class="data-table">
-      <tr><th>Data Type</th><th>Examples</th><th>Purpose</th><th>Legal Basis</th></tr>
-      <tr><td>Name</td><td>Full name, display name</td><td>Account identity, invoicing</td><td><span class="badge badge-blue">Contract</span></td></tr>
-      <tr><td>Email address</td><td>user@example.com</td><td>Authentication, communications</td><td><span class="badge badge-blue">Contract</span></td></tr>
-      <tr><td>Phone number</td><td>+254 7XX XXX XXX</td><td>Phone OTP login, M-Pesa payments, delivery</td><td><span class="badge badge-blue">Contract</span></td></tr>
-      <tr><td>Profile photo</td><td>Uploaded avatar</td><td>Public profile display</td><td><span class="badge badge-green">Consent</span></td></tr>
-      <tr><td>Government ID</td><td>National ID number</td><td>Seller verification, KYC</td><td><span class="badge badge-orange">Legal obligation</span></td></tr>
+    <h3>Account &amp; Identity</h3>
+    <table class="sk-table">
+      <thead><tr><th>Data</th><th>Examples</th><th>Purpose</th><th>Basis</th></tr></thead>
+      <tbody>
+        <tr><td>Name</td><td>Full name, display name</td><td>Identity, invoicing</td><td><span class="badge badge-b">Contract</span></td></tr>
+        <tr><td>Email address</td><td>user@example.com</td><td>Login, notifications</td><td><span class="badge badge-b">Contract</span></td></tr>
+        <tr><td>Phone number</td><td>+254 7XX XXX XXX</td><td>OTP login, M-Pesa, delivery</td><td><span class="badge badge-b">Contract</span></td></tr>
+        <tr><td>Profile photo</td><td>Uploaded avatar</td><td>Public profile</td><td><span class="badge badge-g">Consent</span></td></tr>
+        <tr><td>Government ID</td><td>National ID number</td><td>Seller verification, KYC</td><td><span class="badge badge-o">Legal obligation</span></td></tr>
+      </tbody>
     </table>
-
-    <h3>2.2 Marketplace Activity</h3>
+    <h3>Marketplace Activity</h3>
     <ul>
       <li>Products listed, orders placed, order history</li>
-      <li>Search queries, browsing history on the platform</li>
-      <li>Reviews written and received</li>
+      <li>Search queries and browsing activity on the platform</li>
+      <li>Reviews written and received, ratings given</li>
       <li>Messages exchanged with other users (transaction-gated)</li>
-      <li>Saved items, wishlists, recently viewed</li>
+      <li>Saved items, wishlists, recently viewed products</li>
     </ul>
-
-    <h3>2.3 Device &amp; Technical Data</h3>
+    <h3>Device &amp; Technical Data</h3>
     <ul>
       <li>IP address, browser type, operating system</li>
-      <li>Device identifiers (Firebase Installation ID)</li>
+      <li>Device identifiers (Firebase Installation ID, push token)</li>
       <li>Service worker cache version, app version</li>
       <li>Crash logs and performance metrics</li>
     </ul>
-
-    <h3>2.4 Location Data</h3>
+    <h3>Location Data</h3>
     <ul>
-      <li>Delivery address (required for logistics)</li>
-      <li>GPS coordinates — only when you explicitly grant permission (driver app, delivery tracking)</li>
-      <li>City / region inferred from IP for localisation</li>
+      <li>Delivery address (required for order fulfilment)</li>
+      <li>GPS coordinates — only when you explicitly grant permission (driver app, live delivery tracking)</li>
+      <li>City or region inferred from IP address for localisation</li>
     </ul>
-
-    <h3>2.5 Seller &amp; Business Data</h3>
+    <h3>Seller &amp; Business Data</h3>
     <ul>
       <li>Business name, KRA PIN, business registration number</li>
-      <li>Bank account details / M-Pesa number for payouts</li>
+      <li>Bank account details or M-Pesa number for payouts</li>
       <li>Product inventory, pricing, promotions</li>
-      <li>VAT registration and eTIMS credentials (encrypted at rest)</li>
+      <li>VAT registration and eTIMS credentials (AES-256-GCM encrypted at rest)</li>
     </ul>
-  </div>
+  </section>
 
   <hr class="divider">
 
   <!-- 3 -->
-  <div class="legal-section" id="auth-providers">
+  <section class="section" id="auth-providers">
     <h2>3. Authentication Providers</h2>
-    <p>SOKONI uses <strong>Firebase Authentication</strong> (Google LLC) to manage user sign-in. When you choose a social sign-in provider, that provider's privacy policy also applies.</p>
-
-    <table class="data-table">
-      <tr><th>Provider</th><th>Data Received</th><th>Provider Privacy Policy</th></tr>
-      <tr>
-        <td><strong>Google Sign-In</strong></td>
-        <td>Name, email, profile photo, Google Account ID</td>
-        <td><a href="https://policies.google.com/privacy" target="_blank" rel="noopener">policies.google.com/privacy</a></td>
-      </tr>
-      <tr>
-        <td><strong>Facebook Login</strong></td>
-        <td>Name, email, Facebook User ID, public profile</td>
-        <td><a href="https://www.facebook.com/policy.php" target="_blank" rel="noopener">facebook.com/policy.php</a></td>
-      </tr>
-      <tr>
-        <td><strong>Phone OTP</strong></td>
-        <td>Phone number, verified via SMS OTP</td>
-        <td>Managed by Firebase / Google</td>
-      </tr>
-      <tr>
-        <td><strong>Email &amp; Password</strong></td>
-        <td>Email address, hashed password (stored by Firebase)</td>
-        <td>Managed by Firebase / Google</td>
-      </tr>
+    <p>SOKONI uses <strong>Firebase Authentication</strong> (provided by Google LLC) to manage user sign-in securely. When you choose a social sign-in method, that provider's privacy policy also applies to data they share with us.</p>
+    <table class="sk-table">
+      <thead><tr><th>Provider</th><th>Data Received by SOKONI</th><th>Provider Privacy Policy</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Google Sign-In</strong></td>
+          <td>Name, email address, Google Account ID, profile photo</td>
+          <td><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">policies.google.com/privacy</a></td>
+        </tr>
+        <tr>
+          <td><strong>Facebook Login</strong></td>
+          <td>Name, email address, Facebook User ID, public profile photo</td>
+          <td><a href="https://www.facebook.com/privacy/policy" target="_blank" rel="noopener noreferrer">facebook.com/privacy/policy</a></td>
+        </tr>
+        <tr>
+          <td><strong>Phone OTP</strong></td>
+          <td>Phone number — verified via one-time SMS passcode</td>
+          <td>Managed by Firebase / Google</td>
+        </tr>
+        <tr>
+          <td><strong>Email &amp; Password</strong></td>
+          <td>Email address; password hashed by Firebase (SOKONI never sees it)</td>
+          <td>Managed by Firebase / Google</td>
+        </tr>
+      </tbody>
     </table>
-
-    <p>We do <strong>not</strong> store your social provider password. Passwords for email/password accounts are hashed by Firebase and never accessible to SOKONI.</p>
-    <p>We support <strong>account linking</strong> — you may connect multiple sign-in methods to a single SOKONI account from your profile settings.</p>
-  </div>
+    <p>We do <strong>not</strong> store your social provider passwords. We support <strong>account linking</strong> — you can connect multiple sign-in methods to one SOKONI account from Profile → Settings.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 4 -->
-  <div class="legal-section" id="how-we-use">
+  <section class="section" id="how-we-use">
     <h2>4. How We Use Your Data</h2>
     <ul>
-      <li><strong>Provide the service:</strong> Process orders, facilitate payments, match buyers and sellers.</li>
-      <li><strong>Authentication:</strong> Verify your identity, maintain session security, enforce account limits.</li>
-      <li><strong>Logistics:</strong> Route deliveries, share your address with the assigned driver, provide live tracking.</li>
-      <li><strong>Payments:</strong> Process M-Pesa, card, and wallet transactions; generate eTIMS-compliant receipts.</li>
-      <li><strong>Communications:</strong> Send order notifications, delivery updates, marketing emails (with consent).</li>
-      <li><strong>Trust &amp; Safety:</strong> Detect fraud, prevent abuse, enforce community standards.</li>
-      <li><strong>Legal compliance:</strong> Meet KRA eTIMS obligations, anti-money-laundering requirements, court orders.</li>
-      <li><strong>Platform improvement:</strong> Aggregate analytics to improve search, recommendations, and performance.</li>
+      <li><strong>Service delivery:</strong> Process orders, facilitate payments, match buyers and sellers, route deliveries.</li>
+      <li><strong>Authentication:</strong> Verify your identity, maintain secure sessions, enforce account limits and brute-force protection.</li>
+      <li><strong>Communications:</strong> Send order updates, delivery tracking, security alerts, and (with consent) marketing emails.</li>
+      <li><strong>Payments:</strong> Process M-Pesa, card, and wallet transactions; generate eTIMS-compliant tax receipts.</li>
+      <li><strong>Trust &amp; Safety:</strong> Detect fraud, prevent abuse, enforce community standards, moderate content.</li>
+      <li><strong>Legal compliance:</strong> Meet KRA eTIMS obligations, anti-money-laundering requirements, and lawful court orders.</li>
+      <li><strong>Platform improvement:</strong> Aggregate, anonymised analytics used to improve search results, recommendations, and performance.</li>
     </ul>
-  </div>
+  </section>
 
   <hr class="divider">
 
   <!-- 5 -->
-  <div class="legal-section" id="cookies">
-    <h2>5. Cookies &amp; Tracking</h2>
-    <p>SOKONI uses a Progressive Web App (PWA) architecture. We use the following storage technologies:</p>
-
-    <table class="data-table">
-      <tr><th>Type</th><th>Purpose</th><th>Retention</th></tr>
-      <tr><td>Firebase Auth Session Cookie</td><td>Keep you logged in (Remember Me)</td><td>365 days (Remember Me) / session</td></tr>
-      <tr><td>Service Worker Cache</td><td>Offline access to pages and assets</td><td>Until cache version changes</td></tr>
-      <tr><td>IndexedDB (POS)</td><td>Offline SmartPOS transactions</td><td>Until synced to cloud</td></tr>
-      <tr><td>localStorage</td><td>Cart, preferences, print queue</td><td>Until cleared by user</td></tr>
-      <tr><td>Google Analytics</td><td>Aggregate usage analytics</td><td>26 months</td></tr>
+  <section class="section" id="cookies">
+    <h2>5. Cookies &amp; Local Storage</h2>
+    <p>SOKONI is a Progressive Web App (PWA). We use the following storage mechanisms:</p>
+    <table class="sk-table">
+      <thead><tr><th>Type</th><th>Purpose</th><th>Retention</th></tr></thead>
+      <tbody>
+        <tr><td>Firebase Auth session cookie</td><td>Keep you signed in (Remember Me)</td><td>365 days (Remember Me) or session</td></tr>
+        <tr><td>Service Worker Cache</td><td>Offline access to pages and assets</td><td>Until cache version changes</td></tr>
+        <tr><td>IndexedDB (SmartPOS)</td><td>Offline POS transactions pending sync</td><td>Until synced to cloud and cleared</td></tr>
+        <tr><td>localStorage</td><td>Cart, user preferences, print queue</td><td>Until cleared by user or logout</td></tr>
+        <tr><td>Google Analytics 4 (GA4)</td><td>Aggregate usage analytics (_ga, _gid cookies)</td><td>Up to 26 months</td></tr>
+      </tbody>
     </table>
-
-    <p>We do <strong>not</strong> use third-party advertising cookies or sell your data to advertisers. You may clear all local storage via your browser settings at any time.</p>
-  </div>
+    <p>We do <strong>not</strong> use third-party advertising cookies. You may clear all browser storage at any time via your browser settings or by logging out of SOKONI.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 6 -->
-  <div class="legal-section" id="payments">
+  <section class="section" id="payments">
     <h2>6. Payments &amp; Financial Data</h2>
-    <p>Payment processing is handled by <strong>IntaSend</strong> (licensed by the Central Bank of Kenya). SOKONI does not store raw card numbers or M-Pesa PINs.</p>
+    <p>Payment processing is handled by <strong>IntaSend</strong>, licensed by the Central Bank of Kenya. SOKONI does not store raw card numbers or M-Pesa PINs.</p>
     <ul>
-      <li>M-Pesa STK push is initiated via IntaSend — your PIN is entered directly on the Safaricom interface.</li>
-      <li>Transaction records (amount, reference, status) are stored in our Firestore ledger for accounting and dispute resolution.</li>
-      <li>Seller payouts are processed via IntaSend B2C with Withholding Tax (WHT) applied at 5% per Kenya Revenue Authority regulations.</li>
-      <li>KRA eTIMS receipts are generated for all taxable transactions.</li>
+      <li>M-Pesa STK Push is initiated via IntaSend — your PIN is entered directly on the Safaricom secure interface, never on SOKONI servers.</li>
+      <li>Transaction records (amount, reference number, status) are stored in our Firestore database for accounting, reconciliation, and dispute resolution.</li>
+      <li>Seller payouts are processed via IntaSend B2C with 5% Withholding Tax (WHT) deducted per the Income Tax Act, Cap. 470.</li>
+      <li>KRA eTIMS receipts are generated for all taxable transactions and stored for 7 years as required by law.</li>
     </ul>
-    <p>IntaSend Privacy Policy: <a href="https://intasend.com/privacy" target="_blank" rel="noopener">intasend.com/privacy</a></p>
-  </div>
+    <p>IntaSend Privacy Policy: <a href="https://intasend.com/privacy-policy/" target="_blank" rel="noopener noreferrer">intasend.com/privacy-policy</a></p>
+  </section>
 
   <hr class="divider">
 
   <!-- 7 -->
-  <div class="legal-section" id="analytics">
+  <section class="section" id="analytics">
     <h2>7. Analytics</h2>
-    <p>We use <strong>Google Analytics 4</strong> (GA4) to understand how the platform is used. All analytics data is aggregated and anonymised before being used to make product decisions. We do not use analytics data to build individual advertising profiles.</p>
-    <p>We also maintain internal platform analytics (search trends, funnel metrics, seller performance scores) stored in Firestore, accessible only to authorised admin users.</p>
-  </div>
+    <p>We use <strong>Google Analytics 4 (GA4)</strong> to understand how users interact with the platform. All data is aggregated and anonymised before informing product decisions. We do not build individual advertising profiles or sell analytics data to third parties.</p>
+    <p>We also maintain internal platform analytics (search trends, funnel metrics, seller performance scores) stored in Firebase Firestore, accessible only to authorised admin and operations staff.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 8 -->
-  <div class="legal-section" id="sharing">
+  <section class="section" id="sharing">
     <h2>8. Data Sharing</h2>
-    <p>We share personal data only as required:</p>
+    <p>We share your personal data only when necessary:</p>
     <ul>
-      <li><strong>Sellers:</strong> Your delivery name and address are shared with the seller who fulfilled your order.</li>
-      <li><strong>Drivers:</strong> Your pickup/delivery coordinates are shared with the assigned driver during active delivery.</li>
-      <li><strong>Firebase / Google:</strong> Authentication and database infrastructure.</li>
-      <li><strong>IntaSend:</strong> Payment processing (name, phone number, amount).</li>
-      <li><strong>KRA:</strong> eTIMS transaction data as required by law.</li>
-      <li><strong>Law enforcement:</strong> When legally required by a valid Kenyan court order or statutory demand.</li>
+      <li><strong>Sellers:</strong> Your delivery name and address are shared with the fulfilling seller.</li>
+      <li><strong>Drivers:</strong> Your pickup or delivery coordinates are shared with the assigned driver during an active delivery.</li>
+      <li><strong>Google / Firebase:</strong> Authentication, database, storage, and hosting infrastructure.</li>
+      <li><strong>IntaSend:</strong> Payment processing — name, phone number, amount.</li>
+      <li><strong>Kenya Revenue Authority (KRA):</strong> eTIMS transaction data as required by law.</li>
+      <li><strong>Law enforcement:</strong> Only when required by a valid Kenyan court order or statutory demand.</li>
     </ul>
-    <p>We do <strong>not</strong> sell, rent, or trade your personal data to any third party for marketing purposes.</p>
-  </div>
+    <p>We do <strong>not</strong> sell, rent, or trade your personal data to any third party for marketing or advertising purposes.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 9 -->
-  <div class="legal-section" id="retention">
+  <section class="section" id="retention">
     <h2>9. Data Retention</h2>
-    <table class="data-table">
-      <tr><th>Data Category</th><th>Retention Period</th><th>Reason</th></tr>
-      <tr><td>Active account data</td><td>Duration of account</td><td>Service provision</td></tr>
-      <tr><td>Order &amp; payment records</td><td>7 years after transaction</td><td>Kenya tax law (Income Tax Act)</td></tr>
-      <tr><td>eTIMS invoice records</td><td>7 years</td><td>KRA obligation</td></tr>
-      <tr><td>Chat messages</td><td>90 days after order completion</td><td>Dispute resolution window</td></tr>
-      <tr><td>Audit logs</td><td>2 years</td><td>Security compliance</td></tr>
-      <tr><td>Deleted account data</td><td>30 days (then permanently purged)</td><td>Fraud prevention buffer</td></tr>
+    <table class="sk-table">
+      <thead><tr><th>Data Category</th><th>Retention Period</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>Active account data</td><td>Duration of account</td><td>Service provision</td></tr>
+        <tr><td>Order &amp; payment records</td><td>7 years after transaction</td><td>Kenya Income Tax Act, Cap. 470</td></tr>
+        <tr><td>KRA eTIMS invoice records</td><td>7 years</td><td>KRA legal obligation</td></tr>
+        <tr><td>Chat / messaging data</td><td>90 days after order completion</td><td>Dispute resolution window</td></tr>
+        <tr><td>Security audit logs</td><td>2 years</td><td>Security compliance</td></tr>
+        <tr><td>Deleted account personal data</td><td>30-day soft-delete, then permanent purge</td><td>Fraud prevention buffer, then KDPA compliance</td></tr>
+      </tbody>
     </table>
-    <p>After the applicable retention period, data is permanently deleted or irreversibly anonymised.</p>
-  </div>
+    <p>After the applicable retention period expires, data is permanently deleted or irreversibly anonymised.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 10 -->
-  <div class="legal-section" id="your-rights">
+  <section class="section" id="your-rights">
     <h2>10. Your Rights</h2>
-    <p>Under the Kenya Data Protection Act, 2019, you have the right to:</p>
+    <p>Under the Kenya Data Protection Act 2019, you have the following rights:</p>
     <ul>
       <li><strong>Access:</strong> Request a copy of your personal data.</li>
       <li><strong>Rectification:</strong> Correct inaccurate personal data.</li>
       <li><strong>Erasure:</strong> Request deletion of your data (subject to legal retention requirements).</li>
-      <li><strong>Portability:</strong> Receive your data in a structured, machine-readable format.</li>
+      <li><strong>Portability:</strong> Receive your data in a structured, machine-readable format (CSV or JSON).</li>
       <li><strong>Objection:</strong> Object to processing based on legitimate interests.</li>
-      <li><strong>Restriction:</strong> Request that we limit processing of your data.</li>
-      <li><strong>Withdraw consent:</strong> At any time, where processing is based on consent.</li>
+      <li><strong>Restriction:</strong> Request that we temporarily stop processing your data.</li>
+      <li><strong>Withdraw consent:</strong> At any time, where processing is based on your consent.</li>
     </ul>
-    <p>To exercise any of these rights, visit our <a href="/data-deletion">Data Deletion &amp; Rights Centre</a> or email <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a>.</p>
-    <p>You may also lodge a complaint with the <strong>Office of the Data Protection Commissioner (ODPC)</strong> at <a href="https://www.odpc.go.ke" target="_blank" rel="noopener">odpc.go.ke</a>.</p>
-  </div>
+    <p>To exercise any right, visit our <a href="/data-deletion">Data Deletion &amp; Rights Centre</a> or email <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a>. We respond within 30 days as required by the KDPA.</p>
+    <p>You may also complain to the <strong>Office of the Data Protection Commissioner (ODPC)</strong> at <a href="https://www.odpc.go.ke" target="_blank" rel="noopener noreferrer">odpc.go.ke</a>.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 11 -->
-  <div class="legal-section" id="security">
+  <section class="section" id="security">
     <h2>11. Security</h2>
     <ul>
       <li>All data in transit is encrypted with TLS 1.2+.</li>
-      <li>Firestore data is encrypted at rest by Google Cloud.</li>
-      <li>Payment credentials are stored in Firebase Secret Manager (not in code).</li>
-      <li>Admin access is protected by multi-factor authentication and role-based access control.</li>
-      <li>We conduct regular security audits and penetration testing.</li>
-      <li>Brute-force protection: accounts are locked after 5 failed login attempts.</li>
+      <li>Firebase Firestore data is encrypted at rest by Google Cloud (AES-256).</li>
+      <li>Payment API keys and credentials are stored in Firebase Secret Manager, not in source code.</li>
+      <li>Admin access is protected by multi-factor authentication and role-based access control (8 permission levels).</li>
+      <li>Brute-force protection: accounts are locked after 5 failed consecutive login attempts.</li>
+      <li>Sessions time out automatically after 30 minutes of inactivity (configurable).</li>
+      <li>Content Security Policy (CSP) headers are enforced on all pages.</li>
     </ul>
-    <p>If you discover a security vulnerability, please disclose it responsibly to <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a>.</p>
-  </div>
+    <p>To report a security vulnerability responsibly, email <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a>.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 12 -->
-  <div class="legal-section" id="children">
+  <section class="section" id="children">
     <h2>12. Children</h2>
-    <p>SOKONI is not directed at children under the age of 18. We do not knowingly collect personal data from anyone under 18. If you believe a child has provided us with personal data, please contact us immediately at <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a> and we will delete it.</p>
-  </div>
+    <p>SOKONI is not directed at children under 18 years of age. We do not knowingly collect personal data from anyone under 18. If you believe a child has provided us with personal data, contact <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a> immediately and we will delete it.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 13 -->
-  <div class="legal-section" id="changes">
+  <section class="section" id="changes">
     <h2>13. Changes to This Policy</h2>
-    <p>We may update this Privacy Policy from time to time. Material changes will be communicated via email or an in-app notification at least 14 days before taking effect. The "Last updated" date at the top of this page always reflects the most recent revision. Continued use of SOKONI after a change constitutes acceptance of the updated policy.</p>
-  </div>
+    <p>We may update this Privacy Policy periodically. Material changes will be communicated via email or an in-app notification at least 14 days before taking effect. The "Last updated" date at the top of this page always reflects the most recent revision. Continued use of SOKONI after a change takes effect constitutes acceptance of the updated policy.</p>
+  </section>
 
   <hr class="divider">
 
   <!-- 14 -->
-  <div class="legal-section" id="contact">
+  <section class="section" id="contact">
     <h2>14. Contact &amp; Data Protection Officer</h2>
     <div class="contact-card">
-      <p><strong>Sokoni Digital Limited</strong></p>
-      <p>📧 Privacy enquiries: <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a></p>
-      <p>📧 Security disclosures: <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a></p>
-      <p>📧 Legal / compliance: <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></p>
-      <p>🌐 <a href="https://mysokoni.co.ke">mysokoni.co.ke</a></p>
-      <p style="margin-top:12px;font-size:13px;color:rgba(255,255,255,.35);">Response time: within 72 hours for privacy requests, 30 days for formal data subject access requests as required by law.</p>
+      <p><strong>Sokoni Digital Limited</strong> &nbsp;&bull;&nbsp; Nairobi, Kenya</p>
+      <p>Privacy enquiries: <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a></p>
+      <p>Security disclosures: <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a></p>
+      <p>Legal / compliance: <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></p>
+      <p>Platform: <a href="https://mysokoni.co.ke">mysokoni.co.ke</a></p>
+      <p style="margin-top:10px;font-size:13px;color:rgba(255,255,255,.35);">Response time: within 72 hours for general privacy enquiries; within 30 days for formal data subject access requests as required by the KDPA 2019.</p>
     </div>
-    <p style="margin-top:20px;">To request data deletion or export, use our <a href="/data-deletion">self-service portal</a>.</p>
+    <p style="margin-top:18px;">To request data deletion or data export, use our <a href="/data-deletion">self-service Data Deletion Centre</a>.</p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-links">
+      <a href="/">Marketplace</a>
+      <a href="/privacy" class="active">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/data-deletion">Data Deletion</a>
+      <a href="mailto:support@mysokoni.co.ke">Contact Us</a>
+    </div>
+    <p class="footer-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.</p>
   </div>
-
-</div>
-
-<footer style="text-align:center;padding:32px 24px;border-top:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.3);font-size:13px;">
-  &copy; 2026 Sokoni Digital Limited &nbsp;|&nbsp;
-  <a href="/privacy" style="color:rgba(113,255,0,.7);">Privacy Policy</a> &nbsp;|&nbsp;
-  <a href="/terms" style="color:rgba(255,255,255,.4);">Terms of Service</a> &nbsp;|&nbsp;
-  <a href="/data-deletion" style="color:rgba(255,255,255,.4);">Data Deletion</a>
 </footer>
+
 </body>
 </html>
