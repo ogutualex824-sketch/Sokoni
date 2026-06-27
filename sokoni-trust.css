@@ -1,0 +1,659 @@
+/* ================================================================
+   SOKONI Trust UI — sokoni-trust.css v1.0
+   Styles for: trust badges, payment status, price breakdown,
+   buyer protection, seller verification, digital receipts.
+   Works on dark AND light backgrounds via CSS variables.
+================================================================ */
+
+/* ── Theme tokens (override per page if needed) ── */
+:root {
+  --st-green:      #00a651;
+  --st-green-lt:   rgba(0, 166, 81, .10);
+  --st-green-bd:   rgba(0, 166, 81, .25);
+  --st-blue:       #1565c0;
+  --st-blue-lt:    rgba(21, 101, 192, .10);
+  --st-blue-bd:    rgba(21, 101, 192, .25);
+  --st-gold:       #f9a825;
+  --st-gold-lt:    rgba(249, 168, 37, .10);
+  --st-gold-bd:    rgba(249, 168, 37, .25);
+  --st-red:        #c62828;
+  --st-white:      #ffffff;
+  --st-dark:       rgba(0,0,0,.82);
+  --st-text:       rgba(255,255,255,.85);
+  --st-muted:      rgba(255,255,255,.45);
+  --st-border:     rgba(255,255,255,.10);
+  --st-card:       rgba(255,255,255,.04);
+  --st-radius:     12px;
+  --st-radius-sm:  8px;
+  --st-font:       'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Light-mode override ── */
+.st-light {
+  --st-text:   #1a1a1a;
+  --st-muted:  #666;
+  --st-border: rgba(0,0,0,.10);
+  --st-card:   rgba(0,0,0,.03);
+}
+
+/* ================================================================
+   TRUST BADGE
+================================================================ */
+.st-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--st-green-lt);
+  border: 1px solid var(--st-green-bd);
+  border-radius: var(--st-radius-sm);
+  font-family: var(--st-font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--st-green);
+  letter-spacing: .3px;
+  white-space: nowrap;
+  user-select: none;
+}
+.st-badge svg { flex-shrink: 0; }
+.st-badge .st-badge-sub {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--st-muted);
+  letter-spacing: .2px;
+  margin-left: 4px;
+}
+.st-badge-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Compact variant */
+.st-badge.compact {
+  padding: 5px 10px;
+  font-size: 11px;
+  gap: 5px;
+}
+
+/* Full-width banner variant */
+.st-badge-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: var(--st-green-lt);
+  border-top: 1px solid var(--st-green-bd);
+  border-bottom: 1px solid var(--st-green-bd);
+  font-family: var(--st-font);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.st-badge-banner .st-badge-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--st-green);
+  font-weight: 600;
+}
+.st-badge-banner .st-badge-item svg { opacity: .85; }
+.st-badge-banner .st-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--st-green-bd);
+}
+
+/* IntaSend official badge */
+.st-intasend-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  background: var(--st-green-lt);
+  border: 1px solid var(--st-green-bd);
+  border-radius: var(--st-radius-sm);
+  width: fit-content;
+  max-width: 100%;
+}
+.st-intasend-badge .st-is-logo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--st-font);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--st-green);
+  letter-spacing: .2px;
+}
+.st-intasend-badge .st-is-sub {
+  font-size: 10px;
+  color: var(--st-muted);
+  letter-spacing: .2px;
+}
+.st-intasend-badge .st-is-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--st-green-bd);
+  flex-shrink: 0;
+}
+.st-intasend-badge .st-is-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.st-intasend-badge .st-is-pill {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  color: var(--st-muted);
+  text-transform: uppercase;
+}
+
+/* ================================================================
+   PAYMENT STATUS BAR
+================================================================ */
+.st-status {
+  font-family: var(--st-font);
+  padding: 12px 16px;
+  border-radius: var(--st-radius);
+  background: var(--st-card);
+  border: 1px solid var(--st-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.st-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.st-status-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  background: var(--st-card);
+  border: 1px solid var(--st-border);
+  transition: all .3s;
+}
+.st-status-text { flex: 1; }
+.st-status-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--st-text);
+  margin-bottom: 2px;
+}
+.st-status-desc {
+  font-size: 12px;
+  color: var(--st-muted);
+  line-height: 1.4;
+}
+.st-status-phase {
+  display: flex;
+  gap: 4px;
+}
+.st-phase-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--st-border);
+  transition: background .3s;
+}
+.st-phase-dot.done { background: var(--st-green); }
+.st-phase-dot.active {
+  background: var(--st-green);
+  animation: st-pulse 1.2s ease-in-out infinite;
+}
+
+/* Status states */
+.st-status.preparing  .st-status-icon { background: var(--st-blue-lt);  border-color: var(--st-blue-bd);  color: var(--st-blue); }
+.st-status.waiting    .st-status-icon { background: var(--st-gold-lt);   border-color: var(--st-gold-bd);  color: var(--st-gold); }
+.st-status.received   .st-status-icon { background: var(--st-green-lt);  border-color: var(--st-green-bd); color: var(--st-green); }
+.st-status.verified   .st-status-icon { background: var(--st-green-lt);  border-color: var(--st-green-bd); color: var(--st-green); }
+.st-status.completing .st-status-icon { background: var(--st-green-lt);  border-color: var(--st-green-bd); color: var(--st-green); }
+.st-status.receipt    .st-status-icon { background: var(--st-green-lt);  border-color: var(--st-green-bd); color: var(--st-green); }
+.st-status.complete   .st-status-icon { background: var(--st-green-lt);  border-color: var(--st-green-bd); color: var(--st-green); }
+.st-status.failed     .st-status-icon { background: rgba(198,40,40,.12); border-color: rgba(198,40,40,.25); color: var(--st-red); }
+
+@keyframes st-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.4); opacity: .6; }
+}
+@keyframes st-spin {
+  to { transform: rotate(360deg); }
+}
+.st-spinning { animation: st-spin .8s linear infinite; }
+
+/* ================================================================
+   PRICE BREAKDOWN
+================================================================ */
+.st-breakdown {
+  font-family: var(--st-font);
+  border: 1px solid var(--st-border);
+  border-radius: var(--st-radius);
+  overflow: hidden;
+  background: var(--st-card);
+}
+.st-breakdown-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--st-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--st-muted);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.st-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--st-text);
+  border-bottom: 1px solid var(--st-border);
+  gap: 12px;
+}
+.st-breakdown-row:last-child { border-bottom: none; }
+.st-breakdown-row.discount { color: var(--st-green); }
+.st-breakdown-row.coupon   { color: var(--st-green); }
+.st-breakdown-row.fee      { color: var(--st-muted);  font-size: 12px; }
+.st-breakdown-row.total {
+  font-size: 15px;
+  font-weight: 800;
+  background: var(--st-card);
+  border-top: 1px solid var(--st-border);
+  padding: 12px 14px;
+}
+.st-breakdown-row .st-bd-label { flex: 1; }
+.st-breakdown-row .st-bd-amount { font-variant-numeric: tabular-nums; font-weight: 600; }
+.st-breakdown-row.total .st-bd-amount { color: var(--st-green); font-size: 17px; }
+.st-no-hidden {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  font-size: 11px;
+  color: var(--st-muted);
+  border-top: 1px solid var(--st-border);
+}
+
+/* ================================================================
+   BUYER PROTECTION
+================================================================ */
+.st-protection {
+  font-family: var(--st-font);
+  background: var(--st-card);
+  border: 1px solid var(--st-border);
+  border-radius: var(--st-radius);
+  padding: 12px;
+}
+.st-protection-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--st-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.st-protection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.st-protection-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--st-text);
+  line-height: 1.4;
+}
+.st-protection-item .st-pi-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.st-protection-item strong { color: var(--st-text); }
+
+/* ================================================================
+   SELLER VERIFICATION BADGE
+================================================================ */
+.st-seller-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-family: var(--st-font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  user-select: none;
+  white-space: nowrap;
+}
+.st-seller-badge.seller   { background: var(--st-green-lt);  border: 1px solid var(--st-green-bd);  color: var(--st-green); }
+.st-seller-badge.business { background: var(--st-blue-lt);   border: 1px solid var(--st-blue-bd);   color: var(--st-blue); }
+.st-seller-badge.provider { background: var(--st-gold-lt);   border: 1px solid var(--st-gold-bd);   color: var(--st-gold); }
+.st-seller-badge.professional { background: rgba(156,39,176,.10); border: 1px solid rgba(156,39,176,.25); color: #7b1fa2; }
+.st-seller-badge .st-sb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.st-seller-trust-card {
+  font-family: var(--st-font);
+  background: var(--st-card);
+  border: 1px solid var(--st-border);
+  border-radius: var(--st-radius);
+  padding: 14px;
+}
+.st-seller-trust-card .st-stc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.st-seller-trust-card .st-stc-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--st-text);
+}
+.st-seller-trust-card .st-stc-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.st-stc-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--st-muted);
+}
+
+/* ================================================================
+   DIGITAL RECEIPT MODAL
+================================================================ */
+.st-receipt-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.75);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s;
+}
+.st-receipt-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+.st-receipt-modal {
+  background: #0f1117;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 520px;
+  max-height: 92vh;
+  overflow-y: auto;
+  transform: translateY(40px);
+  transition: transform .3s;
+  font-family: var(--st-font);
+}
+.st-receipt-overlay.visible .st-receipt-modal {
+  transform: translateY(0);
+}
+.st-receipt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  position: sticky;
+  top: 0;
+  background: #0f1117;
+  z-index: 1;
+}
+.st-receipt-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: white;
+}
+.st-receipt-close {
+  background: rgba(255,255,255,.08);
+  border: none;
+  color: rgba(255,255,255,.6);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.st-receipt-body {
+  padding: 20px;
+}
+.st-receipt-merchant {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.st-receipt-merchant .st-rm-name {
+  font-size: 18px;
+  font-weight: 900;
+  color: white;
+  letter-spacing: -.3px;
+}
+.st-receipt-merchant .st-rm-sub {
+  font-size: 12px;
+  color: rgba(255,255,255,.45);
+  margin-top: 3px;
+}
+.st-receipt-divider {
+  border: none;
+  border-top: 1px dashed rgba(255,255,255,.12);
+  margin: 12px 0;
+}
+.st-receipt-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.st-receipt-meta-item { font-size: 11px; }
+.st-receipt-meta-item .st-rmi-label {
+  color: rgba(255,255,255,.35);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 2px;
+}
+.st-receipt-meta-item .st-rmi-val {
+  color: rgba(255,255,255,.85);
+  font-weight: 600;
+}
+.st-receipt-items { margin-bottom: 12px; }
+.st-receipt-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 13px;
+  color: rgba(255,255,255,.75);
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.st-receipt-item:last-child { border-bottom: none; }
+.st-receipt-item .st-ri-name { flex: 1; }
+.st-receipt-item .st-ri-qty  { color: rgba(255,255,255,.4); min-width: 24px; text-align: center; }
+.st-receipt-item .st-ri-price { font-variant-numeric: tabular-nums; font-weight: 600; }
+.st-receipt-totals { margin-bottom: 12px; }
+.st-receipt-total-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 13px;
+  color: rgba(255,255,255,.55);
+}
+.st-receipt-total-row.grand {
+  font-size: 16px;
+  font-weight: 800;
+  color: white;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255,255,255,.12);
+}
+.st-receipt-total-row.grand .st-rt-amount { color: #00a651; }
+.st-receipt-payment-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(0,166,81,.08);
+  border: 1px solid rgba(0,166,81,.18);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #00a651;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.st-receipt-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.st-receipt-qr .st-qr-canvas {
+  width: 120px;
+  height: 120px;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.st-receipt-qr .st-qr-label {
+  font-size: 11px;
+  color: rgba(255,255,255,.35);
+  text-align: center;
+}
+.st-receipt-qr .st-qr-ref {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,.7);
+  letter-spacing: 1px;
+  font-family: 'Courier New', monospace;
+}
+.st-receipt-actions {
+  display: flex;
+  gap: 8px;
+}
+.st-receipt-action {
+  flex: 1;
+  height: 42px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--st-font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity .15s;
+}
+.st-receipt-action:hover { opacity: .85; }
+.st-ra-download { background: #00a651; color: white; }
+.st-ra-email    { background: rgba(255,255,255,.08); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.10); }
+.st-ra-print    { background: rgba(255,255,255,.08); color: rgba(255,255,255,.8); border: 1px solid rgba(255,255,255,.10); }
+
+/* ================================================================
+   PAYMENT TRUST FOOTER (full-page checkout)
+================================================================ */
+.st-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0;
+  font-family: var(--st-font);
+}
+.st-footer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.st-footer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 20px;
+  font-size: 11px;
+  color: rgba(255,255,255,.45);
+}
+.st-footer-text {
+  font-size: 11px;
+  color: rgba(255,255,255,.25);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ================================================================
+   PRINT RECEIPT STYLES (used when window.print() is called)
+================================================================ */
+@media print {
+  body > *:not(.st-receipt-overlay) { display: none !important; }
+  .st-receipt-overlay {
+    position: static !important;
+    background: white !important;
+    opacity: 1 !important;
+    pointer-events: all !important;
+  }
+  .st-receipt-modal {
+    background: white !important;
+    color: black !important;
+    border: none !important;
+    max-height: none !important;
+    transform: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+  }
+  .st-receipt-overlay.visible .st-receipt-modal { transform: none !important; }
+  .st-receipt-header { display: none !important; }
+  .st-receipt-actions { display: none !important; }
+  .st-receipt-merchant .st-rm-name { color: black !important; }
+  .st-receipt-merchant .st-rm-sub  { color: #555 !important; }
+  .st-receipt-item      { color: #333 !important; }
+  .st-receipt-total-row { color: #555 !important; }
+  .st-receipt-total-row.grand { color: black !important; }
+  .st-receipt-total-row.grand .st-rt-amount { color: #00a651 !important; }
+  .st-receipt-meta-item .st-rmi-label { color: #888 !important; }
+  .st-receipt-meta-item .st-rmi-val   { color: #333 !important; }
+  .st-receipt-divider { border-color: #ccc !important; }
+  .st-receipt-payment-badge { background: #f0f8f4 !important; border-color: #00a651 !important; }
+}

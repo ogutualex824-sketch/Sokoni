@@ -24,6 +24,7 @@
   <script src="seo.js" defer></script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="checkout.css">
+  <link rel="stylesheet" href="sokoni-trust.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     /* ============================
@@ -1143,34 +1144,28 @@
         <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;" id="estDeliveryNote">Select zone above to calculate</div>
       </div>
 
-      <!-- Trust badges -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
-          <i class="fas fa-lock" style="color:#71ff00;font-size:16px;"></i>
-          <div><div style="font-size:11px;font-weight:800;color:white;">SSL Secured</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">256-bit encryption</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
-          <i class="fas fa-undo" style="color:#00aaff;font-size:16px;"></i>
-          <div><div style="font-size:11px;font-weight:800;color:white;">7-Day Returns</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">Hassle-free policy</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
-          <i class="fas fa-truck" style="color:#fbbf24;font-size:16px;"></i>
-          <div><div style="font-size:11px;font-weight:800;color:white;">Fast Delivery</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">Same-day Nairobi</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;">
-          <i class="fab fa-whatsapp" style="color:#25d366;font-size:16px;"></i>
-          <div><div style="font-size:11px;font-weight:800;color:white;">WhatsApp Support</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">+254 705 726 803</div></div>
-        </div>
+      <!-- Trust badge (SokoniTrust module renders this) -->
+      <div data-trust="badge" style="margin-top:14px;"></div>
+
+      <!-- Payment status bar (activated during payment flow by JS) -->
+      <div id="checkout-status-wrap" style="margin-top:10px;display:none;">
+        <div data-trust="status" id="checkout-trust-status"></div>
       </div>
 
+      <!-- Buyer protection -->
+      <div data-trust="protection" data-type="marketplace" style="margin-top:10px;"></div>
+
       <!-- WhatsApp support link -->
-      <a href="https://wa.me/254705726803?text=Hi%20SOKONI%20Support%20-%20I%20need%20help%20with%20my%20order." target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);border-radius:12px;color:#25d366;font-size:13px;font-weight:700;text-decoration:none;">
+      <a href="https://wa.me/254705726803?text=Hi%20SOKONI%20Support%20-%20I%20need%20help%20with%20my%20order." target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;padding:11px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);border-radius:12px;color:#25d366;font-size:13px;font-weight:700;text-decoration:none;">
         <i class="fab fa-whatsapp"></i> Chat with Support on WhatsApp
       </a>
     </div>
 
   </div>
 </section>
+
+<!-- Trust footer banner -->
+<div data-trust="footer" style="margin-top:0;"></div>
 
 <!-- M-PESA MODAL -->
 <div class="mpesa-overlay" id="mpesaOverlay">
@@ -1230,13 +1225,8 @@
       📨 Send STK Push
     </button>
 
-    <!-- IntaSend trust badge — visible when live key is active -->
-    <div id="intasendTrustBadge" style="display:none;margin-top:16px;padding:9px 14px;background:rgba(76,175,80,0.06);border:1px solid rgba(76,175,80,0.16);border-radius:10px;align-items:center;justify-content:center;gap:10px;">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6L12 2z" fill="#4caf50" opacity=".85"/></svg>
-      <span style="font-size:11px;color:rgba(76,175,80,0.85);font-weight:700;letter-spacing:.3px;">Secured by IntaSend</span>
-      <span style="width:1px;height:11px;background:rgba(76,175,80,0.25);flex-shrink:0;"></span>
-      <span style="font-size:10px;color:rgba(255,255,255,0.32);letter-spacing:.2px;">256-bit SSL · PCI Compliant</span>
-    </div>
+    <!-- IntaSend trust badge — rendered by SokoniTrust module -->
+    <div id="intasendTrustBadge" data-trust="badge" style="margin-top:16px;"></div>
 
   </div>
 </div>
@@ -1631,9 +1621,12 @@ function placeOrder(){
         description: 'SOKONI Order',
         sellerName:  _sName,
         onSuccess(receipt) {
+          /* Update payment status bar */
+          if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'Payment received — completing your order…');
           saveAndRedirect(receipt.mpesaCode || receipt.phone, 'mpesa', _ordId);
         },
         onFailure(reason) {
+          if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');
           if (reason !== 'cancelled' && reason !== 'timeout') {
             /* Graceful fallback: open IntaSend modal */
             openModal('mpesa');
@@ -2279,6 +2272,38 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
     const eta = etaMap[zone]||"Soon";
     if(msgEl2) msgEl2.innerHTML = `Your order is confirmed! Expected delivery: <strong style="color:#71ff00;">${_esc(eta)}</strong>.<br>You'll receive a confirmation SMS to <strong>${_esc(document.getElementById("coPhone")?.value||"your number")}</strong>.`;
     overlay.style.display = "flex";
+
+    /* ── Trust: generate receipt + show status ── */
+    try {
+      if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('complete', 'Transaction complete — receipt is ready');
+      const _recItems = currentCart.map(p => ({ name: p.name || p.title || 'Item', qty: p.qty || 1, unitPrice: Number(p.price || 0) }));
+      const _recData  = {
+        receiptNo:      orderId,
+        merchantName:   currentCart[0]?.sellerName || 'SOKONI Marketplace',
+        items:          _recItems,
+        subtotal:       subtotal,
+        tax:            0,
+        discount:       promoDiscount || 0,
+        total:          total,
+        paymentMethod:  (method === 'mpesa' ? 'M-Pesa' : method),
+        paymentRef:     payRef || orderId,
+        customerName:   document.getElementById('coName')?.value || '',
+        date:           newOrder.date,
+        loyaltyEarned:  pts,
+      };
+      /* Show receipt modal immediately from local data */
+      if (window.SokoniTrust && SokoniTrust.showReceipt) {
+        setTimeout(() => SokoniTrust.showReceipt(_recData), 1200);
+      }
+      /* Also persist to Firestore via CF (non-blocking) */
+      if (window.firebase) {
+        try {
+          const fn = firebase.functions().httpsCallable('generateTrustReceipt');
+          fn({ ..._recData, grandTotal: total, merchantId: currentCart[0]?.sellerUid || 'marketplace', payments: [{ method, amount: total, ref: payRef }] }).catch(() => {});
+        } catch (_) {}
+      }
+    } catch (_) {}
+
     /* Clear cart */
     localStorage.removeItem("cart");
 
@@ -2747,6 +2772,28 @@ window.processPaypalPayment = processPaypalPayment;
 <script defer src="sokoni-fraud-engine.js"></script>
 <script defer src="sokoni-intasend.js"></script>
 <script defer src="sokoni-vouchers.js"></script>
+<script defer src="sokoni-payment-trust.js"></script>
+<script>
+/* ── Checkout trust integration ── */
+document.addEventListener('DOMContentLoaded', function () {
+  /* Show payment status bar when a payment flow starts */
+  window._checkoutSetTrustStatus = function (phase, msg) {
+    const wrap = document.getElementById('checkout-status-wrap');
+    if (wrap) wrap.style.display = '';
+    if (window.SokoniTrust && SokoniTrust.setStatus) {
+      SokoniTrust.renderStatus(document.getElementById('checkout-trust-status'));
+      SokoniTrust.setStatus(phase, msg);
+    }
+  };
+
+  /* Auto-show receipt modal after successful payment */
+  window._checkoutShowReceipt = function (receiptData) {
+    if (window.SokoniTrust && SokoniTrust.showReceipt) {
+      SokoniTrust.showReceipt(receiptData);
+    }
+  };
+});
+</script>
 </body>
 </html>
 

@@ -7882,3 +7882,11 @@ exports.submitDataRightsRequest        = fbDeletion.submitDataRightsRequest;
 exports.adminGetDataDeletionRequest    = fbDeletion.adminGetDataDeletionRequest;
 exports.adminUpdateDataDeletionStatus  = fbDeletion.adminUpdateDataDeletionStatus;
 exports.deleteMyAccount                = fbDeletion.deleteMyAccount;
+
+/* ── Payment Trust — receipts, verification, security monitoring ─── */
+const payTrust = require('./payment-trust');
+exports.generateTrustReceipt      = payTrust.generateTrustReceipt;
+exports.emailTrustReceipt         = payTrust.emailTrustReceipt;
+exports.verifyTrustReceipt        = payTrust.verifyTrustReceipt;
+exports.getPaymentSecurityAlerts  = payTrust.getPaymentSecurityAlerts;
+exports.detectPaymentAnomalies    = payTrust.detectPaymentAnomalies;

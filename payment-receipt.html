@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Receipt — SOKONI</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/sokoni-trust.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #0b0e14;
+  color: rgba(255,255,255,.85);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 40px;
+}
+.receipt-page-header {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.receipt-page-logo {
+  font-size: 18px;
+  font-weight: 900;
+  color: white;
+  letter-spacing: -.3px;
+}
+.receipt-page-logo span { color: #00a651; }
+.receipt-status-banner {
+  width: 100%;
+  max-width: 520px;
+  margin-bottom: 16px;
+}
+.receipt-card {
+  width: 100%;
+  max-width: 520px;
+  background: #0f1117;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.rc-header {
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  text-align: center;
+}
+.rc-merchant-name { font-size: 20px; font-weight: 900; color: white; }
+.rc-merchant-sub  { font-size: 12px; color: rgba(255,255,255,.35); margin-top: 4px; }
+.rc-body { padding: 20px; }
+.rc-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.rc-meta-item .rc-mi-label { font-size: 11px; color: rgba(255,255,255,.35); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+.rc-meta-item .rc-mi-val   { font-size: 13px; color: rgba(255,255,255,.85); font-weight: 600; }
+hr.rc-div { border: none; border-top: 1px dashed rgba(255,255,255,.08); margin: 16px 0; }
+.rc-items { margin-bottom: 16px; }
+.rc-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 13px;
+  color: rgba(255,255,255,.7);
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.rc-item:last-child { border-bottom: none; }
+.rc-item .ri-name  { flex: 1; }
+.rc-item .ri-qty   { color: rgba(255,255,255,.35); min-width: 28px; text-align: center; }
+.rc-item .ri-price { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rc-totals { margin-bottom: 16px; }
+.rc-total-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 13px; color: rgba(255,255,255,.5); }
+.rc-total-row.grand { font-size: 16px; font-weight: 800; color: white; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.12); }
+.rc-total-row.grand .rt-amt { color: #00a651; }
+.rc-payment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0,166,81,.07);
+  border: 1px solid rgba(0,166,81,.15);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #00a651;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.rc-loyalty {
+  text-align: center;
+  font-size: 12px;
+  color: #00a651;
+  margin-bottom: 16px;
+  padding: 8px;
+  background: rgba(0,166,81,.06);
+  border-radius: 8px;
+}
+.rc-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.rc-qr-title   { font-size: 11px; color: rgba(255,255,255,.35); text-transform: uppercase; letter-spacing: .4px; }
+#rc-qr-canvas  { background: white; border-radius: 8px; padding: 8px; }
+.rc-qr-ref     { font-size: 13px; font-weight: 700; color: rgba(255,255,255,.6); letter-spacing: 1.5px; font-family: 'Courier New', monospace; }
+.rc-qr-note    { font-size: 11px; color: rgba(255,255,255,.25); }
+.rc-verify-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 8px;
+  border-radius: 8px;
+}
+.rc-verify-row.valid   { background: rgba(0,166,81,.08); color: #00a651; }
+.rc-verify-row.invalid { background: rgba(198,40,40,.08); color: #ef5350; }
+.rc-verify-row.pending { background: rgba(255,255,255,.04); color: rgba(255,255,255,.4); }
+.rc-actions {
+  display: flex;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  flex-wrap: wrap;
+}
+.rc-action {
+  flex: 1;
+  min-width: 90px;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: opacity .15s;
+}
+.rc-action:hover { opacity: .85; }
+.rc-dl    { background: #00a651; color: white; }
+.rc-email { background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.1); }
+.rc-home  { background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); border: 1px solid rgba(255,255,255,.1); }
+.rc-footer { width: 100%; max-width: 520px; }
+.rc-loading { text-align: center; padding: 60px 20px; color: rgba(255,255,255,.4); }
+@media print {
+  body { background: white; color: #333; padding: 0; }
+  .receipt-page-header { display: none; }
+  .rc-actions { display: none; }
+  .receipt-card {
+    background: white;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .rc-merchant-name, .rc-mi-val, .ri-name, .ri-price { color: #333 !important; }
+  .rc-mi-label, .ri-qty, .rc-total-row { color: #888 !important; }
+  .rc-total-row.grand { color: #000 !important; }
+  .rc-total-row.grand .rt-amt { color: #00a651 !important; }
+  .rc-payment-row { background: #f0f8f4 !important; border-color: #00a651 !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="receipt-page-header">
+  <div class="receipt-page-logo">SOKONI <span>Pay</span></div>
+  <div data-trust="badge" data-variant="compact"></div>
+</div>
+
+<div class="receipt-status-banner" id="verify-banner">
+  <div class="rc-verify-row pending" id="verify-row">
+    ⟳ Verifying receipt…
+  </div>
+</div>
+
+<div class="receipt-card" id="receipt-card">
+  <div class="rc-loading" id="rc-loading">⟳ Loading receipt…</div>
+  <div id="rc-content" style="display:none"></div>
+</div>
+
+<div class="rc-footer">
+  <div data-trust="footer"></div>
+</div>
+
+<!-- Scripts -->
+<script src="/firebase.js"></script>
+<script src="/sokoni-payment-trust.js"></script>
+<script>
+(async function () {
+  const params    = new URLSearchParams(location.search);
+  const ref       = params.get('ref') || '';
+  const loading   = document.getElementById('rc-loading');
+  const content   = document.getElementById('rc-content');
+  const verifyRow = document.getElementById('verify-row');
+
+  if (!ref) {
+    loading.textContent = 'No receipt reference provided.';
+    verifyRow.className = 'rc-verify-row invalid';
+    verifyRow.textContent = '✕ Invalid receipt link';
+    return;
+  }
+
+  document.title = 'Receipt ' + ref + ' — SOKONI';
+
+  /* Verify + fetch receipt from Firestore */
+  try {
+    const db   = firebase.firestore();
+    const snap = await db.collection('posReceipts').doc(ref).get();
+
+    if (!snap.exists) {
+      loading.textContent = 'Receipt not found.';
+      verifyRow.className = 'rc-verify-row invalid';
+      verifyRow.textContent = '✕ Receipt not found or may have been deleted';
+      return;
+    }
+
+    const d = snap.data();
+    verifyRow.className = 'rc-verify-row valid';
+    verifyRow.textContent = '✓ Verified receipt — ' + d.merchantName + ' · ' + (d.date || new Date(d.createdAt?.seconds * 1000).toLocaleString('en-KE'));
+
+    /* Render receipt */
+    loading.style.display = 'none';
+    content.style.display = '';
+
+    const kes = n => 'KES ' + Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    const items  = d.items || [];
+    const method = d.paymentMethod || 'M-Pesa';
+    const payRef = d.paymentRef || d.mpesaCode || '';
+
+    const itemsHtml = items.map(it =>
+      `<div class="rc-item">
+        <span class="ri-name">${esc(it.name || 'Item')}</span>
+        <span class="ri-qty">×${esc(String(it.qty || 1))}</span>
+        <span class="ri-price">${kes((it.unitPrice || it.price || 0) * (it.qty || 1))}</span>
+      </div>`
+    ).join('');
+
+    const totalsHtml = [
+      items.length > 1 ? `<div class="rc-total-row"><span>Subtotal</span><span>${kes(d.subtotal || 0)}</span></div>` : '',
+      (d.discount || 0) > 0 ? `<div class="rc-total-row" style="color:#00a651"><span>Discount</span><span>−${kes(d.discount)}</span></div>` : '',
+      (d.tax || 0) > 0 ? `<div class="rc-total-row"><span>VAT</span><span>${kes(d.tax)}</span></div>` : '',
+      `<div class="rc-total-row grand"><span>TOTAL PAID</span><span class="rt-amt">${kes(d.total || d.grandTotal || 0)}</span></div>`,
+    ].join('');
+
+    content.innerHTML = `
+      <div class="rc-header">
+        <div class="rc-merchant-name">${esc(d.merchantName || 'SOKONI')}</div>
+        ${d.merchantAddress ? `<div class="rc-merchant-sub">${esc(d.merchantAddress)}</div>` : ''}
+        ${d.merchantPhone   ? `<div class="rc-merchant-sub">${esc(d.merchantPhone)}</div>`   : ''}
+      </div>
+      <div class="rc-body">
+        <div class="rc-meta">
+          <div class="rc-meta-item"><div class="rc-mi-label">Receipt No</div><div class="rc-mi-val">${esc(ref)}</div></div>
+          <div class="rc-meta-item"><div class="rc-mi-label">Date</div><div class="rc-mi-val">${esc(d.date || 'N/A')}</div></div>
+          ${d.cashierName ? `<div class="rc-meta-item"><div class="rc-mi-label">Cashier</div><div class="rc-mi-val">${esc(d.cashierName)}</div></div>` : ''}
+          ${d.customerName ? `<div class="rc-meta-item"><div class="rc-mi-label">Customer</div><div class="rc-mi-val">${esc(d.customerName)}</div></div>` : ''}
+        </div>
+        <hr class="rc-div">
+        <div class="rc-items">${itemsHtml || `<div class="rc-item"><span class="ri-name">Payment</span><span class="ri-price">${kes(d.total || 0)}</span></div>`}</div>
+        <div class="rc-totals">${totalsHtml}</div>
+        <div class="rc-payment-row">✓ Paid via ${esc(method)}${payRef ? ' · Ref: ' + esc(payRef) : ''}</div>
+        ${(d.loyaltyEarned || 0) > 0 ? `<div class="rc-loyalty">+${d.loyaltyEarned} loyalty points earned on this transaction</div>` : ''}
+        <div class="rc-qr">
+          <div class="rc-qr-title">Receipt Verification</div>
+          <canvas id="rc-qr-canvas" width="120" height="120"></canvas>
+          <div class="rc-qr-ref">${esc(ref)}</div>
+          <div class="rc-qr-note">Scan to verify or share this receipt</div>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="rc-action rc-dl"    onclick="window.print()">⬇ Download / Print</button>
+        <button class="rc-action rc-email" onclick="promptEmail()">✉ Email Receipt</button>
+        <button class="rc-action rc-home"  onclick="location.href='/'">🏠 Home</button>
+      </div>`;
+
+    /* Draw QR code into canvas */
+    const qrCanvas = document.getElementById('rc-qr-canvas');
+    const receiptUrl = location.href;
+    if (window.QRCode) {
+      try {
+        new QRCode(qrCanvas, { text: receiptUrl, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.M });
+      } catch (_) { _drawFallbackQR(qrCanvas, ref); }
+    } else {
+      _drawFallbackQR(qrCanvas, ref);
+    }
+
+  } catch (err) {
+    loading.textContent = 'Could not load receipt. Please try again.';
+    verifyRow.className = 'rc-verify-row invalid';
+    verifyRow.textContent = '✕ Verification failed';
+    console.error('Receipt load error:', err);
+  }
+
+  function promptEmail() {
+    const email = window.prompt('Enter email address:');
+    if (!email || !email.includes('@')) return;
+    SokoniTrust.emailReceipt(ref, email);
+  }
+
+  function _drawFallbackQR(canvas, text) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, 120, 120);
+    ctx.fillStyle = '#333';
+    [[8,8],[8,84],[84,8]].forEach(([x,y]) => {
+      ctx.fillRect(x-8, y-8, 28, 28);
+      ctx.fillStyle = '#fff'; ctx.fillRect(x-5, y-5, 22, 22);
+      ctx.fillStyle = '#333'; ctx.fillRect(x-2, y-2, 16, 16);
+    });
+    ctx.font = '7px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#555';
+    ctx.fillText(text.slice(-8), 60, 114);
+  }
+})();
+</script>
+</body>
+</html>
