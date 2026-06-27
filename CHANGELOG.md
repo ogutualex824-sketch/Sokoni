@@ -1,4 +1,28 @@
-﻿## [2026-06-27] — Universal POS Print Engine v2.0 + POS Business Modules + Business Communication System v1.0
+﻿## [2026-06-27] — SmartPOS Phase 2: Enterprise Retail Management Engine v2.0
+
+### Summary
+Complete enterprise retail system on top of SOKONI SmartPOS: financial reporting engine (P&L, tax, cash flow, employee commissions), full inventory management UI, customer CRM with loyalty/wallet/credit, supplier management with purchase orders and GRN workflow, analytics dashboard with CSV export, and 5 Cloud Functions for marketplace sync, receipt delivery, and purchase order emailing. All modules are offline-first via IndexedDB with Firestore cloud sync.
+
+### New Files
+- **`pos-reports.js`** — Reporting engine: daily/weekly/monthly/custom range; P&L; tax; product performance; employee performance; commission; cash flow; live dashboard; CSV export
+- **`pos-inventory.html`** — Full inventory UI: product CRUD, stock levels, movements, batch/expiry tracking, low-stock alerts, stock transfers, adjustment/write-off forms
+- **`pos-customers.html`** — Customer CRM: list/search, profile view, loyalty adjust, wallet top-up, credit payments, purchase history, statement send
+- **`pos-suppliers.html`** — Supplier management: supplier list, PO creation, GRN (goods received), invoice tracking, outstanding payments, auto-reorder suggestions
+- **`pos-reports.html`** — Analytics dashboard: 7-tab report UI (Dashboard, Sales, P&L, Products, Employees, Tax, Cash Flow); date picker with presets; CSV export per section
+- **`functions/pos-retail.js`** — 5 Cloud Functions: `posSyncToMarketplace`, `sendPOSReceipt`, `sendPurchaseOrder`, `posLowStockAlert` (scheduled daily), `posMarketplaceOrderSync` (Firestore trigger)
+
+### Updated Files
+- **`pos.html`** — Phase 2 module scripts injected; "Full Dashboard" / "Full Manager" / "Suppliers" shortcut buttons in Reports, Customers, Inventory tabs; Phase 2 auto-init on DOMContentLoaded
+
+### Architecture
+- **Offline-first dual layer**: IndexedDB as local source of truth → Firestore sync queue; POS never loses data without internet
+- **Bidirectional marketplace sync**: POS sale → marketplace stock update (callable CF); marketplace order → POS inventory deduction (Firestore trigger)
+- **FEFO consumption**: batches consumed in First-Expiry-First-Out order automatically
+- **Security**: all CF callables require Firebase Auth; no raw data embedded in HTML `onclick` attributes; ESC output sanitised
+
+---
+
+## [2026-06-27] — Universal POS Print Engine v2.0 + POS Business Modules + Business Communication System v1.0
 
 ### Summary
 Three parallel feature tracks committed together: (1) Universal POS Print Engine — offline-first, multi-transport receipt/label/barcode printing across BLE/USB/Serial/Network; (2) POS Business Modules — standalone customer management, inventory, sales, reports, and supplier modules; (3) Business Communication System — transaction-gated buyer↔seller messaging with 11 Cloud Functions, auto-moderation, and admin controls.

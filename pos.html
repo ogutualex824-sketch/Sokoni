@@ -366,6 +366,7 @@
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('today')">Today</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('week')">Week</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('month')">Month</button>
+        <button class="inv-btn inv-btn-outline" onclick="window.open('pos-reports.html','_blank')" title="Full Analytics Dashboard">📊 Full Dashboard</button>
       </div>
       <div class="inv-tabs" style="margin:0;padding:0 12px;border-bottom:1px solid var(--border)">
         <button class="inv-tab rep-subtab active" data-subtab="summary" onclick="SPos.reports.switchSubTab('summary')">Summary</button>
@@ -380,6 +381,7 @@
         <input class="inv-search" id="cust-search" placeholder="Search customers..." oninput="SPos._debouncedCustSearch(this.value)">
         <button class="inv-btn inv-btn-green" onclick="SPos.customers.addDialog()">+ Add Customer</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.customers.exportCSV()">Export</button>
+        <button class="inv-btn inv-btn-outline" onclick="window.open('pos-customers.html','_blank')" title="Full Customer Manager">👥 Full Manager</button>
       </div>
       <div class="inv-body" id="customers-body"><div class="pos-empty"><div class="empty-icon">👤</div><p>No customers yet</p></div></div>
     </div>
@@ -1514,6 +1516,13 @@ var SPosBranch = (function(){
 })();
 </script>
 
+<!-- ══ SmartPOS Phase 2 — Enterprise Retail Engine ══ -->
+<script src="pos-inventory.js"></script>
+<script src="pos-sales.js"></script>
+<script src="pos-customers.js"></script>
+<script src="pos-suppliers.js"></script>
+<script src="pos-reports.js"></script>
+
 <script>
 /* Auto-init universal print engine after POS loads */
 document.addEventListener('DOMContentLoaded', function() {
@@ -1527,6 +1536,26 @@ document.addEventListener('DOMContentLoaded', function() {
       const el = document.getElementById('printer-status-txt');
       if (el) el.textContent = 'Disconnected';
     });
+  }
+
+  /* Auto-init Phase 2 modules */
+  const branchId = localStorage.getItem('sokoni_pos_branch') || 'default';
+  if (window.PosInventory) PosInventory.init(branchId).catch(function(){});
+  if (window.PosSales)     PosSales.init(branchId).catch(function(){});
+  if (window.PosCustomers) PosCustomers.init().catch(function(){});
+  if (window.PosSuppliers) PosSuppliers.init().catch(function(){});
+
+  /* Wire inventory shortcuts into the existing inventory tab panel */
+  const invPanel = document.getElementById('panel-inventory');
+  if (invPanel) {
+    const shortcutBar = document.createElement('div');
+    shortcutBar.style.cssText = 'display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap';
+    shortcutBar.innerHTML = [
+      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-inventory.html\',\'_blank\')">📦 Full Inventory Manager</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-suppliers.html\',\'_blank\')">🏭 Suppliers &amp; POs</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-reports.html\',\'_blank\')">📊 Full Reports</button>',
+    ].join('');
+    invPanel.insertBefore(shortcutBar, invPanel.firstChild);
   }
 });
 </script>
