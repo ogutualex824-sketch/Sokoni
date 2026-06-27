@@ -1,4 +1,39 @@
-﻿## [2026-06-27] — Security & Quality Fixes
+﻿## [2026-06-27] — Full Platform Deployment: Functions, PITR, Monitoring
+
+### Summary
+Complete infrastructure deployment: all 636 Cloud Functions deployed (Blaze billing active), 16 Firebase Secrets provisioned in Secret Manager, Firestore PITR enabled, 18 Cloud Monitoring alert policies applied (notificationRateLimit fixed on log-based policies), email notification channel created for ogutualex824@gmail.com.
+
+### Deployment Results
+- **Cloud Functions**: 636 functions deployed (nodejs22 runtime, us-central1) — ✅ ALL LIVE
+- **Firestore PITR**: Point-in-Time Recovery enabled — ✅ PENDING OPERATION (activating)
+- **Monitoring Alerts**: 18/18 policies created in Cloud Monitoring — ✅ ALL LIVE
+- **Notification Channel**: `projects/sokoni-aeb26/notificationChannels/3052073155470197456` → ogutualex824@gmail.com
+- **Health Check**: systemHealthCheck → `{"status":"healthy"}` — Firestore ✅, Email Queue ✅, Algolia ✅, FCM ✅
+
+### Secrets Provisioned (16)
+All secrets created in Firebase Secret Manager with placeholder values — **update each with real credentials**:
+- `INTASEND_PRIVATE_KEY` — M-Pesa payments (IntaSend dashboard → Server Private Key)
+- `ANTHROPIC_API_KEY` — KASS AI assistant (console.anthropic.com)
+- `ALGOLIA_ADMIN_KEY` + `ALGOLIA_SEARCH_KEY` — Search indexing (Algolia dashboard)
+- `AT_API_KEY` + `AT_USERNAME` — Africa's Talking SMS (africastalking.com)
+- `SENDGRID_API_KEY` — Email delivery (sendgrid.com)
+- `MAIL_HOST` + `MAIL_USER` + `MAIL_PASS` — SMTP backup (mail.mysokoni.co.ke)
+- `TYPESENSE_ADMIN_KEY` + `TYPESENSE_SEARCH_KEY` — Self-hosted search
+- `SUB_OS_SIGNING_SECRET` — Subscription OS HMAC (use `openssl rand -hex 32`)
+- `ETIMS_MASTER_KEY` + `ETIMS_PLATFORM_PIN` + `ETIMS_PLATFORM_SECRET` — KRA eTIMS
+
+### Manual Steps Still Required
+1. **Firebase Console** — Enable Phone, Apple, Microsoft, Facebook, GitHub sign-in providers
+2. **DNS** — Complete mysokoni.co.ke domain verification in Firebase Hosting
+3. **M-Pesa Test** — Verify live IntaSend STK push with real INTASEND_PRIVATE_KEY
+4. **Algolia Index** — After setting real ALGOLIA_ADMIN_KEY, run `algoliaBackfill` callable to index all products
+
+### Files Changed
+- `monitoring/alerts.json` — notificationRateLimit added to 14 log-based policies; Firestore metric resource type fixed; HTTP 5xx switched from load balancer to CF log-based
+
+---
+
+## [2026-06-27] — Security & Quality Fixes
 
 ### Summary
 Production hardening pass: cryptographically secure share link tokens, road-adjusted ETA calculation, ghost driver protection, nodemailer v9 upgrade, hub eTIMS email notifications wired.

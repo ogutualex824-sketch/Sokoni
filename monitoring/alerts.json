@@ -83,7 +83,7 @@
       "conditions": [{
         "displayName": "Firestore p99 read latency > 2s",
         "conditionThreshold": {
-          "filter": "resource.type=\"firestore_instance\" AND metric.type=\"firestore.googleapis.com/api/request_latencies\" AND metric.labels.op=\"RunQuery\"",
+          "filter": "resource.type=\"firestore.googleapis.com/Database\" AND metric.type=\"firestore.googleapis.com/api/request_latencies\"",
           "comparison": "COMPARISON_GT",
           "thresholdValue": 2000,
           "duration": "300s",
@@ -110,7 +110,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "86400s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "86400s" },
       "combiner": "OR"
     },
 
@@ -127,30 +127,27 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "3600s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "3600s" },
       "combiner": "OR"
     },
 
     {
       "displayName": "HTTP 5xx Error Rate > 1%",
       "documentation": {
-        "content": "Firebase Hosting is returning 5xx errors. CDN or origin may be degraded.",
+        "content": "Firebase Hosting / Cloud Functions are returning 5xx errors. Check Cloud Function logs for errors.",
         "mimeType": "text/markdown"
       },
       "conditions": [{
-        "displayName": "Hosting 5xx rate > 1%",
-        "conditionThreshold": {
-          "filter": "resource.type=\"http_load_balancer\" AND metric.type=\"loadbalancing.googleapis.com/https/request_count\" AND metric.labels.response_code_class=\"500\"",
-          "comparison": "COMPARISON_GT",
-          "thresholdValue": 0.01,
-          "duration": "300s",
-          "aggregations": [{
-            "alignmentPeriod": "60s",
-            "perSeriesAligner": "ALIGN_RATE"
-          }]
+        "displayName": "CF 5xx error spike",
+        "conditionMatchedLog": {
+          "filter": "resource.type=\"cloud_function\" AND severity=ERROR",
+          "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "1800s" },
+      "alertStrategy": {
+        "notificationRateLimit": { "period": "3600s" },
+        "autoClose": "1800s"
+      },
       "combiner": "OR"
     },
 
@@ -167,7 +164,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "86400s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "86400s" },
       "combiner": "OR"
     },
 
@@ -184,7 +181,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "3600s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "3600s" },
       "combiner": "OR"
     },
 
@@ -201,7 +198,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "1800s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "1800s" },
       "combiner": "OR"
     },
 
@@ -218,7 +215,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "86400s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "86400s" },
       "combiner": "OR"
     },
 
@@ -235,7 +232,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "3600s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "3600s" },
       "combiner": "OR"
     },
 
@@ -252,7 +249,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "1800s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "1800s" },
       "combiner": "OR"
     },
 
@@ -269,7 +266,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "1800s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "1800s" },
       "combiner": "OR"
     },
 
@@ -286,7 +283,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "3600s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "3600s" },
       "combiner": "OR"
     },
 
@@ -303,7 +300,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "3600s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "3600s" },
       "combiner": "OR"
     },
 
@@ -320,7 +317,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "1800s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "1800s" },
       "combiner": "OR"
     },
 
@@ -337,7 +334,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "1800s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "1800s" },
       "combiner": "OR"
     },
 
@@ -354,7 +351,7 @@
           "labelExtractors": {}
         }
       }],
-      "alertStrategy": { "autoClose": "86400s" },
+      "alertStrategy": { "notificationRateLimit": { "period": "3600s" }, "autoClose": "86400s" },
       "combiner": "OR"
     }
 
