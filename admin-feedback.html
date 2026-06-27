@@ -105,7 +105,13 @@
   const getFeedbackItems = httpsCallable(fns, "getFeedbackItems");
   const updateStatus     = httpsCallable(fns, "updateFeedbackStatus");
 
-  function badge(cls, text) { return `<span class="badge badge-${cls}">${text}</span>`; }
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function badge(cls, text) { return `<span class="badge badge-${esc(cls)}">${esc(text)}</span>`; }
 
   function stars(n) {
     if (!n) return "";
@@ -120,9 +126,10 @@
   function renderCard(item) {
     const typeLabel = { bug:"Bug", feature:"Feature", page_rating:"Rating",
                         incorrect_listing:"Listing", other:"Other" }[item.type] || item.type;
-    const pri = item.priority || "medium";
+    const pri    = item.priority || "medium";
+    const safeId = esc(item.id);
     return `
-    <div class="fb-card status-${item.status}" id="card-${item.id}">
+    <div class="fb-card status-${esc(item.status)}" id="card-${safeId}">
       <div class="fb-header">
         <div class="fb-meta">
           <div class="fb-type-row">
@@ -131,27 +138,27 @@
             ${badge("priority-" + pri, pri.toUpperCase())}
             ${item.rating ? stars(item.rating) : ""}
           </div>
-          <div class="fb-ts">${ts(item.createdAt)}${item.uid ? " · uid: " + item.uid.substring(0,8) + "…" : " · anonymous"}</div>
+          <div class="fb-ts">${ts(item.createdAt)}${item.uid ? " &middot; uid: " + esc(item.uid.substring(0,8)) + "&hellip;" : " &middot; anonymous"}</div>
         </div>
       </div>
-      <div class="fb-msg">${item.message}</div>
-      ${item.pageUrl ? `<div class="fb-url">Page: ${item.pageUrl}</div>` : ""}
-      ${item.adminNote ? `<div class="fb-note">Admin note: ${item.adminNote}</div>` : ""}
+      <div class="fb-msg">${esc(item.message)}</div>
+      ${item.pageUrl ? `<div class="fb-url">Page: ${esc(item.pageUrl)}</div>` : ""}
+      ${item.adminNote ? `<div class="fb-note">Admin note: ${esc(item.adminNote)}</div>` : ""}
       <div class="triage-row">
-        <select id="sel-${item.id}" aria-label="Change status">
+        <select id="sel-${safeId}" aria-label="Change status">
           <option value="new"       ${item.status==="new"       ?"selected":""}>New</option>
           <option value="reviewing" ${item.status==="reviewing" ?"selected":""}>Reviewing</option>
           <option value="resolved"  ${item.status==="resolved"  ?"selected":""}>Resolved</option>
           <option value="wontfix"   ${item.status==="wontfix"   ?"selected":""}>Won't Fix</option>
         </select>
-        <select id="pri-${item.id}" aria-label="Priority">
+        <select id="pri-${safeId}" aria-label="Priority">
           <option value="low"      ${pri==="low"      ?"selected":""}>Low</option>
           <option value="medium"   ${pri==="medium"   ?"selected":""}>Medium</option>
           <option value="high"     ${pri==="high"     ?"selected":""}>High</option>
           <option value="critical" ${pri==="critical" ?"selected":""}>Critical</option>
         </select>
-        <textarea id="note-${item.id}" placeholder="Add admin note (optional)">${item.adminNote || ""}</textarea>
-        <button class="btn-save" data-id="${item.id}" aria-label="Save triage">Save</button>
+        <textarea id="note-${safeId}" placeholder="Add admin note (optional)">${esc(item.adminNote || "")}</textarea>
+        <button class="btn-save" data-id="${safeId}" aria-label="Save triage">Save</button>
       </div>
     </div>`;
   }

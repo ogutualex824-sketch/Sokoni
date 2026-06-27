@@ -5029,16 +5029,17 @@ window.deleteSellerAccount=deleteSellerAccount;
 <script>
 (function(){
   var _t=0,_x=null,_fb=null;
+  var REQUIRED_TAPS=8, RESET_MS=3000;
 
   function gotoAdmin(){ _t=0; clearTimeout(_x); window.location.href='admin.html'; }
 
   function showFeedback(){
-    /* Tiny green dot flashes on logo to show tap was registered */
     var logo=document.getElementById('sellerLogoSecret');
     if(!logo) return;
     clearTimeout(_fb);
-    logo.style.filter='drop-shadow(0 0 '+(Math.min(_t*2,14))+'px rgba(113,255,0,'+(0.1+_t*0.12)+'))';
-    _fb=setTimeout(function(){ if(logo) logo.style.filter=''; },400);
+    /* Glow intensifies with each tap — subtle hint to keep going */
+    logo.style.filter='drop-shadow(0 0 '+(Math.min(_t*2,16))+'px rgba(113,255,0,'+(0.08+_t*0.1)+'))';
+    _fb=setTimeout(function(){ if(logo) logo.style.filter=''; },350);
   }
 
   window._secretTap=function(e){
@@ -5046,14 +5047,13 @@ window.deleteSellerAccount=deleteSellerAccount;
     _t++;
     showFeedback();
     clearTimeout(_x);
-    if(_t>=7){ gotoAdmin(); return; }
-    if(_t===1){
-      /* First tap = go to SOKONI home; reset immediately */
-      _x=setTimeout(function(){ _t=0; window.location.href='index.html'; },300);
-      return;
-    }
-    /* Reset counter after 4 seconds of inactivity (taps 2-6) */
-    _x=setTimeout(function(){ _t=0; var logo=document.getElementById('sellerLogoSecret'); if(logo) logo.style.filter=''; },4000);
+    if(_t>=REQUIRED_TAPS){ gotoAdmin(); return; }
+    /* Reset counter after 3 seconds of inactivity */
+    _x=setTimeout(function(){
+      _t=0;
+      var logo=document.getElementById('sellerLogoSecret');
+      if(logo) logo.style.filter='';
+    }, RESET_MS);
   };
 
   /* Wire logo taps — deduplicate touchend + click so each physical tap counts once */
@@ -5075,7 +5075,7 @@ window.deleteSellerAccount=deleteSellerAccount;
   var _s='';
   document.addEventListener('keydown',function(e){
     if(e.ctrlKey&&e.shiftKey){
-      _s+=( e.key||'').toLowerCase();
+      _s+=(e.key||'').toLowerCase();
       if(_s==='sokoni'){ _s=''; gotoAdmin(); }
       if(_s.length>6) _s='';
     } else { _s=''; }

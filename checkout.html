@@ -2209,7 +2209,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
     const zone = document.getElementById("deliveryZone")?.value;
     const etaMap = {"50":"Today","100":"Today","150":"Tomorrow","250":"1–2 business days","500":"2–5 business days"};
     const eta = etaMap[zone]||"Soon";
-    if(msgEl2) msgEl2.innerHTML = `Your order is confirmed! Expected delivery: <strong style="color:#71ff00;">${eta}</strong>.<br>You'll receive a confirmation SMS to <strong>${document.getElementById("coPhone")?.value||"your number"}</strong>.`;
+    if(msgEl2) msgEl2.innerHTML = `Your order is confirmed! Expected delivery: <strong style="color:#71ff00;">${_esc(eta)}</strong>.<br>You'll receive a confirmation SMS to <strong>${_esc(document.getElementById("coPhone")?.value||"your number")}</strong>.`;
     overlay.style.display = "flex";
     /* Clear cart */
     localStorage.removeItem("cart");
