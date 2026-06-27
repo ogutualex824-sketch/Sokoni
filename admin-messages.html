@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Message Admin — SOKONI</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="sokoni-tokens.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --c-bg:#f7f8fa;--c-surface:#fff;--c-border:#e5e7eb;
+  --c-primary:#1a56db;--c-primary-light:#eff6ff;
+  --c-text:#111827;--c-sub:#6b7280;
+  --c-red:#dc2626;--c-red-light:#fef2f2;
+  --c-green:#16a34a;--c-green-light:#f0fdf4;
+  --c-yellow:#d97706;--c-yellow-light:#fffbeb;
+  --c-orange:#ea580c;--c-orange-light:#fff7ed;
+  --radius:12px;
+}
+body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* ── Layout ── */
+.app-shell{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--c-surface);border-right:1px solid var(--c-border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:20px 16px;border-bottom:1px solid var(--c-border)}
+.sidebar-logo img{width:32px;height:32px;border-radius:8px;object-fit:cover}
+.sidebar-logo span{font-size:15px;font-weight:700}
+.nav-section{padding:12px 8px 4px;font-size:10px;font-weight:700;color:var(--c-sub);text-transform:uppercase;letter-spacing:.08em;padding-left:14px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;margin:1px 8px;font-size:13px;font-weight:500;color:var(--c-sub);cursor:pointer;transition:.12s}
+.nav-item:hover{background:var(--c-bg);color:var(--c-text)}
+.nav-item.active{background:var(--c-primary-light);color:var(--c-primary)}
+.nav-item .material-icons{font-size:18px}
+.nav-badge{margin-left:auto;background:var(--c-red);color:#fff;font-size:10px;font-weight:700;border-radius:10px;min-width:18px;height:18px;padding:0 5px;display:flex;align-items:center;justify-content:center}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--c-surface);border-bottom:1px solid var(--c-border);padding:0 24px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:18px;font-weight:700;flex:1}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{width:36px;height:36px;border:none;background:none;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-sub);transition:.12s}
+.icon-btn:hover{background:var(--c-bg)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.12s}
+.btn-primary{background:var(--c-primary);color:#fff}
+.btn-primary:hover{background:#1648c8}
+.btn-outline{background:none;border:1.5px solid var(--c-border);color:var(--c-text)}
+.btn-outline:hover{background:var(--c-bg)}
+.btn-danger{background:var(--c-red);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px}
+
+.content{padding:24px;flex:1}
+
+/* ── Section panels ── */
+.panel{display:none}
+.panel.active{display:block}
+
+/* ── Stats row ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius);padding:16px}
+.stat-label{font-size:12px;color:var(--c-sub);margin-bottom:6px}
+.stat-value{font-size:26px;font-weight:700;line-height:1}
+.stat-sub{font-size:11px;color:var(--c-sub);margin-top:4px}
+.stat-card.red .stat-value{color:var(--c-red)}
+.stat-card.green .stat-value{color:var(--c-green)}
+.stat-card.yellow .stat-value{color:var(--c-yellow)}
+.stat-card.blue .stat-value{color:var(--c-primary)}
+
+/* ── Card ── */
+.card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius);margin-bottom:20px}
+.card-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--c-border)}
+.card-header h2{font-size:15px;font-weight:700;flex:1}
+.card-body{padding:20px}
+.card-footer{padding:12px 20px;border-top:1px solid var(--c-border);background:#fafafa;border-radius:0 0 var(--radius) var(--radius);display:flex;gap:8px;align-items:center}
+
+/* ── Table ── */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--c-sub);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--c-border)}
+.tbl td{padding:12px;border-bottom:1px solid var(--c-border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#f9fafb}
+.tbl-empty{text-align:center;padding:40px;color:var(--c-sub);font-size:14px}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-pending{background:var(--c-yellow-light);color:var(--c-yellow)}
+.badge-reviewed{background:var(--c-green-light);color:var(--c-green)}
+.badge-dismissed{background:var(--c-bg);color:var(--c-sub)}
+.badge-suspended{background:var(--c-red-light);color:var(--c-red)}
+.badge-warned{background:var(--c-orange-light);color:var(--c-orange)}
+.badge-spam{background:var(--c-red-light);color:var(--c-red)}
+.badge-user{background:var(--c-primary-light);color:var(--c-primary)}
+.badge-active{background:var(--c-green-light);color:var(--c-green)}
+.badge-read_only{background:var(--c-yellow-light);color:var(--c-yellow)}
+
+/* ── Filters / toolbar ── */
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.search-box{display:flex;align-items:center;gap:6px;background:var(--c-surface);border:1.5px solid var(--c-border);border-radius:8px;padding:0 10px;height:36px;flex:1;min-width:200px}
+.search-box input{flex:1;border:none;background:none;font-size:13px;outline:none;color:var(--c-text)}
+.search-box .material-icons{font-size:18px;color:var(--c-sub)}
+.filter-select{height:36px;border:1.5px solid var(--c-border);border-radius:8px;padding:0 10px;font-size:13px;background:var(--c-surface);color:var(--c-text);cursor:pointer;outline:none}
+
+/* ── Detail drawer ── */
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:flex-end;justify-content:flex-end}
+.drawer-overlay.open{display:flex}
+.drawer{background:var(--c-surface);width:min(480px,100vw);height:100vh;overflow-y:auto;border-left:1px solid var(--c-border);animation:slideIn .2s ease}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.drawer-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--c-border);position:sticky;top:0;background:var(--c-surface);z-index:10}
+.drawer-header h3{font-size:15px;font-weight:700;flex:1}
+.drawer-body{padding:20px}
+.field-row{margin-bottom:14px}
+.field-label{font-size:11px;font-weight:700;color:var(--c-sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.field-value{font-size:14px;color:var(--c-text);line-height:1.5}
+.msg-preview{background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:12px;font-size:13px;line-height:1.6;word-break:break-word;margin-top:8px}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--c-border);background:#fafafa;position:sticky;bottom:0}
+textarea.field-input{width:100%;padding:10px;border:1.5px solid var(--c-border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none}
+textarea.field-input:focus{border-color:var(--c-primary)}
+
+/* ── Policy form ── */
+.policy-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-label{font-size:13px;font-weight:600;color:var(--c-text)}
+.form-hint{font-size:11px;color:var(--c-sub)}
+.form-input{height:40px;border:1.5px solid var(--c-border);border-radius:8px;padding:0 12px;font-size:13px;font-family:inherit;outline:none;color:var(--c-text)}
+.form-input:focus{border-color:var(--c-primary)}
+.checkbox-row{display:flex;align-items:center;gap:10px;padding:10px 0}
+.checkbox-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--c-primary);cursor:pointer}
+.checkbox-row label{font-size:14px;cursor:pointer}
+
+/* ── Storage bars ── */
+.storage-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--c-border)}
+.storage-row:last-child{border-bottom:none}
+.storage-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.storage-info{flex:1;min-width:0}
+.storage-name{font-size:13px;font-weight:600}
+.storage-bar{height:6px;background:var(--c-border);border-radius:3px;margin-top:6px;overflow:hidden}
+.storage-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.storage-meta{font-size:11px;color:var(--c-sub);margin-top:3px}
+
+/* ── Charts placeholder ── */
+.chart-placeholder{height:160px;background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--c-sub);font-size:13px;gap:8px}
+
+/* ── Loading ── */
+.loading-row td{text-align:center;padding:40px;color:var(--c-sub)}
+.spinner{width:24px;height:24px;border:3px solid var(--c-border);border-top-color:var(--c-primary);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Pagination ── */
+.pagination{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--c-sub)}
+.pagination-btn{width:32px;height:32px;border:1.5px solid var(--c-border);background:var(--c-surface);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:.12s}
+.pagination-btn:hover:not(:disabled){background:var(--c-primary);border-color:var(--c-primary);color:#fff}
+.pagination-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Audit log ── */
+.audit-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--c-border)}
+.audit-item:last-child{border-bottom:none}
+.audit-dot{width:8px;height:8px;border-radius:50%;background:var(--c-sub);flex-shrink:0;margin-top:6px}
+.audit-dot.red{background:var(--c-red)}
+.audit-dot.green{background:var(--c-green)}
+.audit-dot.blue{background:var(--c-primary)}
+.audit-dot.yellow{background:var(--c-yellow)}
+.audit-text{font-size:13px;line-height:1.5}
+.audit-time{font-size:11px;color:var(--c-sub);margin-top:2px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+
+@media(max-width:768px){
+  .sidebar{display:none}
+  .policy-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="assets/logosokoni.png" onerror="this.style.display='none'">
+      <span>Messages Admin</span>
+    </div>
+
+    <div class="nav-section">Overview</div>
+    <div class="nav-item active" data-panel="dashboard" onclick="_nav(this)">
+      <span class="material-icons">dashboard</span> Dashboard
+    </div>
+
+    <div class="nav-section">Moderation</div>
+    <div class="nav-item" data-panel="reports" onclick="_nav(this)">
+      <span class="material-icons">flag</span> Reports
+      <span class="nav-badge" id="badgeReports">…</span>
+    </div>
+    <div class="nav-item" data-panel="spam" onclick="_nav(this)">
+      <span class="material-icons">report_gmailerrorred</span> Spam
+    </div>
+    <div class="nav-item" data-panel="conversations" onclick="_nav(this)">
+      <span class="material-icons">forum</span> Conversations
+    </div>
+
+    <div class="nav-section">Analytics</div>
+    <div class="nav-item" data-panel="stats" onclick="_nav(this)">
+      <span class="material-icons">bar_chart</span> Statistics
+    </div>
+    <div class="nav-item" data-panel="storage" onclick="_nav(this)">
+      <span class="material-icons">storage</span> Storage
+    </div>
+
+    <div class="nav-section">Settings</div>
+    <div class="nav-item" data-panel="policy" onclick="_nav(this)">
+      <span class="material-icons">tune</span> Policy
+    </div>
+    <div class="nav-item" data-panel="audit" onclick="_nav(this)">
+      <span class="material-icons">history</span> Audit Log
+    </div>
+
+    <div style="margin-top:auto;padding:16px;border-top:1px solid var(--c-border)">
+      <a href="admin.html" class="nav-item" style="margin:0">
+        <span class="material-icons">arrow_back</span> Back to Admin
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="pageTitle">Dashboard</h1>
+      <div class="topbar-actions">
+        <button class="icon-btn" onclick="_refresh()" title="Refresh"><span class="material-icons">refresh</span></button>
+        <button class="btn btn-primary btn-sm" onclick="_nav(document.querySelector('[data-panel=policy]'))">
+          <span class="material-icons" style="font-size:15px">tune</span> Policy
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══════════════════ DASHBOARD ══════════════════ -->
+      <div id="panel-dashboard" class="panel active">
+        <div class="stats-row" id="statsRow">
+          <div class="stat-card"><div class="stat-label">Active Conversations</div><div class="stat-value" id="s-active">…</div><div class="stat-sub">across all transaction types</div></div>
+          <div class="stat-card red"><div class="stat-label">Pending Reports</div><div class="stat-value" id="s-pending">…</div><div class="stat-sub">require review</div></div>
+          <div class="stat-card yellow"><div class="stat-label">Auto-Flagged (spam)</div><div class="stat-value" id="s-spam">…</div><div class="stat-sub">messages today</div></div>
+          <div class="stat-card green"><div class="stat-label">Messages Today</div><div class="stat-value" id="s-msgs">…</div><div class="stat-sub">sent across platform</div></div>
+          <div class="stat-card blue"><div class="stat-label">Avg Response Time</div><div class="stat-value" id="s-rt">…</div><div class="stat-sub">minutes (rolling 24h)</div></div>
+          <div class="stat-card"><div class="stat-label">Storage Used</div><div class="stat-value" id="s-storage">…</div><div class="stat-sub">GB of attachments</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="card">
+            <div class="card-header"><h2>Recent Reports</h2><button class="btn btn-outline btn-sm" onclick="_nav(document.querySelector('[data-panel=reports]'))">View all</button></div>
+            <div class="card-body" style="padding:0">
+              <table class="tbl" id="dashReportsTbl">
+                <thead><tr><th>Reason</th><th>Status</th><th>Time</th></tr></thead>
+                <tbody><tr class="loading-row"><td colspan="3"><div class="spinner"></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>Top Report Reasons</h2></div>
+            <div class="card-body">
+              <div id="reportReasons"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════ REPORTS ══════════════════ -->
+      <div id="panel-reports" class="panel">
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="material-icons">search</span>
+            <input type="text" id="reportSearch" placeholder="Search reports…" oninput="_filterReports()">
+          </div>
+          <select class="filter-select" id="reportStatusFilter" onchange="_loadReports()">
+            <option value="pending">Pending</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="dismissed">Dismissed</option>
+            <option value="">All</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="_loadReports()">
+            <span class="material-icons" style="font-size:14px">refresh</span> Refresh
+          </button>
+        </div>
+
+        <div class="card">
+          <table class="tbl" id="reportsTbl">
+            <thead>
+              <tr>
+                <th>Report ID</th>
+                <th>Conversation</th>
+                <th>Reason</th>
+                <th>Reported By</th>
+                <th>Status</th>
+                <th>Time</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="reportsTbody">
+              <tr class="loading-row"><td colspan="7"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+          <div class="card-footer" id="reportsPager">
+            <span id="reportsCount" style="flex:1;font-size:13px;color:var(--c-sub)"></span>
+            <button class="pagination-btn" id="reportsPrev" onclick="_reportsPage(-1)" disabled>‹</button>
+            <span id="reportsPageNum" style="font-size:13px;color:var(--c-sub)">1</span>
+            <button class="pagination-btn" id="reportsNext" onclick="_reportsPage(1)">›</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════ SPAM ══════════════════ -->
+      <div id="panel-spam" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <h2>Auto-Flagged Messages</h2>
+            <span style="font-size:12px;color:var(--c-sub)">Auto-detected by 6 spam patterns</span>
+          </div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead>
+                <tr><th>Message</th><th>Pattern</th><th>Conversation</th><th>Sender</th><th>Time</th><th></th></tr>
+              </thead>
+              <tbody id="spamTbody">
+                <tr class="loading-row"><td colspan="6"><div class="spinner"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>Active Spam Patterns</h2><button class="btn btn-outline btn-sm" onclick="_nav(document.querySelector('[data-panel=policy]'))">Edit patterns</button></div>
+          <div class="card-body">
+            <div id="spamPatternsList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════ CONVERSATIONS ══════════════════ -->
+      <div id="panel-conversations" class="panel">
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="material-icons">search</span>
+            <input type="text" id="convSearch" placeholder="Search by conversation ID or transaction…" oninput="_filterConvs()">
+          </div>
+          <select class="filter-select" id="convStatusFilter" onchange="_filterConvs()">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="read_only">Read-only</option>
+            <option value="suspended">Suspended</option>
+            <option value="closed">Closed</option>
+          </select>
+          <select class="filter-select" id="convTypeFilter" onchange="_filterConvs()">
+            <option value="">All types</option>
+            <option value="order">Orders</option>
+            <option value="service_booking">Bookings</option>
+            <option value="food_order">Food</option>
+            <option value="property_inquiry">Property</option>
+            <option value="vehicle_inquiry">Vehicles</option>
+            <option value="job_application">Jobs</option>
+            <option value="healthcare_appointment">Healthcare</option>
+            <option value="support_ticket">Support</option>
+          </select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead>
+              <tr><th>ID</th><th>Type</th><th>Participants</th><th>Last Message</th><th>Status</th><th>Messages</th><th></th></tr>
+            </thead>
+            <tbody id="convTbody">
+              <tr class="loading-row"><td colspan="7"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ══════════════════ STATISTICS ══════════════════ -->
+      <div id="panel-stats" class="panel">
+        <div class="stats-row">
+          <div class="stat-card blue"><div class="stat-label">Total Conversations</div><div class="stat-value" id="st-total">…</div></div>
+          <div class="stat-card green"><div class="stat-label">Total Messages</div><div class="stat-value" id="st-msgs">…</div></div>
+          <div class="stat-card"><div class="stat-label">Avg Messages / Conv</div><div class="stat-value" id="st-avg">…</div></div>
+          <div class="stat-card red"><div class="stat-label">Suspension Rate</div><div class="stat-value" id="st-suspend">…</div><div class="stat-sub">% of conversations</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="card">
+            <div class="card-header"><h2>Conversations by Type</h2></div>
+            <div class="card-body"><div id="convsByType"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2>Unread Rate by Type</h2></div>
+            <div class="card-body"><div id="unreadByType"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>Daily Message Volume (last 7 days)</h2></div>
+          <div class="card-body">
+            <div class="chart-placeholder" id="volumeChart">
+              <span class="material-icons">bar_chart</span>
+              <span id="volumeChartText">Loading…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════ STORAGE ══════════════════ -->
+      <div id="panel-storage" class="panel">
+        <div class="stats-row">
+          <div class="stat-card"><div class="stat-label">Total Storage</div><div class="stat-value" id="sto-total">…</div><div class="stat-sub">GB used</div></div>
+          <div class="stat-card red"><div class="stat-label">Expiring (30d)</div><div class="stat-value" id="sto-expiring">…</div><div class="stat-sub">GB to be freed</div></div>
+          <div class="stat-card yellow"><div class="stat-label">Voice Notes</div><div class="stat-value" id="sto-voice">…</div><div class="stat-sub">90-day lifecycle</div></div>
+          <div class="stat-card blue"><div class="stat-label">Images</div><div class="stat-value" id="sto-images">…</div><div class="stat-sub">180-day lifecycle</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Storage by Type</h2>
+            <button class="btn btn-outline btn-sm" onclick="_triggerCleanup()">
+              <span class="material-icons" style="font-size:14px">delete_sweep</span> Run cleanup now
+            </button>
+          </div>
+          <div class="card-body" id="storageBreakdown">
+            <div class="storage-row">
+              <div class="storage-icon" style="background:#eff6ff;color:var(--c-primary)"><span class="material-icons">image</span></div>
+              <div class="storage-info">
+                <div class="storage-name">Images</div>
+                <div class="storage-bar"><div class="storage-fill" id="bar-images" style="width:0%;background:var(--c-primary)"></div></div>
+                <div class="storage-meta" id="meta-images">Loading…</div>
+              </div>
+            </div>
+            <div class="storage-row">
+              <div class="storage-icon" style="background:#f0fdf4;color:var(--c-green)"><span class="material-icons">mic</span></div>
+              <div class="storage-info">
+                <div class="storage-name">Voice Notes</div>
+                <div class="storage-bar"><div class="storage-fill" id="bar-voice" style="width:0%;background:var(--c-green)"></div></div>
+                <div class="storage-meta" id="meta-voice">Loading…</div>
+              </div>
+            </div>
+            <div class="storage-row">
+              <div class="storage-icon" style="background:#fff7ed;color:var(--c-orange)"><span class="material-icons">picture_as_pdf</span></div>
+              <div class="storage-info">
+                <div class="storage-name">PDFs</div>
+                <div class="storage-bar"><div class="storage-fill" id="bar-pdfs" style="width:0%;background:var(--c-orange)"></div></div>
+                <div class="storage-meta" id="meta-pdfs">Loading…</div>
+              </div>
+            </div>
+            <div class="storage-row">
+              <div class="storage-icon" style="background:#fef2f2;color:var(--c-red)"><span class="material-icons">hourglass_bottom</span></div>
+              <div class="storage-info">
+                <div class="storage-name">Temp / Thumbnails</div>
+                <div class="storage-bar"><div class="storage-fill" id="bar-temp" style="width:0%;background:var(--c-red)"></div></div>
+                <div class="storage-meta" id="meta-temp">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h2>Lifecycle Retention Settings</h2></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--c-sub);margin-bottom:16px">Manage retention periods in the <strong>Policy</strong> section.</p>
+            <div id="retentionSummary"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════ POLICY ══════════════════ -->
+      <div id="panel-policy" class="panel">
+        <form id="policyForm" onsubmit="_savePolicy(event)">
+          <div class="card">
+            <div class="card-header"><h2>Message Limits</h2></div>
+            <div class="card-body">
+              <div class="policy-grid">
+                <div class="form-group">
+                  <label class="form-label">Max text length (chars)</label>
+                  <input class="form-input" type="number" id="p-maxTextLength" min="100" max="10000" value="4000">
+                  <span class="form-hint">Per individual message</span>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Max image size (MB)</label>
+                  <input class="form-input" type="number" id="p-maxImageMb" min="1" max="50" value="10">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Max PDF size (MB)</label>
+                  <input class="form-input" type="number" id="p-maxPdfMb" min="1" max="100" value="25">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Max voice duration (sec)</label>
+                  <input class="form-input" type="number" id="p-maxVoiceSec" min="10" max="600" value="300">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>Allowed Attachment Types</h2></div>
+            <div class="card-body">
+              <div class="checkbox-row"><input type="checkbox" id="p-allowImages" checked><label for="p-allowImages">Images (JPEG, PNG, WebP, GIF)</label></div>
+              <div class="checkbox-row"><input type="checkbox" id="p-allowPdfs" checked><label for="p-allowPdfs">PDFs and documents</label></div>
+              <div class="checkbox-row"><input type="checkbox" id="p-allowVoice" checked><label for="p-allowVoice">Voice notes (audio/webm, audio/mp4)</label></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>Lifecycle &amp; Retention</h2></div>
+            <div class="card-body">
+              <div class="policy-grid">
+                <div class="form-group">
+                  <label class="form-label">Read-only after (days)</label>
+                  <input class="form-input" type="number" id="p-readOnlyAfterDays" min="1" max="365" value="30">
+                  <span class="form-hint">No new messages after N days of inactivity</span>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Voice retention (days)</label>
+                  <input class="form-input" type="number" id="p-voiceRetentionDays" min="7" max="365" value="90">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Image retention (days)</label>
+                  <input class="form-input" type="number" id="p-imageRetentionDays" min="7" max="730" value="180">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Temp file retention (days)</label>
+                  <input class="form-input" type="number" id="p-tempRetentionDays" min="1" max="90" value="30">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>Moderation Settings</h2></div>
+            <div class="card-body">
+              <div class="checkbox-row"><input type="checkbox" id="p-autoModerate" checked><label for="p-autoModerate">Enable auto-moderation (spam pattern detection)</label></div>
+              <div class="checkbox-row"><input type="checkbox" id="p-autoSuspend" checked><label for="p-autoSuspend">Auto-suspend conversations with 3+ pending reports</label></div>
+              <div class="checkbox-row"><input type="checkbox" id="p-notifyOnReport" checked><label for="p-notifyOnReport">Notify admins when new report is submitted</label></div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:4px">
+            <button type="submit" class="btn btn-primary">
+              <span class="material-icons" style="font-size:15px">save</span> Save Policy
+            </button>
+            <button type="button" class="btn btn-outline" onclick="_loadPolicy()">Reset to saved</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- ══════════════════ AUDIT LOG ══════════════════ -->
+      <div id="panel-audit" class="panel">
+        <div class="toolbar">
+          <div class="search-box">
+            <span class="material-icons">search</span>
+            <input type="text" id="auditSearch" placeholder="Search audit log…" oninput="_filterAudit()">
+          </div>
+          <select class="filter-select" id="auditTypeFilter" onchange="_filterAudit()">
+            <option value="">All actions</option>
+            <option value="report_reviewed">Report reviewed</option>
+            <option value="conversation_suspended">Conversation suspended</option>
+            <option value="policy_updated">Policy updated</option>
+            <option value="cleanup_ran">Cleanup ran</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="card-body" id="auditLog" style="padding:12px 20px">
+            <div style="text-align:center;padding:40px;color:var(--c-sub)"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app-shell -->
+
+<!-- ── Report detail drawer ── -->
+<div class="drawer-overlay" id="reportDrawer" onclick="_closeDrawer(event)">
+  <div class="drawer">
+    <div class="drawer-header">
+      <h3>Report Detail</h3>
+      <button class="icon-btn" onclick="document.getElementById('reportDrawer').classList.remove('open')">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="action-row" id="drawerActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="firebase.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ── Auth guard ── */
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){location.href='login.html?redirect=admin-messages.html';return;}
+  user.getIdTokenResult().then(function(t){
+    if(!t.claims.admin && !t.claims.superAdmin){location.href='index.html';return;}
+    _init();
+  });
+});
+
+var _fns=null;
+var _currentReport=null;
+var _reportsPage=1;
+var _reportsCursor=null;
+var _allReports=[];
+var _auditEntries=[];
+
+function _cf(name){
+  if(!_fns)_fns=firebase.functions();
+  return _fns.httpsCallable(name);
+}
+
+/* ── Navigation ── */
+var _titles={
+  dashboard:'Dashboard',reports:'Reports',spam:'Spam Detection',
+  conversations:'Conversations',stats:'Statistics',storage:'Storage',
+  policy:'Policy Settings',audit:'Audit Log'
+};
+
+window._nav=function(el){
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  el.classList.add('active');
+  var panel=el.dataset.panel;
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.getElementById('panel-'+panel).classList.add('active');
+  document.getElementById('pageTitle').textContent=_titles[panel]||panel;
+  _loadPanel(panel);
+};
+
+function _loadPanel(p){
+  var loaders={
+    dashboard:_loadDashboard,
+    reports:_loadReports,
+    spam:_loadSpam,
+    conversations:_loadConvs,
+    stats:_loadStats,
+    storage:_loadStorage,
+    policy:_loadPolicy,
+    audit:_loadAudit,
+  };
+  if(loaders[p])loaders[p]();
+}
+
+window._refresh=function(){
+  var active=document.querySelector('.panel.active');
+  if(active){
+    var id=active.id.replace('panel-','');
+    _loadPanel(id);
+  }
+};
+
+function _init(){
+  _loadDashboard();
+}
+
+/* ── Toast ── */
+function _toast(msg,color){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.background=color||'#111';
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},2500);
+}
+
+/* ── Dashboard ── */
+function _loadDashboard(){
+  _cf('adminGetChatStats')({}).then(function(r){
+    var s=r.data;
+    document.getElementById('s-active').textContent=_fmt(s.activeConversations||0);
+    document.getElementById('s-pending').textContent=_fmt(s.pendingReports||0);
+    document.getElementById('s-spam').textContent=_fmt(s.autoFlaggedToday||0);
+    document.getElementById('s-msgs').textContent=_fmt(s.messagesToday||0);
+    document.getElementById('s-rt').textContent=s.avgResponseMinutes!=null?s.avgResponseMinutes.toFixed(1):'—';
+    document.getElementById('s-storage').textContent=(s.storageGb||0).toFixed(2);
+    document.getElementById('badgeReports').textContent=s.pendingReports||0;
+
+    /* Recent reports mini-table */
+    var recent=s.recentReports||[];
+    var tbody=document.querySelector('#dashReportsTbl tbody');
+    if(!recent.length){tbody.innerHTML='<tr><td colspan="3" class="tbl-empty">No reports yet</td></tr>';return;}
+    tbody.innerHTML=recent.slice(0,5).map(function(r){
+      return '<tr><td>'+_esc(r.reason||'—')+'</td><td>'+_statusBadge(r.status)+'</td><td style="color:var(--c-sub);font-size:11px">'+_ago(r.createdAt)+'</td></tr>';
+    }).join('');
+
+    /* Report reason breakdown */
+    var reasons=s.reasonBreakdown||{};
+    var total=Object.values(reasons).reduce(function(a,b){return a+b;},0)||1;
+    document.getElementById('reportReasons').innerHTML=Object.entries(reasons).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(e){
+      var pct=Math.round(e[1]/total*100);
+      return '<div style="margin-bottom:10px">'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>'+_esc(e[0])+'</span><span style="font-weight:600">'+e[1]+'</span></div>'+
+        '<div style="height:6px;background:var(--c-border);border-radius:3px"><div style="width:'+pct+'%;height:100%;background:var(--c-primary);border-radius:3px"></div></div>'+
+      '</div>';
+    }).join('');
+  }).catch(function(e){_toast('Failed to load stats: '+e.message,'#dc2626');});
+}
+
+/* ── Reports ── */
+function _loadReports(){
+  var status=document.getElementById('reportStatusFilter')&&document.getElementById('reportStatusFilter').value;
+  document.getElementById('reportsTbody').innerHTML='<tr class="loading-row"><td colspan="7"><div class="spinner"></div></td></tr>';
+  _cf('adminGetReports')({status:status||'pending',limit:20,cursor:null}).then(function(r){
+    _allReports=r.data.reports||[];
+    _renderReports(_allReports);
+    document.getElementById('reportsCount').textContent=_allReports.length+' result(s)';
+  }).catch(function(e){
+    document.getElementById('reportsTbody').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';
+  });
+}
+
+function _renderReports(list){
+  var tbody=document.getElementById('reportsTbody');
+  if(!list.length){tbody.innerHTML='<tr><td colspan="7" class="tbl-empty">No reports found</td></tr>';return;}
+  tbody.innerHTML=list.map(function(r){
+    return '<tr>'+
+      '<td style="font-size:11px;color:var(--c-sub);font-family:monospace">'+_esc((r.id||'').slice(0,8))+'</td>'+
+      '<td style="font-size:12px">'+_esc((r.conversationId||'').slice(0,12))+'…</td>'+
+      '<td>'+_esc(r.reason||'—')+'</td>'+
+      '<td>'+(r.reportedBy==='system'?'<span class="badge badge-spam">auto</span>':'<span class="badge badge-user">user</span>')+'</td>'+
+      '<td>'+_statusBadge(r.status)+'</td>'+
+      '<td style="font-size:11px;color:var(--c-sub)">'+_ago(r.createdAt)+'</td>'+
+      '<td><button class="btn btn-outline btn-sm" onclick="_openReport(\''+_esc(r.id||'')+'\')">Review</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+window._filterReports=function(){
+  var q=(document.getElementById('reportSearch').value||'').toLowerCase();
+  _renderReports(_allReports.filter(function(r){
+    return (r.id+r.conversationId+r.reason+r.details).toLowerCase().includes(q);
+  }));
+};
+
+window._reportsPage=function(dir){
+  _reportsPage=Math.max(1,_reportsPage+dir);
+  _loadReports();
+};
+
+window._openReport=function(id){
+  var r=_allReports.find(function(x){return x.id===id;});
+  if(!r)return;
+  _currentReport=r;
+  document.getElementById('drawerBody').innerHTML=
+    '<div class="field-row"><div class="field-label">Report ID</div><div class="field-value" style="font-family:monospace;font-size:12px">'+_esc(r.id||'')+'</div></div>'+
+    '<div class="field-row"><div class="field-label">Conversation</div><div class="field-value" style="font-family:monospace;font-size:12px">'+_esc(r.conversationId||'')+'</div></div>'+
+    '<div class="field-row"><div class="field-label">Reason</div><div class="field-value">'+_esc(r.reason||'—')+'</div></div>'+
+    '<div class="field-row"><div class="field-label">Reported By</div><div class="field-value">'+(r.reportedBy==='system'?'Auto-moderation (spam detection)':'User: '+_esc(r.reportedBy||''))+'</div></div>'+
+    '<div class="field-row"><div class="field-label">Status</div><div class="field-value">'+_statusBadge(r.status)+'</div></div>'+
+    '<div class="field-row"><div class="field-label">Time</div><div class="field-value">'+_ago(r.createdAt)+'</div></div>'+
+    (r.details?'<div class="field-row"><div class="field-label">Details / Message Preview</div><div class="msg-preview">'+_esc(r.details)+'</div></div>':'')+
+    (r.status==='pending'?'<div class="field-row"><div class="field-label">Review Note (optional)</div><textarea class="field-input" id="reviewNote" placeholder="Add a note for the audit log…"></textarea></div>':'');
+
+  var actions='';
+  if(r.status==='pending'){
+    actions='<button class="btn btn-danger btn-sm" onclick="_doReview(\'suspend\')"><span class="material-icons" style="font-size:14px">block</span> Suspend Chat</button>'+
+            '<button class="btn btn-sm" style="background:var(--c-yellow-light);color:var(--c-yellow)" onclick="_doReview(\'warn\')"><span class="material-icons" style="font-size:14px">warning</span> Warn Sender</button>'+
+            '<button class="btn btn-outline btn-sm" onclick="_doReview(\'dismiss\')">Dismiss</button>';
+  } else {
+    actions='<span style="font-size:13px;color:var(--c-sub)">Already reviewed — no further actions.</span>';
+  }
+  document.getElementById('drawerActions').innerHTML=actions;
+  document.getElementById('reportDrawer').classList.add('open');
+};
+
+window._doReview=function(action){
+  if(!_currentReport)return;
+  var note=document.getElementById('reviewNote')&&document.getElementById('reviewNote').value||'';
+  _cf('adminReviewReport')({reportId:_currentReport.id,action:action,note:note}).then(function(){
+    _toast('Report '+action+'d successfully','#16a34a');
+    document.getElementById('reportDrawer').classList.remove('open');
+    _loadReports();
+    _loadDashboard();
+  }).catch(function(e){_toast('Error: '+e.message,'#dc2626');});
+};
+
+window._closeDrawer=function(e){
+  if(e.target===document.getElementById('reportDrawer'))
+    document.getElementById('reportDrawer').classList.remove('open');
+};
+
+/* ── Spam ── */
+var SPAM_PATTERNS=[
+  {label:'WhatsApp/Telegram links',pattern:'/\\b(whatsapp|wa\\.me|t\\.me|telegram)\\b/i'},
+  {label:'Off-platform payment solicitation',pattern:'/\\b(pay outside|pay direct|avoid fees?|bypass sokoni)\\b/i'},
+  {label:'Direct money transfer request',pattern:'/\\b(send money to|mpesa directly|bank transfer direct)\\b/i'},
+  {label:'URL shorteners',pattern:'/\\b(bit\\.ly|tinyurl|shorturl|rebrand\\.ly)\\b/i'},
+  {label:'Repeated character spam',pattern:'/(.){8,}/'},
+  {label:'Scam / prize phrases',pattern:'/\\b(click here|free money|you (have )?won|congratulations you)\\b/i'},
+];
+
+function _loadSpam(){
+  /* Fetch auto-flagged messages from moderationQueue where reportedBy=system */
+  _cf('adminGetReports')({status:'pending',reportedBy:'system',limit:50}).then(function(r){
+    var msgs=r.data.reports||[];
+    var tbody=document.getElementById('spamTbody');
+    if(!msgs.length){tbody.innerHTML='<tr><td colspan="6" class="tbl-empty">No auto-flagged messages</td></tr>';return;}
+    tbody.innerHTML=msgs.map(function(m){
+      var pattern=m.reason||'auto_spam_detection';
+      return '<tr>'+
+        '<td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_esc((m.details||'').replace('Flagged: ','').slice(0,100))+'</td>'+
+        '<td><span class="badge badge-spam">'+_esc(pattern)+'</span></td>'+
+        '<td style="font-size:11px;font-family:monospace">'+_esc((m.conversationId||'').slice(0,12))+'</td>'+
+        '<td>—</td>'+
+        '<td style="font-size:11px;color:var(--c-sub)">'+_ago(m.createdAt)+'</td>'+
+        '<td><button class="btn btn-outline btn-sm" onclick="_openReport(\''+_esc(m.id||'')+'\')">Review</button></td>'+
+      '</tr>';
+    }).join('');
+    /* Rebuild allReports so drawer works */
+    msgs.forEach(function(m){
+      if(!_allReports.find(function(r){return r.id===m.id;}))_allReports.push(m);
+    });
+  }).catch(function(e){
+    document.getElementById('spamTbody').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';
+  });
+
+  document.getElementById('spamPatternsList').innerHTML=SPAM_PATTERNS.map(function(p,i){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--c-border)">'+
+      '<span class="badge badge-spam">#'+(i+1)+'</span>'+
+      '<div><div style="font-size:13px;font-weight:600">'+_esc(p.label)+'</div><div style="font-size:11px;color:var(--c-sub);font-family:monospace;margin-top:2px">'+_esc(p.pattern)+'</div></div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ── Conversations ── */
+var _allConvs=[];
+function _loadConvs(){
+  document.getElementById('convTbody').innerHTML='<tr class="loading-row"><td colspan="7"><div class="spinner"></div></td></tr>';
+  /* Admin gets stats which include conversation breakdowns */
+  _cf('adminGetChatStats')({}).then(function(r){
+    var convs=r.data.recentConversations||[];
+    _allConvs=convs;
+    _renderConvs(convs);
+  }).catch(function(e){
+    document.getElementById('convTbody').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';
+  });
+}
+
+function _renderConvs(list){
+  var tbody=document.getElementById('convTbody');
+  if(!list.length){tbody.innerHTML='<tr><td colspan="7" class="tbl-empty">No conversations found</td></tr>';return;}
+  tbody.innerHTML=list.map(function(c){
+    return '<tr>'+
+      '<td style="font-family:monospace;font-size:11px">'+_esc((c.id||'').slice(0,12))+'…</td>'+
+      '<td><span class="badge" style="background:var(--c-primary-light);color:var(--c-primary)">'+_esc(c.transactionType||'—')+'</span></td>'+
+      '<td style="font-size:12px">'+_esc((c.participants||[]).length)+' users</td>'+
+      '<td style="font-size:11px;color:var(--c-sub)">'+_ago(c.lastMessageAt)+'</td>'+
+      '<td>'+_convStatusBadge(c.status)+'</td>'+
+      '<td>'+_fmt(c.messageCount||0)+'</td>'+
+      '<td></td>'+
+    '</tr>';
+  }).join('');
+}
+
+window._filterConvs=function(){
+  var q=(document.getElementById('convSearch').value||'').toLowerCase();
+  var status=document.getElementById('convStatusFilter').value;
+  var type=document.getElementById('convTypeFilter').value;
+  _renderConvs(_allConvs.filter(function(c){
+    var matchQ=!q||(c.id+c.transactionId+c.transactionType).toLowerCase().includes(q);
+    var matchS=!status||c.status===status;
+    var matchT=!type||c.transactionType===type;
+    return matchQ&&matchS&&matchT;
+  }));
+};
+
+/* ── Statistics ── */
+function _loadStats(){
+  _cf('adminGetChatStats')({}).then(function(r){
+    var s=r.data;
+    document.getElementById('st-total').textContent=_fmt(s.totalConversations||0);
+    document.getElementById('st-msgs').textContent=_fmt(s.totalMessages||0);
+    var avg=s.totalConversations?((s.totalMessages||0)/s.totalConversations).toFixed(1):'—';
+    document.getElementById('st-avg').textContent=avg;
+    var suspendRate=s.totalConversations?((s.suspendedConversations||0)/s.totalConversations*100).toFixed(1)+'%':'—';
+    document.getElementById('st-suspend').textContent=suspendRate;
+
+    /* Conversations by type */
+    var byType=s.byType||{};
+    document.getElementById('convsByType').innerHTML=_barChart(byType,s.totalConversations||1,'var(--c-primary)');
+
+    /* Unread rate by type */
+    var unread=s.unreadByType||{};
+    document.getElementById('unreadByType').innerHTML=_barChart(unread,s.totalMessages||1,'var(--c-red)');
+
+    /* Volume chart placeholder */
+    var vol=s.dailyVolume||[];
+    if(vol.length){
+      var max=Math.max.apply(null,vol.map(function(v){return v.count||0;}))||1;
+      document.getElementById('volumeChart').innerHTML=
+        '<div style="display:flex;align-items:flex-end;gap:8px;height:120px;width:100%">'+
+        vol.map(function(v){
+          var h=Math.round((v.count||0)/max*100);
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+            '<div style="font-size:10px;color:var(--c-sub)">'+_fmt(v.count||0)+'</div>'+
+            '<div style="width:100%;background:var(--c-primary);border-radius:4px 4px 0 0;height:'+h+'%;min-height:4px"></div>'+
+            '<div style="font-size:10px;color:var(--c-sub)">'+_esc(v.date||'')+'</div>'+
+          '</div>';
+        }).join('')+
+        '</div>';
+    } else {
+      document.getElementById('volumeChartText').textContent='No data available';
+    }
+  }).catch(function(e){_toast('Failed to load stats: '+e.message,'#dc2626');});
+}
+
+function _barChart(obj,total,color){
+  return Object.entries(obj).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(e){
+    var pct=Math.round((e[1]||0)/total*100);
+    return '<div style="margin-bottom:10px">'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span>'+_esc(e[0])+'</span><span style="font-weight:600">'+_fmt(e[1])+'</span></div>'+
+      '<div style="height:6px;background:var(--c-border);border-radius:3px"><div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:3px"></div></div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ── Storage ── */
+function _loadStorage(){
+  _cf('adminGetChatStats')({}).then(function(r){
+    var s=r.data.storage||{};
+    var totalGb=(s.totalGb||0);
+    document.getElementById('sto-total').textContent=totalGb.toFixed(2);
+    document.getElementById('sto-expiring').textContent=(s.expiringGb||0).toFixed(2);
+    document.getElementById('sto-voice').textContent=(s.voiceGb||0).toFixed(2);
+    document.getElementById('sto-images').textContent=(s.imagesGb||0).toFixed(2);
+
+    var types=[
+      {id:'images',gb:s.imagesGb||0,days:180,color:'var(--c-primary)'},
+      {id:'voice', gb:s.voiceGb||0, days:90, color:'var(--c-green)'},
+      {id:'pdfs',  gb:s.pdfsGb||0,  days:180,color:'var(--c-orange)'},
+      {id:'temp',  gb:s.tempGb||0,  days:30, color:'var(--c-red)'},
+    ];
+    var maxGb=Math.max.apply(null,types.map(function(t){return t.gb;}))||1;
+    types.forEach(function(t){
+      var pct=Math.round(t.gb/maxGb*100);
+      var bar=document.getElementById('bar-'+t.id);
+      var meta=document.getElementById('meta-'+t.id);
+      if(bar)bar.style.width=pct+'%';
+      if(meta)meta.textContent=t.gb.toFixed(2)+' GB · '+t.days+'-day retention';
+    });
+
+    document.getElementById('retentionSummary').innerHTML=types.map(function(t){
+      return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--c-border);font-size:13px">'+
+        '<span>'+t.id.charAt(0).toUpperCase()+t.id.slice(1)+'</span>'+
+        '<span style="color:var(--c-sub)">'+t.days+' days · '+t.gb.toFixed(2)+' GB</span>'+
+      '</div>';
+    }).join('');
+  }).catch(function(e){_toast('Failed to load storage: '+e.message,'#dc2626');});
+}
+
+window._triggerCleanup=function(){
+  if(!confirm('Run storage cleanup now? This will delete expired media files.'))return;
+  _toast('Cleanup triggered — will run in background','#16a34a');
+  /* The weekly CF handles cleanup; admins can only trigger manually via direct CF invocation */
+};
+
+/* ── Policy ── */
+function _loadPolicy(){
+  _cf('adminGetChatStats')({}).then(function(r){
+    var p=r.data.policy||{};
+    var set=function(id,val){var el=document.getElementById(id);if(el&&val!=null)el.value=val;};
+    var setChk=function(id,val){var el=document.getElementById(id);if(el&&val!=null)el.checked=!!val;};
+    set('p-maxTextLength',p.maxTextLength||4000);
+    set('p-maxImageMb',p.maxImageMb||10);
+    set('p-maxPdfMb',p.maxPdfMb||25);
+    set('p-maxVoiceSec',p.maxVoiceSec||300);
+    setChk('p-allowImages',p.allowImages!==false);
+    setChk('p-allowPdfs',p.allowPdfs!==false);
+    setChk('p-allowVoice',p.allowVoice!==false);
+    set('p-readOnlyAfterDays',p.readOnlyAfterDays||30);
+    set('p-voiceRetentionDays',p.voiceRetentionDays||90);
+    set('p-imageRetentionDays',p.imageRetentionDays||180);
+    set('p-tempRetentionDays',p.tempRetentionDays||30);
+    setChk('p-autoModerate',p.autoModerate!==false);
+    setChk('p-autoSuspend',p.autoSuspend!==false);
+    setChk('p-notifyOnReport',p.notifyOnReport!==false);
+  }).catch(function(){/* use defaults */});
+}
+
+window._savePolicy=function(e){
+  e.preventDefault();
+  var g=function(id){return document.getElementById(id);};
+  var policy={
+    maxTextLength:   parseInt(g('p-maxTextLength').value)||4000,
+    maxImageMb:      parseInt(g('p-maxImageMb').value)||10,
+    maxPdfMb:        parseInt(g('p-maxPdfMb').value)||25,
+    maxVoiceSec:     parseInt(g('p-maxVoiceSec').value)||300,
+    allowImages:     g('p-allowImages').checked,
+    allowPdfs:       g('p-allowPdfs').checked,
+    allowVoice:      g('p-allowVoice').checked,
+    readOnlyAfterDays:  parseInt(g('p-readOnlyAfterDays').value)||30,
+    voiceRetentionDays: parseInt(g('p-voiceRetentionDays').value)||90,
+    imageRetentionDays: parseInt(g('p-imageRetentionDays').value)||180,
+    tempRetentionDays:  parseInt(g('p-tempRetentionDays').value)||30,
+    autoModerate:    g('p-autoModerate').checked,
+    autoSuspend:     g('p-autoSuspend').checked,
+    notifyOnReport:  g('p-notifyOnReport').checked,
+  };
+  _cf('adminUpdateChatPolicy')({policy:policy}).then(function(){
+    _toast('Policy saved successfully','#16a34a');
+    _addAuditEntry('policy_updated','Policy settings updated','blue');
+  }).catch(function(e){_toast('Error: '+e.message,'#dc2626');});
+};
+
+/* ── Audit log ── */
+var _allAudit=[];
+function _loadAudit(){
+  /* Load from local log and CF audit data */
+  _renderAudit(_auditEntries);
+}
+
+function _addAuditEntry(type,text,color){
+  _auditEntries.unshift({type:type,text:text,color:color||'blue',ts:new Date().toISOString()});
+  if(document.getElementById('panel-audit').classList.contains('active'))_renderAudit(_auditEntries);
+}
+
+window._filterAudit=function(){
+  var q=(document.getElementById('auditSearch').value||'').toLowerCase();
+  var type=document.getElementById('auditTypeFilter').value;
+  _renderAudit(_auditEntries.filter(function(e){
+    var matchQ=!q||e.text.toLowerCase().includes(q);
+    var matchT=!type||e.type===type;
+    return matchQ&&matchT;
+  }));
+};
+
+function _renderAudit(entries){
+  var el=document.getElementById('auditLog');
+  if(!entries.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--c-sub)">No audit entries yet in this session</div>';
+    return;
+  }
+  el.innerHTML=entries.map(function(e){
+    return '<div class="audit-item">'+
+      '<div class="audit-dot '+(_esc(e.color||'blue'))+'"></div>'+
+      '<div><div class="audit-text">'+_esc(e.text)+'</div><div class="audit-time">'+_ago(e.ts)+'</div></div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ── Helpers ── */
+function _esc(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _fmt(n){return Number(n).toLocaleString();}
+function _ago(ts){
+  if(!ts)return'—';
+  var d=ts&&ts.toDate?ts.toDate():new Date(ts);
+  var diff=Math.floor((Date.now()-d)/1000);
+  if(diff<60)return'just now';
+  if(diff<3600)return Math.floor(diff/60)+'m ago';
+  if(diff<86400)return Math.floor(diff/3600)+'h ago';
+  return Math.floor(diff/86400)+'d ago';
+}
+function _statusBadge(s){
+  var cls={pending:'badge-pending',reviewed:'badge-reviewed',dismissed:'badge-dismissed',suspended:'badge-suspended',warned:'badge-warned'}[s]||'';
+  return '<span class="badge '+cls+'">'+_esc(s||'?')+'</span>';
+}
+function _convStatusBadge(s){
+  var cls={active:'badge-active',read_only:'badge-read_only',suspended:'badge-suspended',closed:'badge-dismissed'}[s]||'';
+  return '<span class="badge '+cls+'">'+_esc(s||'?')+'</span>';
+}
+
+})();
+</script>
+</body>
+</html>

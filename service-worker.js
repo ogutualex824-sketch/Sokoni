@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260627230000";
+const CACHE_VERSION = "sokoni-20260628000000";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -70,6 +70,8 @@ const PRECACHE_PAGES = [
   "/ai-subscriptions.html",
   "/admin-subscriptions.html",
   "/subscription-os.html",
+  "/chat.html",
+  "/admin-messages.html",
 ];
 
 const PRECACHE_STATIC = [
@@ -159,6 +161,8 @@ const PRECACHE_STATIC = [
   "/sokoni-mobile-fixes.css",
   /* ── Enterprise Notification Center v1.0 ── */
   "/sokoni-notif-engine.js", "/sokoni-notif-center.js",
+  /* ── Business Communication System v1.0 ── */
+  "/sokoni-chat-engine.js",
 ];
 
 const CDN_ORIGINS = [
