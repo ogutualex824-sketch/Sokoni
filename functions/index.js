@@ -2068,11 +2068,15 @@ exports.verifyIntasendPayment = onRequest(
       return;
     }
 
-    /* Rate-limit: 10 verification attempts per IP per minute (Firestore-backed, cross-instance) */
-    const ip  = (req.headers["x-forwarded-for"] || req.ip || "unknown").split(",")[0].trim();
-    const _rl = await checkRateLimitDurable(`verify_${ip}`, 10, 60);
-    if (!_rl.ok) {
-      log.warn("Rate limit exceeded", { ip });
+    /* Rate-limit: dual — per-IP (10/min) AND per-UID (5/min) to prevent NAT bypass */
+    const ip     = (req.headers["x-forwarded-for"] || req.ip || "unknown").split(",")[0].trim();
+    const callerUid = req.body?.uid || req.body?.buyerUid || null;
+    const [_rlIp, _rlUid] = await Promise.all([
+      checkRateLimitDurable(`verify_${ip}`, 10, 60),
+      callerUid ? checkRateLimitDurable(`verify_uid_${callerUid}`, 5, 60) : Promise.resolve({ ok: true }),
+    ]);
+    if (!_rlIp.ok || !_rlUid.ok) {
+      log.warn("Rate limit exceeded", { ip, uid: callerUid });
       res.status(429).json({ verified: false, error: "Rate limit exceeded. Please wait before retrying." });
       return;
     }
@@ -7869,3 +7873,10 @@ exports.posLookupCustomer      = posZF.posLookupCustomer;
 exports.posProcessRefund       = posZF.posProcessRefund;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
+
+/* ── Facebook / Meta Data Deletion Callback + Data Rights ───────────── */
+const fbDeletion = require('./facebook-data-deletion');
+exports.facebookDataDeletion           = fbDeletion.facebookDataDeletion;
+exports.submitDataRightsRequest        = fbDeletion.submitDataRightsRequest;
+exports.adminGetDataDeletionRequest    = fbDeletion.adminGetDataDeletionRequest;
+exports.adminUpdateDataDeletionStatus  = fbDeletion.adminUpdateDataDeletionStatus;

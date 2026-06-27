@@ -1029,30 +1029,10 @@ async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
     }
 }
 
-function signInWithApple() {
-    _signInWithOAuth('apple.com', 'Apple', function(p) {
-        p.addScope('email');
-        p.addScope('name');
-    });
-}
-
-function signInWithMicrosoft() {
-    _signInWithOAuth('microsoft.com', 'Microsoft', function(p) {
-        p.addScope('email');
-        p.addScope('profile');
-    });
-}
-
 function signInWithFacebook() {
     _signInWithOAuth('facebook', 'Facebook', function(p) {
         p.addScope('email');
         p.addScope('public_profile');
-    });
-}
-
-function signInWithGitHub() {
-    _signInWithOAuth('github', 'GitHub', function(p) {
-        p.addScope('user:email');
     });
 }
 

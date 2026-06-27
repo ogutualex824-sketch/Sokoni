@@ -2007,13 +2007,11 @@ service cloud.firestore {
     match /communityRecommendations/{recId} {
       allow read: if true;
       allow create: if isAuthed() && request.resource.data.askerUid == request.auth.uid;
-      /* SECURITY: asker update field-locked — cannot change askerUid or inflate response counts. */
+      /* responseCount/responses are written by CF Admin SDK only — not client-writable. */
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.askerUid == request.auth.uid
                         && request.resource.data.diff(resource.data)
-                             .affectedKeys().hasOnly(['content','title','tags','edited','editedAt']))
-                    || (isAuthed() && request.resource.data.diff(resource.data)
-                         .affectedKeys().hasOnly(['responseCount','responses']));
+                             .affectedKeys().hasOnly(['content','title','tags','edited','editedAt']));
       allow delete: if isAdmin();
     }
     match /communityRecResponses/{respId} {
@@ -4428,6 +4426,20 @@ service cloud.firestore {
     match /ratingsSummary/{targetId} {
       allow read:  if true;   // public: needed for product cards and search results
       allow write: if false;  // CF Admin SDK only
+    }
+
+    /* ── Data Deletion & Rights Requests ──────────────────────────────── */
+    match /dataDeletionRequests/{reqId} {
+      allow read:   if isAdmin();
+      allow create: if false; // CF Admin SDK only (facebookDataDeletion CF)
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+    match /dataRightsRequests/{reqId} {
+      allow read:   if isAdmin();
+      allow create: if false; // CF (submitDataRightsRequest callable)
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
   }

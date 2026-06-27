@@ -1,22 +1,28 @@
 /**
- * SOKONI Reviews & Ratings Engine v1.0
+ * SOKONI Reviews & Ratings Engine v1.1
  * Cloud Functions: submitReview, getReviews, flagReview,
  *                  markReviewHelpful, adminModerateReview
  *
  * Collection layout:
- *   reviews/{reviewId}           — top-level review docs
- *   ratingsSummary/{targetId}    — denormalised avg+count per entity
+ *   reviews/{reviewId}                    — top-level review docs
+ *   reviews/{id}/flags/{uid}              — per-user flag records
+ *   reviews/{id}/helpfulVotes/{uid}       — per-user helpful votes
+ *   ratingsSummary/{targetId}             — denormalised avg+count
+ *   reviewRateLimits/{uid}_{action}_{day} — daily rate-limit counters
  *
  * targetId format: "{type}_{entityId}"  e.g. "product_abc", "seller_xyz"
+ *
+ * Security hardening v1.1:
+ *   - Per-user daily rate limits on submit/flag/helpful
+ *   - Account ban check on submit
+ *   - Minimum account age (1h) before reviewing
+ *   - Zero-trust input validation on all public endpoints
  */
 
 "use strict";
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret }       = require("firebase-functions/params");
 const admin                  = require("firebase-admin");
-
-const db = admin.firestore;   // lazily evaluated — init happens in index.js
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function _db() { return admin.firestore(); }
@@ -27,13 +33,52 @@ function _sanitize(str, maxLen = 2000) {
   return str.replace(/<[^>]*>/g, "").trim().slice(0, maxLen);
 }
 
-function _requireAuth(context) {
-  if (!context.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  return context.auth.uid;
+function _requireAuth(req) {
+  if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  return req.auth.uid;
 }
 
-function _isAdmin(context) {
-  return !!(context.auth?.token?.admin || context.auth?.token?.superAdmin);
+function _isAdmin(req) {
+  return !!(req.auth?.token?.admin || req.auth?.token?.superAdmin);
+}
+
+/**
+ * Firestore-backed daily rate limiter for reviews actions.
+ * Key: `{uid}_{action}_{YYYY-MM-DD}` — auto-expires by date.
+ */
+async function _checkReviewRateLimit(uid, action, limit) {
+  const db  = _db();
+  const day = new Date().toISOString().slice(0, 10);
+  const ref = db.collection("reviewRateLimits").doc(`${uid}_${action}_${day}`);
+  let allowed = false;
+  await db.runTransaction(async (tx) => {
+    const doc   = await tx.get(ref);
+    const count = doc.exists ? (doc.data().count || 0) : 0;
+    if (count >= limit) return; // allowed stays false
+    tx.set(ref, {
+      uid, action, day,
+      count:     count + 1,
+      expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 86400000 * 2)),
+    }, { merge: true });
+    allowed = true;
+  });
+  if (!allowed) throw new HttpsError("resource-exhausted", `Daily limit reached for ${action}. Try again tomorrow.`);
+}
+
+/** Check user is not banned and account is old enough */
+async function _assertReviewEligible(uid) {
+  const db      = _db();
+  const userDoc = await db.collection("users").doc(uid).get().catch(() => null);
+  if (!userDoc || !userDoc.exists) throw new HttpsError("not-found", "User profile not found.");
+  const data = userDoc.data();
+  if (data.isBanned || data.status === "banned" || data.status === "suspended") {
+    throw new HttpsError("permission-denied", "Account restricted. Contact support.");
+  }
+  // Minimum 1-hour account age to prevent throwaway review accounts
+  const created = data.createdAt?.toDate?.() || data.created ? new Date(data.created) : null;
+  if (created && (Date.now() - created.getTime()) < 3600000) {
+    throw new HttpsError("permission-denied", "Account too new to submit reviews.");
+  }
 }
 
 /** Recalculate and update ratingsSummary for a target */
@@ -62,15 +107,26 @@ async function _recalcSummary(targetId) {
 // ── submitReview ──────────────────────────────────────────────────────────────
 exports.submitReview = onCall({ region: "us-central1" }, async (req) => {
   const uid = _requireAuth(req);
+
+  // Zero-trust input validation
   const { targetId, targetType, targetName, rating, title, body, orderId, images } = req.data;
 
-  if (!targetId || typeof targetId !== "string") throw new HttpsError("invalid-argument", "targetId required.");
+  if (!targetId || typeof targetId !== "string" || targetId.length > 128) throw new HttpsError("invalid-argument", "targetId required.");
   if (!["product","seller","service","food","healthcare","entertainment","education","legal","driver"].includes(targetType)) {
     throw new HttpsError("invalid-argument", "Invalid targetType.");
   }
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     throw new HttpsError("invalid-argument", "Rating must be 1-5.");
   }
+  if (body && typeof body === "string" && body.trim().length < 10) {
+    throw new HttpsError("invalid-argument", "Review body must be at least 10 characters.");
+  }
+
+  // Security checks — rate limit (3/day) + ban + account age
+  await Promise.all([
+    _checkReviewRateLimit(uid, "submit", 3),
+    _assertReviewEligible(uid),
+  ]);
 
   const db = _db();
 
@@ -196,7 +252,10 @@ exports.getReviews = onCall({ region: "us-central1" }, async (req) => {
 exports.flagReview = onCall({ region: "us-central1" }, async (req) => {
   const uid = _requireAuth(req);
   const { reviewId, reason } = req.data;
-  if (!reviewId) throw new HttpsError("invalid-argument", "reviewId required.");
+  if (!reviewId || typeof reviewId !== "string") throw new HttpsError("invalid-argument", "reviewId required.");
+
+  // Rate limit: 10 flags per user per day
+  await _checkReviewRateLimit(uid, "flag", 10);
 
   const db = _db();
   const ref = db.collection("reviews").doc(reviewId);
@@ -227,7 +286,10 @@ exports.flagReview = onCall({ region: "us-central1" }, async (req) => {
 exports.markReviewHelpful = onCall({ region: "us-central1" }, async (req) => {
   const uid = _requireAuth(req);
   const { reviewId } = req.data;
-  if (!reviewId) throw new HttpsError("invalid-argument", "reviewId required.");
+  if (!reviewId || typeof reviewId !== "string") throw new HttpsError("invalid-argument", "reviewId required.");
+
+  // Rate limit: 50 helpful votes per user per day
+  await _checkReviewRateLimit(uid, "helpful", 50);
 
   const db = _db();
   const ref    = db.collection("reviews").doc(reviewId);

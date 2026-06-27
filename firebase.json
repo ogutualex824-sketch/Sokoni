@@ -52,7 +52,8 @@
       "*.jsonl"
     ],
     "rewrites": [
-      { "source": "/api/chat", "function": "sokoniChat", "region": "us-central1" }
+      { "source": "/api/chat",                     "function": "sokoniChat",           "region": "us-central1" },
+      { "source": "/api/facebook/data-deletion",   "function": "facebookDataDeletion", "region": "us-central1" }
     ],
     "cleanUrls": true,
     "trailingSlash": false,
@@ -101,8 +102,26 @@
       },
 
       {
+        "source": "@(login|signup|admin|superadmin).html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, private" },
+          { "key": "Pragma", "value": "no-cache" },
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+        ]
+      },
+
+      {
+        "source": "@(checkout|payments|wallet|financial-os|finos).html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-store, private" },
+          { "key": "Pragma", "value": "no-cache" }
+        ]
+      },
+
+      {
         "source": "**",
         "headers": [
+          { "key": "X-Permitted-Cross-Domain-Policies", "value": "none" },
 
           {
             "key": "Content-Security-Policy",

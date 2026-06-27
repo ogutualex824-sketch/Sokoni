@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Deletion — SOKONI</title>
+  <meta name="description" content="Delete your SOKONI account and personal data. Request data export or erasure under the Kenya Data Protection Act 2019.">
+  <meta property="og:title" content="Data Deletion — SOKONI">
+  <meta property="og:description" content="Request deletion of your SOKONI account and personal data.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://mysokoni.co.ke/data-deletion">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root { --accent: #71ff00; }
+    body { background: #0a0a0a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
+    .legal-hero { background: linear-gradient(135deg,#1a0a0a 0%,#0a0a0a 60%); padding: 80px 24px 48px; text-align: center; border-bottom: 1px solid rgba(255,80,80,.1); }
+    .legal-hero h1 { font-size: clamp(28px,5vw,44px); color: #fff; margin: 0 0 12px; font-weight: 800; }
+    .legal-hero p  { color: rgba(255,255,255,.5); font-size: 14px; margin: 0; }
+    .legal-body { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+    .option-card {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 18px;
+      padding: 28px 28px 24px;
+      margin-bottom: 20px;
+      transition: border-color .2s;
+    }
+    .option-card:hover { border-color: rgba(113,255,0,.25); }
+    .option-card h2 { font-size: 20px; color: #fff; font-weight: 700; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+    .option-card h2 .icon { font-size: 24px; }
+    .option-card p  { font-size: 15px; color: rgba(255,255,255,.6); line-height: 1.7; margin: 0 0 20px; }
+    .option-card ul { padding-left: 20px; margin: 0 0 20px; }
+    .option-card li { font-size: 14px; color: rgba(255,255,255,.55); line-height: 1.7; margin-bottom: 4px; }
+    .btn-danger {
+      display: inline-block;
+      background: rgba(220,50,50,.15);
+      border: 1.5px solid rgba(220,50,50,.35);
+      color: #ff6b6b;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .18s, border-color .18s;
+    }
+    .btn-danger:hover { background: rgba(220,50,50,.25); border-color: rgba(220,50,50,.6); }
+    .btn-primary {
+      display: inline-block;
+      background: var(--accent);
+      color: #000;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      border: none;
+      transition: opacity .18s;
+    }
+    .btn-primary:hover { opacity: .85; }
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: rgba(255,255,255,.08); }
+    .timeline-step { position: relative; margin-bottom: 22px; }
+    .timeline-step::before { content: ''; position: absolute; left: -24px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+    .timeline-step h3 { font-size: 15px; color: rgba(255,255,255,.85); font-weight: 600; margin: 0 0 4px; }
+    .timeline-step p  { font-size: 14px; color: rgba(255,255,255,.5); margin: 0; }
+    .notice { background: rgba(255,200,0,.06); border: 1px solid rgba(255,200,0,.15); border-radius: 12px; padding: 16px 20px; font-size: 14px; color: rgba(255,220,100,.8); margin: 24px 0; line-height: 1.65; }
+    .form-row { display: flex; flex-direction: column; gap: 14px; }
+    .form-field label { display: block; font-size: 13px; color: rgba(255,255,255,.5); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+    .form-field input, .form-field select, .form-field textarea {
+      width: 100%; box-sizing: border-box;
+      background: rgba(255,255,255,.06);
+      border: 1.5px solid rgba(255,255,255,.12);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      padding: 12px 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--accent); }
+    .form-field textarea { resize: vertical; min-height: 80px; }
+    .form-field select option { background: #1a1a1a; }
+    #formMsg { display: none; padding: 14px 18px; border-radius: 10px; font-size: 14px; margin-top: 14px; }
+    #formMsg.success { background: rgba(113,255,0,.1); border: 1px solid rgba(113,255,0,.25); color: var(--accent); display: block; }
+    #formMsg.error   { background: rgba(255,60,60,.1); border: 1px solid rgba(255,60,60,.25); color: #ff6b6b; display: block; }
+    .divider { border: none; border-top: 1px solid rgba(255,255,255,.06); margin: 40px 0; }
+    h1.section-h { font-size: 18px; color: #fff; font-weight: 700; margin: 0 0 20px; }
+  </style>
+</head>
+<body>
+<div class="legal-hero">
+  <h1>Data Deletion Centre</h1>
+  <p>Your rights under the Kenya Data Protection Act, 2019</p>
+</div>
+
+<div class="legal-body">
+
+  <!-- Option 1: Self-service -->
+  <div class="option-card">
+    <h2><span class="icon">⚡</span> Delete My Account Instantly</h2>
+    <p>If you are signed in to SOKONI, you can delete your account and all associated personal data directly from your profile settings — no waiting required.</p>
+    <div class="timeline">
+      <div class="timeline-step">
+        <h3>Go to Profile Settings</h3>
+        <p>Tap your profile picture → Settings → Account</p>
+      </div>
+      <div class="timeline-step">
+        <h3>Select "Delete Account"</h3>
+        <p>Scroll to the danger zone at the bottom of Account settings</p>
+      </div>
+      <div class="timeline-step">
+        <h3>Confirm Deletion</h3>
+        <p>Type DELETE to confirm — action is irreversible</p>
+      </div>
+      <div class="timeline-step">
+        <h3>Done</h3>
+        <p>Your account is deactivated immediately. Permanent purge completes within 30 days</p>
+      </div>
+    </div>
+    <a href="/profile" class="btn-primary">Go to Profile Settings</a>
+  </div>
+
+  <!-- What gets deleted -->
+  <div class="option-card">
+    <h2><span class="icon">🗑️</span> What Gets Deleted</h2>
+    <p>When you delete your SOKONI account, the following is permanently removed within 30 days:</p>
+    <ul>
+      <li>Profile name, photo, email address, phone number</li>
+      <li>Order history and delivery addresses</li>
+      <li>Reviews written and received</li>
+      <li>Messages and chat history</li>
+      <li>Saved items, wishlists, search history</li>
+      <li>Wallet balance (disbursed before deletion, if any)</li>
+      <li>Seller listings and storefront</li>
+      <li>All device tokens and notification preferences</li>
+    </ul>
+    <div class="notice">
+      ⚠️ <strong>Legal retention:</strong> Financial transaction records and KRA eTIMS receipts are retained for 7 years as required by Kenyan tax law, even after account deletion. These records are anonymised where possible.
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Option 2: Submit a request -->
+  <h1 class="section-h">Submit a Deletion or Rights Request</h1>
+  <p style="font-size:15px;color:rgba(255,255,255,.55);margin:0 0 24px;line-height:1.7;">
+    Can't sign in? Want to request data export, correction, or a formal erasure under the Kenya Data Protection Act? Use the form below.
+  </p>
+
+  <div class="option-card">
+    <h2><span class="icon">📋</span> Data Rights Request Form</h2>
+    <form id="deletionForm" onsubmit="submitDeletionRequest(event)">
+      <div class="form-row">
+        <div class="form-field">
+          <label>Full Name</label>
+          <input type="text" id="reqName" placeholder="Your full name" required minlength="2" maxlength="120">
+        </div>
+        <div class="form-field">
+          <label>Email Address on Account</label>
+          <input type="email" id="reqEmail" placeholder="email@example.com" required maxlength="200">
+        </div>
+        <div class="form-field">
+          <label>Phone Number on Account (optional)</label>
+          <input type="tel" id="reqPhone" placeholder="+254 7XX XXX XXX" maxlength="20">
+        </div>
+        <div class="form-field">
+          <label>Request Type</label>
+          <select id="reqType" required>
+            <option value="">— Select —</option>
+            <option value="delete_account">Delete my account and all personal data</option>
+            <option value="export_data">Export my personal data (data portability)</option>
+            <option value="rectify_data">Correct inaccurate personal data</option>
+            <option value="restrict_processing">Restrict processing of my data</option>
+            <option value="withdraw_consent">Withdraw marketing consent</option>
+            <option value="facebook_deletion">Facebook Login data deletion</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Additional Details (optional)</label>
+          <textarea id="reqDetails" placeholder="Provide any additional context about your request..."></textarea>
+        </div>
+        <div>
+          <button type="submit" class="btn-primary" id="reqSubmitBtn">Submit Request</button>
+          <div id="formMsg"></div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="notice">
+    📬 <strong>Response time:</strong> We will acknowledge your request within <strong>72 hours</strong> and complete it within <strong>30 days</strong> as required by the Kenya Data Protection Act, 2019. If we need to verify your identity, we may request a copy of your national ID.
+  </div>
+
+  <hr class="divider">
+
+  <!-- Contact -->
+  <div class="option-card">
+    <h2><span class="icon">✉️</span> Contact Our Data Protection Officer</h2>
+    <p>For complex data rights matters or if you are unsatisfied with our response:</p>
+    <ul>
+      <li>📧 <a href="mailto:privacy@mysokoni.co.ke" style="color:var(--accent);">privacy@mysokoni.co.ke</a></li>
+      <li>📧 <a href="mailto:legal@mysokoni.co.ke" style="color:var(--accent);">legal@mysokoni.co.ke</a></li>
+    </ul>
+    <p>You may also escalate unresolved complaints to the <strong>Office of the Data Protection Commissioner (ODPC)</strong> at <a href="https://www.odpc.go.ke" target="_blank" rel="noopener" style="color:var(--accent);">odpc.go.ke</a>.</p>
+  </div>
+
+</div>
+
+<footer style="text-align:center;padding:32px 24px;border-top:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.3);font-size:13px;">
+  &copy; 2026 Sokoni Digital Limited &nbsp;|&nbsp;
+  <a href="/privacy" style="color:rgba(255,255,255,.4);">Privacy Policy</a> &nbsp;|&nbsp;
+  <a href="/terms" style="color:rgba(255,255,255,.4);">Terms of Service</a> &nbsp;|&nbsp;
+  <a href="/data-deletion" style="color:rgba(113,255,0,.7);">Data Deletion</a>
+</footer>
+
+<script src="firebase.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  function _esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  window.submitDeletionRequest = async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('reqSubmitBtn');
+    const msg = document.getElementById('formMsg');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    msg.className = '';
+    msg.style.display = 'none';
+
+    const name    = document.getElementById('reqName').value.trim();
+    const email   = document.getElementById('reqEmail').value.trim().toLowerCase();
+    const phone   = document.getElementById('reqPhone').value.trim();
+    const type    = document.getElementById('reqType').value;
+    const details = document.getElementById('reqDetails').value.trim();
+
+    if (!name || !email || !type) {
+      msg.textContent = 'Please fill in all required fields.';
+      msg.className = 'error';
+      btn.disabled = false;
+      btn.textContent = 'Submit Request';
+      return;
+    }
+
+    try {
+      const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      const fns = getFunctions(window._firebaseApp, 'us-central1');
+      const submitDataRightsRequest = httpsCallable(fns, 'submitDataRightsRequest');
+      await submitDataRightsRequest({ name, email, phone, type, details });
+      msg.textContent = '✓ Request received. We will contact you within 72 hours.';
+      msg.className = 'success';
+      document.getElementById('deletionForm').reset();
+    } catch (err) {
+      /* Fallback: mailto link if CF unavailable */
+      const subject = encodeURIComponent('Data Rights Request — ' + _esc(type));
+      const body    = encodeURIComponent('Name: ' + _esc(name) + '\nEmail: ' + _esc(email) + '\nPhone: ' + _esc(phone) + '\nRequest type: ' + _esc(type) + '\nDetails: ' + _esc(details));
+      window.location.href = 'mailto:privacy@mysokoni.co.ke?subject=' + subject + '&body=' + body;
+      msg.textContent = 'Opening your email client to send the request…';
+      msg.className = 'success';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Submit Request';
+  };
+})();
+</script>
+</body>
+</html>
