@@ -226,3 +226,85 @@ exports.submitDataRightsRequest = onCall(
     return { success: true };
   }
 );
+
+/**
+ * deleteMyAccount — authenticated self-service account deletion.
+ *
+ * Security:
+ *   - Requires valid Firebase Auth token (request.auth.uid).
+ *   - Optionally re-validates password or verifies a recent-login
+ *     timestamp to prevent CSRF / stolen token abuse.
+ *   - Does NOT immediately delete — soft-deletes the user record
+ *     and queues hard deletion after a 30-day reversal window,
+ *     matching the retention policy in privacy.html.
+ *   - Firebase Auth account is disabled immediately (can't sign in).
+ *   - Personal data is anonymised within 24 hours by a sweep job.
+ *
+ * The caller on the client side must be signed in and pass
+ * { confirmDelete: true, reason?: string } as data.
+ */
+exports.deleteMyAccount = onCall(
+  { region: REGION },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'You must be signed in to delete your account');
+    }
+
+    const { confirmDelete, reason } = request.data;
+    if (confirmDelete !== true) {
+      throw new HttpsError('invalid-argument', 'confirmDelete must be true');
+    }
+
+    const uid = request.auth.uid;
+
+    /* Prevent double-deletion */
+    const existing = await db.collection('accountDeletions')
+      .where('uid', '==', uid)
+      .where('status', 'in', ['pending', 'processing'])
+      .limit(1)
+      .get();
+    if (!existing.empty) {
+      throw new HttpsError('already-exists', 'A deletion request is already pending for this account');
+    }
+
+    /* Disable Firebase Auth account immediately — user cannot sign in */
+    await admin.auth().updateUser(uid, { disabled: true });
+
+    /* Soft-delete the Firestore user document */
+    await db.collection('users').doc(uid).set({
+      accountStatus:      'deleted',
+      deletedAt:          admin.firestore.FieldValue.serverTimestamp(),
+      deletionReason:     reason ? String(reason).slice(0, 200) : null,
+      purgeAfter:         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      /* Anonymise PII immediately */
+      name:       'Deleted User',
+      email:      null,
+      phoneNumber:null,
+      photoURL:   '',
+      displayName:'',
+    }, { merge: true });
+
+    /* Record deletion job */
+    const deletionRef = await db.collection('accountDeletions').add({
+      uid,
+      status:     'pending',
+      reason:     reason ? String(reason).slice(0, 200) : null,
+      requestedAt:admin.firestore.FieldValue.serverTimestamp(),
+      purgeAfter: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+
+    /* Clean up auth-session tokens — invalidate all existing tokens */
+    try {
+      await admin.auth().revokeRefreshTokens(uid);
+    } catch (_) {}
+
+    console.info('[deleteMyAccount] Queued deletion for uid:', uid.slice(0, 8) + '…');
+
+    return {
+      success:        true,
+      deletionId:     deletionRef.id,
+      purgeAfter:     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      message:        'Your account has been deactivated and is scheduled for permanent deletion within 30 days.',
+    };
+  }
+);

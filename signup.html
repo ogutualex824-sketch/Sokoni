@@ -96,7 +96,7 @@
 
       <div class="auth-divider">or sign up with</div>
 
-      <div class="auth-social-grid" style="grid-template-columns:repeat(3,1fr);">
+      <div class="auth-social-grid">
         <!-- Google -->
         <button type="button" class="auth-social-btn google-btn" id="googleSignInBtn" onclick="signInWithGoogle()">
           <svg class="ssb-icon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -107,12 +107,12 @@
           </svg>
           <span class="g-btn-text">Google</span>
         </button>
-        <!-- Apple -->
-        <button type="button" class="auth-social-btn apple-btn" onclick="signInWithApple()">
-          <svg class="ssb-icon" width="17" height="18" viewBox="0 0 814 1000" fill="white" aria-hidden="true">
-            <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.3-161-39.3c-73.4 0-99.9 40.8-165.5 40.8s-105.9-57-155.5-127.4C46 376.6 46 256.4 46 240c0-145.8 95.2-222.5 188.9-222.5 50.6 0 92.6 33.3 124.4 33.3 30.7 0 78.8-35.2 136.5-35.2 23.3 0 108.2 2.6 168.9 70.3zm-41.4-129.7c-19.2 12.2-66.4 37.6-66.4 108.9 0 71.5 65.3 124.5 96.2 138.3-4.5 9-28.9 62.8-90 62.8-40 0-70.4-26.3-115.4-26.3-47.3 0-93.6 30.2-129.5 30.2-57.8 0-110-71.4-130.4-121.9"/>
+        <!-- Facebook -->
+        <button type="button" class="auth-social-btn fb-btn" onclick="signInWithFacebook()">
+          <svg class="ssb-icon" width="17" height="17" viewBox="0 0 24 24" fill="#1877F2" aria-hidden="true">
+            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073c0 6.027 4.388 11.026 10.125 11.927V15.563H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.234 2.686.234v2.953H15.83c-1.491 0-1.956.927-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.437C19.612 23.1 24 18.1 24 12.073z"/>
           </svg>
-          Apple
+          Facebook
         </button>
         <!-- Phone -->
         <button type="button" class="auth-social-btn phone-btn" onclick="window.location.href='login.html#phone'">

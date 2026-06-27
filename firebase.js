@@ -9,9 +9,7 @@ import {
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
-  OAuthProvider,
   FacebookAuthProvider,
-  GithubAuthProvider,
   getRedirectResult,
   linkWithCredential,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -85,10 +83,8 @@ window.firebaseStorage = storage;
         /* Attach the matching credential for the linking flow in auth.js */
         const pid = err.customData?._tokenResponse?.providerId || "";
         try {
-          if (pid === "google.com")       err._pendingCred = GoogleAuthProvider.credentialFromError(err);
-          else if (pid === "facebook.com") err._pendingCred = FacebookAuthProvider.credentialFromError(err);
-          else if (pid === "github.com")   err._pendingCred = GithubAuthProvider.credentialFromError(err);
-          else                             err._pendingCred = OAuthProvider.credentialFromError(err);
+          if (pid === "google.com")         err._pendingCred = GoogleAuthProvider.credentialFromError(err);
+          else if (pid === "facebook.com")  err._pendingCred = FacebookAuthProvider.credentialFromError(err);
         } catch (_) {}
       }
       window.dispatchEvent(new CustomEvent("sokoniGoogleRedirectError", { detail: err }));
@@ -184,10 +180,21 @@ onAuthStateChanged(auth, async (user) => {
           } catch(_) {}
         }
 
+        /* Resolve provider label for all supported sign-in methods */
+        const isFacebook = providerId === "facebook.com";
+        const isPhone    = providerId === "phone";
+        const isEmail    = providerId === "password";
+
+        const providerSlug = isGoogle   ? "google"
+                           : isFacebook ? "facebook"
+                           : isPhone    ? "phone"
+                           : "email";
+
         const profile = {
           uid:                user.uid,
-          name:               user.displayName || user.email.split("@")[0],
-          email:              user.email,
+          name:               user.displayName || (user.email || user.phoneNumber || "").split("@")[0] || "User",
+          email:              user.email || null,
+          phoneNumber:        user.phoneNumber || null,
           registeredAs:       { user: true },
           roles:              ["buyer"],
           accountStatus:      "active",
@@ -198,13 +205,14 @@ onAuthStateChanged(auth, async (user) => {
           firstReferralOrderDone: false,
           joinedAt:           _now.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
           joinedTimestamp:    _now.getTime(),
-          ...(isGoogle && {
-            firstName,
-            lastName,
-            photoURL:      user.photoURL  || "",
-            provider:      "google",
-            providers:     ["google"],
-            emailVerified: user.emailVerified,
+          provider:           providerSlug,
+          providers:          [providerSlug],
+          photoURL:           user.photoURL || "",
+          emailVerified:      user.emailVerified || isPhone,
+          ...(isGoogle && { firstName, lastName }),
+          ...(isFacebook && {
+            firstName: (user.displayName || "").split(" ")[0] || "",
+            lastName:  (user.displayName || "").split(" ").slice(1).join(" ") || "",
           }),
         };
         await setDoc(doc(db, "users", user.uid), {

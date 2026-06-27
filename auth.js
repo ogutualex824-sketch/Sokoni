@@ -838,7 +838,7 @@ window.addEventListener('sokoniOAuthRedirectDone', async function(e) {
     const result     = e.detail;
     const providerId = result.user?.providerData?.[0]?.providerId || 'unknown';
     /* Google redirects already handled by sokoniGoogleRedirectDone above;
-       this listener handles Apple, Microsoft, Facebook, GitHub, Phone */
+       this listener handles Facebook, Phone */
     if (providerId !== 'google.com') {
         await _handleOAuthResult(result, _providerLabel(providerId));
     }
@@ -868,20 +868,16 @@ window.addEventListener('sokoniOAuthRedirectError', function(e) {
 });
 
 /* ══════════════════════════════════════════════════════════════
-   UNIVERSAL OAUTH — Apple · Microsoft · Facebook · GitHub
-   All providers share the same popup/redirect detection, linking,
-   and post-auth profile handling.
+   UNIVERSAL OAUTH — Facebook (Google handled separately above)
+   Popup with redirect fallback, account linking, post-auth profile.
 ══════════════════════════════════════════════════════════════ */
 
 function _providerLabel(providerId) {
     const map = {
-        'google.com':    'Google',
-        'apple.com':     'Apple',
-        'microsoft.com': 'Microsoft',
-        'facebook.com':  'Facebook',
-        'github.com':    'GitHub',
-        'phone':         'Phone',
-        'password':      'Email',
+        'google.com':   'Google',
+        'facebook.com': 'Facebook',
+        'phone':        'Phone',
+        'password':     'Email',
     };
     return map[providerId] || providerId;
 }
@@ -977,9 +973,7 @@ async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
 
     try {
         const {
-            OAuthProvider,
             FacebookAuthProvider,
-            GithubAuthProvider,
             signInWithPopup,
             signInWithRedirect,
             setPersistence,
@@ -992,12 +986,7 @@ async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
             remember ? browserLocalPersistence : browserSessionPersistence
         ).catch(function() {});
 
-        let provider;
-        switch (providerKey) {
-            case 'facebook': provider = new FacebookAuthProvider(); break;
-            case 'github':   provider = new GithubAuthProvider();   break;
-            default:         provider = new OAuthProvider(providerKey); break;
-        }
+        const provider = new FacebookAuthProvider();
         if (configureFn) configureFn(provider);
 
         try {
@@ -1252,9 +1241,7 @@ async function _linkPendingProvider(credUser, email) {
     if (!window._pendingProviderLink) return;
     try {
         const {
-            OAuthProvider,
             FacebookAuthProvider,
-            GithubAuthProvider,
             linkWithCredential,
         } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
 
@@ -1262,13 +1249,8 @@ async function _linkPendingProvider(credUser, email) {
         const provider = window._pendingProviderLink.provider;
         let pendingCred;
 
-        switch (provider) {
-            case 'Facebook':
-                pendingCred = FacebookAuthProvider.credentialFromError(err); break;
-            case 'GitHub':
-                pendingCred = GithubAuthProvider.credentialFromError(err); break;
-            default:
-                pendingCred = OAuthProvider.credentialFromError(err); break;
+        if (provider === 'Facebook') {
+            pendingCred = FacebookAuthProvider.credentialFromError(err);
         }
 
         if (pendingCred) {

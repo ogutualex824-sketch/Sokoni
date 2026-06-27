@@ -4441,6 +4441,12 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
+    match /accountDeletions/{reqId} {
+      allow read:   if isAdmin();
+      allow create: if false; // CF (deleteMyAccount callable)
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
 
   }
 }

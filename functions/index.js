@@ -7881,3 +7881,4 @@ exports.facebookDataDeletion           = fbDeletion.facebookDataDeletion;
 exports.submitDataRightsRequest        = fbDeletion.submitDataRightsRequest;
 exports.adminGetDataDeletionRequest    = fbDeletion.adminGetDataDeletionRequest;
 exports.adminUpdateDataDeletionStatus  = fbDeletion.adminUpdateDataDeletionStatus;
+exports.deleteMyAccount                = fbDeletion.deleteMyAccount;
