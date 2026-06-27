@@ -874,22 +874,25 @@ function syncToFirestore(){
   _syncTimer=setTimeout(_doSync,2000);
 }
 function _doSync(){
-  try{
-    var uid=null;
-    try{uid=(JSON.parse(localStorage.getItem('sokoniUser')||'{}')).uid;}catch(e){}
-    if(!uid||typeof firebase==='undefined'||!firebase.firestore)return;
-    var db=firebase.firestore();
-    var data={
+  var uid=null;
+  try{uid=(JSON.parse(localStorage.getItem('sokoniUser')||'{}')).uid;}catch(e){}
+  if(!uid)return;
+  (async()=>{try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const {getFirestore,doc,setDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="bos-sync")||initializeApp(_cfg,"bos-sync");
+    const _db=getFirestore(_a);
+    await setDoc(doc(_db,'businessOS',uid),{
       profile:getBSO('bosBizProfile'),
       inventory:getBS('bosInventory'),
       orders:getBS('bosOrders'),
       accounts:getBS('bosAccounts'),
       customers:getBS('bosCustomers'),
       staff:getBS('bosStaff'),
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-    };
-    db.collection('businessOS').doc(uid).set(data,{merge:true}).catch(function(){});
-  }catch(e){}
+      updatedAt:serverTimestamp()
+    },{merge:true});
+  }catch(e){}})();
 }
 
 /* ── INIT ── */
@@ -898,25 +901,27 @@ renderDash();
 /* Try to pull from Firestore if available */
 (function(){
   function tryLoad(){
-    try{
-      var uid=null;
-      try{uid=(JSON.parse(localStorage.getItem('sokoniUser')||'{}')).uid;}catch(e){}
-      if(!uid||typeof firebase==='undefined'||!firebase.firestore)return;
-      firebase.firestore().collection('businessOS').doc(uid).get().then(function(snap){
-        if(!snap.exists)return;
-        var d=snap.data();
-        if(d.profile)setBS('bosBizProfile',d.profile);
-        if(d.inventory)setBS('bosInventory',d.inventory);
-        if(d.orders)setBS('bosOrders',d.orders);
-        if(d.accounts)setBS('bosAccounts',d.accounts);
-        if(d.customers)setBS('bosCustomers',d.customers);
-        if(d.staff)setBS('bosStaff',d.staff);
-        /* Re-render current panel */
-        showBPanel(_activePanel);
-      }).catch(function(){});
-    }catch(e){}
+    var uid=null;
+    try{uid=(JSON.parse(localStorage.getItem('sokoniUser')||'{}')).uid;}catch(e){}
+    if(!uid)return;
+    (async()=>{try{
+      const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const {getFirestore,doc,getDoc}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+      const _a=getApps().find(a=>a.name==="bos-load")||initializeApp(_cfg,"bos-load");
+      const snap=await getDoc(doc(getFirestore(_a),'businessOS',uid));
+      if(!snap.exists())return;
+      const d=snap.data();
+      if(d.profile)setBS('bosBizProfile',d.profile);
+      if(d.inventory)setBS('bosInventory',d.inventory);
+      if(d.orders)setBS('bosOrders',d.orders);
+      if(d.accounts)setBS('bosAccounts',d.accounts);
+      if(d.customers)setBS('bosCustomers',d.customers);
+      if(d.staff)setBS('bosStaff',d.staff);
+      showBPanel(_activePanel);
+    }catch(e){}})();
   }
-  /* Delay to let firebase.js initialize */
+  /* Delay to let auth settle */
   setTimeout(tryLoad,2000);
 })();
 </script>

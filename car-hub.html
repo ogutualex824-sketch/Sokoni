@@ -2176,6 +2176,7 @@ body{padding-bottom:70px;}
 /* ══════════════════════════════════════════════
    CAR HUB — COMPLETE SYSTEM
 ══════════════════════════════════════════════ */
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 /* ════ DL SYSTEM ════ */
 function getDLStatus(){try{const d=JSON.parse(localStorage.getItem("sokoniDLRecord")||"null");return d;}catch(e){return null;}}
@@ -2484,8 +2485,8 @@ function openBookingModal(carId){
       if(gateStatus){
         gateStatus.style.color="#ff9800";
         const needsClass = (carType==="Van"||carType==="Minibus"||carType==="Bus") ? "Class D (Passenger)" : "Class B (Light Vehicle)";
-        gateStatus.innerHTML=`⛔ Your ${dl.dlClass} does not authorise you to drive a <strong>${carType}</strong>.<br>
-          You need at least <strong>${needsClass}</strong> to rent this vehicle.<br>
+        gateStatus.innerHTML=`⛔ Your ${_esc(dl.dlClass)} does not authorise you to drive a <strong>${_esc(carType)}</strong>.<br>
+          You need at least <strong>${_esc(needsClass)}</strong> to rent this vehicle.<br>
           <a href="car-hub.html?tab=dl" style="color:#f97316;font-weight:700;text-decoration:none;margin-top:6px;display:inline-block;">
             🪪 Upgrade your licence class via NTSA →
           </a>`;
@@ -2552,7 +2553,7 @@ function confirmBooking(){
   }
   /* Show M-Pesa STK push instructions */
   if(msgEl){
-    msgEl.innerHTML=`✅ Booking <strong>${bid}</strong> confirmed!<br><span style="font-size:10px;color:rgba(255,255,255,0.5);">M-Pesa STK push sent to ${phone}. Enter your PIN to complete payment. Car owner notified via WhatsApp.</span>`;
+    msgEl.innerHTML=`✅ Booking <strong>${_esc(bid)}</strong> confirmed!<br><span style="font-size:10px;color:rgba(255,255,255,0.5);">M-Pesa STK push sent to ${_esc(phone)}. Enter your PIN to complete payment. Car owner notified via WhatsApp.</span>`;
     msgEl.style.color="#71ff00";
   }
   showFleetMsg("✅ Booking confirmed — M-Pesa request sent!");
@@ -2662,7 +2663,7 @@ function triggerSOS(bookingId){
     document.body.appendChild(modal);
   }
   const car=getCars().find(c=>c.id===bk.carId);
-  document.getElementById("sosCarInfo").innerHTML=`Car: <strong style="color:white;">${bk.carMake} ${bk.carModel} (${bk.carPlate})</strong><br>Booking: ${bookingId}<br>Renter: ${bk.renterName} · ${bk.renterPhone}`;
+  document.getElementById("sosCarInfo").innerHTML=`Car: <strong style="color:white;">${_esc(bk.carMake)} ${_esc(bk.carModel)} (${_esc(bk.carPlate)})</strong><br>Booking: ${_esc(bookingId)}<br>Renter: ${_esc(bk.renterName)} · ${_esc(bk.renterPhone)}`;
   const ownerPhone=(car?.ownerPhone||"").replace(/^0/,"254").replace(/\D/g,"");
   const msg=encodeURIComponent(`🆘 SOKONI SOS ALERT\n\nCar: ${bk.carMake} ${bk.carModel} (${bk.carPlate})\nRenter: ${bk.renterName}\nPhone: ${bk.renterPhone}\nBooking: ${bookingId}\n\nPlease respond immediately.`);
   const waEl=document.getElementById("sosWA");
@@ -3067,8 +3068,14 @@ async function submitTripRating(){
     rating:_ratingVal,comment,
     createdAt:new Date().toISOString()
   };
-  if(window.db && uid){
-    await window.db.collection('carRatings').add(ratingDoc).catch(console.error);
+  if(uid){
+    (async()=>{try{
+      const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const {getFirestore,collection,addDoc}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+      const _a=getApps().find(a=>a.name==="ch-rt")||initializeApp(_cfg,"ch-rt");
+      await addDoc(collection(getFirestore(_a),'carRatings'),ratingDoc);
+    }catch(e){}})();
   }
   /* Mark booking as rated in localStorage */
   const bks=getBookings().map(b=>b.id===_ratingBookingId?{...b,rated:true,rating:_ratingVal}:b);
@@ -4510,7 +4517,7 @@ var CarHubPro = (function(){
     var resEl = document.getElementById('aiResult');
     if(!resEl) return;
     resEl.style.display='block';
-    resEl.innerHTML='<div style="font-size:13px;font-weight:800;color:white;margin-bottom:8px;">Estimated Market Value for '+year+' '+make+' '+model+'</div>'
+    resEl.innerHTML='<div style="font-size:13px;font-weight:800;color:white;margin-bottom:8px;">Estimated Market Value for '+_esc(year)+' '+_esc(make)+' '+_esc(model)+'</div>'
       +'<div style="font-size:26px;font-weight:900;color:#71ff00;margin-bottom:6px;">KES '+Math.round(est).toLocaleString('en-KE',{maximumFractionDigits:0})+'</div>'
       +'<div style="font-size:11px;color:rgba(255,255,255,0.4);">Range: KES '+(Math.round(est*0.9)).toLocaleString('en-KE',{maximumFractionDigits:0})+' – '+(Math.round(est*1.1)).toLocaleString('en-KE',{maximumFractionDigits:0})+'</div>'
       +'<div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:8px;">AI estimate based on market trends. Actual price may vary.</div>';

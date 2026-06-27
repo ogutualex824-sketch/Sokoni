@@ -1340,12 +1340,11 @@
 
       const q = query(
         collection(db, "verifications"),
+        where("status", "==", "approved"),
         orderBy("approvedAt", "desc"),
-        limit(50)
+        limit(12)
       );
-      const _snap = await getDocs(q);
-      const snap = { docs: _snap.docs.filter(d => d.data().status === "approved"), empty: false };
-      snap.empty = snap.docs.length === 0;
+      const snap = await getDocs(q);
 
       if (snap.empty) {
         grid.innerHTML = `<div class="vf-dir-empty"><i class="fa-solid fa-badge-check"></i><div>No verified members yet â€” be the first to apply!</div></div>`;

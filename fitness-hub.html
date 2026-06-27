@@ -1920,9 +1920,9 @@ function loadUserBookings() {
   if(!_uid) return;
   try {
     onSnapshot(
-      query(collection(db,'fitness_bookings'), orderBy('date','asc'), limit(200)),
+      query(collection(db,'fitness_bookings'), where('uid','==',_uid), orderBy('date','asc'), limit(30)),
       snap => {
-        const bks = snap.docs.filter(d=>d.data().uid===_uid).map(d=>({id:d.id,...d.data()}));
+        const bks = snap.docs.map(d=>({id:d.id,...d.data()}));
         if(bks.length) {
           localStorage.setItem('sokoniBookings', JSON.stringify(bks));
           if(typeof renderUpcomingBookings==='function') renderUpcomingBookings();

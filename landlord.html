@@ -856,6 +856,7 @@
 <script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js"></script>
 <script>
   /* ══ DATA ══════════════════════════════════════ */
+  const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   function getData(){ try{ return JSON.parse(localStorage.getItem("sokoniLandlordProperties")) || []; }catch(e){ return []; } }
   function saveData(d){
     localStorage.setItem("sokoniLandlordProperties", JSON.stringify(d));
@@ -995,14 +996,14 @@
       return `
         <div class="unit-card ${u.status === 'occupied' ? 'unit-occupied' : 'unit-vacant'}">
           <div class="unit-header">
-            <div class="unit-num">${u.number}</div>
-            <span class="unit-type-tag">${u.type||""}</span>
+            <div class="unit-num">${_esc(u.number)}</div>
+            <span class="unit-type-tag">${_esc(u.type||"")}</span>
             <span class="unit-status-tag ${u.status==='occupied'?'ustag-occ':'ustag-vac'}">${u.status==='occupied'?"Occupied":"Vacant"}</span>
           </div>
           ${u.status==='occupied' ? `
-          <div class="unit-tenant">👤 ${u.tenant || "—"}</div>
-          <div class="unit-phone">📞 ${u.tenantPhone || "—"}</div>
-          <div class="unit-lease">📄 ${u.leaseStart||"—"} → ${u.leaseEnd||"—"}</div>
+          <div class="unit-tenant">👤 ${_esc(u.tenant || "—")}</div>
+          <div class="unit-phone">📞 ${_esc(u.tenantPhone || "—")}</div>
+          <div class="unit-lease">📄 ${_esc(u.leaseStart||"—")} → ${_esc(u.leaseEnd||"—")}</div>
           ` : ""}
           <div class="unit-rent-row">
             <span>💰 KES ${Number(u.rent||0).toLocaleString()}/mo</span>
@@ -1017,7 +1018,7 @@
             <button type="button" class="unit-btn unit-btn-grey" onclick="openEditUnit('${u.propId}','${u.id}')">✏️ Edit</button>
             ${u.status==='occupied' ? `<button type="button" class="unit-btn unit-btn-red" onclick="vacateUnit('${u.propId}','${u.id}')">🚪 Vacate</button>` : ""}
           </div>
-          <div class="unit-prop-label">${u.propName||""}</div>
+          <div class="unit-prop-label">${_esc(u.propName||"")}</div>
         </div>
       `;
     }).join("") + "</div>";
@@ -1119,8 +1120,8 @@
       <h3 style="color:rgba(255,255,255,0.5);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:24px 0 12px;">⏳ Pending (${unpaid.length})</h3>
       ${unpaid.map(u=>`
         <div class="rent-row rent-unpaid-row">
-          <div><strong>${u.number}</strong> <span class="unit-prop-label">${u.propName}</span></div>
-          <div>${u.tenant||"—"} · ${u.tenantPhone||""}</div>
+          <div><strong>${_esc(u.number)}</strong> <span class="unit-prop-label">${_esc(u.propName)}</span></div>
+          <div>${_esc(u.tenant||"—")} · ${_esc(u.tenantPhone||"")}</div>
           <div>KES ${Number(u.rent||0).toLocaleString()}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button type="button" class="unit-btn unit-btn-green" onclick="toggleRentFromRentSection('${u.propId}','${u.id}')">✅ Mark Paid</button>
@@ -1131,8 +1132,8 @@
       <h3 style="color:rgba(255,255,255,0.5);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:24px 0 12px;">✅ Paid (${paid.length})</h3>
       ${paid.map(u=>`
         <div class="rent-row rent-paid-row">
-          <div><strong>${u.number}</strong> <span class="unit-prop-label">${u.propName}</span></div>
-          <div>${u.tenant||"—"}</div>
+          <div><strong>${_esc(u.number)}</strong> <span class="unit-prop-label">${_esc(u.propName)}</span></div>
+          <div>${_esc(u.tenant||"—")}</div>
           <div>KES ${Number(u.rent||0).toLocaleString()}</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <span style="color:#71ff00;font-size:12px;">✅ Paid ${rentStatus(u,month).paidDate||""}</span>
@@ -1163,9 +1164,9 @@
       return `
         <div class="water-card">
           <div class="water-card-header">
-            <div class="unit-num">${u.number}</div>
-            <div class="unit-prop-label">${u.propName}</div>
-            <span class="unit-status-tag ${u.status==='occupied'?'ustag-occ':'ustag-vac'}">${u.status==='occupied'?u.tenant||"Occupied":"Vacant"}</span>
+            <div class="unit-num">${_esc(u.number)}</div>
+            <div class="unit-prop-label">${_esc(u.propName)}</div>
+            <span class="unit-status-tag ${u.status==='occupied'?'ustag-occ':'ustag-vac'}">${u.status==='occupied'?_esc(u.tenant||"Occupied"):"Vacant"}</span>
           </div>
           ${bill ? `
             <div class="water-bill-detail">
@@ -1223,8 +1224,8 @@
         </div>
         ${allUnits.map(u=>`
           <div class="deposit-row">
-            <span><strong>${u.number}</strong><br><small>${u.propName}</small></span>
-            <span>${u.tenant||"—"}<br><small>${u.tenantPhone||""}</small></span>
+            <span><strong>${_esc(u.number)}</strong><br><small>${_esc(u.propName)}</small></span>
+            <span>${_esc(u.tenant||"—")}<br><small>${_esc(u.tenantPhone||"")}</small></span>
             <span>KES ${Number(u.deposit||0).toLocaleString()}</span>
             <span class="${u.depositPaid?'deposit-paid':'deposit-unpaid'}">${u.depositPaid?"✅ Paid":"⏳ Pending"}</span>
             <span>
@@ -1303,7 +1304,7 @@
   function openAddUnitModal(){
     const props = getData();
     const sel   = document.getElementById("unitPropertyId");
-    sel.innerHTML = props.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");
+    sel.innerHTML = props.map(p=>`<option value="${_esc(p.id)}">${_esc(p.name)}</option>`).join("");
     document.getElementById("addUnitModal").style.display = "flex";
   }
 
@@ -1342,7 +1343,7 @@
     const sel = document.getElementById("waterUnitId");
     if(!sel.value || sel.value === ""){
       sel.innerHTML = `<option value="">Select unit...</option>` +
-        allUnits.map(u=>`<option value="${u.propId}__${u.id}">${u.number} — ${u.propName} (${u.tenant||"vacant"})</option>`).join("");
+        allUnits.map(u=>`<option value="${u.propId}__${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant||"vacant")})</option>`).join("");
     }
     const wMonth = document.getElementById("waterBillMonth");
     if(wMonth && !wMonth.value) wMonth.value = new Date().toISOString().slice(0,7);
@@ -1686,7 +1687,7 @@
     const sel = document.getElementById("maintUnitId");
     const props = getData();
     sel.innerHTML = '<option value="">Select unit...</option>' +
-      props.flatMap(p=>(p.units||[]).map(u=>`<option value="${p.id}|${u.id}">${u.number} — ${p.name}${u.tenant?' ('+u.tenant+')':" (Vacant)"}</option>`)).join("");
+      props.flatMap(p=>(p.units||[]).map(u=>`<option value="${_esc(p.id)}|${_esc(u.id)}">${_esc(u.number)} — ${_esc(p.name)}${u.tenant?' ('+_esc(u.tenant)+')':" (Vacant)"}</option>`)).join("");
     document.getElementById("maintDesc").value = "";
     document.getElementById("maintCost").value = "";
     document.getElementById("maintContractor").value = "";
@@ -1792,7 +1793,7 @@
     const sel   = document.getElementById("noticeUnitId");
     const props = getData();
     sel.innerHTML = '<option value="">Select unit / tenant...</option>' +
-      props.flatMap(p=>(p.units||[]).map(u=>`<option value="${p.id}|${u.id}">${u.tenant||u.number} — ${p.name}${u.status!=="occupied"?" (Vacant)":""}</option>`)).join("");
+      props.flatMap(p=>(p.units||[]).map(u=>`<option value="${_esc(p.id)}|${_esc(u.id)}">${_esc(u.tenant||u.number)} — ${_esc(p.name)}${u.status!=="occupied"?" (Vacant)":""}</option>`)).join("");
     document.getElementById("noticeDate").value    = new Date().toISOString().slice(0,10);
     document.getElementById("noticeDays").value    = "30";
     document.getElementById("noticePreviewSection").style.display = "none";
@@ -3291,7 +3292,7 @@ Both parties should retain a signed copy of this agreement.
     const props = getData();
     const allUnits = props.flatMap(p=>(p.units||[]).map(u=>({...u,propId:p.id,propName:p.name,propPhone:p.phone,propLandlord:p.landlord})));
     const sel = document.getElementById("invUnitId");
-    sel.innerHTML = allUnits.map(u=>`<option value="${u.propId}|${u.id}">${u.number} — ${u.propName} (${u.tenant||"vacant"})</option>`).join("");
+    sel.innerHTML = allUnits.map(u=>`<option value="${u.propId}|${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant||"vacant")})</option>`).join("");
     if(prefillUnitKey) sel.value = prefillUnitKey;
     if(prefillType){ document.getElementById("invType").value = prefillType; onInvTypeChange(); }
     document.getElementById("invDate").value   = new Date().toISOString().slice(0,10);
@@ -3505,7 +3506,7 @@ Both parties should retain a signed copy of this agreement.
     const selApp = document.getElementById("scApplyTo");
     const allUnits = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied").map(u=>({...u,propId:p.id,propName:p.name})));
     selApp.innerHTML = `<option value="all">All Occupied Units</option>` +
-      allUnits.map(u=>`<option value="${u.propId}|${u.id}">${u.number} — ${u.propName} (${u.tenant})</option>`).join("");
+      allUnits.map(u=>`<option value="${u.propId}|${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant)})</option>`).join("");
     const m = document.getElementById("scChargeMonth");
     if(m) m.value = new Date().toISOString().slice(0,7);
     document.getElementById("serviceChargeModal").style.display="flex";
@@ -3592,7 +3593,7 @@ Both parties should retain a signed copy of this agreement.
     const props   = getData();
     const allUnits = props.flatMap(p=>(p.units||[]).filter(u=>u.status==="occupied").map(u=>({...u,propId:p.id,propName:p.name})));
     const sel = document.getElementById("bmUnitTarget");
-    sel.innerHTML = allUnits.map(u=>`<option value="${u.propId}|${u.id}">${u.number} — ${u.propName} (${u.tenant})</option>`).join("");
+    sel.innerHTML = allUnits.map(u=>`<option value="${u.propId}|${u.id}">${_esc(u.number)} — ${_esc(u.propName)} (${_esc(u.tenant)})</option>`).join("");
     document.getElementById("bmMessage").value="";
     document.getElementById("bmResult").innerHTML="";
     document.getElementById("bulkMessageModal").style.display="flex";

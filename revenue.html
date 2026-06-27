@@ -528,7 +528,7 @@ window.loadLedger = async function() {
         </tr>`).join("")
       : "<tr><td colspan='8' class='rev-empty'>No records</td></tr>";
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='8' class='rev-empty' style='color:#ff4444'>Error: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan='8' class='rev-empty' style='color:#ff4444'>Unable to load data — please refresh.</td></tr>`;
   }
 };
 
@@ -560,7 +560,7 @@ window.loadInvoices = async function() {
         </div>
       </div>`).join("");
   } catch(e) {
-    list.innerHTML = `<div class='rev-empty' style='color:#ff4444'>Error: ${e.message}</div>`;
+    list.innerHTML = `<div class='rev-empty' style='color:#ff4444'>Unable to load data — please refresh.</div>`;
   }
 };
 
@@ -629,7 +629,7 @@ window.loadConfig = async function() {
       } catch(e2) { console.warn("[Revenue] Auto-seed failed:", e2); }
     }
   } catch(e) {
-    document.getElementById("hubConfigRows").innerHTML = "<div style='color:#ff4444'>Error: " + e.message + "</div>";
+    document.getElementById("hubConfigRows").innerHTML = "<div style='color:#ff4444'>Unable to load data — please refresh."</div>";
   }
 };
 
@@ -678,7 +678,7 @@ window.loadSubscriptions = async function() {
       </tr>`;
     }).join("");
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Unable to load data — please refresh.</td></tr>`;
   }
 };
 
@@ -730,7 +730,7 @@ window.loadFeatured = async function() {
       </tr>`;
     }).join("");
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='8' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan='8' style='color:#ff4444;padding:20px'>Unable to load data — please refresh.</td></tr>`;
   }
 };
 
@@ -761,7 +761,7 @@ window.loadAds = async function() {
       </tr>`;
     }).join("");
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='9' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan='9' style='color:#ff4444;padding:20px'>Unable to load data — please refresh.</td></tr>`;
   }
 };
 
