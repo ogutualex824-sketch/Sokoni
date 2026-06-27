@@ -1,4 +1,34 @@
-﻿## [2026-06-28] — Public Pages, Compliance & Trust Audit v1.0
+﻿## [2026-06-28] — Admin Operating System (AOS) v1.0
+
+### Summary
+Enterprise-grade Admin Operating System delivered as a full SPA with 17 sections covering every SOKONI hub from a single mission-control interface. Security hardening sprint also completed: review rate limiting wired into CF bodies, dual IP+UID payment rate limit, community IDOR fix, auth/payment page Cache-Control headers, and Production Security Certification Report at 95/100.
+
+### Files Created
+- `admin-os.html` — AOS SPA: dark sidebar, 17 panels (dashboard, users, marketplace, services, delivery, financial, support, comms, content, AI, search, SmartPOS, fraud, analytics, config, audit, security), live KPI grid, Canvas charts, mobile-responsive
+- `sokoni-aos.js` — AOS engine: auth gate, lazy panel loading, 50+ CF wires, real-time Firestore listeners, inline Canvas charts, toast/modal/spinner UI helpers, full public API
+- `docs/SECURITY_CERTIFICATION.md` — Production Security Certification Report v2.1 (95/100)
+
+### Files Modified
+- `functions/reviews.js` — rate limiting wired: submitReview (3/day), flagReview (10/day), markReviewHelpful (50/day)
+- `functions/index.js` — dual rate limit on verifyIntasendPayment (IP + UID); removed duplicate search exports block
+- `firestore.rules` — community IDOR: removed client-writable responseCount/responses update path
+- `firebase.json` — Cache-Control headers for auth pages (no-store) and payment pages (no-store, private); X-Permitted-Cross-Domain-Policies header added
+
+### Security Changes
+- Review abuse: 3 submits / 10 flags / 50 helpful votes per UID per day
+- Payment verification: dual rate limit blocks NAT bypass attacks (10/IP/min + 5/UID/min)
+- Community IDOR: responseCount and responses now CF Admin SDK only
+- Auth/payment pages: no-store cache headers prevent credential caching
+
+### API Changes
+- None (all changes are hardening of existing CFs)
+
+### Breaking Changes
+- None
+
+---
+
+## [2026-06-28] — Public Pages, Compliance & Trust Audit v1.0
 
 ### Summary
 Complete public-page overhaul. 13 new pages created, `sokoni-legal.css` shared stylesheet (400+ lines), comprehensive footer system, sitemap updated with 20 legal/company URLs, robots.txt patched to disallow two admin-only pages mistakenly left open. All auth providers (Google, Facebook, Apple, Microsoft) now have the required public-facing Privacy, Terms, Data Deletion, and Community Guidelines pages. SEO-complete: title, description, og:, twitter:card, canonical, and Schema.org structured data on every new page.

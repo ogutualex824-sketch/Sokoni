@@ -1,1693 +1,496 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-no-header="true">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin OS — SOKONI</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#09090b;--sur:#111113;--sur2:#18181b;--brd:#1e1e22;--brd2:#2a2a30;--g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;--y:#fbbf24;--txt:#e5e7eb;--sub:#6b7280;--radius:12px}
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
-.shell{display:flex;min-height:100vh}
-.sidebar{width:235px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
-.logo{padding:18px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px}
-.logo-text{font-size:14px;font-weight:900;background:linear-gradient(90deg,var(--g),var(--b));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.2}
-.logo-sub{font-size:10px;color:var(--sub)}
-.ng{padding:10px 0 3px 14px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.1em}
-.ni{display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:8px;margin:1px 8px;font-size:13px;font-weight:500;color:var(--sub);cursor:pointer;transition:.12s;text-decoration:none}
-.ni:hover{background:var(--sur2);color:var(--txt)}.ni.active{background:rgba(113,255,0,.08);color:var(--g)}
-.ni .material-icons{font-size:17px;flex-shrink:0}
-.bc{background:var(--r);color:#fff;border-radius:999px;font-size:9px;font-weight:900;padding:1px 5px;margin-left:auto}
-.sidebar-foot{margin-top:auto;padding:10px 8px;border-top:1px solid var(--brd)}
-.main{flex:1;min-width:0;display:flex;flex-direction:column}
-.topbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:0 22px;height:58px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
-.topbar h1{font-size:16px;font-weight:900;background:linear-gradient(90deg,var(--g),var(--b));-webkit-background-clip:text;-webkit-text-fill-color:transparent;flex:1}
-.content{padding:20px;flex:1}
-.panel{display:none}.panel.active{display:block}
-
-/* Stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
-.stat{background:var(--sur);border:1px solid var(--brd);border-radius:var(--radius);padding:14px}
-.stat.warn{border-color:rgba(255,149,0,.3)}
-.stat.alert{border-color:rgba(255,68,68,.3)}
-.sv{font-size:22px;font-weight:900;color:var(--g);line-height:1}
-.sv.b{color:var(--b)}.sv.o{color:var(--o)}.sv.r{color:var(--r)}.sv.p{color:var(--p)}.sv.y{color:var(--y)}.sv.w{color:#fff}
-.sl{font-size:10px;color:var(--sub);margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
-
-/* Card */
-.card{background:var(--sur);border:1px solid var(--brd);border-radius:var(--radius);margin-bottom:16px}
-.card-hd{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--brd)}
-.card-title{font-size:13px;font-weight:700;flex:1}
-.card-body{padding:16px}
-
-/* Tables */
-.tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{text-align:left;padding:9px 12px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--brd)}
-.tbl td{padding:9px 12px;border-bottom:1px solid var(--brd);vertical-align:middle}
-.tbl tr:last-child td{border-bottom:none}
-.tbl tr:hover td{background:var(--sur2)}
-.tbl-empty{text-align:center;padding:32px;color:var(--sub)}
-
-/* Buttons */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:.12s;font-family:inherit}
-.btn-g{background:var(--g);color:#000}.btn-g:hover{background:#5dcc00}
-.btn-o{background:none;border:1.5px solid var(--brd2);color:var(--txt)}.btn-o:hover{background:var(--sur2)}
-.btn-r{background:rgba(255,68,68,.12);color:var(--r);border:1px solid rgba(255,68,68,.22)}.btn-r:hover{background:rgba(255,68,68,.2)}
-.btn-b{background:rgba(0,212,255,.12);color:var(--b);border:1px solid rgba(0,212,255,.2)}.btn-b:hover{background:rgba(0,212,255,.2)}
-.btn-p{background:rgba(168,85,247,.12);color:var(--p);border:1px solid rgba(168,85,247,.2)}.btn-p:hover{background:rgba(168,85,247,.2)}
-.btn-sm{padding:5px 9px;font-size:11px}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-
-/* Badges */
-.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
-.bg{background:rgba(113,255,0,.1);color:var(--g)}.bb{background:rgba(0,212,255,.1);color:var(--b)}
-.bo{background:rgba(255,149,0,.1);color:var(--o)}.br{background:rgba(255,68,68,.1);color:var(--r)}
-.bp{background:rgba(168,85,247,.1);color:var(--p)}.by{background:rgba(251,191,36,.1);color:var(--y)}
-.bs{background:rgba(255,255,255,.06);color:var(--sub)}
-
-/* Forms */
-.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
-.fg2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.fl{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
-.fi{background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:100%;transition:.12s}
-.fi:focus{border-color:var(--g)}
-.fs{background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;cursor:pointer;width:100%;height:40px}
-
-/* Toolbar */
-.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:14px}
-.search-box{display:flex;align-items:center;gap:6px;background:var(--sur);border:1.5px solid var(--brd2);border-radius:8px;padding:0 10px;height:34px;flex:1;min-width:200px}
-.search-box input{flex:1;border:none;background:none;font-size:12px;color:var(--txt);outline:none;font-family:inherit}
-.search-box .material-icons{font-size:16px;color:var(--sub)}
-
-/* Modal */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center}
-.overlay.open{display:flex}
-.modal{background:var(--sur);border:1px solid var(--brd2);border-radius:14px;width:min(540px,92vw);max-height:90vh;overflow-y:auto}
-.mhd{display:flex;align-items:center;gap:9px;padding:16px 20px;border-bottom:1px solid var(--brd);position:sticky;top:0;background:var(--sur);z-index:10}
-.mhd h2{font-size:14px;font-weight:900;flex:1}
-.mbody{padding:20px}
-.mfoot{padding:12px 20px;border-top:1px solid var(--brd);display:flex;gap:9px;justify-content:flex-end;background:var(--sur);position:sticky;bottom:0}
-
-/* Feature flags */
-.flag-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--brd)}
-.flag-row:last-child{border-bottom:none}
-.flag-key{font-size:12px;font-weight:700;color:var(--b);width:220px;flex-shrink:0}
-.flag-desc{flex:1;font-size:11px;color:var(--sub)}
-.toggle{position:relative;width:42px;height:22px;flex-shrink:0}
-.toggle input{opacity:0;width:0;height:0}
-.toggle-sl{position:absolute;cursor:pointer;inset:0;background:var(--brd2);border-radius:22px;transition:.2s}
-.toggle input:checked+.toggle-sl{background:var(--g)}
-.toggle-sl:before{content:'';position:absolute;width:18px;height:18px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s}
-.toggle input:checked+.toggle-sl:before{transform:translateX(20px)}
-
-/* Settings category tabs */
-.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
-.cat-tab{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);color:var(--sub);transition:.12s}
-.cat-tab.active{background:rgba(113,255,0,.1);color:var(--g);border-color:rgba(113,255,0,.3)}
-.cat-tab:hover:not(.active){background:var(--sur2);color:var(--txt)}
-
-/* Quick links grid */
-.links-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
-.link-card{background:var(--sur2);border:1px solid var(--brd2);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:8px;cursor:pointer;text-decoration:none;transition:.12s}
-.link-card:hover{border-color:var(--g);background:rgba(113,255,0,.04)}
-.link-card .material-icons{font-size:24px;color:var(--g)}
-.link-card-title{font-size:13px;font-weight:700;color:var(--txt)}
-.link-card-sub{font-size:11px;color:var(--sub)}
-
-/* Toast */
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1d;border:1px solid var(--brd2);color:var(--txt);padding:9px 16px;border-radius:9px;font-size:12px;font-weight:700;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
-.toast.show{opacity:1}
-.spin{width:18px;height:18px;border:2px solid var(--brd);border-top-color:var(--g);border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle}
-@keyframes sp{to{transform:rotate(360deg)}}
-
-@media(max-width:768px){.sidebar{display:none}.fg2{grid-template-columns:1fr}}
-</style>
+  <script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin OS — SOKONI Mission Control</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--aos-bg:#0f1117;--aos-surface:#1a1d2e;--aos-surface2:#222540;--aos-border:rgba(255,255,255,.08);--aos-accent:#00bcd4;--aos-accent2:#7c4dff;--aos-success:#4caf50;--aos-warn:#ff9800;--aos-danger:#f44336;--aos-text:#e0e0e0;--aos-muted:#888;--aos-sidebar-w:220px;--aos-radius:8px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{background:var(--aos-bg);color:var(--aos-text);display:flex;font-size:14px;line-height:1.5}
+    .aos-sidebar{width:var(--aos-sidebar-w);min-height:100vh;background:var(--aos-surface);border-right:1px solid var(--aos-border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto}
+    .aos-logo{padding:20px 16px 16px;border-bottom:1px solid var(--aos-border);display:flex;align-items:center;gap:10px}
+    .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--aos-accent),var(--aos-accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .logo-text{font-size:13px;font-weight:700;letter-spacing:.5px}
+    .logo-sub{font-size:10px;color:var(--aos-muted)}
+    .nav-group{padding:8px 0}
+    .nav-group-label{font-size:10px;font-weight:600;color:var(--aos-muted);letter-spacing:1px;text-transform:uppercase;padding:8px 16px 4px}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:var(--aos-text);transition:background .15s,color .15s;font-size:13px;border:none;background:none;width:100%;text-align:left;text-decoration:none}
+    .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+    .nav-item.active{background:rgba(0,188,212,.15);color:var(--aos-accent);font-weight:600}
+    .nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
+    .nav-badge{margin-left:auto;background:var(--aos-danger);color:#fff;font-size:10px;border-radius:10px;padding:1px 6px;font-weight:700}
+    .aos-sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid var(--aos-border)}
+    .aos-user-chip{display:flex;align-items:center;gap:10px;padding:8px 0}
+    .aos-user-avatar{width:30px;height:30px;background:linear-gradient(135deg,#00bcd4,#7c4dff);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+    .aos-user-info-text{font-size:12px;overflow:hidden}
+    .aos-user-info-text strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .aos-user-info-text span{color:var(--aos-muted);font-size:10px}
+    .signout-btn{width:100%;margin-top:8px;padding:7px;border-radius:var(--aos-radius);border:1px solid var(--aos-border);background:none;color:var(--aos-muted);cursor:pointer;font-size:12px;transition:background .15s,color .15s}
+    .signout-btn:hover{background:rgba(244,67,54,.1);color:var(--aos-danger)}
+    .aos-main{margin-left:var(--aos-sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+    .aos-header{position:sticky;top:0;z-index:50;background:var(--aos-surface);border-bottom:1px solid var(--aos-border);padding:12px 24px;display:flex;align-items:center;gap:16px}
+    .aos-breadcrumb{font-size:18px;font-weight:700;flex:1}
+    .aos-header-search input{background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:20px;padding:7px 16px;color:var(--aos-text);font-size:13px;width:220px;outline:none}
+    .aos-header-search input:focus{border-color:var(--aos-accent)}
+    .header-notif-btn{width:36px;height:36px;border-radius:50%;background:var(--aos-surface2);border:1px solid var(--aos-border);color:var(--aos-text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+    .header-notif-btn:hover{background:rgba(0,188,212,.1)}
+    .aos-content{flex:1;padding:24px;overflow-y:auto}
+    .aos-panel{display:block}
+    .aos-panel[hidden]{display:none!important}
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+    .kpi-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:16px;transition:border-color .2s}
+    .kpi-card:hover{border-color:var(--aos-accent)}
+    .kpi-label{font-size:11px;color:var(--aos-muted);text-transform:uppercase;letter-spacing:.5px}
+    .kpi-value{font-size:28px;font-weight:700;margin:4px 0 2px;line-height:1}
+    .kpi-sub{font-size:11px;color:var(--aos-muted)}
+    .kpi-card.accent{border-color:rgba(0,188,212,.3);background:rgba(0,188,212,.05)}
+    .kpi-card.success{border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05)}
+    .kpi-card.warn{border-color:rgba(255,152,0,.3);background:rgba(255,152,0,.05)}
+    .kpi-card.danger{border-color:rgba(244,67,54,.3);background:rgba(244,67,54,.05)}
+    #healthScores{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px}
+    .health-chip{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px 16px;min-width:130px}
+    .health-chip span{font-size:11px;color:var(--aos-muted);display:block}
+    .health-chip strong{font-size:22px;font-weight:700;display:block;margin:2px 0 6px}
+    .health-bar{height:4px;background:rgba(255,255,255,.1);border-radius:2px}
+    .health-bar div{height:100%;border-radius:2px;background:var(--aos-accent)}
+    .chart-wrap{width:100%}
+    .chart-wrap canvas{width:100%!important;display:block}
+    .analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+    .dash-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+    .dash-section{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:16px}
+    .dash-section h3{font-size:14px;margin-bottom:12px;font-weight:600}
+    .alert-list{display:flex;flex-direction:column;gap:8px}
+    .alert-chip{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--aos-radius);border:1px solid var(--aos-border);font-size:13px}
+    .alert-chip time{margin-left:auto;color:var(--aos-muted);font-size:11px;white-space:nowrap}
+    .sev-critical{border-color:rgba(244,67,54,.5);background:rgba(244,67,54,.07)}
+    .sev-high{border-color:rgba(255,152,0,.5);background:rgba(255,152,0,.07)}
+    .sev-warn,.sev-medium{border-color:rgba(255,235,59,.4);background:rgba(255,235,59,.05)}
+    .sev-info{border-color:var(--aos-border)}
+    .aos-table{width:100%;border-collapse:collapse;font-size:13px}
+    .aos-table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:600;color:var(--aos-muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--aos-border);white-space:nowrap}
+    .aos-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+    .aos-table tbody tr:hover{background:rgba(255,255,255,.03)}
+    .empty-cell{text-align:center;padding:32px;color:var(--aos-muted)}
+    .role-badge,.status-badge,.prio-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+    .role-admin{background:rgba(124,77,255,.2);color:#b39ddb}
+    .role-seller{background:rgba(0,188,212,.2);color:var(--aos-accent)}
+    .role-buyer{background:rgba(33,150,243,.2);color:#90caf9}
+    .role-driver{background:rgba(255,152,0,.2);color:#ffcc80}
+    .role-provider{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .role-moderator{background:rgba(233,30,99,.2);color:#f48fb1}
+    .st-active{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .st-inactive,.st-cancelled{background:rgba(158,158,158,.2);color:#bdbdbd}
+    .st-banned,.st-suspended{background:rgba(244,67,54,.2);color:#ef9a9a}
+    .st-pending{background:rgba(255,152,0,.2);color:#ffcc80}
+    .st-completed,.st-paid,.st-delivered{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .st-processing{background:rgba(33,150,243,.2);color:#90caf9}
+    .st-open{background:rgba(0,188,212,.2);color:var(--aos-accent)}
+    .st-online{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .st-offline,.st-unknown{background:rgba(158,158,158,.2);color:#bdbdbd}
+    .prio-critical{background:rgba(244,67,54,.2);color:#ef9a9a}
+    .prio-high{background:rgba(255,152,0,.2);color:#ffcc80}
+    .prio-normal{background:rgba(33,150,243,.2);color:#90caf9}
+    .prio-low{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .audit-action{background:rgba(124,77,255,.15);color:#b39ddb;padding:2px 7px;border-radius:4px;font-size:11px;font-family:monospace}
+    .aos-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--aos-radius);border:1px solid var(--aos-border);background:var(--aos-surface2);color:var(--aos-text);cursor:pointer;font-size:13px;font-weight:500;transition:background .15s,border-color .15s;text-decoration:none}
+    .aos-btn:hover{border-color:var(--aos-accent);background:rgba(0,188,212,.1)}
+    .aos-btn.success{border-color:rgba(76,175,80,.4);background:rgba(76,175,80,.1);color:#a5d6a7}
+    .aos-btn.success:hover{background:rgba(76,175,80,.2)}
+    .aos-btn.danger{border-color:rgba(244,67,54,.4);background:rgba(244,67,54,.1);color:#ef9a9a}
+    .aos-btn-sm{display:inline-flex;align-items:center;padding:4px 10px;border-radius:5px;border:1px solid var(--aos-border);background:var(--aos-surface2);color:var(--aos-text);cursor:pointer;font-size:11px;font-weight:500;transition:background .15s}
+    .aos-btn-sm:hover{background:rgba(255,255,255,.1)}
+    .aos-btn-sm.success{border-color:rgba(76,175,80,.4);color:#a5d6a7}
+    .aos-btn-sm.success:hover{background:rgba(76,175,80,.15)}
+    .aos-btn-sm.danger{border-color:rgba(244,67,54,.4);color:#ef9a9a}
+    .aos-btn-sm.danger:hover{background:rgba(244,67,54,.15)}
+    .aos-btn-sm.warning{border-color:rgba(255,152,0,.4);color:#ffcc80}
+    .aos-btn-sm.warning:hover{background:rgba(255,152,0,.15)}
+    .tab-bar{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--aos-border);margin-bottom:20px}
+    .tab-btn{padding:8px 16px;border:none;background:none;color:var(--aos-muted);cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;margin-bottom:-1px}
+    .tab-btn:hover{color:var(--aos-text)}
+    .tab-btn.active{color:var(--aos-accent);border-bottom-color:var(--aos-accent)}
+    .panel-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+    .panel-toolbar h2{flex:1;font-size:16px;font-weight:600}
+    .panel-toolbar input,.panel-toolbar select{padding:7px 12px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);color:var(--aos-text);font-size:13px;outline:none}
+    .panel-toolbar input:focus,.panel-toolbar select:focus{border-color:var(--aos-accent)}
+    .user-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .user-detail-grid>div{display:flex;flex-direction:column;background:var(--aos-surface2);border-radius:var(--aos-radius);padding:10px 12px}
+    .user-detail-grid strong{font-size:11px;color:var(--aos-muted);margin-bottom:2px}
+    .fin-stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+    .fin-stat{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:14px 18px;min-width:160px}
+    .fin-stat span{font-size:11px;color:var(--aos-muted);display:block}
+    .fin-stat strong{font-size:20px;font-weight:700}
+    .payout-actions{margin-bottom:12px}
+    .fin-report{background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px;white-space:pre-wrap;font-size:12px;font-family:monospace;max-height:400px;overflow-y:auto}
+    .stat-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:14px 16px}
+    .stat-card span{font-size:11px;color:var(--aos-muted);display:block;margin-bottom:4px}
+    .stat-card strong{font-size:22px;font-weight:700;display:block}
+    .stat-card.success{border-color:rgba(76,175,80,.3)}
+    .stat-card.warn{border-color:rgba(255,152,0,.3)}
+    .stat-card.danger{border-color:rgba(244,67,54,.3)}
+    .ai-stats-grid,.mkt-quality,.pos-stats,.fraud-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--aos-border)}
+    .toggle-row:last-child{border-bottom:none}
+    .toggle-sw{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0}
+    .toggle-sw input{opacity:0;width:0;height:0}
+    .toggle-sw span{position:absolute;inset:0;background:rgba(255,255,255,.1);border-radius:22px;cursor:pointer;transition:background .2s}
+    .toggle-sw span::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}
+    .toggle-sw input:checked+span{background:var(--aos-accent)}
+    .toggle-sw input:checked+span::before{transform:translateX(18px)}
+    .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    .config-section{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:20px}
+    .config-section h3{font-size:14px;font-weight:600;margin-bottom:16px}
+    .config-label{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+    .config-label span{font-size:12px;color:var(--aos-muted)}
+    .config-label input{padding:8px 12px;background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:var(--aos-radius);color:var(--aos-text);font-size:13px;outline:none}
+    .config-label input:focus{border-color:var(--aos-accent)}
+    .config-label.toggle-row{flex-direction:row;align-items:center;margin-bottom:0}
+    .flag-list{display:flex;flex-direction:column}
+    .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+    .cat-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:16px 12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .cat-icon{font-size:28px}
+    .cat-card strong{font-size:13px}
+    .cat-card small{color:var(--aos-muted);font-size:11px}
+    .cat-add{border-style:dashed;cursor:pointer;opacity:.6}
+    .cat-add:hover{opacity:1;border-color:var(--aos-accent)}
+    .cat-add span{font-size:28px;color:var(--aos-accent)}
+    .review-list{display:flex;flex-direction:column;gap:12px}
+    .review-item{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:14px 16px}
+    .review-header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+    .review-actions{display:flex;gap:8px;margin-top:10px}
+    .banner-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+    .banner-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);overflow:hidden}
+    .banner-card img{width:100%;height:120px;object-fit:cover}
+    .banner-info{padding:10px 12px}
+    .banner-info strong{display:block;font-size:13px}
+    .banner-info small{color:var(--aos-muted);font-size:11px;display:block;margin:2px 0 8px}
+    .banner-actions{display:flex;gap:6px}
+    .faq-list{display:flex;flex-direction:column;gap:4px}
+    .faq-item{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);overflow:hidden}
+    .faq-item summary{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;font-size:13px;font-weight:500;gap:12px}
+    .faq-item summary div{display:flex;gap:6px;flex-shrink:0}
+    .faq-item p{padding:0 14px 12px;color:var(--aos-muted);font-size:13px}
+    .ann-list{display:flex;flex-direction:column;gap:10px}
+    .ann-item{border-left:3px solid var(--aos-border);padding:12px 14px;border-radius:0 var(--aos-radius) var(--aos-radius) 0;background:var(--aos-surface)}
+    .ann-info{border-left-color:var(--aos-accent)}
+    .ann-warning{border-left-color:var(--aos-warn)}
+    .ann-success{border-left-color:var(--aos-success)}
+    .ann-meta{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+    .notif-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--aos-border);font-size:13px}
+    .notif-type{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:rgba(0,188,212,.15);color:var(--aos-accent)}
+    .compose-form{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:20px;margin-bottom:24px}
+    .compose-form h3{margin-bottom:14px;font-size:14px}
+    .compose-form input,.compose-form textarea,.compose-form select{width:100%;padding:9px 12px;background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:var(--aos-radius);color:var(--aos-text);font-size:13px;margin-bottom:10px;outline:none;font-family:inherit}
+    .compose-form input:focus,.compose-form textarea:focus,.compose-form select:focus{border-color:var(--aos-accent)}
+    .search-health{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+    .trending-chips{display:flex;flex-wrap:wrap;gap:8px}
+    .trending-chip{padding:4px 10px;background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:20px;font-size:12px;cursor:pointer}
+    .trending-chip small{color:var(--aos-muted);margin-left:4px}
+    .ai-module-toggles{margin-top:20px;background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:16px}
+    .ai-module-toggles h3{font-size:14px;margin-bottom:12px}
+    .delivery-stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+    .delivery-stat{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:14px 20px;text-align:center}
+    .delivery-stat span{font-size:11px;color:var(--aos-muted);display:block}
+    .delivery-stat strong{font-size:28px;font-weight:700}
+    .security-grid{display:flex;flex-direction:column;gap:24px}
+    .quick-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:24px}
+    .quick-link{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);cursor:pointer;text-decoration:none;color:var(--aos-text);font-size:13px;transition:border-color .15s}
+    .quick-link:hover{border-color:var(--aos-accent);color:var(--aos-accent)}
+    .aos-spinner{display:flex;align-items:center;justify-content:center;padding:40px}
+    .aos-spinner div{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--aos-accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;color:var(--aos-muted);gap:12px}
+    .empty-state span{font-size:40px}
+    .aos-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:20px}
+    .aos-modal.open{display:flex}
+    .modal-box{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:12px;width:100%;max-width:700px;max-height:85vh;display:flex;flex-direction:column}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--aos-border)}
+    .modal-header h2{font-size:16px;font-weight:600}
+    .modal-header button{background:none;border:none;color:var(--aos-muted);font-size:20px;cursor:pointer;line-height:1}
+    .modal-header button:hover{color:var(--aos-text)}
+    .modal-body{padding:20px;overflow-y:auto}
+    .ticket-detail textarea{background:var(--aos-surface2);color:var(--aos-text);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:9px;font-family:inherit;font-size:13px;outline:none;resize:vertical}
+    .ticket-detail textarea:focus{border-color:var(--aos-accent)}
+    .aos-pre{background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px;white-space:pre-wrap;font-size:12px;font-family:monospace;max-height:400px;overflow-y:auto}
+    .toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+    .toast{padding:12px 18px;border-radius:var(--aos-radius);font-size:13px;font-weight:500;max-width:320px;opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;background:var(--aos-surface2);border:1px solid var(--aos-border)}
+    .toast.visible{opacity:1;transform:translateY(0)}
+    .toast-success{border-color:rgba(76,175,80,.5);background:rgba(76,175,80,.15);color:#a5d6a7}
+    .toast-error{border-color:rgba(244,67,54,.5);background:rgba(244,67,54,.15);color:#ef9a9a}
+    .toast-info{border-color:rgba(0,188,212,.5);background:rgba(0,188,212,.15);color:var(--aos-accent)}
+    .aos-muted{color:var(--aos-muted)}
+    .aos-mono{font-family:"SFMono-Regular",Consolas,monospace;font-size:12px}
+    .mobile-menu-btn{display:none;width:36px;height:36px;background:var(--aos-surface2);border:1px solid var(--aos-border);border-radius:var(--aos-radius);align-items:center;justify-content:center;cursor:pointer;font-size:18px}
+    @media(max-width:900px){.config-grid{grid-template-columns:1fr}.analytics-grid{grid-template-columns:1fr}.dash-row{grid-template-columns:1fr}}
+    @media(max-width:768px){.aos-sidebar{transform:translateX(-100%);transition:transform .25s}.aos-sidebar.open{transform:translateX(0)}.aos-main{margin-left:0}.mobile-menu-btn{display:flex!important}}
+  </style>
 </head>
 <body>
-<div class="shell">
-  <aside class="sidebar">
-    <div class="logo">
-      <span class="material-icons" style="font-size:22px;background:linear-gradient(135deg,var(--g),var(--b));-webkit-background-clip:text;-webkit-text-fill-color:transparent">admin_panel_settings</span>
-      <div><div class="logo-text">Admin OS</div><div class="logo-sub">SOKONI Platform</div></div>
+  <aside class="aos-sidebar" id="aosSidebar">
+    <div class="aos-logo">
+      <div class="logo-icon">&#x1F680;</div>
+      <div><div class="logo-text">SOKONI AOS</div><div class="logo-sub">Mission Control</div></div>
     </div>
-
-    <div class="ng">Platform</div>
-    <div class="ni active" onclick="_nav(this,'overview')"><span class="material-icons">dashboard</span>Overview</div>
-    <div class="ni" onclick="_nav(this,'links')"><span class="material-icons">apps</span>All Tools</div>
-
-    <div class="ng">Operations</div>
-    <div class="ni" onclick="_nav(this,'users')"><span class="material-icons">people</span>Users</div>
-    <div class="ni" onclick="_nav(this,'marketplace')"><span class="material-icons">shopping_bag</span>Marketplace</div>
-    <div class="ni" onclick="_nav(this,'orders')"><span class="material-icons">receipt_long</span>Orders <span class="bc" id="sbOrders">…</span></div>
-    <div class="ni" onclick="_nav(this,'bookings')"><span class="material-icons">event_note</span>Bookings</div>
-    <div class="ni" onclick="_nav(this,'delivery')"><span class="material-icons">local_shipping</span>Delivery</div>
-    <div class="ni" onclick="_nav(this,'pos-devices')"><span class="material-icons">point_of_sale</span>SmartPOS</div>
-
-    <div class="ng">Financial</div>
-    <a href="financial-os.html" class="ni"><span class="material-icons">account_balance</span>Financial OS</a>
-    <div class="ni" onclick="_nav(this,'payouts')"><span class="material-icons">payments</span>Payouts <span class="bc" id="sbPayouts">…</span></div>
-    <a href="commission-engine.html" class="ni"><span class="material-icons">percent</span>Commission</a>
-    <a href="subscription-billing.html" class="ni"><span class="material-icons">subscriptions</span>Billing</a>
-
-    <div class="ng">Customer</div>
-    <div class="ni" onclick="_nav(this,'tickets')"><span class="material-icons">support_agent</span>Support <span class="bc" id="sbTickets">…</span></div>
-    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons">gavel</span>Disputes <span class="bc" id="sbDisputes">…</span></div>
-    <div class="ni" onclick="_nav(this,'reviews')"><span class="material-icons">star</span>Reviews</div>
-
-    <div class="ng">Communications</div>
-    <div class="ni" onclick="_nav(this,'push-notif')"><span class="material-icons">notifications_active</span>Push Notifications</div>
-    <div class="ni" onclick="_nav(this,'announcements')"><span class="material-icons">campaign</span>Announcements</div>
-    <a href="email-center.html" class="ni"><span class="material-icons">email</span>Email Center</a>
-
-    <div class="ng">Content</div>
-    <div class="ni" onclick="_nav(this,'banners')"><span class="material-icons">image</span>Banners</div>
-    <div class="ni" onclick="_nav(this,'categories')"><span class="material-icons">category</span>Categories</div>
-    <div class="ni" onclick="_nav(this,'faqs')"><span class="material-icons">quiz</span>FAQs</div>
-
-    <div class="ng">AI & Search</div>
-    <div class="ni" onclick="_nav(this,'ai-ops')"><span class="material-icons">smart_toy</span>AI Operations</div>
-    <div class="ni" onclick="_nav(this,'search')"><span class="material-icons">manage_search</span>Search Manager</div>
-
-    <div class="ng">Security</div>
-    <a href="trust-safety.html" class="ni"><span class="material-icons">shield</span>Trust & Safety</a>
-    <div class="ni" onclick="_nav(this,'fraud')"><span class="material-icons">report_problem</span>Fraud Center <span class="bc" id="sbFraud">…</span></div>
-    <div class="ni" onclick="_nav(this,'audit')"><span class="material-icons">history</span>Audit Logs</div>
-
-    <div class="ng">Config</div>
-    <div class="ni" onclick="_nav(this,'settings')"><span class="material-icons">settings</span>Settings</div>
-    <div class="ni" onclick="_nav(this,'flags')"><span class="material-icons">flag</span>Feature Flags</div>
-
-    <div class="sidebar-foot">
-      <a href="admin.html" class="ni" style="margin:0"><span class="material-icons">arrow_back</span>Legacy Admin</a>
+    <div class="nav-group">
+      <div class="nav-group-label">Overview</div>
+      <button class="nav-item" data-section="dashboard" data-label="Dashboard" onclick="SokoniAOS.navigate('dashboard');_closeSidebar()"><span class="nav-icon">&#x1F3E0;</span>Dashboard</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">People</div>
+      <button class="nav-item" data-section="users" data-label="User Management" onclick="SokoniAOS.navigate('users');_closeSidebar()"><span class="nav-icon">&#x1F465;</span>Users</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Commerce</div>
+      <button class="nav-item" data-section="marketplace" data-label="Marketplace" onclick="SokoniAOS.navigate('marketplace');_closeSidebar()"><span class="nav-icon">&#x1F6D2;</span>Marketplace</button>
+      <button class="nav-item" data-section="services" data-label="Service Hubs" onclick="SokoniAOS.navigate('services');_closeSidebar()"><span class="nav-icon">&#x1F527;</span>Service Hubs</button>
+      <button class="nav-item" data-section="delivery" data-label="Delivery Operations" onclick="SokoniAOS.navigate('delivery');_closeSidebar()"><span class="nav-icon">&#x1F697;</span>Delivery</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Operations</div>
+      <button class="nav-item" data-section="financial" data-label="Financial Center" onclick="SokoniAOS.navigate('financial');_closeSidebar()"><span class="nav-icon">&#x1F4B0;</span>Financial</button>
+      <button class="nav-item" data-section="support" data-label="Customer Support" onclick="SokoniAOS.navigate('support');_closeSidebar()"><span class="nav-icon">&#x1F3A7;</span>Support<span class="nav-badge" id="sidebarTicketBadge" hidden>0</span></button>
+      <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span>Communications</button>
+      <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span>Content</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Intelligence</div>
+      <button class="nav-item" data-section="ai" data-label="AI Operations" onclick="SokoniAOS.navigate('ai');_closeSidebar()"><span class="nav-icon">&#x1F916;</span>AI</button>
+      <button class="nav-item" data-section="search" data-label="Search Management" onclick="SokoniAOS.navigate('search');_closeSidebar()"><span class="nav-icon">&#x1F50D;</span>Search</button>
+      <button class="nav-item" data-section="analytics" data-label="Analytics &amp; BI" onclick="SokoniAOS.navigate('analytics');_closeSidebar()"><span class="nav-icon">&#x1F4CA;</span>Analytics</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Platform</div>
+      <button class="nav-item" data-section="smartpos" data-label="SmartPOS" onclick="SokoniAOS.navigate('smartpos');_closeSidebar()"><span class="nav-icon">&#x1F5A8;&#xFE0F;</span>SmartPOS</button>
+      <button class="nav-item" data-section="fraud" data-label="Fraud &amp; Trust" onclick="SokoniAOS.navigate('fraud');_closeSidebar()"><span class="nav-icon">&#x1F6E1;&#xFE0F;</span>Fraud &amp; Trust</button>
+      <button class="nav-item" data-section="config" data-label="Platform Config" onclick="SokoniAOS.navigate('config');_closeSidebar()"><span class="nav-icon">&#x2699;&#xFE0F;</span>Config</button>
+      <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span>Audit</button>
+      <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Tools</div>
+      <a class="nav-item" href="platform-health.html" target="_blank"><span class="nav-icon">&#x1F49A;</span>Platform Health</a>
+      <a class="nav-item" href="finos.html" target="_blank"><span class="nav-icon">&#x1F3E6;</span>FinOS</a>
+      <a class="nav-item" href="trust-safety.html" target="_blank"><span class="nav-icon">&#x1F512;</span>Trust &amp; Safety</a>
+      <a class="nav-item" href="launch-readiness.html" target="_blank"><span class="nav-icon">&#x1F680;</span>Launch Readiness</a>
+      <a class="nav-item" href="reliability-center.html" target="_blank"><span class="nav-icon">&#x1F4E1;</span>Reliability</a>
+    </div>
+    <div class="aos-sidebar-footer">
+      <div class="aos-user-chip">
+        <div class="aos-user-avatar">A</div>
+        <div class="aos-user-info-text"><strong id="aosUserName">Loading&#x2026;</strong><span id="aosUserRole">Admin</span></div>
+      </div>
+      <button class="signout-btn" onclick="SokoniAOS.signOut()">Sign Out</button>
     </div>
   </aside>
 
-  <div class="main">
-    <div class="topbar">
-      <h1 id="pageTitle">Platform Overview</h1>
-      <button class="btn btn-o btn-sm" onclick="_nav(document.querySelector('.ni[onclick*=tickets]'),'tickets')"><span class="material-icons" style="font-size:14px">support_agent</span>Support</button>
-      <button class="btn btn-o btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px">refresh</span></button>
-    </div>
-    <div class="content">
+  <main class="aos-main">
+    <header class="aos-header">
+      <button class="mobile-menu-btn" onclick="_openSidebar()">&#x2630;</button>
+      <div class="aos-breadcrumb" id="aosBreadcrumb">Dashboard</div>
+      <div class="aos-header-search"><input type="search" placeholder="Quick user search&#x2026;" oninput="SokoniAOS.navigate('users');SokoniAOS.loadUsers(this.value)" aria-label="Search"></div>
+      <button class="header-notif-btn" onclick="SokoniAOS.navigate('comms')" title="Notifications">&#x1F514;</button>
+    </header>
 
-      <!-- OVERVIEW -->
-      <div id="panel-overview" class="panel active">
-        <div class="stats">
-          <div class="stat"><div class="sv" id="ov-users">…</div><div class="sl">Total Users</div></div>
-          <div class="stat"><div class="sv b" id="ov-sellers">…</div><div class="sl">Sellers</div></div>
-          <div class="stat"><div class="sv g" id="ov-newtoday">…</div><div class="sl">New Today</div></div>
-          <div class="stat warn"><div class="sv o" id="ov-orders">…</div><div class="sl">Pending Orders</div></div>
-          <div class="stat alert"><div class="sv r" id="ov-tickets">…</div><div class="sl">Open Tickets</div></div>
-          <div class="stat alert"><div class="sv r" id="ov-reports">…</div><div class="sl">Pending Reports</div></div>
-          <div class="stat"><div class="sv p" id="ov-banned">…</div><div class="sl">Banned Users</div></div>
-          <div class="stat"><div class="sv g" id="ov-revenue">…</div><div class="sl">Revenue Today</div></div>
-          <div class="stat"><div class="sv b" id="ov-commission">…</div><div class="sl">Commission Today</div></div>
-          <div class="stat"><div class="sv p" id="ov-subs">…</div><div class="sl">Active Subs</div></div>
-          <div class="stat warn"><div class="sv o" id="ov-payouts">…</div><div class="sl">Pending Payouts</div></div>
+    <div class="aos-content">
+
+      <div class="aos-panel" id="panel-dashboard">
+        <div class="quick-links">
+          <a class="quick-link" href="platform-health.html" target="_blank">&#x1F49A; Platform Health</a>
+          <a class="quick-link" href="finos.html" target="_blank">&#x1F3E6; FinOS</a>
+          <a class="quick-link" href="financial-os.html" target="_blank">&#x1F4C4; Financial OS</a>
+          <a class="quick-link" href="trust-safety.html" target="_blank">&#x1F512; Trust &amp; Safety</a>
+          <a class="quick-link" href="reliability-center.html" target="_blank">&#x1F4E1; Reliability</a>
+          <a class="quick-link" href="seller-success.html" target="_blank">&#x1F3EA; Seller Success</a>
+          <a class="quick-link" href="merchant-pipeline.html" target="_blank">&#x1F4CA; Merchant Pipeline</a>
+          <a class="quick-link" href="launch-readiness.html" target="_blank">&#x1F680; Launch Readiness</a>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="card">
-            <div class="card-hd"><span class="card-title">Quick Actions</span></div>
-            <div class="card-body" style="display:grid;gap:8px">
-              <button class="btn btn-b" onclick="_nav(document.querySelector('.ni[onclick*=users]'),'users')"><span class="material-icons" style="font-size:14px">people</span>Manage Users</button>
-              <button class="btn btn-o" onclick="_nav(document.querySelector('.ni[onclick*=tickets]'),'tickets')"><span class="material-icons" style="font-size:14px">support_agent</span>Review Tickets</button>
-              <a href="trust-safety.html" class="btn btn-r" style="text-decoration:none"><span class="material-icons" style="font-size:14px">shield</span>Trust & Safety</a>
-              <a href="financial-os.html" class="btn btn-b" style="text-decoration:none"><span class="material-icons" style="font-size:14px">account_balance</span>Financial OS</a>
-            </div>
+        <div class="kpi-grid">
+          <div class="kpi-card accent"><div class="kpi-label">Active Users</div><div class="kpi-value" id="kpiActiveUsers">&#x2014;</div><div class="kpi-sub">online</div></div>
+          <div class="kpi-card success"><div class="kpi-label">Orders Today</div><div class="kpi-value" id="kpiOrdersToday">&#x2014;</div><div class="kpi-sub">live count</div></div>
+          <div class="kpi-card success"><div class="kpi-label">Revenue Today</div><div class="kpi-value" id="kpiRevenueToday">&#x2014;</div><div class="kpi-sub">gross KES</div></div>
+          <div class="kpi-card"><div class="kpi-label">Commission</div><div class="kpi-value" id="kpiCommission">&#x2014;</div><div class="kpi-sub">today</div></div>
+          <div class="kpi-card"><div class="kpi-label">Active Sellers</div><div class="kpi-value" id="kpiActiveSellers">&#x2014;</div><div class="kpi-sub">shops</div></div>
+          <div class="kpi-card"><div class="kpi-label">Active Providers</div><div class="kpi-value" id="kpiActiveProviders">&#x2014;</div><div class="kpi-sub">services</div></div>
+          <div class="kpi-card"><div class="kpi-label">Active Riders</div><div class="kpi-value" id="kpiActiveRiders">&#x2014;</div><div class="kpi-sub">drivers</div></div>
+          <div class="kpi-card warn"><div class="kpi-label">Pending Payouts</div><div class="kpi-value" id="kpiPendingPayouts">&#x2014;</div><div class="kpi-sub">awaiting</div></div>
+          <div class="kpi-card warn"><div class="kpi-label">Open Tickets</div><div class="kpi-value" id="kpiOpenTickets">&#x2014;</div><div class="kpi-sub">support</div></div>
+          <div class="kpi-card danger"><div class="kpi-label">Disputes</div><div class="kpi-value" id="kpiDisputes">&#x2014;</div><div class="kpi-sub">open</div></div>
+          <div class="kpi-card danger"><div class="kpi-label">Failed Payments</div><div class="kpi-value" id="kpiFailedPayments">&#x2014;</div><div class="kpi-sub">today</div></div>
+          <div class="kpi-card"><div class="kpi-label">New Registrations</div><div class="kpi-value" id="kpiNewRegistrations">&#x2014;</div><div class="kpi-sub">today</div></div>
+          <div class="kpi-card"><div class="kpi-label">Refund Requests</div><div class="kpi-value" id="kpiRefundRequests">&#x2014;</div><div class="kpi-sub">pending</div></div>
+          <div class="kpi-card"><div class="kpi-label">Active Subscriptions</div><div class="kpi-value" id="kpiActiveSubs">&#x2014;</div><div class="kpi-sub">paid plans</div></div>
+        </div>
+        <h3 style="margin-bottom:12px;font-size:14px;font-weight:600">Platform Health</h3>
+        <div id="healthScores"><div class="aos-spinner"><div></div></div></div>
+        <div class="dash-row">
+          <div class="dash-section"><h3>Revenue (7 Days)</h3><div class="chart-wrap"><canvas id="revenueChart" height="160"></canvas></div></div>
+          <div class="dash-section"><h3>Live Alerts</h3><div id="dashAlerts"><div class="aos-spinner"><div></div></div></div></div>
+        </div>
+      </div>
+
+      <div class="aos-panel" id="panel-users" hidden>
+        <div class="panel-toolbar">
+          <h2>User Management</h2>
+          <input type="search" placeholder="Search users&#x2026;" oninput="SokoniAOS.loadUsers(this.value)" style="min-width:200px">
+          <select onchange="SokoniAOS.loadUsers('',this.value,'')"><option value="">All Roles</option><option>buyer</option><option>seller</option><option>provider</option><option>driver</option><option>moderator</option><option>admin</option></select>
+          <select onchange="SokoniAOS.loadUsers('','',this.value)"><option value="">All Status</option><option>active</option><option>inactive</option><option>banned</option><option>suspended</option></select>
+          <span id="userTotal" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="aos-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Last Login</th><th>Actions</th></tr></thead>
+            <tbody id="usersBody"><tr><td colspan="7" class="empty-cell"><div class="aos-spinner"><div></div></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="aos-panel" id="panel-marketplace" hidden>
+        <div class="panel-toolbar"><h2>Marketplace</h2></div>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="products" onclick="SokoniAOS.marketplaceTab('products')">Products</button>
+          <button class="tab-btn" data-tab="orders" onclick="SokoniAOS.marketplaceTab('orders')">Orders</button>
+          <button class="tab-btn" data-tab="categories" onclick="SokoniAOS.marketplaceTab('categories')">Categories</button>
+          <button class="tab-btn" data-tab="reviews" onclick="SokoniAOS.marketplaceTab('reviews')">Review Queue</button>
+        </div>
+        <div id="mktBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-services" hidden>
+        <div class="panel-toolbar"><h2>Service Hubs</h2></div>
+        <div style="overflow-x:auto">
+          <table class="aos-table">
+            <thead><tr><th>Provider</th><th>Category</th><th>Location</th><th>Status</th><th>Bookings</th><th>Rating</th><th>Actions</th></tr></thead>
+            <tbody id="servicesBody"><tr><td colspan="7" class="empty-cell"><div class="aos-spinner"><div></div></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="aos-panel" id="panel-delivery" hidden>
+        <div class="panel-toolbar"><h2>Delivery Operations</h2></div>
+        <div class="delivery-stats">
+          <div class="delivery-stat"><span>Delivering Now</span><strong id="deliveringNow">&#x2014;</strong></div>
+          <div class="delivery-stat"><span>Completed Today</span><strong id="deliveredToday">&#x2014;</strong></div>
+          <div class="delivery-stat"><span>Avg Time</span><strong id="avgDeliveryMin">&#x2014;</strong></div>
+        </div>
+        <div id="deliveryBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-financial" hidden>
+        <div class="panel-toolbar"><h2>Financial Center</h2><a class="aos-btn" href="finos.html" target="_blank">&#x1F3E6; FinOS</a><a class="aos-btn" href="financial-os.html" target="_blank">&#x1F4C4; Financial OS</a></div>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="payments" onclick="SokoniAOS.financialTab('payments')">Revenue</button>
+          <button class="tab-btn" data-tab="commissions" onclick="SokoniAOS.financialTab('commissions')">Commissions</button>
+          <button class="tab-btn" data-tab="payouts" onclick="SokoniAOS.financialTab('payouts')">Payouts</button>
+          <button class="tab-btn" data-tab="disputes" onclick="SokoniAOS.financialTab('disputes')">Disputes</button>
+          <button class="tab-btn" data-tab="refunds" onclick="SokoniAOS.financialTab('refunds')">Refunds</button>
+          <button class="tab-btn" data-tab="report" onclick="SokoniAOS.financialTab('report')">Report</button>
+        </div>
+        <div id="finBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-support" hidden>
+        <div class="panel-toolbar">
+          <h2>Customer Support</h2>
+          <select onchange="SokoniAOS.loadSupport(this.value)"><option value="open">Open</option><option value="pending">Pending</option><option value="resolved">Resolved</option><option value="">All</option></select>
+          <select onchange="SokoniAOS.loadSupport('open',this.value)"><option value="">All Priority</option><option value="critical">Critical</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select>
+        </div>
+        <div id="supportBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-comms" hidden>
+        <div class="panel-toolbar"><h2>Communications</h2></div>
+        <div class="compose-form">
+          <h3>&#x1F4E2; Send Notification</h3>
+          <input type="text" id="notifTitle" placeholder="Title">
+          <textarea id="notifBody" placeholder="Message body&#x2026;" rows="3"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <select id="notifTarget"><option value="all">All Users</option><option value="role">By Role</option><option value="active">Active (7d)</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option></select>
+            <select id="notifRole"><option value="">Role (if By Role)</option><option>buyer</option><option>seller</option><option>driver</option><option>provider</option><option>moderator</option><option>admin</option></select>
           </div>
-          <div class="card">
-            <div class="card-hd"><span class="card-title">Platform Health</span></div>
-            <div class="card-body" id="healthSummary"><div class="spin"></div></div>
-          </div>
+          <button class="aos-btn success" style="margin-top:10px" onclick="SokoniAOS.sendPushNotification()">&#x1F680; Send Notification</button>
         </div>
+        <div class="dash-section"><h3>Recent Notifications</h3><div id="recentNotifs"><div class="aos-spinner"><div></div></div></div></div>
       </div>
 
-      <!-- ALL TOOLS -->
-      <div id="panel-links" class="panel">
-        <p style="font-size:12px;color:var(--sub);margin-bottom:16px">All SOKONI admin tools in one place. No code required for routine operations.</p>
-        <div class="links-grid" id="linksGrid">
-          <!-- injected by JS -->
+      <div class="aos-panel" id="panel-content" hidden>
+        <div class="panel-toolbar"><h2>Content Management</h2></div>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="banners" onclick="SokoniAOS.contentTab('banners')">Banners</button>
+          <button class="tab-btn" data-tab="announcements" onclick="SokoniAOS.contentTab('announcements')">Announcements</button>
+          <button class="tab-btn" data-tab="faqs" onclick="SokoniAOS.contentTab('faqs')">FAQs</button>
         </div>
+        <div id="contentBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
-      <!-- USERS -->
-      <div id="panel-users" class="panel">
-        <div class="toolbar">
-          <div class="search-box"><span class="material-icons">search</span><input type="text" id="userQuery" placeholder="Email, name, phone, or UID…" onkeydown="if(event.key==='Enter')_searchUsers()"></div>
-          <select id="userRole" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer">
-            <option value="">All roles</option>
-            <option value="buyer">Buyer</option><option value="seller">Seller</option>
-            <option value="provider">Provider</option><option value="driver">Driver</option>
-            <option value="moderator">Moderator</option><option value="admin">Admin</option>
+      <div class="aos-panel" id="panel-ai" hidden>
+        <div class="panel-toolbar"><h2>AI Operations</h2></div>
+        <div id="aiBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-search" hidden>
+        <div class="panel-toolbar"><h2>Search Management</h2></div>
+        <div id="searchBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-smartpos" hidden>
+        <div class="panel-toolbar"><h2>SmartPOS Management</h2><a class="aos-btn" href="pos.html" target="_blank">&#x1F5A5;&#xFE0F; POS</a><a class="aos-btn" href="commissioning.html" target="_blank">&#x1F527; Commissioning</a></div>
+        <div id="posBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-fraud" hidden>
+        <div class="panel-toolbar"><h2>Fraud &amp; Trust Center</h2></div>
+        <div id="fraudBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-analytics" hidden>
+        <div class="panel-toolbar"><h2>Analytics &amp; Business Intelligence</h2></div>
+        <div id="analyticsBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-config" hidden>
+        <div class="panel-toolbar"><h2>Platform Configuration</h2></div>
+        <div id="configBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <div class="aos-panel" id="panel-audit" hidden>
+        <div class="panel-toolbar">
+          <h2>Audit Center</h2>
+          <select onchange="SokoniAOS.loadAudit(this.value)">
+            <option value="admin">Admin Actions</option><option value="payment">Payment Trail</option>
+            <option value="security">Security Events</option><option value="platform">Platform Events</option>
           </select>
-          <select id="userStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer">
-            <option value="">All statuses</option>
-            <option value="active">Active</option><option value="banned">Banned</option>
-            <option value="suspended">Suspended</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_searchUsers()"><span class="material-icons" style="font-size:14px">search</span>Search</button>
+          <button class="aos-btn" id="auditExportBtn">&#x1F4E5; Export CSV</button>
         </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th></th></tr></thead>
-            <tbody id="usersTbl"><tr><td colspan="6" class="tbl-empty">Search for users above</td></tr></tbody>
-          </table>
-        </div>
+        <div id="auditBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
-      <!-- SUPPORT TICKETS -->
-      <div id="panel-tickets" class="panel">
-        <div class="toolbar">
-          <select id="ticketStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadTickets()">
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
-            <option value="resolved">Resolved</option>
-          </select>
-          <select id="ticketPriority" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadTickets()">
-            <option value="">All priorities</option>
-            <option value="urgent">Urgent</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Subject</th><th>From</th><th>Category</th><th>Priority</th><th>Status</th><th>Created</th><th></th></tr></thead>
-            <tbody id="ticketsTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- CATEGORIES -->
-      <div id="panel-categories" class="panel">
-        <div class="toolbar">
-          <select id="catHubFilter" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadCategories()">
-            <option value="">All hubs</option>
-            <option value="marketplace">Marketplace</option><option value="food_delivery">Food Delivery</option>
-            <option value="services">Services</option><option value="property">Property</option>
-            <option value="vehicles">Vehicles</option><option value="events">Events</option>
-            <option value="healthcare">Healthcare</option><option value="jobs">Jobs</option>
-            <option value="legal">Legal</option><option value="education">Education</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_openCatModal(null)"><span class="material-icons" style="font-size:14px">add</span>Add Category</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Name</th><th>Hub</th><th>Parent</th><th>Status</th><th></th></tr></thead>
-            <tbody id="catTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- PLATFORM SETTINGS -->
-      <div id="panel-settings" class="panel">
-        <div class="cat-tabs" id="settingsTabs"></div>
-        <div class="card">
-          <div class="card-hd"><span class="card-title" id="settingsTitle">Loading…</span>
-            <button class="btn btn-g btn-sm" onclick="_saveSettings()"><span class="material-icons" style="font-size:14px">save</span>Save</button>
-          </div>
-          <div class="card-body" id="settingsBody"><div class="spin"></div></div>
-        </div>
-        <p style="font-size:11px;color:var(--sub);margin-top:8px">Settings take effect immediately. No code deploy required. SuperAdmin only.</p>
-      </div>
-
-      <!-- FEATURE FLAGS -->
-      <div id="panel-flags" class="panel">
-        <p style="font-size:12px;color:var(--sub);margin-bottom:14px">Feature flags control platform capabilities without code deployment. SuperAdmin only.</p>
-        <div class="card">
-          <div class="card-body" id="flagsList"><div class="spin"></div></div>
-        </div>
-      </div>
-
-      <!-- MARKETPLACE -->
-      <div id="panel-marketplace" class="panel">
-        <div class="toolbar">
-          <div class="search-box"><span class="material-icons">search</span><input type="text" id="mpQuery" placeholder="Product name or seller…" onkeydown="if(event.key==='Enter')_loadProducts()"></div>
-          <select id="mpStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadProducts()">
-            <option value="">All statuses</option><option value="active">Active</option><option value="pending">Pending</option><option value="rejected">Rejected</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_loadProducts()"><span class="material-icons" style="font-size:14px">refresh</span>Load</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Product</th><th>Seller</th><th>Price (KES)</th><th>Status</th><th>Featured</th><th></th></tr></thead>
-            <tbody id="mpTbl"><tr><td colspan="6" class="tbl-empty">Click Load to fetch products</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- ORDERS -->
-      <div id="panel-orders" class="panel">
-        <div class="toolbar">
-          <select id="ordStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadOrders()">
-            <option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="processing">Processing</option>
-            <option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_loadOrders()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Order ID</th><th>Buyer</th><th>Total (KES)</th><th>Items</th><th>Status</th><th>Created</th><th></th></tr></thead>
-            <tbody id="ordTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- BOOKINGS -->
-      <div id="panel-bookings" class="panel">
-        <div class="toolbar">
-          <select id="bkgStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadBookings()">
-            <option value="">All statuses</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option>
-            <option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_loadBookings()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>Date</th><th>Total (KES)</th><th>Status</th></tr></thead>
-            <tbody id="bkgTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- DELIVERY -->
-      <div id="panel-delivery" class="panel">
-        <div class="stats">
-          <div class="stat"><div class="sv b" id="del-active">…</div><div class="sl">Active Deliveries</div></div>
-          <div class="stat"><div class="sv g" id="del-drivers">…</div><div class="sl">Active Drivers</div></div>
-          <div class="stat"><div class="sv" id="del-today">…</div><div class="sl">Completed Today</div></div>
-          <div class="stat warn"><div class="sv o" id="del-late">…</div><div class="sl">Late / At Risk</div></div>
-        </div>
-        <div class="card">
-          <div class="card-hd"><span class="card-title">Recent Deliveries</span><button class="btn btn-o btn-sm" onclick="_loadDelivery()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
-          <table class="tbl">
-            <thead><tr><th>Order</th><th>Driver</th><th>Status</th><th>ETA</th><th>Updated</th></tr></thead>
-            <tbody id="delTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- PAYOUTS -->
-      <div id="panel-payouts" class="panel">
-        <p style="font-size:12px;color:var(--sub);margin-bottom:14px">Pending seller payout requests. Approving requires SuperAdmin.</p>
-        <div class="toolbar">
-          <button class="btn btn-g btn-sm" onclick="_loadPayouts()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-          <button class="btn btn-r btn-sm" id="batchApproveBtn" onclick="_batchApprove()" style="display:none"><span class="material-icons" style="font-size:14px">check_circle</span>Approve Selected</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th><input type="checkbox" id="payAll" onchange="_toggleAllPay(this.checked)" style="accent-color:var(--g)"></th><th>Seller</th><th>Amount (KES)</th><th>Method</th><th>Requested</th><th></th></tr></thead>
-            <tbody id="payTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- DISPUTES -->
-      <div id="panel-disputes" class="panel">
-        <div class="toolbar">
-          <select id="dspStatus" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadDisputes()">
-            <option value="open">Open</option><option value="under_review">Under Review</option><option value="resolved">Resolved</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_loadDisputes()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Order</th><th>Buyer</th><th>Seller</th><th>Reason</th><th>Amount</th><th>Status</th><th></th></tr></thead>
-            <tbody id="dspTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- REVIEWS -->
-      <div id="panel-reviews" class="panel">
-        <div class="toolbar">
-          <select id="revFilter" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadReviews()">
-            <option value="">All ratings</option><option value="1">1 star</option><option value="2">2 stars</option>
-            <option value="3">3 stars</option><option value="4">4 stars</option><option value="5">5 stars</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_loadReviews()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Item</th><th>Reviewer</th><th>Rating</th><th>Comment</th><th>Date</th><th></th></tr></thead>
-            <tbody id="revTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- PUSH NOTIFICATIONS -->
-      <div id="panel-push-notif" class="panel">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="card">
-            <div class="card-hd"><span class="card-title">Send Push Notification</span></div>
-            <div class="card-body">
-              <div class="fg"><label class="fl">Title *</label><input type="text" class="fi" id="pn-title" placeholder="Important update"></div>
-              <div class="fg"><label class="fl">Message *</label><textarea class="fi" id="pn-body" rows="3" placeholder="Your message here…"></textarea></div>
-              <div class="fg"><label class="fl">Target Audience</label>
-                <select class="fs" id="pn-target">
-                  <option value="all">All users</option><option value="buyers">Buyers only</option>
-                  <option value="sellers">Sellers only</option><option value="drivers">Drivers only</option>
-                </select>
-              </div>
-              <div class="fg"><label class="fl">Action URL (optional)</label><input type="text" class="fi" id="pn-url" placeholder="https://mysokoni.co.ke/"></div>
-              <button class="btn btn-g" onclick="_sendPush()"><span class="material-icons" style="font-size:14px">send</span>Send Notification</button>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-hd"><span class="card-title">Recent Notifications</span><button class="btn btn-o btn-sm" onclick="_loadRecentNotifs()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
-            <div id="recentNotifs" style="padding:14px;font-size:12px"><div class="spin"></div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ANNOUNCEMENTS -->
-      <div id="panel-announcements" class="panel">
-        <div class="toolbar">
-          <button class="btn btn-g btn-sm" onclick="_openAnnModal(null)"><span class="material-icons" style="font-size:14px">add</span>New Announcement</button>
-          <button class="btn btn-o btn-sm" onclick="_loadAnnouncements()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Title</th><th>Type</th><th>Target</th><th>Active</th><th>Created</th><th></th></tr></thead>
-            <tbody id="annTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- BANNERS -->
-      <div id="panel-banners" class="panel">
-        <div class="toolbar">
-          <button class="btn btn-g btn-sm" onclick="_openBannerModal(null)"><span class="material-icons" style="font-size:14px">add</span>New Banner</button>
-          <button class="btn btn-o btn-sm" onclick="_loadBanners()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div id="bannersGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"><div class="spin" style="margin:24px auto;display:block"></div></div>
-      </div>
-
-      <!-- FAQs -->
-      <div id="panel-faqs" class="panel">
-        <div class="toolbar">
-          <button class="btn btn-g btn-sm" onclick="_openFaqModal(null)"><span class="material-icons" style="font-size:14px">add</span>New FAQ</button>
-          <button class="btn btn-o btn-sm" onclick="_loadFaqs()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Question</th><th>Category</th><th>Order</th><th>Active</th><th></th></tr></thead>
-            <tbody id="faqTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- POS DEVICES -->
-      <div id="panel-pos-devices" class="panel">
-        <div class="toolbar">
-          <button class="btn btn-g btn-sm" onclick="_loadPosDevices()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Device ID</th><th>Merchant</th><th>Type</th><th>Version</th><th>Status</th><th>Last Seen</th></tr></thead>
-            <tbody id="posTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- AI OPERATIONS -->
-      <div id="panel-ai-ops" class="panel">
-        <div class="stats">
-          <div class="stat"><div class="sv b" id="ai-tokens">…</div><div class="sl">Total Tokens</div></div>
-          <div class="stat"><div class="sv o" id="ai-cost">…</div><div class="sl">Est. Cost (USD)</div></div>
-          <div class="stat"><div class="sv" id="ai-reqs">…</div><div class="sl">Total Requests</div></div>
-          <div class="stat"><div class="sv g" id="ai-users">…</div><div class="sl">Active AI Users</div></div>
-        </div>
-        <div class="card">
-          <div class="card-hd"><span class="card-title">AI Module Status</span><button class="btn btn-o btn-sm" onclick="_loadAiStats()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
-          <div class="card-body" id="aiModuleList"><div class="spin"></div></div>
-        </div>
-      </div>
-
-      <!-- SEARCH MANAGER -->
-      <div id="panel-search" class="panel">
-        <div class="stats">
-          <div class="stat"><div class="sv g" id="srch-total">…</div><div class="sl">Total Searches</div></div>
-          <div class="stat warn"><div class="sv o" id="srch-queue">…</div><div class="sl">Queue Pending</div></div>
-          <div class="stat"><div class="sv b" id="srch-trends">…</div><div class="sl">Trending Terms</div></div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="card">
-            <div class="card-hd"><span class="card-title">Trending Searches</span><button class="btn btn-o btn-sm" onclick="_loadSearch()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
-            <div class="card-body" id="trendingList"><div class="spin"></div></div>
-          </div>
-          <div class="card">
-            <div class="card-hd"><span class="card-title">Index Queue</span></div>
-            <div class="card-body" id="queueList"><div class="spin"></div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- FRAUD CENTER -->
-      <div id="panel-fraud" class="panel">
-        <div class="stats">
-          <div class="stat alert"><div class="sv r" id="fr-flags">…</div><div class="sl">Risk Flags</div></div>
-          <div class="stat alert"><div class="sv r" id="fr-chargebacks">…</div><div class="sl">Chargebacks</div></div>
-          <div class="stat warn"><div class="sv o" id="fr-dupes">…</div><div class="sl">Duplicate Accounts</div></div>
-        </div>
-        <div class="card">
-          <div class="card-hd"><span class="card-title">Active Risk Flags</span><button class="btn btn-o btn-sm" onclick="_loadFraud()"><span class="material-icons" style="font-size:14px">refresh</span></button></div>
-          <table class="tbl">
-            <thead><tr><th>User</th><th>Flag Type</th><th>Risk Score</th><th>Flagged</th><th></th></tr></thead>
-            <tbody id="fraudTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- AUDIT LOGS -->
-      <div id="panel-audit" class="panel">
-        <div class="toolbar">
-          <select id="auditAction" style="background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer" onchange="_loadAudit()">
-            <option value="">All actions</option>
-            <option value="ban_user">Ban User</option><option value="role_change">Role Change</option>
-            <option value="payout_approve">Payout Approve</option><option value="dispute_resolve">Dispute Resolve</option>
-            <option value="product_reject">Product Reject</option><option value="review_remove">Review Remove</option>
-            <option value="flag_toggle">Flag Toggle</option><option value="settings_update">Settings Update</option>
-          </select>
-          <button class="btn btn-g btn-sm" onclick="_loadAudit()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-        </div>
-        <div class="card">
-          <table class="tbl">
-            <thead><tr><th>Admin</th><th>Action</th><th>Target</th><th>Detail</th><th>Time</th></tr></thead>
-            <tbody id="auditTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
-          </table>
-        </div>
+      <div class="aos-panel" id="panel-security" hidden>
+        <div class="panel-toolbar"><h2>Security</h2></div>
+        <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
     </div>
-  </div>
-</div>
+  </main>
 
-<!-- User detail modal -->
-<div class="overlay" id="userModal" onclick="_closeOv(event,'userModal')">
-  <div class="modal">
-    <div class="mhd"><h2 id="umTitle">User Profile</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('userModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody" id="umBody"><div class="spin"></div></div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('userModal').classList.remove('open')">Close</button>
-      <button class="btn btn-p" id="umRoleBtn" onclick="_openRoleModal()">Change Role</button>
-      <button class="btn btn-r" id="umBanBtn" onclick="_banFromModal()">Ban User</button>
-    </div>
-  </div>
-</div>
-
-<!-- Role change modal -->
-<div class="overlay" id="roleModal" onclick="_closeOv(event,'roleModal')">
-  <div class="modal">
-    <div class="mhd"><h2>Change User Role</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('roleModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody">
-      <input type="hidden" id="rm-uid">
-      <div class="fg"><label class="fl">New Role</label>
-        <select class="fs" id="rm-role">
-          <option value="buyer">Buyer</option><option value="seller">Seller</option>
-          <option value="provider">Provider</option><option value="driver">Driver</option>
-          <option value="moderator">Moderator</option><option value="admin">Admin</option>
-        </select>
-      </div>
-      <p style="font-size:11px;color:var(--r);margin-top:4px">This updates Firebase Auth custom claims. Requires the user to sign out and back in.</p>
-    </div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('roleModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn-g" id="roleBtn" onclick="_applyRole()">Apply Role</button>
-    </div>
-  </div>
-</div>
-
-<!-- Ticket resolve modal -->
-<div class="overlay" id="ticketModal" onclick="_closeOv(event,'ticketModal')">
-  <div class="modal">
-    <div class="mhd"><h2>Resolve Ticket</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('ticketModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody">
-      <input type="hidden" id="tm-id">
-      <div id="tm-detail" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.9"></div>
-      <div class="fg"><label class="fl">Resolution</label><textarea class="fi" id="tm-res" rows="3" placeholder="How was this resolved?"></textarea></div>
-      <div class="fg"><label class="fl">Status</label>
-        <select class="fs" id="tm-status"><option value="resolved">Resolved</option><option value="in_progress">In Progress</option><option value="closed">Closed</option></select>
-      </div>
-    </div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('ticketModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn-g" id="ticketBtn" onclick="_submitTicket()">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- Category modal -->
-<div class="overlay" id="catModal" onclick="_closeOv(event,'catModal')">
-  <div class="modal">
-    <div class="mhd"><h2 id="cmTitle">Add Category</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('catModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody">
-      <input type="hidden" id="cm-id">
-      <div class="fg2">
-        <div class="fg"><label class="fl">Name *</label><input type="text" class="fi" id="cm-name" placeholder="Electronics"></div>
-        <div class="fg"><label class="fl">Hub *</label>
-          <select class="fs" id="cm-hub">
-            <option value="marketplace">Marketplace</option><option value="food_delivery">Food Delivery</option>
-            <option value="services">Services</option><option value="property">Property</option>
-            <option value="vehicles">Vehicles</option><option value="events">Events</option>
-            <option value="healthcare">Healthcare</option><option value="jobs">Jobs</option>
-            <option value="legal">Legal</option><option value="education">Education</option>
-            <option value="hotel">Hotel</option><option value="logistics">Logistics</option>
-          </select>
-        </div>
-        <div class="fg"><label class="fl">Icon (Material Icon name)</label><input type="text" class="fi" id="cm-icon" placeholder="devices"></div>
-        <div class="fg"><label class="fl">Parent Category ID</label><input type="text" class="fi" id="cm-parent" placeholder="Leave blank for root"></div>
-      </div>
-      <div class="fg"><label class="fl">Description</label><input type="text" class="fi" id="cm-desc"></div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
-        <input type="checkbox" id="cm-active" checked style="accent-color:var(--g)"> Active (visible to users)
-      </label>
-    </div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('catModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn-g" id="catBtn" onclick="_saveCategory()">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- Order detail / status modal -->
-<div class="overlay" id="orderModal" onclick="_closeOv(event,'orderModal')">
-  <div class="modal">
-    <div class="mhd"><h2 id="omTitle">Order Detail</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('orderModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody" id="omBody"><div class="spin"></div></div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('orderModal').classList.remove('open')">Close</button>
-      <input type="hidden" id="om-id">
-      <select class="fs" id="om-status" style="width:auto;height:36px;padding:0 10px;display:inline-block">
-        <option value="confirmed">Confirmed</option><option value="processing">Processing</option>
-        <option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
-      </select>
-      <button class="btn btn-g" id="omBtn" onclick="_updateOrderStatus()">Update Status</button>
-    </div>
-  </div>
-</div>
-
-<!-- Dispute resolve modal -->
-<div class="overlay" id="disputeModal" onclick="_closeOv(event,'disputeModal')">
-  <div class="modal">
-    <div class="mhd"><h2>Resolve Dispute</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('disputeModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody">
-      <input type="hidden" id="dm-id">
-      <div id="dm-detail" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;font-size:12px;line-height:1.9;margin-bottom:14px"></div>
-      <div class="fg"><label class="fl">Decision *</label>
-        <select class="fs" id="dm-favor">
-          <option value="true">Favor Buyer — issue refund</option>
-          <option value="false">Favor Seller — release payment</option>
-        </select>
-      </div>
-      <div class="fg"><label class="fl">Resolution Notes</label><textarea class="fi" id="dm-notes" rows="3" placeholder="Explain the resolution…"></textarea></div>
-    </div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('disputeModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn-g" id="dspBtn" onclick="_resolveDispute()">Resolve</button>
-    </div>
-  </div>
-</div>
-
-<!-- Banner create/edit modal -->
-<div class="overlay" id="bannerModal" onclick="_closeOv(event,'bannerModal')">
-  <div class="modal">
-    <div class="mhd"><h2 id="bnrTitle">New Banner</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('bannerModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody">
-      <input type="hidden" id="bnr-id">
-      <div class="fg"><label class="fl">Title *</label><input type="text" class="fi" id="bnr-title" placeholder="Summer Sale"></div>
-      <div class="fg"><label class="fl">Subtitle</label><input type="text" class="fi" id="bnr-sub" placeholder="Up to 50% off"></div>
-      <div class="fg"><label class="fl">Image URL</label><input type="text" class="fi" id="bnr-img" placeholder="https://…"></div>
-      <div class="fg"><label class="fl">Action URL</label><input type="text" class="fi" id="bnr-url" placeholder="https://mysokoni.co.ke/marketplace"></div>
-      <div class="fg2">
-        <div class="fg"><label class="fl">Position</label>
-          <select class="fs" id="bnr-pos"><option value="hero">Hero</option><option value="mid">Mid-page</option><option value="sidebar">Sidebar</option></select>
-        </div>
-        <div class="fg"><label class="fl">Hub</label>
-          <select class="fs" id="bnr-hub"><option value="all">All</option><option value="marketplace">Marketplace</option><option value="food">Food</option><option value="events">Events</option><option value="property">Property</option></select>
-        </div>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="bnr-active" checked style="accent-color:var(--g)"> Active</label>
-    </div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('bannerModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn-g" id="bnrBtn" onclick="_saveBanner()">Save Banner</button>
-    </div>
-  </div>
-</div>
-
-<!-- FAQ create/edit modal -->
-<div class="overlay" id="faqModal" onclick="_closeOv(event,'faqModal')">
-  <div class="modal">
-    <div class="mhd"><h2 id="faqMTitle">New FAQ</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('faqModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody">
-      <input type="hidden" id="faq-id">
-      <div class="fg"><label class="fl">Question *</label><input type="text" class="fi" id="faq-q" placeholder="How do I track my order?"></div>
-      <div class="fg"><label class="fl">Answer *</label><textarea class="fi" id="faq-a" rows="4" placeholder="You can track your order by…"></textarea></div>
-      <div class="fg2">
-        <div class="fg"><label class="fl">Category</label><input type="text" class="fi" id="faq-cat" placeholder="Payments"></div>
-        <div class="fg"><label class="fl">Sort Order</label><input type="number" class="fi" id="faq-order" value="0"></div>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="faq-active" checked style="accent-color:var(--g)"> Active</label>
-    </div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('faqModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn-g" id="faqBtn" onclick="_saveFaq()">Save FAQ</button>
-    </div>
-  </div>
-</div>
-
-<!-- Announcement create/edit modal -->
-<div class="overlay" id="annModal" onclick="_closeOv(event,'annModal')">
-  <div class="modal">
-    <div class="mhd"><h2 id="annMTitle">New Announcement</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('annModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
-    <div class="mbody">
-      <input type="hidden" id="ann-id">
-      <div class="fg"><label class="fl">Title *</label><input type="text" class="fi" id="ann-title" placeholder="Platform Update"></div>
-      <div class="fg"><label class="fl">Message *</label><textarea class="fi" id="ann-body" rows="4" placeholder="We are excited to announce…"></textarea></div>
-      <div class="fg2">
-        <div class="fg"><label class="fl">Type</label>
-          <select class="fs" id="ann-type"><option value="info">Info</option><option value="warning">Warning</option><option value="maintenance">Maintenance</option><option value="promotion">Promotion</option></select>
-        </div>
-        <div class="fg"><label class="fl">Target</label>
-          <select class="fs" id="ann-target"><option value="all">All users</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option></select>
-        </div>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" id="ann-active" checked style="accent-color:var(--g)"> Active</label>
-    </div>
-    <div class="mfoot">
-      <button class="btn btn-o" onclick="document.getElementById('annModal').classList.remove('open')">Cancel</button>
-      <button class="btn btn-g" id="annBtn" onclick="_saveAnnouncement()">Publish</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-<script src="firebase.js"></script>
-<script>
-(function(){
-'use strict';
-var _fns=null,_db=null,_isSA=false,_activeUid=null;
-var _allSettings={},_activeSettingsCat='general',_allFlags=[];
-
-firebase.auth().onAuthStateChanged(function(u){
-  if(!u){location.href='login.html?redirect=admin-os.html';return;}
-  u.getIdTokenResult().then(function(t){
-    if(!t.claims.admin&&!t.claims.superAdmin){location.href='index.html';return;}
-    _isSA=t.claims.superAdmin||false;
-    if(!_isSA){
-      document.getElementById('flags').style.display='none';
-      document.querySelectorAll('#panel-settings .btn-g').forEach(function(b){b.disabled=true;b.title='SuperAdmin only';});
-    }
-    _loadOverview();
-    _populateLinks();
-  });
-});
-
-function _cf(n){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(n);}
-function _fs(){if(!_db)_db=firebase.firestore();return _db;}
-
-var TITLES={overview:'Executive Dashboard',links:'All Admin Tools',users:'User Management',marketplace:'Marketplace',orders:'Orders',bookings:'Bookings',delivery:'Delivery Operations',payouts:'Pending Payouts','pos-devices':'SmartPOS Devices',tickets:'Support Tickets',disputes:'Disputes',reviews:'Reviews','push-notif':'Push Notifications',announcements:'Announcements',banners:'Banners & Content',categories:'Categories',faqs:'FAQs','ai-ops':'AI Operations',search:'Search Manager',fraud:'Fraud Center',audit:'Audit Logs',settings:'Platform Settings',flags:'Feature Flags'};
-
-window._nav=function(el,p){
-  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});
-  el.classList.add('active');
-  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
-  document.getElementById('panel-'+p).classList.add('active');
-  document.getElementById('pageTitle').textContent=TITLES[p]||p;
-  ({overview:_loadOverview,links:_populateLinks,users:function(){},marketplace:_loadProducts,orders:_loadOrders,bookings:_loadBookings,delivery:_loadDelivery,payouts:_loadPayouts,'pos-devices':_loadPosDevices,tickets:_loadTickets,disputes:_loadDisputes,reviews:_loadReviews,'push-notif':_loadRecentNotifs,announcements:_loadAnnouncements,banners:_loadBanners,categories:_loadCategories,faqs:_loadFaqs,'ai-ops':_loadAiStats,search:_loadSearch,fraud:_loadFraud,audit:_loadAudit,settings:_loadSettings,flags:_loadFlags}[p]||function(){})();
-};
-window._refresh=function(){var a=document.querySelector('.panel.active');if(a){var p=a.id.replace('panel-','');({overview:_loadOverview,marketplace:_loadProducts,orders:_loadOrders,bookings:_loadBookings,delivery:_loadDelivery,payouts:_loadPayouts,'pos-devices':_loadPosDevices,tickets:_loadTickets,disputes:_loadDisputes,reviews:_loadReviews,'push-notif':_loadRecentNotifs,announcements:_loadAnnouncements,banners:_loadBanners,categories:_loadCategories,faqs:_loadFaqs,'ai-ops':_loadAiStats,search:_loadSearch,fraud:_loadFraud,audit:_loadAudit,settings:_loadSettings,flags:_loadFlags}[p]||function(){})();}};
-
-/* ── Overview ── */
-function _loadOverview(){
-  _cf('adminGetPlatformOverview')({}).then(function(r){
-    var d=r.data;
-    document.getElementById('ov-users').textContent=(d.totalUsers||0).toLocaleString();
-    document.getElementById('ov-sellers').textContent=(d.totalSellers||0).toLocaleString();
-    document.getElementById('ov-newtoday').textContent=d.newUsersToday||0;
-    document.getElementById('ov-orders').textContent=(d.activeOrders||0).toLocaleString();
-    document.getElementById('ov-tickets').textContent=d.openTickets||0;
-    document.getElementById('ov-reports').textContent=d.pendingReports||0;
-    document.getElementById('ov-banned').textContent=d.bannedUsers||0;
-    document.getElementById('sbTickets').textContent=d.openTickets||0;
-    document.getElementById('healthSummary').innerHTML=
-      _hrow('Users',d.totalUsers,'var(--g)')+
-      _hrow('Active sellers',d.totalSellers,'var(--b)')+
-      _hrow('New today',d.newUsersToday,'var(--g)')+
-      _hrow('Pending orders',d.activeOrders,'var(--o)')+
-      _hrow('Open tickets',d.openTickets,d.openTickets>10?'var(--r)':'var(--txt)')+
-      _hrow('Pending reports',d.pendingReports,d.pendingReports>5?'var(--r)':'var(--txt)');
-  }).catch(function(e){_toast('Error: '+e.message,'red');});
-  _cf('adminGetExecutiveDashboard')({}).then(function(r){
-    var d=r.data||{};
-    document.getElementById('ov-revenue').textContent='KES '+(Math.round((d.revenueToday||0)/100)).toLocaleString();
-    document.getElementById('ov-commission').textContent='KES '+(Math.round((d.commissionToday||0)/100)).toLocaleString();
-    document.getElementById('ov-subs').textContent=(d.activeSubs||0).toLocaleString();
-    document.getElementById('ov-payouts').textContent=(d.pendingPayouts||0).toLocaleString();
-    document.getElementById('sbOrders').textContent=d.activeOrders||0;
-    document.getElementById('sbPayouts').textContent=d.pendingPayouts||0;
-    document.getElementById('sbDisputes').textContent=d.openDisputes||0;
-  }).catch(function(){});
-}
-function _hrow(label,val,color){
-  return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px">'+
-    '<span style="color:var(--sub)">'+_esc(label)+'</span>'+
-    '<span style="font-weight:700;color:'+color+'">'+(val||0).toLocaleString()+'</span></div>';
-}
-
-/* ── All Tools ── */
-var ALL_TOOLS=[
-  {href:'financial-os.html',     icon:'account_balance',    title:'Financial OS',        sub:'Escrow, payouts, analytics'},
-  {href:'commission-engine.html',icon:'percent',            title:'Commission Engine',   sub:'Rules and preview'},
-  {href:'subscription-billing.html',icon:'subscriptions',  title:'Subscription Billing',sub:'Plans and subscribers'},
-  {href:'trust-safety.html',     icon:'shield',             title:'Trust & Safety',      sub:'Reports and bans'},
-  {href:'finos.html',            icon:'bar_chart',          title:'FinOS v1',            sub:'Ledger, wallets, fraud'},
-  {href:'reliability-center.html',icon:'monitor_heart',    title:'Reliability Center',  sub:'Ops reports'},
-  {href:'platform-health.html',  icon:'health_and_safety',  title:'Platform Health',     sub:'5-dimension scores'},
-  {href:'monitor.html',          icon:'analytics',          title:'Monitor',             sub:'Live metrics'},
-  {href:'seller-success.html',   icon:'storefront',         title:'Seller Success',      sub:'Quality & retention'},
-  {href:'launch-readiness.html', icon:'rocket_launch',      title:'Launch Readiness',    sub:'Pre-launch checklist'},
-  {href:'merchant-pipeline.html',icon:'timeline',           title:'Merchant Pipeline',   sub:'Onboarding pipeline'},
-  {href:'admin-messages.html',   icon:'forum',              title:'Messages Admin',      sub:'Communication moderation'},
-  {href:'email-center.html',     icon:'email',              title:'Email Center',        sub:'Templates and campaigns'},
-  {href:'gip.html',              icon:'map',                title:'GIP',                 sub:'Geo intelligence'},
-  {href:'wap.html',              icon:'account_tree',       title:'Workflow Automation',sub:'Platform workflows'},
-  {href:'ecc.html',              icon:'engineering',        title:'Enterprise Control',  sub:'Incidents and metrics'},
-  {href:'platform.html',         icon:'hub',                title:'Platform Registry',   sub:'Services and events'},
-  {href:'ai-subscriptions.html', icon:'smart_toy',          title:'AI Subscriptions',    sub:'AI credits and plans'},
-];
-function _populateLinks(){
-  document.getElementById('linksGrid').innerHTML=ALL_TOOLS.map(function(t){
-    return '<a href="'+t.href+'" class="link-card">'+
-      '<span class="material-icons">'+t.icon+'</span>'+
-      '<div class="link-card-title">'+_esc(t.title)+'</div>'+
-      '<div class="link-card-sub">'+_esc(t.sub)+'</div></a>';
-  }).join('');
-}
-
-/* ── Users ── */
-window._searchUsers=function(){
-  var q=document.getElementById('userQuery').value.trim();
-  var role=document.getElementById('userRole').value||undefined;
-  var status=document.getElementById('userStatus').value||undefined;
-  document.getElementById('usersTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminSearchUsers')({query:q||undefined,role,status,limit:50}).then(function(r){
-    var tb=document.getElementById('usersTbl');
-    if(!r.data.users.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No users found</td></tr>';return;}
-    tb.innerHTML=r.data.users.map(function(u){
-      return '<tr>'+
-        '<td style="font-weight:600">'+_esc(u.displayName||'—')+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_esc(u.email||'—')+'</td>'+
-        '<td><span class="badge '+_roleClass(u.role)+'">'+_esc(u.role||'buyer')+'</span></td>'+
-        '<td><span class="badge '+(u.status==='active'||!u.status?'bg':u.status==='banned'?'br':'bo')+'">'+_esc(u.status||'active')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(u.createdAt)+'</td>'+
-        '<td><button class="btn btn-b btn-sm" onclick="_openUser(\''+u.id+'\')">View</button></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('usersTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-};
-window._openUser=function(uid){
-  _activeUid=uid;
-  document.getElementById('umTitle').textContent='Loading…';
-  document.getElementById('umBody').innerHTML='<div class="spin"></div>';
-  document.getElementById('userModal').classList.add('open');
-  document.getElementById('rm-uid').value=uid;
-  _cf('adminGetUser')({uid}).then(function(r){
-    var d=r.data;
-    var u=d.profile||{};
-    var auth=d.authRecord||{};
-    var wallet=d.wallet||{};
-    document.getElementById('umTitle').textContent=_esc(u.displayName||uid);
-    document.getElementById('umBody').innerHTML=
-      '<div style="display:grid;gap:10px">'+
-      '<div style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;font-size:12px;line-height:2">'+
-        'UID: <code style="color:var(--b);font-size:11px">'+_esc(uid)+'</code><br>'+
-        'Email: <strong>'+_esc(auth.email||u.email||'—')+'</strong>'+
-        (auth.emailVerified?' <span class="badge bg" style="font-size:9px">Verified</span>':' <span class="badge br" style="font-size:9px">Unverified</span>')+'<br>'+
-        'Role: <span class="badge '+_roleClass(u.role)+'">'+_esc(u.role||'buyer')+'</span><br>'+
-        'Status: <span class="badge '+(u.status==='active'||!u.status?'bg':u.status==='banned'?'br':'bo')+'">'+_esc(u.status||'active')+'</span><br>'+
-        'Last sign-in: '+_esc(auth.lastSignIn||'—')+'<br>'+
-        'Auth providers: '+_esc((auth.providerData||[]).join(', ')||'—')+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'+
-        '<div class="stat"><div class="sv g" style="font-size:16px">KES '+Math.round(((wallet.availableBalance||0))/100).toLocaleString()+'</div><div class="sl">Wallet</div></div>'+
-        '<div class="stat"><div class="sv b" style="font-size:16px">'+d.orderCount+'</div><div class="sl">Orders</div></div>'+
-        '<div class="stat"><div class="sv r" style="font-size:16px">'+d.reportCount+'</div><div class="sl">Reports</div></div>'+
-      '</div>'+
-      (d.activeSubscriptions&&d.activeSubscriptions.length?
-        '<div style="font-size:11px;color:var(--sub)">Subscriptions: '+d.activeSubscriptions.map(function(s){return _esc(s.planId||'?');}).join(', ')+'</div>':'')+
-      '</div>';
-  }).catch(function(e){document.getElementById('umBody').innerHTML='<div style="color:var(--r);font-size:12px">Error: '+_esc(e.message)+'</div>';});
-};
-window._openRoleModal=function(){document.getElementById('roleModal').classList.add('open');};
-window._applyRole=function(){
-  var uid=document.getElementById('rm-uid').value;
-  var role=document.getElementById('rm-role').value;
-  if(!uid||!role)return _toast('uid and role required','red');
-  var btn=document.getElementById('roleBtn');btn.disabled=true;btn.textContent='Applying…';
-  _cf('adminUpdateUserRole')({uid,role})
-  .then(function(){_toast('Role updated to '+role,'green');document.getElementById('roleModal').classList.remove('open');})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Apply Role';});
-};
-window._banFromModal=function(){
-  if(!_activeUid)return;
-  var reason=prompt('Ban reason:');
-  if(!reason)return;
-  _cf('tsBanUser')({uid:_activeUid,action:'ban',reason})
-  .then(function(){_toast('User banned','green');document.getElementById('userModal').classList.remove('open');})
-  .catch(function(e){_toast(e.message,'red');});
-};
-function _roleClass(r){return r==='admin'||r==='superAdmin'?'br':r==='moderator'?'bp':r==='seller'?'bg':r==='driver'?'bb':'bs';}
-
-/* ── Tickets ── */
-window._loadTickets=function(){
-  var status=document.getElementById('ticketStatus').value||'open';
-  var priority=document.getElementById('ticketPriority').value||undefined;
-  document.getElementById('ticketsTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetSupportTickets')({status,priority,limit:100}).then(function(r){
-    var tb=document.getElementById('ticketsTbl');
-    if(!r.data.tickets.length){tb.innerHTML='<tr><td colspan="7" class="tbl-empty">No tickets</td></tr>';return;}
-    tb.innerHTML=r.data.tickets.map(function(t){
-      return '<tr>'+
-        '<td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(t.subject||'—')+'</td>'+
-        '<td style="font-size:11px">'+_esc(t.email||t.displayName||'—')+'</td>'+
-        '<td><span class="badge bs">'+_esc(t.category||'general')+'</span></td>'+
-        '<td>'+_prioBadge(t.priority)+'</td>'+
-        '<td><span class="badge '+(t.status==='open'?'br':t.status==='in_progress'?'bo':'bg')+'">'+_esc(t.status||'open')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(t.createdAt)+'</td>'+
-        '<td><button class="btn btn-g btn-sm" onclick="_openTicket(\''+t.id+'\','+JSON.stringify(t)+')">Resolve</button></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('ticketsTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-};
-window._openTicket=function(id,t){
-  document.getElementById('tm-id').value=id;
-  document.getElementById('tm-detail').innerHTML=
-    'From: <strong>'+_esc(t.email||t.displayName||'—')+'</strong><br>'+
-    'Subject: <strong>'+_esc(t.subject||'—')+'</strong><br>'+
-    'Message: <em>'+_esc(t.message||'—')+'</em><br>'+
-    'Priority: '+_prioBadge(t.priority)+' · '+_relTime(t.createdAt);
-  document.getElementById('tm-res').value='';
-  document.getElementById('tm-status').value='resolved';
-  document.getElementById('ticketModal').classList.add('open');
-};
-window._submitTicket=function(){
-  var id=document.getElementById('tm-id').value;
-  var res=document.getElementById('tm-res').value.trim();
-  var status=document.getElementById('tm-status').value;
-  var btn=document.getElementById('ticketBtn');btn.disabled=true;btn.textContent='Saving…';
-  _cf('adminResolveSupportTicket')({ticketId:id,resolution:res,status})
-  .then(function(){_toast('Ticket updated','green');document.getElementById('ticketModal').classList.remove('open');_loadTickets();})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Save';});
-};
-function _prioBadge(p){return '<span class="badge '+(p==='urgent'||p==='high'?'br':p==='medium'?'bo':'bs')+'">'+_esc(p||'medium')+'</span>';}
-
-/* ── Categories ── */
-window._loadCategories=function(){
-  var hub=document.getElementById('catHubFilter').value||undefined;
-  document.getElementById('catTbl').innerHTML='<tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetCategories')({hubType:hub}).then(function(r){
-    var tb=document.getElementById('catTbl');
-    if(!r.data.categories.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No categories</td></tr>';return;}
-    tb.innerHTML=r.data.categories.map(function(c){
-      return '<tr>'+
-        '<td><span class="material-icons" style="font-size:14px;vertical-align:middle;color:var(--g);margin-right:5px">'+_esc(c.icon||'folder')+'</span><strong>'+_esc(c.name||'?')+'</strong></td>'+
-        '<td><span class="badge bb">'+_esc(c.hubType||'?')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_esc(c.parentId||'Root')+'</td>'+
-        '<td><span class="badge '+(c.active?'bg':'bs')+'">'+(c.active?'Active':'Inactive')+'</span></td>'+
-        '<td><button class="btn btn-o btn-sm" onclick="_openCatModal('+JSON.stringify(c)+')">Edit</button></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){_toast(e.message,'red');});
-};
-window._openCatModal=function(cat){
-  var isEdit=cat&&cat.id;
-  document.getElementById('cmTitle').textContent=isEdit?'Edit Category':'Add Category';
-  document.getElementById('cm-id').value=isEdit?cat.id:'';
-  document.getElementById('cm-name').value=cat?cat.name:'';
-  document.getElementById('cm-hub').value=cat?cat.hubType:'marketplace';
-  document.getElementById('cm-icon').value=cat?cat.icon||'':'';
-  document.getElementById('cm-parent').value=cat?cat.parentId||'':'';
-  document.getElementById('cm-desc').value=cat?cat.description||'':'';
-  document.getElementById('cm-active').checked=cat?cat.active!==false:true;
-  document.getElementById('catModal').classList.add('open');
-};
-window._saveCategory=function(){
-  var name=document.getElementById('cm-name').value.trim();
-  var hub=document.getElementById('cm-hub').value;
-  if(!name||!hub)return _toast('Name and hub required','red');
-  var btn=document.getElementById('catBtn');btn.disabled=true;btn.textContent='Saving…';
-  _cf('adminUpsertCategory')({
-    categoryId:document.getElementById('cm-id').value||undefined,
-    name,hubType:hub,
-    icon:document.getElementById('cm-icon').value.trim(),
-    parentId:document.getElementById('cm-parent').value.trim()||undefined,
-    description:document.getElementById('cm-desc').value.trim(),
-    active:document.getElementById('cm-active').checked,
-  }).then(function(){_toast('Category saved','green');document.getElementById('catModal').classList.remove('open');_loadCategories();})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Save';});
-};
-
-/* ── Settings ── */
-var SETTINGS_DEFS={
-  general:[
-    {key:'platformName',label:'Platform Name',type:'text'},
-    {key:'supportEmail',label:'Support Email',type:'email'},
-    {key:'supportPhone',label:'Support Phone',type:'tel'},
-    {key:'maintenanceMode',label:'Maintenance Mode',type:'bool'},
-    {key:'maintenanceMessage',label:'Maintenance Message',type:'text'},
-    {key:'termsVersion',label:'Terms Version',type:'text'},
-  ],
-  financial:[
-    {key:'defaultCommissionPct',label:'Default Commission %',type:'number'},
-    {key:'minWithdrawalAmountCents',label:'Min Withdrawal (KES cents)',type:'number'},
-    {key:'maxOrderValueCents',label:'Max Order Value (KES cents)',type:'number'},
-    {key:'vatRate',label:'VAT Rate %',type:'number'},
-    {key:'whtRate',label:'WHT Rate %',type:'number'},
-    {key:'payoutScheduleDays',label:'Payout Hold Days',type:'number'},
-  ],
-  subscription:[
-    {key:'defaultTrialDays',label:'Default Trial Days',type:'number'},
-    {key:'gracePeriodDays',label:'Grace Period Days',type:'number'},
-    {key:'maxTrialExtensions',label:'Max Trial Extensions',type:'number'},
-  ],
-  security:[
-    {key:'sessionTimeoutMinutes',label:'Session Timeout (min)',type:'number'},
-    {key:'maxLoginAttempts',label:'Max Login Attempts',type:'number'},
-    {key:'lockoutDurationMinutes',label:'Lockout Duration (min)',type:'number'},
-    {key:'requireEmailVerification',label:'Require Email Verification',type:'bool'},
-    {key:'enforceStrongPasswords',label:'Enforce Strong Passwords',type:'bool'},
-  ],
-};
-function _loadSettings(){
-  _cf('adminGetPlatformSettings')({}).then(function(r){
-    _allSettings=r.data.settings||{};
-    _renderSettingsTabs();
-    _renderSettingsBody(_activeSettingsCat);
-  }).catch(function(e){_toast('Error: '+e.message,'red');});
-}
-function _renderSettingsTabs(){
-  document.getElementById('settingsTabs').innerHTML=Object.keys(SETTINGS_DEFS).map(function(cat){
-    return '<div class="cat-tab '+(cat===_activeSettingsCat?'active':'')+'" onclick="_switchCat(\''+cat+'\')">'+_esc(cat.charAt(0).toUpperCase()+cat.slice(1))+'</div>';
-  }).join('');
-}
-window._switchCat=function(cat){
-  _activeSettingsCat=cat;
-  _renderSettingsTabs();
-  _renderSettingsBody(cat);
-};
-function _renderSettingsBody(cat){
-  document.getElementById('settingsTitle').textContent=cat.charAt(0).toUpperCase()+cat.slice(1)+' Settings';
-  var defs=SETTINGS_DEFS[cat]||[];
-  var vals=_allSettings[cat]||{};
-  document.getElementById('settingsBody').innerHTML=defs.map(function(d){
-    var v=vals[d.key]!==undefined?vals[d.key]:'';
-    if(d.type==='bool'){
-      return '<label style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);font-size:13px">'+
-        '<span>'+_esc(d.label)+'</span>'+
-        '<label class="toggle"><input type="checkbox" id="set-'+cat+'-'+d.key+'" '+(v?'checked':'')+' '+((!_isSA)?'disabled':'')+' onchange="_settingChanged()"><span class="toggle-sl"></span></label>'+
-      '</label>';
-    }
-    return '<div class="fg" style="border-bottom:1px solid var(--brd);padding-bottom:10px">'+
-      '<label class="fl">'+_esc(d.label)+'</label>'+
-      '<input type="'+d.type+'" class="fi" id="set-'+cat+'-'+d.key+'" value="'+_esc(String(v))+'" '+((!_isSA)?'disabled title="SuperAdmin only"':'')+'>'+
-    '</div>';
-  }).join('');
-}
-window._settingChanged=function(){};
-window._saveSettings=function(){
-  if(!_isSA)return _toast('SuperAdmin only','red');
-  var cat=_activeSettingsCat;
-  var defs=SETTINGS_DEFS[cat]||[];
-  var updates={};
-  defs.forEach(function(d){
-    var el=document.getElementById('set-'+cat+'-'+d.key);
-    if(!el)return;
-    updates[d.key]=d.type==='bool'?el.checked:d.type==='number'?parseFloat(el.value)||0:el.value;
-  });
-  _cf('adminUpdatePlatformSettings')({category:cat,updates})
-  .then(function(){_toast('Settings saved','green');_loadSettings();})
-  .catch(function(e){_toast(e.message,'red');});
-};
-
-/* ── Feature Flags ── */
-function _loadFlags(){
-  _cf('adminGetFeatureFlags')({}).then(function(r){
-    _allFlags=r.data.flags||[];
-    document.getElementById('flagsList').innerHTML=_allFlags.map(function(f){
-      return '<div class="flag-row">'+
-        '<div class="flag-key">'+_esc(f.key)+'</div>'+
-        '<div class="flag-desc">'+_esc(f.description||'')+'</div>'+
-        '<div style="font-size:11px;color:var(--sub);width:60px;text-align:center">'+Math.round(f.rolloutPct||100)+'%</div>'+
-        '<label class="toggle">'+
-          '<input type="checkbox" id="flag-'+_esc(f.key)+'" '+(f.enabled?'checked':'')+' onchange="_toggleFlag(\''+_esc(f.key)+'\',this.checked)" '+(!_isSA?'disabled':'')+'>'+
-          '<span class="toggle-sl"></span>'+
-        '</label>'+
-      '</div>';
-    }).join('')||'<div style="color:var(--sub);font-size:12px">No flags loaded</div>';
-  }).catch(function(e){_toast(e.message,'red');});
-}
-window._toggleFlag=function(key,enabled){
-  if(!_isSA){_toast('SuperAdmin only','red');return;}
-  var f=_allFlags.find(function(x){return x.key===key;})||{};
-  _cf('adminUpdateFeatureFlag')({key,enabled,rolloutPct:f.rolloutPct,description:f.description})
-  .then(function(){_toast((enabled?'Enabled':'Disabled')+': '+key,'green');})
-  .catch(function(e){_toast(e.message,'red');document.getElementById('flag-'+key).checked=!enabled;});
-};
-
-/* ── Marketplace ── */
-function _loadProducts(){
-  var q=document.getElementById('mpQuery').value.trim()||undefined;
-  var status=document.getElementById('mpStatus').value||undefined;
-  document.getElementById('mpTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetProducts')({query:q,status,limit:50}).then(function(r){
-    var tb=document.getElementById('mpTbl');
-    var rows=r.data.products||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No products found</td></tr>';return;}
-    tb.innerHTML=rows.map(function(p){
-      var st=p.status||'active';
-      return '<tr>'+
-        '<td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(p.name||'—')+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_esc(p.sellerName||p.sellerId||'—')+'</td>'+
-        '<td>'+Math.round((p.price||0)/100).toLocaleString()+'</td>'+
-        '<td><span class="badge '+(st==='active'?'bg':st==='pending'?'bo':'br')+'">'+_esc(st)+'</span></td>'+
-        '<td>'+(p.featured?'<span class="badge bb">Featured</span>':'<span class="badge bs">—</span>')+'</td>'+
-        '<td style="display:flex;gap:4px">'+
-          (st==='pending'?'<button class="btn btn-g btn-sm" onclick="_setProductStatus(\''+p.id+'\',\'active\')">Approve</button>':'')+
-          (st!=='rejected'?'<button class="btn btn-r btn-sm" onclick="_setProductStatus(\''+p.id+'\',\'rejected\')">Reject</button>':'')+
-          '<button class="btn btn-b btn-sm" onclick="_toggleFeatured(\''+p.id+'\','+(p.featured?'false':'true')+')">'+( p.featured?'Unfeature':'Feature')+'</button>'+
-        '</td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('mpTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-window._setProductStatus=function(id,status){
-  _cf('adminUpdateProductStatus')({productId:id,status}).then(function(){_toast('Product '+status,'green');_loadProducts();}).catch(function(e){_toast(e.message,'red');});
-};
-window._toggleFeatured=function(id,featured){
-  _cf('adminUpdateProductStatus')({productId:id,featured}).then(function(){_toast('Product updated','green');_loadProducts();}).catch(function(e){_toast(e.message,'red');});
-};
-
-/* ── Orders ── */
-var _activeOrderId=null;
-function _loadOrders(){
-  var status=document.getElementById('ordStatus').value||'pending';
-  document.getElementById('ordTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetOrders')({status,limit:50}).then(function(r){
-    var tb=document.getElementById('ordTbl');
-    var rows=r.data.orders||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="tbl-empty">No orders</td></tr>';return;}
-    tb.innerHTML=rows.map(function(o){
-      return '<tr>'+
-        '<td style="font-size:11px;color:var(--b)">'+_esc((o.id||'').slice(-8))+'</td>'+
-        '<td style="font-size:11px">'+_esc(o.buyerName||o.buyerEmail||'—')+'</td>'+
-        '<td>KES '+Math.round((o.totalCents||0)/100).toLocaleString()+'</td>'+
-        '<td style="font-size:11px">'+_esc((o.itemCount||1)+' item'+(o.itemCount===1?'':'s'))+'</td>'+
-        '<td><span class="badge '+(o.status==='delivered'?'bg':o.status==='cancelled'?'br':o.status==='shipped'?'bb':'bo')+'">'+_esc(o.status||'pending')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(o.createdAt)+'</td>'+
-        '<td><button class="btn btn-b btn-sm" onclick="_openOrder(\''+o.id+'\',\''+_esc(o.status||'pending')+'\','+JSON.stringify(_esc(o.buyerName||o.buyerEmail||o.id))+')">Manage</button></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('ordTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-window._openOrder=function(id,status,label){
-  _activeOrderId=id;
-  document.getElementById('om-id').value=id;
-  document.getElementById('omTitle').textContent='Order: '+label;
-  document.getElementById('omBody').innerHTML='<div style="font-size:12px;color:var(--sub)">Order ID: <code style="color:var(--b)">'+_esc(id)+'</code><br>Current status: <span class="badge bo">'+_esc(status)+'</span></div>';
-  document.getElementById('om-status').value=status;
-  document.getElementById('orderModal').classList.add('open');
-};
-window._updateOrderStatus=function(){
-  var id=document.getElementById('om-id').value;
-  var status=document.getElementById('om-status').value;
-  var btn=document.getElementById('omBtn');btn.disabled=true;btn.textContent='Saving…';
-  _cf('adminUpdateOrderStatus')({orderId:id,status})
-  .then(function(){_toast('Order updated to '+status,'green');document.getElementById('orderModal').classList.remove('open');_loadOrders();})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Update Status';});
-};
-
-/* ── Bookings ── */
-function _loadBookings(){
-  var status=document.getElementById('bkgStatus').value||undefined;
-  document.getElementById('bkgTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetBookings')({status,limit:50}).then(function(r){
-    var tb=document.getElementById('bkgTbl');
-    var rows=r.data.bookings||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No bookings</td></tr>';return;}
-    tb.innerHTML=rows.map(function(b){
-      return '<tr>'+
-        '<td style="font-size:11px;color:var(--b)">'+_esc((b.id||'').slice(-8))+'</td>'+
-        '<td style="font-size:11px">'+_esc(b.customerName||b.customerEmail||'—')+'</td>'+
-        '<td>'+_esc(b.serviceName||b.serviceType||'—')+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(b.bookingDate||b.scheduledAt)+'</td>'+
-        '<td>KES '+Math.round((b.totalCents||0)/100).toLocaleString()+'</td>'+
-        '<td><span class="badge '+(b.status==='completed'?'bg':b.status==='cancelled'?'br':b.status==='confirmed'?'bb':'bo')+'">'+_esc(b.status||'pending')+'</span></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('bkgTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-
-/* ── Delivery ── */
-function _loadDelivery(){
-  _cf('adminGetDeliveryStats')({}).then(function(r){
-    var d=r.data||{};
-    document.getElementById('del-active').textContent=(d.activeDeliveries||0).toLocaleString();
-    document.getElementById('del-drivers').textContent=(d.activeDrivers||0).toLocaleString();
-    document.getElementById('del-today').textContent=(d.completedToday||0).toLocaleString();
-    document.getElementById('del-late').textContent=(d.lateDeliveries||0).toLocaleString();
-    var tb=document.getElementById('delTbl');
-    var rows=d.recentDeliveries||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No active deliveries</td></tr>';return;}
-    tb.innerHTML=rows.map(function(d){
-      return '<tr>'+
-        '<td style="font-size:11px;color:var(--b)">'+_esc((d.orderId||'').slice(-8))+'</td>'+
-        '<td>'+_esc(d.driverName||'Unassigned')+'</td>'+
-        '<td><span class="badge '+(d.deliveryStatus==='delivered'?'bg':d.deliveryStatus==='picked_up'?'bb':'bo')+'">'+_esc(d.deliveryStatus||'pending')+'</span></td>'+
-        '<td style="font-size:11px">'+_esc(d.eta||'—')+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(d.updatedAt)+'</td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){_toast(e.message,'red');});
-}
-
-/* ── Payouts ── */
-var _selectedPayouts=[];
-function _loadPayouts(){
-  _selectedPayouts=[];document.getElementById('batchApproveBtn').style.display='none';
-  document.getElementById('payTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetPendingPayouts')({limit:50}).then(function(r){
-    var tb=document.getElementById('payTbl');
-    var rows=r.data.payouts||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No pending payouts</td></tr>';return;}
-    tb.innerHTML=rows.map(function(p){
-      return '<tr>'+
-        '<td><input type="checkbox" class="pay-chk" value="'+p.id+'" onchange="_payCheck()" style="accent-color:var(--g)"></td>'+
-        '<td>'+_esc(p.sellerName||p.sellerId||'—')+'</td>'+
-        '<td>KES '+Math.round((p.amountCents||0)/100).toLocaleString()+'</td>'+
-        '<td><span class="badge bs">'+_esc(p.method||'mpesa')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(p.createdAt)+'</td>'+
-        '<td>'+(_isSA?'<button class="btn btn-g btn-sm" onclick="_approveOne(\''+p.id+'\')">Approve</button>':'<span style="font-size:11px;color:var(--sub)">SuperAdmin</span>')+'</td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('payTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-window._payCheck=function(){
-  _selectedPayouts=Array.from(document.querySelectorAll('.pay-chk:checked')).map(function(c){return c.value;});
-  document.getElementById('batchApproveBtn').style.display=(_isSA&&_selectedPayouts.length)?'inline-flex':'none';
-};
-window._toggleAllPay=function(checked){
-  document.querySelectorAll('.pay-chk').forEach(function(c){c.checked=checked;});
-  _payCheck();
-};
-window._approveOne=function(id){if(!_isSA)return _toast('SuperAdmin only','red');_cf('adminApprovePayouts')({payoutIds:[id]}).then(function(){_toast('Payout approved','green');_loadPayouts();}).catch(function(e){_toast(e.message,'red');});};
-window._batchApprove=function(){if(!_isSA||!_selectedPayouts.length)return;_cf('adminApprovePayouts')({payoutIds:_selectedPayouts}).then(function(){_toast(_selectedPayouts.length+' payouts approved','green');_loadPayouts();}).catch(function(e){_toast(e.message,'red');});};
-
-/* ── Disputes ── */
-function _loadDisputes(){
-  var status=document.getElementById('dspStatus').value||'open';
-  document.getElementById('dspTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetDisputes')({status,limit:50}).then(function(r){
-    var tb=document.getElementById('dspTbl');
-    var rows=r.data.disputes||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="tbl-empty">No disputes</td></tr>';return;}
-    tb.innerHTML=rows.map(function(d){
-      return '<tr>'+
-        '<td style="font-size:11px;color:var(--b)">'+_esc((d.orderId||d.id||'').slice(-8))+'</td>'+
-        '<td style="font-size:11px">'+_esc(d.buyerName||'—')+'</td>'+
-        '<td style="font-size:11px">'+_esc(d.sellerName||'—')+'</td>'+
-        '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(d.reason||'—')+'</td>'+
-        '<td>KES '+Math.round((d.amountCents||0)/100).toLocaleString()+'</td>'+
-        '<td><span class="badge '+(d.status==='resolved'?'bg':d.status==='under_review'?'bb':'br')+'">'+_esc(d.status||'open')+'</span></td>'+
-        '<td>'+(d.status!=='resolved'?'<button class="btn btn-p btn-sm" onclick="_openDispute(\''+d.id+'\','+JSON.stringify({buyer:d.buyerName||'',seller:d.sellerName||'',reason:d.reason||'',amount:Math.round((d.amountCents||0)/100)})+')">Resolve</button>':'—')+'</td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('dspTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-window._openDispute=function(id,info){
-  document.getElementById('dm-id').value=id;
-  document.getElementById('dm-detail').innerHTML='Buyer: <strong>'+_esc(info.buyer||'—')+'</strong><br>Seller: <strong>'+_esc(info.seller||'—')+'</strong><br>Reason: <em>'+_esc(info.reason||'—')+'</em><br>Amount: <strong>KES '+(_esc(String(info.amount)))+'</strong>';
-  document.getElementById('dm-favor').value='true';
-  document.getElementById('dm-notes').value='';
-  document.getElementById('disputeModal').classList.add('open');
-};
-window._resolveDispute=function(){
-  var id=document.getElementById('dm-id').value;
-  var favorBuyer=document.getElementById('dm-favor').value==='true';
-  var notes=document.getElementById('dm-notes').value.trim();
-  var btn=document.getElementById('dspBtn');btn.disabled=true;btn.textContent='Resolving…';
-  _cf('adminResolveDispute')({disputeId:id,favorBuyer,notes})
-  .then(function(){_toast('Dispute resolved','green');document.getElementById('disputeModal').classList.remove('open');_loadDisputes();})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Resolve';});
-};
-
-/* ── Reviews ── */
-function _loadReviews(){
-  var rating=document.getElementById('revFilter').value;
-  var params={limit:50};if(rating)params.minRating=parseInt(rating,10),params.maxRating=parseInt(rating,10);
-  document.getElementById('revTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetReviews')(params).then(function(r){
-    var tb=document.getElementById('revTbl');
-    var rows=r.data.reviews||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No reviews</td></tr>';return;}
-    tb.innerHTML=rows.map(function(rv){
-      var stars='★'.repeat(rv.rating||0)+'☆'.repeat(5-(rv.rating||0));
-      return '<tr>'+
-        '<td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(rv.targetName||rv.targetId||'—')+'</td>'+
-        '<td style="font-size:11px">'+_esc(rv.reviewerName||'Anonymous')+'</td>'+
-        '<td style="color:var(--y);letter-spacing:-1px">'+stars+'</td>'+
-        '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(rv.comment||'—')+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(rv.createdAt)+'</td>'+
-        '<td><button class="btn btn-r btn-sm" onclick="_removeReview(\''+rv.id+'\')">Remove</button></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('revTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-window._removeReview=function(id){
-  if(!confirm('Remove this review? This is permanent.'))return;
-  _cf('adminRemoveReview')({reviewId:id}).then(function(){_toast('Review removed','green');_loadReviews();}).catch(function(e){_toast(e.message,'red');});
-};
-
-/* ── Push Notifications ── */
-function _loadRecentNotifs(){
-  document.getElementById('recentNotifs').innerHTML='<div class="spin" style="margin:10px auto;display:block"></div>';
-  _cf('adminGetRecentNotifications')({limit:10}).then(function(r){
-    var rows=r.data.notifications||[];
-    if(!rows.length){document.getElementById('recentNotifs').innerHTML='<div style="color:var(--sub);padding:10px">No notifications yet</div>';return;}
-    document.getElementById('recentNotifs').innerHTML='<div style="display:grid;gap:8px;padding:12px">'+rows.map(function(n){
-      return '<div style="background:var(--sur2);border:1px solid var(--brd);border-radius:8px;padding:10px">'+
-        '<div style="font-weight:700;font-size:12px">'+_esc(n.title||'—')+'</div>'+
-        '<div style="font-size:11px;color:var(--sub);margin:2px 0">'+_esc(n.body||'—')+'</div>'+
-        '<div style="font-size:10px;color:var(--sub)">'+_relTime(n.createdAt)+' · '+_esc(n.target||'all')+'</div>'+
-      '</div>';
-    }).join('')+'</div>';
-  }).catch(function(e){document.getElementById('recentNotifs').innerHTML='<div style="color:var(--r);padding:10px">Error: '+_esc(e.message)+'</div>';});
-}
-window._sendPush=function(){
-  var title=document.getElementById('pn-title').value.trim();
-  var body=document.getElementById('pn-body').value.trim();
-  if(!title||!body)return _toast('Title and message required','red');
-  var target=document.getElementById('pn-target').value;
-  var url=document.getElementById('pn-url').value.trim()||undefined;
-  if(!confirm('Send push notification to '+target+'?'))return;
-  _cf('adminSendPushNotification')({title,body,target,url})
-  .then(function(r){_toast('Notification sent to '+(r.data.sent||0)+' devices','green');document.getElementById('pn-title').value='';document.getElementById('pn-body').value='';_loadRecentNotifs();})
-  .catch(function(e){_toast(e.message,'red');});
-};
-
-/* ── Announcements ── */
-function _loadAnnouncements(){
-  document.getElementById('annTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetAnnouncements')({limit:50}).then(function(r){
-    var tb=document.getElementById('annTbl');
-    var rows=r.data.announcements||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No announcements</td></tr>';return;}
-    tb.innerHTML=rows.map(function(a){
-      return '<tr>'+
-        '<td style="font-weight:600">'+_esc(a.title||'—')+'</td>'+
-        '<td><span class="badge '+(a.type==='warning'?'bo':a.type==='maintenance'?'br':a.type==='promotion'?'bp':'bb')+'">'+_esc(a.type||'info')+'</span></td>'+
-        '<td><span class="badge bs">'+_esc(a.target||'all')+'</span></td>'+
-        '<td><span class="badge '+(a.active!==false?'bg':'bs')+'">'+(a.active!==false?'Active':'Inactive')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(a.createdAt)+'</td>'+
-        '<td><button class="btn btn-o btn-sm" onclick="_openAnnModal('+JSON.stringify(a)+')">Edit</button></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('annTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-window._openAnnModal=function(ann){
-  document.getElementById('annMTitle').textContent=ann&&ann.id?'Edit Announcement':'New Announcement';
-  document.getElementById('ann-id').value=ann&&ann.id?ann.id:'';
-  document.getElementById('ann-title').value=ann?ann.title||'':'';
-  document.getElementById('ann-body').value=ann?ann.body||ann.message||'':'';
-  document.getElementById('ann-type').value=ann?ann.type||'info':'info';
-  document.getElementById('ann-target').value=ann?ann.target||'all':'all';
-  document.getElementById('ann-active').checked=ann?ann.active!==false:true;
-  document.getElementById('annModal').classList.add('open');
-};
-window._saveAnnouncement=function(){
-  var title=document.getElementById('ann-title').value.trim();
-  var body=document.getElementById('ann-body').value.trim();
-  if(!title||!body)return _toast('Title and message required','red');
-  var btn=document.getElementById('annBtn');btn.disabled=true;btn.textContent='Saving…';
-  _cf('adminSaveAnnouncement')({
-    announcementId:document.getElementById('ann-id').value||undefined,
-    title,body,type:document.getElementById('ann-type').value,
-    target:document.getElementById('ann-target').value,active:document.getElementById('ann-active').checked,
-  })
-  .then(function(){_toast('Announcement saved','green');document.getElementById('annModal').classList.remove('open');_loadAnnouncements();})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Publish';});
-};
-
-/* ── Banners ── */
-function _loadBanners(){
-  document.getElementById('bannersGrid').innerHTML='<div class="spin" style="margin:24px auto;display:block"></div>';
-  _cf('adminGetBanners')({}).then(function(r){
-    var rows=r.data.banners||[];
-    if(!rows.length){document.getElementById('bannersGrid').innerHTML='<p style="color:var(--sub);font-size:12px">No banners yet</p>';return;}
-    document.getElementById('bannersGrid').innerHTML=rows.map(function(b){
-      return '<div class="card" style="overflow:hidden">'+
-        (b.imageUrl?'<img src="'+_esc(b.imageUrl)+'" style="width:100%;height:120px;object-fit:cover;border-radius:8px 8px 0 0" loading="lazy">':
-          '<div style="height:80px;background:var(--sur2);display:flex;align-items:center;justify-content:center"><span class="material-icons" style="font-size:32px;color:var(--brd2)">image</span></div>')+
-        '<div class="card-body" style="padding:10px">'+
-          '<div style="font-weight:700;font-size:13px">'+_esc(b.title||'—')+'</div>'+
-          (b.subtitle?'<div style="font-size:11px;color:var(--sub);margin-top:2px">'+_esc(b.subtitle)+'</div>':'')+
-          '<div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">'+
-            '<span class="badge bs">'+_esc(b.position||'hero')+'</span>'+
-            '<span class="badge bs">'+_esc(b.hub||'all')+'</span>'+
-            '<span class="badge '+(b.active?'bg':'bs')+'">'+(b.active?'Active':'Inactive')+'</span>'+
-          '</div>'+
-          '<div style="display:flex;gap:6px;margin-top:10px">'+
-            '<button class="btn btn-o btn-sm" onclick="_openBannerModal('+JSON.stringify(b)+')">Edit</button>'+
-            '<button class="btn btn-r btn-sm" onclick="_deleteBanner(\''+b.id+'\')">Delete</button>'+
-          '</div>'+
-        '</div>'+
-      '</div>';
-    }).join('');
-  }).catch(function(e){document.getElementById('bannersGrid').innerHTML='<p style="color:var(--r);font-size:12px">Error: '+_esc(e.message)+'</p>';});
-}
-window._openBannerModal=function(bnr){
-  document.getElementById('bnrTitle').textContent=bnr&&bnr.id?'Edit Banner':'New Banner';
-  document.getElementById('bnr-id').value=bnr&&bnr.id?bnr.id:'';
-  document.getElementById('bnr-title').value=bnr?bnr.title||'':'';
-  document.getElementById('bnr-sub').value=bnr?bnr.subtitle||'':'';
-  document.getElementById('bnr-img').value=bnr?bnr.imageUrl||'':'';
-  document.getElementById('bnr-url').value=bnr?bnr.actionUrl||'':'';
-  document.getElementById('bnr-pos').value=bnr?bnr.position||'hero':'hero';
-  document.getElementById('bnr-hub').value=bnr?bnr.hub||'all':'all';
-  document.getElementById('bnr-active').checked=bnr?bnr.active!==false:true;
-  document.getElementById('bannerModal').classList.add('open');
-};
-window._saveBanner=function(){
-  var title=document.getElementById('bnr-title').value.trim();
-  if(!title)return _toast('Title required','red');
-  var btn=document.getElementById('bnrBtn');btn.disabled=true;btn.textContent='Saving…';
-  _cf('adminSaveBanner')({
-    bannerId:document.getElementById('bnr-id').value||undefined,
-    title,subtitle:document.getElementById('bnr-sub').value.trim(),
-    imageUrl:document.getElementById('bnr-img').value.trim(),
-    actionUrl:document.getElementById('bnr-url').value.trim(),
-    position:document.getElementById('bnr-pos').value,hub:document.getElementById('bnr-hub').value,
-    active:document.getElementById('bnr-active').checked,
-  })
-  .then(function(){_toast('Banner saved','green');document.getElementById('bannerModal').classList.remove('open');_loadBanners();})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Save Banner';});
-};
-window._deleteBanner=function(id){
-  if(!confirm('Delete this banner?'))return;
-  _cf('adminDeleteBanner')({bannerId:id}).then(function(){_toast('Banner deleted','green');_loadBanners();}).catch(function(e){_toast(e.message,'red');});
-};
-
-/* ── FAQs ── */
-function _loadFaqs(){
-  document.getElementById('faqTbl').innerHTML='<tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetFaqs')({}).then(function(r){
-    var tb=document.getElementById('faqTbl');
-    var rows=r.data.faqs||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No FAQs yet</td></tr>';return;}
-    tb.innerHTML=rows.map(function(f){
-      return '<tr>'+
-        '<td style="font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(f.question||'—')+'</td>'+
-        '<td><span class="badge bs">'+_esc(f.category||'General')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_esc(String(f.order||0))+'</td>'+
-        '<td><span class="badge '+(f.active!==false?'bg':'bs')+'">'+(f.active!==false?'Active':'Inactive')+'</span></td>'+
-        '<td style="display:flex;gap:4px">'+
-          '<button class="btn btn-o btn-sm" onclick="_openFaqModal('+JSON.stringify(f)+')">Edit</button>'+
-          '<button class="btn btn-r btn-sm" onclick="_deleteFaq(\''+f.id+'\')">Del</button>'+
-        '</td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('faqTbl').innerHTML='<tr><td colspan="5" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-window._openFaqModal=function(faq){
-  document.getElementById('faqMTitle').textContent=faq&&faq.id?'Edit FAQ':'New FAQ';
-  document.getElementById('faq-id').value=faq&&faq.id?faq.id:'';
-  document.getElementById('faq-q').value=faq?faq.question||'':'';
-  document.getElementById('faq-a').value=faq?faq.answer||'':'';
-  document.getElementById('faq-cat').value=faq?faq.category||'':'';
-  document.getElementById('faq-order').value=faq?faq.order||0:0;
-  document.getElementById('faq-active').checked=faq?faq.active!==false:true;
-  document.getElementById('faqModal').classList.add('open');
-};
-window._saveFaq=function(){
-  var q=document.getElementById('faq-q').value.trim();
-  var a=document.getElementById('faq-a').value.trim();
-  if(!q||!a)return _toast('Question and answer required','red');
-  var btn=document.getElementById('faqBtn');btn.disabled=true;btn.textContent='Saving…';
-  _cf('adminUpsertFaq')({
-    faqId:document.getElementById('faq-id').value||undefined,
-    question:q,answer:a,category:document.getElementById('faq-cat').value.trim()||'General',
-    order:parseInt(document.getElementById('faq-order').value)||0,active:document.getElementById('faq-active').checked,
-  })
-  .then(function(){_toast('FAQ saved','green');document.getElementById('faqModal').classList.remove('open');_loadFaqs();})
-  .catch(function(e){_toast(e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.textContent='Save FAQ';});
-};
-window._deleteFaq=function(id){
-  if(!confirm('Delete this FAQ?'))return;
-  _cf('adminDeleteFaq')({faqId:id}).then(function(){_toast('FAQ deleted','green');_loadFaqs();}).catch(function(e){_toast(e.message,'red');});
-};
-
-/* ── SmartPOS ── */
-function _loadPosDevices(){
-  document.getElementById('posTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetPosDevices')({}).then(function(r){
-    var tb=document.getElementById('posTbl');
-    var rows=r.data.devices||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No devices registered</td></tr>';return;}
-    tb.innerHTML=rows.map(function(d){
-      return '<tr>'+
-        '<td style="font-size:11px;color:var(--b);font-family:monospace">'+_esc(d.id||'—')+'</td>'+
-        '<td>'+_esc(d.merchantName||d.merchantId||'—')+'</td>'+
-        '<td><span class="badge bs">'+_esc(d.deviceType||'pos')+'</span></td>'+
-        '<td style="font-size:11px">'+_esc(d.appVersion||'—')+'</td>'+
-        '<td><span class="badge '+(d.status==='active'?'bg':d.status==='offline'?'bs':'bo')+'">'+_esc(d.status||'active')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(d.lastSeen)+'</td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('posTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-
-/* ── AI Operations ── */
-var AI_MODULES=[
-  {key:'kass_chat',label:'KASS AI Concierge',desc:'Customer chat assistant'},
-  {key:'search_ai',label:'AI Search (NLP)',desc:'Swahili intent parsing'},
-  {key:'fraud_ai',label:'Fraud Detection AI',desc:'Transaction risk scoring'},
-  {key:'recommendations',label:'Recommendations',desc:'Product recommendations'},
-  {key:'pricing_ai',label:'Dynamic Pricing AI',desc:'Market-aware pricing'},
-];
-function _loadAiStats(){
-  _cf('adminGetAiStats')({}).then(function(r){
-    var d=r.data||{};
-    document.getElementById('ai-tokens').textContent=(d.totalTokens||0).toLocaleString();
-    document.getElementById('ai-cost').textContent='$'+(d.estimatedCostUsd||0).toFixed(4);
-    document.getElementById('ai-reqs').textContent=(d.totalRequests||0).toLocaleString();
-    document.getElementById('ai-users').textContent=(d.activeUsers||0).toLocaleString();
-    var flags=d.moduleFlags||{};
-    document.getElementById('aiModuleList').innerHTML=AI_MODULES.map(function(m){
-      var enabled=flags[m.key]!==false;
-      return '<div class="flag-row">'+
-        '<div class="flag-key">'+_esc(m.label)+'</div>'+
-        '<div class="flag-desc">'+_esc(m.desc)+'</div>'+
-        '<label class="toggle"><input type="checkbox" '+(enabled?'checked':'')+' '+(!_isSA?'disabled':'')+' onchange="_toggleAiModule(\''+m.key+'\',this.checked)"><span class="toggle-sl"></span></label>'+
-      '</div>';
-    }).join('');
-  }).catch(function(e){_toast(e.message,'red');});
-}
-window._toggleAiModule=function(key,enabled){
-  if(!_isSA){_toast('SuperAdmin only','red');return;}
-  _cf('adminUpdateFeatureFlag')({key:'ai_module_'+key,enabled,description:'AI module: '+key})
-  .then(function(){_toast((enabled?'Enabled':'Disabled')+': '+key,'green');})
-  .catch(function(e){_toast(e.message,'red');});
-};
-
-/* ── Search Manager ── */
-function _loadSearch(){
-  _cf('adminGetSearchStats')({}).then(function(r){
-    var d=r.data||{};
-    document.getElementById('srch-total').textContent=(d.totalSearches||0).toLocaleString();
-    document.getElementById('srch-queue').textContent=(d.pendingQueue||0).toLocaleString();
-    var trending=d.trendingSearches||[];
-    document.getElementById('srch-trends').textContent=trending.length;
-    document.getElementById('trendingList').innerHTML=trending.length?trending.map(function(t,i){
-      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd);font-size:12px">'+
-        '<span style="color:var(--sub);width:20px;text-align:right">'+(i+1)+'</span>'+
-        '<span style="flex:1;font-weight:600">'+_esc(t.query||t.term||t)+'</span>'+
-        (t.count?'<span style="color:var(--sub);font-size:11px">'+t.count+' searches</span>':'')+'</div>';
-    }).join(''):'<div style="color:var(--sub)">No trending data yet</div>';
-    var queue=d.queueItems||[];
-    document.getElementById('queueList').innerHTML=queue.length?queue.map(function(q){
-      return '<div style="font-size:11px;padding:6px 0;border-bottom:1px solid var(--brd);color:var(--sub)">'+_esc(q.collection||'?')+' · <span style="color:var(--o)">'+_esc(q.action||'index')+'</span></div>';
-    }).join(''):'<div style="color:var(--g);font-size:12px">Queue is clear</div>';
-  }).catch(function(e){_toast(e.message,'red');});
-}
-
-/* ── Fraud Center ── */
-function _loadFraud(){
-  _cf('adminGetFraudAlerts')({}).then(function(r){
-    var d=r.data||{};
-    var flags=d.riskFlags||[];
-    var chargebacks=d.chargebacks||[];
-    var dupes=d.duplicateAccounts||[];
-    document.getElementById('fr-flags').textContent=flags.length;
-    document.getElementById('fr-chargebacks').textContent=chargebacks.length;
-    document.getElementById('fr-dupes').textContent=dupes.length;
-    document.getElementById('sbFraud').textContent=flags.length+chargebacks.length;
-    var tb=document.getElementById('fraudTbl');
-    if(!flags.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No risk flags — all clear</td></tr>';return;}
-    tb.innerHTML=flags.map(function(f){
-      return '<tr>'+
-        '<td style="font-size:11px">'+_esc(f.userEmail||f.userId||'—')+'</td>'+
-        '<td><span class="badge br">'+_esc(f.flagType||f.type||'risk')+'</span></td>'+
-        '<td style="font-weight:700;color:var(--r)">'+_esc(String(f.riskScore||0))+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(f.createdAt)+'</td>'+
-        '<td><button class="btn btn-b btn-sm" onclick="_openUser(\''+_esc(f.userId||'')+'\')">View User</button></td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){_toast(e.message,'red');});
-}
-
-/* ── Audit Logs ── */
-function _loadAudit(){
-  var action=document.getElementById('auditAction').value||undefined;
-  document.getElementById('auditTbl').innerHTML='<tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr>';
-  _cf('adminGetAuditLogs')({action,limit:100}).then(function(r){
-    var tb=document.getElementById('auditTbl');
-    var rows=r.data.logs||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No audit logs</td></tr>';return;}
-    tb.innerHTML=rows.map(function(l){
-      return '<tr>'+
-        '<td style="font-size:11px">'+_esc(l.adminEmail||l.adminId||'—')+'</td>'+
-        '<td><span class="badge bb">'+_esc(l.action||'—')+'</span></td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_esc(l.targetId||'—')+'</td>'+
-        '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(JSON.stringify(l.details||{}))+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_relTime(l.createdAt)+'</td>'+
-      '</tr>';
-    }).join('');
-  }).catch(function(e){document.getElementById('auditTbl').innerHTML='<tr><td colspan="5" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
-}
-
-/* ── Utils ── */
-function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function _relTime(ts){if(!ts)return'—';var t=ts.seconds?ts.seconds*1000:ts.toMillis?ts.toMillis():0;if(!t)return'—';var d=Math.round((Date.now()-t)/1000);return d<60?d+'s':d<3600?Math.round(d/60)+'m ago':d<86400?Math.round(d/3600)+'h ago':Math.round(d/86400)+'d ago';}
-function _toast(msg,c){var t=document.getElementById('toast');t.textContent=msg;t.style.color=c==='red'?'var(--r)':'var(--g)';t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);}
-window._closeOv=function(e,id){if(e.target===document.getElementById(id))document.getElementById(id).classList.remove('open');};
-})();
-</script>
+  <script src="/__/firebase/init.js"></script>
+  <script src="sokoni-aos.js"></script>
+  <script>
+    function _openSidebar()  { document.getElementById("aosSidebar").classList.add("open"); }
+    function _closeSidebar() { document.getElementById("aosSidebar").classList.remove("open"); }
+    document.addEventListener("DOMContentLoaded", function() {
+      try {
+        firebase.firestore().collection("supportTickets").where("status","==","open")
+          .onSnapshot(function(snap) {
+            var b = document.getElementById("sidebarTicketBadge");
+            if (b) { b.textContent = snap.size; b.hidden = snap.size === 0; }
+          });
+      } catch(e) {}
+    });
+  </script>
 </body>
 </html>

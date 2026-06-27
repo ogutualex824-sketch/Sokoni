@@ -7920,6 +7920,18 @@ exports.getPaymentSecurityAlerts  = payTrust.getPaymentSecurityAlerts;
 exports.detectPaymentAnomalies    = payTrust.detectPaymentAnomalies;
 
 
+/* ── MiniShop & Social Commerce Engine v1.0 ─────────────────────────────── */
+const minishop = require('./minishop');
+exports.getMinishopPublic          = minishop.getMinishopPublic;
+exports.claimMinishopHandle        = minishop.claimMinishopHandle;
+exports.saveMinishopConfig         = minishop.saveMinishopConfig;
+exports.trackMinishopView          = minishop.trackMinishopView;
+exports.getMinishopAnalytics       = minishop.getMinishopAnalytics;
+exports.generateMinishopShareCard  = minishop.generateMinishopShareCard;
+exports.aiGenerateMinishopContent  = minishop.aiGenerateMinishopContent;
+exports.followShop                 = minishop.followShop;
+exports.getMyMinishop              = minishop.getMyMinishop;
+
 /* ── Automation & Decision Engine (ADE) v1.0 ────────────────────────────── */
 const ade = require('./ade');
 // Firestore triggers
