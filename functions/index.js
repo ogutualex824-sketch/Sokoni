@@ -866,27 +866,273 @@ Today's date: ${new Date().toLocaleDateString("en-KE", { weekday: "long", year: 
 );
 
 /* ══════════════════════════════════════════════════════════════
-   SOKONI CHAT — Public customer shopping assistant
-   No auth required. Rate-limited: 20 req/IP/minute.
+   KASS PUBLIC CONCIERGE (sokoniChat)
+   Intelligent marketplace AI — searches Firestore, calls tools,
+   returns { response, results?, actions? }.
+   No auth required. Rate-limited: 30 req/IP/minute.
 ══════════════════════════════════════════════════════════════ */
 const _chatRateMap = new Map(); /* ip → { count, resetAt } */
 
+const _CHAT_TOOLS = [
+  {
+    name: "search_marketplace",
+    description: "Search SOKONI marketplace for products or services. Call this FIRST whenever a user asks about buying anything, finding a seller, or looking for a service. Returns matching listings.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query:    { type: "string",  description: "Search terms e.g. 'Nike shoes', 'ceiling fan', 'plumber Nairobi'" },
+        category: { type: "string",  description: "Category filter e.g. 'electronics', 'fashion', 'cleaning', 'tutoring'" },
+        type:     { type: "string",  enum: ["products", "services", "all"], description: "What to search — default: all" },
+        maxPrice: { type: "number",  description: "Maximum price in KES" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_stays",
+    description: "Search BnBs, short stays, furnished apartments, serviced apartments, and hotels. Call this for: bnb, BnB, airbnb, short stay, vacation rental, furnished apartment, place to sleep, weekend getaway, accommodation, lodge, hotel, resort.",
+    input_schema: {
+      type: "object",
+      properties: {
+        location: { type: "string", description: "City or area e.g. 'Nairobi', 'Westlands', 'Mombasa'" },
+        type:     { type: "string", enum: ["bnb", "hotel", "all"], description: "Type of stay — bnb for short stays/Airbnb-style, hotel for full-service" },
+        maxPrice: { type: "number", description: "Max price per night in KES" },
+        guests:   { type: "number", description: "Number of guests" },
+      },
+    },
+  },
+  {
+    name: "search_restaurants",
+    description: "Search restaurants, food delivery, groceries, and pharmacies. Call for: restaurant, food delivery, takeaway, pizza, ugali, nyama choma, grocery, supermarket, chemist, pharmacy.",
+    input_schema: {
+      type: "object",
+      properties: {
+        location: { type: "string", description: "City or area" },
+        cuisine:  { type: "string", description: "Cuisine type e.g. 'Kenyan', 'Indian', 'Chinese', 'Italian'" },
+        type:     { type: "string", enum: ["restaurant", "grocery", "pharmacy", "all"], description: "Establishment type" },
+      },
+    },
+  },
+  {
+    name: "search_events",
+    description: "Search upcoming events, concerts, shows, sports, and conferences on SOKONI.",
+    input_schema: {
+      type: "object",
+      properties: {
+        location: { type: "string" },
+        category: { type: "string", description: "e.g. 'music', 'sports', 'comedy', 'conference', 'wedding'" },
+        dateFrom: { type: "string", description: "Start date YYYY-MM-DD" },
+      },
+    },
+  },
+  {
+    name: "search_jobs",
+    description: "Search job listings on SOKONI Jobs. Call for: job, career, employment, vacancy, internship, freelance work, part-time.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query:    { type: "string", description: "Job title or skills e.g. 'software engineer', 'sales', 'driver'" },
+        location: { type: "string", description: "City or 'remote'" },
+        type:     { type: "string", description: "full-time, part-time, freelance, remote, internship" },
+      },
+    },
+  },
+  {
+    name: "get_page_url",
+    description: "Get the correct SOKONI page URL for any category or intent. Use whenever a user asks to open, view, or navigate — then include an action link in your response.",
+    input_schema: {
+      type: "object",
+      properties: {
+        intent: { type: "string", description: "What the user wants e.g. 'bnb', 'short stays', 'food delivery', 'seller dashboard', 'track order'" },
+      },
+      required: ["intent"],
+    },
+  },
+];
+
+const _PAGE_MAP = {
+  'bnb':'short-stays.html', 'airbnb':'short-stays.html', 'short stay':'short-stays.html', 'short-stay':'short-stays.html',
+  'vacation':'short-stays.html', 'furnished':'short-stays.html', 'serviced apartment':'short-stays.html',
+  'accommodation':'short-stays.html', 'place to stay':'short-stays.html', 'place to sleep':'short-stays.html',
+  'self catering':'short-stays.html', 'weekend':'short-stays.html',
+  'hotel':'hotels.html', 'lodge':'hotels.html', 'resort':'hotels.html',
+  'ride':'ride.html', 'boda':'ride.html', 'taxi':'ride.html', 'cab':'ride.html', 'lift':'ride.html',
+  'shop':'marketplace.html', 'marketplace':'marketplace.html', 'product':'marketplace.html', 'buy':'marketplace.html', 'shopping':'marketplace.html',
+  'service':'services.html', 'plumber':'services.html', 'cleaner':'services.html', 'tutor':'services.html',
+  'food':'food-hub.html', 'restaurant':'food-hub.html', 'grocery':'food-hub.html', 'delivery food':'food-hub.html',
+  'property':'property-hub.html', 'house':'property-hub.html', 'land':'property-hub.html', 'apartment for sale':'property-hub.html',
+  'car':'car-hub.html', 'vehicle':'car-hub.html', 'car hire':'car-hub.html', 'ntsa':'car-hub.html',
+  'job':'jobs.html', 'career':'jobs.html', 'vacancy':'jobs.html', 'employment':'jobs.html', 'internship':'jobs.html',
+  'event':'events.html', 'concert':'events.html', 'ticket':'events.html', 'show':'events.html', 'sports':'events.html',
+  'health':'healthcare.html', 'doctor':'healthcare.html', 'clinic':'healthcare.html', 'pharmacy':'healthcare.html', 'hospital':'healthcare.html',
+  'dj':'entertainment-hub.html', 'entertainment':'entertainment-hub.html', 'band':'entertainment-hub.html',
+  'delivery':'delivery.html', 'courier':'delivery.html', 'send package':'delivery.html',
+  'sell':'seller.html', 'seller':'seller.html', 'vendor':'seller.html', 'open shop':'seller.html',
+  'driver':'driver.html', 'delivery driver':'driver.html',
+  'loyalty':'loyalty.html', 'reward':'loyalty.html', 'points':'loyalty.html',
+  'referral':'referral.html', 'invite':'referral.html',
+  'wallet':'wallet.html', 'payment':'wallet.html', 'mpesa':'wallet.html',
+  'track':'track.html', 'order status':'track.html', 'where is my order':'track.html',
+  'cart':'cart.html', 'checkout':'cart.html',
+};
+
+async function _execChatTool(name, input, ctx) {
+  try {
+    if (name === "get_page_url") {
+      const d = (input.intent || "").toLowerCase();
+      let url = "index.html", label = "Home";
+      for (const [k, v] of Object.entries(_PAGE_MAP)) {
+        if (d.includes(k)) { url = v; label = k.charAt(0).toUpperCase() + k.slice(1).replace(/-/g, " "); break; }
+      }
+      ctx.addAction({ label: `Open ${label}`, url });
+      return { url, label };
+    }
+
+    if (name === "search_marketplace") {
+      const { query = "", category, type: t, maxPrice } = input;
+      const rows = [];
+
+      if (!t || t === "products" || t === "all") {
+        let q = db.collection("products").limit(10);
+        if (category) q = q.where("category", "==", category);
+        if (maxPrice)  q = q.where("price", "<=", maxPrice).orderBy("price");
+        const snap = await q.get().catch(() => ({ docs: [] }));
+        snap.docs.filter(d => {
+          const n = (d.data().name || "").toLowerCase();
+          return !query || n.includes(query.toLowerCase()) || (d.data().category || "").toLowerCase().includes(query.toLowerCase());
+        }).slice(0, 5).forEach(d => {
+          const r = d.data();
+          const card = { type:"product", id:d.id, name:r.name, price:r.price, category:r.category, image:r.imageUrl||r.image, rating:r.avgRating||r.rating, url:`product.html?id=${d.id}`, seller:r.sellerName||r.shopName };
+          rows.push(card); ctx.addResult(card);
+        });
+      }
+
+      if (!t || t === "services" || t === "all") {
+        let q = db.collection("services").limit(8);
+        if (category) q = q.where("category", "==", category);
+        const snap = await q.get().catch(() => ({ docs: [] }));
+        snap.docs.filter(d => {
+          const n = (d.data().name || d.data().title || "").toLowerCase();
+          return !query || n.includes(query.toLowerCase()) || (d.data().category || "").toLowerCase().includes(query.toLowerCase());
+        }).slice(0, 4).forEach(d => {
+          const r = d.data();
+          const card = { type:"service", id:d.id, name:r.name||r.title, price:r.price||r.startingPrice, category:r.category, image:r.image||r.photo, rating:r.rating||r.avgRating, url:"services.html" };
+          rows.push(card); ctx.addResult(card);
+        });
+      }
+
+      if (!rows.length) return { found: 0, message: "No listings found. The platform is growing — try different keywords or browse the marketplace." };
+      ctx.addAction({ label: "Browse Marketplace", url: "marketplace.html" });
+      return { found: rows.length, listings: rows.map(r => ({ name:r.name, price:`KES ${Number(r.price||0).toLocaleString()}`, category:r.category, rating:r.rating?`${r.rating}★`:null })) };
+    }
+
+    if (name === "search_stays") {
+      const { location, type: t, maxPrice } = input;
+      const rows = [];
+      const cols = t === "hotel" ? ["hotels"] : t === "bnb" ? ["listings"] : ["listings", "hotels"];
+      for (const col of cols) {
+        let q = db.collection(col).limit(8);
+        if (location) q = q.where("city", "==", location);
+        if (maxPrice && col !== "hotels") q = q.where("pricePerNight", "<=", maxPrice);
+        const snap = await q.get().catch(() => ({ docs: [] }));
+        snap.docs.forEach(d => {
+          const r = d.data();
+          const card = { type:col==="hotels"?"hotel":"bnb", id:d.id, name:r.name||r.title, price:r.pricePerNight||r.price, city:r.city||r.location||location, image:r.image||r.photo||(r.images||[])[0], rating:r.rating||r.avgRating, bedrooms:r.bedrooms, url:col==="hotels"?`hotels.html?id=${d.id}`:`short-stays.html?id=${d.id}` };
+          rows.push(card); ctx.addResult(card);
+        });
+      }
+      if (!rows.length) {
+        ctx.addAction({ label: "Browse Short Stays", url: "short-stays.html" });
+        return { found: 0, message: `No ${t||"stays"} found${location?" in "+location:""}. Browse the Short Stays page for all listings.` };
+      }
+      ctx.addAction({ label: "View all Short Stays", url: "short-stays.html" });
+      return { found: rows.length, stays: rows.map(r => ({ name:r.name, pricePerNight:`KES ${Number(r.price||0).toLocaleString()}/night`, city:r.city, type:r.type, rating:r.rating?`${r.rating}★`:null, bedrooms:r.bedrooms })) };
+    }
+
+    if (name === "search_restaurants") {
+      const { location, cuisine, type: t } = input;
+      let q = db.collection("providers").limit(10);
+      if (location) q = q.where("city", "==", location);
+      const snap = await q.get().catch(() => ({ docs: [] }));
+      const rows = snap.docs.filter(d => {
+        const cat = (d.data().category || "").toLowerCase();
+        const isFood = cat.includes("food") || cat.includes("restaurant") || cat.includes("catering") || cat.includes("grocery") || cat.includes("pharmacy") || cat.includes("chemist");
+        if (!isFood) return false;
+        if (cuisine) return cat.includes(cuisine.toLowerCase()) || (d.data().name || "").toLowerCase().includes(cuisine.toLowerCase());
+        if (t && t !== "all") {
+          if (t === "grocery") return cat.includes("grocery") || cat.includes("supermarket");
+          if (t === "pharmacy") return cat.includes("pharmacy") || cat.includes("chemist");
+          return cat.includes("restaurant") || cat.includes("food") || cat.includes("catering");
+        }
+        return true;
+      }).slice(0, 6);
+      if (!rows.length) {
+        ctx.addAction({ label: "Browse Food Hub", url: "food-hub.html" });
+        return { found: 0, message: "No restaurants found yet. Browse the Food Hub." };
+      }
+      rows.forEach(d => { const r = d.data(); ctx.addResult({ type:"restaurant", id:d.id, name:r.name||r.businessName, category:r.category, city:r.city, image:r.image||r.logo, rating:r.rating||r.avgRating, url:"food-hub.html" }); });
+      ctx.addAction({ label: "View Food Hub", url: "food-hub.html" });
+      return { found: rows.length, restaurants: rows.map(d => ({ name:d.data().name||d.data().businessName, category:d.data().category, city:d.data().city, rating:d.data().rating?`${d.data().rating}★`:null })) };
+    }
+
+    if (name === "search_events") {
+      const { location, category, dateFrom } = input;
+      let q = db.collection("entEvents").where("status", "==", "published").limit(6);
+      if (location) q = q.where("city", "==", location);
+      if (dateFrom)  q = q.where("date", ">=", dateFrom);
+      const snap = await q.get().catch(() => ({ docs: [] }));
+      if (snap.empty) {
+        ctx.addAction({ label: "Browse Events", url: "events.html" });
+        return { found: 0, message: "No events found. Browse all events on the Events page." };
+      }
+      snap.docs.forEach(d => { const r = d.data(); ctx.addResult({ type:"event", id:d.id, name:r.title||r.name, date:r.date, venue:r.venue, city:r.city, price:r.ticketPrice||r.price, image:r.image||r.poster, url:`events.html?id=${d.id}` }); });
+      ctx.addAction({ label: "Browse all Events", url: "events.html" });
+      return { found: snap.docs.length, events: snap.docs.map(d => ({ name:d.data().title||d.data().name, date:d.data().date, venue:d.data().venue, price:d.data().ticketPrice?`KES ${Number(d.data().ticketPrice).toLocaleString()}`:"Free" })) };
+    }
+
+    if (name === "search_jobs") {
+      const { query = "", location, type: t } = input;
+      let q = db.collection("jobs").where("status", "==", "active").limit(10);
+      if (location && location !== "remote") q = q.where("location", "==", location);
+      if (t) q = q.where("type", "==", t);
+      const snap = await q.get().catch(() => ({ docs: [] }));
+      const rows = snap.docs.filter(d => {
+        if (!query) return true;
+        const ql = query.toLowerCase();
+        return (d.data().title || "").toLowerCase().includes(ql) || (d.data().description || "").toLowerCase().includes(ql);
+      }).slice(0, 6);
+      if (!rows.length) {
+        ctx.addAction({ label: "Browse Jobs", url: "jobs.html" });
+        return { found: 0, message: "No jobs found. Browse all listings on SOKONI Jobs." };
+      }
+      rows.forEach(d => { const r = d.data(); ctx.addResult({ type:"job", id:d.id, name:r.title, company:r.company, location:r.location, salary:r.salary, jobType:r.type, url:`jobs.html?id=${d.id}` }); });
+      ctx.addAction({ label: "Browse all Jobs", url: "jobs.html" });
+      return { found: rows.length, jobs: rows.map(d => ({ title:d.data().title, company:d.data().company, location:d.data().location, salary:d.data().salary||"Negotiable", type:d.data().type })) };
+    }
+
+    return { error: `Unknown tool: ${name}` };
+  } catch (err) {
+    console.error(`[sokoniChat] tool ${name} error:`, err.message);
+    return { error: err.message };
+  }
+}
+
 exports.sokoniChat = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 30, invoker: "public" },
+  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 60, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
-    /* Rate limit: 20 messages per IP per minute */
+    /* Rate limit: 30 messages per IP per minute */
     const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip || "unknown";
     const now = Date.now();
     const bucket = _chatRateMap.get(ip) || { count: 0, resetAt: now + 60000 };
     if (now > bucket.resetAt) { bucket.count = 0; bucket.resetAt = now + 60000; }
     bucket.count++;
     _chatRateMap.set(ip, bucket);
-    if (bucket.count > 20) {
+    if (bucket.count > 30) {
       res.status(429).json({ error: "Too many messages — please wait a moment before trying again." });
       return;
     }
@@ -897,40 +1143,105 @@ exports.sokoniChat = onRequest(
       return;
     }
 
-    /* Sanitize: keep last 10 turns, text content only */
-    const history = messages.slice(-10).map(m => ({
+    /* Sanitize: keep last 20 turns, text only */
+    const history = messages.slice(-20).map(m => ({
       role: m.role === "assistant" ? "assistant" : "user",
-      content: String(m.content || "").slice(0, 800),
-    }));
+      content: String(m.content || "").slice(0, 1200),
+    })).filter(m => m.content.trim());
 
-    const systemPrompt = `You are Sokoni Assistant — the friendly AI shopping guide for SOKONI, Kenya's #1 digital marketplace at mysokoni.co.ke.
+    const today = new Date().toLocaleDateString("en-KE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const systemPrompt = `You are KASS, the intelligent AI concierge for SOKONI — Kenya's premier digital marketplace at mysokoni.co.ke. You serve buyers, sellers, service seekers, and vendors across Kenya.
 
-SOKONI offers: products (electronics, fashion, food, home), services (plumbers, cleaners, tutors, designers), delivery (same-day Nairobi, 1–4 days nationwide), healthcare booking, entertainment (DJs, MCs, bands), rides (boda, car, tuk-tuk), BnB & property listings, car hire, B2B wholesale, digital products, flash sales.
+## SOKONI Services & Pages
 
-Key facts:
-- Pay with M-Pesa (STK push), Visa, Mastercard or PayPal
-- Sellers keep 88% — only 12% platform fee
-- Free to list as a seller or service provider
-- 7-day hassle-free returns
-- Same-day delivery in Nairobi, 1–2 days Mombasa/Kisumu, 2–4 days elsewhere
-- Support: +254 705 726 803 | info@sokoni.co.ke | WhatsApp (fastest)
-- Emergency: 999 or 112
+**Shopping:** Marketplace (marketplace.html) — products, electronics, fashion, home goods, books
+**Services:** Services (services.html) — plumbers, electricians, cleaners, tutors, designers, photographers, mechanics
+**Accommodation:** Short Stays (short-stays.html) — BnBs, Airbnb-style, furnished apartments, serviced apartments, vacation rentals, self-catering; Hotels (hotels.html) — full-service hotels, lodges, resorts
+**Food:** Food Hub (food-hub.html) — restaurants, delivery, fast food, takeaway, groceries
+**Health:** Healthcare (healthcare.html) — doctors, clinics, pharmacy, specialists, lab tests
+**Transport:** Rides (ride.html) — boda, taxi, cab; Car Hub (car-hub.html) — rental cars, NTSA, garages
+**Property:** Property Hub (property-hub.html) — houses, apartments, land, commercial spaces
+**Work:** Jobs (jobs.html) — full-time, part-time, freelance, remote, internships
+**Entertainment:** Events (events.html) — concerts, shows, sports, comedy; Entertainment Hub (entertainment-hub.html) — DJs, MCs, bands, comedians, photographers
+**Delivery:** Delivery (delivery.html) — same-day courier, nationwide shipping
+**Seller tools:** Seller Dashboard (seller.html); Driver Dashboard (driver.html)
+**Rewards:** Loyalty (loyalty.html) — earn points on every purchase; Referrals (referral.html) — earn for inviting friends
+**Account:** Wallet (wallet.html) — M-Pesa, Visa, Mastercard, PayPal; Order Tracking (track.html)
 
-Be warm, concise, and helpful. Reply in plain text or simple HTML (links use style='color:#71ff00'). Keep answers under 120 words. For products or services, suggest the relevant SOKONI page. If unsure, guide to WhatsApp support. Today: ${new Date().toLocaleDateString("en-KE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.`;
+## Intent Mapping (critical — you MUST recognise these)
+- bnb / BnB / airbnb / short stay / vacation rental / furnished apartment / place to stay / place to sleep / accommodation / weekend getaway / self-catering → **Short Stays** (short-stays.html)
+- hotel / lodge / resort / full-service hotel → **Hotels** (hotels.html)
+- boda / taxi / cab / lift / uber / bolt alternative → **Rides** (ride.html)
+- food delivery / restaurant / nyama choma / ugali / pizza / takeaway / grocery → **Food Hub** (food-hub.html)
+
+## Rules
+1. **Always call a search tool first** — before answering about specific products, BnBs, hotels, restaurants, events, or jobs. Never make up listings.
+2. **Never say "I don't know"** without searching. If nothing found, say so clearly and provide an action link.
+3. **Never say "browse index.html" or "check messages.html"** — those are internal routes, never mention them.
+4. **Call get_page_url** to generate action links when a user wants to navigate somewhere.
+5. **Maintain context** — if user refines a previous search, carry forward their intent.
+6. **Format prices as KES** with thousands separators. Use **bold** and bullet lists sparingly.
+7. Keep responses concise (under 150 words unless listing results). Be warm, confident, and proactive.
+
+## Platform facts
+- Payments: M-Pesa STK push, Visa, Mastercard, PayPal
+- Sellers keep 88% (12% platform commission); free to list
+- Returns: 7-day hassle-free
+- Delivery: same-day Nairobi, 1–2 days Mombasa/Kisumu, 2–4 days elsewhere
+- Support: WhatsApp (fastest) | +254 705 726 803 | info@mysokoni.co.ke
+
+Today: ${today}`;
+
+    const collectedResults = [];
+    const collectedActions = [];
+    const ctx = {
+      addResult: (r) => { if (collectedResults.length < 6) collectedResults.push(r); },
+      addAction: (a) => { if (!collectedActions.some(x => x.url === a.url)) collectedActions.push(a); },
+    };
 
     try {
       const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
-      const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 300,
-        system: systemPrompt,
-        messages: history,
+      let currentMessages = [...history];
+      let finalResponse = "";
+      const MAX_ITER = 5;
+
+      for (let iter = 0; iter < MAX_ITER; iter++) {
+        const aiRes = await anthropic.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 800,
+          system: systemPrompt,
+          tools: _CHAT_TOOLS,
+          messages: currentMessages,
+        });
+
+        if (aiRes.stop_reason === "end_turn" || aiRes.stop_reason !== "tool_use") {
+          finalResponse = aiRes.content.filter(b => b.type === "text").map(b => b.text).join("").trim();
+          break;
+        }
+
+        /* tool_use — execute all requested tools in parallel */
+        const toolBlocks = aiRes.content.filter(b => b.type === "tool_use");
+        const toolResults = await Promise.all(toolBlocks.map(async block => ({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(await _execChatTool(block.name, block.input, ctx)),
+        })));
+
+        currentMessages = [
+          ...currentMessages,
+          { role: "assistant", content: aiRes.content },
+          { role: "user",      content: toolResults },
+        ];
+      }
+
+      res.json({
+        response: finalResponse || "I'm here to help! What are you looking for on SOKONI?",
+        results: collectedResults.length > 0 ? collectedResults : undefined,
+        actions: collectedActions.length > 0 ? collectedActions : undefined,
       });
-      const text = response.content.filter(b => b.type === "text").map(b => b.text).join("").trim();
-      res.json({ response: text });
     } catch (err) {
       console.error("sokoniChat error:", err);
-      res.status(500).json({ error: "Sorry, the assistant is temporarily unavailable. Please try again shortly." });
+      res.status(500).json({ error: "KASS is temporarily unavailable. Please try again in a moment." });
     }
   }
 );

@@ -51,6 +51,9 @@
       "tmp_*.png",
       "*.jsonl"
     ],
+    "rewrites": [
+      { "source": "/api/chat", "function": "sokoniChat", "region": "us-central1" }
+    ],
     "cleanUrls": true,
     "trailingSlash": false,
     "404": "/offline.html",

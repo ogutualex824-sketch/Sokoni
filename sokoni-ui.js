@@ -632,10 +632,11 @@
     document.body.insertBefore(bar, document.body.firstChild);
 
     /* ── State ─────────────────────────────────────────── */
-    var _failures   = 0;     /* consecutive probe failures  */
-    var _showing    = false; /* is bar currently visible?   */
-    var _probing    = false; /* probe fetch in-flight?       */
-    var _probeTimer = null;  /* handle for next scheduled probe */
+    var _failures   = 0;          /* consecutive probe failures  */
+    var _showing    = false;      /* is bar currently visible?   */
+    var _probing    = false;      /* probe fetch in-flight?       */
+    var _probeTimer = null;       /* handle for next scheduled probe */
+    var _bootTime   = Date.now(); /* used to suppress false positives during SW install */
 
     /* ── Probe ─────────────────────────────────────────────────────────────
        Two-stage:
@@ -681,7 +682,7 @@
             _scheduleProbe(30000); /* slow poll while connected */
           } else {
             _failures += 1;
-            if (_failures >= 2) _setBar(true); /* 2 consecutive failures → show */
+            if (_failures >= 3) _setBar(true); /* 3 consecutive failures → show */
             _scheduleProbe(10000); /* fast poll while disconnected */
           }
         })
@@ -689,6 +690,8 @@
     }
 
     function _setBar(visible) {
+      /* Suppress banner during first 9 s — avoids SW-install false positives */
+      if (visible && (Date.now() - _bootTime) < 9000) return;
       if (_showing === visible) return;
       _showing = visible;
       bar.classList.toggle('sk-offline--visible', visible);
@@ -706,10 +709,11 @@
     /* online/offline events are hints only — always verify with a real probe.
        Reset failure count on 'online' so recovery is immediate after 1 success. */
     global.addEventListener('online',  function() { _failures = 0; _probe(); });
-    global.addEventListener('offline', function() { _probe(); });
+    /* Delay offline-event probe by 1.5 s — browser may fire spurious offline events */
+    global.addEventListener('offline', function() { setTimeout(_probe, 1500); });
 
-    /* First probe: 3 s delay so SW finishes installing before we hit the network */
-    setTimeout(_probe, 3000);
+    /* First probe: 5 s delay so SW finishes installing before we hit the network */
+    setTimeout(_probe, 5000);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────

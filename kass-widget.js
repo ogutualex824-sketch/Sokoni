@@ -1,253 +1,401 @@
 /* ================================================================
-   KASS — Sokoni AI Assistant Widget  v1.0
-   Cross-platform floating chat widget.
-   Inject on any page: <script defer src="kass-widget.js"></script>
-   Calls Firebase Function 'kass' (HTTPS callable) when online;
-   falls back to rule-based answers offline.
+   KASS — Sokoni AI Concierge Widget  v2.0
+   Intelligent marketplace assistant with Firestore search,
+   rich result cards, action chips, and conversation memory.
+   Usage: <script defer src="kass-widget.js"></script>
 ================================================================ */
 (function () {
   'use strict';
+  if (document.getElementById('kassBtn')) return;
 
-  /* ── Don't double-mount ── */
-  if (document.getElementById('kassWidget')) return;
+  var ENDPOINT = '/api/chat'; /* Firebase Hosting rewrite → sokoniChat CF */
+
+  /* ── Conversation history (per session, in-memory) ── */
+  var _history = [];
+  var _greeted = false;
+  var _busy    = false;
+
+  /* ── Escape HTML ── */
+  function _esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Markdown → safe HTML ── */
+  function _md(text) {
+    var s = _esc(String(text || ''));
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+    s = s.replace(/\[([^\]]{1,80})\]\(([^)]{1,200})\)/g,
+      '<a href="$2" style="color:#71ff00;text-decoration:underline">$1</a>');
+
+    /* bullet lists */
+    var lines = s.split('\n'), out = [], inList = false;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      if (/^[-•] /.test(l)) {
+        if (!inList) { out.push('<ul style="margin:6px 0 4px 16px;padding:0">'); inList = true; }
+        out.push('<li>' + l.replace(/^[-•] /, '') + '</li>');
+      } else {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(l);
+      }
+    }
+    if (inList) out.push('</ul>');
+    s = out.join('\n');
+
+    s = s.replace(/\n{2,}/g, '</p><p style="margin:6px 0 0">');
+    s = s.replace(/\n/g, '<br>');
+    return '<p style="margin:0">' + s + '</p>';
+  }
+
+  /* ── Result card HTML ── */
+  function _cardHtml(r) {
+    var icons = { product:'🛍️', service:'🔧', bnb:'🏠', hotel:'🏨', event:'🎫', job:'💼', restaurant:'🍽️' };
+    var icon  = icons[r.type] || '📦';
+    var price = '';
+    if (r.price) {
+      price = 'KES ' + Number(r.price).toLocaleString();
+      if (r.type === 'bnb' || r.type === 'hotel') price += '/night';
+    }
+    var rating = r.rating ? '★'.repeat(Math.min(5, Math.round(Number(r.rating)))) : '';
+    var meta   = [r.city, r.company, rating].filter(Boolean).join(' · ');
+    var url    = _esc(r.url || 'index.html');
+    var kp = 'if(event.key===\'Enter\')window.location.href=\'' + url + '\'';
+    return [
+      '<div class="kc-card" role="button" tabindex="0"',
+        ' onclick="window.location.href=\'' + url + '\'"',
+        ' onkeydown="' + kp + '">',
+        r.image
+          ? '<img class="kc-card-img" src="' + _esc(r.image) + '" loading="lazy" alt="' + _esc(r.name||'') + '" onerror="this.style.display=\'none\'">'
+          : '<div class="kc-card-ph">' + icon + '</div>',
+        '<div class="kc-card-body">',
+          '<div class="kc-card-name">' + _esc(r.name || 'Listing') + '</div>',
+          price ? '<div class="kc-card-price">' + price + '</div>' : '',
+          meta  ? '<div class="kc-card-meta">' + _esc(meta) + '</div>' : '',
+        '</div>',
+      '</div>',
+    ].join('');
+  }
 
   /* ── Inject styles ── */
-  var style = document.createElement('style');
-  style.textContent = [
+  var _styleEl = document.createElement('style');
+  _styleEl.textContent = [
+    /* FAB */
     '#kassBtn{position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;',
     'background:#0f0f0f;border:2px solid #71ff00;cursor:pointer;z-index:9999;',
     'display:flex;align-items:center;justify-content:center;',
-    'box-shadow:0 4px 20px rgba(113,255,0,0.25);transition:transform 0.2s;}',
-    '#kassBtn:hover{transform:scale(1.08);background:#1a1a1a;}',
-    '#kassBtn svg{width:26px;height:26px;stroke:#71ff00;}',
-    '#kassModal{position:fixed;bottom:148px;right:12px;width:320px;max-height:480px;',
+    'box-shadow:0 4px 20px rgba(113,255,0,0.3);transition:transform .2s;}',
+    '#kassBtn:hover{transform:scale(1.08);}',
+    '#kassUnread{position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;',
+    'background:#ff4444;color:#fff;font-size:11px;font-weight:800;display:none;',
+    'align-items:center;justify-content:center;}',
+    /* Modal */
+    '#kassModal{position:fixed;bottom:148px;right:12px;width:360px;max-height:560px;',
     'background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:18px;',
     'display:none;flex-direction:column;z-index:9998;',
-    'box-shadow:0 12px 40px rgba(0,0,0,0.6);overflow:hidden;}',
+    'box-shadow:0 12px 48px rgba(0,0,0,0.75);overflow:hidden;}',
     '#kassModal.open{display:flex;}',
+    /* Header */
     '#kassHead{padding:14px 16px;background:#1a1a1a;display:flex;align-items:center;gap:10px;',
-    'border-bottom:1px solid rgba(255,255,255,0.06);}',
-    '#kassHead .kh-avatar{width:32px;height:32px;border-radius:50%;background:#71ff00;',
-    'display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}',
-    '#kassHead .kh-info{flex:1;}',
-    '#kassHead .kh-name{font-size:13px;font-weight:800;color:white;}',
-    '#kassHead .kh-status{font-size:10px;color:#71ff00;font-weight:600;}',
-    '#kassClose{background:none;border:none;color:rgba(255,255,255,0.4);',
-    'font-size:20px;cursor:pointer;padding:0;line-height:1;}',
-    '#kassClose:hover{color:white;}',
-    '#kassMsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;}',
-    '.km{max-width:85%;padding:9px 12px;border-radius:14px;font-size:12.5px;line-height:1.5;word-break:break-word;}',
-    '.km.bot{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);align-self:flex-start;border-radius:4px 14px 14px 14px;}',
-    '.km.user{background:#71ff00;color:#000;align-self:flex-end;font-weight:600;border-radius:14px 4px 14px 14px;}',
-    '.km.typing{background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);font-style:italic;}',
-    '#kassInput{display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(255,255,255,0.06);}',
-    '#kassInput input{flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);',
-    'border-radius:20px;padding:9px 14px;color:white;font-size:13px;outline:none;',
-    'font-family:inherit;min-height:38px;}',
-    '#kassInput input::placeholder{color:rgba(255,255,255,0.3);}',
-    '#kassInput input:focus{border-color:rgba(113,255,0,0.4);}',
-    '#kassSend{width:36px;height:36px;border-radius:50%;background:#71ff00;',
-    'border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}',
-    '#kassSend:hover{background:#90ff30;}',
-    '#kassSend svg{width:16px;height:16px;}',
-    '#kassChips{padding:0 12px 8px;display:flex;flex-wrap:wrap;gap:6px;}',
-    '.kchip{padding:5px 10px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);',
-    'border-radius:20px;font-size:11px;color:#71ff00;cursor:pointer;font-weight:600;}',
+    'border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;}',
+    '.kh-av{width:34px;height:34px;border-radius:50%;background:#71ff00;',
+    'display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}',
+    '.kh-info{flex:1;min-width:0;}',
+    '.kh-name{font-size:13px;font-weight:800;color:#fff;}',
+    '.kh-status{font-size:11px;color:#71ff00;font-weight:600;display:flex;align-items:center;gap:5px;}',
+    '.kh-dot{width:7px;height:7px;border-radius:50%;background:#71ff00;display:inline-block;flex-shrink:0;}',
+    '.kh-dot.offline{background:#ff4444;}',
+    '#kassClose{background:none;border:none;color:rgba(255,255,255,0.4);font-size:22px;',
+    'cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0;}',
+    '#kassClose:hover{color:#fff;}',
+    /* Messages */
+    '#kassMsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;',
+    'gap:8px;overscroll-behavior:contain;scroll-behavior:smooth;}',
+    '.km{max-width:90%;padding:9px 12px;border-radius:14px;font-size:13px;',
+    'line-height:1.55;word-break:break-word;}',
+    '.km a{color:#71ff00;text-decoration:underline;}',
+    '.km.bot{background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.88);',
+    'align-self:flex-start;border-radius:4px 14px 14px 14px;}',
+    '.km.user{background:#71ff00;color:#000;align-self:flex-end;font-weight:600;',
+    'border-radius:14px 4px 14px 14px;}',
+    '.km.typing{background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);',
+    'font-size:18px;letter-spacing:3px;align-self:flex-start;padding:6px 14px;}',
+    '.km.err{background:rgba(255,68,68,0.1);color:#ff9999;border:1px solid rgba(255,68,68,0.2);',
+    'font-size:12.5px;align-self:flex-start;}',
+    /* Cards */
+    '.kc-results{display:flex;flex-direction:column;gap:6px;margin-top:8px;}',
+    '.kc-card{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.05);',
+    'border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 10px;',
+    'cursor:pointer;transition:background .15s;text-align:left;}',
+    '.kc-card:hover,.kc-card:focus{background:rgba(255,255,255,0.1);outline:none;}',
+    '.kc-card-img{width:50px;height:50px;object-fit:cover;border-radius:7px;',
+    'flex-shrink:0;background:#222;}',
+    '.kc-card-ph{width:50px;height:50px;border-radius:7px;background:#1e1e1e;',
+    'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}',
+    '.kc-card-body{flex:1;min-width:0;}',
+    '.kc-card-name{font-size:12.5px;font-weight:700;color:#fff;',
+    'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '.kc-card-price{font-size:12px;color:#71ff00;font-weight:700;margin-top:2px;}',
+    '.kc-card-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;}',
+    /* Action chips (from server) */
+    '.kc-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}',
+    '.kc-action{display:inline-block;padding:5px 12px;',
+    'background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);',
+    'border-radius:20px;font-size:11.5px;color:#71ff00;cursor:pointer;',
+    'font-weight:700;text-decoration:none;transition:background .15s;}',
+    '.kc-action:hover{background:rgba(113,255,0,0.2);color:#71ff00;}',
+    /* Suggestion chips */
+    '#kassChips{padding:4px 12px 10px;display:flex;flex-wrap:wrap;gap:6px;flex-shrink:0;}',
+    '.kchip{padding:5px 11px;background:rgba(113,255,0,0.07);',
+    'border:1px solid rgba(113,255,0,0.2);border-radius:20px;font-size:11.5px;',
+    'color:#71ff00;cursor:pointer;font-weight:600;user-select:none;}',
     '.kchip:hover{background:rgba(113,255,0,0.16);}',
-    '@media(max-width:380px){#kassModal{width:calc(100vw - 24px);right:12px;}}'
+    /* Input row */
+    '#kassInput{display:flex;gap:8px;padding:10px 12px;',
+    'border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0;}',
+    '#kassField{flex:1;background:rgba(255,255,255,0.05);',
+    'border:1px solid rgba(255,255,255,0.1);border-radius:20px;',
+    'padding:9px 14px;color:#fff;font-size:13px;outline:none;font-family:inherit;}',
+    '#kassField::placeholder{color:rgba(255,255,255,0.3);}',
+    '#kassField:focus{border-color:rgba(113,255,0,0.5);}',
+    '#kassSend{width:38px;height:38px;border-radius:50%;background:#71ff00;',
+    'border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;',
+    'flex-shrink:0;align-self:flex-end;}',
+    '#kassSend:hover{background:#90ff30;}',
+    '#kassSend:disabled{opacity:0.35;cursor:default;}',
+    '@keyframes kass-blink{0%,100%{opacity:.2}50%{opacity:1}}',
+    '@media(max-width:400px){#kassModal{width:calc(100vw - 24px);right:12px;bottom:80px;max-height:72vh;}}',
   ].join('');
-  document.head.appendChild(style);
+  document.head.appendChild(_styleEl);
 
   /* ── Build DOM ── */
-  var btn = document.createElement('button');
-  btn.id = 'kassBtn';
-  btn.setAttribute('aria-label', 'Ask KASS AI');
-  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#71ff00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  var _btn = document.createElement('button');
+  _btn.id = 'kassBtn';
+  _btn.setAttribute('aria-label', 'Ask KASS AI assistant');
+  _btn.innerHTML = [
+    '<div id="kassUnread">?</div>',
+    '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#71ff00"',
+      ' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">',
+      '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    '</svg>',
+  ].join('');
 
-  var modal = document.createElement('div');
-  modal.id = 'kassModal';
-  modal.setAttribute('role', 'dialog');
-  modal.setAttribute('aria-label', 'KASS AI Assistant');
-  modal.innerHTML = [
+  var _modal = document.createElement('div');
+  _modal.id = 'kassModal';
+  _modal.setAttribute('role', 'dialog');
+  _modal.setAttribute('aria-label', 'KASS — Sokoni AI Concierge');
+  _modal.innerHTML = [
     '<div id="kassHead">',
-    '  <div class="kh-avatar">&#129302;</div>',
+    '  <div class="kh-av">🤖</div>',
     '  <div class="kh-info">',
     '    <div class="kh-name">KASS — Sokoni AI</div>',
-    '    <div class="kh-status">&#9679; Online</div>',
+    '    <div class="kh-status">',
+    '      <span class="kh-dot" id="kassStatusDot"></span>',
+    '      <span id="kassStatusTxt">Online</span>',
+    '    </div>',
     '  </div>',
     '  <button id="kassClose" aria-label="Close">&times;</button>',
     '</div>',
-    '<div id="kassMsgs"></div>',
+    '<div id="kassMsgs" role="log" aria-live="polite" aria-atomic="false"></div>',
     '<div id="kassChips">',
+    '  <span class="kchip" data-q="I want a BnB in Nairobi">Find a BnB</span>',
+    '  <span class="kchip" data-q="Show me restaurants near Westlands">Restaurants</span>',
     '  <span class="kchip" data-q="How do I sell on Sokoni?">Sell on Sokoni</span>',
-    '  <span class="kchip" data-q="How do I earn loyalty points?">Loyalty points</span>',
-    '  <span class="kchip" data-q="How do I track my order?">Track order</span>',
-    '  <span class="kchip" data-q="What is a referral code?">Referrals</span>',
+    '  <span class="kchip" data-q="Show me job listings in Nairobi">Jobs</span>',
     '</div>',
     '<div id="kassInput">',
-    '  <input type="text" placeholder="Ask KASS anything..." maxlength="200" autocomplete="off" id="kassField">',
-    '  <button id="kassSend" aria-label="Send">',
-    '    <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+    '  <input type="text" id="kassField"',
+    '    placeholder="Ask KASS anything…"',
+    '    maxlength="300" autocomplete="off" spellcheck="true">',
+    '  <button id="kassSend" aria-label="Send message">',
+    '    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000"',
+    '      stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">',
+    '      <line x1="22" y1="2" x2="11" y2="13"/>',
+    '      <polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+    '    </svg>',
     '  </button>',
-    '</div>'
+    '</div>',
   ].join('');
 
-  document.body.appendChild(btn);
-  document.body.appendChild(modal);
+  document.body.appendChild(_btn);
+  document.body.appendChild(_modal);
 
-  /* ── State ── */
-  var msgs = document.getElementById('kassMsgs');
-  var field = document.getElementById('kassField');
-  var greeted = false;
+  /* ── DOM refs ── */
+  var _msgs      = document.getElementById('kassMsgs');
+  var _field     = document.getElementById('kassField');
+  var _sendBtn   = document.getElementById('kassSend');
+  var _chips     = document.getElementById('kassChips');
+  var _statusDot = document.getElementById('kassStatusDot');
+  var _statusTxt = document.getElementById('kassStatusTxt');
+  var _unread    = document.getElementById('kassUnread');
 
-  /* ── Helpers ── */
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  /* ── Connectivity status ── */
+  function _updateStatus() {
+    var online = navigator.onLine !== false;
+    _statusDot.className = 'kh-dot' + (online ? '' : ' offline');
+    _statusTxt.textContent = online ? 'Online' : 'Offline';
+  }
+  window.addEventListener('online',  _updateStatus);
+  window.addEventListener('offline', _updateStatus);
+  _updateStatus();
+
+  /* ── Message helpers ── */
+  function _addBot(html) {
+    var el = document.createElement('div');
+    el.className = 'km bot';
+    el.innerHTML = html;
+    _msgs.appendChild(el);
+    _msgs.scrollTop = _msgs.scrollHeight;
+    return el;
   }
 
-  function addMsg(text, cls) {
-    var m = document.createElement('div');
-    m.className = 'km ' + cls;
-    m.innerHTML = esc(text);
-    msgs.appendChild(m);
-    msgs.scrollTop = msgs.scrollHeight;
-    return m;
+  function _addUser(text) {
+    var el = document.createElement('div');
+    el.className = 'km user';
+    el.textContent = text;
+    _msgs.appendChild(el);
+    _msgs.scrollTop = _msgs.scrollHeight;
   }
 
-  function showTyping() {
-    return addMsg('KASS is typing…', 'bot typing');
+  function _addErr(msg) {
+    var el = document.createElement('div');
+    el.className = 'km err';
+    el.textContent = msg;
+    _msgs.appendChild(el);
+    _msgs.scrollTop = _msgs.scrollHeight;
   }
 
-  function removeEl(el) {
-    if (el && el.parentNode) el.parentNode.removeChild(el);
+  function _showTyping() {
+    var el = document.createElement('div');
+    el.className = 'km typing';
+    el.innerHTML = '<span style="animation:kass-blink 1.2s infinite">●</span>'
+      + '<span style="animation:kass-blink 1.2s infinite .4s">●</span>'
+      + '<span style="animation:kass-blink 1.2s infinite .8s">●</span>';
+    _msgs.appendChild(el);
+    _msgs.scrollTop = _msgs.scrollHeight;
+    return el;
   }
 
-  /* ── Offline rule-based responder ── */
-  var RULES = [
-    [/sell|list|upload|shop|product/i,
-      'To sell on Sokoni: tap "Seller" from the menu or go to seller.html. You can list products, manage orders, and track revenue — all from your dashboard.'],
-    [/loyalty|point|reward|redeem/i,
-      'You earn loyalty points on every purchase, referral, review, and daily login. Redeem them for cash, vouchers, or free delivery at loyalty.html.'],
-    [/referr|invite|code/i,
-      'Your referral code earns both you and your friend bonus points when they sign up and make their first purchase. Find your code at referral.html.'],
-    [/track|order|deliver/i,
-      'Track your orders at track.html. You\'ll see real-time status updates and estimated delivery times. You can also contact your driver from there.'],
-    [/pay|mpesa|m-pesa|intasend|checkout/i,
-      'Sokoni supports M-Pesa STK push. At checkout, enter your phone number and you\'ll receive a prompt to confirm payment within seconds.'],
-    [/subscri|plan|business|premium/i,
-      'Business subscription plans are at subscriptions.html. Plans unlock featured listings, priority support, advanced analytics, and lower commission rates.'],
-    [/analytic|dashboard|stat|report/i,
-      'Seller Analytics at seller-analytics.html shows your views, sales funnel, top products, and revenue trends with 30-day charts.'],
-    [/driver|ride|deliver/i,
-      'Sokoni has a delivery network for packages and goods. Book delivery at delivery.html. Drivers track orders live on the driver dashboard.'],
-    [/property|house|rent|buy|land/i,
-      'Browse properties to buy, rent, or lease at property-hub.html — houses, apartments, land, commercial spaces across Kenya.'],
-    [/fitness|gym|workout|exercise/i,
-      'The Fitness Hub at fitness-hub.html connects you to gyms, trainers, and fitness classes near you.'],
-    [/legal|lawyer|advocate|court/i,
-      'The Legal Hub at legal-hub.html has vetted advocates for consultation, contracts, and legal services.'],
-    [/car|vehicle|rent car|hire/i,
-      'Car Hub at car-hub.html has 17+ rental cars, NTSA services, GPS tracking, insurance, and garage bookings.'],
-    [/hello|hi|hey|good/i,
-      'Hello! I\'m KASS, your Sokoni AI assistant. I can help you navigate the platform, understand features, or answer any questions. What would you like to know?'],
-    [/thank/i,
-      'You\'re welcome! Is there anything else I can help you with on Sokoni?'],
-  ];
+  function _removeEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
 
-  function offlineReply(q) {
-    for (var i = 0; i < RULES.length; i++) {
-      if (RULES[i][0].test(q)) return RULES[i][1];
+  /* ── Render rich response ── */
+  function _renderResponse(data) {
+    var html = '';
+    if (data.response) html += _md(data.response);
+    if (data.results && data.results.length) {
+      html += '<div class="kc-results">';
+      for (var i = 0; i < Math.min(data.results.length, 4); i++) html += _cardHtml(data.results[i]);
+      html += '</div>';
     }
-    return 'I\'m not sure about that one. You can browse all features at index.html or contact support through the inbox at messages.html.';
+    if (data.actions && data.actions.length) {
+      html += '<div class="kc-actions">';
+      for (var j = 0; j < data.actions.length; j++) {
+        html += '<a class="kc-action" href="' + _esc(data.actions[j].url || '#') + '">'
+              + _esc(data.actions[j].label) + '</a>';
+      }
+      html += '</div>';
+    }
+    _addBot(html || _md("I'm here to help! What are you looking for on Sokoni?"));
+  }
+
+  /* ── API call ── */
+  function _callKass(text) {
+    _history.push({ role: 'user', content: text });
+    var controller = new AbortController();
+    var timeoutId  = setTimeout(function() { controller.abort(); }, 30000);
+    return fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: _history.slice(-20) }),
+      signal: controller.signal,
+    }).then(function(resp) {
+      clearTimeout(timeoutId);
+      return resp.json().then(function(data) {
+        if (!resp.ok) throw new Error(data.error || 'KASS is temporarily unavailable.');
+        _history.push({ role: 'assistant', content: data.response || '' });
+        return data;
+      });
+    }).catch(function(err) {
+      clearTimeout(timeoutId);
+      _history.pop(); /* remove user message so retry works */
+      if (err.name === 'AbortError') throw new Error('Request timed out — please try again.');
+      throw err;
+    });
   }
 
   /* ── Send message ── */
-  function send(text) {
+  function _send(text) {
     text = (text || '').trim();
-    if (!text) return;
-    field.value = '';
-    document.getElementById('kassChips').style.display = 'none';
-    addMsg(text, 'user');
+    if (!text || _busy) return;
+    _busy = true;
+    _field.value = '';
+    _sendBtn.disabled = true;
+    _chips.style.display = 'none';
+    _addUser(text);
+    var typing = _showTyping();
 
-    var typing = showTyping();
+    _callKass(text).then(function(data) {
+      _removeEl(typing);
+      _renderResponse(data);
+    }).catch(function(err) {
+      _removeEl(typing);
+      _addErr(err.message || 'KASS is temporarily unavailable. Please try again in a moment.');
+    }).then(function() {
+      /* always runs (finally polyfill via chained then) */
+      _busy = false;
+      _sendBtn.disabled = false;
+      setTimeout(function() { _field.focus(); }, 50);
+    });
 
-    /* Try Firebase Function first */
-    var sent = false;
-    if (window.firebase && firebase.functions) {
-      try {
-        var fn = firebase.functions().httpsCallable('kass');
-        fn({ message: text })
-          .then(function (result) {
-            removeEl(typing);
-            var reply = (result && result.data && result.data.reply) || offlineReply(text);
-            addMsg(reply, 'bot');
-          })
-          .catch(function () {
-            removeEl(typing);
-            addMsg(offlineReply(text), 'bot');
-          });
-        sent = true;
-      } catch(e) {}
-    }
-
-    if (!sent) {
-      /* Simulate latency for offline mode */
-      setTimeout(function () {
-        removeEl(typing);
-        addMsg(offlineReply(text), 'bot');
-      }, 700 + Math.random() * 400);
-    }
-
-    /* Track in analytics */
-    if (window.sokoniTrackEngagement) window.sokoniTrackEngagement('kass_query', 1);
-    if (window.gtag) window.gtag('event', 'kass_query', { query_length: text.length });
-
-    /* Store to history (max 30) */
-    try {
-      var hist = JSON.parse(localStorage.getItem('kassHistory') || '[]');
-      hist.push({ q: text, ts: Date.now() });
-      if (hist.length > 30) hist.shift();
-      localStorage.setItem('kassHistory', JSON.stringify(hist));
-    } catch(e) {}
+    try { if (window.sokoniTrackEngagement) window.sokoniTrackEngagement('kass_query', 1); } catch(e) {}
+    try { if (window.gtag) window.gtag('event', 'kass_query', { query_length: text.length }); } catch(e) {}
   }
 
   /* ── Open / close ── */
-  btn.addEventListener('click', function () {
-    modal.classList.toggle('open');
-    if (modal.classList.contains('open')) {
-      if (!greeted) {
-        greeted = true;
-        var name = '';
-        try { name = (JSON.parse(localStorage.getItem('sokoniUser') || '{}')).name || ''; } catch(e) {}
-        addMsg('Hey' + (name ? ' ' + esc(name.split(' ')[0]) : '') + '! I\'m KASS, your Sokoni assistant. How can I help you today?', 'bot');
-      }
-      field.focus();
+  function _open() {
+    _modal.classList.add('open');
+    _unread.style.display = 'none';
+    if (!_greeted) {
+      _greeted = true;
+      var name = '';
+      try { name = (JSON.parse(localStorage.getItem('sokoniUser') || '{}')).name || ''; } catch(e) {}
+      var greet = name ? 'Hey **' + name.split(' ')[0] + '**!' : 'Hey there!';
+      _addBot(_md(greet + " I'm **KASS**, your Sokoni AI concierge.\n\nI can search for **BnBs**, **restaurants**, **products**, **jobs**, **events** — or help with anything on the platform. What are you looking for?"));
+    }
+    setTimeout(function() { _field.focus(); }, 60);
+  }
+
+  function _close() { _modal.classList.remove('open'); }
+
+  _btn.addEventListener('click', function() {
+    _modal.classList.contains('open') ? _close() : _open();
+  });
+
+  document.getElementById('kassClose').addEventListener('click', _close);
+
+  document.addEventListener('click', function(e) {
+    if (_modal.classList.contains('open')
+        && !_modal.contains(e.target)
+        && !_btn.contains(e.target)) {
+      _close();
     }
   });
 
-  document.getElementById('kassClose').addEventListener('click', function () {
-    modal.classList.remove('open');
+  /* ── Input handlers ── */
+  _sendBtn.addEventListener('click', function() { _send(_field.value); });
+  _field.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _send(_field.value); }
   });
-
-  /* ── Send via button or Enter ── */
-  document.getElementById('kassSend').addEventListener('click', function () {
-    send(field.value);
-  });
-  field.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(field.value); }
-  });
-
-  /* ── Suggestion chips ── */
-  document.getElementById('kassChips').addEventListener('click', function (e) {
+  _chips.addEventListener('click', function(e) {
     var chip = e.target.closest('.kchip');
-    if (chip) send(chip.dataset.q);
+    if (chip) _send(chip.dataset.q);
   });
 
-  /* ── Close on outside click ── */
-  document.addEventListener('click', function (e) {
-    if (!modal.contains(e.target) && e.target !== btn) {
-      modal.classList.remove('open');
+  /* ── Show unread badge 3 s after load ── */
+  setTimeout(function() {
+    if (!_modal.classList.contains('open') && !_greeted) {
+      _unread.style.display = 'flex';
     }
-  });
+  }, 3000);
 
 })();
