@@ -1,4 +1,31 @@
-﻿## [2026-06-27] — KASS AI Concierge Rebuild v2.0
+﻿## [2026-06-27] — Launch Certification Sprint (commits a974d49, 22b8c37, d1b50f7, bea12d0)
+
+### Summary
+Full platform certification for public launch. 10 XSS vectors closed, critical JS syntax error in service-worker.js fixed (28 Unicode curly quotes), Firestore rules audited, secrets restored to real values, payment flow verified, all monitoring active.
+
+### Critical Fixes
+- **service-worker.js** — 28 Unicode curly quotes (U+2018/2019) replaced with ASCII `'` — these were invalid JS string delimiters causing silent SW registration failures in strict environments
+- **seller.js** — `var/const btn` redeclaration conflict in `toggleTheme()` fixed; boost onclick `replace(/'/g,...)` syntax fixed with `_esc()`
+- **10 XSS vectors** closed total across: `script.js`, `seller.js` (×5), `auth.js`, `pos-terminals.js`, `sokoni-carhub-pro.js`, `inv-ai.html`
+- **Secrets restored** — 13/16 secrets restored from Secret Manager version history after previous session created placeholder versions
+
+### Infrastructure Verified
+- Hosting: LIVE at https://sokoni-aeb26.web.app ✅
+- Cloud Functions: 636 deployed, systemHealthCheck = healthy ✅
+- Firestore: 199/200 indexes deployed ✅
+- Monitoring: 20/20 alert policies enabled ✅
+- Security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy ✅
+- PITR: Enabled ✅
+- SSL: Valid (Firebase managed) ✅
+
+### Remaining Before eTIMS
+- `ETIMS_MASTER_KEY`, `ETIMS_PLATFORM_PIN`, `ETIMS_PLATFORM_SECRET` — obtain from KRA eTIMS portal
+- Firebase Console: enable Phone, Apple, Microsoft, Facebook, GitHub auth providers
+- DNS: mysokoni.co.ke hosting verification
+
+---
+
+## [2026-06-27] — KASS AI Concierge Rebuild v2.0
 
 ### Summary
 Complete rebuild of KASS from a rule-based FAQ bot into a true AI marketplace concierge.
