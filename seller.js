@@ -2703,26 +2703,30 @@ function renderSellerRatings(){
         <!-- Individual reviews -->
         <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">Recent Reviews</div>
         ${ratings.slice(0,10).map(r=>{
-            const rAvg = r.avgScore || r.stars || 0;
+            const rAvg  = r.avgScore || r.stars || 0;
+            const rName = _esc(r.buyerName||"Anonymous");
+            const rDate = _esc(r.date||"");
+            const rOid  = _esc(r.orderId||"");
+            const rCmt  = _esc(r.comment||"");
             const dims = [
-                r.delivery     ? `🚚 ${r.delivery}`     : "",
-                r.responseTime ? `⚡ ${r.responseTime}` : "",
-                r.returns      ? `🔄 ${r.returns}`      : "",
-                r.satisfaction ? `😊 ${r.satisfaction}` : "",
+                r.delivery     ? `🚚 ${_esc(r.delivery)}`     : "",
+                r.responseTime ? `⚡ ${_esc(r.responseTime)}` : "",
+                r.returns      ? `🔄 ${_esc(r.returns)}`      : "",
+                r.satisfaction ? `😊 ${_esc(r.satisfaction)}` : "",
             ].filter(Boolean);
             return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px;margin-bottom:10px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <div style="width:32px;height:32px;border-radius:50%;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#71ff00;">${(r.buyerName||"A").charAt(0).toUpperCase()}</div>
+                        <div style="width:32px;height:32px;border-radius:50%;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#71ff00;">${(rName[0]||'A').toUpperCase()}</div>
                         <div>
-                            <div style="font-weight:700;color:white;font-size:13px;">${r.buyerName||"Anonymous"}</div>
-                            <div style="font-size:10px;color:rgba(255,255,255,0.35);">${r.date||""} · Order ${r.orderId||""}</div>
+                            <div style="font-weight:700;color:white;font-size:13px;">${rName}</div>
+                            <div style="font-size:10px;color:rgba(255,255,255,0.35);">${rDate} · Order ${rOid}</div>
                         </div>
                     </div>
                     <div style="color:#ffc107;font-size:14px;">${"★".repeat(Math.round(rAvg))}${"☆".repeat(5-Math.round(rAvg))} <span style="font-size:12px;color:rgba(255,255,255,0.4);">${rAvg}</span></div>
                 </div>
                 ${dims.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">${dims.map(d=>`<span style="font-size:11px;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.15);color:#ffc107;padding:3px 9px;border-radius:6px;">${d}</span>`).join("")}</div>` : ""}
-                ${r.comment ? `<div style="font-size:13px;color:rgba(255,255,255,0.6);line-height:1.5;font-style:italic;">"${r.comment}"</div>` : ""}
+                ${rCmt ? `<div style="font-size:13px;color:rgba(255,255,255,0.6);line-height:1.5;font-style:italic;">"${rCmt}"</div>` : ""}
             </div>`;
         }).join("")}
     `;
@@ -2840,7 +2844,7 @@ function populateFlashSelect(){
     let products = [];
     try { products = JSON.parse(localStorage.getItem("sellerProducts")) || []; } catch(e) {}
     sel.innerHTML = `<option value="">Select a product...</option>` +
-        products.map(p => `<option value="${p.id}">${p.name} — KES ${Number(p.price).toLocaleString()}</option>`).join("");
+        products.map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} — KES ${Number(p.price).toLocaleString()}</option>`).join("");
 }
 
 function launchFlashSale(){
@@ -2912,7 +2916,7 @@ function populateBoostSelect(){
     let products = [];
     try { products = JSON.parse(localStorage.getItem("sellerProducts")) || []; } catch(e) {}
     sel.innerHTML = `<option value="">Select a product to boost...</option>` +
-        products.map(p => `<option value="${p.id}">${p.name} — KES ${Number(p.price).toLocaleString()}</option>`).join("");
+        products.map(p => `<option value="${_esc(p.id)}">${_esc(p.name)} — KES ${Number(p.price).toLocaleString()}</option>`).join("");
 }
 
 function launchBoost(){
@@ -3718,8 +3722,8 @@ function checkLowStockAlerts(){
             <h4>Stock Alert</h4>
             <p>`;
     const msgs = [];
-    if(outItems.length) msgs.push(`<strong style="color:#ff6b6b;">${outItems.length} product(s) out of stock</strong>: ${outItems.slice(0,3).map(p=>p.name).join(", ")}${outItems.length>3?" + more":""}`);
-    if(lowItems.length) msgs.push(`<strong style="color:#ff9800;">${lowItems.length} product(s) running low</strong>: ${lowItems.slice(0,3).map(p=>`${p.name} (${p.stock} left)`).join(", ")}${lowItems.length>3?" + more":""}`);
+    if(outItems.length) msgs.push(`<strong style="color:#ff6b6b;">${outItems.length} product(s) out of stock</strong>: ${outItems.slice(0,3).map(p=>_esc(p.name)).join(", ")}${outItems.length>3?" + more":""}`);
+    if(lowItems.length) msgs.push(`<strong style="color:#ff9800;">${lowItems.length} product(s) running low</strong>: ${lowItems.slice(0,3).map(p=>`${_esc(p.name)} (${Number(p.stock)} left)`).join(", ")}${lowItems.length>3?" + more":""}`);
     html += msgs.join(" · ") + `</p></div></div>`;
     bar.innerHTML = html;
 }
@@ -3879,12 +3883,18 @@ function renderOfferInbox(){
         return;
     }
     const statusCol = { pending:"#ff9800", accepted:"#71ff00", declined:"#ff4444", countered:"#00aaff" };
-    el.innerHTML = myOffers.map(o => `
+    el.innerHTML = myOffers.map(o => {
+        const oProd = _esc(o.productName||"");
+        const oBuyer = _esc(o.buyerName||"");
+        const oDate  = _esc(o.date||"");
+        const oMsg   = _esc(o.message||"");
+        const oId    = _esc(o.id||"");
+        return `
         <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 16px;margin-bottom:10px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
                 <div style="flex:1;">
-                    <div style="font-weight:700;color:white;font-size:13px;">${o.productName}</div>
-                    <div style="font-size:11px;color:rgba(255,255,255,0.35);">${o.buyerName} · ${o.date}</div>
+                    <div style="font-weight:700;color:white;font-size:13px;">${oProd}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.35);">${oBuyer} · ${oDate}</div>
                 </div>
                 <span style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;background:${statusCol[o.status]||"#ff9800"}18;color:${statusCol[o.status]||"#ff9800"};">${(o.status||"pending").toUpperCase()}</span>
             </div>
@@ -3893,15 +3903,15 @@ function renderOfferInbox(){
                 <span style="font-size:12px;color:rgba(255,255,255,0.4);">Offer: <strong style="color:#ffc107;">KES ${Number(o.offerPrice).toLocaleString()}</strong></span>
                 <span style="font-size:12px;color:rgba(255,255,255,0.4);">Diff: <strong style="color:${o.offerPrice >= o.listedPrice ? "#71ff00" : "#ff9800"};">${o.offerPrice >= o.listedPrice ? "+" : ""}KES ${(o.offerPrice - o.listedPrice).toLocaleString()}</strong></span>
             </div>
-            ${o.message ? `<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;font-style:italic;">"${o.message}"</div>` : ""}
+            ${oMsg ? `<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;font-style:italic;">"${oMsg}"</div>` : ""}
             ${o.status==="pending" ? `
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button onclick="respondOffer('${o.id}','accepted')" style="padding:8px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-weight:800;font-size:12px;border-radius:8px;cursor:pointer;font-family:inherit;">✅ Accept</button>
-                <button onclick="respondOffer('${o.id}','declined')" style="padding:8px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:800;font-size:12px;border-radius:8px;cursor:pointer;font-family:inherit;">❌ Decline</button>
-                <button onclick="counterOffer('${o.id}')" style="padding:8px 16px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;font-weight:800;font-size:12px;border-radius:8px;cursor:pointer;font-family:inherit;">↩️ Counter</button>
+                <button onclick="respondOffer('${oId}','accepted')" style="padding:8px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-weight:800;font-size:12px;border-radius:8px;cursor:pointer;font-family:inherit;">✅ Accept</button>
+                <button onclick="respondOffer('${oId}','declined')" style="padding:8px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:800;font-size:12px;border-radius:8px;cursor:pointer;font-family:inherit;">❌ Decline</button>
+                <button onclick="counterOffer('${oId}')" style="padding:8px 16px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;font-weight:800;font-size:12px;border-radius:8px;cursor:pointer;font-family:inherit;">↩️ Counter</button>
             </div>` : ""}
         </div>
-    `).join("");
+    `; }).join("");
 }
 
 function respondOffer(offerId, status){

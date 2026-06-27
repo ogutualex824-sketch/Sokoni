@@ -2571,16 +2571,18 @@ function loadHomepageReviews(){
 }
 
 function reviewCard(r){
+    const _rn = String(r.name||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const _rc = String(r.comment||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     return `
         <div class="rt-card">
             <div class="rt-card-top">
-                <div class="rt-avatar">${r.name[0].toUpperCase()}</div>
+                <div class="rt-avatar">${(_rn[0]||'?').toUpperCase()}</div>
                 <div>
-                    <div class="rt-name">${r.name}</div>
+                    <div class="rt-name">${_rn}</div>
                     <div class="rt-stars">${"★".repeat(r.rating)}${"☆".repeat(5-r.rating)}</div>
                 </div>
             </div>
-            <p class="rt-comment">"${r.comment}"</p>
+            <p class="rt-comment">"${_rc}"</p>
         </div>
     `;
 }
