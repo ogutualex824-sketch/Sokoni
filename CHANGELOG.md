@@ -1,4 +1,24 @@
-﻿## [2026-06-27] — Logistics Automation & Dispatch System v1.0
+﻿## [2026-06-27] — KASS Phase 2 & Deploy Unblock
+
+### Summary
+Deployed KASS Phase 2 AI agent (action engine with 9 action tools: add_to_cart, view_cart, get_my_orders, track_order, cancel_order, save_to_wishlist, get_wallet, book_stay, compare_products). Fixed two blocking deploy errors that were preventing sokoniChat from reaching Firebase Cloud Build.
+
+### Modified Files
+- **`functions/dispatch.js`** — Migrated all 8 CFs from Gen1 API (`functions.region().runWith().https.onCall`) to Gen2 (`onCall`, `onSchedule`, `onDocumentUpdated` from `firebase-functions/v2/*`). Changed region from `europe-west1` to `us-central1`. Fixed `require('../sokoni-dispatch')` → `require('./sokoni-dispatch')`.
+- **`functions/hub-etims.js`** — Fixed top-level `admin.storage().bucket()` call that crashed `index.js` during local analysis phase. Moved to `_bucket()` lazy helper called only inside handlers.
+
+### Fixes
+- **`TypeError: functions.region is not a function`** — Gen1 Firebase Functions API removed in v4+. Dispatch module fully rewritten to Gen2 syntax.
+- **`Error: Bucket name not specified or invalid`** — `hub-etims.js` called `admin.storage().bucket()` at module load time before any Firebase config was available. Lazy-initialized.
+
+### Deployment
+- `sokoniChat` (Gen2, us-central1) — deployed and live
+- Hosting `/api/chat` rewrite → `sokoniChat` — deployed and live
+- KASS widget sends `auth_token` (Firebase ID token) → action tools are auth-scoped per user
+
+---
+
+## [2026-06-27] — Logistics Automation & Dispatch System v1.0
 
 ### Summary
 Complete intelligent delivery logistics platform. Replaces naive first-available rider assignment with a weighted scoring dispatch engine, adds cascade auto-dispatch with 90-second timeouts, multi-order batch routing, hub-based logistics, proof of delivery (OTP + photo + GPS), failed delivery workflows, GPS fraud detection, seller delivery dashboard, admin ops command center, rider app shift management, and daily analytics rollups.
