@@ -205,15 +205,13 @@ exports.markRead = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) =>
     { unreadCount: 0 }
   );
 
-  /* Mark messages from others as read */
+  /* Mark messages from others as read (simple orderBy — no composite index needed) */
   const unreadSnap = await db.collection('conversations').doc(conversationId)
     .collection('messages')
-    .where('senderId', '!=', uid)
-    .orderBy('senderId')
     .orderBy('timestamp', 'desc')
     .limit(50).get();
   unreadSnap.docs
-    .filter(d => d.data().status !== 'read')
+    .filter(d => d.data().senderId !== uid && d.data().status !== 'read')
     .forEach(d => batch.update(d.ref, { status: 'read' }));
 
   await batch.commit();
@@ -455,19 +453,24 @@ exports.archiveCompletedConversations = onSchedule(
     const policy = await _getPolicy();
     const cutoff = new Date(Date.now() - policy.readOnlyAfterDays * 86400000);
     const db     = _db();
+    /* Single equality filter — no composite index; date filter in memory */
     const snap   = await db.collection('conversations')
       .where('status', '==', 'active')
-      .where('lastMessageAt', '<=', cutoff)
-      .limit(100).get();
+      .limit(200).get();
     if (snap.empty) return;
+    const toArchive = snap.docs.filter(doc => {
+      const ts = doc.data().lastMessageAt;
+      return ts && ts.toMillis() <= cutoff.getTime();
+    });
+    if (!toArchive.length) return;
     const batch = db.batch();
-    snap.docs.forEach(doc => batch.update(doc.ref, {
+    toArchive.forEach(doc => batch.update(doc.ref, {
       status:     'read_only',
       readOnlyAt: _now(),
       updatedAt:  _now(),
     }));
     await batch.commit();
-    logger.info('[messages] Archived conversations', { count: snap.size });
+    logger.info('[messages] Archived conversations', { count: toArchive.length });
   }
 );
 

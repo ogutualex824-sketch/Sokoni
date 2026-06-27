@@ -1,663 +1,193 @@
-﻿<!DOCTYPE html>
-<html lang="en" data-require-auth="true">
-<head><script src="security.js"></script>
-<script src="auth-guard.js"></script>
-<script src="shared-header.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>SOKONI Inbox — Universal Messenger</title>
-<meta name="description" content="All your SOKONI conversations in one place — buyers, sellers, providers, riders, landlords, doctors and more.">
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Messages — SOKONI</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#71ff00">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Inbox">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="mobile.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="sokoni-tokens.css">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;height:100vh;overflow:hidden;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--c-bg:#f7f8fa;--c-surface:#fff;--c-border:#e5e7eb;--c-primary:#1a56db;--c-primary-light:#eff6ff;--c-text:#111827;--c-sub:#6b7280;--c-red:#dc2626;--radius:12px}
+body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);min-height:100vh;padding-bottom:80px}
 
-/* NAV */
-.ib-nav{display:flex;align-items:center;gap:10px;padding:0 16px;height:54px;background:rgba(8,8,8,0.98);border-bottom:1px solid rgba(113,255,0,0.1);position:fixed;top:0;left:0;right:0;z-index:300;backdrop-filter:blur(16px);}
-.ib-nav-logo{font-size:15px;font-weight:900;color:#71ff00;text-decoration:none;white-space:nowrap;}
-.ib-nav-sep{width:1px;height:18px;background:rgba(255,255,255,0.1);flex-shrink:0;}
-.ib-nav-title{font-size:13px;font-weight:700;color:rgba(255,255,255,0.5);flex-shrink:0;}
-.ib-nav-search{flex:1;max-width:280px;position:relative;display:flex;align-items:center;}
-.ib-nav-search input{width:100%;padding:7px 12px 7px 30px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:white;font-size:13px;font-family:inherit;outline:none;}
-.ib-nav-search input::placeholder{color:rgba(255,255,255,0.28);}
-.ib-nav-search input:focus{border-color:rgba(113,255,0,0.3);}
-.ib-search-icon{position:absolute;left:10px;font-size:11px;color:rgba(255,255,255,0.28);pointer-events:none;}
-.ib-nav-right{display:flex;align-items:center;gap:7px;margin-left:auto;}
-.ib-icon-btn{width:34px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;text-decoration:none;color:white;position:relative;transition:all .15s;flex-shrink:0;}
-.ib-icon-btn:hover{border-color:rgba(113,255,0,0.3);background:rgba(113,255,0,0.06);}
-.ib-icon-btn .nb{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:99px;background:#ef4444;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid #080808;}
+.topbar{position:sticky;top:0;z-index:100;background:var(--c-surface);border-bottom:1px solid var(--c-border);padding:0 16px;height:60px;display:flex;align-items:center;gap:12px}
+.topbar h1{font-size:20px;font-weight:700;flex:1}
+.icon-btn{width:40px;height:40px;border:none;background:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-sub)}
+.icon-btn:hover{background:var(--c-bg)}
 
-/* LAYOUT */
-.ib-wrap{display:flex;height:calc(100vh - 54px);margin-top:54px;}
+.search-wrap{padding:12px 16px;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--c-bg);border:1px solid var(--c-border);border-radius:10px;padding:0 12px;height:42px}
+.search-box input{flex:1;border:none;background:none;font-size:14px;color:var(--c-text);outline:none}
+.search-box .material-icons{font-size:20px;color:var(--c-sub)}
 
-/* SIDEBAR */
-.ib-sidebar{width:320px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.07);overflow:hidden;}
-.ib-sb-head{padding:13px 15px 10px;border-bottom:1px solid rgba(255,255,255,0.06);}
-.ib-sb-title{font-size:16px;font-weight:900;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
-.ib-new-btn{margin-left:auto;padding:6px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:8px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;}
-.ib-new-btn:hover{background:rgba(113,255,0,0.18);}
-.ib-tabs{display:flex;gap:0;}
-.ib-tab{flex:1;padding:7px 4px;background:none;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,0.38);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .16s;display:flex;align-items:center;justify-content:center;gap:4px;}
-.ib-tab.active{color:#71ff00;border-bottom-color:#71ff00;}
-.ib-tab .tb{background:#ef4444;color:white;font-size:9px;font-weight:900;padding:1px 5px;border-radius:99px;min-width:15px;text-align:center;}
-.ib-list{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.07) transparent;}
-.ib-list::-webkit-scrollbar{width:3px;}
-.ib-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.07);border-radius:4px;}
+.filters{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none;background:var(--c-surface);border-bottom:1px solid var(--c-border)}
+.filters::-webkit-scrollbar{display:none}
+.filter-chip{white-space:nowrap;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500;border:1.5px solid var(--c-border);background:var(--c-surface);cursor:pointer;color:var(--c-sub);transition:.15s}
+.filter-chip.active{background:var(--c-primary);border-color:var(--c-primary);color:#fff}
 
-/* CONVERSATION ITEMS */
-.cv{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);transition:background .13s;position:relative;}
-.cv:hover{background:rgba(255,255,255,0.025);}
-.cv.cv-on{background:rgba(113,255,0,0.04);border-left:2px solid #71ff00;}
-.cv-av{width:43px;height:43px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:white;flex-shrink:0;}
-.cv-body{flex:1;min-width:0;}
-.cv-name{font-size:13px;font-weight:700;color:white;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cv-name.u{font-weight:900;}
-.cv-ctx{font-size:10px;color:rgba(255,255,255,0.32);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cv-prev{font-size:11px;color:rgba(255,255,255,0.38);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cv-prev.u{color:rgba(255,255,255,0.72);font-weight:600;}
-.cv-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;}
-.cv-t{font-size:10px;color:rgba(255,255,255,0.27);}
-.cv-bdg{background:#71ff00;color:#050f05;font-size:9px;font-weight:900;min-width:17px;height:17px;border-radius:99px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
-.ib-empty{text-align:center;padding:44px 20px;color:rgba(255,255,255,0.28);}
-.ib-empty-icon{font-size:38px;margin-bottom:10px;}
-.ib-empty-txt{font-size:13px;font-weight:700;}
-.ib-empty-sub{font-size:11px;margin-top:5px;color:rgba(255,255,255,0.18);}
+.conv-list{padding:8px 0}
+.conv-item{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;border-bottom:1px solid var(--c-border);background:var(--c-surface);transition:.1s;text-decoration:none;color:inherit}
+.conv-item:hover{background:#f9fafb}
+.conv-item.unread{background:var(--c-primary-light)}
+.conv-avatar{width:48px;height:48px;border-radius:50%;background:var(--c-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex-shrink:0;overflow:hidden}
+.conv-avatar img{width:100%;height:100%;object-fit:cover}
+.conv-body{flex:1;min-width:0}
+.conv-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-subtitle{font-size:12px;color:var(--c-sub);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-preview{font-size:13px;color:var(--c-sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-item.unread .conv-preview{color:var(--c-text);font-weight:500}
+.conv-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.conv-time{font-size:11px;color:var(--c-sub)}
+.unread-badge{background:var(--c-primary);color:#fff;font-size:11px;font-weight:700;border-radius:10px;min-width:20px;height:20px;padding:0 6px;display:flex;align-items:center;justify-content:center}
 
-/* CHAT PANEL */
-.ib-chat{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-.ib-ph{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,0.18);}
-.ib-ph-icon{font-size:52px;margin-bottom:12px;opacity:.45;}
-.ib-ph h3{font-size:15px;font-weight:900;margin-bottom:5px;color:rgba(255,255,255,0.35);}
-.ib-ph p{font-size:12px;}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 24px;text-align:center}
+.empty .material-icons{font-size:64px;color:#d1d5db;margin-bottom:16px}
+.empty h3{font-size:18px;font-weight:600;margin-bottom:8px}
+.empty p{font-size:14px;color:var(--c-sub);max-width:280px;line-height:1.5}
 
-/* CHAT HEADER */
-.ch-head{display:flex;align-items:center;gap:10px;padding:11px 15px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;}
-.ch-back{display:none;width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);align-items:center;justify-content:center;cursor:pointer;font-size:13px;flex-shrink:0;color:white;}
-.ch-av{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;flex-shrink:0;}
-.ch-info{flex:1;min-width:0;}
-.ch-name{font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ch-meta{font-size:10px;color:rgba(255,255,255,0.38);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.ch-type-badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;}
-.ch-acts{display:flex;gap:5px;}
-.ch-act{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,0.07);background:none;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.45);transition:all .14s;}
-.ch-act:hover{border-color:rgba(255,255,255,0.18);color:white;}
+.skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);background-size:200%;animation:shimmer 1.2s infinite;border-radius:6px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.sk-conv{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--c-border);background:var(--c-surface)}
+.sk-avatar{width:48px;height:48px;border-radius:50%;flex-shrink:0}
+.sk-body{flex:1}
+.sk-line{height:13px;margin-bottom:7px;border-radius:4px}
+.sk-line.w80{width:80%}.sk-line.w60{width:60%}.sk-line.w40{width:40%}
 
-/* MESSAGES */
-.ch-msgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:5px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.07) transparent;}
-.ch-msgs::-webkit-scrollbar{width:3px;}
-.ch-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.07);border-radius:4px;}
-.day-sep{text-align:center;font-size:10px;color:rgba(255,255,255,0.22);font-weight:700;margin:7px 0;letter-spacing:.4px;}
-.sys-msg{text-align:center;font-size:11px;color:rgba(255,255,255,0.32);background:rgba(255,255,255,0.04);border-radius:8px;padding:5px 12px;margin:3px auto;max-width:260px;}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:64px;z-index:100}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;color:var(--c-sub);text-decoration:none;border:none;background:none}
+.nav-item.active{color:var(--c-primary)}
+.nav-item .material-icons{font-size:24px}
 
-/* BUBBLES */
-.brow{display:flex;align-items:flex-end;gap:5px;}
-.brow.mine{flex-direction:row-reverse;}
-.brow.mine .bav{display:none;}
-.bav{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:white;flex-shrink:0;margin-bottom:1px;}
-.bub{max-width:72%;padding:9px 12px;border-radius:16px;font-size:13px;line-height:1.55;word-break:break-word;position:relative;}
-.bub.theirs{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.08);border-bottom-left-radius:4px;}
-.bub.mine{background:rgba(113,255,0,0.11);border:1px solid rgba(113,255,0,0.18);border-bottom-right-radius:4px;}
-.bub-img{max-width:190px;max-height:190px;border-radius:10px;cursor:zoom-in;display:block;margin-bottom:3px;}
-.bub-file{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.05);border-radius:9px;padding:7px 9px;}
-.bub-meta{display:flex;align-items:center;justify-content:flex-end;gap:3px;margin-top:3px;}
-.bub-t{font-size:9px;color:rgba(255,255,255,0.27);}
-.rcpt{font-size:10px;line-height:1;}
-.rcpt-s{color:rgba(255,255,255,0.27);}
-.rcpt-r{color:#71ff00;}
-.guard-note{font-size:10px;color:rgba(255,100,100,0.6);margin-top:2px;}
-.guard-note a{color:#fb923c;font-weight:700;text-decoration:none;}
-
-/* TYPING */
-.typing-wrap{padding:5px 16px;min-height:24px;flex-shrink:0;}
-.typing-ind{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,0.38);background:rgba(255,255,255,0.04);border-radius:99px;padding:4px 11px;}
-.tdots{display:flex;gap:3px;}
-.tdots span{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.32);animation:td 1.4s ease-in-out infinite;}
-.tdots span:nth-child(2){animation-delay:.2s;}
-.tdots span:nth-child(3){animation-delay:.4s;}
-@keyframes td{0%,80%,100%{transform:scale(.75);opacity:.4;}40%{transform:scale(1);opacity:1;}}
-
-/* INPUT */
-.ch-input-row{display:flex;align-items:flex-end;gap:7px;padding:9px 13px;border-top:1px solid rgba(255,255,255,0.07);background:rgba(8,8,8,0.97);flex-shrink:0;}
-.ch-attach{width:35px;height:35px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:rgba(255,255,255,0.45);transition:all .14s;}
-.ch-attach:hover{border-color:rgba(113,255,0,0.3);color:#71ff00;}
-#fileInput{display:none;}
-.ch-txt-wrap{flex:1;}
-.ch-ta{width:100%;padding:8px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;font-family:inherit;outline:none;resize:none;line-height:1.45;max-height:110px;min-height:36px;overflow-y:auto;scrollbar-width:none;}
-.ch-ta::placeholder{color:rgba(255,255,255,0.28);}
-.ch-ta:focus{border-color:rgba(113,255,0,0.3);}
-.ch-send{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:filter .14s;}
-.ch-send:hover{filter:brightness(1.1);}
-
-/* IMG PREVIEW BAR */
-.img-prev-bar{display:flex;align-items:center;gap:8px;padding:7px 13px;background:rgba(113,255,0,0.04);border-top:1px solid rgba(113,255,0,0.1);}
-.img-prev-thumb{width:42px;height:42px;object-fit:cover;border-radius:7px;}
-.img-prev-clear{background:none;border:none;color:rgba(255,255,255,0.38);cursor:pointer;font-size:16px;padding:0;}
-
-/* PUSH BANNER */
-.push-bar{background:rgba(113,255,0,0.05);border-bottom:1px solid rgba(113,255,0,0.1);padding:9px 15px;display:flex;align-items:center;gap:9px;font-size:12px;flex-shrink:0;}
-.push-bar-txt{flex:1;color:rgba(255,255,255,0.55);}
-.push-en{padding:5px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:7px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;}
-.push-x{background:none;border:none;color:rgba(255,255,255,0.28);cursor:pointer;font-size:16px;padding:0;}
-
-/* MODALS */
-.ib-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(14px);z-index:500;display:flex;align-items:flex-end;justify-content:center;padding:0;}
-@media(min-width:580px){.ib-overlay{align-items:center;padding:20px;}}
-.ib-modal{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:22px 22px 0 0;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;padding:20px 18px 28px;}
-@media(min-width:580px){.ib-modal{border-radius:22px;}}
-.ib-mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
-.ib-mtitle{font-size:15px;font-weight:900;}
-.ib-mclose{background:none;border:none;color:rgba(255,255,255,0.38);font-size:19px;cursor:pointer;padding:0;line-height:1;}
-.ib-inp{width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:9px;resize:vertical;}
-.ib-inp::placeholder{color:rgba(255,255,255,0.28);}
-.ib-inp:focus{border-color:rgba(113,255,0,0.35);}
-.ib-lbl{font-size:11px;font-weight:700;color:rgba(255,255,255,0.38);margin-bottom:4px;display:block;}
-.ib-btn{width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;border-radius:11px;color:#050f05;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px;}
-.ib-btn:hover{filter:brightness(1.07);}
-
-/* LIGHTBOX */
-.ib-lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:600;display:flex;align-items:center;justify-content:center;cursor:zoom-out;}
-.ib-lightbox img{max-width:95vw;max-height:90vh;border-radius:11px;object-fit:contain;}
-
-/* MOBILE */
-@media(max-width:768px){
-  .ib-sidebar{width:100%;border-right:none;}
-  .ib-chat{position:fixed;inset:0;top:54px;background:#080808;transform:translateX(100%);transition:transform .24s cubic-bezier(.4,0,.2,1);z-index:200;}
-  .ib-chat.open{transform:translateX(0);}
-  .ch-back{display:flex !important;}
-  .ib-nav-search{display:none;}
+@media(min-width:769px){
+  .bottom-nav{display:none}
+  body{padding-bottom:0;max-width:640px;margin:0 auto}
 }
 </style>
 </head>
 <body>
-<script src="splash.js"></script>
-<script src="sokoni-inbox.js"></script>
-<script src="contact-guard.js"></script>
 
-<!-- NAV -->
-<nav class="ib-nav sk-sub-nav">
-  <a href="index.html" class="ib-nav-logo">💬 SOKONI</a>
-  <div class="ib-nav-sep"></div>
-  <span class="ib-nav-title">Inbox</span>
-  <div class="ib-nav-search">
-    <span class="ib-search-icon">🔍</span>
-    <input type="text" id="navSearch" placeholder="Search conversations…" oninput="filterConvos(this.value)">
+<div class="topbar">
+  <h1>Messages</h1>
+  <button class="icon-btn" onclick="location.href='index.html'"><span class="material-icons">home</span></button>
+</div>
+
+<div class="search-wrap">
+  <div class="search-box">
+    <span class="material-icons">search</span>
+    <input type="text" id="searchInput" placeholder="Search conversations…" autocomplete="off">
   </div>
-  <div class="ib-nav-right">
-    <button class="ib-icon-btn" onclick="showNewConvo()" title="New message">✏️</button>
-    <a href="notifications.html" class="ib-icon-btn" id="notifBtn" title="Notifications">🔔</a>
-    <a href="profile.html" class="ib-icon-btn" title="Profile">👤</a>
-    <a href="index.html" class="ib-icon-btn" title="Home">🏠</a>
-  </div>
+</div>
+
+<div class="filters">
+  <button class="filter-chip active" data-filter="all">All</button>
+  <button class="filter-chip" data-filter="order">Orders</button>
+  <button class="filter-chip" data-filter="service_booking">Services</button>
+  <button class="filter-chip" data-filter="food_order">Food</button>
+  <button class="filter-chip" data-filter="property_inquiry">Property</button>
+  <button class="filter-chip" data-filter="vehicle_inquiry">Vehicles</button>
+  <button class="filter-chip" data-filter="job_application">Jobs</button>
+  <button class="filter-chip" data-filter="healthcare_appointment">Healthcare</button>
+  <button class="filter-chip" data-filter="support_ticket">Support</button>
+</div>
+
+<div id="convList" class="conv-list">
+  <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
+  <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
+  <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html"    class="nav-item"><span class="material-icons">home</span>Home</a>
+  <a href="services.html" class="nav-item"><span class="material-icons">home_repair_service</span>Services</a>
+  <a href="messages.html" class="nav-item active"><span class="material-icons">chat</span>Messages</a>
+  <a href="profile.html"  class="nav-item"><span class="material-icons">person</span>Profile</a>
 </nav>
 
-<!-- LAYOUT -->
-<div class="ib-wrap">
-
-  <!-- SIDEBAR -->
-  <div class="ib-sidebar">
-    <div class="ib-sb-head">
-      <div class="ib-sb-title">
-        Messages
-        <span id="totalBadge" style="font-size:10px;background:#ef4444;color:white;padding:1px 6px;border-radius:99px;font-weight:900;display:none;"></span>
-        <button class="ib-new-btn" onclick="showNewConvo()">+ New</button>
-      </div>
-      <div class="ib-tabs">
-        <button class="ib-tab active" onclick="switchTab('inbox',this)">All <span class="tb" id="tabAllBadge" style="display:none;"></span></button>
-        <button class="ib-tab" onclick="switchTab('unread',this)">Unread <span class="tb" id="tabUnreadBadge" style="display:none;"></span></button>
-        <button class="ib-tab" onclick="switchTab('pinned',this)">Pinned</button>
-        <button class="ib-tab" onclick="switchTab('spam',this)">Spam</button>
-      </div>
-    </div>
-    <div class="ib-list" id="convoList"></div>
-  </div>
-
-  <!-- CHAT -->
-  <div class="ib-chat" id="ibChat">
-    <div class="ib-ph">
-      <div class="ib-ph-icon">💬</div>
-      <h3>Your messages</h3>
-      <p>Select a conversation to start chatting</p>
-    </div>
-  </div>
-
-</div>
-
-<!-- NEW CONVO MODAL -->
-<div id="newConvoModal" class="ib-overlay" style="display:none;" onclick="if(event.target===this)closeNewConvo()">
-  <div class="ib-modal">
-    <div class="ib-mhead">
-      <div class="ib-mtitle">✉️ New Conversation</div>
-      <button class="ib-mclose" onclick="closeNewConvo()">✕</button>
-    </div>
-    <label class="ib-lbl">Recipient <span style="font-weight:400;color:rgba(255,255,255,0.35);">— seller/provider UID, or blank for Support</span></label>
-    <input class="ib-inp" type="text" id="ncTo" placeholder="Paste recipient UID (from store page) or leave blank…">
-    <label class="ib-lbl">Conversation type</label>
-    <select class="ib-inp" id="ncType" style="cursor:pointer;">
-      <option value="general">💬 General Message</option>
-      <option value="buyer-seller">🛍️ Buyer ↔ Seller</option>
-      <option value="customer-provider">🛠️ Customer ↔ Provider</option>
-      <option value="rider-passenger">🛵 Rider ↔ Passenger</option>
-      <option value="tenant-landlord">🏠 Tenant ↔ Landlord</option>
-      <option value="patient-doctor">🏥 Patient ↔ Doctor</option>
-      <option value="client-lawyer">⚖️ Client ↔ Lawyer</option>
-      <option value="marketing">🎯 Client ↔ Marketer</option>
-    </select>
-    <label class="ib-lbl">Topic / context</label>
-    <input class="ib-inp" type="text" id="ncContext" placeholder="e.g. Blue Dress, Cleaning quote, Legal advice…">
-    <label class="ib-lbl">Your message *</label>
-    <textarea class="ib-inp" id="ncMsg" rows="3" placeholder="Type your message…"></textarea>
-    <button class="ib-btn" onclick="startConvo()">Send Message</button>
-  </div>
-</div>
-
-<!-- LIGHTBOX -->
-<div id="ibLightbox" class="ib-lightbox" style="display:none;" onclick="closeLightbox()">
-  <img id="ibLbImg" src="" alt="">
-</div>
-
-<input type="file" id="fileInput" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip" onchange="handleFile(event)">
-
-<script src="analytics.js" defer></script>
-<script src="sw-register.js" defer></script>
-
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="firebase.js"></script>
+<script src="sokoni-chat-engine.js"></script>
 <script>
-/* ============================================================
-   SOKONI UNIVERSAL INBOX  v2.0
-   Firestore: conversations/{convId}/messages/{msgId}
-   convId = [uid1,uid2].sort().join('_')
-============================================================ */
-const FS_URL = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-let _db=null, _uid=null, _myName='Me';
-let _tab='inbox', _activeId=null, _searchQ='', _convos=[];
-let _convoUnsub=null, _listUnsub=null, _docUnsub=null, _typingTimer=null;
-let _pendingImg=null, _lastReadOther=0;
+(function(){
+'use strict';
+var _unsub=null,_all=[],_filter='all',_search='';
 
-const TYPE_CFG = window.SokoniInbox?.TYPE_CONFIG || {};
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){location.href='login.html?redirect=messages.html';return;}
+  _subscribe();
+});
 
-// ── UTILS ────────────────────────────────────────────────────
-function _color(s){ const c=['#f97316','#8b5cf6','#3b82f6','#10b981','#ef4444','#eab308','#6366f1','#f43f5e','#14b8a6','#a855f7']; let h=0; for(let i=0;i<(s||'').length;i++) h=(h*31+s.charCodeAt(i))&0xffffffff; return c[Math.abs(h)%c.length]; }
-function _ini(s){ return (s||'?').split(/\s+/).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?'; }
-function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function _time(ts){ if(!ts) return ''; const d=new Date(ts),n=new Date(); if(d.toDateString()===n.toDateString()) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); if(n-d<7*864e5) return d.toLocaleDateString([],{weekday:'short'}); return d.toLocaleDateString([],{month:'short',day:'numeric'}); }
-function _convId(a,b){ return [a,b].sort().join('_'); }
-
-// ── AUTH ─────────────────────────────────────────────────────
-function _getUser(){ try{ return JSON.parse(localStorage.getItem('sokoniUser')||'null'); }catch(e){ return null; } }
-
-// ── FIRESTORE ────────────────────────────────────────────────
-async function _fs(){ if(!_db) _db=window.firebaseDB||null; if(!_db) return null; return await import(FS_URL).catch(()=>null); }
-
-// ── SUBSCRIBE LIST ───────────────────────────────────────────
-async function _subList(){
-  if(_listUnsub){ _listUnsub(); _listUnsub=null; }
-  const fs=await _fs(); if(!fs||!_uid){ _renderList([]); return; }
-  const {collection,query,where,orderBy,onSnapshot}=fs;
-  const q=query(collection(_db,'conversations'),where('participants','array-contains',_uid),orderBy('lastAt','desc'));
-  _listUnsub=onSnapshot(q,snap=>{
-    _convos=snap.docs.map(d=>({id:d.id,...d.data()}));
-    _renderList(_convos); _updateBadges();
-    const p=new URLSearchParams(location.search);
-    if(p.get('with')&&!_activeId) _initUrl(p);
-    if(p.get('convo')&&!_activeId) openConvo(p.get('convo'));
-  },()=>_renderList([]));
-}
-
-// ── INIT FROM URL (hub deep-link) ────────────────────────────
-async function _initUrl(p){
-  const ou=p.get('with'), on=p.get('name')||'User', type=p.get('type')||'general', ctx=p.get('ctx')||'';
-  const fs=await _fs(); if(!fs||!_uid) return;
-  const {doc,setDoc}=fs;
-  const cid=_convId(_uid,ou);
-  await setDoc(doc(_db,'conversations',cid),{participants:[_uid,ou].sort(),names:{[_uid]:_myName,[ou]:on},type,context:ctx,lastAt:Date.now(),unread:{},createdAt:Date.now()},{merge:true});
-  openConvo(cid);
-  history.replaceState({},'','messages.html');
-}
-
-// ── RENDER LIST ──────────────────────────────────────────────
-function _renderList(convos){
-  const list=document.getElementById('convoList'); if(!list) return;
-  let items=[...convos];
-  if(_searchQ){ const q=_searchQ.toLowerCase(); items=items.filter(c=>{ const o=(c.participants||[]).find(p=>p!==_uid)||''; const n=(c.names||{})[o]||''; return n.toLowerCase().includes(q)||(c.context||'').toLowerCase().includes(q)||(c.lastMessage||'').toLowerCase().includes(q); }); }
-  if(_tab==='unread') items=items.filter(c=>!(c.spam||{})[_uid]&&(c.unread||{})[_uid]>0);
-  if(_tab==='spam')   items=items.filter(c=>(c.spam||{})[_uid]);
-  if(_tab==='pinned') items=items.filter(c=>(c.pinnedBy||[]).includes(_uid));
-  if(_tab==='inbox')  items=items.filter(c=>!(c.spam||{})[_uid]);
-  if(!items.length){
-    const em={inbox:'No conversations yet',unread:'No unread messages',pinned:'No pinned chats',spam:'No spam'};
-    list.innerHTML=`<div class="ib-empty"><div class="ib-empty-icon">${_tab==='spam'?'🚫':'💬'}</div><div class="ib-empty-txt">${em[_tab]||''}</div><div class="ib-empty-sub">Tap + New to start a conversation</div></div>`;
-    return;
-  }
-  list.innerHTML=items.map(c=>{
-    const o=(c.participants||[]).find(p=>p!==_uid)||'?';
-    const n=(c.names||{})[o]||'Sokoni User';
-    const ur=(c.unread||{})[_uid]||0;
-    const tc=TYPE_CFG[c.type||'general']||{};
-    const col=tc.color||_color(n);
-    const prev=c.lastMessage?_esc(c.lastMessage.substring(0,48)):'<em style="opacity:.4">No messages yet</em>';
-    const pin=(c.pinnedBy||[]).includes(_uid);
-    return `<div class="cv${c.id===_activeId?' cv-on':''}" onclick="openConvo('${_esc(c.id)}')">
-      <div class="cv-av" style="background:${col};">${_esc(_ini(n))}</div>
-      <div class="cv-body">
-        <div class="cv-name${ur>0?' u':''}">${_esc(n)}${pin?' 📌':''}</div>
-        ${c.context?`<div class="cv-ctx">${_esc((tc.icon||'💬')+' '+c.context)}</div>`:''}
-        <div class="cv-prev${ur>0?' u':''}">${prev}</div>
-      </div>
-      <div class="cv-meta">
-        <div class="cv-t">${_time(c.lastAt)}</div>
-        ${ur>0?`<div class="cv-bdg">${ur}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function _updateBadges(){
-  const n=_convos.filter(c=>!(c.spam||{})[_uid]&&(c.unread||{})[_uid]>0).length;
-  const tb=document.getElementById('totalBadge'); if(tb){tb.textContent=n||'';tb.style.display=n?'':'none';}
-  const ub=document.getElementById('tabUnreadBadge'); if(ub){ub.textContent=n||'';ub.style.display=n?'':'none';}
-  window.dispatchEvent(new CustomEvent('sokoniInboxUnread',{detail:{count:n}}));
-}
-
-function switchTab(t,btn){ _tab=t; document.querySelectorAll('.ib-tab').forEach(b=>b.classList.remove('active')); if(btn) btn.classList.add('active'); _renderList(_convos); }
-function filterConvos(q){ _searchQ=q.trim(); _renderList(_convos); }
-
-// ── OPEN CONVERSATION ────────────────────────────────────────
-function openConvo(id){
-  _activeId=id;
-  const c=_convos.find(x=>x.id===id)||{id,names:{},participants:[]};
-  const o=(c.participants||[]).find(p=>p!==_uid)||'';
-  const n=(c.names||{})[o]||'Sokoni User';
-  const tc=TYPE_CFG[c.type||'general']||{};
-  const col=tc.color||_color(n);
-  _renderList(_convos);
-  const chat=document.getElementById('ibChat');
-  chat.innerHTML=`
-    <div class="ch-head">
-      <button class="ch-back" onclick="closeChatPanel()">←</button>
-      <div class="ch-av" style="background:${col};">${_esc(_ini(n))}</div>
-      <div class="ch-info">
-        <div class="ch-name">${_esc(n)}</div>
-        <div class="ch-meta">
-          ${tc.icon?`<span class="ch-type-badge" style="background:${col}1e;color:${col};border:1px solid ${col}3a;">${_esc(tc.icon)} ${_esc(tc.label||'')}</span>`:''}
-          ${c.context?`<span>${_esc(c.context)}</span>`:''}
-        </div>
-      </div>
-      <div class="ch-acts">
-        <button class="ch-act" onclick="togglePin('${_esc(id)}')" title="Pin">📌</button>
-        <button class="ch-act" onclick="markSpam('${_esc(id)}')" title="Spam">🚫</button>
-        <button class="ch-act" onclick="deleteConvo('${_esc(id)}')" title="Delete">🗑️</button>
-      </div>
-    </div>
-    <div class="ch-msgs" id="chatArea"><div style="text-align:center;padding:40px;color:rgba(255,255,255,0.28);font-size:13px;">Loading…</div></div>
-    <div class="typing-wrap" id="typingWrap"></div>
-    <div id="imgPrevBar" style="display:none;" class="img-prev-bar">
-      <img id="imgPrevThumb" class="img-prev-thumb" src="" alt="">
-      <span id="imgPrevName" style="font-size:11px;color:rgba(255,255,255,0.45);flex:1;"></span>
-      <button class="img-prev-clear" onclick="clearImg()">✕</button>
-    </div>
-    <div class="ch-input-row">
-      <button class="ch-attach" onclick="document.getElementById('fileInput').click()" title="Attach">📎</button>
-      <div class="ch-txt-wrap">
-        <textarea class="ch-ta" id="chatInput" placeholder="Type a message…" rows="1"
-          oninput="autoResize(this);onTyping('${_esc(id)}')"
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg('${_esc(id)}');}"></textarea>
-      </div>
-      <button class="ch-send" onclick="sendMsg('${_esc(id)}')" title="Send">➤</button>
-    </div>`;
-  chat.classList.add('open');
-  setTimeout(()=>{ const t=document.getElementById('chatInput'); if(t) t.focus(); },80);
-  _subMsgs(id);
-  _subDoc(id);
-}
-
-function closeChatPanel(){
-  if(_convoUnsub){_convoUnsub();_convoUnsub=null;}
-  if(_docUnsub){_docUnsub();_docUnsub=null;}
-  const chat=document.getElementById('ibChat');
-  chat.classList.remove('open');
-  chat.innerHTML=`<div class="ib-ph"><div class="ib-ph-icon">💬</div><h3>Your messages</h3><p>Select a conversation to start chatting</p></div>`;
-  _activeId=null; _renderList(_convos);
-}
-window.closeChatPanel=closeChatPanel;
-
-// ── SUBSCRIBE MESSAGES ───────────────────────────────────────
-async function _subMsgs(cid){
-  if(_convoUnsub){_convoUnsub();_convoUnsub=null;}
-  const fs=await _fs(); if(!fs||!_uid) return;
-  const {collection,query,orderBy,onSnapshot,doc,updateDoc}=fs;
-  try{ await updateDoc(doc(_db,'conversations',cid),{[`unread.${_uid}`]:0,[`lastReadAt.${_uid}`]:Date.now()}); }catch(e){}
-  const q=query(collection(_db,'conversations',cid,'messages'),orderBy('ts','asc'));
-  _convoUnsub=onSnapshot(q,snap=>{
-    const msgs=snap.docs.map(d=>({id:d.id,...d.data()}));
-    _renderMsgs(msgs,cid);
-    const last=msgs[msgs.length-1];
-    if(last&&last.senderId!==_uid) SokoniInbox.fireNewMessage(cid,last);
-  },()=>{});
-}
-
-// ── SUBSCRIBE CONVO DOC (typing + read receipts) ─────────────
-async function _subDoc(cid){
-  if(_docUnsub){_docUnsub();_docUnsub=null;}
-  const fs=await _fs(); if(!fs||!_uid) return;
-  const {doc,onSnapshot}=fs;
-  _docUnsub=onSnapshot(doc(_db,'conversations',cid),snap=>{
-    if(!snap.exists()) return;
-    const d=snap.data();
-    const other=(d.participants||[]).find(p=>p!==_uid);
-    // Typing
-    const tw=document.getElementById('typingWrap');
-    if(tw){
-      const tts=(d.typing||{})[other]||0;
-      if(tts>Date.now()-4500){ const nn=(d.names||{})[other]||'User'; tw.innerHTML=`<div class="typing-ind"><span>${_esc(nn)} is typing</span><div class="tdots"><span></span><span></span><span></span></div></div>`; }
-      else tw.innerHTML='';
-    }
-    // Read receipts — update last bubble
-    _lastReadOther=(d.lastReadAt||{})[other]||0;
-    const area=document.getElementById('chatArea');
-    if(area){
-      const rcpts=area.querySelectorAll('.rcpt');
-      if(rcpts.length){ const last=rcpts[rcpts.length-1]; const ts=parseInt(last.dataset.ts||'0'); last.innerHTML=_lastReadOther>=ts?'<span class="rcpt-r">✓✓</span>':'<span class="rcpt-s">✓</span>'; }
-    }
-  },()=>{});
-}
-
-// ── RENDER MESSAGES ──────────────────────────────────────────
-function _renderMsgs(msgs,cid){
-  const area=document.getElementById('chatArea'); if(!area) return;
-  if(!msgs.length){ area.innerHTML=`<div style="text-align:center;padding:44px 20px;color:rgba(255,255,255,0.28);font-size:13px;">No messages yet — say hello! 👋</div>`; return; }
-  const c=_convos.find(x=>x.id===cid)||{};
-  const otherUid=(c.participants||[]).find(p=>p!==_uid)||'';
-  const otherColor=_color((c.names||{})[otherUid]||'U');
-  const otherInit=_ini((c.names||{})[otherUid]||'U');
-  let html='', lastDay='';
-  msgs.forEach((m,i)=>{
-    const day=new Date(m.ts||Date.now()).toDateString();
-    if(day!==lastDay){ html+=`<div class="day-sep">${day===new Date().toDateString()?'Today':new Date(m.ts).toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'})}</div>`; lastDay=day; }
-    if(m.type==='system'){ html+=`<div class="sys-msg">${_esc(m.text)}</div>`; return; }
-    const mine=m.senderId===_uid;
-    const t=_time(m.ts||Date.now());
-    const isLast=i===msgs.length-1;
-    let content='';
-    if(m.type==='image'&&m.imageData){
-      content=`<img class="bub-img" src="${m.imageData}" alt="image" onclick="openLb('${m.imageData.substring(0,30)}')">`;
-      if(m.text) content+=`<div>${_esc(m.text)}</div>`;
-    } else {
-      const raw=m.text||'';
-      /* Full 5-char XSS escape as fallback if ContactGuard not loaded */
-      const _safeEsc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-      const safe=window.ContactGuard?.sanitiseForDisplay?ContactGuard.sanitiseForDisplay(raw):_safeEsc(raw);
-      content=safe;
-    }
-    const gn=m.guarded?`<div class="guard-note">🤖 Contact info hidden — <a href="marketing.html">Boost to unlock</a></div>`:'';
-    const rcpt=(mine&&isLast)?`<span class="rcpt" data-ts="${m.ts||0}">${_lastReadOther>=(m.ts||0)?'<span class="rcpt-r">✓✓</span>':'<span class="rcpt-s">✓</span>'}</span>`:'';
-    html+=`<div class="brow${mine?' mine':''}">
-      ${!mine?`<div class="bav" style="background:${otherColor};">${_esc(otherInit)}</div>`:''}
-      <div class="bub${mine?' mine':' theirs'}">${content}${gn}<div class="bub-meta"><span class="bub-t">${t}</span>${rcpt}</div></div>
-    </div>`;
+function _subscribe(){
+  if(_unsub)_unsub();
+  _unsub=SokoniChat.onConversationsChanged(function(err,convs){
+    if(err){_renderErr();return;}
+    _all=convs||[];_render();
   });
-  area.innerHTML=html;
-  area.scrollTop=area.scrollHeight;
 }
 
-// Image lightbox — store src in dataset to avoid inline attr limit
-function openLb(partial){ const area=document.getElementById('chatArea'); if(!area) return; const img=area.querySelector(`.bub-img[src^="${partial}"]`); if(!img) return; const lb=document.getElementById('ibLightbox'); const li=document.getElementById('ibLbImg'); if(lb&&li){li.src=img.src;lb.style.display='flex';} }
-function closeLightbox(){ const lb=document.getElementById('ibLightbox'); if(lb) lb.style.display='none'; }
-window.openLb=openLb; window.closeLightbox=closeLightbox;
-
-// ── SEND MESSAGE ─────────────────────────────────────────────
-async function sendMsg(cid){
-  const inp=document.getElementById('chatInput');
-  const raw=(inp?.value||'').trim();
-  if(!raw&&!_pendingImg) return;
-  const _do=async(text,guarded)=>{
-    if(inp){inp.value='';autoResize(inp);}
-    const fs=await _fs(); if(!fs||!_uid){(window._skToast||alert)('Please log in.');return;}
-    const {collection,addDoc,doc,updateDoc}=fs;
-    const other=(_convos.find(c=>c.id===cid)?.participants||[]).find(p=>p!==_uid)||'';
-    if(_pendingImg){
-      await addDoc(collection(_db,'conversations',cid,'messages'),{senderId:_uid,senderName:_myName,type:'image',imageData:_pendingImg.dataUrl,text:text||'',guarded:false,ts:Date.now()});
-      clearImg();
-    } else {
-      await addDoc(collection(_db,'conversations',cid,'messages'),{senderId:_uid,senderName:_myName,type:'text',text,guarded:!!guarded,ts:Date.now()});
-    }
-    const prevUnread=(_convos.find(c=>c.id===cid)?.unread||{})[other]||0;
-    await updateDoc(doc(_db,'conversations',cid),{lastMessage:(text||'[Image]').substring(0,80),lastAt:Date.now(),lastBy:_uid,[`unread.${other}`]:prevUnread+1,[`lastReadAt.${_uid}`]:Date.now(),[`typing.${_uid}`]:0});
-    window.dispatchEvent(new CustomEvent('sokoniOutboundMessage',{detail:{cid,recipientUid:other,preview:text||'[Image]'}}));
-  };
-  if(window.ContactGuard?.process&&raw){ const r=ContactGuard.process(raw); if(r.wasBlocked) ContactGuard.showWarning(raw,r.text,r.findings,masked=>_do(masked,true),()=>{if(inp)inp.focus();}); else _do(r.text,false); }
-  else _do(raw,false);
-}
-window.sendMsg=sendMsg;
-
-// ── TYPING ───────────────────────────────────────────────────
-async function onTyping(cid){
-  if(_typingTimer) clearTimeout(_typingTimer);
-  const fs=await _fs(); if(fs&&_uid){ const {doc,updateDoc}=fs; updateDoc(doc(_db,'conversations',cid),{[`typing.${_uid}`]:Date.now()}).catch(()=>{}); }
-  _typingTimer=setTimeout(async()=>{ const fs2=await _fs(); if(fs2){const {doc,updateDoc}=fs2;updateDoc(doc(_db,'conversations',cid),{[`typing.${_uid}`]:0}).catch(()=>{});} },3500);
-}
-
-// ── IMAGE HANDLING ───────────────────────────────────────────
-function handleFile(e){
-  const f=e.target.files?.[0]; e.target.value=''; if(!f) return;
-  if(!f.type.startsWith('image/')){ showToast(`📄 File sharing via Storage (${f.name})`, 'info'); return; }
-  const reader=new FileReader();
-  reader.onload=ev=>{ const img=new Image(); img.onload=()=>{ const c=document.createElement('canvas'); let w=img.width,h=img.height,mx=800; if(w>mx||h>mx){if(w>h){h=Math.round(h*mx/w);w=mx;}else{w=Math.round(w*mx/h);h=mx;}} c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h); let q=0.8,du=c.toDataURL('image/jpeg',q); while(du.length>200000&&q>0.2){q-=0.15;du=c.toDataURL('image/jpeg',q);} if(du.length>260000){showToast('⚠️ Image too large','error');return;} _pendingImg={dataUrl:du,filename:f.name}; const bar=document.getElementById('imgPrevBar'),th=document.getElementById('imgPrevThumb'),nm=document.getElementById('imgPrevName'); if(bar&&th&&nm){th.src=du;nm.textContent=f.name;bar.style.display='flex';} }; img.src=ev.target.result; };
-  reader.readAsDataURL(f);
-}
-function clearImg(){ _pendingImg=null; const b=document.getElementById('imgPrevBar'); if(b) b.style.display='none'; }
-window.clearImg=clearImg;
-
-function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
-
-// ── CONVO ACTIONS ────────────────────────────────────────────
-async function togglePin(id){ const fs=await _fs(); if(!fs||!_uid) return; const {doc,updateDoc,arrayUnion,arrayRemove}=fs; const p=(_convos.find(x=>x.id===id)?.pinnedBy||[]).includes(_uid); await updateDoc(doc(_db,'conversations',id),{pinnedBy:p?arrayRemove(_uid):arrayUnion(_uid)}).catch(()=>{}); showToast(p?'📌 Unpinned':'📌 Pinned'); }
-async function markSpam(id){ const fs=await _fs(); if(fs&&_uid){const {doc,updateDoc}=fs; await updateDoc(doc(_db,'conversations',id),{[`spam.${_uid}`]:true}).catch(()=>{});} closeChatPanel(); showToast('🚫 Moved to spam'); }
-async function deleteConvo(id, _c){ if(!_c){ _skConfirm('Delete this conversation? It only removes it for you.', ()=>deleteConvo(id,true)); return; } const fs=await _fs(); if(fs&&_uid){const {doc,updateDoc,arrayRemove}=fs; await updateDoc(doc(_db,'conversations',id),{participants:arrayRemove(_uid)}).catch(()=>{});} closeChatPanel(); showToast('🗑️ Deleted'); }
-window.togglePin=togglePin; window.markSpam=markSpam; window.deleteConvo=deleteConvo;
-
-// ── NEW CONVO MODAL ──────────────────────────────────────────
-function showNewConvo(){ document.getElementById('newConvoModal').style.display='flex'; document.body.style.overflow='hidden'; }
-function closeNewConvo(){ document.getElementById('newConvoModal').style.display='none'; document.body.style.overflow=''; }
-window.showNewConvo=showNewConvo; window.closeNewConvo=closeNewConvo;
-
-async function startConvo(){
-  const type  = document.getElementById('ncType')?.value || 'general';
-  const ctx   = document.getElementById('ncContext')?.value.trim() || '';
-  const msg   = document.getElementById('ncMsg')?.value.trim();
-  const toRaw = document.getElementById('ncTo')?.value.trim() || '';
-  if(!msg){ showToast('⚠️ Please enter a message','error'); return; }
-  if(!_uid){ window.location.href='login.html?next=messages.html'; return; }
-  const fs=await _fs(); if(!fs){ showToast('⚠️ Not connected','error'); return; }
-  const {doc,setDoc,addDoc,collection}=fs;
-  const other     = toRaw || 'sokoni-support';
-  const otherName = toRaw ? ('User ' + toRaw.substring(0,8) + '…') : 'SOKONI Support';
-  const cid = _convId(_uid, other);
-  await setDoc(doc(_db,'conversations',cid),{
-    participants:[_uid,other].sort(),
-    names:{[_uid]:_myName,[other]:otherName},
-    type, context:ctx,
-    lastMessage:msg.substring(0,80),
-    lastAt:Date.now(),
-    unread:{[other]:1},
-    createdAt:Date.now()
-  },{merge:true});
-  await addDoc(collection(_db,'conversations',cid,'messages'),{senderId:_uid,senderName:_myName,type:'text',text:msg,guarded:false,ts:Date.now()});
-  closeNewConvo();
-  ['ncTo','ncContext','ncMsg'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  openConvo(cid);
-}
-window.startConvo=startConvo;
-
-// ── PUSH NOTIFICATIONS ───────────────────────────────────────
-function _showPushBanner(){
-  if(Notification?.permission==='granted') return;
-  if(localStorage.getItem('sokoniPushDismissed')) return;
-  const b=document.createElement('div'); b.id='pushBannerEl'; b.className='push-bar';
-  b.innerHTML=`<span>🔔</span><span class="push-bar-txt">Enable notifications to get alerts for new messages.</span><button class="push-en" onclick="enablePush()">Enable</button><button class="push-x" onclick="dismissPush()">✕</button>`;
-  document.getElementById('ibChat')?.before(b)||document.querySelector('.ib-wrap')?.prepend(b);
-}
-async function enablePush(){ const ok=await SokoniInbox.requestPushPermission(); if(ok){dismissPush();if(_uid&&_db)SokoniInbox.savePushToken(_uid,_db);showToast('🔔 Notifications enabled!');}else showToast('⚠️ Notifications blocked','error'); }
-function dismissPush(){ localStorage.setItem('sokoniPushDismissed','1'); document.getElementById('pushBannerEl')?.remove(); }
-window.enablePush=enablePush; window.dismissPush=dismissPush;
-
-// ── TOAST ────────────────────────────────────────────────────
-function showToast(msg,type){
-  const old=document.querySelector('.ib-toast'); if(old) old.remove();
-  const t=document.createElement('div'); t.className='ib-toast';
-  t.style.cssText=`position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid ${type==='error'?'rgba(239,68,68,.4)':'rgba(113,255,0,.3)'};border-radius:12px;padding:11px 20px;font-size:13px;font-weight:700;color:${type==='error'?'#f87171':'#71ff00'};z-index:9999;white-space:nowrap;box-shadow:0 8px 28px rgba(0,0,0,.6);`;
-  t.textContent=msg; document.body.appendChild(t);
-  setTimeout(()=>t.style.opacity='0',3100); setTimeout(()=>t.remove(),3500);
-}
-
-// ── INIT ─────────────────────────────────────────────────────
-(function init(){
-  const user=_getUser();
-  if(!user?.uid){
-    document.getElementById('convoList').innerHTML=`<div class="ib-empty"><div class="ib-empty-icon">🔒</div><div class="ib-empty-txt">Sign in to view messages</div><a href="login.html?next=messages.html" style="display:inline-block;margin-top:14px;padding:10px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050f05;font-weight:900;border-radius:11px;text-decoration:none;font-size:13px;">Login</a></div>`;
-    return;
-  }
-  _uid=user.uid; _myName=user.name||user.email||'Me';
-  function tryStart(){
-    if(window.firebaseDB){ _db=window.firebaseDB; _subList(); _showPushBanner(); return; }
-    document.addEventListener('sokoniAuthReady',function h(e){ document.removeEventListener('sokoniAuthReady',h); _db=window.firebaseDB||null; _uid=e.detail?.uid||_uid; _subList(); _showPushBanner(); if(_uid&&_db&&Notification?.permission==='granted') SokoniInbox.savePushToken(_uid,_db); });
-    setTimeout(()=>{ if(!_listUnsub&&window.firebaseDB){_db=window.firebaseDB;_subList();} },2000);
-  }
-  tryStart();
-  // Live unread badge in nav
-  document.addEventListener('sokoniAuthReady',e=>{
-    const uid=e.detail?.uid||_uid, db=window.firebaseDB;
-    if(uid&&db) SokoniInbox.subscribeUnread(uid,db,count=>{
-      const btn=document.getElementById('notifBtn'); if(!btn) return;
-      let b=btn.querySelector('.nb');
-      if(count>0){ if(!b){b=document.createElement('span');b.className='nb';btn.appendChild(b);} b.textContent=count; }
-      else if(b) b.remove();
-    });
+document.querySelectorAll('.filter-chip').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.filter-chip').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');_filter=btn.dataset.filter;_render();
   });
+});
+
+var _st;
+document.getElementById('searchInput').addEventListener('input',function(e){
+  clearTimeout(_st);_st=setTimeout(function(){_search=e.target.value.toLowerCase().trim();_render();},220);
+});
+
+function _render(){
+  var list=_all;
+  if(_filter!=='all')list=list.filter(function(c){return c.transactionType===_filter;});
+  if(_search)list=list.filter(function(c){
+    return(c.title+' '+c.participantName+' '+(c.lastMessageText||'')).toLowerCase().includes(_search);
+  });
+  var el=document.getElementById('convList');
+  if(!list.length){
+    el.innerHTML='<div class="empty"><span class="material-icons">chat_bubble_outline</span><h3>No conversations</h3><p>'+
+      (_filter!=='all'||_search?'No matching conversations found.':
+       'Your conversations appear here when you place an order, make a booking, or submit an inquiry.')+
+      '</p></div>';return;
+  }
+  el.innerHTML=list.map(_convHtml).join('');
+}
+
+function _renderErr(){
+  document.getElementById('convList').innerHTML=
+    '<div class="empty"><span class="material-icons">error_outline</span><h3>Could not load messages</h3><p>Check your connection and try again.</p></div>';
+}
+
+function _convHtml(c){
+  var ctx=SokoniChat.getContext(c.transactionType);
+  var unread=(c.unreadCount||0)>0;
+  var preview=c.lastMessageText||'No messages yet';
+  var t=c.lastMessageAt?SokoniChat.timeStr(c.lastMessageAt):'';
+  var avatar=c.participantAvatar
+    ?'<img src="'+SokoniChat.esc(c.participantAvatar)+'" alt="">'
+    :'<span class="material-icons">'+ctx.icon+'</span>';
+  return '<a class="conv-item'+(unread?' unread':'')+'" href="chat.html?id='+encodeURIComponent(c.conversationId)+'">'+
+    '<div class="conv-avatar">'+avatar+'</div>'+
+    '<div class="conv-body">'+
+      '<div class="conv-title">'+SokoniChat.esc(c.participantName||'Unknown')+'</div>'+
+      '<div class="conv-subtitle">'+SokoniChat.esc(c.title||'')+'</div>'+
+      '<div class="conv-preview">'+SokoniChat.esc(preview)+'</div>'+
+    '</div>'+
+    '<div class="conv-meta">'+
+      '<span class="conv-time">'+SokoniChat.esc(t)+'</span>'+
+      (unread?'<span class="unread-badge">'+Math.min(c.unreadCount,99)+'</span>':'')+
+    '</div>'+
+  '</a>';
+}
+
+window.addEventListener('beforeunload',function(){if(_unsub)_unsub();});
 })();
 </script>
-  <script defer src="kass-widget.js"></script>
-<script src="sokoni-trust.js" defer></script>
-<script src="sokoni-ui-extras.js" defer></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <nav class="bottom-nav">
-    <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-    <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
-    <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-    <a href="messages.html" class="bnav-item active-bnav"><span class="bnav-emoji">💬</span><span>Messages</span></a>
-    <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
-  </nav>
 </body>
 </html>
-
-
-
-

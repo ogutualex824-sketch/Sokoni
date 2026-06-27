@@ -7429,3 +7429,16 @@ exports.onMessageCreated            = messages.onMessageCreated;
 exports.moderateMessage             = messages.moderateMessage;
 exports.archiveCompletedConversations = messages.archiveCompletedConversations;
 exports.cleanupChatStorage          = messages.cleanupChatStorage;
+
+/* ══════════════════════════════════════════════════════════════════
+   SOKONI SmartPOS Retail Cloud Functions  v2.0
+   5 Cloud Functions: marketplace stock sync, SMS/email receipts,
+   purchase order email, daily low-stock alert, order→POS inventory.
+══════════════════════════════════════════════════════════════════ */
+const posRetail = require("./pos-retail");
+
+exports.posSyncToMarketplace       = posRetail.posSyncToMarketplace;
+exports.sendPOSReceipt             = posRetail.sendPOSReceipt;
+exports.sendPurchaseOrder          = posRetail.sendPurchaseOrder;
+exports.posLowStockAlert           = posRetail.posLowStockAlert;
+exports.posMarketplaceOrderSync    = posRetail.posMarketplaceOrderSync;

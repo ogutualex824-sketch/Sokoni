@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports &amp; Analytics — SOKONI SmartPOS</title>
+  <style>
+    :root{--bg:#0d0d1a;--bg2:#141426;--card:#1a1a2e;--card2:#22223b;--border:#2a2a4a;--accent:#7c3aed;--accent2:#a855f7;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;--text:#f0f0ff;--muted:#8888aa;--r:12px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:15px;min-height:100vh}
+    .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;height:56px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+    .topbar-back{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px 8px}
+    .topbar-title{font-size:16px;font-weight:600;flex:1}
+    .container{max-width:1200px;margin:0 auto;padding:16px 12px 100px}
+    .tabs{display:flex;gap:4px;background:var(--card);border-radius:var(--r);padding:4px;margin-bottom:16px;overflow-x:auto}
+    .tab{flex:1;min-width:80px;padding:9px;text-align:center;border-radius:9px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);border:none;background:none;white-space:nowrap}
+    .tab.active{background:var(--accent);color:#fff}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+    .btn{padding:9px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent)}
+    .btn-sm{padding:6px 12px;font-size:12px}
+    .form-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+    .form-input:focus{border-color:var(--accent)}
+    select.form-input{cursor:pointer}
+    .tbl{width:100%;border-collapse:collapse;font-size:13px}
+    .tbl th{padding:9px 12px;text-align:left;background:var(--bg2);color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+    .tbl td{padding:9px 12px;border-bottom:1px solid rgba(42,42,74,.5);vertical-align:middle}
+    .tbl tr:hover td{background:rgba(124,58,237,.05)}
+    .tbl-wrap{overflow-x:auto}
+    .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+    .pill-green{background:rgba(34,197,94,.15);color:var(--green)}
+    .pill-red{background:rgba(239,68,68,.15);color:var(--red)}
+    .pill-yellow{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .pill-gray{background:rgba(136,136,170,.15);color:var(--muted)}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+    .summary-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+    .summary-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+    .summary-value{font-size:22px;font-weight:700}
+    .summary-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .summary-change.up{color:var(--green)}.summary-change.down{color:var(--red)}
+    .section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+    .section-title{font-size:15px;font-weight:600}
+    /* Chart */
+    .bar-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px 0}
+    .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+    .bar{background:var(--accent);border-radius:4px 4px 0 0;min-height:4px;width:100%;transition:height .3s}
+    .bar-lbl{font-size:10px;color:var(--muted);white-space:nowrap}
+    .bar-val{font-size:10px;color:var(--text);white-space:nowrap}
+    /* Donut */
+    .pay-breakdown{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    .pay-pill{display:flex;flex-direction:column;align-items:center;background:var(--bg2);border-radius:8px;padding:10px 14px;min-width:90px}
+    .pay-amt{font-size:15px;font-weight:700}
+    .pay-lbl{font-size:11px;color:var(--muted)}
+    /* P&L */
+    .pl-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}
+    .pl-row.total{font-weight:700;font-size:15px;border-top:2px solid var(--border);border-bottom:none}
+    .pl-row.sub{padding-left:16px;color:var(--muted);font-size:13px}
+    .pos-val{color:var(--green)}.neg-val{color:var(--red)}
+    #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:30px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+    #toast.show{opacity:1}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading-overlay{text-align:center;padding:40px;color:var(--muted)}
+    @media(max-width:600px){.summary-grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar-back" onclick="history.back()">&#8592;</button>
+  <div class="topbar-title">📊 Reports &amp; Analytics</div>
+  <button class="btn btn-outline btn-sm" onclick="exportCurrentReport()">📥 Export</button>
+</div>
+
+<div class="container">
+
+  <!-- Date Range Picker -->
+  <div class="card">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select class="form-input" id="periodPreset" style="width:160px" onchange="applyPreset()">
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="week">This Week</option>
+        <option value="month" selected>This Month</option>
+        <option value="last_month">Last Month</option>
+        <option value="year">This Year</option>
+        <option value="custom">Custom Range</option>
+      </select>
+      <div id="customRange" style="display:none;display:flex;gap:8px;align-items:center">
+        <input class="form-input" type="date" id="fromDate" style="width:140px">
+        <span style="color:var(--muted)">to</span>
+        <input class="form-input" type="date" id="toDate" style="width:140px">
+      </div>
+      <input class="form-input" id="branchInput" placeholder="Branch ID (default=all)" style="width:160px">
+      <button class="btn btn-primary btn-sm" onclick="runReport()">▶ Run Report</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="dashboard">📈 Dashboard</button>
+    <button class="tab" data-tab="sales">💰 Sales</button>
+    <button class="tab" data-tab="pl">📑 P&amp;L</button>
+    <button class="tab" data-tab="products">🏷️ Products</button>
+    <button class="tab" data-tab="employees">👤 Employees</button>
+    <button class="tab" data-tab="tax">🧾 Tax</button>
+    <button class="tab" data-tab="cashflow">🏦 Cash Flow</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="tab-panel active" id="tab-dashboard">
+    <div id="dashContent" class="loading-overlay"><span class="spinner"></span> Loading…</div>
+  </div>
+
+  <!-- SALES -->
+  <div class="tab-panel" id="tab-sales">
+    <div id="salesContent" class="loading-overlay"><span class="spinner"></span> Loading…</div>
+  </div>
+
+  <!-- P&L -->
+  <div class="tab-panel" id="tab-pl">
+    <div id="plContent" class="loading-overlay"><span class="spinner"></span> Loading…</div>
+  </div>
+
+  <!-- PRODUCTS -->
+  <div class="tab-panel" id="tab-products">
+    <div id="prodContent" class="loading-overlay"><span class="spinner"></span> Loading…</div>
+  </div>
+
+  <!-- EMPLOYEES -->
+  <div class="tab-panel" id="tab-employees">
+    <div id="empContent" class="loading-overlay"><span class="spinner"></span> Loading…</div>
+  </div>
+
+  <!-- TAX -->
+  <div class="tab-panel" id="tab-tax">
+    <div id="taxContent" class="loading-overlay"><span class="spinner"></span> Loading…</div>
+  </div>
+
+  <!-- CASH FLOW -->
+  <div class="tab-panel" id="tab-cashflow">
+    <div id="cashContent" class="loading-overlay"><span class="spinner"></span> Loading…</div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script src="firebase.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="pos-inventory.js"></script>
+<script src="pos-sales.js"></script>
+<script src="pos-customers.js"></script>
+<script src="pos-suppliers.js"></script>
+<script src="pos-reports.js"></script>
+<script>
+const E   = id => document.getElementById(id);
+const _e  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const KES = n  => 'KES ' + Number(n||0).toFixed(2);
+const pct = (n,d) => d ? ((n/d)*100).toFixed(1)+'%' : '—';
+
+let _currentReport = null;
+let _activeTab     = 'dashboard';
+let _from          = 0, _until = 0;
+
+function toast(msg, dur = 2500) {
+  const el = E('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+/* ── Tabs ── */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t.dataset.tab));
+    _activeTab = t.dataset.tab;
+    renderActiveTab();
+  });
+});
+
+/* ── Period presets ── */
+function applyPreset() {
+  const now = new Date();
+  const preset = E('periodPreset').value;
+  const cr = E('customRange');
+  cr.style.display = preset === 'custom' ? '' : 'none';
+  if (preset !== 'custom') runReport();
+}
+
+function _getPeriod() {
+  const preset = E('periodPreset').value;
+  const now    = new Date();
+  let from, until;
+  if (preset === 'today')      { from = _startOf('day'); until = _endOf('day'); }
+  else if (preset === 'yesterday') { const y = new Date(Date.now()-86400000); from = _startOf('day',y); until = _endOf('day',y); }
+  else if (preset === 'week')  { from = _startOf('week'); until = _endOf('week'); }
+  else if (preset === 'month') { from = _startOf('month'); until = _endOf('month'); }
+  else if (preset === 'last_month') {
+    const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    from = _startOf('month',d); until = _endOf('month',d);
+  }
+  else if (preset === 'year')  { from = _startOf('year'); until = _endOf('year'); }
+  else {
+    from  = new Date(E('fromDate').value||now).setHours(0,0,0,0);
+    until = new Date(E('toDate').value||now).setHours(23,59,59,999);
+  }
+  return { from, until };
+}
+
+function _startOf(unit, date=new Date()){const d=new Date(date);if(unit==='day'){d.setHours(0,0,0,0);}else if(unit==='week'){d.setHours(0,0,0,0);d.setDate(d.getDate()-d.getDay());}else if(unit==='month'){d.setHours(0,0,0,0);d.setDate(1);}else if(unit==='year'){d.setHours(0,0,0,0);d.setMonth(0,1);}return d.getTime();}
+function _endOf(unit,date=new Date()){const s=_startOf(unit,date);if(unit==='day')return s+86400000-1;if(unit==='week')return s+7*86400000-1;if(unit==='month'){const d=new Date(s);d.setMonth(d.getMonth()+1);return d.getTime()-1;}if(unit==='year'){const d=new Date(s);d.setFullYear(d.getFullYear()+1);return d.getTime()-1;}return Date.now();}
+
+/* ── Main run ── */
+async function runReport() {
+  const { from, until } = _getPeriod();
+  _from  = from;
+  _until = until;
+  const branchId = E('branchInput').value.trim() || 'default';
+
+  /* Set all panels to loading */
+  ['dashContent','salesContent','plContent','prodContent','empContent','taxContent','cashContent'].forEach(id => {
+    E(id).innerHTML = '<div class="loading-overlay"><span class="spinner"></span> Loading…</div>';
+  });
+
+  /* Run all in parallel */
+  const [salesRep, plRep, prodRep, empRep, taxRep, cashRep] = await Promise.all([
+    PosReports.getCustomRangeReport(branchId, from, until),
+    PosReports.getProfitLossReport(branchId, from, until),
+    PosReports.getProductPerformanceReport(branchId, from, until),
+    PosReports.getEmployeePerformanceReport(branchId, from, until),
+    PosReports.getTaxReport(branchId, from, until),
+    PosReports.getCashFlowReport(branchId, from, until),
+  ]);
+
+  _currentReport = { salesRep, plRep, prodRep, empRep, taxRep, cashRep, branchId };
+
+  renderDashboard(salesRep, plRep, cashRep);
+  renderSales(salesRep);
+  renderPL(plRep);
+  renderProducts(prodRep);
+  renderEmployees(empRep);
+  renderTax(taxRep);
+  renderCashFlow(cashRep);
+}
+
+function renderActiveTab() {
+  if (!_currentReport) runReport();
+}
+
+/* ══ DASHBOARD ══ */
+function renderDashboard(s, pl, cash) {
+  const df = (ts, te) => `${new Date(ts).toLocaleDateString('en-KE')} – ${new Date(te).toLocaleDateString('en-KE')}`;
+  const marginColor = pl.netProfit >= 0 ? 'var(--green)' : 'var(--red)';
+  E('dashContent').innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">📅 ${df(_from,_until)}</div>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="summary-label">Net Revenue</div>
+        <div class="summary-value" style="color:var(--green)">${KES(s.netRevenue)}</div>
+        <div class="summary-sub">Gross: ${KES(s.grossRevenue)} · Refunds: ${KES(s.refundTotal)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Net Profit</div>
+        <div class="summary-value" style="color:${marginColor}">${KES(pl.netProfit)}</div>
+        <div class="summary-sub">Margin: ${pl.grossMargin}%</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Transactions</div>
+        <div class="summary-value">${s.transactions.toLocaleString()}</div>
+        <div class="summary-sub">Avg: ${KES(s.avgSaleValue)} · Refunds: ${s.refundCount}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Gross Profit</div>
+        <div class="summary-value" style="color:var(--accent2)">${KES(pl.grossProfit)}</div>
+        <div class="summary-sub">COGS: ${KES(pl.cogs)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Total Tax (VAT)</div>
+        <div class="summary-value" style="font-size:16px">${KES(s.totalTax)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Discounts Given</div>
+        <div class="summary-value stock-low" style="font-size:16px">${KES(s.totalDiscount + s.totalCoupon)}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="card">
+        <div class="section-title" style="margin-bottom:10px">💳 Payment Methods</div>
+        <div class="pay-breakdown">
+          ${Object.entries(s.payBreakdown||{}).map(([m,a])=>`<div class="pay-pill"><div class="pay-amt">${KES(a)}</div><div class="pay-lbl">${m}</div></div>`).join('')||'<div style="color:var(--muted);font-size:13px">No data</div>'}
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom:10px">⏰ Peak Hour</div>
+        ${renderHourlyBar(s.hourlyRevenue||new Array(24).fill(0))}
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Peak: ${formatHour(s.peakHour)}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-hd">
+        <div class="section-title">🏆 Top 5 Products</div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>#</th><th>Product</th><th>Qty Sold</th><th>Revenue</th><th>Profit</th></tr></thead>
+        <tbody>${(s.topProducts||[]).slice(0,5).map((p,i)=>`<tr>
+          <td><strong style="color:var(--accent2)">${i+1}</strong></td>
+          <td>${_e(p.name)}</td><td>${p.qty}</td><td>${KES(p.revenue)}</td><td>${KES(p.profit)}</td>
+        </tr>`).join('')||'<tr><td colspan="5" style="color:var(--muted);text-align:center">No data</td></tr>'}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+function renderHourlyBar(hourly) {
+  const max = Math.max(...hourly, 1);
+  const labels = ['12a','1','2','3','4','5','6','7','8','9','10','11','12p','1','2','3','4','5','6','7','8','9','10','11'];
+  return `<div class="bar-chart">${hourly.map((v,i)=>`<div class="bar-col"><div class="bar" style="height:${Math.round((v/max)*100)}px;background:${v===Math.max(...hourly)?'var(--accent2)':'var(--accent)'}"></div><div class="bar-lbl">${labels[i]}</div></div>`).join('')}</div>`;
+}
+
+function formatHour(h) {
+  if (h === undefined || h === null) return '—';
+  if (h === 0) return '12:00 AM';
+  if (h < 12)  return h + ':00 AM';
+  if (h === 12) return '12:00 PM';
+  return (h-12) + ':00 PM';
+}
+
+/* ══ SALES ══ */
+function renderSales(s) {
+  E('salesContent').innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card"><div class="summary-label">Gross Revenue</div><div class="summary-value">${KES(s.grossRevenue)}</div></div>
+      <div class="summary-card"><div class="summary-label">Refunds</div><div class="summary-value stock-out">${KES(s.refundTotal)}</div></div>
+      <div class="summary-card"><div class="summary-label">Net Revenue</div><div class="summary-value" style="color:var(--green)">${KES(s.netRevenue)}</div></div>
+      <div class="summary-card"><div class="summary-label">Transactions</div><div class="summary-value">${s.transactions}</div></div>
+      <div class="summary-card"><div class="summary-label">Avg Sale</div><div class="summary-value" style="font-size:16px">${KES(s.avgSaleValue)}</div></div>
+      <div class="summary-card"><div class="summary-label">Voided</div><div class="summary-value" style="font-size:16px">${s.voidedCount}</div></div>
+    </div>
+    <div class="card">
+      <div class="section-title" style="margin-bottom:10px">💳 Payment Breakdown</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Method</th><th>Amount</th><th>Share</th></tr></thead>
+        <tbody>${Object.entries(s.payBreakdown||{}).map(([m,a])=>`<tr>
+          <td style="text-transform:capitalize">${_e(m)}</td>
+          <td>${KES(a)}</td>
+          <td><div style="background:var(--bg2);border-radius:4px;padding:2px 0"><div style="background:var(--accent);height:6px;border-radius:4px;width:${pct(a,s.netRevenue)}" title="${pct(a,s.netRevenue)}"></div></div></td>
+        </tr>`).join('')||'<tr><td colspan="3" style="color:var(--muted)">No data</td></tr>'}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="section-title" style="margin-bottom:10px">📦 Sales by Category</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Category</th><th>Revenue</th><th>%</th></tr></thead>
+        <tbody>${(s.categories||[]).map(c=>`<tr>
+          <td>${_e(c.name)}</td><td>${KES(c.revenue)}</td><td>${pct(c.revenue,s.netRevenue)}</td>
+        </tr>`).join('')||'<tr><td colspan="3" style="color:var(--muted)">No data</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/* ══ P&L ══ */
+function renderPL(pl) {
+  const row = (label, val, sub, neg, cls='') => `
+    <div class="pl-row ${cls}">
+      <div>${label}${sub?`<div style="font-size:11px;color:var(--muted)">${sub}</div>`:''}</div>
+      <div class="${neg?'neg-val':'pos-val'}">${KES(val)}</div>
+    </div>`;
+  E('plContent').innerHTML = `
+    <div class="card" style="max-width:640px">
+      <div class="section-title" style="margin-bottom:16px">Profit &amp; Loss Statement</div>
+      ${row('Gross Revenue', pl.revenue, null, false)}
+      <div class="pl-row sub"><div>Cost of Goods Sold</div><div class="neg-val">(${KES(pl.cogs)})</div></div>
+      ${row('Gross Profit', pl.grossProfit, `Margin: ${pl.grossMargin}%`, pl.grossProfit<0)}
+      <div style="margin-top:10px"></div>
+      <div style="font-size:12px;color:var(--muted);padding:6px 0;font-weight:600">OPERATING EXPENSES</div>
+      ${(pl.expenseBreakdown||[]).map(e => `<div class="pl-row sub"><div>${_e(e.category)}</div><div class="neg-val">(${KES(e.amount)})</div></div>`).join('')}
+      <div class="pl-row sub"><div>Total Operating Expenses</div><div class="neg-val">(${KES(pl.operatingExpenses)})</div></div>
+      ${row('Operating Profit', pl.operatingProfit, null, pl.operatingProfit<0)}
+      <div class="pl-row sub"><div>Tax / VAT Payable</div><div class="neg-val">(${KES(pl.taxAmount)})</div></div>
+      <div style="height:1px;background:var(--border);margin:4px 0"></div>
+      ${row('Net Profit', pl.netProfit, null, pl.netProfit<0, 'total')}
+    </div>`;
+}
+
+/* ══ PRODUCTS ══ */
+function renderProducts(prod) {
+  E('prodContent').innerHTML = `
+    <div class="card">
+      <div class="section-hd">
+        <div class="section-title">🏆 Top Sellers</div>
+        <button class="btn btn-outline btn-sm" onclick="exportProducts()">📥 CSV</button>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>#</th><th>Product</th><th>Qty</th><th>Revenue</th><th>COGS</th><th>Profit</th><th>Margin</th><th>Stock</th></tr></thead>
+        <tbody>${(prod.topSellers||[]).slice(0,30).map((p,i)=>{
+          const margin = p.revenue>0 ? (p.profit/p.revenue*100).toFixed(1)+'%' : '—';
+          return `<tr>
+            <td><strong style="color:var(--accent2)">${i+1}</strong></td>
+            <td>${_e(p.name)}</td><td>${p.qty}</td><td>${KES(p.revenue)}</td>
+            <td>${KES(p.cost)}</td><td class="${p.profit>=0?'pos-val':'neg-val'}">${KES(p.profit)}</td>
+            <td>${margin}</td>
+            <td>${p.currentStock!==undefined?p.currentStock:'—'}</td>
+          </tr>`;
+        }).join('')||'<tr><td colspan="8" style="color:var(--muted);text-align:center">No data</td></tr>'}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="section-title" style="margin-bottom:10px">🐌 Slow Movers</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue</th><th>Current Stock</th></tr></thead>
+        <tbody>${(prod.slowMovers||[]).slice(0,10).map(p=>`<tr>
+          <td>${_e(p.name)}</td><td>${p.qty}</td><td>${KES(p.revenue)}</td><td>${p.currentStock!==undefined?p.currentStock:'—'}</td>
+        </tr>`).join('')||'<tr><td colspan="4" style="color:var(--muted);text-align:center">No data</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/* ══ EMPLOYEES ══ */
+function renderEmployees(emp) {
+  E('empContent').innerHTML = `
+    <div class="card">
+      <div class="section-hd">
+        <div class="section-title">👤 Employee Performance</div>
+        <button class="btn btn-outline btn-sm" onclick="exportEmployees()">📥 CSV</button>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>#</th><th>Cashier</th><th>Transactions</th><th>Revenue</th><th>Avg Sale</th><th>Refunds</th><th>Hours</th><th>Rev/Hour</th></tr></thead>
+        <tbody>${(emp.employees||[]).map((e,i)=>`<tr>
+          <td><strong style="color:var(--accent2)">${i+1}</strong></td>
+          <td>${_e(e.cashierId)}</td>
+          <td>${e.transactions}</td>
+          <td>${KES(e.revenue)}</td>
+          <td>${KES(e.avgSale)}</td>
+          <td class="neg-val">${KES(e.refunds)}</td>
+          <td>${e.hoursWorked?.toFixed(1)||'—'}</td>
+          <td>${e.revenuePerHour>0?KES(e.revenuePerHour):'—'}</td>
+        </tr>`).join('')||'<tr><td colspan="8" style="color:var(--muted);text-align:center">No data</td></tr>'}</tbody>
+      </table></div>
+    </div>
+    ${(emp.shifts||[]).length?`<div class="card">
+      <div class="section-title" style="margin-bottom:10px">🕐 Shifts</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cashier</th><th>Start</th><th>End</th><th>Sales</th><th>Cash Variance</th></tr></thead>
+        <tbody>${emp.shifts.map(s=>`<tr>
+          <td>${_e(s.cashierId)}</td>
+          <td style="font-size:12px">${s.startTime?new Date(s.startTime).toLocaleString('en-KE',{dateStyle:'short',timeStyle:'short'}):''}</td>
+          <td style="font-size:12px">${s.endTime?new Date(s.endTime).toLocaleString('en-KE',{dateStyle:'short',timeStyle:'short'}):'Open'}</td>
+          <td>${KES(s.totalSales||0)}</td>
+          <td class="${(s.variance||0)>=0?'pos-val':'neg-val'}">${s.variance!==undefined?KES(s.variance):'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`:''}`;
+}
+
+/* ══ TAX ══ */
+function renderTax(tax) {
+  E('taxContent').innerHTML = `
+    <div class="card" style="max-width:600px">
+      <div class="section-title" style="margin-bottom:16px">🧾 VAT / Tax Report</div>
+      <div class="summary-grid" style="margin-bottom:16px">
+        <div class="summary-card"><div class="summary-label">Taxable Sales</div><div class="summary-value" style="font-size:16px">${KES(tax.totalTaxable)}</div></div>
+        <div class="summary-card"><div class="summary-label">Total Tax Collected</div><div class="summary-value" style="font-size:16px;color:var(--accent2)">${KES(tax.totalTax)}</div></div>
+        <div class="summary-card"><div class="summary-label">Transactions</div><div class="summary-value">${tax.transactions}</div></div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tax Rate</th><th>Taxable Amount</th><th>Tax Amount</th><th>Transactions</th></tr></thead>
+        <tbody>${(tax.breakdown||[]).map(r=>`<tr>
+          <td>${r.rate}%</td>
+          <td>${KES(r.taxableAmount)}</td>
+          <td><strong>${KES(r.taxAmount)}</strong></td>
+          <td>${r.transactions}</td>
+        </tr>`).join('')||'<tr><td colspan="4" style="color:var(--muted);text-align:center">No taxable sales</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/* ══ CASH FLOW ══ */
+function renderCashFlow(cf) {
+  const row = (l,v,neg=false,sub=false) => `<div class="pl-row ${sub?'sub':''}"><div>${l}</div><div class="${neg?'neg-val':'pos-val'}">${neg?'('+KES(v)+')':KES(v)}</div></div>`;
+  E('cashContent').innerHTML = `
+    <div class="card" style="max-width:600px">
+      <div class="section-title" style="margin-bottom:16px">🏦 Cash Flow Statement</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">INFLOWS</div>
+      ${row('Total Sales Revenue', cf.totalInflow)}
+      <div style="margin-top:10px;font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">OUTFLOWS</div>
+      ${row('Refunds', cf.refunds, true, true)}
+      ${row('Expenses', cf.expenses, true, true)}
+      <div style="height:1px;background:var(--border);margin:6px 0"></div>
+      ${row('Net Cash Flow', cf.netCashFlow, cf.netCashFlow<0)}
+      <div style="margin-top:16px;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px">CASH SPECIFICALLY</div>
+      ${row('Cash In', cf.cashIn)}
+      ${row('Cash Out (Refunds)', cf.cashOut, true, true)}
+      ${row('Cash Expenses', cf.cashExpenses, true, true)}
+      <div style="height:1px;background:var(--border);margin:6px 0"></div>
+      ${row('Net Cash', cf.netCash, cf.netCash<0)}
+    </div>
+    ${Object.keys(cf.expenseBreakdown||{}).length?`<div class="card" style="max-width:600px">
+      <div class="section-title" style="margin-bottom:10px">💸 Expense Breakdown</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Category</th><th>Amount</th><th>%</th></tr></thead>
+        <tbody>${Object.entries(cf.expenseBreakdown).map(([cat,amt])=>`<tr>
+          <td>${_e(cat)}</td><td>${KES(amt)}</td><td>${pct(amt,cf.expenses)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`:''}`;
+}
+
+/* ══ EXPORTS ══ */
+function exportCurrentReport() {
+  if (!_currentReport) { toast('❌ Run a report first'); return; }
+  if (_activeTab==='products') exportProducts();
+  else if (_activeTab==='employees') exportEmployees();
+  else exportSalesCSV();
+}
+
+function exportSalesCSV() {
+  const s = _currentReport?.salesRep;
+  if (!s) return;
+  const rows = (s.products||[]).map(p => `"${p.name}","${p.qty}","${p.revenue.toFixed(2)}","${p.cost.toFixed(2)}","${p.profit.toFixed(2)}"`);
+  const csv  = `Summary\nNet Revenue,${s.netRevenue.toFixed(2)}\nTransactions,${s.transactions}\nAvg Sale,${s.avgSaleValue.toFixed(2)}\n\nProducts\nName,Qty,Revenue,COGS,Profit\n` + rows.join('\n');
+  _downloadCSV('sales-report.csv', csv);
+}
+
+function exportProducts() {
+  const prod = _currentReport?.prodRep;
+  if (!prod) return;
+  const rows = (prod.topSellers||[]).map(p => `"${p.name}","${p.qty}","${p.revenue.toFixed(2)}","${p.cost.toFixed(2)}","${p.profit.toFixed(2)}","${p.currentStock??''}"`);
+  _downloadCSV('products.csv', 'Name,Qty Sold,Revenue,COGS,Profit,Stock\n' + rows.join('\n'));
+}
+
+function exportEmployees() {
+  const emp = _currentReport?.empRep;
+  if (!emp) return;
+  const rows = (emp.employees||[]).map(e => `"${e.cashierId}","${e.transactions}","${e.revenue.toFixed(2)}","${e.avgSale.toFixed(2)}","${e.refunds.toFixed(2)}","${(e.hoursWorked||0).toFixed(1)}"`);
+  _downloadCSV('employees.csv', 'Cashier,Transactions,Revenue,Avg Sale,Refunds,Hours\n' + rows.join('\n'));
+}
+
+function _downloadCSV(name, content) {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([content],{type:'text/csv'})), download: name });
+  a.click();
+}
+
+/* ── Init ── */
+Promise.all([
+  window.PosSales ? PosSales.init('default') : Promise.resolve(),
+  window.PosInventory ? PosInventory.init('default') : Promise.resolve(),
+]).then(() => {
+  E('periodPreset').value = 'month';
+  runReport();
+});
+</script>
+</body>
+</html>

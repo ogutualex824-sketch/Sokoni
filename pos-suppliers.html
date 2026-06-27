@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suppliers — SOKONI SmartPOS</title>
+  <style>
+    :root{--bg:#0d0d1a;--bg2:#141426;--card:#1a1a2e;--card2:#22223b;--border:#2a2a4a;--accent:#7c3aed;--accent2:#a855f7;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;--text:#f0f0ff;--muted:#8888aa;--r:12px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:15px;min-height:100vh}
+    .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;height:56px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+    .topbar-back{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px 8px}
+    .topbar-title{font-size:16px;font-weight:600;flex:1}
+    .container{max-width:1200px;margin:0 auto;padding:16px 12px 100px}
+    .tabs{display:flex;gap:4px;background:var(--card);border-radius:var(--r);padding:4px;margin-bottom:16px;overflow-x:auto}
+    .tab{flex:1;min-width:90px;padding:9px;text-align:center;border-radius:9px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);border:none;background:none;white-space:nowrap}
+    .tab.active{background:var(--accent);color:#fff}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+    .search{flex:1;min-width:200px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+    .search:focus{border-color:var(--accent)}
+    .search::placeholder{color:var(--muted)}
+    .btn{padding:9px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent)}
+    .btn-green{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+    .btn-sm{padding:6px 12px;font-size:12px}
+    .btn-icon{width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:14px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer}
+    .btn-icon:hover{color:var(--text);background:var(--card)}
+    .tbl{width:100%;border-collapse:collapse;font-size:13px}
+    .tbl th{padding:9px 12px;text-align:left;background:var(--bg2);color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+    .tbl td{padding:9px 12px;border-bottom:1px solid rgba(42,42,74,.5);vertical-align:middle}
+    .tbl tr:hover td{background:rgba(124,58,237,.05)}
+    .tbl-wrap{overflow-x:auto}
+    .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+    .pill-green{background:rgba(34,197,94,.15);color:var(--green)}
+    .pill-red{background:rgba(239,68,68,.15);color:var(--red)}
+    .pill-yellow{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .pill-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+    .pill-gray{background:rgba(136,136,170,.15);color:var(--muted)}
+    .pill-purple{background:rgba(124,58,237,.15);color:var(--accent2)}
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .form-group{display:flex;flex-direction:column;gap:5px}
+    .form-label{font-size:12px;color:var(--muted);font-weight:500}
+    .form-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+    .form-input:focus{border-color:var(--accent)}
+    .form-input::placeholder{color:var(--muted)}
+    select.form-input{cursor:pointer}
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
+    .modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:700px;max-height:90vh;overflow-y:auto}
+    .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .modal-title{font-size:16px;font-weight:600}
+    .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px}
+    .modal-body{padding:20px}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+    .summary-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+    .summary-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+    .summary-value{font-size:22px;font-weight:700}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+    .stat-box{background:var(--bg2);border-radius:8px;padding:12px;text-align:center}
+    .stat-val{font-size:16px;font-weight:700}
+    .stat-lbl{font-size:11px;color:var(--muted)}
+    .po-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .po-item:last-child{border:none}
+    #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:30px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+    #toast.show{opacity:1}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:600px){.form-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar-back" onclick="history.back()">&#8592;</button>
+  <div class="topbar-title">🏭 Suppliers &amp; Purchasing</div>
+  <button class="btn btn-primary btn-sm" onclick="openAddSupplier()">+ Add Supplier</button>
+</div>
+
+<div class="container">
+
+  <div class="summary-grid">
+    <div class="summary-card"><div class="summary-label">Total Suppliers</div><div class="summary-value" id="sumSuppliers">—</div></div>
+    <div class="summary-card"><div class="summary-label">Open POs</div><div class="summary-value" id="sumOpenPOs">—</div></div>
+    <div class="summary-card"><div class="summary-label">Total Outstanding</div><div class="summary-value stock-low" id="sumOutstanding" style="font-size:16px">—</div></div>
+    <div class="summary-card"><div class="summary-label">Reorder Suggestions</div><div class="summary-value" id="sumReorder">—</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="suppliers">🏭 Suppliers</button>
+    <button class="tab" data-tab="pos">📋 Purchase Orders</button>
+    <button class="tab" data-tab="grn">📦 Receive Goods</button>
+    <button class="tab" data-tab="invoices">💰 Invoices</button>
+    <button class="tab" data-tab="reorder">⚡ Auto Reorder</button>
+  </div>
+
+  <!-- SUPPLIERS -->
+  <div class="tab-panel active" id="tab-suppliers">
+    <div class="toolbar">
+      <input class="search" id="suppSearch" placeholder="Search suppliers…" oninput="filterSuppliers()">
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Supplier</th><th>Contact</th><th>Phone</th><th>Category</th><th>Outstanding</th><th>Lead Time</th><th>On-Time</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="suppTbody"></tbody>
+      </table>
+    </div>
+    <div id="suppEmpty" style="text-align:center;padding:50px;color:var(--muted);display:none">
+      <div style="font-size:48px">🏭</div>
+      <div style="margin-top:8px">No suppliers yet. Add your first supplier.</div>
+    </div>
+  </div>
+
+  <!-- PURCHASE ORDERS -->
+  <div class="tab-panel" id="tab-pos">
+    <div class="toolbar">
+      <input class="search" id="poSearch" placeholder="Search POs…" oninput="filterPOs()">
+      <select class="form-input" id="poStatus" style="width:140px" onchange="filterPOs()">
+        <option value="">All Status</option>
+        <option value="draft">Draft</option>
+        <option value="sent">Sent</option>
+        <option value="partial">Partial</option>
+        <option value="received">Received</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="openCreatePO()">+ Create PO</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>PO Number</th><th>Supplier</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="poTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- GRN -->
+  <div class="tab-panel" id="tab-grn">
+    <div class="section-hd" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600">Receive Goods (GRN)</div>
+    </div>
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Select Purchase Order</label>
+          <select class="form-input" id="grnPO" onchange="loadPOForGRN()">
+            <option value="">— Select Open PO —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Delivery Note / Reference</label>
+          <input class="form-input" id="grnRef" placeholder="Delivery note number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Received Date</label>
+          <input class="form-input" id="grnDate" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Received By</label>
+          <input class="form-input" id="grnBy" placeholder="Your name">
+        </div>
+      </div>
+      <div id="grnItems" style="margin-top:14px"></div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-green" onclick="submitGRN()" id="grnSubmitBtn" style="display:none">✅ Confirm Goods Received</button>
+      </div>
+    </div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px">Recent GRNs</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>GRN No.</th><th>Supplier</th><th>Date</th><th>Items</th><th>Total Cost</th><th>By</th></tr></thead>
+        <tbody id="grnTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- INVOICES -->
+  <div class="tab-panel" id="tab-invoices">
+    <div class="toolbar">
+      <input class="search" id="invSearch" placeholder="Search invoices…" oninput="filterInvoices()">
+      <select class="form-input" id="invStatus" style="width:140px" onchange="filterInvoices()">
+        <option value="">All Status</option>
+        <option value="unpaid">Unpaid</option>
+        <option value="partial">Partial</option>
+        <option value="paid">Paid</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Invoice</th><th>Supplier</th><th>Date</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="invTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- AUTO REORDER -->
+  <div class="tab-panel" id="tab-reorder">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:15px;font-weight:600">Reorder Suggestions</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="createAllReorderPOs()">⚡ Create All POs</button>
+        <button class="btn btn-outline btn-sm" onclick="loadReorderSuggestions()">🔄 Refresh</button>
+      </div>
+    </div>
+    <div id="reorderList">
+      <div style="text-align:center;padding:30px;color:var(--muted)"><span class="spinner"></span> Loading suggestions…</div>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER MODAL -->
+<div class="modal-bg" id="supplierModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="suppModalTitle">Add Supplier</div>
+      <button class="modal-close" onclick="closeSupplierModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Company Name *</label>
+          <input class="form-input" id="sName" placeholder="e.g. Unilever Kenya Ltd">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contact Person</label>
+          <input class="form-input" id="sContact" placeholder="Sales rep name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone *</label>
+          <input class="form-input" id="sPhone" placeholder="0712345678" type="tel">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="sEmail" placeholder="supplier@email.com" type="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <input class="form-input" id="sCategory" placeholder="e.g. FMCG, Electronics">
+        </div>
+        <div class="form-group">
+          <label class="form-label">KRA PIN</label>
+          <input class="form-input" id="sKraPin" placeholder="A0012345Z" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Terms (days)</label>
+          <input class="form-input" id="sPayTerms" type="number" value="30" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lead Time (days)</label>
+          <input class="form-input" id="sLeadTime" type="number" value="3" min="1">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Address</label>
+          <input class="form-input" id="sAddress" placeholder="Physical address">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Notes</label>
+          <textarea class="form-input" id="sNotes" rows="2" style="resize:vertical"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeSupplierModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSupplier()">Save Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE PO MODAL -->
+<div class="modal-bg" id="poModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Create Purchase Order</div>
+      <button class="modal-close" onclick="E('poModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Supplier *</label>
+          <select class="form-input" id="poSupplier" onchange="poSupplierChanged()">
+            <option value="">— Select Supplier —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Expected Delivery</label>
+          <input class="form-input" id="poDelivery" type="date">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Notes</label>
+          <input class="form-input" id="poNotes" placeholder="Delivery instructions, terms, etc.">
+        </div>
+      </div>
+      <div style="font-weight:600;margin-bottom:8px;font-size:13px">Items</div>
+      <div id="poItems"></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="addPOItem()">+ Add Item</button>
+      <div style="text-align:right;margin-top:14px;font-size:15px;font-weight:700">
+        Total: <span id="poTotal">KES 0.00</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="E('poModal').style.display='none'">Cancel</button>
+      <button class="btn btn-outline" onclick="savePO('draft')">Save Draft</button>
+      <button class="btn btn-primary" onclick="savePO('sent')">📧 Send to Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICE PAYMENT MODAL -->
+<div class="modal-bg" id="payInvModal" style="display:none">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">Record Invoice Payment</div>
+      <button class="modal-close" onclick="E('payInvModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Invoice</label>
+          <input class="form-input" id="payInvRef" readonly>
+          <input type="hidden" id="payInvId">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Balance</label>
+          <div id="payInvBal" style="font-size:18px;font-weight:700;color:var(--red)"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount to Pay (KES)</label>
+          <input class="form-input" id="payInvAmt" type="number" min="1" placeholder="0.00">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Payment Method</label>
+          <select class="form-input" id="payInvMethod">
+            <option value="cash">Cash</option>
+            <option value="bank">Bank Transfer</option>
+            <option value="mpesa">M-Pesa</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Reference / Cheque No.</label>
+          <input class="form-input" id="payInvRefNo" placeholder="Optional transaction reference">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="E('payInvModal').style.display='none'">Cancel</button>
+      <button class="btn btn-green" onclick="confirmInvPayment()">✅ Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="firebase.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="pos-inventory.js"></script>
+<script src="pos-suppliers.js"></script>
+<script>
+const E   = id => document.getElementById(id);
+const _e  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const KES = n  => 'KES ' + Number(n||0).toFixed(2);
+
+let _allSuppliers = [], _allPOs = [], _allInvoices = [], _editSuppId = null;
+let _poItems = [], _selPayInvId = null;
+
+function toast(msg, dur = 2500) {
+  const el = E('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+/* ── Tabs ── */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t.dataset.tab));
+    const tab = t.dataset.tab;
+    if (tab === 'pos')     { loadPOs(); }
+    if (tab === 'grn')     { loadGRNTab(); }
+    if (tab === 'invoices'){ loadInvoices(); }
+    if (tab === 'reorder') { loadReorderSuggestions(); }
+  });
+});
+
+/* ── Summary ── */
+async function loadSummary() {
+  const [supps, pos, invs] = await Promise.all([PosSuppliers.getAllSuppliers(), PosSuppliers.getAllPOs(), PosSuppliers.getAllInvoices()]);
+  _allSuppliers = supps;
+  const openPOs = pos.filter(p => ['draft','sent','partial'].includes(p.status));
+  const outstanding = invs.filter(i => i.status !== 'paid').reduce((t, i) => t + i.balance, 0);
+  E('sumSuppliers').textContent  = supps.length;
+  E('sumOpenPOs').textContent    = openPOs.length;
+  E('sumOutstanding').textContent = KES(outstanding);
+  /* Reorder suggestions */
+  if (window.PosInventory) {
+    const sug = await PosInventory.getReorderSuggestions();
+    E('sumReorder').textContent = sug.length;
+  }
+}
+
+/* ══ SUPPLIERS ══ */
+async function loadSuppliers() {
+  _allSuppliers = await PosSuppliers.getAllSuppliers();
+  filterSuppliers();
+}
+
+function filterSuppliers() {
+  const q = E('suppSearch').value.toLowerCase();
+  const list = q ? _allSuppliers.filter(s => (s.name+s.contactPerson+s.phone).toLowerCase().includes(q)) : _allSuppliers;
+  E('suppEmpty').style.display = list.length ? 'none' : '';
+  const perf = s => {
+    const rate = s.performance?.onTimeRate || 0;
+    return rate >= 90 ? '<span class="pill pill-green">' + rate.toFixed(0) + '%</span>'
+      : rate >= 70 ? '<span class="pill pill-yellow">' + rate.toFixed(0) + '%</span>'
+      : '<span class="pill pill-red">' + rate.toFixed(0) + '%</span>';
+  };
+  E('suppTbody').innerHTML = list.map(s => `<tr>
+    <td><div style="font-weight:600">${_e(s.name)}</div><div style="font-size:11px;color:var(--muted)">${_e(s.kraPin||'')}</div></td>
+    <td>${_e(s.contactPerson||'—')}</td>
+    <td>${_e(s.phone||'—')}</td>
+    <td>${_e(s.category||'—')}</td>
+    <td class="${s.outstanding>0?'stock-low':''}">${KES(s.outstanding)}</td>
+    <td>${s.performance?.avgLeadDays?.toFixed(1)||'—'} days</td>
+    <td>${perf(s)}</td>
+    <td>
+      <div style="display:flex;gap:4px">
+        <button class="btn-icon" onclick="editSupplier('${_e(s.id)}')" title="Edit">✏️</button>
+        <button class="btn-icon" onclick="openCreatePOForSupplier('${_e(s.id)}')" title="Create PO">📋</button>
+        <button class="btn-icon" onclick="viewSupplierPerformance('${_e(s.id)}')" title="Performance">📊</button>
+      </div>
+    </td>
+  </tr>`).join('');
+}
+
+/* ── Supplier Modal ── */
+function openAddSupplier() {
+  _editSuppId = null;
+  E('suppModalTitle').textContent = 'Add Supplier';
+  ['sName','sContact','sPhone','sEmail','sCategory','sKraPin','sAddress','sNotes'].forEach(id => E(id).value='');
+  E('sPayTerms').value = '30'; E('sLeadTime').value = '3';
+  E('supplierModal').style.display = '';
+}
+
+async function editSupplier(id) {
+  const s = await PosSuppliers.getSupplier(id);
+  if (!s) return;
+  _editSuppId = id;
+  E('suppModalTitle').textContent = 'Edit Supplier';
+  E('sName').value = s.name;  E('sContact').value = s.contactPerson||'';
+  E('sPhone').value = s.phone; E('sEmail').value = s.email||'';
+  E('sCategory').value = s.category||''; E('sKraPin').value = s.kraPin||'';
+  E('sPayTerms').value = s.paymentTerms||30; E('sLeadTime').value = s.leadTime||3;
+  E('sAddress').value = s.address||''; E('sNotes').value = s.notes||'';
+  E('supplierModal').style.display = '';
+}
+
+function closeSupplierModal() { E('supplierModal').style.display = 'none'; }
+
+async function saveSupplier() {
+  const name  = E('sName').value.trim();
+  const phone = E('sPhone').value.trim();
+  if (!name)  { toast('❌ Company name is required'); return; }
+  if (!phone) { toast('❌ Phone is required'); return; }
+  const data = {
+    name, contactPerson: E('sContact').value.trim(), phone, email: E('sEmail').value.trim(),
+    category: E('sCategory').value.trim(), kraPin: E('sKraPin').value.trim().toUpperCase(),
+    paymentTerms: parseInt(E('sPayTerms').value)||30, leadTime: parseInt(E('sLeadTime').value)||3,
+    address: E('sAddress').value.trim(), notes: E('sNotes').value.trim(),
+  };
+  try {
+    if (_editSuppId) { await PosSuppliers.updateSupplier(_editSuppId, data); toast('✅ Supplier updated'); }
+    else             { await PosSuppliers.addSupplier(data); toast('✅ Supplier added'); }
+    closeSupplierModal(); await loadSuppliers(); await loadSummary();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+/* ══ PURCHASE ORDERS ══ */
+async function loadPOs() {
+  _allPOs = await PosSuppliers.getAllPOs();
+  filterPOs();
+}
+
+function filterPOs() {
+  const q      = E('poSearch').value.toLowerCase();
+  const status = E('poStatus').value;
+  let list     = _allPOs;
+  if (q)      list = list.filter(p => (p.poNumber+(p.supplierName||'') + (p.supplierId||'')).toLowerCase().includes(q));
+  if (status) list = list.filter(p => p.status === status);
+  const statusPill = s => {
+    const m = {draft:'pill-gray',sent:'pill-blue',partial:'pill-yellow',received:'pill-green',cancelled:'pill-red'};
+    return `<span class="pill ${m[s]||'pill-gray'}">${s}</span>`;
+  };
+  E('poTbody').innerHTML = list.map(p => {
+    const supp = _allSuppliers.find(s => s.id === p.supplierId);
+    return `<tr>
+      <td style="font-family:monospace">${_e(p.poNumber)}</td>
+      <td>${_e(supp?.name||p.supplierId||'—')}</td>
+      <td style="font-size:12px">${p.createdAt?new Date(p.createdAt).toLocaleDateString('en-KE'):'—'}</td>
+      <td>${(p.items||[]).length}</td>
+      <td>${KES(p.totalAmount)}</td>
+      <td>${statusPill(p.status)}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          ${p.status !== 'received' && p.status !== 'cancelled' ? `<button class="btn btn-outline btn-sm" onclick="receiveFromPO('${_e(p.id)}')">Receive</button>` : ''}
+          ${p.status === 'draft' ? `<button class="btn btn-outline btn-sm" onclick="sendPO('${_e(p.id)}')">Send</button>` : ''}
+          ${['draft','sent','partial'].includes(p.status) ? `<button class="btn-icon" onclick="cancelPO('${_e(p.id)}')">✕</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Create PO ── */
+function openCreatePO(supplierId = '') {
+  _poItems = [];
+  const suppSelect = E('poSupplier');
+  suppSelect.innerHTML = '<option value="">— Select Supplier —</option>' + _allSuppliers.map(s => `<option value="${_e(s.id)}" ${s.id===supplierId?'selected':''}>${_e(s.name)}</option>`).join('');
+  if (supplierId) suppSelect.value = supplierId;
+  E('poDelivery').value = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  E('poNotes').value = '';
+  addPOItem();
+  E('poModal').style.display = '';
+}
+
+function openCreatePOForSupplier(id) { openCreatePO(id); }
+
+function poSupplierChanged() { updatePOTotal(); }
+
+function addPOItem() {
+  const idx = _poItems.length;
+  _poItems.push({ productId:'', productName:'', qty:1, unitCost:0 });
+  renderPOItems();
+}
+
+function removePOItem(idx) {
+  _poItems.splice(idx, 1);
+  renderPOItems();
+}
+
+function renderPOItems() {
+  E('poItems').innerHTML = _poItems.map((item, i) => `
+    <div class="po-item">
+      <div style="flex:2;min-width:160px">
+        <input class="form-input" placeholder="Product name" value="${_e(item.productName)}" oninput="_poItems[${i}].productName=this.value">
+      </div>
+      <div style="flex:1;min-width:80px">
+        <input class="form-input" type="number" min="1" value="${item.qty}" placeholder="Qty" oninput="_poItems[${i}].qty=+this.value||1;updatePOTotal()">
+      </div>
+      <div style="flex:1;min-width:100px">
+        <input class="form-input" type="number" min="0" step="0.01" value="${item.unitCost||''}" placeholder="Unit cost" oninput="_poItems[${i}].unitCost=+this.value||0;updatePOTotal()">
+      </div>
+      <div style="flex:1;min-width:80px;font-size:13px;color:var(--muted)">
+        = ${KES(item.qty*(item.unitCost||0))}
+      </div>
+      <button class="btn-icon" onclick="removePOItem(${i})" title="Remove">✕</button>
+    </div>`).join('');
+  updatePOTotal();
+}
+
+function updatePOTotal() {
+  const total = _poItems.reduce((t, i) => t + i.qty * (i.unitCost||0), 0);
+  E('poTotal').textContent = KES(total);
+}
+
+async function savePO(status) {
+  const suppId = E('poSupplier').value;
+  if (!suppId) { toast('❌ Select a supplier'); return; }
+  const items = _poItems.filter(i => i.productName.trim());
+  if (!items.length) { toast('❌ Add at least one item'); return; }
+  try {
+    await PosSuppliers.createPO({
+      supplierId: suppId, status, notes: E('poNotes').value,
+      expectedDelivery: E('poDelivery').value ? new Date(E('poDelivery').value).getTime() : null,
+      items: items.map(i => ({ ...i, lineTotal: i.qty * (i.unitCost||0) })),
+    });
+    toast('✅ Purchase Order created');
+    E('poModal').style.display = 'none';
+    loadPOs(); loadSummary();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+async function sendPO(id) {
+  await PosSuppliers.updatePOStatus(id, 'sent');
+  toast('✅ PO marked as sent'); loadPOs();
+}
+
+async function cancelPO(id) {
+  if (!confirm('Cancel this Purchase Order?')) return;
+  await PosSuppliers.updatePOStatus(id, 'cancelled');
+  toast('PO cancelled'); loadPOs(); loadSummary();
+}
+
+function receiveFromPO(id) {
+  document.querySelectorAll('.tab').forEach(t => { if (t.dataset.tab==='grn') t.click(); });
+  setTimeout(() => { E('grnPO').value = id; loadPOForGRN(); }, 200);
+}
+
+/* ══ GRN ══ */
+async function loadGRNTab() {
+  const pos = (await PosSuppliers.getAllPOs()).filter(p => ['sent','partial'].includes(p.status));
+  E('grnPO').innerHTML = '<option value="">— Select Open PO —</option>' + pos.map(p => {
+    const supp = _allSuppliers.find(s => s.id === p.supplierId);
+    return `<option value="${_e(p.id)}">${_e(p.poNumber)} — ${_e(supp?.name||p.supplierId)}</option>`;
+  }).join('');
+  E('grnDate').value = new Date().toISOString().slice(0,10);
+  loadGRNHistory();
+}
+
+async function loadPOForGRN() {
+  const poId = E('grnPO').value;
+  if (!poId) { E('grnItems').innerHTML=''; E('grnSubmitBtn').style.display='none'; return; }
+  const po = await PosSuppliers.getPO(poId);
+  if (!po) return;
+  E('grnItems').innerHTML = `
+    <div style="font-weight:600;margin-bottom:8px;font-size:13px">Items to Receive</div>
+    ${(po.items||[]).map((item, i) => `
+      <div class="po-item">
+        <div style="flex:2">${_e(item.productName||item.productId)}</div>
+        <div style="flex:1;color:var(--muted);font-size:12px">Ordered: ${item.qty}</div>
+        <div style="flex:1;color:var(--muted);font-size:12px">Received: ${item.receivedQty||0}</div>
+        <div style="flex:1;min-width:90px">
+          <input class="form-input" type="number" min="0" max="${item.qty-(item.receivedQty||0)}" value="${item.qty-(item.receivedQty||0)}" placeholder="Qty" id="grnQty${i}">
+        </div>
+        <div style="flex:1;min-width:90px">
+          <input class="form-input" type="date" id="grnExp${i}" placeholder="Expiry">
+        </div>
+        <div style="flex:1;min-width:90px">
+          <input class="form-input" placeholder="Batch" id="grnBatch${i}">
+        </div>
+      </div>`).join('')}`;
+  E('grnSubmitBtn').style.display = '';
+  E('grnSubmitBtn').dataset.poid = poId;
+  E('grnSubmitBtn').dataset.items = JSON.stringify(po.items||[]);
+}
+
+async function submitGRN() {
+  const poId  = E('grnSubmitBtn').dataset.poid;
+  const items = JSON.parse(E('grnSubmitBtn').dataset.items||'[]');
+  const received = items.map((item, i) => ({
+    ...item, receivedNow: parseInt(E('grnQty'+i)?.value)||0,
+    expiryDate: E('grnExp'+i)?.value||null, batchNo: E('grnBatch'+i)?.value||null,
+  }));
+  try {
+    await PosSuppliers.createGRN({
+      poId, supplierId: (await PosSuppliers.getPO(poId)).supplierId,
+      deliveryNote: E('grnRef').value, receivedAt: Date.now(),
+      receivedBy: E('grnBy').value, branchId: 'default',
+      items: received.filter(r => r.receivedNow > 0),
+    });
+    toast('✅ Goods Received Note created'); E('grnItems').innerHTML=''; E('grnSubmitBtn').style.display='none';
+    loadGRNHistory(); loadSummary();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+async function loadGRNHistory() {
+  const grns = await PosSuppliers.getAllGRNs();
+  E('grnTbody').innerHTML = grns.slice(0,20).map(g => {
+    const supp = _allSuppliers.find(s => s.id === g.supplierId);
+    return `<tr>
+      <td style="font-family:monospace">${_e(g.grnNumber)}</td>
+      <td>${_e(supp?.name||g.supplierId)}</td>
+      <td style="font-size:12px">${g.receivedAt?new Date(g.receivedAt).toLocaleDateString('en-KE'):'—'}</td>
+      <td>${(g.items||[]).length}</td>
+      <td>${KES(g.totalCost)}</td>
+      <td>${_e(g.receivedBy||'—')}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ══ INVOICES ══ */
+async function loadInvoices() {
+  _allInvoices = await PosSuppliers.getAllInvoices();
+  filterInvoices();
+}
+
+function filterInvoices() {
+  const q      = E('invSearch').value.toLowerCase();
+  const status = E('invStatus').value;
+  let list     = _allInvoices;
+  if (q)      list = list.filter(i => (i.invoiceNumber+(i.supplierId||'')).toLowerCase().includes(q));
+  if (status) list = list.filter(i => i.status === status);
+  const sPill = s => ({paid:'<span class="pill pill-green">Paid</span>',partial:'<span class="pill pill-yellow">Partial</span>',unpaid:'<span class="pill pill-red">Unpaid</span>'}[s]||'<span class="pill pill-gray">'+s+'</span>');
+  E('invTbody').innerHTML = list.map(inv => {
+    const supp = _allSuppliers.find(s => s.id === inv.supplierId);
+    return `<tr>
+      <td style="font-family:monospace">${_e(inv.invoiceNumber)}</td>
+      <td>${_e(supp?.name||inv.supplierId||'—')}</td>
+      <td style="font-size:12px">${inv.date?new Date(inv.date).toLocaleDateString('en-KE'):'—'}</td>
+      <td>${KES(inv.amount)}</td>
+      <td>${KES(inv.paidAmount)}</td>
+      <td class="${inv.balance>0?'stock-low':''}">${KES(inv.balance)}</td>
+      <td>${sPill(inv.status)}</td>
+      <td>${inv.status!=='paid'?`<button class="btn btn-outline btn-sm" onclick="openPayInv('${_e(inv.id)}')">Pay</button>`:''}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function openPayInv(id) {
+  const inv = _allInvoices.find(i => i.id === id);
+  if (!inv) return;
+  _selPayInvId = id;
+  E('payInvId').value  = id;
+  E('payInvRef').value = inv.invoiceNumber;
+  E('payInvBal').textContent = KES(inv.balance);
+  E('payInvAmt').value = inv.balance;
+  E('payInvModal').style.display = '';
+}
+
+async function confirmInvPayment() {
+  const id  = E('payInvId').value;
+  const amt = parseFloat(E('payInvAmt').value)||0;
+  if (amt <= 0) { toast('❌ Amount must be > 0'); return; }
+  try {
+    await PosSuppliers.recordInvoicePayment(id, amt, E('payInvMethod').value, E('payInvRefNo').value);
+    toast('✅ Payment recorded'); E('payInvModal').style.display = 'none'; loadInvoices(); loadSummary();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+/* ══ REORDER ══ */
+async function loadReorderSuggestions() {
+  if (!window.PosInventory) { E('reorderList').innerHTML='<div style="color:var(--muted);padding:20px">Inventory module not loaded</div>'; return; }
+  const sug = await PosInventory.getReorderSuggestions();
+  E('sumReorder').textContent = sug.length;
+  if (!sug.length) { E('reorderList').innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)"><div style="font-size:48px">✅</div><div style="margin-top:8px">No reorders needed — all stock levels OK!</div></div>'; return; }
+  /* Group by supplier */
+  const bySupp = {};
+  for (const s of sug) {
+    const sid = s.product?.supplierId || 'unknown';
+    if (!bySupp[sid]) bySupp[sid] = [];
+    bySupp[sid].push(s);
+  }
+  E('reorderList').innerHTML = Object.entries(bySupp).map(([sid, items]) => {
+    const supp = _allSuppliers.find(s => s.id === sid);
+    return `<div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-weight:600">🏭 ${_e(supp?.name||'Unknown Supplier')}</div>
+        <button class="btn btn-primary btn-sm" onclick="createSupplierReorderPO('${_e(sid)}')">Create PO</button>
+      </div>
+      ${items.map(s => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1"><div style="font-weight:500">${_e(s.product.name)}</div><div style="font-size:12px;color:var(--muted)">SKU: ${_e(s.product.sku||'—')}</div></div>
+        <div class="stock-out">Only ${s.qty} left</div>
+        <div style="font-size:12px;color:var(--muted)">→ Order ${s.product.reorderQty||20}</div>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+async function createSupplierReorderPO(supplierId) {
+  const sug  = await PosInventory.getReorderSuggestions();
+  const mine = sug.filter(s => (s.product?.supplierId||'unknown') === supplierId);
+  try {
+    await PosSuppliers.createPO({
+      supplierId, status: 'draft',
+      items: mine.map(s => ({ productId: s.product.id, productName: s.product.name, qty: s.product.reorderQty||20, unitCost: s.product.cost||0 })),
+    });
+    toast('✅ Purchase Order created for supplier'); loadSummary();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+async function createAllReorderPOs() {
+  if (!window.PosInventory) return;
+  const pos = await PosSuppliers.createAutoReorderPOs();
+  toast(`✅ Created ${pos.length} Purchase Order${pos.length!==1?'s':''}`); loadSummary(); loadPOs();
+}
+
+async function viewSupplierPerformance(id) {
+  const perf = await PosSuppliers.getSupplierPerformance(id);
+  const s    = _allSuppliers.find(x => x.id === id);
+  if (!perf) { toast('No performance data yet'); return; }
+  alert(`📊 ${s?.name||id} Performance\n\nOrders: ${perf.totalOrders}\nOn-Time Rate: ${perf.onTimeRate?.toFixed(1)}%\nAvg Lead Time: ${perf.avgLeadDays?.toFixed(1)} days\nRejection Rate: ${perf.rejectRate?.toFixed(1)}%\nOutstanding: ${KES(perf.outstanding)}`);
+}
+
+/* ── Init ── */
+Promise.all([
+  PosSuppliers.init(),
+  PosInventory ? PosInventory.init('default') : Promise.resolve(),
+]).then(() => { loadSuppliers(); loadSummary(); });
+</script>
+</body>
+</html>

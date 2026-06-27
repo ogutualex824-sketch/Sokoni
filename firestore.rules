@@ -4269,6 +4269,76 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       BUSINESS COMMUNICATION SYSTEM
+    ══════════════════════════════════════════════════════════════ */
+
+    /* Conversations — participant-scoped read; CF-only write */
+    match /conversations/{conversationId} {
+      allow read:   if request.auth != null
+                    && request.auth.uid in resource.data.participants;
+      allow write:  if false;  /* createConversation / archiveCompletedConversations CFs only */
+
+      /* Messages — participants read; participants create (with validation); own-message update only */
+      match /messages/{messageId} {
+        allow read: if request.auth != null
+                    && request.auth.uid in
+                       get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+
+        allow create: if request.auth != null
+                      && request.auth.uid in
+                         get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+                      && get(/databases/$(database)/documents/conversations/$(conversationId)).data.status == 'active'
+                      && request.resource.data.senderId == request.auth.uid
+                      && request.resource.data.keys().hasAll(['senderId','timestamp','type','status','deleted','edited'])
+                      && request.resource.data.type in ['text','image','pdf','voice']
+                      && (request.resource.data.type != 'text'
+                          || (request.resource.data.text is string && request.resource.data.text.size() <= 4000));
+
+        /* Sender may soft-delete own message or mark edited */
+        allow update: if request.auth != null
+                      && resource.data.senderId == request.auth.uid
+                      && request.resource.data.senderId == resource.data.senderId
+                      && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['deleted','deletedAt','text','edited','editedAt','storageRef']);
+
+        allow delete: if false;
+      }
+    }
+
+    /* User conversation index — own entries only */
+    match /userConversations/{uid} {
+      allow read:  if request.auth != null && request.auth.uid == uid;
+      allow write: if false;  /* CF only */
+
+      match /items/{conversationId} {
+        allow read:  if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    /* Typing indicators — own uid only; public read within authenticated users */
+    match /typingIndicators/{conversationId} {
+      allow read: if request.auth != null;
+
+      match /users/{uid} {
+        allow read:  if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    /* Chat policies — admin read/write via CF; reject direct client writes */
+    match /chatPolicies/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* Moderation queue — admin read via CF; no direct client access */
+    match /moderationQueue/{reportId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
   }
 }
 
