@@ -1,4 +1,54 @@
-﻿## [2026-06-27] — Delivery Pricing & Live Tracking Upgrade v2.0
+﻿## [2026-06-27] — KASS AI Concierge Rebuild v2.0
+
+### Summary
+Complete rebuild of KASS from a rule-based FAQ bot into a true AI marketplace concierge.
+KASS now searches Firestore in real-time, returns rich listing cards, action chips, and
+maintains conversation context across turns. The offline connectivity false positive is
+also fixed.
+
+### Modified Files
+
+#### `functions/index.js` — `sokoniChat` CF
+- Replaced thin 300-token plain-text responder with full tool-calling agentic concierge
+- Comprehensive system prompt covering all 20+ SOKONI hubs with URL mapping and intent aliases
+- 6 Firestore search tools: `search_marketplace`, `search_stays`, `search_restaurants`,
+  `search_events`, `search_jobs`, `get_page_url`
+- Agentic loop: max 5 iterations; tools run in parallel; structured `{ response, results, actions }` response
+- Model upgraded to `claude-haiku-4-5-20251001` (faster, cheaper for public endpoint)
+- Rate limit: 20 → 30 req/IP/min; conversation history: 10 → 20 turns; timeout: 30 → 60 s
+
+#### `kass-widget.js`
+- Complete rewrite (253 → 290 lines, cleaner architecture)
+- Endpoint: now calls `/api/chat` via `fetch` POST — **removes broken `httpsCallable('kass')`** (was admin-only, causing all users to hit FAQ fallback)
+- Maintains full in-memory conversation history (sent with every request)
+- Rich rendering: `_md()` markdown renderer (bold/italic/lists/links); listing cards with image/price/rating; action chip links
+- Removed all `offlineReply()` / FAQ rules — if CF unavailable shows "temporarily unavailable"
+- Removed all references to `index.html` and `messages.html`
+- Live connectivity status dot in header (green/red via `navigator.onLine`)
+- Accessible: `role="button"`, `tabindex`, ARIA attributes, keyboard navigation
+
+#### `firebase.json`
+- Added hosting rewrite: `GET /api/chat` → `sokoniChat` (us-central1)
+- Same-origin rewrite eliminates CORS and CSP considerations
+
+#### `sokoni-ui.js` — `_initOfflineBar()`
+- Failure threshold: 2 → 3 consecutive probe failures before showing banner
+- Boot grace: banner suppressed for first 9 s (prevents SW-install false positives)
+- `offline` event probe delayed by 1.5 s (was immediate — caused spurious offline reads)
+- First scheduled probe: 3 s → 5 s
+
+### Security
+- Widget no longer sends user messages to the admin-only `kass` function
+- KASS public endpoint has no auth — rate-limited at 30/IP/min as before
+
+### Performance
+- KASS response time: ~2–3 s (haiku model) vs 5–8 s (sonnet) for simple queries
+- Tool calls run in parallel (`Promise.all`) when the AI issues multiple tools at once
+- Widget uses `AbortController` with 30 s timeout to prevent hung requests
+
+---
+
+## [2026-06-27] — Delivery Pricing & Live Tracking Upgrade v2.0
 
 ### Summary
 Complete overhaul of the SOKONI delivery pricing model and live tracking experience.
