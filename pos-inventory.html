@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory — SOKONI SmartPOS</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root{--bg:#0d0d1a;--bg2:#141426;--card:#1a1a2e;--card2:#22223b;--border:#2a2a4a;--accent:#7c3aed;--accent2:#a855f7;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--text:#f0f0ff;--muted:#8888aa;--r:12px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:15px;min-height:100vh}
+    .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;height:56px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+    .topbar-back{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px 8px}
+    .topbar-back:hover{color:var(--text)}
+    .topbar-title{font-size:16px;font-weight:600;flex:1}
+    .container{max-width:1200px;margin:0 auto;padding:16px 12px 100px}
+    .tabs{display:flex;gap:4px;background:var(--card);border-radius:var(--r);padding:4px;margin-bottom:16px;overflow-x:auto}
+    .tab{flex:1;min-width:100px;padding:9px;text-align:center;border-radius:9px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);border:none;background:none;white-space:nowrap}
+    .tab.active{background:var(--accent);color:#fff}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+    .search{flex:1;min-width:200px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+    .search:focus{border-color:var(--accent)}
+    .search::placeholder{color:var(--muted)}
+    .btn{padding:9px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent)}
+    .btn-danger{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+    .btn-sm{padding:6px 12px;font-size:12px}
+    .btn-icon{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:14px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer}
+    .btn-icon:hover{color:var(--text);background:var(--card)}
+    /* Table */
+    .tbl{width:100%;border-collapse:collapse;font-size:13px}
+    .tbl th{padding:9px 12px;text-align:left;background:var(--bg2);color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+    .tbl td{padding:9px 12px;border-bottom:1px solid rgba(42,42,74,.5);vertical-align:middle}
+    .tbl tr:hover td{background:rgba(124,58,237,.05)}
+    .tbl-wrap{overflow-x:auto}
+    /* Pills */
+    .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+    .pill-green{background:rgba(34,197,94,.15);color:var(--green)}
+    .pill-red{background:rgba(239,68,68,.15);color:var(--red)}
+    .pill-yellow{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .pill-gray{background:rgba(136,136,170,.15);color:var(--muted)}
+    .pill-purple{background:rgba(124,58,237,.15);color:var(--accent2)}
+    /* Form */
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .form-group{display:flex;flex-direction:column;gap:5px}
+    .form-label{font-size:12px;color:var(--muted);font-weight:500}
+    .form-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+    .form-input:focus{border-color:var(--accent)}
+    .form-input::placeholder{color:var(--muted)}
+    select.form-input{cursor:pointer}
+    .form-check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px}
+    .form-check input{accent-color:var(--accent);width:16px;height:16px}
+    /* Modal */
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
+    .modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:680px;max-height:90vh;overflow-y:auto}
+    .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .modal-title{font-size:16px;font-weight:600}
+    .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px}
+    .modal-body{padding:20px}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+    /* Stock badges */
+    .stock-ok{color:var(--green)}.stock-low{color:var(--yellow)}.stock-out{color:var(--red)}
+    /* Summary cards */
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+    .summary-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+    .summary-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+    .summary-value{font-size:22px;font-weight:700}
+    .summary-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    /* Toast */
+    #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:30px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+    #toast.show{opacity:1}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .section-title{font-size:15px;font-weight:600}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer}
+    .chip.active{border-color:var(--accent);background:rgba(124,58,237,.15);color:var(--accent2)}
+    @media(max-width:600px){.form-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar-back" onclick="history.back()">&#8592;</button>
+  <div class="topbar-title">📦 Inventory Management</div>
+  <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Add Product</button>
+</div>
+
+<div class="container">
+
+  <!-- Summary -->
+  <div class="summary-grid" id="summaryCards">
+    <div class="summary-card"><div class="summary-label">Total Products</div><div class="summary-value" id="sumTotal">—</div></div>
+    <div class="summary-card"><div class="summary-label">Low Stock</div><div class="summary-value stock-low" id="sumLow">—</div></div>
+    <div class="summary-card"><div class="summary-label">Out of Stock</div><div class="summary-value stock-out" id="sumOut">—</div></div>
+    <div class="summary-card"><div class="summary-label">Expiring (7 days)</div><div class="summary-value stock-low" id="sumExp">—</div></div>
+    <div class="summary-card"><div class="summary-label">Inventory Value</div><div class="summary-value" id="sumValue" style="font-size:16px">—</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="products">📦 Products</button>
+    <button class="tab" data-tab="stock">📊 Stock Levels</button>
+    <button class="tab" data-tab="movements">📋 Movements</button>
+    <button class="tab" data-tab="batches">🗃️ Batches/Expiry</button>
+    <button class="tab" data-tab="alerts">🔔 Alerts</button>
+    <button class="tab" data-tab="transfer">🔄 Transfers</button>
+  </div>
+
+  <!-- PRODUCTS TAB -->
+  <div class="tab-panel active" id="tab-products">
+    <div class="toolbar">
+      <input class="search" id="productSearch" placeholder="Search by name, SKU, barcode…" oninput="filterProducts()">
+      <div id="catChips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      <button class="btn btn-outline btn-sm" onclick="importCSV()">📤 Import CSV</button>
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 Export</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Product</th><th>SKU</th><th>Barcode</th><th>Category</th>
+          <th>Price</th><th>Cost</th><th>Stock</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="productTbody"></tbody>
+      </table>
+    </div>
+    <div id="productEmpty" style="text-align:center;padding:40px;color:var(--muted);display:none">
+      <div style="font-size:48px;margin-bottom:8px">📦</div>
+      <div>No products yet. Tap "+ Add Product" to get started.</div>
+    </div>
+  </div>
+
+  <!-- STOCK TAB -->
+  <div class="tab-panel" id="tab-stock">
+    <div class="toolbar">
+      <input class="search" id="stockSearch" placeholder="Search product…" oninput="filterStock()">
+      <button class="btn btn-outline btn-sm" onclick="doStockAdjust()">✏️ Adjust Stock</button>
+      <button class="btn btn-outline btn-sm" onclick="doDamagedWrite()">🗑️ Damaged Write-off</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Product</th><th>SKU</th><th>On Hand</th><th>Reserved</th><th>Available</th><th>Min Level</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="stockTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MOVEMENTS TAB -->
+  <div class="tab-panel" id="tab-movements">
+    <div class="toolbar">
+      <input class="search" id="movSearch" placeholder="Search product…" oninput="filterMovements()">
+      <select class="form-input" id="movType" style="width:160px" onchange="filterMovements()">
+        <option value="">All Types</option>
+        <option value="sale">Sale</option>
+        <option value="purchase">Purchase</option>
+        <option value="adjustment_in">Adjustment In</option>
+        <option value="adjustment_out">Adjustment Out</option>
+        <option value="transfer_in">Transfer In</option>
+        <option value="transfer_out">Transfer Out</option>
+        <option value="return_customer">Customer Return</option>
+        <option value="return_supplier">Supplier Return</option>
+        <option value="damaged">Damaged</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Time</th><th>Product</th><th>Type</th><th>Qty</th><th>Reference</th><th>By</th></tr></thead>
+        <tbody id="movTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BATCHES/EXPIRY TAB -->
+  <div class="tab-panel" id="tab-batches">
+    <div class="section-hd">
+      <div class="section-title">Batch Tracking &amp; Expiry Dates</div>
+      <button class="btn btn-outline btn-sm" onclick="loadBatches()">🔄 Refresh</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Product</th><th>Batch No.</th><th>Expiry Date</th><th>Received Qty</th><th>Remaining</th><th>Status</th></tr></thead>
+        <tbody id="batchTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ALERTS TAB -->
+  <div class="tab-panel" id="tab-alerts">
+    <div class="section-hd">
+      <div class="section-title">Low Stock &amp; Expiry Alerts</div>
+      <button class="btn btn-primary btn-sm" onclick="createAutoReorderPOs()">⚡ Auto Reorder POs</button>
+    </div>
+    <div id="alertsList"></div>
+  </div>
+
+  <!-- TRANSFER TAB -->
+  <div class="tab-panel" id="tab-transfer">
+    <div class="card">
+      <div class="section-title" style="margin-bottom:14px">Transfer Stock Between Branches</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Product</label>
+          <input class="form-input" id="tProd" placeholder="Type to search…" oninput="searchTransferProduct()" autocomplete="off">
+          <div id="tProdResults" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;display:none;max-height:200px;overflow-y:auto"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">From Branch</label>
+          <input class="form-input" id="tFrom" placeholder="e.g. main" value="main">
+        </div>
+        <div class="form-group">
+          <label class="form-label">To Branch</label>
+          <input class="form-input" id="tTo" placeholder="e.g. naivasha">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input class="form-input" id="tQty" type="number" min="1" value="1">
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="form-group">
+          <label class="form-label">Current Stock at From Branch</label>
+          <div id="tStock" style="font-size:13px;color:var(--muted)">Select a product first</div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn btn-primary" onclick="doTransfer()">🔄 Transfer Stock</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- PRODUCT MODAL -->
+<div class="modal-bg" id="productModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Add Product</div>
+      <button class="modal-close" onclick="closeProductModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Product Name *</label>
+          <input class="form-input" id="pName" placeholder="e.g. Omo Washing Powder 500g">
+        </div>
+        <div class="form-group">
+          <label class="form-label">SKU</label>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="pSku" placeholder="Auto-generate" style="flex:1">
+            <button class="btn btn-outline btn-sm" onclick="genSKU()">Gen</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Barcode (EAN/UPC)</label>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="pBarcode" placeholder="Scan or enter" style="flex:1">
+            <button class="btn btn-outline btn-sm" onclick="genBarcode()">Gen</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <input class="form-input" id="pCategory" list="catList" placeholder="e.g. Groceries">
+          <datalist id="catList"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Brand</label>
+          <input class="form-input" id="pBrand" placeholder="Brand name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Selling Price (KES) *</label>
+          <input class="form-input" id="pPrice" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cost Price (KES)</label>
+          <input class="form-input" id="pCost" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">VAT Rate (%)</label>
+          <select class="form-input" id="pTaxRate">
+            <option value="16">16% VAT</option>
+            <option value="8">8% VAT</option>
+            <option value="0">0% (Exempt)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <select class="form-input" id="pUnit">
+            <option>PCS</option><option>KG</option><option>G</option><option>L</option>
+            <option>ML</option><option>M</option><option>BOX</option><option>PACK</option><option>DOZEN</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Opening Stock</label>
+          <input class="form-input" id="pOpeningStock" type="number" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Min Stock Level (Alert)</label>
+          <input class="form-input" id="pMinStock" type="number" min="0" value="5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reorder Level</label>
+          <input class="form-input" id="pReorder" type="number" min="0" value="10">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reorder Quantity</label>
+          <input class="form-input" id="pReorderQty" type="number" min="1" value="20">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Tracking Options</label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">
+            <label class="form-check"><input type="checkbox" id="pHasBatch"> Track Batches</label>
+            <label class="form-check"><input type="checkbox" id="pHasSerial"> Track Serials</label>
+            <label class="form-check"><input type="checkbox" id="pHasExpiry"> Has Expiry Date</label>
+          </div>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Description</label>
+          <textarea class="form-input" id="pDesc" rows="2" placeholder="Optional description" style="resize:vertical"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADJUST STOCK MODAL -->
+<div class="modal-bg" id="adjustModal" style="display:none">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title" id="adjustTitle">Adjust Stock</div>
+      <button class="modal-close" onclick="closeAdjust()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Product</label>
+          <input class="form-input" id="adjProdName" readonly>
+          <input type="hidden" id="adjProdId">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Adjustment Type</label>
+          <select class="form-input" id="adjType">
+            <option value="1">Add Stock (+)</option>
+            <option value="-1">Remove Stock (−)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input class="form-input" id="adjQty" type="number" min="1" value="1">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Reason *</label>
+          <select class="form-input" id="adjReason">
+            <option>Stock Count Correction</option>
+            <option>Damaged Goods</option>
+            <option>Expired</option>
+            <option>Theft/Shrinkage</option>
+            <option>Free Sample</option>
+            <option>Opening Stock</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Current Stock</label>
+          <div id="adjCurrent" style="font-size:18px;font-weight:700"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeAdjust()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAdjust()">Apply Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="firebase.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="pos-inventory.js"></script>
+<script src="pos-suppliers.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────
+   Inventory UI Controller
+───────────────────────────────────────────────────────── */
+const E   = id => document.getElementById(id);
+const _e  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const KES = n  => 'KES ' + Number(n||0).toFixed(2);
+
+let _allProducts  = [];
+let _allStock     = [];
+let _editId       = null;
+let _adjProduct   = null;
+let _transferProductId = null;
+
+/* ── Tabs ── */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t.dataset.tab));
+    if (t.dataset.tab === 'stock')     loadStock();
+    if (t.dataset.tab === 'batches')   loadBatches();
+    if (t.dataset.tab === 'movements') loadMovements();
+    if (t.dataset.tab === 'alerts')    loadAlerts();
+  });
+});
+
+/* ── Toast ── */
+function toast(msg, dur = 2500) {
+  const el = E('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+/* ── Summary ── */
+async function loadSummary() {
+  const products = await PosInventory.getAllProducts();
+  const inv      = await PosInventory.getStockForBranch();
+  let total = 0, low = 0, out = 0, value = 0;
+  for (const p of products.filter(p => p.status === 'active')) {
+    const stock = inv.find(i => i.productId === p.id);
+    const qty   = stock?.qty || 0;
+    total++;
+    if (qty === 0)               out++;
+    else if (qty <= p.minStockLevel) low++;
+    value += qty * (p.cost || 0);
+  }
+  const exp = await PosInventory.getExpiringItems('default', 7);
+  E('sumTotal').textContent = total;
+  E('sumLow').textContent   = low;
+  E('sumOut').textContent   = out;
+  E('sumExp').textContent   = exp.length;
+  E('sumValue').textContent = KES(value);
+}
+
+/* ══ PRODUCTS ══ */
+async function loadProducts() {
+  _allProducts = await PosInventory.getAllProducts();
+  const cats   = [...new Set(_allProducts.map(p => p.category).filter(Boolean))];
+  E('catList').innerHTML = cats.map(c => `<option value="${_e(c)}">`).join('');
+  E('catChips').innerHTML = `<span class="chip active" data-cat="" onclick="setCategory(this,'')">All</span>` +
+    cats.slice(0, 8).map(c => `<span class="chip" data-cat="${_e(c)}" onclick="setCategory(this,'${_e(c)}')">${_e(c)}</span>`).join('');
+  filterProducts();
+  loadSummary();
+}
+
+let _activeCat = '';
+function setCategory(el, cat) {
+  document.querySelectorAll('#catChips .chip').forEach(c => c.classList.toggle('active', c === el));
+  _activeCat = cat;
+  filterProducts();
+}
+
+async function filterProducts() {
+  const q   = E('productSearch').value.toLowerCase();
+  const inv = await PosInventory.getStockForBranch();
+  let list  = _allProducts;
+  if (q)          list = list.filter(p => (p.name+p.sku+p.barcode+p.brand).toLowerCase().includes(q));
+  if (_activeCat) list = list.filter(p => p.category === _activeCat);
+  renderProductTable(list, inv);
+}
+
+function renderProductTable(products, inv) {
+  const empty = E('productEmpty');
+  if (!products.length) { empty.style.display = ''; E('productTbody').innerHTML = ''; return; }
+  empty.style.display = 'none';
+  E('productTbody').innerHTML = products.map(p => {
+    const stock = inv.find(i => i.productId === p.id);
+    const qty   = stock?.qty || 0;
+    const cls   = qty === 0 ? 'stock-out' : qty <= p.minStockLevel ? 'stock-low' : 'stock-ok';
+    const statusPill = p.status === 'active'
+      ? '<span class="pill pill-green">Active</span>'
+      : '<span class="pill pill-gray">Inactive</span>';
+    return `<tr>
+      <td><div style="font-weight:600">${_e(p.name)}</div><div style="font-size:11px;color:var(--muted)">${_e(p.brand||'')}</div></td>
+      <td style="font-family:monospace">${_e(p.sku||'—')}</td>
+      <td style="font-family:monospace;font-size:12px">${_e(p.barcode||'—')}</td>
+      <td>${_e(p.category||'—')}</td>
+      <td>${KES(p.price)}</td>
+      <td>${KES(p.cost)}</td>
+      <td class="${cls}"><strong>${qty}</strong> ${_e(p.unit||'PCS')}</td>
+      <td>${statusPill}</td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn-icon" onclick="editProduct('${_e(p.id)}')" title="Edit">✏️</button>
+          <button class="btn-icon" onclick="openAdjust('${_e(p.id)}','${_e(p.name)}')" title="Adjust stock">📊</button>
+          <button class="btn-icon" onclick="printLabel('${_e(p.id)}')" title="Print label">🏷️</button>
+          <button class="btn-icon btn-danger" onclick="deactivateProduct('${_e(p.id)}')" title="Deactivate">🗑️</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Product Modal ── */
+function openProductModal() { _editId = null; E('modalTitle').textContent = 'Add Product'; clearProductForm(); E('productModal').style.display = ''; }
+function closeProductModal(){ E('productModal').style.display = 'none'; }
+
+function clearProductForm() {
+  ['pName','pSku','pBarcode','pCategory','pBrand','pDesc'].forEach(id => E(id) && (E(id).value=''));
+  E('pPrice').value = ''; E('pCost').value = ''; E('pTaxRate').value = '16'; E('pUnit').value = 'PCS';
+  E('pOpeningStock').value = '0'; E('pMinStock').value = '5'; E('pReorder').value = '10'; E('pReorderQty').value = '20';
+  E('pHasBatch').checked = false; E('pHasSerial').checked = false; E('pHasExpiry').checked = false;
+}
+
+function genSKU()     { E('pSku').value     = PosInventory.generateSKU(E('pCategory').value||'GEN'); }
+function genBarcode() { E('pBarcode').value = PosInventory.generateBarcode('200'); }
+
+async function editProduct(id) {
+  const p = await PosInventory.getProduct(id);
+  if (!p) return;
+  _editId = id;
+  E('modalTitle').textContent = 'Edit Product';
+  E('pName').value  = p.name;   E('pSku').value  = p.sku;     E('pBarcode').value = p.barcode;
+  E('pCategory').value = p.category; E('pBrand').value = p.brand||''; E('pDesc').value = p.description||'';
+  E('pPrice').value = p.price;  E('pCost').value = p.cost;    E('pTaxRate').value = String(p.taxRate);
+  E('pUnit').value  = p.unit;   E('pMinStock').value = p.minStockLevel; E('pReorder').value = p.reorderLevel;
+  E('pReorderQty').value = p.reorderQty;
+  E('pHasBatch').checked = p.hasBatch; E('pHasSerial').checked = p.hasSerial; E('pHasExpiry').checked = p.hasExpiry;
+  E('productModal').style.display = '';
+}
+
+async function saveProduct() {
+  const name = E('pName').value.trim();
+  if (!name) { toast('❌ Product name is required'); return; }
+  const price = parseFloat(E('pPrice').value) || 0;
+  if (price <= 0) { toast('❌ Price must be greater than zero'); return; }
+  const data = {
+    name, sku: E('pSku').value.trim(), barcode: E('pBarcode').value.trim(),
+    category: E('pCategory').value.trim(), brand: E('pBrand').value.trim(),
+    description: E('pDesc').value.trim(),
+    price, cost: parseFloat(E('pCost').value)||0, taxRate: parseInt(E('pTaxRate').value)||16,
+    unit: E('pUnit').value, minStockLevel: parseInt(E('pMinStock').value)||5,
+    reorderLevel: parseInt(E('pReorder').value)||10, reorderQty: parseInt(E('pReorderQty').value)||20,
+    hasBatch: E('pHasBatch').checked, hasSerial: E('pHasSerial').checked, hasExpiry: E('pHasExpiry').checked,
+    status: 'active',
+  };
+  try {
+    if (_editId) {
+      await PosInventory.updateProduct(_editId, data);
+      toast('✅ Product updated');
+    } else {
+      const product = await PosInventory.addProduct(data);
+      /* Set opening stock */
+      const opening = parseInt(E('pOpeningStock').value)||0;
+      if (opening > 0) await PosInventory.adjustStock(product.id, 'default', opening, 'Opening Stock');
+      toast('✅ Product added');
+    }
+    closeProductModal();
+    loadProducts();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+async function deactivateProduct(id) {
+  if (!confirm('Deactivate this product?')) return;
+  await PosInventory.updateProduct(id, { status: 'inactive' });
+  toast('Product deactivated'); loadProducts();
+}
+
+async function printLabel(id) {
+  const p = await PosInventory.getProduct(id);
+  if (!p || !window.SokoniLabelEngine) { toast('Label engine not loaded'); return; }
+  SokoniLabelEngine.printPriceTag({ name: p.name, price: p.price, barcode: p.barcode, sku: p.sku });
+  toast('📤 Printing label…');
+}
+
+/* ══ STOCK ══ */
+async function loadStock() {
+  _allStock = await PosInventory.getStockForBranch();
+  filterStock();
+}
+
+async function filterStock() {
+  const q = E('stockSearch').value.toLowerCase();
+  const tbody = E('stockTbody');
+  tbody.innerHTML = '';
+  for (const inv of _allStock) {
+    const p = await PosInventory.getProduct(inv.productId);
+    if (!p || p.status !== 'active') continue;
+    if (q && !(p.name+p.sku).toLowerCase().includes(q)) continue;
+    const avail = inv.qty - (inv.reservedQty||0);
+    const cls   = inv.qty === 0 ? 'stock-out' : inv.qty <= p.minStockLevel ? 'stock-low' : 'stock-ok';
+    tbody.innerHTML += `<tr>
+      <td><div style="font-weight:600">${_e(p.name)}</div></td>
+      <td style="font-family:monospace">${_e(p.sku||'—')}</td>
+      <td class="${cls}"><strong>${inv.qty}</strong></td>
+      <td>${inv.reservedQty||0}</td>
+      <td class="${cls}"><strong>${avail}</strong></td>
+      <td>${p.minStockLevel}</td>
+      <td>${inv.qty===0?'<span class="pill pill-red">Out of stock</span>':inv.qty<=p.minStockLevel?'<span class="pill pill-yellow">Low stock</span>':'<span class="pill pill-green">OK</span>'}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="openAdjust('${_e(p.id)}','${_e(p.name)}')">Adjust</button></td>
+    </tr>`;
+  }
+}
+
+/* ── Stock Adjust Modal ── */
+function doStockAdjust()  { openAdjust('',''); }
+function doDamagedWrite() { openAdjust('','','damaged'); }
+
+async function openAdjust(id, name, mode) {
+  _adjProduct = { id, name };
+  E('adjProdId').value   = id;
+  E('adjProdName').value = name;
+  E('adjReason').value   = mode === 'damaged' ? 'Damaged Goods' : 'Stock Count Correction';
+  E('adjType').value     = mode === 'damaged' ? '-1' : '1';
+  if (id) {
+    const stock = await PosInventory.getStock(id);
+    E('adjCurrent').textContent = stock.qty + ' units';
+  } else {
+    E('adjCurrent').textContent = '';
+  }
+  E('adjustModal').style.display = '';
+}
+
+function closeAdjust() { E('adjustModal').style.display = 'none'; }
+
+async function saveAdjust() {
+  const id  = E('adjProdId').value;
+  if (!id) { toast('❌ Select a product first'); return; }
+  const qty  = parseInt(E('adjQty').value) || 0;
+  const sign = parseInt(E('adjType').value);
+  const reason = E('adjReason').value;
+  if (qty <= 0) { toast('❌ Quantity must be > 0'); return; }
+  try {
+    await PosInventory.adjustStock(id, 'default', qty * sign, reason);
+    toast('✅ Stock adjusted');
+    closeAdjust(); loadStock(); loadSummary();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+/* ══ MOVEMENTS ══ */
+async function loadMovements() {
+  const q    = E('movSearch').value.toLowerCase();
+  const type = E('movType').value;
+  const all  = _allProducts;
+  const tbody = E('movTbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Loading…</td></tr>';
+  let rows = [];
+  for (const p of all.filter(p => !q || (p.name+p.sku).toLowerCase().includes(q)).slice(0, 20)) {
+    const mvs = await PosInventory.getMovements(p.id, 'default', 20);
+    mvs.forEach(m => { if (!type || m.type === type) rows.push({ ...m, productName: p.name }); });
+  }
+  rows.sort((a, b) => b.timestamp - a.timestamp);
+  tbody.innerHTML = rows.slice(0, 100).map(m => `<tr>
+    <td style="font-size:12px">${new Date(m.timestamp).toLocaleString('en-KE',{dateStyle:'short',timeStyle:'short'})}</td>
+    <td>${_e(m.productName)}</td>
+    <td><span class="pill ${movPillClass(m.type)}">${_e(m.type)}</span></td>
+    <td class="${m.qty > 0 && m.type.includes('in')||m.type==='purchase'||m.type==='return_customer'?'stock-ok':'stock-out'}">${m.type.includes('out')||m.type==='sale'||m.type==='damaged'||m.type==='return_supplier'?'-':'+'} ${m.qty}</td>
+    <td style="font-family:monospace;font-size:12px">${_e(m.reference||'—').slice(0,16)}</td>
+    <td>${_e(m.performedBy||'—')}</td>
+  </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">No movements found</td></tr>';
+}
+
+function movPillClass(type) {
+  if (type === 'sale')            return 'pill-purple';
+  if (type === 'purchase')        return 'pill-green';
+  if (type.includes('in'))        return 'pill-green';
+  if (type.includes('out'))       return 'pill-red';
+  if (type.includes('damaged'))   return 'pill-red';
+  return 'pill-gray';
+}
+
+function filterMovements() { loadMovements(); }
+
+/* ══ BATCHES ══ */
+async function loadBatches() {
+  const tbody = E('batchTbody');
+  const today = new Date().toISOString().slice(0,10);
+  const in7   = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  let rows    = [];
+  for (const p of _allProducts) {
+    const batches = await PosInventory.getBatches(p.id, 'default');
+    batches.forEach(b => rows.push({ ...b, productName: p.name }));
+  }
+  rows.sort((a, b) => (a.expiryDate||'9999').localeCompare(b.expiryDate||'9999'));
+  tbody.innerHTML = rows.map(b => {
+    const expClass = !b.expiryDate ? '' : b.expiryDate <= today ? 'stock-out' : b.expiryDate <= in7 ? 'stock-low' : 'stock-ok';
+    return `<tr>
+      <td>${_e(b.productName)}</td>
+      <td style="font-family:monospace">${_e(b.batchNo||'—')}</td>
+      <td class="${expClass}"><strong>${b.expiryDate||'—'}</strong></td>
+      <td>${b.receivedQty}</td>
+      <td>${b.remainingQty}</td>
+      <td>${b.remainingQty===0?'<span class="pill pill-gray">Depleted</span>':b.expiryDate&&b.expiryDate<=today?'<span class="pill pill-red">Expired</span>':b.expiryDate&&b.expiryDate<=in7?'<span class="pill pill-yellow">Expiring soon</span>':'<span class="pill pill-green">Active</span>'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted)">No batch records found</td></tr>';
+}
+
+/* ══ ALERTS ══ */
+async function loadAlerts() {
+  const el   = E('alertsList');
+  el.innerHTML = '<div style="padding:20px;color:var(--muted)"><span class="spinner"></span> Loading alerts…</div>';
+  const low  = await PosInventory.getLowStockItems();
+  const exp  = await PosInventory.getExpiringItems('default', 7);
+  let html   = '';
+  if (low.length) {
+    html += `<div class="card"><div class="section-title" style="margin-bottom:12px;color:var(--yellow)">⚠️ Low Stock (${low.length})</div>`;
+    html += low.map(i => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1"><div style="font-weight:600">${_e(i.product.name)}</div><div style="font-size:12px;color:var(--muted)">Min: ${i.minLevel} · Reorder: ${i.product.reorderLevel}</div></div>
+        <div class="stock-low" style="font-size:18px;font-weight:700">${i.qty} left</div>
+      </div>`).join('');
+    html += '</div>';
+  }
+  if (exp.length) {
+    html += `<div class="card"><div class="section-title" style="margin-bottom:12px;color:var(--red)">🗓️ Expiring Within 7 Days (${exp.length})</div>`;
+    html += exp.map(b => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1"><div style="font-weight:600">Batch: ${_e(b.batchNo||b.productId)}</div><div style="font-size:12px;color:var(--muted)">Qty remaining: ${b.remainingQty}</div></div>
+        <div class="stock-out" style="font-weight:700">EXP: ${b.expiryDate}</div>
+      </div>`).join('');
+    html += '</div>';
+  }
+  if (!low.length && !exp.length) html = '<div style="text-align:center;padding:40px;color:var(--muted)"><div style="font-size:48px">✅</div><div style="margin-top:8px">No alerts — all stock levels OK!</div></div>';
+  el.innerHTML = html;
+}
+
+async function createAutoReorderPOs() {
+  if (!window.PosSuppliers) { toast('Supplier module not loaded'); return; }
+  const pos = await PosSuppliers.createAutoReorderPOs();
+  toast(`✅ Created ${pos.length} Purchase Order${pos.length!==1?'s':''}`);
+}
+
+/* ══ TRANSFER ══ */
+async function searchTransferProduct() {
+  const q = E('tProd').value;
+  if (!q) { E('tProdResults').style.display='none'; return; }
+  const results = await PosInventory.searchProducts(q, { limit: 8 });
+  const div = E('tProdResults');
+  div.style.display = results.length ? '' : 'none';
+  div.innerHTML = results.map(p => `<div onclick="selectTransferProduct('${_e(p.id)}','${_e(p.name)}')" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border)">${_e(p.name)} <span style="color:var(--muted);font-size:12px">${_e(p.sku||'')}</span></div>`).join('');
+}
+
+async function selectTransferProduct(id, name) {
+  _transferProductId = id;
+  E('tProd').value = name;
+  E('tProdResults').style.display = 'none';
+  const stock = await PosInventory.getStock(id, E('tFrom').value||'default');
+  E('tStock').innerHTML = `<strong class="stock-ok">${stock.qty} units</strong> available at ${E('tFrom').value||'default'}`;
+}
+
+async function doTransfer() {
+  if (!_transferProductId) { toast('❌ Select a product'); return; }
+  const from = E('tFrom').value.trim();
+  const to   = E('tTo').value.trim();
+  const qty  = parseInt(E('tQty').value)||0;
+  if (!from || !to) { toast('❌ Enter both branches'); return; }
+  if (from === to)  { toast('❌ From and To cannot be the same'); return; }
+  if (qty <= 0)     { toast('❌ Quantity must be > 0'); return; }
+  try {
+    await PosInventory.transferStock(_transferProductId, from, to, qty);
+    toast('✅ Transfer complete');
+    E('tQty').value = 1;
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+/* ── Export CSV ── */
+async function exportCSV() {
+  const inv = await PosInventory.getStockForBranch();
+  const rows = _allProducts.map(p => {
+    const stock = inv.find(i => i.productId === p.id);
+    return `"${p.name}","${p.sku||''}","${p.barcode||''}","${p.category||''}","${p.brand||''}","${p.price}","${p.cost}","${stock?.qty||0}","${p.unit}","${p.status}"`;
+  });
+  const csv  = 'Name,SKU,Barcode,Category,Brand,Price,Cost,Stock,Unit,Status\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'inventory-export.csv';
+  a.click();
+}
+
+function importCSV() { toast('📤 Use the import template — feature coming soon'); }
+
+/* ── Init ── */
+PosInventory.init('default').then(() => {
+  loadProducts();
+  PosInventory.on('stock:low', ({ product }) => toast(`⚠️ Low stock: ${product.name}`));
+});
+if (window.PosSuppliers) PosSuppliers.init();
+</script>
+</body>
+</html>

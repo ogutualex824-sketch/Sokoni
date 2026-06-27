@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customers — SOKONI SmartPOS</title>
+  <style>
+    :root{--bg:#0d0d1a;--bg2:#141426;--card:#1a1a2e;--card2:#22223b;--border:#2a2a4a;--accent:#7c3aed;--accent2:#a855f7;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;--text:#f0f0ff;--muted:#8888aa;--r:12px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:15px;min-height:100vh}
+    .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;height:56px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+    .topbar-back{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px 8px}
+    .topbar-title{font-size:16px;font-weight:600;flex:1}
+    .container{max-width:1200px;margin:0 auto;padding:16px 12px 100px}
+    .tabs{display:flex;gap:4px;background:var(--card);border-radius:var(--r);padding:4px;margin-bottom:16px;overflow-x:auto}
+    .tab{flex:1;min-width:90px;padding:9px;text-align:center;border-radius:9px;cursor:pointer;font-size:12px;font-weight:500;color:var(--muted);border:none;background:none;white-space:nowrap}
+    .tab.active{background:var(--accent);color:#fff}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+    .search{flex:1;min-width:200px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+    .search:focus{border-color:var(--accent)}
+    .search::placeholder{color:var(--muted)}
+    .btn{padding:9px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent)}
+    .btn-green{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+    .btn-sm{padding:6px 12px;font-size:12px}
+    .btn-icon{width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:14px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer}
+    .btn-icon:hover{color:var(--text);background:var(--card)}
+    .tbl{width:100%;border-collapse:collapse;font-size:13px}
+    .tbl th{padding:9px 12px;text-align:left;background:var(--bg2);color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+    .tbl td{padding:9px 12px;border-bottom:1px solid rgba(42,42,74,.5);vertical-align:middle}
+    .tbl tr:hover td{background:rgba(124,58,237,.05)}
+    .tbl-wrap{overflow-x:auto}
+    .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+    .pill-green{background:rgba(34,197,94,.15);color:var(--green)}
+    .pill-red{background:rgba(239,68,68,.15);color:var(--red)}
+    .pill-yellow{background:rgba(234,179,8,.15);color:var(--yellow)}
+    .pill-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+    .pill-gray{background:rgba(136,136,170,.15);color:var(--muted)}
+    .pill-purple{background:rgba(124,58,237,.15);color:var(--accent2)}
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .form-group{display:flex;flex-direction:column;gap:5px}
+    .form-label{font-size:12px;color:var(--muted);font-weight:500}
+    .form-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:14px;outline:none}
+    .form-input:focus{border-color:var(--accent)}
+    .form-input::placeholder{color:var(--muted)}
+    select.form-input{cursor:pointer}
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
+    .modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:760px;max-height:90vh;overflow-y:auto}
+    .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .modal-title{font-size:16px;font-weight:600}
+    .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px}
+    .modal-body{padding:20px}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+    .summary-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+    .summary-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+    .summary-value{font-size:22px;font-weight:700}
+    .tier-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase}
+    .tier-bronze{background:rgba(180,100,40,.2);color:#cd7f32}
+    .tier-silver{background:rgba(180,180,180,.2);color:#c0c0c0}
+    .tier-gold{background:rgba(255,200,0,.2);color:#ffd700}
+    .tier-platinum{background:rgba(168,85,247,.2);color:#c084fc}
+    .avatar{width:42px;height:42px;border-radius:50%;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+    .profile-row{display:flex;align-items:flex-start;gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+    .stat-box{background:var(--bg2);border-radius:8px;padding:12px;text-align:center}
+    .stat-val{font-size:18px;font-weight:700}
+    .stat-lbl{font-size:11px;color:var(--muted)}
+    #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:30px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+    #toast.show{opacity:1}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:600px){.form-grid{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}.stat-row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar-back" onclick="history.back()">&#8592;</button>
+  <div class="topbar-title">👥 Customer Management</div>
+  <button class="btn btn-primary btn-sm" onclick="openAddCustomer()">+ Add Customer</button>
+</div>
+
+<div class="container">
+
+  <div class="summary-grid">
+    <div class="summary-card"><div class="summary-label">Total Customers</div><div class="summary-value" id="sumTotal">—</div></div>
+    <div class="summary-card"><div class="summary-label">Active (30 days)</div><div class="summary-value" id="sumActive">—</div></div>
+    <div class="summary-card"><div class="summary-label">Loyalty Points</div><div class="summary-value" id="sumPoints" style="font-size:18px">—</div></div>
+    <div class="summary-card"><div class="summary-label">Credit Outstanding</div><div class="summary-value stock-low" id="sumCredit" style="font-size:16px">—</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="list">👥 All Customers</button>
+    <button class="tab" data-tab="profile">👤 Profile</button>
+    <button class="tab" data-tab="loyalty">⭐ Loyalty</button>
+    <button class="tab" data-tab="credit">💳 Credit Accounts</button>
+  </div>
+
+  <!-- LIST -->
+  <div class="tab-panel active" id="tab-list">
+    <div class="toolbar">
+      <input class="search" id="custSearch" placeholder="Search by name, phone, email…" oninput="filterCustomers()">
+      <select class="form-input" id="tierFilter" style="width:130px" onchange="filterCustomers()">
+        <option value="">All Tiers</option>
+        <option value="bronze">Bronze</option>
+        <option value="silver">Silver</option>
+        <option value="gold">Gold</option>
+        <option value="platinum">Platinum</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="exportCustomers()">📥 Export</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Customer</th><th>Phone</th><th>Loyalty Pts</th><th>Wallet</th><th>Credit Balance</th><th>Tier</th><th>Joined</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="custTbody"></tbody>
+      </table>
+    </div>
+    <div id="custEmpty" style="text-align:center;padding:50px;color:var(--muted);display:none">
+      <div style="font-size:48px">👥</div>
+      <div style="margin-top:8px">No customers yet. Add one to get started.</div>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="tab-panel" id="tab-profile">
+    <div id="profileSearch" class="card">
+      <div class="form-label" style="margin-bottom:8px">Search Customer</div>
+      <div style="display:flex;gap:8px">
+        <input class="form-input search" id="profileQ" placeholder="Name, phone or email…" oninput="searchProfile()" style="flex:1">
+      </div>
+      <div id="profileResults" style="margin-top:8px"></div>
+    </div>
+    <div id="profileView" style="display:none"></div>
+  </div>
+
+  <!-- LOYALTY -->
+  <div class="tab-panel" id="tab-loyalty">
+    <div class="card">
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">Loyalty Program Rules</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;font-size:13px">
+        <div class="stat-box"><div class="stat-val">1 pt</div><div class="stat-lbl">per KES 100 spent</div></div>
+        <div class="stat-box"><div class="stat-val">KES 0.50</div><div class="stat-lbl">per point value</div></div>
+        <div class="stat-box"><div class="stat-val">KES 20K</div><div class="stat-lbl">→ Silver tier</div></div>
+        <div class="stat-box"><div class="stat-val">KES 100K</div><div class="stat-lbl">→ Gold tier</div></div>
+        <div class="stat-box"><div class="stat-val">KES 500K</div><div class="stat-lbl">→ Platinum tier</div></div>
+      </div>
+    </div>
+    <div class="toolbar" style="margin-top:0">
+      <input class="search" id="loyaltySearch" placeholder="Search customer to adjust points…" oninput="searchLoyalty()">
+    </div>
+    <div id="loyaltyResults"></div>
+  </div>
+
+  <!-- CREDIT -->
+  <div class="tab-panel" id="tab-credit">
+    <div class="toolbar">
+      <input class="search" id="creditSearch" placeholder="Search credit account…" oninput="filterCredit()">
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Customer</th><th>Credit Limit</th><th>Outstanding</th><th>Available</th><th>Last Payment</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="creditTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ADD / EDIT CUSTOMER MODAL -->
+<div class="modal-bg" id="addModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="addModalTitle">Add Customer</div>
+      <button class="modal-close" onclick="closeAdd()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Full Name *</label>
+          <input class="form-input" id="cName" placeholder="e.g. Grace Wanjiku">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone *</label>
+          <input class="form-input" id="cPhone" placeholder="0712345678" type="tel">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="cEmail" placeholder="customer@email.com" type="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ID Number (National ID)</label>
+          <input class="form-input" id="cIdNo" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date of Birth</label>
+          <input class="form-input" id="cDob" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gender</label>
+          <select class="form-input" id="cGender">
+            <option value="">Prefer not to say</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Address</label>
+          <input class="form-input" id="cAddress" placeholder="Physical address or town">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Credit Limit (KES)</label>
+          <input class="form-input" id="cCreditLimit" type="number" min="0" value="0" placeholder="0 = no credit">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input class="form-input" id="cNotes" placeholder="Optional notes">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeAdd()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCustomer()">Save Customer</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE DETAIL MODAL -->
+<div class="modal-bg" id="detailModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Customer Profile</div>
+      <button class="modal-close" onclick="E('detailModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- LOYALTY ADJUST MODAL -->
+<div class="modal-bg" id="loyaltyModal" style="display:none">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Adjust Loyalty Points</div>
+      <button class="modal-close" onclick="closeLoyaltyModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Customer</label>
+          <input class="form-input" id="loyalName" readonly>
+          <input type="hidden" id="loyalId">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Current Points</label>
+          <div id="loyalCurrent" style="font-size:20px;font-weight:700;color:var(--accent2)"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Adjust Type</label>
+          <select class="form-input" id="loyalType">
+            <option value="loyalty_adjust">Add Points</option>
+            <option value="loyalty_deduct">Remove Points</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Points</label>
+          <input class="form-input" id="loyalPts" type="number" min="1" value="10">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Reason</label>
+          <input class="form-input" id="loyalReason" placeholder="e.g. Goodwill, Promotion, Correction">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLoyaltyModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLoyaltyAdjust()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- WALLET TOP-UP MODAL -->
+<div class="modal-bg" id="walletModal" style="display:none">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <div class="modal-title">Wallet Top-Up</div>
+      <button class="modal-close" onclick="E('walletModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Customer</label>
+          <input class="form-input" id="walletName" readonly>
+          <input type="hidden" id="walletId">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Current Balance</label>
+          <div id="walletBalance" style="font-size:20px;font-weight:700;color:var(--green)"></div>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Top-Up Amount (KES)</label>
+          <input class="form-input" id="walletAmt" type="number" min="1" placeholder="0.00">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Payment Method</label>
+          <select class="form-input" id="walletMethod">
+            <option value="cash">Cash</option>
+            <option value="mpesa">M-Pesa</option>
+            <option value="card">Card</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="E('walletModal').style.display='none'">Cancel</button>
+      <button class="btn btn-green" onclick="saveWalletTopup()">💰 Top Up</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREDIT PAYMENT MODAL -->
+<div class="modal-bg" id="creditModal" style="display:none">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <div class="modal-title">Record Credit Payment</div>
+      <button class="modal-close" onclick="E('creditModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Customer</label>
+          <input class="form-input" id="creditName" readonly>
+          <input type="hidden" id="creditId">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Outstanding Balance</label>
+          <div id="creditOutstanding" style="font-size:18px;font-weight:700;color:var(--red)"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Credit Limit</label>
+          <div id="creditLimit" style="font-size:14px;color:var(--muted)"></div>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Payment Amount (KES)</label>
+          <input class="form-input" id="creditAmt" type="number" min="1" placeholder="0.00">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Method</label>
+          <select class="form-input" id="creditMethod">
+            <option value="cash">Cash</option>
+            <option value="mpesa">M-Pesa</option>
+            <option value="card">Card</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="E('creditModal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCreditPayment()">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="firebase.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="pos-customers.js"></script>
+<script>
+const E   = id => document.getElementById(id);
+const _e  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const KES = n  => 'KES ' + Number(n||0).toFixed(2);
+
+let _allCustomers = [];
+let _editId = null;
+
+function toast(msg, dur = 2500) {
+  const el = E('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+/* ── Tabs ── */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t.dataset.tab));
+    if (t.dataset.tab === 'credit') loadCredit();
+  });
+});
+
+/* ── Summary ── */
+async function loadSummary() {
+  const all = await PosCustomers.getAllCustomers();
+  _allCustomers = all;
+  const now30 = Date.now() - 30 * 86400000;
+  const active = all.filter(c => c.lastPurchase >= now30).length;
+  const totalPts = all.reduce((t, c) => t + (c.loyaltyPoints || 0), 0);
+  const totalCredit = all.reduce((t, c) => t + (c.creditBalance || 0), 0);
+  E('sumTotal').textContent  = all.length;
+  E('sumActive').textContent = active;
+  E('sumPoints').textContent = totalPts.toLocaleString();
+  E('sumCredit').textContent = KES(totalCredit);
+}
+
+/* ══ LIST ══ */
+function filterCustomers() {
+  const q    = E('custSearch').value.toLowerCase();
+  const tier = E('tierFilter').value;
+  let list   = _allCustomers;
+  if (q)    list = list.filter(c => (c.name+c.phone+c.email).toLowerCase().includes(q));
+  if (tier) list = list.filter(c => c.loyaltyTier === tier);
+  renderCustomerTable(list);
+}
+
+function tierBadge(t) {
+  const classes = { bronze:'tier-bronze', silver:'tier-silver', gold:'tier-gold', platinum:'tier-platinum' };
+  return `<span class="tier-badge ${classes[t]||'tier-bronze'}">${t||'Bronze'}</span>`;
+}
+
+function renderCustomerTable(list) {
+  E('custEmpty').style.display = list.length ? 'none' : '';
+  E('custTbody').innerHTML = list.map(c => `<tr>
+    <td>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="avatar" style="width:34px;height:34px;font-size:13px">${_e((c.name||'?')[0].toUpperCase())}</div>
+        <div><div style="font-weight:600">${_e(c.name)}</div><div style="font-size:11px;color:var(--muted)">${_e(c.email||'')}</div></div>
+      </div>
+    </td>
+    <td>${_e(c.phone||'—')}</td>
+    <td><strong style="color:var(--accent2)">${(c.loyaltyPoints||0).toLocaleString()}</strong></td>
+    <td>${KES(c.walletBalance)}</td>
+    <td class="${c.creditBalance>0?'stock-low':''}">${KES(c.creditBalance)}</td>
+    <td>${tierBadge(c.loyaltyTier)}</td>
+    <td style="font-size:12px;color:var(--muted)">${c.joinedAt?new Date(c.joinedAt).toLocaleDateString('en-KE'):''}</td>
+    <td>
+      <div style="display:flex;gap:4px">
+        <button class="btn-icon" onclick="viewProfile('${_e(c.id)}')" title="View profile">👤</button>
+        <button class="btn-icon" onclick="openWallet('${_e(c.id)}','${_e(c.name)}')" title="Wallet top-up">💰</button>
+        <button class="btn-icon" onclick="openLoyaltyModal('${_e(c.id)}','${_e(c.name)}',${c.loyaltyPoints||0})" title="Adjust points">⭐</button>
+        <button class="btn-icon" onclick="editCustomer('${_e(c.id)}')" title="Edit">✏️</button>
+      </div>
+    </td>
+  </tr>`).join('');
+}
+
+/* ── Add / Edit ── */
+function openAddCustomer() {
+  _editId = null;
+  E('addModalTitle').textContent = 'Add Customer';
+  ['cName','cPhone','cEmail','cIdNo','cAddress','cNotes'].forEach(id => E(id).value='');
+  E('cDob').value=''; E('cGender').value=''; E('cCreditLimit').value='0';
+  E('addModal').style.display = '';
+}
+
+async function editCustomer(id) {
+  const c = await PosCustomers.getCustomer(id);
+  if (!c) return;
+  _editId = id;
+  E('addModalTitle').textContent = 'Edit Customer';
+  E('cName').value = c.name;   E('cPhone').value  = c.phone;  E('cEmail').value  = c.email||'';
+  E('cIdNo').value = c.idNumber||''; E('cDob').value = c.dob||''; E('cGender').value = c.gender||'';
+  E('cAddress').value = c.address||''; E('cNotes').value = c.notes||'';
+  E('cCreditLimit').value = c.creditLimit||0;
+  E('addModal').style.display = '';
+}
+
+function closeAdd() { E('addModal').style.display = 'none'; }
+
+async function saveCustomer() {
+  const name  = E('cName').value.trim();
+  const phone = E('cPhone').value.trim();
+  if (!name)  { toast('❌ Name is required'); return; }
+  if (!phone) { toast('❌ Phone is required'); return; }
+  const data = {
+    name, phone, email: E('cEmail').value.trim(),
+    idNumber: E('cIdNo').value.trim(), dob: E('cDob').value,
+    gender: E('cGender').value, address: E('cAddress').value.trim(),
+    notes: E('cNotes').value.trim(), creditLimit: parseFloat(E('cCreditLimit').value)||0,
+  };
+  try {
+    if (_editId) { await PosCustomers.updateCustomer(_editId, data); toast('✅ Customer updated'); }
+    else         { await PosCustomers.addCustomer(data); toast('✅ Customer added'); }
+    closeAdd();
+    await loadSummary();
+    filterCustomers();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+/* ── Profile View ── */
+async function viewProfile(id) {
+  const c     = await PosCustomers.getCustomer(id);
+  const hist  = await PosCustomers.getPurchaseHistory(id, 10);
+  const stmt  = await PosCustomers.getStatement(id, Date.now() - 30*86400000, Date.now());
+  const creditAvail = Math.max(0, (c.creditLimit||0) - (c.creditBalance||0));
+  E('detailBody').innerHTML = `
+    <div class="profile-row">
+      <div class="avatar" style="width:56px;height:56px;font-size:22px">${_e((c.name||'?')[0].toUpperCase())}</div>
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:700">${_e(c.name)}</div>
+        <div style="font-size:13px;color:var(--muted);margin:4px 0">${_e(c.phone)} · ${_e(c.email||'—')}</div>
+        <div style="margin-top:4px">${tierBadge(c.loyaltyTier)}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="editCustomer('${_e(c.id)}')">✏️ Edit</button>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-val" style="color:var(--accent2)">${(c.loyaltyPoints||0).toLocaleString()}</div><div class="stat-lbl">Loyalty Points</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:var(--green)">${KES(c.walletBalance)}</div><div class="stat-lbl">Wallet</div></div>
+      <div class="stat-box"><div class="stat-val">${KES(c.totalSpent)}</div><div class="stat-lbl">Total Spent</div></div>
+    </div>
+    ${c.creditLimit>0?`<div style="background:var(--bg2);border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px">
+      💳 Credit: Limit <strong>${KES(c.creditLimit)}</strong> · Outstanding <strong class="stock-low">${KES(c.creditBalance)}</strong> · Available <strong class="stock-ok">${KES(creditAvail)}</strong>
+      <button class="btn btn-outline btn-sm" style="margin-left:auto;display:block" onclick="openCreditPayment('${_e(c.id)}','${_e(c.name)}')">Record Payment</button>
+    </div>`:''}
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="openWallet('${_e(c.id)}','${_e(c.name)}')">💰 Wallet Top-Up</button>
+      <button class="btn btn-outline btn-sm" onclick="openLoyaltyModal('${_e(c.id)}','${_e(c.name)}',${c.loyaltyPoints||0})">⭐ Adjust Points</button>
+      <button class="btn btn-outline btn-sm" onclick="sendStatement('${_e(c.id)}')">📧 Email Statement</button>
+    </div>
+    <div style="font-weight:600;font-size:14px;margin-bottom:8px">Recent Purchases (30 days)</div>
+    ${hist.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Receipt</th><th>Items</th><th>Total</th></tr></thead><tbody>${
+      hist.map(s=>`<tr>
+        <td style="font-size:12px">${new Date(s.timestamp).toLocaleDateString('en-KE')}</td>
+        <td style="font-family:monospace;font-size:12px">${_e(s.receiptNumber||'—')}</td>
+        <td>${(s.items||[]).length}</td>
+        <td>${KES(s.total)}</td>
+      </tr>`).join('')
+    }</tbody></table></div>` : '<div style="color:var(--muted);font-size:13px">No recent purchases</div>'}
+  `;
+  E('detailModal').style.display = '';
+}
+
+async function searchProfile() {
+  const q = E('profileQ').value;
+  if (q.length < 2) { E('profileResults').innerHTML=''; return; }
+  const results = await PosCustomers.searchCustomers(q);
+  E('profileResults').innerHTML = results.length ? results.slice(0,6).map(c => `
+    <div onclick="selectProfileCustomer('${_e(c.id)}')" style="padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:10px">
+      <div class="avatar" style="width:36px;height:36px;font-size:14px">${_e((c.name||'?')[0].toUpperCase())}</div>
+      <div><div style="font-weight:600">${_e(c.name)}</div><div style="font-size:12px;color:var(--muted)">${_e(c.phone)}</div></div>
+      <div style="margin-left:auto">${tierBadge(c.loyaltyTier)}</div>
+    </div>`).join('') : '<div style="color:var(--muted);font-size:13px;padding:10px">No customers found</div>';
+}
+
+async function selectProfileCustomer(id) {
+  E('profileResults').innerHTML='';
+  E('profileSearch').style.display = 'none';
+  await renderInlineProfile(id);
+}
+
+async function renderInlineProfile(id) {
+  const c = await PosCustomers.getCustomer(id);
+  if (!c) return;
+  const hist = await PosCustomers.getPurchaseHistory(id, 20);
+  E('profileView').style.display = '';
+  const creditAvail = Math.max(0, (c.creditLimit||0)-(c.creditBalance||0));
+  E('profileView').innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+        <div class="avatar" style="width:54px;height:54px;font-size:20px">${_e((c.name||'?')[0].toUpperCase())}</div>
+        <div style="flex:1">
+          <div style="font-size:18px;font-weight:700">${_e(c.name)}</div>
+          <div style="font-size:12px;color:var(--muted)">${_e(c.phone)} · ${_e(c.email||'—')}</div>
+          <div style="margin-top:4px">${tierBadge(c.loyaltyTier)}</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="E('profileSearch').style.display='';E('profileView').style.display='none'">🔄 Change</button>
+      </div>
+      <div class="stat-row">
+        <div class="stat-box"><div class="stat-val" style="color:var(--accent2)">${(c.loyaltyPoints||0).toLocaleString()}</div><div class="stat-lbl">Loyalty Points = ${KES((c.loyaltyPoints||0)*0.5)}</div></div>
+        <div class="stat-box"><div class="stat-val" style="color:var(--green)">${KES(c.walletBalance)}</div><div class="stat-lbl">Wallet</div></div>
+        <div class="stat-box"><div class="stat-val">${KES(c.totalSpent)}</div><div class="stat-lbl">Lifetime Spend</div></div>
+      </div>
+      ${c.creditLimit>0?`<div style="font-size:13px;margin:10px 0;padding:10px;background:var(--bg2);border-radius:8px">💳 Credit Limit: <strong>${KES(c.creditLimit)}</strong> · Outstanding: <strong class="stock-low">${KES(c.creditBalance)}</strong> · Available: <strong class="stock-ok">${KES(creditAvail)}</strong></div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn btn-outline btn-sm" onclick="openWallet('${_e(c.id)}','${_e(c.name)}')">💰 Wallet Top-Up</button>
+        <button class="btn btn-outline btn-sm" onclick="openLoyaltyModal('${_e(c.id)}','${_e(c.name)}',${c.loyaltyPoints||0})">⭐ Adjust Points</button>
+        <button class="btn btn-outline btn-sm" onclick="openCreditPayment('${_e(c.id)}','${_e(c.name)}')">💳 Record Credit Payment</button>
+        <button class="btn btn-outline btn-sm" onclick="sendStatement('${_e(c.id)}')">📧 Statement</button>
+      </div>
+      <div style="font-weight:600;margin-bottom:8px">Purchase History</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Receipt</th><th>Items</th><th>Total</th><th>Points</th></tr></thead><tbody>${
+        hist.map(s=>`<tr>
+          <td style="font-size:12px">${new Date(s.timestamp).toLocaleDateString('en-KE')}</td>
+          <td style="font-family:monospace;font-size:12px">${_e(s.receiptNumber||'—')}</td>
+          <td>${(s.items||[]).length}</td>
+          <td>${KES(s.total)}</td>
+          <td>+${s.loyaltyEarned||0}</td>
+        </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted)">No history</td></tr>'
+      }</tbody></table></div>
+    </div>`;
+}
+
+/* ── Loyalty Adjust ── */
+function openLoyaltyModal(id, name, pts) {
+  E('loyalId').value   = id;
+  E('loyalName').value = name;
+  E('loyalCurrent').textContent = pts.toLocaleString() + ' pts';
+  E('loyalPts').value  = 10;
+  E('loyalReason').value = '';
+  E('loyaltyModal').style.display = '';
+}
+
+function closeLoyaltyModal() { E('loyaltyModal').style.display = 'none'; }
+
+async function saveLoyaltyAdjust() {
+  const id     = E('loyalId').value;
+  const type   = E('loyalType').value;
+  const pts    = parseInt(E('loyalPts').value)||0;
+  const reason = E('loyalReason').value.trim();
+  if (pts <= 0)  { toast('❌ Points must be > 0'); return; }
+  if (!reason)   { toast('❌ Enter a reason'); return; }
+  try {
+    const isAdd = type === 'loyalty_adjust';
+    await PosCustomers.addTransaction(id, { type, points: isAdd ? pts : -pts, description: reason });
+    toast('✅ Points adjusted');
+    closeLoyaltyModal();
+    await loadSummary();
+    filterCustomers();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+async function searchLoyalty() {
+  const q = E('loyaltySearch').value;
+  if (q.length < 2) { E('loyaltyResults').innerHTML=''; return; }
+  const results = await PosCustomers.searchCustomers(q);
+  E('loyaltyResults').innerHTML = results.slice(0,8).map(c => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+      <div class="avatar" style="width:36px;height:36px;font-size:13px">${_e((c.name||'?')[0].toUpperCase())}</div>
+      <div style="flex:1"><div style="font-weight:600">${_e(c.name)}</div><div style="font-size:12px;color:var(--accent2)">${(c.loyaltyPoints||0).toLocaleString()} pts · ${KES((c.loyaltyPoints||0)*0.5)} value</div></div>
+      ${tierBadge(c.loyaltyTier)}
+      <button class="btn btn-outline btn-sm" onclick="openLoyaltyModal('${_e(c.id)}','${_e(c.name)}',${c.loyaltyPoints||0})">Adjust</button>
+    </div>`).join('');
+}
+
+/* ── Wallet ── */
+async function openWallet(id, name) {
+  const c = await PosCustomers.getCustomer(id);
+  E('walletId').value    = id;
+  E('walletName').value  = name;
+  E('walletBalance').textContent = KES(c?.walletBalance||0);
+  E('walletAmt').value   = '';
+  E('walletModal').style.display = '';
+}
+
+async function saveWalletTopup() {
+  const id  = E('walletId').value;
+  const amt = parseFloat(E('walletAmt').value)||0;
+  if (amt <= 0) { toast('❌ Amount must be > 0'); return; }
+  try {
+    await PosCustomers.topUpWallet(id, amt, E('walletMethod').value);
+    toast('✅ Wallet topped up: ' + KES(amt));
+    E('walletModal').style.display = 'none';
+    await loadSummary(); filterCustomers();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+/* ── Credit ── */
+async function loadCredit() {
+  const all    = await PosCustomers.getAllCustomers();
+  const credit = all.filter(c => (c.creditLimit||0) > 0);
+  const q      = E('creditSearch').value.toLowerCase();
+  const list   = q ? credit.filter(c => c.name.toLowerCase().includes(q)) : credit;
+  E('creditTbody').innerHTML = list.map(c => {
+    const avail = Math.max(0,(c.creditLimit||0)-(c.creditBalance||0));
+    return `<tr>
+      <td><div style="font-weight:600">${_e(c.name)}</div><div style="font-size:11px;color:var(--muted)">${_e(c.phone)}</div></td>
+      <td>${KES(c.creditLimit)}</td>
+      <td class="${c.creditBalance>0?'stock-low':''}">${KES(c.creditBalance)}</td>
+      <td class="stock-ok">${KES(avail)}</td>
+      <td style="font-size:12px;color:var(--muted)">${c.lastPayment?new Date(c.lastPayment).toLocaleDateString('en-KE'):'—'}</td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-outline btn-sm" onclick="openCreditPayment('${_e(c.id)}','${_e(c.name)}')">Pay</button>
+          <button class="btn btn-outline btn-sm" onclick="viewProfile('${_e(c.id)}')">View</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filterCredit() { loadCredit(); }
+
+async function openCreditPayment(id, name) {
+  const c = await PosCustomers.getCustomer(id);
+  E('creditId').value   = id;
+  E('creditName').value = name;
+  E('creditOutstanding').textContent = KES(c?.creditBalance||0);
+  E('creditLimit').textContent = 'Limit: ' + KES(c?.creditLimit||0);
+  E('creditAmt').value  = '';
+  E('creditModal').style.display = '';
+}
+
+async function saveCreditPayment() {
+  const id  = E('creditId').value;
+  const amt = parseFloat(E('creditAmt').value)||0;
+  if (amt <= 0) { toast('❌ Amount must be > 0'); return; }
+  try {
+    await PosCustomers.recordCreditPayment(id, amt, E('creditMethod').value);
+    toast('✅ Payment recorded: ' + KES(amt));
+    E('creditModal').style.display = 'none';
+    await loadSummary(); filterCustomers(); loadCredit();
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+async function sendStatement(id) {
+  const c = await PosCustomers.getCustomer(id);
+  if (!c?.email && !c?.phone) { toast('❌ Customer has no email or phone'); return; }
+  try {
+    await PosCustomers.sendStatementToCustomer(id);
+    toast('✅ Statement sent to customer');
+  } catch (err) { toast('❌ ' + err.message); }
+}
+
+function exportCustomers() {
+  const rows = _allCustomers.map(c => `"${c.name}","${c.phone}","${c.email||''}","${c.loyaltyTier}","${c.loyaltyPoints||0}","${(c.walletBalance||0).toFixed(2)}","${(c.creditLimit||0).toFixed(2)}","${(c.creditBalance||0).toFixed(2)}","${(c.totalSpent||0).toFixed(2)}"`);
+  const csv  = 'Name,Phone,Email,Tier,Points,Wallet,Credit Limit,Credit Balance,Total Spent\n' + rows.join('\n');
+  const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})), download:'customers.csv' });
+  a.click();
+}
+
+/* ── Init ── */
+PosCustomers.init().then(() => { loadSummary().then(() => filterCustomers()); });
+</script>
+</body>
+</html>

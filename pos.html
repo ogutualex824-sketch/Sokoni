@@ -434,7 +434,7 @@
         </div>
         <div class="settings-section">
           <div class="settings-section-title">PRINTER</div>
-          <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="SPos.printerSetup()">Connect</button><button class="inv-btn inv-btn-outline" onclick="PosPrinter.testPrint(SPos.state.settings).catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="window.open('pos-printer-setup.html','_blank')">&#9881;&#65039; Printer Setup</button><button class="inv-btn inv-btn-outline" onclick="SokoniPosprint&&SokoniPosprint.printTest().catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Paper Width</strong></div><select class="settings-input" id="s-paper-width" onchange="SPos.settings.savePaperWidth(this.value)"><option value="58">58mm</option><option value="80">80mm</option></select></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Auto-print receipts</strong><span>After every sale</span></div><label class="toggle"><input type="checkbox" id="s-auto-print" onchange="SPos.settings.saveToggle('autoPrint',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Open Cash Drawer</strong><span>After cash payment</span></div><label class="toggle"><input type="checkbox" id="s-cash-drawer" onchange="SPos.settings.saveToggle('openCashDrawer',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
@@ -1056,6 +1056,12 @@
 <!-- ══ POS modules ══ -->
 <script src="pos-printer.js"></script>
 <script src="sokoni-print-engine.js"></script>
+<!-- Universal Print Engine v2 — offline-first, multi-transport, multi-driver -->
+<script src="sokoni-printer-drivers.js"></script>
+<script src="sokoni-printer-discovery.js"></script>
+<script src="sokoni-receipt-engine.js"></script>
+<script src="sokoni-label-engine.js"></script>
+<script src="sokoni-pos-print.js"></script>
 <script src="pos-manager-auth.js"></script>
 <script src="pos-terminals.js"></script>
 <script src="pos-device-manager.js"></script>
@@ -1506,6 +1512,23 @@ var SPosBranch = (function(){
            selectBranch: selectBranch, addBranch: addBranch, deleteBranch: deleteBranch,
            getCurrent: _getCurrent, getBranches: _getBranches };
 })();
+</script>
+
+<script>
+/* Auto-init universal print engine after POS loads */
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.SokoniPosprint) {
+    SokoniPosprint.init().catch(function() {});
+    SokoniPosprint.on('printer:connected', function(d) {
+      const el = document.getElementById('printer-status-txt');
+      if (el) el.textContent = '✅ ' + (d.name || 'Connected');
+    });
+    SokoniPosprint.on('printer:disconnected', function() {
+      const el = document.getElementById('printer-status-txt');
+      if (el) el.textContent = 'Disconnected';
+    });
+  }
+});
 </script>
 </body>
 </html>
