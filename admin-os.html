@@ -823,9 +823,9 @@ window._nav=function(el,p){
   document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
   document.getElementById('panel-'+p).classList.add('active');
   document.getElementById('pageTitle').textContent=TITLES[p]||p;
-  ({overview:_loadOverview,links:_populateLinks,users:function(){},tickets:_loadTickets,categories:_loadCategories,settings:_loadSettings,flags:_loadFlags}[p]||function(){})();
+  ({overview:_loadOverview,links:_populateLinks,users:function(){},marketplace:_loadProducts,orders:_loadOrders,bookings:_loadBookings,delivery:_loadDelivery,payouts:_loadPayouts,'pos-devices':_loadPosDevices,tickets:_loadTickets,disputes:_loadDisputes,reviews:_loadReviews,'push-notif':_loadRecentNotifs,announcements:_loadAnnouncements,banners:_loadBanners,categories:_loadCategories,faqs:_loadFaqs,'ai-ops':_loadAiStats,search:_loadSearch,fraud:_loadFraud,audit:_loadAudit,settings:_loadSettings,flags:_loadFlags}[p]||function(){})();
 };
-window._refresh=function(){var a=document.querySelector('.panel.active');if(a){var p=a.id.replace('panel-','');({overview:_loadOverview,tickets:_loadTickets,categories:_loadCategories,settings:_loadSettings,flags:_loadFlags}[p]||function(){})();}};
+window._refresh=function(){var a=document.querySelector('.panel.active');if(a){var p=a.id.replace('panel-','');({overview:_loadOverview,marketplace:_loadProducts,orders:_loadOrders,bookings:_loadBookings,delivery:_loadDelivery,payouts:_loadPayouts,'pos-devices':_loadPosDevices,tickets:_loadTickets,disputes:_loadDisputes,reviews:_loadReviews,'push-notif':_loadRecentNotifs,announcements:_loadAnnouncements,banners:_loadBanners,categories:_loadCategories,faqs:_loadFaqs,'ai-ops':_loadAiStats,search:_loadSearch,fraud:_loadFraud,audit:_loadAudit,settings:_loadSettings,flags:_loadFlags}[p]||function(){})();}};
 
 /* ── Overview ── */
 function _loadOverview(){
@@ -847,6 +847,16 @@ function _loadOverview(){
       _hrow('Open tickets',d.openTickets,d.openTickets>10?'var(--r)':'var(--txt)')+
       _hrow('Pending reports',d.pendingReports,d.pendingReports>5?'var(--r)':'var(--txt)');
   }).catch(function(e){_toast('Error: '+e.message,'red');});
+  _cf('adminGetExecutiveDashboard')({}).then(function(r){
+    var d=r.data||{};
+    document.getElementById('ov-revenue').textContent='KES '+(Math.round((d.revenueToday||0)/100)).toLocaleString();
+    document.getElementById('ov-commission').textContent='KES '+(Math.round((d.commissionToday||0)/100)).toLocaleString();
+    document.getElementById('ov-subs').textContent=(d.activeSubs||0).toLocaleString();
+    document.getElementById('ov-payouts').textContent=(d.pendingPayouts||0).toLocaleString();
+    document.getElementById('sbOrders').textContent=d.activeOrders||0;
+    document.getElementById('sbPayouts').textContent=d.pendingPayouts||0;
+    document.getElementById('sbDisputes').textContent=d.openDisputes||0;
+  }).catch(function(){});
 }
 function _hrow(label,val,color){
   return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px">'+
