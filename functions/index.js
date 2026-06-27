@@ -7478,3 +7478,22 @@ exports.adminSubProcessRefund     = subBilling.adminSubProcessRefund;
 exports.adminSubExportBilling     = subBilling.adminSubExportBilling;
 exports.subProcessExpirations     = subBilling.subProcessExpirations;
 exports.subSendRenewalReminders   = subBilling.subSendRenewalReminders;
+
+/* ══════════════════════════════════════════════════════════════════
+   FinOS v2.0 — Universal Transaction Router + Escrow + Settlement
+   12 Cloud Functions extending FinOS v1.0
+══════════════════════════════════════════════════════════════════ */
+const finosRouter = require('./finos-router');
+
+exports.finosRecordTransaction     = finosRouter.finosRecordTransaction;
+exports.finosCreateEscrow          = finosRouter.finosCreateEscrow;
+exports.finosReleaseEscrow         = finosRouter.finosReleaseEscrow;
+exports.finosDisputeEscrow         = finosRouter.finosDisputeEscrow;
+exports.finosResolveDispute        = finosRouter.finosResolveDispute;
+exports.finosGetSettlementRules    = finosRouter.finosGetSettlementRules;
+exports.finosUpdateSettlementRules = finosRouter.finosUpdateSettlementRules;
+exports.finosProcessSettlements    = finosRouter.finosProcessSettlements;
+exports.finosGetRevenueAnalytics   = finosRouter.finosGetRevenueAnalytics;
+exports.finosRequestBankPayout     = finosRouter.finosRequestBankPayout;
+exports.finosGetAdminDashboard     = finosRouter.finosGetAdminDashboard;
+exports.finosGenerateReceipt       = finosRouter.finosGenerateReceipt;
