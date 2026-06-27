@@ -1,4 +1,43 @@
-﻿## [2026-06-27] — Comprehensive Platform Security & Performance Audit
+﻿## [2026-06-27] — Phase 1–20 Production Completion Directive Sprint (commit 22b8c37)
+
+### Summary
+Continued 20-phase production readiness audit. 3 additional XSS vectors closed in seller.js, auth ?next= redirect param fixed, missing inv-ai.html page created, 34 dev/screenshot files removed from production hosting, Firestore rules reviewed and rules deployed.
+
+### Security Fixes (Phase 1 / Phase 3)
+- **XSS** — seller.js `populateBoostSelect()`: escaped `p.id`/`p.name` in `<option>` elements
+- **XSS** — seller.js premium status banner: escaped `plan?.name||currentPlan` sourced from localStorage
+- **XSS** — seller.js low-stock alert bar: escaped `p.name` for out-of-stock / low-stock product names
+- **Auth redirect** — auth.js: `?next=` / `?redirect=` URL param now captured on page load into `sokoniLoginRedirect` sessionStorage with allowlist validation (no `//` prefix, alphanumeric path only)
+- **Missing page** — inv-ai.html: created redirect stub for broken links from `inv-dashboard.html`, `inv-product.html`, `inv-products.html`, `sokoni-inv-shell.js`
+- **Hosting cleanup** — firebase.json: excluded 34 screenshot files (`ss_*.png`, `tmp_*.png`), dev mocks (`sokoni-dev-mock.js`, `sokoni-mock-data.js`), test tools (`jest.config.js`), and session files from public deployment (~2MB savings)
+
+### Firestore Rules
+- Deployed updated rules (no logic changes — rules already correct)
+- Reviewed: `auditLogs`, `rateLimits`, `securityEvents` are admin-only ✅
+- Orders: client-side `status:'paid'` creation noted; `serverVerified` field is the integrity gate ✅
+
+### Phase Audit Results
+- **Phase 1 XSS Scan**: 8 total vectors fixed across script.js (1), seller.js (5), auth.js (1)
+- **Phase 3 Security**: Storage rules — MIME blocklist + size limits enforced ✅; CSP deployed ✅; rate limiting in CFs ✅ (259 auth-checked CF operations)
+- **Phase 6 Logistics**: GPS tracking via `SokoniDB.startGPSTracking/stopGPSTracking` in driver.html ✅
+- **Phase 8 POS**: Barcode scanner active (`barcode.openScanner`) ✅
+- **Phase 11 AI**: `sokoniChat` + `kass` CFs deployed; requires `ANTHROPIC_API_KEY` secret
+- **Phase 12 PWA/Offline**: SW serves `/offline.html` on network fail, 90+ pages precached ✅
+- **Phase 15 PWA Installability**: All 9 manifest requirements met ✅
+- **Phase 16 Monitoring**: 18 alert policies live in Cloud Monitoring ✅
+- **Phase 17 Backup**: PITR enabled + `scheduledFirestoreBackup` CF deployed ✅
+
+### Files Changed
+- `seller.js` — 3 XSS fixes (boost select, plan banner, stock alert)
+- `auth.js` — ?next= URL param capture
+- `inv-ai.html` — new file (redirect stub)
+- `firebase.json` — hosting ignore list expanded
+- `firestore.rules` — deployed (no logic changes)
+- `delivery-tracking.html`, `sokoni-delivery.js`, `sokoni-routing.js`, `sokoni-delivery-pricing.js` — delivery module updates
+
+---
+
+## [2026-06-27] — Comprehensive Platform Security & Performance Audit
 
 ### Summary
 Full audit-and-fix sprint across all 156 HTML pages. Resolved XSS vectors, silent Firestore compound query failures, legacy compat SDK calls, error message disclosure, missing bottom navigation, and a UI button overflow bug. Restored Firestore query efficiency with 4 new composite indexes.
