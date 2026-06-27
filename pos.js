@@ -1755,9 +1755,10 @@ const SPos = (function () {
 
     async printReport() {
       const body = document.getElementById('reports-body').innerHTML;
-      const w    = window.open('', '_blank', 'width=700,height=600');
-      w.document.write(`<html><head><title>Sales Report</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}.kpi-card{border:1px solid #ddd;padding:12px;border-radius:8px}.kpi-val{font-size:18px;font-weight:bold}</style></head><body>${body}<script>window.print()<\/script></body></html>`);
-      w.document.close();
+      const html = `<html><head><title>Sales Report</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}.kpi-card{border:1px solid #ddd;padding:12px;border-radius:8px}.kpi-val{font-size:18px;font-weight:bold}</style></head><body>${body}<script>window.print()<\/script></body></html>`;
+      const bu = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+      const w  = window.open(bu, '_blank', 'width=700,height=600');
+      if (w) setTimeout(() => URL.revokeObjectURL(bu), 10000); else URL.revokeObjectURL(bu);
     },
   };
 

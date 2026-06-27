@@ -337,8 +337,10 @@ window.SokoniLabelEngine = (() => {
     if (!window.SokoniPosprint) {
       /* Fallback: browser print */
       const html = buildHTML(items, opts);
-      const w = window.open('', '_blank', 'width=600,height=500');
-      if (w) { w.document.write(html); w.document.close(); }
+      const bu = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+      const w = window.open(bu, '_blank', 'width=600,height=500');
+      if (w) setTimeout(() => URL.revokeObjectURL(bu), 10000);
+      else URL.revokeObjectURL(bu);
       return;
     }
 
@@ -366,8 +368,9 @@ window.SokoniLabelEngine = (() => {
 
     /* Fall back to browser HTML label */
     const html = buildHTML(items, opts);
-    const w = window.open('', '_blank', 'width=600,height=500');
-    if (w) { w.document.write(html); w.document.close(); }
+    const bu2 = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+    const w = window.open(bu2, '_blank', 'width=600,height=500');
+    if (w) setTimeout(() => URL.revokeObjectURL(bu2), 10000); else URL.revokeObjectURL(bu2);
   }
 
   /* Print a product barcode sticker */
@@ -398,15 +401,16 @@ window.SokoniLabelEngine = (() => {
 
   /* Print shipping label */
   function printShippingLabel(data, opts = {}) {
+    const _openBlob = (h, dims) => {
+      const bu = URL.createObjectURL(new Blob([h], {type:'text/html;charset=utf-8'}));
+      const w = window.open(bu, '_blank', dims);
+      if (w) setTimeout(() => URL.revokeObjectURL(bu), 10000); else URL.revokeObjectURL(bu);
+    };
     if (!window.SokoniReceiptEngine) {
-      const html = buildHTML([data], { size: '100x150', ...opts });
-      const w = window.open('', '_blank', 'width=500,height=600');
-      if (w) { w.document.write(html); w.document.close(); }
+      _openBlob(buildHTML([data], { size: '100x150', ...opts }), 'width=500,height=600');
       return;
     }
-    const html = SokoniReceiptEngine.buildShippingLabel({ data, type: 'shipping' });
-    const w = window.open('', '_blank', 'width=500,height=600');
-    if (w) { w.document.write(html); w.document.close(); }
+    _openBlob(SokoniReceiptEngine.buildShippingLabel({ data, type: 'shipping' }), 'width=500,height=600');
   }
 
   /* ── Helpers ── */

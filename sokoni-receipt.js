@@ -187,13 +187,12 @@
   /* ── Print in a new window ── */
   async function printReceipt(opts) {
     const html = await buildHTML(opts);
-    const w = window.open('', '_blank', 'width=350,height=600,scrollbars=yes');
-    if (!w) { alert('Pop-up blocked. Allow pop-ups for printing.'); return; }
-    w.document.write(html);
-    w.document.close();
+    const blobUrl = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+    const w = window.open(blobUrl, '_blank', 'width=350,height=600,scrollbars=yes');
+    if (!w) { URL.revokeObjectURL(blobUrl); alert('Pop-up blocked. Allow pop-ups for printing.'); return; }
     w.focus();
-    /* Give QR image time to load before printing */
-    setTimeout(() => { w.print(); }, 600);
+    /* Give QR image time to load before printing, then revoke blob URL */
+    setTimeout(() => { w.print(); URL.revokeObjectURL(blobUrl); }, 600);
   }
 
   /* ── Download as PDF (using print dialog save-as-PDF) ── */
@@ -245,12 +244,11 @@
       .replace('size: 80mm', 'size: 58mm')
       .replace('width: 80mm;', 'width: 58mm;')
       .replace('font-size: 12px', 'font-size: 11px');
-    const w = window.open('', '_blank', 'width=280,height=600,scrollbars=yes');
-    if (!w) { alert('Pop-up blocked.'); return; }
-    w.document.write(html);
-    w.document.close();
+    const blobUrl2 = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+    const w = window.open(blobUrl2, '_blank', 'width=280,height=600,scrollbars=yes');
+    if (!w) { URL.revokeObjectURL(blobUrl2); alert('Pop-up blocked.'); return; }
     w.focus();
-    setTimeout(() => w.print(), 600);
+    setTimeout(() => { w.print(); URL.revokeObjectURL(blobUrl2); }, 600);
   }
 
   /* ── Expose public API ── */

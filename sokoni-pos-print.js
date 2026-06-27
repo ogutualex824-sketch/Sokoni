@@ -453,8 +453,10 @@ window.SokoniPosprint = (() => {
       type: 'browser',
       async send(_bytes, htmlDoc) {
         if (htmlDoc) {
-          const w = window.open('', '_blank', 'width=400,height=600');
-          if (w) { w.document.write(htmlDoc); w.document.close(); setTimeout(() => w.print(), 300); }
+          const bu = URL.createObjectURL(new Blob([htmlDoc], {type:'text/html;charset=utf-8'}));
+          const w = window.open(bu, '_blank', 'width=400,height=600');
+          if (w) setTimeout(() => { w.print(); URL.revokeObjectURL(bu); }, 300);
+          else URL.revokeObjectURL(bu);
         } else {
           window.print();
         }

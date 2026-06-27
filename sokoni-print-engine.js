@@ -617,13 +617,14 @@ const SokoniPrint = (() => {
 
   /* ── HTML popup opener ───────────────────────────────────────── */
   function _openHTML(html) {
-    const w = window.open('', '_blank', 'width=860,height=720');
+    const blobUrl = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+    const w = window.open(blobUrl, '_blank', 'width=860,height=720');
     if (!w) {
+      URL.revokeObjectURL(blobUrl);
       (window._skToast || window.alert)('Allow popups to print documents');
       return;
     }
-    w.document.write(html);
-    w.document.close();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
   }
 
   /* ── Thermal send via PosPrinter.sendRaw ─────────────────────── */
