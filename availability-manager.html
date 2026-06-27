@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Availability Manager · SOKONI</title>
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="sokoni-tokens.css" />
+  <style>
+    /* ── Base & Layout ──────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* ── Top bar ──────────────────────────────────────────────────────── */
+    .top-bar {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0 20px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .top-bar .back-btn {
+      width: 36px; height: 36px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      background: #f1f5f9; border: none; cursor: pointer; color: #374151;
+      font-size: 18px; text-decoration: none;
+    }
+    .top-bar h1 { font-size: 17px; font-weight: 700; flex: 1; }
+    .save-btn {
+      background: #2563eb; color: #fff; border: none; border-radius: 9px;
+      padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: background .15s;
+    }
+    .save-btn:hover { background: #1d4ed8; }
+    .save-btn:disabled { background: #93c5fd; cursor: wait; }
+
+    /* ── Live status hero ─────────────────────────────────────────────── */
+    .status-hero {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: #fff;
+      padding: 24px 20px;
+    }
+    .status-hero .biz-name { font-size: 13px; color: #94a3b8; margin-bottom: 4px; }
+    .status-hero .live-row {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    }
+    .status-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #10b981; flex-shrink: 0;
+      animation: pulse-green 2s ease infinite;
+    }
+    @keyframes pulse-green { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+    .status-label { font-size: 18px; font-weight: 700; }
+    .status-chips {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .status-chip {
+      padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      border: 1.5px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+      color: #e2e8f0; cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .status-chip:hover, .status-chip.active {
+      background: rgba(255,255,255,.9); color: #0f172a; border-color: transparent;
+    }
+    .status-chip.active-green  { background: #10b981; color: #fff; border-color: transparent; }
+    .status-chip.active-yellow { background: #f59e0b; color: #fff; border-color: transparent; }
+    .status-chip.active-red    { background: #ef4444; color: #fff; border-color: transparent; }
+    .status-chip.active-gray   { background: #6b7280; color: #fff; border-color: transparent; }
+    .status-chip.active-purple { background: #8b5cf6; color: #fff; border-color: transparent; }
+
+    /* ── Tabs ─────────────────────────────────────────────────────────── */
+    .tabs-bar {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .tabs-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 14px 18px; font-size: 13px; font-weight: 600; color: #6b7280;
+      border: none; background: none; cursor: pointer; white-space: nowrap;
+      border-bottom: 2px solid transparent; transition: all .15s;
+    }
+    .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+
+    /* ── Panel ────────────────────────────────────────────────────────── */
+    .panel { display: none; padding: 20px; max-width: 700px; margin: 0 auto; }
+    .panel.active { display: block; }
+
+    /* ── Cards ────────────────────────────────────────────────────────── */
+    .card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+      padding: 20px; margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 14px; color: #0f172a;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title .badge {
+      font-size: 10px; background: #eff6ff; color: #2563eb;
+      padding: 2px 7px; border-radius: 20px; font-weight: 600;
+    }
+
+    /* ── Mode selector ────────────────────────────────────────────────── */
+    .mode-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .mode-card {
+      border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 12px;
+      cursor: pointer; transition: all .15s; position: relative;
+    }
+    .mode-card:hover { border-color: #93c5fd; background: #f0f9ff; }
+    .mode-card.selected { border-color: #2563eb; background: #eff6ff; }
+    .mode-card .icon { font-size: 20px; margin-bottom: 4px; }
+    .mode-card .name { font-size: 12px; font-weight: 600; color: #1e40af; }
+    .mode-card .desc { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .mode-card input[type="checkbox"] {
+      position: absolute; top: 10px; right: 10px;
+      width: 15px; height: 15px; accent-color: #2563eb;
+    }
+
+    /* ── Day schedule ─────────────────────────────────────────────────── */
+    .day-row {
+      border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 8px; overflow: hidden;
+    }
+    .day-header {
+      display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+      background: #f8fafc; cursor: pointer;
+    }
+    .day-toggle {
+      position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0;
+    }
+    .day-toggle input { opacity: 0; width: 0; height: 0; }
+    .day-toggle .track {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: #d1d5db; border-radius: 10px; transition: background .2s;
+    }
+    .day-toggle input:checked ~ .track { background: #10b981; }
+    .day-toggle .thumb {
+      position: absolute; left: 3px; bottom: 3px; width: 14px; height: 14px;
+      background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 3px #0002;
+    }
+    .day-toggle input:checked ~ .thumb { transform: translateX(16px); }
+    .day-name { font-weight: 600; font-size: 13px; flex: 1; }
+    .day-summary { font-size: 12px; color: #6b7280; }
+
+    .day-body { padding: 12px 14px; display: none; border-top: 1px solid #f1f5f9; }
+    .day-body.open { display: block; }
+
+    .periods-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .period-row { display: flex; align-items: center; gap: 8px; }
+    .period-row input[type="time"] {
+      flex: 1; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+      font-size: 13px; color: #0f172a; background: #fff;
+    }
+    .period-row .between { font-size: 11px; color: #6b7280; flex-shrink: 0; }
+    .period-row .del-btn {
+      width: 28px; height: 28px; border-radius: 7px; border: none;
+      background: #fef2f2; color: #ef4444; cursor: pointer; font-size: 15px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .add-period-btn {
+      font-size: 12px; font-weight: 600; color: #2563eb; background: none; border: none;
+      cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ── Form fields ──────────────────────────────────────────────────── */
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block; font-size: 12px; font-weight: 600; color: #374151;
+      margin-bottom: 5px;
+    }
+    .field input[type="number"], .field input[type="text"],
+    .field input[type="date"], .field textarea, .field select {
+      width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 9px;
+      font-size: 13px; color: #0f172a; background: #fff; transition: border-color .15s;
+    }
+    .field input:focus, .field textarea:focus, .field select:focus {
+      outline: none; border-color: #2563eb;
+    }
+    .field .hint { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── Toggle switch (generic) ──────────────────────────────────────── */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid #f1f5f9;
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-row .label { font-size: 13px; font-weight: 500; }
+    .toggle-row .sublabel { font-size: 11px; color: #6b7280; margin-top: 1px; }
+    .sw { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .sw input { opacity: 0; width: 0; height: 0; }
+    .sw .tr {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: #d1d5db; border-radius: 12px; transition: background .2s;
+    }
+    .sw input:checked ~ .tr { background: #2563eb; }
+    .sw .th {
+      position: absolute; left: 3px; bottom: 3px; width: 18px; height: 18px;
+      background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 4px #0003;
+    }
+    .sw input:checked ~ .th { transform: translateX(20px); }
+
+    /* ── Capacity stats ───────────────────────────────────────────────── */
+    .cap-stats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+      margin-bottom: 16px;
+    }
+    .cap-stat {
+      background: #f8fafc; border-radius: 10px; padding: 12px; text-align: center;
+    }
+    .cap-stat .val { font-size: 22px; font-weight: 800; color: #1e40af; }
+    .cap-stat .lbl { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+    /* ── Holiday list ─────────────────────────────────────────────────── */
+    .holiday-list { display: flex; flex-direction: column; gap: 8px; }
+    .holiday-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border: 1px solid #e2e8f0; border-radius: 9px; background: #fff;
+    }
+    .holiday-item .date-badge {
+      background: #f0fdf4; color: #166534; font-size: 11px; font-weight: 700;
+      padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+    }
+    .holiday-item .name { font-size: 13px; font-weight: 500; flex: 1; }
+    .holiday-item .closed-tag {
+      font-size: 11px; font-weight: 600; color: #ef4444; background: #fef2f2;
+      padding: 2px 7px; border-radius: 5px;
+    }
+    .holiday-item .del-h {
+      width: 26px; height: 26px; border: none; background: #fef2f2;
+      color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .add-holiday-btn {
+      width: 100%; padding: 10px; border: 1.5px dashed #cbd5e1; border-radius: 10px;
+      background: none; color: #2563eb; font-size: 13px; font-weight: 600;
+      cursor: pointer; margin-top: 10px;
+    }
+    .add-holiday-btn:hover { background: #eff6ff; }
+
+    /* ── Vacation banner ──────────────────────────────────────────────── */
+    .vac-active-banner {
+      background: #f5f3ff; border: 1.5px solid #c4b5fd; border-radius: 12px;
+      padding: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;
+    }
+    .vac-active-banner .icon { font-size: 28px; }
+    .vac-active-banner .info { flex: 1; }
+    .vac-active-banner .title { font-size: 14px; font-weight: 700; color: #4c1d95; }
+    .vac-active-banner .sub   { font-size: 12px; color: #6d28d9; margin-top: 2px; }
+    .end-vac-btn {
+      background: #7c3aed; color: #fff; border: none; border-radius: 9px;
+      padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+
+    /* ── Toast ────────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      background: #0f172a; color: #fff; padding: 11px 22px; border-radius: 25px;
+      font-size: 13px; font-weight: 500; z-index: 9999; white-space: nowrap;
+      opacity: 0; transition: opacity .25s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #ef4444; }
+
+    /* ── Bottom nav (shared) ──────────────────────────────────────────── */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; border-top: 1px solid #e2e8f0;
+      display: flex; padding: 8px 0 12px; z-index: 200;
+    }
+    .bottom-nav a {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      font-size: 10px; color: #6b7280; text-decoration: none;
+    }
+    .bottom-nav a.active { color: #2563eb; }
+    .bottom-nav a svg { width: 22px; height: 22px; }
+
+    @media (min-width: 769px) { .bottom-nav { display: none; } }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+<div class="top-bar">
+  <a href="seller.html" class="back-btn" aria-label="Back">&#8592;</a>
+  <h1>Availability Manager</h1>
+  <button class="save-btn" id="saveBtn" onclick="saveAll()">Save</button>
+</div>
+
+<!-- ── Live status hero ─────────────────────────────────────────────────── -->
+<div class="status-hero">
+  <div class="biz-name" id="bizNameHero">Loading…</div>
+  <div class="live-row">
+    <span class="status-dot" id="statusDot"></span>
+    <span class="status-label" id="statusLabel">Loading status…</span>
+  </div>
+  <div class="status-chips">
+    <button class="status-chip" data-status="available"         onclick="quickStatus(this)">Available</button>
+    <button class="status-chip" data-status="busy"              onclick="quickStatus(this)">Busy</button>
+    <button class="status-chip" data-status="on_break"          onclick="quickStatus(this)">On Break</button>
+    <button class="status-chip" data-status="away"              onclick="quickStatus(this)">Away</button>
+    <button class="status-chip" data-status="do_not_disturb"    onclick="quickStatus(this)">Do Not Disturb</button>
+    <button class="status-chip" data-status="emergency_closure" onclick="quickStatus(this)">Emergency</button>
+  </div>
+</div>
+
+<!-- ── Tabs ─────────────────────────────────────────────────────────────── -->
+<div class="tabs-bar">
+  <button class="tab-btn active" data-panel="mode"      onclick="switchTab(this)">Mode</button>
+  <button class="tab-btn"        data-panel="schedule"  onclick="switchTab(this)">Schedule</button>
+  <button class="tab-btn"        data-panel="appt"      onclick="switchTab(this)">Appointments</button>
+  <button class="tab-btn"        data-panel="capacity"  onclick="switchTab(this)">Capacity</button>
+  <button class="tab-btn"        data-panel="vacation"  onclick="switchTab(this)">Vacation</button>
+  <button class="tab-btn"        data-panel="holidays"  onclick="switchTab(this)">Holidays</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 1 — Mode
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel active" id="panel-mode">
+  <div class="card">
+    <div class="card-title">
+      Availability Mode
+      <span class="badge">Required</span>
+    </div>
+    <div class="mode-grid" id="modeGrid">
+      <label class="mode-card" data-mode="open_24_7">
+        <input type="checkbox" name="mode" value="open_24_7" />
+        <div class="icon">🕐</div>
+        <div class="name">Open 24/7</div>
+        <div class="desc">Always available</div>
+      </label>
+      <label class="mode-card" data-mode="fixed_hours">
+        <input type="checkbox" name="mode" value="fixed_hours" />
+        <div class="icon">🕘</div>
+        <div class="name">Fixed Hours</div>
+        <div class="desc">Set weekly schedule</div>
+      </label>
+      <label class="mode-card" data-mode="appointment_only">
+        <input type="checkbox" name="mode" value="appointment_only" />
+        <div class="icon">📅</div>
+        <div class="name">Appointment Only</div>
+        <div class="desc">Pre-book required</div>
+      </label>
+      <label class="mode-card" data-mode="on_demand">
+        <input type="checkbox" name="mode" value="on_demand" />
+        <div class="icon">⚡</div>
+        <div class="name">On Demand</div>
+        <div class="desc">Accept when online</div>
+      </label>
+      <label class="mode-card" data-mode="weekday_only">
+        <input type="checkbox" name="mode" value="weekday_only" />
+        <div class="icon">💼</div>
+        <div class="name">Weekdays Only</div>
+        <div class="desc">Mon – Fri</div>
+      </label>
+      <label class="mode-card" data-mode="weekend_only">
+        <input type="checkbox" name="mode" value="weekend_only" />
+        <div class="icon">🎉</div>
+        <div class="name">Weekends Only</div>
+        <div class="desc">Sat &amp; Sun</div>
+      </label>
+      <label class="mode-card" data-mode="seasonal">
+        <input type="checkbox" name="mode" value="seasonal" />
+        <div class="icon">🌦</div>
+        <div class="name">Seasonal</div>
+        <div class="desc">Specific months only</div>
+      </label>
+      <label class="mode-card" data-mode="temporary_closed">
+        <input type="checkbox" name="mode" value="temporary_closed" />
+        <div class="icon">🔒</div>
+        <div class="name">Temporarily Closed</div>
+        <div class="desc">Hidden from search</div>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Business Details</div>
+    <div class="field">
+      <label>Business / Display Name</label>
+      <input type="text" id="businessName" placeholder="e.g. Mama Jane's Kitchen" maxlength="120" />
+    </div>
+    <div class="field">
+      <label>Hub Type</label>
+      <select id="hubType">
+        <option value="marketplace">Marketplace / Shop</option>
+        <option value="food">Food &amp; Restaurant</option>
+        <option value="healthcare">Healthcare</option>
+        <option value="services">Services</option>
+        <option value="property">Property</option>
+        <option value="jobs">Jobs / Recruitment</option>
+        <option value="events">Events</option>
+        <option value="entertainment">Entertainment</option>
+        <option value="hotels">Hotels</option>
+        <option value="short_stays">Short Stays / BnB</option>
+        <option value="rides">Rides / Transport</option>
+        <option value="car_hub">Car Hub</option>
+        <option value="delivery">Delivery / Courier</option>
+        <option value="legal">Legal Services</option>
+        <option value="education">Education / Tuition</option>
+        <option value="digital">Digital / Tech</option>
+        <option value="b2b">B2B / Wholesale</option>
+        <option value="general">General</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Average Response Time (minutes)</label>
+      <input type="number" id="avgResponseMins" min="1" max="10080" placeholder="e.g. 30" />
+      <div class="hint">Shown to customers on your profile. Helps set expectations.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">After-Hours Bookings</div>
+    <div class="toggle-row">
+      <div>
+        <div class="label">Allow bookings outside working hours</div>
+        <div class="sublabel">Customers can request you even when you're closed</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="afterHours" /><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Message shown for after-hours requests</label>
+      <input type="text" id="afterHoursMsg" placeholder="e.g. We'll confirm your booking by 8am." maxlength="300" />
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 2 — Schedule
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-schedule">
+  <div class="card">
+    <div class="card-title">Weekly Schedule</div>
+    <div id="weeklySchedule"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Notifications</div>
+    <div class="toggle-row">
+      <div><div class="label">Notify me when business opens</div></div>
+      <label class="sw"><input type="checkbox" id="notifyOnOpen" /><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="label">Notify me when business closes</div></div>
+      <label class="sw"><input type="checkbox" id="notifyOnClose" /><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="label">Notify on new bookings</div></div>
+      <label class="sw"><input type="checkbox" id="notifyOnBooking" checked /><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="label">Notify when capacity is reached</div></div>
+      <label class="sw"><input type="checkbox" id="notifyOnCapacity" /><span class="tr"></span><span class="th"></span></label>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 3 — Appointments
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-appt">
+  <div class="card">
+    <div class="card-title">Appointment Scheduling</div>
+    <div class="toggle-row">
+      <div><div class="label">Enable appointment booking</div><div class="sublabel">Generate time slots customers can book</div></div>
+      <label class="sw"><input type="checkbox" id="apptEnabled" onchange="toggleApptFields()" /><span class="tr"></span><span class="th"></span></label>
+    </div>
+  </div>
+
+  <div id="apptFields" style="display:none;">
+    <div class="card">
+      <div class="card-title">Slot Configuration</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Appointment Duration (min)</label>
+          <input type="number" id="apptDuration" min="5" max="480" value="30" />
+        </div>
+        <div class="field">
+          <label>Buffer Between Slots (min)</label>
+          <input type="number" id="apptBuffer" min="0" max="120" value="0" />
+          <div class="hint">Break between appointments</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Travel Time Buffer (min)</label>
+          <input type="number" id="apptTravel" min="0" max="120" value="0" />
+          <div class="hint">For home visits / mobile services</div>
+        </div>
+        <div class="field">
+          <label>Max Days in Advance</label>
+          <input type="number" id="apptMaxDays" min="1" max="365" value="30" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Minimum Notice Required (hours)</label>
+        <input type="number" id="apptMinNotice" min="0" max="72" value="1" />
+        <div class="hint">Customers cannot book less than this many hours before the slot</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Booking Rules</div>
+      <div class="toggle-row">
+        <div><div class="label">Allow same-day bookings</div><div class="sublabel">Even within min notice hours</div></div>
+        <label class="sw"><input type="checkbox" id="apptSameDay" /><span class="tr"></span><span class="th"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><div class="label">Allow after-hours appointments</div><div class="sublabel">Slots outside configured schedule</div></div>
+        <label class="sw"><input type="checkbox" id="apptAfterHours" /><span class="tr"></span><span class="th"></span></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 4 — Capacity
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-capacity">
+  <div class="cap-stats">
+    <div class="cap-stat">
+      <div class="val" id="todayCount">0</div>
+      <div class="lbl">Today's Bookings</div>
+    </div>
+    <div class="cap-stat">
+      <div class="val" id="maxPerDayStat">∞</div>
+      <div class="lbl">Daily Limit</div>
+    </div>
+    <div class="cap-stat">
+      <div class="val" id="remainingToday">∞</div>
+      <div class="lbl">Remaining Today</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Daily &amp; Weekly Limits</div>
+    <div class="field-row">
+      <div class="field">
+        <label>Max Bookings Per Day</label>
+        <input type="number" id="capMaxPerDay" min="1" max="9999" placeholder="Unlimited" />
+        <div class="hint">Leave blank for unlimited</div>
+      </div>
+      <div class="field">
+        <label>Max Bookings Per Week</label>
+        <input type="number" id="capMaxPerWeek" min="1" max="9999" placeholder="Unlimited" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Max Simultaneous Jobs / Customers</label>
+      <input type="number" id="capMaxSim" min="1" max="100" placeholder="1" />
+      <div class="hint">For services that can handle multiple customers at once</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px;">When Capacity Is Reached</div>
+    <p style="font-size:13px;color:#6b7280;line-height:1.6;">
+      SOKONI automatically stops accepting new bookings when your daily limit is reached.
+      Customers will see your next available slot and can join a waitlist.
+      Your limit resets at midnight Nairobi time.
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 5 — Vacation
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-vacation">
+  <div id="vacActiveBanner" class="vac-active-banner" style="display:none;">
+    <span class="icon">✈️</span>
+    <div class="info">
+      <div class="title">You're currently on vacation</div>
+      <div class="sub" id="vacBannerSub">Returning on —</div>
+    </div>
+    <button class="end-vac-btn" onclick="endVacation()">End Vacation</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Vacation Mode</div>
+    <div class="toggle-row">
+      <div><div class="label">Enable vacation mode</div><div class="sublabel">Hides you from search and stops bookings</div></div>
+      <label class="sw"><input type="checkbox" id="vacActive" onchange="toggleVacFields()" /><span class="tr"></span><span class="th"></span></label>
+    </div>
+  </div>
+
+  <div id="vacFields" style="display:none;">
+    <div class="card">
+      <div class="card-title">Vacation Dates</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Start Date</label>
+          <input type="date" id="vacStart" />
+        </div>
+        <div class="field">
+          <label>End Date</label>
+          <input type="date" id="vacEnd" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Message to customers (optional)</label>
+        <textarea id="vacMessage" rows="3" placeholder="e.g. I'm on holiday until 15 July. I'll respond to all messages on my return." maxlength="200"></textarea>
+      </div>
+      <div class="toggle-row">
+        <div><div class="label">Auto-reactivate on end date</div><div class="sublabel">Automatically go back to active when vacation ends</div></div>
+        <label class="sw"><input type="checkbox" id="vacAutoReactivate" checked /><span class="tr"></span><span class="th"></span></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PANEL 6 — Holidays
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-holidays">
+  <div class="card">
+    <div class="card-title">Kenyan Public Holidays <span class="badge">Auto-loaded</span></div>
+    <p style="font-size:12px;color:#6b7280;margin-bottom:12px;">
+      These are pre-configured for Kenya. Mark any as a closure day or set special hours.
+    </p>
+    <div class="holiday-list" id="publicHolidayList"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Custom Closures &amp; Special Days</div>
+    <div class="holiday-list" id="customHolidayList">
+      <div style="color:#9ca3af;font-size:13px;text-align:center;padding:16px;">
+        No custom dates yet. Add one below.
+      </div>
+    </div>
+    <button class="add-holiday-btn" onclick="addCustomHoliday()">+ Add Custom Date</button>
+  </div>
+
+  <div class="card" id="addHolidayForm" style="display:none;">
+    <div class="card-title">New Custom Date</div>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="newHolDate" />
+    </div>
+    <div class="field">
+      <label>Label / Reason</label>
+      <input type="text" id="newHolLabel" placeholder="e.g. Company Anniversary" maxlength="80" />
+    </div>
+    <div class="toggle-row">
+      <div><div class="label">Mark as closed all day</div></div>
+      <label class="sw"><input type="checkbox" id="newHolClosed" checked onchange="toggleHolPeriods()" /><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div id="holPeriods" style="display:none;margin-top:10px;">
+      <div class="field">
+        <label>Special Hours</label>
+        <div class="period-row">
+          <input type="time" id="holOpen" value="09:00" />
+          <span class="between">to</span>
+          <input type="time" id="holClose" value="13:00" />
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button onclick="saveCustomHoliday()" style="flex:1;background:#2563eb;color:#fff;border:none;border-radius:9px;padding:10px;font-weight:600;cursor:pointer;">Save Date</button>
+      <button onclick="cancelHoliday()" style="flex:1;background:#f1f5f9;color:#374151;border:none;border-radius:9px;padding:10px;font-weight:600;cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ─────────────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<!-- ── Bottom nav ────────────────────────────────────────────────────────── -->
+<nav class="bottom-nav">
+  <a href="index.html">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Home
+  </a>
+  <a href="seller.html" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"/><path d="M3 9l2.45-4.9A2 2 0 0 1 7.24 3h9.52a2 2 0 0 1 1.8 1.1L21 9"/><path d="M12 3v6"/></svg>
+    Seller
+  </a>
+  <a href="profile.html">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    Profile
+  </a>
+</nav>
+
+<!-- ── Firebase & Scripts ─────────────────────────────────────────────────── -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="firebase.js"></script>
+<script src="sokoni-availability.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Availability Manager Page Controller
+   All user data is written via textContent / value — zero innerHTML with
+   user-supplied strings to prevent XSS.
+═══════════════════════════════════════════════════════════════════════════ */
+
+const DAYS_ORDER = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+const DAY_LABELS = { monday:"Monday", tuesday:"Tuesday", wednesday:"Wednesday",
+  thursday:"Thursday", friday:"Friday", saturday:"Saturday", sunday:"Sunday" };
+
+/* In-memory state */
+let _uid      = null;
+let _config   = {};
+let _holidays = [];   // { date, label, closed, periods }
+let _avail    = null; // SokoniAvailability instance
+
+const STATUS_COLORS = {
+  available:"#10b981", busy:"#f59e0b", away:"#6b7280", offline:"#9ca3af",
+  on_break:"#f59e0b", closed:"#ef4444", vacation:"#8b5cf6",
+  emergency_closure:"#ef4444", do_not_disturb:"#dc2626",
+};
+
+/* ── Auth guard ─────────────────────────────────────────────────────────── */
+firebase.auth().onAuthStateChanged((user) => {
+  if (!user) { window.location.href = "login.html?next=availability-manager.html"; return; }
+  _uid = user.uid;
+  loadConfig();
+});
+
+/* ── Tab switching ──────────────────────────────────────────────────────── */
+function switchTab(btn) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("panel-" + btn.dataset.panel).classList.add("active");
+}
+
+/* ── Load existing config ───────────────────────────────────────────────── */
+async function loadConfig() {
+  try {
+    const snap = await db.collection("providerAvailability").doc(_uid).get();
+    if (snap.exists) {
+      _config = snap.data();
+    } else {
+      _config = { modes: ["fixed_hours"], schedule: {}, appt: {}, cap: {}, notify: {} };
+    }
+    _populateUI(_config);
+    _subscribeStatus();
+    await _loadHolidays();
+  } catch (e) {
+    showToast("Failed to load settings.", true);
+  }
+}
+
+/* ── Subscribe real-time status ─────────────────────────────────────────── */
+function _subscribeStatus() {
+  _avail = new SokoniAvailability(_uid, { db });
+  _avail.load().then(() => _avail.loadConfig()).then(() => {
+    _renderStatusHero(_avail._status || {});
+  });
+  _avail.subscribe((s) => _renderStatusHero(s));
+}
+
+function _renderStatusHero(s) {
+  const isOpen = _avail ? _avail.isOpenNow() : false;
+  const label  = _avail ? _avail.getLabel()  : (s.label || "Unknown");
+  const status = s.liveStatus || "offline";
+  const color  = STATUS_COLORS[status] || (isOpen ? "#10b981" : "#ef4444");
+
+  document.getElementById("bizNameHero").textContent = s.businessName || "Your Business";
+  document.getElementById("statusLabel").textContent = label;
+  const dot = document.getElementById("statusDot");
+  dot.style.background   = color;
+  dot.style.animation    = isOpen ? "pulse-green 2s ease infinite" : "none";
+
+  // Highlight active chip
+  document.querySelectorAll(".status-chip").forEach(c => {
+    c.className = "status-chip" + (c.dataset.status === status
+      ? " active-" + _chipColor(status) : "");
+  });
+}
+
+function _chipColor(s) {
+  if (s === "available") return "green";
+  if (s === "busy" || s === "on_break") return "yellow";
+  if (s === "vacation") return "purple";
+  if (["closed","emergency_closure","do_not_disturb"].includes(s)) return "red";
+  return "gray";
+}
+
+/* ── Quick status change ────────────────────────────────────────────────── */
+async function quickStatus(btn) {
+  const status = btn.dataset.status;
+  btn.disabled = true;
+  try {
+    await setLiveStatus(status);
+    showToast("Status updated to " + status.replace(/_/g, " "));
+  } catch (e) {
+    showToast("Failed to update status.", true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ── Populate UI from config ────────────────────────────────────────────── */
+function _populateUI(cfg) {
+  /* Modes */
+  const modes = cfg.modes || [];
+  document.querySelectorAll("#modeGrid input[type='checkbox']").forEach(cb => {
+    cb.checked = modes.includes(cb.value);
+    cb.closest(".mode-card").classList.toggle("selected", cb.checked);
+    cb.addEventListener("change", function() {
+      this.closest(".mode-card").classList.toggle("selected", this.checked);
+    });
+  });
+
+  /* Business details */
+  _val("businessName",    cfg.businessName || "");
+  _val("avgResponseMins", cfg.avgResponseMins || "");
+  _val("afterHoursMsg",   cfg.afterHoursMsg || "");
+  _chk("afterHours",      cfg.afterHours || false);
+  if (cfg.hubType) document.getElementById("hubType").value = cfg.hubType;
+
+  /* Weekly schedule */
+  _buildScheduleUI(cfg.schedule || {});
+
+  /* Notifications */
+  _chk("notifyOnOpen",     cfg.notify?.onOpen    || false);
+  _chk("notifyOnClose",    cfg.notify?.onClose   || false);
+  _chk("notifyOnBooking",  cfg.notify?.onBooking !== false);
+  _chk("notifyOnCapacity", cfg.notify?.onCapacity || false);
+
+  /* Appointments */
+  const apptEnabled = cfg.appt?.enabled || false;
+  _chk("apptEnabled", apptEnabled);
+  _val("apptDuration",  cfg.appt?.durationMins   || 30);
+  _val("apptBuffer",    cfg.appt?.bufferMins      || 0);
+  _val("apptTravel",    cfg.appt?.travelMins      || 0);
+  _val("apptMaxDays",   cfg.appt?.maxDaysAhead    || 30);
+  _val("apptMinNotice", cfg.appt?.minNoticeHours  || 1);
+  _chk("apptSameDay",   cfg.appt?.allowSameDay    || false);
+  _chk("apptAfterHours",cfg.appt?.allowAfterHours || false);
+  document.getElementById("apptFields").style.display = apptEnabled ? "block" : "none";
+
+  /* Capacity */
+  _val("capMaxPerDay",  cfg.cap?.maxPerDay  || "");
+  _val("capMaxPerWeek", cfg.cap?.maxPerWeek || "");
+  _val("capMaxSim",     cfg.cap?.maxSimultaneous || "");
+  const today    = cfg.cap?.todayCount || 0;
+  const maxDay   = cfg.cap?.maxPerDay  || null;
+  document.getElementById("todayCount").textContent   = today;
+  document.getElementById("maxPerDayStat").textContent = maxDay != null ? maxDay : "∞";
+  document.getElementById("remainingToday").textContent = maxDay != null ? Math.max(0, maxDay - today) : "∞";
+
+  /* Vacation */
+  const vacActive = cfg.isOnVacation || false;
+  _chk("vacActive", vacActive);
+  document.getElementById("vacFields").style.display = vacActive ? "block" : "none";
+  if (vacActive) {
+    document.getElementById("vacActiveBanner").style.display = "flex";
+    document.getElementById("vacBannerSub").textContent =
+      "Returning on " + (cfg.vacationEndDate || "—");
+    _val("vacStart",  cfg.vacationStartDate || "");
+    _val("vacEnd",    cfg.vacationEndDate   || "");
+    _val("vacMessage",cfg.vacationMessage   || "");
+    _chk("vacAutoReactivate", cfg.vacationAutoReactivate !== false);
+  }
+}
+
+/* ── Build weekly schedule UI ───────────────────────────────────────────── */
+function _buildScheduleUI(schedule) {
+  const container = document.getElementById("weeklySchedule");
+  container.innerHTML = "";
+  DAYS_ORDER.forEach(day => {
+    const dayCfg = schedule[day] || { closed: true, periods: [], breaks: [] };
+    container.appendChild(_dayRow(day, dayCfg));
+  });
+}
+
+function _dayRow(day, cfg) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "day-row";
+  wrapper.id = "day-" + day;
+
+  const isOpen = !cfg.closed && cfg.periods?.length > 0;
+  const summary = isOpen
+    ? cfg.periods.map(p => p.open + "–" + p.close).join(", ")
+    : "Closed";
+
+  /* Header */
+  const hdr = document.createElement("div");
+  hdr.className = "day-header";
+  hdr.innerHTML = `
+    <label class="day-toggle">
+      <input type="checkbox" class="day-open-toggle" data-day="${day}" ${isOpen ? "checked" : ""} />
+      <span class="track"></span><span class="thumb"></span>
+    </label>
+    <span class="day-name">${DAY_LABELS[day]}</span>
+    <span class="day-summary" id="summ-${day}">${_escStr(summary)}</span>
+  `;
+  hdr.addEventListener("click", (e) => {
+    if (e.target.closest(".day-toggle")) return;
+    const body = document.getElementById("body-" + day);
+    body.classList.toggle("open");
+  });
+
+  /* Body */
+  const body = document.createElement("div");
+  body.className = "day-body" + (isOpen && cfg.periods?.length ? " open" : "");
+  body.id = "body-" + day;
+
+  const periodsList = document.createElement("div");
+  periodsList.className = "periods-list";
+  periodsList.id = "periods-" + day;
+
+  (cfg.periods || [{ open: "08:00", close: "17:00" }]).forEach(p => {
+    periodsList.appendChild(_periodRow(day, p.open, p.close));
+  });
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "add-period-btn";
+  addBtn.textContent = "+ Add another period";
+  addBtn.addEventListener("click", () => {
+    document.getElementById("periods-" + day).appendChild(_periodRow(day, "09:00", "13:00"));
+  });
+
+  body.appendChild(periodsList);
+  body.appendChild(addBtn);
+
+  /* Toggle handler */
+  hdr.querySelector(".day-open-toggle").addEventListener("change", function() {
+    const open = this.checked;
+    body.classList.toggle("open", open);
+    document.getElementById("summ-" + day).textContent = open ? "Open" : "Closed";
+    if (open && !document.getElementById("periods-" + day).children.length) {
+      document.getElementById("periods-" + day).appendChild(_periodRow(day, "08:00", "17:00"));
+    }
+  });
+
+  wrapper.appendChild(hdr);
+  wrapper.appendChild(body);
+  return wrapper;
+}
+
+function _periodRow(day, openTime, closeTime) {
+  const row = document.createElement("div");
+  row.className = "period-row";
+
+  const openInput = document.createElement("input");
+  openInput.type  = "time"; openInput.value = openTime; openInput.className = "period-open";
+  const between = document.createElement("span");
+  between.className = "between"; between.textContent = "to";
+  const closeInput = document.createElement("input");
+  closeInput.type  = "time"; closeInput.value = closeTime; closeInput.className = "period-close";
+  const delBtn = document.createElement("button");
+  delBtn.type = "button"; delBtn.className = "del-btn"; delBtn.textContent = "×";
+  delBtn.addEventListener("click", () => row.remove());
+
+  row.appendChild(openInput); row.appendChild(between);
+  row.appendChild(closeInput); row.appendChild(delBtn);
+  return row;
+}
+
+/* ── Read schedule from DOM ─────────────────────────────────────────────── */
+function _readSchedule() {
+  const out = {};
+  DAYS_ORDER.forEach(day => {
+    const toggle = document.querySelector(`.day-open-toggle[data-day="${day}"]`);
+    const isOpen = toggle ? toggle.checked : false;
+    if (!isOpen) { out[day] = { closed: true, periods: [], breaks: [] }; return; }
+    const periods = [];
+    document.querySelectorAll(`#periods-${day} .period-row`).forEach(row => {
+      const open  = row.querySelector(".period-open")?.value;
+      const close = row.querySelector(".period-close")?.value;
+      if (open && close && open < close) periods.push({ open, close });
+    });
+    out[day] = { closed: periods.length === 0, periods, breaks: [] };
+  });
+  return out;
+}
+
+/* ── Appointment fields toggle ──────────────────────────────────────────── */
+function toggleApptFields() {
+  const on = document.getElementById("apptEnabled").checked;
+  document.getElementById("apptFields").style.display = on ? "block" : "none";
+}
+
+/* ── Vacation fields toggle ─────────────────────────────────────────────── */
+function toggleVacFields() {
+  const on = document.getElementById("vacActive").checked;
+  document.getElementById("vacFields").style.display = on ? "block" : "none";
+  if (on && !document.getElementById("vacStart").value) {
+    const today = new Date().toISOString().split("T")[0];
+    document.getElementById("vacStart").value = today;
+  }
+}
+
+async function endVacation() {
+  try {
+    await clearVacationMode();
+    _chk("vacActive", false);
+    document.getElementById("vacFields").style.display = "none";
+    document.getElementById("vacActiveBanner").style.display = "none";
+    showToast("Vacation ended. You're back online!");
+    await loadConfig();
+  } catch (e) {
+    showToast("Failed to end vacation.", true);
+  }
+}
+
+/* ── Holidays ───────────────────────────────────────────────────────────── */
+const KE_HOLIDAYS_2026 = [
+  { date:"2026-01-01", label:"New Year's Day",     closed:true },
+  { date:"2026-04-03", label:"Good Friday",         closed:true },
+  { date:"2026-04-06", label:"Easter Monday",       closed:true },
+  { date:"2026-05-01", label:"Labour Day",          closed:true },
+  { date:"2026-06-01", label:"Madaraka Day",        closed:true },
+  { date:"2026-10-10", label:"Huduma Day",          closed:true },
+  { date:"2026-10-20", label:"Mashujaa Day",        closed:true },
+  { date:"2026-12-12", label:"Jamhuri Day",         closed:true },
+  { date:"2026-12-25", label:"Christmas Day",       closed:true },
+  { date:"2026-12-26", label:"Boxing Day",          closed:true },
+];
+
+async function _loadHolidays() {
+  /* Render public holidays */
+  const pubList = document.getElementById("publicHolidayList");
+  pubList.innerHTML = "";
+  KE_HOLIDAYS_2026.forEach(h => pubList.appendChild(_holidayEl(h, false)));
+
+  /* Load custom overrides from Firestore */
+  _holidays = [];
+  try {
+    const snap = await db.collection("providerAvailability").doc(_uid)
+      .collection("overrides")
+      .orderBy(firebase.firestore.FieldPath.documentId())
+      .get();
+    snap.forEach(d => {
+      const data = { date: d.id, ...d.data() };
+      _holidays.push(data);
+    });
+  } catch (_) {}
+  _renderCustomHolidays();
+}
+
+function _renderCustomHolidays() {
+  const list = document.getElementById("customHolidayList");
+  list.innerHTML = "";
+  if (!_holidays.length) {
+    const empty = document.createElement("div");
+    empty.style.cssText = "color:#9ca3af;font-size:13px;text-align:center;padding:16px;";
+    empty.textContent = "No custom dates yet. Add one below.";
+    list.appendChild(empty);
+    return;
+  }
+  _holidays.forEach(h => list.appendChild(_holidayEl(h, true)));
+}
+
+function _holidayEl(h, deletable) {
+  const row = document.createElement("div");
+  row.className = "holiday-item";
+
+  const dateBadge = document.createElement("span");
+  dateBadge.className = "date-badge";
+  dateBadge.textContent = new Date(h.date + "T12:00:00Z")
+    .toLocaleDateString("en-KE", { day:"numeric", month:"short" });
+
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = h.label || h.date;
+
+  const tag = document.createElement("span");
+  tag.className = "closed-tag";
+  tag.textContent = h.closed ? "Closed" : "Special Hours";
+
+  row.appendChild(dateBadge);
+  row.appendChild(name);
+  row.appendChild(tag);
+
+  if (deletable) {
+    const del = document.createElement("button");
+    del.className = "del-h"; del.textContent = "×";
+    del.addEventListener("click", () => deleteHoliday(h.date));
+    row.appendChild(del);
+  }
+  return row;
+}
+
+function addCustomHoliday() {
+  document.getElementById("addHolidayForm").style.display = "block";
+}
+
+function cancelHoliday() {
+  document.getElementById("addHolidayForm").style.display = "none";
+}
+
+function toggleHolPeriods() {
+  const closed = document.getElementById("newHolClosed").checked;
+  document.getElementById("holPeriods").style.display = closed ? "none" : "block";
+}
+
+async function saveCustomHoliday() {
+  const date  = document.getElementById("newHolDate").value;
+  const label = document.getElementById("newHolLabel").value.trim();
+  const closed = document.getElementById("newHolClosed").checked;
+
+  if (!date || !label) { showToast("Date and label required.", true); return; }
+
+  const overrideData = { date, label: label.slice(0,80), closed, type:"custom", createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+  if (!closed) {
+    const open  = document.getElementById("holOpen").value;
+    const close = document.getElementById("holClose").value;
+    if (open && close && open < close) overrideData.periods = [{ open, close }];
+  }
+
+  try {
+    await db.collection("providerAvailability").doc(_uid)
+      .collection("overrides").doc(date).set(overrideData);
+    _holidays.push(overrideData);
+    _holidays.sort((a,b) => a.date.localeCompare(b.date));
+    _renderCustomHolidays();
+    document.getElementById("addHolidayForm").style.display = "none";
+    document.getElementById("newHolDate").value = "";
+    document.getElementById("newHolLabel").value = "";
+    showToast("Custom date saved.");
+  } catch (e) {
+    showToast("Failed to save date.", true);
+  }
+}
+
+async function deleteHoliday(date) {
+  if (!confirm("Remove this date override?")) return;
+  try {
+    await db.collection("providerAvailability").doc(_uid)
+      .collection("overrides").doc(date).delete();
+    _holidays = _holidays.filter(h => h.date !== date);
+    _renderCustomHolidays();
+    showToast("Date removed.");
+  } catch (e) {
+    showToast("Failed to remove date.", true);
+  }
+}
+
+/* ── Save all ───────────────────────────────────────────────────────────── */
+async function saveAll() {
+  const btn = document.getElementById("saveBtn");
+  btn.disabled = true; btn.textContent = "Saving…";
+
+  try {
+    const modes = [...document.querySelectorAll("#modeGrid input:checked")].map(c => c.value);
+    if (!modes.length) { showToast("Please select at least one availability mode.", true); return; }
+
+    const apptEnabled = document.getElementById("apptEnabled").checked;
+    const vacActive   = document.getElementById("vacActive").checked;
+
+    const config = {
+      businessName:    document.getElementById("businessName").value.trim(),
+      hubType:         document.getElementById("hubType").value,
+      modes,
+      schedule:        _readSchedule(),
+      appt: {
+        enabled:         apptEnabled,
+        durationMins:    Number(document.getElementById("apptDuration").value) || 30,
+        bufferMins:      Number(document.getElementById("apptBuffer").value)   || 0,
+        travelMins:      Number(document.getElementById("apptTravel").value)   || 0,
+        maxDaysAhead:    Number(document.getElementById("apptMaxDays").value)  || 30,
+        minNoticeHours:  Number(document.getElementById("apptMinNotice").value)|| 1,
+        allowSameDay:    document.getElementById("apptSameDay").checked,
+        allowAfterHours: document.getElementById("apptAfterHours").checked,
+      },
+      cap: {
+        maxPerDay:  document.getElementById("capMaxPerDay").value  ? Number(document.getElementById("capMaxPerDay").value)  : null,
+        maxPerWeek: document.getElementById("capMaxPerWeek").value ? Number(document.getElementById("capMaxPerWeek").value) : null,
+        maxSim:     document.getElementById("capMaxSim").value     ? Number(document.getElementById("capMaxSim").value)     : null,
+      },
+      vacation: {
+        active:           vacActive,
+        startDate:        document.getElementById("vacStart").value,
+        endDate:          document.getElementById("vacEnd").value,
+        message:          document.getElementById("vacMessage").value.trim(),
+        autoReactivate:   document.getElementById("vacAutoReactivate").checked,
+      },
+      afterHours:      document.getElementById("afterHours").checked,
+      afterHoursMsg:   document.getElementById("afterHoursMsg").value.trim(),
+      avgResponseMins: document.getElementById("avgResponseMins").value ? Number(document.getElementById("avgResponseMins").value) : null,
+      notify: {
+        onOpen:     document.getElementById("notifyOnOpen").checked,
+        onClose:    document.getElementById("notifyOnClose").checked,
+        onBooking:  document.getElementById("notifyOnBooking").checked,
+        onCapacity: document.getElementById("notifyOnCapacity").checked,
+      },
+    };
+
+    await saveProviderAvailability(config);
+    showToast("Availability settings saved! ✓");
+    await loadConfig();
+  } catch (e) {
+    showToast("Failed to save. Please try again.", true);
+    console.error(e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Save";
+  }
+}
+
+/* ── Utilities ──────────────────────────────────────────────────────────── */
+function _val(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
+function _chk(id, v) { const el = document.getElementById(id); if (el) el.checked = !!v; }
+function _escStr(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function showToast(msg, isErr) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast" + (isErr ? " error" : "") + " show";
+  setTimeout(() => t.classList.remove("show"), 3500);
+}
+</script>
+
+</body>
+</html>
