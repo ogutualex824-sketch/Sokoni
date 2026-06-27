@@ -1,4 +1,85 @@
-﻿## [2026-06-27] — Universal Auth System: 5 New Providers, Phone OTP, Remember Me, First-Login Init
+﻿## [2026-06-27] — Security & Quality Fixes
+
+### Summary
+Production hardening pass: cryptographically secure share link tokens, road-adjusted ETA calculation, ghost driver protection, nodemailer v9 upgrade, hub eTIMS email notifications wired.
+
+### Files Affected
+- `sokoni-tracking.js` — share link token now uses `crypto.getRandomValues()` (24-char hex); previously `Math.random()` was predictable
+- `track.html` — ETA now uses road-distance factor (1.3× straight-line) + live driver speed; previously straight-line only
+- `driver.html` — ghost driver fix: `beforeunload` handler sets driver offline on tab/window close; 60-second heartbeat updates `lastPing` for freshness detection
+- `functions/package.json` — nodemailer upgraded `^6.10.1` → `^9.0.0` (Node 22 compatible)
+- `functions/hub-etims.js` — email notifications wired: buyer email on invoice accepted, hub manager email on KRA submission failure
+
+### Security Changes
+- Share link tokens are now cryptographically random (crypto.getRandomValues)
+- Ghost drivers can no longer appear as online after browser close
+
+### Performance Changes
+- ETA accuracy improved: road-distance factor + live speed reduces systematic underestimation
+
+---
+
+## [2026-06-27] — Hub eTIMS & Logistics Documents v1.0
+
+### Summary
+Multi-hub tax and logistics architecture. Every SOKONI Hub operates independently with its own type, tax configuration, operational document sequences, and (for selling/hybrid hubs) separate KRA eTIMS registration under its own KRA PIN. Logistics-only hubs never issue tax invoices but generate a complete suite of operational documents with A4-printable HTML.
+
+### Hub Types
+| Type | Tax Invoices | Operational Docs | Invoice Authority |
+|---|---|---|---|
+| `logistics` | Never | All 5 types | `"seller"` |
+| `selling` | Hub's own KRA PIN | All 5 types | `"hub"` |
+| `marketplace` | Sellers invoice themselves | All 5 types | `"seller"` |
+| `hybrid` | Hub's own KRA PIN | All 5 types | `"hub"` |
+
+### Operational Document Types (all A4-printable HTML)
+`pickup_receipt` | `warehouse_receipt` | `dispatch_note` (auto on order_completed) | `return_confirmation` | `transfer_note`
+
+### Duplicate Invoice Prevention Architecture
+- `etimsOnOrderCompleted` checks `order.hubId → hubs/{hubId}.taxConfig.invoiceAuthority` and defers to hub if `"hub"`, preventing double-invoicing
+- `hubOnOrderCompleted` only issues tax invoices when `invoiceAuthority === "hub"` AND `etimsActive === true`
+- Both triggers use idempotency keys to block duplicates from Firebase trigger retries
+- `hubGetAuditTrail` aggregates all seller + hub invoices per order and sets `duplicateRisk: true` if > 1 active invoice is found
+
+### New Files
+| File | Purpose |
+|---|---|
+| `functions/hub-etims.js` | 13 Cloud Functions — full hub backend |
+| `sokoni-hub-etims.js` | Frontend SDK — callable wrappers, document table renderer, audit timeline |
+| `hub-dashboard.html` | 5-tab hub manager dashboard: Overview / Documents / Invoices / Audit / Settings |
+
+### New Cloud Functions (13)
+`hubCreate`, `hubUpdate`, `hubGetProfile`, `hubUpdateTaxConfig`, `hubRegisterEtims`, `hubGenerateDocument`, `hubGetDocuments`, `hubOnOrderCompleted`, `hubGenerateInvoice`, `hubResubmitInvoice`, `hubGetAuditTrail`, `hubGetStats`, `hubAdminGetAllStats`
+
+### New Firestore Collections (6)
+| Collection | Access |
+|---|---|
+| `hubs/{hubId}` | Authed read; manager/admin write |
+| `hubCredentials/{hubId}` | CF only — AES-256-GCM |
+| `hubSequences/{hubId}` | CF only |
+| `hubDocuments/{docId}` | Hub manager / seller / buyer read; CF write |
+| `hubInvoices/{invoiceId}` | Hub manager / seller / buyer read; immutable |
+| `hubInvoiceQueue/{queueId}` | Admin read; CF write |
+
+### New Firestore Indexes (12)
+6 on `hubDocuments`, 5 on `hubInvoices`, 1 on `hubInvoiceQueue`
+
+### Patched Files
+- `functions/etims.js` — `etimsOnOrderCompleted` defers when hub has invoice authority
+- `functions/index.js` — 13 hub CF exports added
+- `firestore.rules` — 6 new hub collections with correct RBAC
+- `firestore.indexes.json` — 12 new hub indexes
+
+### Security
+- `hubCredentials` and `hubSequences`: `allow read, write: if false` — zero client access
+- `hubDocuments` and `hubInvoices`: CF-write-only, append-only; no client create/update/delete
+- Tax config changes require `isAdmin` custom claim
+- Hub manager writes limited to name/region/address/operationalDocs fields only
+- Credential encryption reuses `ETIMS_MASTER_KEY` from Secret Manager (same key as seller eTIMS)
+
+---
+
+## [2026-06-27] — Universal Auth System: 5 New Providers, Phone OTP, Remember Me, First-Login Init
 
 ### Summary
 Extends SOKONI authentication from Google-only OAuth to a full universal identity platform. Adds Apple, Microsoft, Facebook, GitHub, and Phone OTP sign-in alongside the existing Google and email/password methods. All providers share unified popup/redirect detection, cross-provider account linking, and a single post-auth result handler. First-login initialisation now creates wallet (balance: 0) and notification preferences documents automatically. A referral code is generated on signup. New users with `onboardingRequired: true` are redirected to the onboarding hub.

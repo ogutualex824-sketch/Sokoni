@@ -986,8 +986,10 @@
     if(!_dest.lat) return;
     const lat=dLat!=null?dLat:_driver.lat, lng=dLng!=null?dLng:_driver.lng;
     if(!lat) return;
-    const km=(Math.sqrt(Math.pow(_dest.lat-lat,2)+Math.pow(_dest.lng-lng,2))*111).toFixed(1);
-    const etaMins=Math.max(0,Math.round(parseFloat(km)/0.45));
+    const straightKm=Math.sqrt(Math.pow(_dest.lat-lat,2)+Math.pow(_dest.lng-lng,2))*111;
+    const km=(straightKm*1.3).toFixed(1); /* road-distance factor: roads are ~1.3× straight-line */
+    const speedKmh=Math.max(_driver.speed||18,8); /* use live speed or 18 km/h urban default */
+    const etaMins=Math.max(0,Math.round(parseFloat(km)/(speedKmh/60)));
     const s=id=>document.getElementById(id);
     const set=(id,v)=>{ const e=s(id); if(e) e.textContent=v; };
     set('riderStatus', parseFloat(km)<0.12?'✅ Arrived':'🟢 On the way');
@@ -1169,8 +1171,10 @@
   /* Called after each GPS/simulation update — smart message + confidence */
   function _postUpdate(lat,lng){
     if(!_dest.lat||!lat) return;
-    const km=(Math.sqrt(Math.pow(_dest.lat-lat,2)+Math.pow(_dest.lng-lng,2))*111).toFixed(1);
-    const etaMins=Math.max(0,Math.round(parseFloat(km)/0.45));
+    const straightKm2=Math.sqrt(Math.pow(_dest.lat-lat,2)+Math.pow(_dest.lng-lng,2))*111;
+    const km=(straightKm2*1.3).toFixed(1);
+    const speedKmh2=Math.max(_driver.speed||18,8);
+    const etaMins=Math.max(0,Math.round(parseFloat(km)/(speedKmh2/60)));
 
     /* Smart status message */
     const smart=getSmartStatus(lat,lng,km,etaMins);

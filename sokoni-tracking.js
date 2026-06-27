@@ -419,7 +419,9 @@ const SokoniTracking = {
     const snap = await getDoc(doc(db, 'trackedVehicles', vehicleId));
     if (!snap.exists() || snap.data().ownerUid !== uid) throw new Error('Not authorised');
     const id = _id('SHR-');
-    const token = Math.random().toString(36).slice(2, 10).toUpperCase();
+    const _tb = new Uint8Array(12);
+    crypto.getRandomValues(_tb);
+    const token = Array.from(_tb, b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
     const expiresAt = new Date(Date.now() + expiryHours * 3600000);
     await setDoc(doc(db, 'trackingShares', id), {
       id, vehicleId, token, createdBy: uid,

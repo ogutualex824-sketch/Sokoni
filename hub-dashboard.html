@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hub Dashboard — SOKONI</title>
+<link rel="manifest" href="/manifest.json">
+<script src="firebase.js" defer></script>
+<script src="sokoni-ui.js" defer></script>
+<script src="sokoni-hub-etims.js" defer></script>
+<style>
+:root{--bg:#0a0a0a;--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.85);--muted:rgba(255,255,255,0.38);--lime:#71ff00;--red:#ff4444;--amber:#ffb400;--blue:#4488ff;--purple:#aa44ff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+.page-wrap{max-width:1200px;margin:0 auto;padding:24px 16px 80px}
+
+/* Hub selector */
+.hub-selector{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+.hub-selector select{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:#fff;font-size:14px;outline:none;cursor:pointer}
+.hub-selector select:focus{border-color:rgba(113,255,0,0.4)}
+.hub-selector select option{background:#1a1a1a}
+.hub-badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700}
+.hub-logistics{background:rgba(68,136,255,0.1);color:var(--blue);border:1px solid rgba(68,136,255,0.25)}
+.hub-selling{background:rgba(113,255,0,0.1);color:var(--lime);border:1px solid rgba(113,255,0,0.25)}
+.hub-marketplace{background:rgba(255,180,0,0.1);color:var(--amber);border:1px solid rgba(255,180,0,0.25)}
+.hub-hybrid{background:rgba(170,68,255,0.1);color:var(--purple);border:1px solid rgba(170,68,255,0.25)}
+
+/* KPI grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.kpi .val{font-size:24px;font-weight:800;color:#fff;margin-bottom:3px}
+.kpi .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.kpi.ok   .val{color:var(--lime)}
+.kpi.warn .val{color:var(--amber)}
+.kpi.fail .val{color:var(--red)}
+.kpi.blue .val{color:var(--blue)}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto}
+.tab{padding:10px 16px;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.tab.active{color:#fff;border-color:var(--lime)}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* Card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px}
+.card h3{font-size:14px;font-weight:700;margin-bottom:14px}
+
+/* Form */
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:14px}
+.field label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.field input,.field select{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:#fff;font-size:13px;outline:none}
+.field input:focus,.field select:focus{border-color:rgba(113,255,0,0.4)}
+.field select option{background:#1a1a1a}
+
+/* Buttons */
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--lime);color:#000}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-primary:disabled{opacity:.4;cursor:default}
+.btn-outline{background:none;color:var(--text);border:1px solid var(--border)}
+.btn-outline:hover{background:rgba(255,255,255,0.03)}
+.btn-sm{padding:4px 10px;font-size:11px}
+
+/* Doc type grid */
+.doc-type-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:18px}
+.doc-type-btn{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;text-align:left;transition:all .15s;color:var(--text)}
+.doc-type-btn:hover{border-color:rgba(113,255,0,0.3);background:rgba(113,255,0,0.04)}
+.doc-type-btn .icon{font-size:22px;margin-bottom:6px;display:block}
+.doc-type-btn .name{font-size:13px;font-weight:600}
+.doc-type-btn .desc{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* Alert */
+.alert{border-radius:10px;padding:11px 15px;font-size:13px;margin-bottom:14px}
+.alert-ok{background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);color:var(--lime)}
+.alert-err{background:rgba(255,68,68,0.07);border:1px solid rgba(255,68,68,0.2);color:var(--red)}
+.alert-warn{background:rgba(255,180,0,0.07);border:1px solid rgba(255,180,0,0.2);color:var(--amber)}
+.alert-info{background:rgba(68,136,255,0.07);border:1px solid rgba(68,136,255,0.2);color:var(--blue)}
+
+.empty{text-align:center;padding:28px 0;color:var(--muted);font-size:13px}
+.table-wrap{overflow-x:auto}
+.inv-row-fail td{color:var(--red)!important}
+
+/* Audit timeline */
+.timeline-wrap{padding:6px 0}
+
+/* Filter bar */
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.filter-bar select,.filter-bar input{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:7px 11px;color:#fff;font-size:12px;outline:none}
+.filter-bar select option{background:#1a1a1a}
+
+@media(max-width:600px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div id="sk-header-placeholder"></div>
+
+<div class="page-wrap">
+
+  <!-- Hub selector -->
+  <div class="hub-selector">
+    <label style="font-size:14px;font-weight:700;color:var(--muted)">Hub:</label>
+    <select id="hub-select" onchange="loadHub(this.value)">
+      <option value="">— Select Hub —</option>
+    </select>
+    <span id="hub-type-badge"></span>
+    <button class="btn btn-outline" onclick="loadHub(currentHubId)">↺ Refresh</button>
+    <span id="etims-status-badge" style="display:none"></span>
+  </div>
+
+  <!-- KPI row -->
+  <div class="kpi-grid">
+    <div class="kpi blue"><div class="val" id="k-docs">—</div><div class="lbl">Total Documents</div></div>
+    <div class="kpi ok"><div class="val" id="k-pickup">—</div><div class="lbl">Pickups</div></div>
+    <div class="kpi ok"><div class="val" id="k-dispatch">—</div><div class="lbl">Dispatches</div></div>
+    <div class="kpi warn"><div class="val" id="k-returns">—</div><div class="lbl">Returns</div></div>
+    <div class="kpi ok"><div class="val" id="k-inv-ok">—</div><div class="lbl">Invoices Accepted</div></div>
+    <div class="kpi fail"><div class="val" id="k-inv-fail">—</div><div class="lbl">Invoices Failed</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('overview',this)">Overview</button>
+    <button class="tab" onclick="switchTab('documents',this)">Documents</button>
+    <button class="tab" id="invoices-tab" onclick="switchTab('invoices',this)">Invoices</button>
+    <button class="tab" onclick="switchTab('audit',this)">Audit Trail</button>
+    <button class="tab" onclick="switchTab('settings',this)">Settings</button>
+  </div>
+
+  <!-- ── TAB: Overview ─────────────────────────────────────────── -->
+  <div id="tab-overview" class="tab-pane active">
+    <div class="card">
+      <h3>Hub Information</h3>
+      <div id="hub-info"><p style="color:var(--muted);font-size:13px">Select a hub to view details.</p></div>
+    </div>
+    <div class="card">
+      <h3>Recent Activity</h3>
+      <div class="table-wrap" id="recent-docs"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: Documents ────────────────────────────────────────── -->
+  <div id="tab-documents" class="tab-pane">
+
+    <!-- Document type selector -->
+    <div class="card">
+      <h3>Issue New Document</h3>
+      <div id="logistics-msg" class="alert alert-info" style="display:none">
+        ℹ This is a logistics-only hub. Operational documents are issued here. Tax invoices are managed by each seller's own eTIMS profile.
+      </div>
+      <div class="doc-type-grid" id="doc-type-grid"></div>
+    </div>
+
+    <!-- Document form (shown after type selected) -->
+    <div class="card" id="doc-form-card" style="display:none">
+      <h3 id="doc-form-title">Generate Document</h3>
+      <div class="form-row">
+        <div class="field"><label>Order ID (optional)</label><input type="text" id="df-orderId" placeholder="Order ID"></div>
+        <div class="field"><label>Seller ID (optional)</label><input type="text" id="df-sellerId" placeholder="Seller UID"></div>
+        <div class="field"><label>Buyer ID (optional)</label><input type="text" id="df-buyerId" placeholder="Buyer UID"></div>
+        <div class="field"><label>Signed By</label><input type="text" id="df-signedBy" placeholder="Staff name"></div>
+      </div>
+      <div class="form-row">
+        <div class="field" style="grid-column:1/-1">
+          <label>Notes / Remarks</label>
+          <input type="text" id="df-notes" placeholder="Optional notes">
+        </div>
+      </div>
+      <div id="doc-items-section" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <h3 style="font-size:13px;font-weight:700">Items</h3>
+          <button class="btn btn-sm btn-outline" onclick="addItemRow()">+ Add Item</button>
+        </div>
+        <div id="doc-items"></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" id="doc-submit-btn" onclick="submitDoc()">Generate Document</button>
+        <button class="btn btn-outline" onclick="cancelDocForm()">Cancel</button>
+      </div>
+      <div id="doc-form-result" style="margin-top:14px"></div>
+    </div>
+
+    <!-- Document list -->
+    <div class="card">
+      <h3>All Documents</h3>
+      <div class="filter-bar">
+        <select id="filter-doctype" onchange="loadDocuments()">
+          <option value="">All Types</option>
+          <option value="pickup_receipt">Pickup Receipt</option>
+          <option value="warehouse_receipt">Warehouse Receipt</option>
+          <option value="dispatch_note">Dispatch Note</option>
+          <option value="return_confirmation">Return Confirmation</option>
+          <option value="transfer_note">Transfer Note</option>
+        </select>
+        <input type="text" id="filter-orderid" placeholder="Filter by Order ID" onkeyup="debounceLoadDocs()" style="width:180px">
+      </div>
+      <div class="table-wrap" id="docs-list"><div class="empty">Select a hub first.</div></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: Invoices (selling hubs only) ─────────────────────── -->
+  <div id="tab-invoices" class="tab-pane">
+    <div id="invoices-not-selling" class="alert alert-info" style="display:none">
+      ℹ This hub type does not issue KRA tax invoices. Tax invoices are issued by sellers or SOKONI platform. See the Documents tab for operational logistics documents.
+    </div>
+    <div id="invoices-panel" style="display:none">
+      <div class="card">
+        <h3>Manual Invoice Generation</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Generate a hub tax invoice for a specific order. Orders automatically receive invoices on completion — use this only for manual overrides.</p>
+        <div class="form-row">
+          <div class="field"><label>Order ID *</label><input type="text" id="inv-orderId" placeholder="Order ID"></div>
+          <div class="field"><label>Buyer KRA PIN (optional)</label><input type="text" id="inv-buyerPin" placeholder="P051234567T"></div>
+        </div>
+        <button class="btn btn-primary" id="inv-btn" onclick="generateHubInvoice()">Generate Invoice</button>
+        <div id="inv-result" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <h3>Hub Invoices</h3>
+        <div class="table-wrap" id="inv-list"><div class="empty">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: Audit Trail ──────────────────────────────────────── -->
+  <div id="tab-audit" class="tab-pane">
+    <div class="card">
+      <h3>Order Audit Trail</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+        View the complete lifecycle of any order: documents issued, tax invoices, delivery events, and duplicate-invoice health check.
+      </p>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <input type="text" id="audit-orderId" placeholder="Enter Order ID" style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:#fff;font-size:13px;outline:none;flex:1;min-width:200px">
+        <button class="btn btn-primary" onclick="loadAuditTrail()">Search</button>
+      </div>
+      <div id="audit-result"></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: Settings ─────────────────────────────────────────── -->
+  <div id="tab-settings" class="tab-pane">
+    <div class="card">
+      <h3>Hub Configuration</h3>
+      <div class="form-row">
+        <div class="field"><label>Hub Name *</label><input type="text" id="s-name" placeholder="e.g. Nairobi West Hub"></div>
+        <div class="field"><label>Region</label><input type="text" id="s-region" placeholder="e.g. Nairobi"></div>
+        <div class="field" style="grid-column:1/-1"><label>Address</label><input type="text" id="s-address" placeholder="Physical address"></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveHubProfile()">Save</button>
+      <div id="profile-result" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card" id="etims-settings-card">
+      <h3>eTIMS Registration</h3>
+      <div id="etims-inactive-notice" class="alert alert-warn" style="margin-bottom:14px">
+        This hub is not yet registered on KRA eTIMS. Complete the registration below to enable tax invoicing.
+      </div>
+      <div id="etims-active-notice" class="alert alert-ok" style="display:none;margin-bottom:14px">
+        ✓ eTIMS is active for this hub.
+      </div>
+      <div class="form-row">
+        <div class="field"><label>KRA PIN *</label><input type="text" id="e-kraPin" placeholder="P051234567T" maxlength="11"></div>
+        <div class="field"><label>Branch ID</label><input type="text" id="e-branchId" placeholder="00" value="00" maxlength="2"></div>
+        <div class="field"><label>Device Serial *</label><input type="text" id="e-serial" placeholder="KRA-assigned device serial"></div>
+        <div class="field"><label>Taxpayer Secret *</label><input type="password" id="e-secret" placeholder="Taxpayer secret from KRA portal"></div>
+      </div>
+      <div class="alert alert-warn" style="margin-bottom:14px">
+        ⚠ Credentials are encrypted server-side with AES-256-GCM. Never enter them on any other page.
+      </div>
+      <button class="btn btn-primary" id="e-btn" onclick="registerEtims()">Register eTIMS</button>
+      <div id="etims-result" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h3>Tax Configuration</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Configure VAT status and invoice prefix. Admin changes are applied immediately.</p>
+      <div class="form-row">
+        <div class="field">
+          <label>VAT Status</label>
+          <select id="tc-vatStatus">
+            <option value="registered">Registered (16%)</option>
+            <option value="zero_rated">Zero Rated (0%)</option>
+            <option value="exempt">Exempt</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Tax Category</label>
+          <select id="tc-taxCategory">
+            <option value="A">A — Standard Rate</option>
+            <option value="B">B — Zero Rated</option>
+            <option value="C">C — Exempt</option>
+          </select>
+        </div>
+        <div class="field"><label>Invoice Prefix</label><input type="text" id="tc-prefix" placeholder="e.g. NRB-W" maxlength="8"></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveTaxConfig()">Update Tax Config</button>
+      <div id="taxcfg-result" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<script>
+let currentHubId   = "";
+let currentHubData = null;
+let selectedDocType = "";
+let itemCounter    = 0;
+let docDebounce    = null;
+
+/* ── Auth & hub list ────────────────────────────────────────────── */
+document.addEventListener("DOMContentLoaded", () => {
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) { location.href = "/auth.html?next=/hub-dashboard.html"; return; }
+    const tok = await user.getIdTokenResult();
+    if (!tok.claims?.isAdmin && !tok.claims?.isHubManager) {
+      location.href = "/index.html"; return;
+    }
+    await loadHubList(user, tok.claims);
+  });
+});
+
+async function loadHubList(user, claims) {
+  const db  = firebase.firestore();
+  let q     = db.collection("hubs").where("status","==","active");
+  const sel = document.getElementById("hub-select");
+
+  const snap = await q.get();
+  snap.forEach(d => {
+    const h   = d.data();
+    const opt = document.createElement("option");
+    opt.value = h.hubId;
+    opt.text  = h.name;
+    sel.appendChild(opt);
+  });
+
+  // Auto-select if hub manager with a single hub
+  if (!claims.isAdmin && claims.hubId) {
+    sel.value = claims.hubId;
+    loadHub(claims.hubId);
+  }
+}
+
+/* ── Load hub ───────────────────────────────────────────────────── */
+async function loadHub(hubId) {
+  if (!hubId) return;
+  currentHubId = hubId;
+
+  const data = await SokoniHubETIMS.getHubProfile(hubId).catch(e => null);
+  if (!data) return;
+  currentHubData = data;
+
+  // Type badge
+  document.getElementById("hub-type-badge").innerHTML = SokoniHubETIMS.hubTypeBadge(data.type);
+
+  // eTIMS status badge
+  const sb = document.getElementById("etims-status-badge");
+  if (["selling","hybrid"].includes(data.type)) {
+    sb.style.display = "inline-flex";
+    sb.innerHTML     = data.etimsActive
+      ? '<span class="chip chip-ok">eTIMS Active</span>'
+      : '<span class="chip chip-fail">eTIMS Inactive</span>';
+  } else {
+    sb.style.display = "none";
+  }
+
+  // Invoices tab visibility
+  const invTab = document.getElementById("invoices-tab");
+  if (!["selling","hybrid"].includes(data.type)) {
+    invTab.style.opacity = ".35";
+  }
+
+  // Settings pre-fill
+  document.getElementById("s-name").value    = data.name    || "";
+  document.getElementById("s-region").value  = data.region  || "";
+  document.getElementById("s-address").value = data.address || "";
+  if (data.taxConfig?.vatStatus)  document.getElementById("tc-vatStatus").value    = data.taxConfig.vatStatus;
+  if (data.taxConfig?.taxCategory)document.getElementById("tc-taxCategory").value  = data.taxConfig.taxCategory;
+  if (data.taxConfig?.invoicePrefix)document.getElementById("tc-prefix").value     = data.taxConfig.invoicePrefix;
+  if (data.taxConfig?.kraPin)     document.getElementById("e-kraPin").value        = data.taxConfig.kraPin;
+  if (data.taxConfig?.branchId)   document.getElementById("e-branchId").value      = data.taxConfig.branchId;
+
+  // eTIMS settings
+  document.getElementById("etims-inactive-notice").style.display = data.etimsActive ? "none" : "block";
+  document.getElementById("etims-active-notice").style.display   = data.etimsActive ? "block" : "none";
+  document.getElementById("etims-settings-card").style.display   = ["selling","hybrid"].includes(data.type) ? "block" : "none";
+
+  // Invoices panel
+  document.getElementById("invoices-not-selling").style.display = ["selling","hybrid"].includes(data.type) ? "none" : "block";
+  document.getElementById("invoices-panel").style.display       = ["selling","hybrid"].includes(data.type) ? "block" : "none";
+
+  // Document type buttons
+  buildDocTypeGrid(data);
+  // Logistics notice
+  document.getElementById("logistics-msg").style.display = data.type === "logistics" ? "block" : "none";
+
+  await loadStats();
+  await loadDocuments();
+  if (["selling","hybrid"].includes(data.type)) await loadInvoices();
+}
+
+/* ── Stats ──────────────────────────────────────────────────────── */
+async function loadStats() {
+  const r = await SokoniHubETIMS.getHubStats(currentHubId).catch(()=>null);
+  if (!r) return;
+
+  const bt = r.documents.byType || {};
+  document.getElementById("k-docs").textContent     = r.documents.total;
+  document.getElementById("k-pickup").textContent   = bt.pickup_receipt     || 0;
+  document.getElementById("k-dispatch").textContent = bt.dispatch_note      || 0;
+  document.getElementById("k-returns").textContent  = bt.return_confirmation|| 0;
+  document.getElementById("k-inv-ok").textContent   = r.invoices.accepted || 0;
+  document.getElementById("k-inv-fail").textContent = r.invoices.failed   || 0;
+
+  // Hub info card
+  document.getElementById("hub-info").innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;font-size:13px">
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Name</span><br><strong>${esc(r.hub.name)}</strong></div>
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Type</span><br>${SokoniHubETIMS.hubTypeBadge(r.hub.type)}</div>
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Status</span><br><strong style="color:${r.hub.status==="active"?"var(--lime)":"var(--red)"}">${r.hub.status}</strong></div>
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">Hub ID</span><br><code style="font-size:12px">${esc(currentHubId)}</code></div>
+      ${r.hub.etimsActive !== undefined ? `<div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">eTIMS</span><br>${r.hub.etimsActive?"<span style=\"color:var(--lime)\">Active</span>":"<span style=\"color:var(--red)\">Inactive</span>"}</div>` : ""}
+    </div>`;
+
+  // Recent docs
+  SokoniHubETIMS.renderDocumentTable("recent-docs", r.recentDocs || []);
+}
+
+/* ── Document type grid ─────────────────────────────────────────── */
+const DOC_TYPES = [
+  { type: "pickup_receipt",      icon: "📦", name: "Pickup Receipt",      desc: "Seller hands goods to hub" },
+  { type: "warehouse_receipt",   icon: "🏭", name: "Warehouse Receipt",   desc: "Hub receives into warehouse" },
+  { type: "dispatch_note",       icon: "🚚", name: "Dispatch Note",       desc: "Hub releases to delivery / buyer" },
+  { type: "return_confirmation", icon: "↩",  name: "Return Confirmation", desc: "Hub receives returned goods" },
+  { type: "transfer_note",       icon: "🔄", name: "Transfer Note",       desc: "Hub-to-hub inter-transfer" },
+];
+
+function buildDocTypeGrid(hub) {
+  const enabled = hub.operationalDocs || {};
+  const grid = document.getElementById("doc-type-grid");
+  grid.innerHTML = DOC_TYPES.map(dt => `
+    <button class="doc-type-btn" ${!enabled[dt.type] ? "disabled style='opacity:.3;cursor:default'" : ""} onclick="selectDocType('${dt.type}','${dt.name}')">
+      <span class="icon">${dt.icon}</span>
+      <span class="name">${dt.name}</span>
+      <span class="desc">${dt.desc}</span>
+    </button>`).join("");
+}
+
+function selectDocType(type, label) {
+  selectedDocType = type;
+  document.getElementById("doc-form-title").textContent = "Generate " + label;
+  document.getElementById("doc-form-card").style.display = "block";
+  document.getElementById("doc-items").innerHTML = "";
+  itemCounter = 0;
+  addItemRow();
+  document.getElementById("doc-form-result").innerHTML = "";
+  document.getElementById("doc-form-card").scrollIntoView({ behavior: "smooth" });
+}
+
+function addItemRow() {
+  itemCounter++;
+  const row = document.createElement("div");
+  row.id    = `item-row-${itemCounter}`;
+  row.style.cssText = "display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center";
+  row.innerHTML = `
+    <input type="text"   placeholder="Description"  style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:#fff;font-size:12px;outline:none">
+    <input type="number" placeholder="Qty"  min="1" style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:#fff;font-size:12px;outline:none" value="1">
+    <input type="text"   placeholder="Unit" style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:#fff;font-size:12px;outline:none" value="pcs">
+    <input type="text"   placeholder="SKU / Barcode" style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:#fff;font-size:12px;outline:none">
+    <button class="btn btn-sm btn-outline" onclick="this.parentElement.remove()" style="border-color:var(--red);color:var(--red)">✕</button>`;
+  document.getElementById("doc-items").appendChild(row);
+}
+
+function cancelDocForm() {
+  document.getElementById("doc-form-card").style.display = "none";
+  selectedDocType = "";
+}
+
+async function submitDoc() {
+  if (!selectedDocType || !currentHubId) return;
+  const btn    = document.getElementById("doc-submit-btn");
+  const result = document.getElementById("doc-form-result");
+  btn.disabled = true; btn.textContent = "Generating…";
+  result.innerHTML = "";
+
+  // Collect items
+  const items = [];
+  document.querySelectorAll("[id^='item-row-']").forEach(row => {
+    const inputs = row.querySelectorAll("input");
+    if (inputs[0]?.value?.trim()) {
+      items.push({
+        name:  inputs[0].value.trim(),
+        qty:   parseInt(inputs[1].value) || 1,
+        unit:  inputs[2].value.trim() || "pcs",
+        sku:   inputs[3].value.trim(),
+        condition: "Good",
+      });
+    }
+  });
+
+  const r = await SokoniHubETIMS.generateDocument(currentHubId, selectedDocType, {
+    orderId:  document.getElementById("df-orderId").value.trim()   || undefined,
+    sellerId: document.getElementById("df-sellerId").value.trim()  || undefined,
+    buyerId:  document.getElementById("df-buyerId").value.trim()   || undefined,
+    signedBy: document.getElementById("df-signedBy").value.trim()  || undefined,
+    notes:    document.getElementById("df-notes").value.trim()     || undefined,
+    items,
+  }).catch(e => ({ error: e.message || e.details }));
+
+  btn.disabled = false; btn.textContent = "Generate Document";
+
+  if (r.error) {
+    result.innerHTML = `<div class="alert alert-err">Error: ${esc(r.error)}</div>`;
+  } else if (r.duplicate) {
+    result.innerHTML = `<div class="alert alert-warn">Document already exists. Ref: <strong>${esc(r.docNumber)}</strong> <a class="etims-link" href="${esc(r.htmlUrl)}" target="_blank">Download</a></div>`;
+  } else {
+    result.innerHTML = `<div class="alert alert-ok">✓ Document <strong>${esc(r.docNumber)}</strong> generated.
+      <a class="etims-link" href="${esc(r.htmlUrl)}" target="_blank" style="margin-left:8px">Download</a></div>`;
+    await loadDocuments();
+    await loadStats();
+  }
+}
+
+/* ── Documents list ─────────────────────────────────────────────── */
+async function loadDocuments() {
+  if (!currentHubId) return;
+  const docType = document.getElementById("filter-doctype")?.value || "";
+  const orderId = document.getElementById("filter-orderid")?.value.trim() || undefined;
+
+  const r = await SokoniHubETIMS.getDocuments({ hubId: currentHubId, docType: docType||undefined, orderId }).catch(()=>null);
+  SokoniHubETIMS.renderDocumentTable("docs-list", r?.documents || []);
+}
+
+function debounceLoadDocs() {
+  clearTimeout(docDebounce);
+  docDebounce = setTimeout(loadDocuments, 400);
+}
+
+/* ── Invoices ───────────────────────────────────────────────────── */
+async function loadInvoices() {
+  const r = await firebase.firestore()
+    .collection("hubInvoices").where("hubId","==",currentHubId)
+    .orderBy("createdAt","desc").limit(30).get().catch(()=>null);
+  if (!r) return;
+
+  const invs = r.docs.map(d => d.data());
+  const el   = document.getElementById("inv-list");
+  if (!invs.length) { el.innerHTML = '<div class="empty">No invoices yet.</div>'; return; }
+
+  const rows = invs.map(i => `<tr class="${i.status==="failed"?"inv-row-fail":""}">
+    <td><code style="font-size:11px">${esc(i.invoiceNumber)}</code></td>
+    <td>${esc(i.orderId?.slice(-10)||"—")}</td>
+    <td>${new Date(i.createdAt).toLocaleDateString("en-KE")}</td>
+    <td style="text-align:right">KES ${Number(i.total||0).toLocaleString("en-KE",{minimumFractionDigits:2})}</td>
+    <td>${SokoniHubETIMS.statusBadge(i.status)}</td>
+    <td>${i.kraReceiptNumber ? esc(i.kraReceiptNumber) : "—"}</td>
+    <td>
+      ${i.htmlUrl ? `<a class="etims-link" href="${esc(i.htmlUrl)}" target="_blank">Download</a>` : ""}
+      ${i.status==="failed"?`<button class="etims-link-btn" onclick="retryHubInv('${i.invoiceId}',this)">Retry</button>`:""}
+    </td>
+  </tr>`).join("");
+
+  el.innerHTML = `<table class="etims-table">
+    <thead><tr><th>Invoice #</th><th>Order</th><th>Date</th><th style="text-align:right">Total</th><th>Status</th><th>KRA Receipt</th><th>Actions</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function retryHubInv(id, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  const r = await SokoniHubETIMS.resubmitInvoice(id).catch(e => ({ error: e.message }));
+  btn.textContent = r.error ? "Failed" : "Queued ✓";
+  if (!r.error) setTimeout(loadInvoices, 2000);
+}
+
+async function generateHubInvoice() {
+  const btn    = document.getElementById("inv-btn");
+  const result = document.getElementById("inv-result");
+  const orderId = document.getElementById("inv-orderId").value.trim();
+  if (!orderId) { result.innerHTML = '<div class="alert alert-err">Enter an Order ID.</div>'; return; }
+
+  btn.disabled = true; btn.textContent = "Generating…";
+  result.innerHTML = "";
+
+  const r = await SokoniHubETIMS.generateInvoice(currentHubId, orderId, document.getElementById("inv-buyerPin").value.trim() || undefined)
+    .catch(e => ({ error: e.message || e.details }));
+
+  btn.disabled = false; btn.textContent = "Generate Invoice";
+
+  if (r.error) {
+    result.innerHTML = `<div class="alert alert-err">Error: ${esc(r.error)}</div>`;
+  } else if (r.duplicate) {
+    result.innerHTML = `<div class="alert alert-warn">Invoice already exists: <strong>${esc(r.invoiceNumber)}</strong> — Status: ${SokoniHubETIMS.statusBadge(r.status)}</div>`;
+  } else {
+    result.innerHTML = `<div class="alert alert-ok">✓ Invoice <strong>${esc(r.invoiceNumber)}</strong> issued.
+      Status: <strong>${r.status}</strong>
+      ${r.htmlUrl ? `<a class="etims-link" href="${esc(r.htmlUrl)}" target="_blank" style="margin-left:8px">Download</a>` : ""}
+    </div>`;
+    await loadInvoices();
+  }
+}
+
+/* ── Audit Trail ────────────────────────────────────────────────── */
+async function loadAuditTrail() {
+  const orderId = document.getElementById("audit-orderId").value.trim();
+  if (!orderId) return;
+  const result = document.getElementById("audit-result");
+  result.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+
+  const trail = await SokoniHubETIMS.getAuditTrail(orderId).catch(e => ({ error: e.message }));
+  if (trail.error) { result.innerHTML = `<div class="alert alert-err">Error: ${esc(trail.error)}</div>`; return; }
+
+  result.innerHTML = `
+    <div class="card" style="margin-bottom:0">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Order</div>
+          <div style="font-size:13px;font-weight:700">${esc(orderId)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Status: ${esc(trail.order?.status||"—")} &nbsp;|&nbsp; Total: ${SokoniHubETIMS.formatKES(trail.order?.total)}</div>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Invoice Authority</div>
+          <div style="font-size:13px">${esc(trail.order?.invoiceAuthority||"seller")}</div>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Tax Invoices</div>
+          <div style="font-size:13px">${(trail.sellerInvoices||[]).length} seller + ${(trail.hubInvoices||[]).length} hub</div>
+        </div>
+      </div>
+      <div class="timeline-wrap" id="audit-timeline"></div>
+    </div>`;
+  SokoniHubETIMS.renderAuditTimeline("audit-timeline", trail);
+}
+
+/* ── Settings ───────────────────────────────────────────────────── */
+async function saveHubProfile() {
+  const r = await SokoniHubETIMS.updateHub({
+    hubId:   currentHubId,
+    name:    document.getElementById("s-name").value.trim(),
+    region:  document.getElementById("s-region").value.trim(),
+    address: document.getElementById("s-address").value.trim(),
+  }).catch(e => ({ error: e.message }));
+  document.getElementById("profile-result").innerHTML =
+    r.error ? `<div class="alert alert-err">${esc(r.error)}</div>` : '<div class="alert alert-ok">Saved ✓</div>';
+}
+
+async function registerEtims() {
+  const btn = document.getElementById("e-btn");
+  btn.disabled = true; btn.textContent = "Registering…";
+  const r = await SokoniHubETIMS.registerHubEtims({
+    hubId:          currentHubId,
+    kraPin:         document.getElementById("e-kraPin").value.trim(),
+    branchId:       document.getElementById("e-branchId").value.trim() || "00",
+    deviceSerial:   document.getElementById("e-serial").value.trim(),
+    taxpayerSecret: document.getElementById("e-secret").value.trim(),
+  }).catch(e => ({ error: e.message }));
+  btn.disabled = false; btn.textContent = "Register eTIMS";
+
+  const el = document.getElementById("etims-result");
+  if (r.error) {
+    el.innerHTML = `<div class="alert alert-err">${esc(r.error)}</div>`;
+  } else {
+    el.innerHTML = `<div class="alert ${r.kraValidation?.valid ? "alert-ok" : "alert-warn"}">
+      eTIMS credentials saved. KRA validation: <strong>${esc(r.kraValidation?.code)}</strong> — ${esc(r.kraValidation?.message)}
+    </div>`;
+    document.getElementById("etims-inactive-notice").style.display = "none";
+    document.getElementById("etims-active-notice").style.display   = "block";
+    await loadHub(currentHubId);
+  }
+}
+
+async function saveTaxConfig() {
+  const r = await SokoniHubETIMS.updateTaxConfig(currentHubId, {
+    vatStatus:     document.getElementById("tc-vatStatus").value,
+    taxCategory:   document.getElementById("tc-taxCategory").value,
+    invoicePrefix: document.getElementById("tc-prefix").value.trim() || undefined,
+  }).catch(e => ({ error: e.message }));
+  document.getElementById("taxcfg-result").innerHTML =
+    r.error ? `<div class="alert alert-err">${esc(r.error)}</div>` : '<div class="alert alert-ok">Tax config updated ✓</div>';
+}
+
+/* ── Tab switch ─────────────────────────────────────────────────── */
+function switchTab(id, btn) {
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  if (btn) btn.classList.add("active");
+  if (id === "documents" && currentHubId) loadDocuments();
+  if (id === "invoices"  && currentHubId) loadInvoices();
+}
+
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+</script>
+</body>
+</html>

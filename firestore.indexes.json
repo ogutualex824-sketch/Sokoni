@@ -2902,14 +2902,192 @@
       "collectionGroup": "paymentVerifications",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "uid",       "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerUid", "order": "ASCENDING"  },
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerUid", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "buyerUid",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orderId",   "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPlatformInvoice", "order": "ASCENDING"  },
+        { "fieldPath": "status",            "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",         "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "nextRetryAt", "order": "ASCENDING" },
+        { "fieldPath": "priority",    "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "invoiceId", "order": "ASCENDING" },
+        { "fieldPath": "status",    "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsBulkJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerUid", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "etimsAlerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerUid", "order": "ASCENDING"  },
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hubId",    "order": "ASCENDING"  },
+        { "fieldPath": "issuedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hubId",    "order": "ASCENDING"  },
+        { "fieldPath": "docType",  "order": "ASCENDING"  },
+        { "fieldPath": "issuedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orderId",  "order": "ASCENDING"  },
+        { "fieldPath": "docType",  "order": "ASCENDING"  },
+        { "fieldPath": "status",   "order": "ASCENDING"  }
+      ]
+    },
+    {
+      "collectionGroup": "hubDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orderId",  "order": "ASCENDING"  },
+        { "fieldPath": "issuedAt", "order": "ASCENDING"  }
+      ]
+    },
+    {
+      "collectionGroup": "hubDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerId", "order": "ASCENDING"  },
+        { "fieldPath": "issuedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "buyerId",  "order": "ASCENDING"  },
+        { "fieldPath": "issuedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hubId",     "order": "ASCENDING"  },
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hubId",     "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orderId",   "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sellerUid", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "buyerUid",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hubInvoiceQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hubId",       "order": "ASCENDING" },
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "nextRetryAt", "order": "ASCENDING" }
       ]
     }
   ],

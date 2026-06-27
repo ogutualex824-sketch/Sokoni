@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eTIMS Admin — SOKONI</title>
+<link rel="manifest" href="/manifest.json">
+<script src="firebase.js" defer></script>
+<script src="sokoni-ui.js" defer></script>
+<script src="sokoni-etims.js" defer></script>
+<style>
+:root{--bg:#0a0a0a;--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.85);--muted:rgba(255,255,255,0.38);--lime:#71ff00;--red:#ff4444;--amber:#ffb400;--blue:#4488ff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+.page-wrap{max-width:1200px;margin:0 auto;padding:24px 16px 80px}
+.page-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px;flex-wrap:wrap;gap:12px}
+.page-hdr h1{font-size:22px;font-weight:800}
+.page-hdr h1 span{color:var(--lime)}
+
+/* KPI grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:13px;margin-bottom:28px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.kpi .val{font-size:26px;font-weight:800;color:#fff;margin-bottom:4px}
+.kpi .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.kpi.ok   .val{color:var(--lime)}
+.kpi.warn .val{color:var(--amber)}
+.kpi.fail .val{color:var(--red)}
+.kpi.blue .val{color:var(--blue)}
+
+/* Health bar */
+.health-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:22px}
+.health-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.health-dot.ok{background:var(--lime)}
+.health-dot.warn{background:var(--amber)}
+.health-dot.fail{background:var(--red)}
+.health-label{font-size:13px;font-weight:600}
+.health-desc{font-size:12px;color:var(--muted);margin-left:auto}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto}
+.tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.tab.active{color:#fff;border-color:var(--lime)}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* Card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:20px}
+.card h3{font-size:15px;font-weight:700;margin-bottom:16px}
+
+/* Data table */
+.table-wrap{overflow-x:auto}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{background:rgba(255,255,255,0.04);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.data-table td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.03);vertical-align:middle}
+.data-table tr:hover td{background:rgba(255,255,255,0.02)}
+.data-table .r{text-align:right}
+
+/* Platform invoice form */
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+.field label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.field input,.field select{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:#fff;font-size:13px;outline:none}
+.field input:focus,.field select:focus{border-color:rgba(113,255,0,0.4)}
+.field select option{background:#1a1a1a}
+
+/* Buttons */
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--lime);color:#000}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-primary:disabled{opacity:.45;cursor:default}
+.btn-outline{background:none;color:var(--text);border:1px solid var(--border)}
+.btn-outline:hover{background:rgba(255,255,255,0.03)}
+.btn-sm{padding:5px 10px;font-size:11px}
+
+/* Alert */
+.alert{border-radius:10px;padding:12px 16px;font-size:13px;margin-bottom:14px}
+.alert-ok{background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);color:var(--lime)}
+.alert-err{background:rgba(255,68,68,0.07);border:1px solid rgba(255,68,68,0.2);color:var(--red)}
+.alert-warn{background:rgba(255,180,0,0.07);border:1px solid rgba(255,180,0,0.2);color:var(--amber)}
+
+/* Empty */
+.empty{text-align:center;padding:34px 0;color:var(--muted);font-size:13px}
+.chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.chip-ok{background:rgba(113,255,0,0.1);color:var(--lime);border:1px solid rgba(113,255,0,0.2)}
+.chip-fail{background:rgba(255,68,68,0.1);color:var(--red);border:1px solid rgba(255,68,68,0.2)}
+.chip-warn{background:rgba(255,180,0,0.1);color:var(--amber);border:1px solid rgba(255,180,0,0.2)}
+
+@media(max-width:600px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div id="sk-header-placeholder"></div>
+
+<div class="page-wrap">
+
+  <div class="page-hdr">
+    <div>
+      <h1>eTIMS Admin &mdash; <span>KRA Dashboard</span></h1>
+      <p style="font-size:13px;color:var(--muted);margin-top:3px">Platform-wide KRA eTIMS monitoring and compliance</p>
+    </div>
+    <button class="btn btn-outline" onclick="loadAll()">↺ Refresh</button>
+  </div>
+
+  <!-- API Health bar -->
+  <div class="health-row" id="health-bar">
+    <div class="health-dot ok" id="health-dot"></div>
+    <span class="health-label" id="health-label">KRA eTIMS API — Checking…</span>
+    <span class="health-desc" id="health-desc"></span>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi ok"><div class="val" id="k-total">—</div><div class="lbl">Total Invoices</div></div>
+    <div class="kpi ok"><div class="val" id="k-rev">—</div><div class="lbl">Total Revenue</div></div>
+    <div class="kpi ok"><div class="val" id="k-vat">—</div><div class="lbl">VAT Collected</div></div>
+    <div class="kpi blue"><div class="val" id="k-platrev">—</div><div class="lbl">Platform Revenue</div></div>
+    <div class="kpi warn"><div class="val" id="k-queue">—</div><div class="lbl">Queue Size</div></div>
+    <div class="kpi fail"><div class="val" id="k-failed">—</div><div class="lbl">Failed Invoices</div></div>
+    <div class="kpi ok"><div class="val" id="k-sellers">—</div><div class="lbl">Active Sellers</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('failures',this)">Failed Submissions</button>
+    <button class="tab" onclick="switchTab('queue',this)">Queue</button>
+    <button class="tab" onclick="switchTab('sellers',this)">Seller Compliance</button>
+    <button class="tab" onclick="switchTab('platform',this)">Platform Invoice</button>
+  </div>
+
+  <!-- TAB: Failed submissions -->
+  <div id="tab-failures" class="tab-pane active">
+    <div class="card">
+      <h3>Failed Submissions</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+        Invoices that exhausted all 5 retry attempts. Investigate the error and resubmit manually.
+      </p>
+      <div class="table-wrap" id="failures-table">
+        <div class="empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Queue -->
+  <div id="tab-queue" class="tab-pane">
+    <div class="card">
+      <h3>Submission Queue</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+        Invoices awaiting submission to KRA. Queue is processed every 5 minutes automatically.
+      </p>
+      <div class="table-wrap" id="queue-table">
+        <div class="empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Seller compliance -->
+  <div id="tab-sellers" class="tab-pane">
+    <div class="card">
+      <h3>Active Seller eTIMS Profiles</h3>
+      <div class="table-wrap" id="sellers-table">
+        <div class="empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Platform invoice -->
+  <div id="tab-platform" class="tab-pane">
+    <div class="card">
+      <h3>Issue SOKONI Platform Invoice</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:18px">
+        Generate a KRA eTIMS invoice for platform revenue under SOKONI's own KRA PIN.
+        This covers commissions, subscriptions, advertising, delivery fees, and verification charges.
+      </p>
+
+      <div class="alert alert-warn">
+        ⚠ SOKONI must be registered on the KRA eTIMS portal as a VAT-registered taxpayer.
+        Set <code>ETIMS_PLATFORM_PIN</code> and <code>ETIMS_PLATFORM_SECRET</code> secrets before using this.
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label>Fee Type *</label>
+          <select id="p-type">
+            <option value="commission">Commission Fee</option>
+            <option value="subscription">Subscription Fee</option>
+            <option value="advertising">Advertising Fee</option>
+            <option value="delivery">Delivery Service Fee</option>
+            <option value="verification">Verification Fee</option>
+            <option value="premium">Premium Service Fee</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Amount (KES) *</label>
+          <input type="number" id="p-amount" placeholder="e.g. 5000" min="1" step="0.01">
+        </div>
+        <div class="field">
+          <label>Seller UID (bill to)</label>
+          <input type="text" id="p-seller" placeholder="Firebase UID (optional)">
+        </div>
+        <div class="field">
+          <label>Reference</label>
+          <input type="text" id="p-ref" placeholder="Order/subscription ID">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Description (optional)</label>
+          <input type="text" id="p-desc" placeholder="e.g. October 2025 commission batch">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="p-btn" onclick="doplatInv()">Issue Platform Invoice</button>
+        <button class="btn btn-outline" onclick="document.getElementById('plat-result').innerHTML=''">Clear</button>
+      </div>
+      <div id="plat-result"></div>
+    </div>
+
+    <div class="card">
+      <h3>Recent Platform Invoices</h3>
+      <div class="table-wrap" id="plat-inv-table">
+        <div class="empty">Will appear here after issuing the first platform invoice.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<script>
+/* ── Auth guard (admin only) ─────────────────────────────── */
+document.addEventListener("DOMContentLoaded", () => {
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) { location.href = "/auth.html?next=/etims-admin.html"; return; }
+    const tok = await user.getIdTokenResult();
+    if (!tok.claims?.isAdmin) { location.href = "/index.html"; return; }
+    loadAll();
+  });
+});
+
+async function loadAll() {
+  const res = await SokoniETIMS.getAdminStats().catch(e => { console.error(e); return null; });
+  if (!res) {
+    setHealth("fail", "Could not reach Cloud Functions", "Check Firebase billing and function deployments");
+    return;
+  }
+
+  const { overview, recentFailures, queueItems, activeSellers } = res;
+
+  /* KPIs */
+  document.getElementById("k-total").textContent   = (overview.totalInvoices||0).toLocaleString();
+  document.getElementById("k-rev").textContent     = SokoniETIMS.formatKES(overview.totalRevenue);
+  document.getElementById("k-vat").textContent     = SokoniETIMS.formatKES(overview.totalVat);
+  document.getElementById("k-platrev").textContent = SokoniETIMS.formatKES(overview.platformRevenue);
+  document.getElementById("k-queue").textContent   = (overview.queueSize||0).toString();
+  document.getElementById("k-failed").textContent  = (overview.failedInvoices||0).toString();
+  document.getElementById("k-sellers").textContent = (overview.activeSellers||0).toString();
+
+  /* Health */
+  const queueOk   = (overview.queueSize||0) < 50;
+  const failOk    = (overview.failedInvoices||0) < 10;
+  const healthOk  = queueOk && failOk;
+  setHealth(
+    healthOk ? "ok" : failOk ? "warn" : "fail",
+    healthOk ? "KRA eTIMS API — Operational"
+             : failOk ? "KRA eTIMS — Elevated Queue"
+             : "KRA eTIMS — Attention Required",
+    `Queue: ${overview.queueSize||0} | Failed: ${overview.failedInvoices||0} | Active sellers: ${overview.activeSellers||0}`
+  );
+
+  /* Tables */
+  renderFailures(recentFailures||[]);
+  renderQueue(queueItems||[]);
+  renderSellers(activeSellers||[]);
+}
+
+function setHealth(state, label, desc) {
+  const dot   = document.getElementById("health-dot");
+  const lbl   = document.getElementById("health-label");
+  const dsc   = document.getElementById("health-desc");
+  dot.className = `health-dot ${state}`;
+  lbl.textContent = label;
+  dsc.textContent = desc || "";
+}
+
+/* ── Failures ────────────────────────────────────────────── */
+function renderFailures(items) {
+  const el = document.getElementById("failures-table");
+  if (!items.length) { el.innerHTML = '<div class="empty" style="color:var(--lime)">✓ No failed submissions.</div>'; return; }
+  const rows = items.map(i => `<tr>
+    <td>${esc(i.invoiceNumber||i.invoiceId?.slice(-8))}</td>
+    <td><code style="font-size:11px;opacity:.6">${esc(i.sellerUid?.slice(0,10))}…</code></td>
+    <td>${new Date(i.createdAt).toLocaleDateString("en-KE")}</td>
+    <td style="color:var(--red);font-size:12px">${esc(i.error||"Unknown error")}</td>
+    <td><button class="btn btn-sm btn-outline" onclick="adminRetry('${i.invoiceId}',this)">Retry</button></td>
+  </tr>`).join("");
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Invoice #</th><th>Seller</th><th>Date</th><th>Error</th><th>Action</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+async function adminRetry(id, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  const r = await SokoniETIMS.resubmitInvoice(id).catch(e => ({ error: e.message }));
+  btn.textContent = r.error ? "Failed" : "Queued ✓";
+  if (!r.error) setTimeout(loadAll, 2000);
+}
+
+/* ── Queue ───────────────────────────────────────────────── */
+function renderQueue(items) {
+  const el = document.getElementById("queue-table");
+  if (!items.length) { el.innerHTML = '<div class="empty" style="color:var(--lime)">Queue is empty.</div>'; return; }
+  const rows = items.map(i => `<tr>
+    <td>${esc(i.invoiceId?.slice(-10))}</td>
+    <td><code style="font-size:11px;opacity:.6">${esc(i.sellerUid?.slice(0,10))}…</code></td>
+    <td>${i.retryCount||0}</td>
+    <td>${i.nextRetryAt ? new Date(i.nextRetryAt).toLocaleString("en-KE") : "—"}</td>
+  </tr>`).join("");
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Invoice (last 10)</th><th>Seller</th><th>Attempts</th><th>Next Retry</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+/* ── Sellers ─────────────────────────────────────────────── */
+function renderSellers(items) {
+  const el = document.getElementById("sellers-table");
+  if (!items.length) { el.innerHTML = '<div class="empty">No sellers with active eTIMS.</div>'; return; }
+  const rows = items.map(s => `<tr>
+    <td>${esc(s.businessName)}</td>
+    <td>${esc(s.kraPin)}</td>
+    <td class="r">${(s.totalInvoices||0).toLocaleString()}</td>
+    <td>${s.failedInvoices
+      ? `<span class="chip chip-fail">${s.failedInvoices} failed</span>`
+      : `<span class="chip chip-ok">Clean</span>`}</td>
+    <td>${s.lastSubmission ? new Date(s.lastSubmission).toLocaleDateString("en-KE") : "—"}</td>
+  </tr>`).join("");
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Business</th><th>KRA PIN</th><th class="r">Invoices</th><th>Health</th><th>Last Submission</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+/* ── Platform invoice ─────────────────────────────────────── */
+async function doplatInv() {
+  const btn    = document.getElementById("p-btn");
+  const res    = document.getElementById("plat-result");
+  const amount = parseFloat(document.getElementById("p-amount").value);
+  const type   = document.getElementById("p-type").value;
+
+  if (!amount || amount <= 0) { res.innerHTML = '<div class="alert alert-err">Enter a valid amount.</div>'; return; }
+
+  btn.disabled = true; btn.textContent = "Issuing…";
+  res.innerHTML = "";
+
+  const r = await SokoniETIMS.platformInvoice({
+    feeType:     type,
+    amount,
+    sellerUid:   document.getElementById("p-seller").value.trim() || undefined,
+    reference:   document.getElementById("p-ref").value.trim() || undefined,
+    description: document.getElementById("p-desc").value.trim() || undefined,
+  }).catch(e => ({ error: e.message || e.details }));
+
+  btn.disabled = false; btn.textContent = "Issue Platform Invoice";
+
+  if (r.error) {
+    res.innerHTML = `<div class="alert alert-err">Error: ${esc(r.error)}</div>`;
+  } else if (r.duplicate) {
+    res.innerHTML = `<div class="alert alert-warn">Invoice already exists (idempotency key matched). ID: <b>${esc(r.invoiceId)}</b></div>`;
+  } else {
+    res.innerHTML = `<div class="alert alert-ok">
+      ✓ Platform invoice <b>${esc(r.invoiceNumber||"")}</b> issued.<br>
+      Status: <b>${r.status}</b>
+      ${r.status === "accepted" ? " — Accepted by KRA." : " — Queued for submission."}
+      ${r.invoiceId
+        ? `<br><button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="SokoniETIMS.downloadReceipt('${r.invoiceId}')">📄 Download Receipt</button>`
+        : ""}
+    </div>`;
+    loadAll();
+  }
+}
+
+/* ── Tab switch ─────────────────────────────────────────── */
+function switchTab(id, btn) {
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  if (btn) btn.classList.add("active");
+}
+
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+</script>
+</body>
+</html>

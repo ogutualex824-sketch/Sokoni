@@ -1485,7 +1485,28 @@ window.toggleOnline = async function() {
     if (!_drvGpsActive) {
       _drvGpsActive = true;
       SokoniDB.startGPSTracking(drv.id, (lat2, lng2) => {
-        SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat2, lng2).catch(()=>{});
+        SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, lat2, lng2, { lastPing: new Date().toISOString() }).catch(()=>{});
+      });
+    }
+
+    /* Heartbeat — updates lastPing every 60 s so staleness checks can detect ghost drivers */
+    if (!window._drvHeartbeat) {
+      window._drvHeartbeat = setInterval(() => {
+        if (window.isOnline && drv) {
+          SokoniDB.setDriverOnline(drv.id, true, drv.vehicle, null, null, { lastPing: new Date().toISOString() }).catch(()=>{});
+        }
+      }, 60_000);
+    }
+
+    /* Ghost-driver guard: mark offline if tab/browser is closed without explicit logout */
+    if (!window._drvBeforeUnloadBound) {
+      window._drvBeforeUnloadBound = true;
+      window.addEventListener('beforeunload', () => {
+        if (window.isOnline && drv) {
+          /* Non-blocking fire-and-forget — sendBeacon isn't available for Firestore,
+             but this handles the common case of tab close / refresh. */
+          SokoniDB.setDriverOnline(drv.id, false, drv.vehicle, null, null).catch(()=>{});
+        }
       });
     }
 

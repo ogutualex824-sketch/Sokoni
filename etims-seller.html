@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eTIMS — SOKONI Seller</title>
+<link rel="manifest" href="/manifest.json">
+<script src="firebase.js" defer></script>
+<script src="sokoni-ui.js" defer></script>
+<script src="sokoni-etims.js" defer></script>
+<style>
+:root{--bg:#0a0a0a;--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.85);--muted:rgba(255,255,255,0.38);--lime:#71ff00;--blue:#003366;--red:#ff4444;--amber:#ffb400}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+.page-wrap{max-width:1100px;margin:0 auto;padding:24px 16px 80px}
+
+/* Header */
+.page-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+.page-hdr h1{font-size:22px;font-weight:800}
+.page-hdr h1 span{color:var(--lime)}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.status-pill.active{background:rgba(113,255,0,0.1);color:var(--lime);border:1px solid rgba(113,255,0,0.25)}
+.status-pill.pending{background:rgba(255,180,0,0.1);color:var(--amber);border:1px solid rgba(255,180,0,0.25)}
+.status-pill.inactive{background:rgba(255,255,255,0.05);color:var(--muted);border:1px solid var(--border)}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.stat-card .val{font-size:24px;font-weight:800;color:#fff;margin-bottom:4px}
+.stat-card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.stat-card.fail .val{color:var(--red)}
+.stat-card.warn .val{color:var(--amber)}
+.stat-card.ok   .val{color:var(--lime)}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto}
+.tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.tab.active{color:#fff;border-color:var(--lime)}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* Card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
+.card h3{font-size:15px;font-weight:700;margin-bottom:16px}
+
+/* Form */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:18px}
+.field label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.field input,.field select{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:#fff;font-size:14px;outline:none;transition:border-color .15s}
+.field input:focus,.field select:focus{border-color:rgba(113,255,0,0.4)}
+.field input::placeholder{color:var(--muted)}
+.field select option{background:#1a1a1a}
+.pin-hint{font-size:11px;margin-top:4px}
+
+/* Buttons */
+.btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--lime);color:#000}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-primary:disabled{opacity:.45;cursor:default}
+.btn-outline{background:none;color:var(--text);border:1px solid var(--border)}
+.btn-outline:hover{border-color:rgba(255,255,255,0.2);background:rgba(255,255,255,0.03)}
+.btn-danger{background:rgba(255,68,68,0.1);color:var(--red);border:1px solid rgba(255,68,68,0.2)}
+
+/* Table */
+.table-wrap{overflow-x:auto}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{background:rgba(255,255,255,0.04);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.data-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.03);vertical-align:middle}
+.data-table tr:hover td{background:rgba(255,255,255,0.02)}
+.data-table .r{text-align:right}
+
+/* Alert box */
+.alert{border-radius:10px;padding:12px 16px;font-size:13px;margin-bottom:16px}
+.alert-warn{background:rgba(255,180,0,0.08);border:1px solid rgba(255,180,0,0.2);color:var(--amber)}
+.alert-ok{background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);color:var(--lime)}
+.alert-err{background:rgba(255,68,68,0.07);border:1px solid rgba(255,68,68,0.2);color:var(--red)}
+
+/* Bulk period selector */
+.period-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+.period-row .field{flex:1;min-width:160px}
+
+/* Loading skeleton */
+.skeleton{background:rgba(255,255,255,0.05);border-radius:6px;animation:sk 1.4s infinite}
+@keyframes sk{0%,100%{opacity:.4}50%{opacity:.9}}
+
+/* Empty */
+.empty{text-align:center;padding:40px 0;color:var(--muted);font-size:14px}
+
+@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div id="sk-header-placeholder"></div>
+
+<div class="page-wrap">
+
+  <!-- Page header -->
+  <div class="page-hdr">
+    <div>
+      <h1>eTIMS &mdash; <span>KRA Invoicing</span></h1>
+      <p style="font-size:13px;color:var(--muted);margin-top:3px">Kenya Revenue Authority Electronic Tax Invoice System</p>
+    </div>
+    <div id="etims-status-pill" class="status-pill inactive">Not Registered</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card ok"><div class="val" id="st-total">—</div><div class="lbl">Invoices Issued</div></div>
+    <div class="stat-card ok"><div class="val" id="st-rev">—</div><div class="lbl">Total Revenue</div></div>
+    <div class="stat-card ok"><div class="val" id="st-vat">—</div><div class="lbl">VAT Collected</div></div>
+    <div class="stat-card warn"><div class="val" id="st-pend">—</div><div class="lbl">Pending Submission</div></div>
+    <div class="stat-card fail"><div class="val" id="st-fail">—</div><div class="lbl">Failed</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('invoices',this)">Recent Invoices</button>
+    <button class="tab" onclick="switchTab('bulk',this)">Bulk / Periodic</button>
+    <button class="tab" onclick="switchTab('failed',this)">Failed</button>
+    <button class="tab" onclick="switchTab('register',this)">Settings / Register</button>
+  </div>
+
+  <!-- TAB: Recent Invoices -->
+  <div id="tab-invoices" class="tab-pane active">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <h3 style="margin:0">Recent Invoices</h3>
+        <button class="btn btn-outline" onclick="loadStats()" style="font-size:12px">↺ Refresh</button>
+      </div>
+      <div class="table-wrap" id="invoices-table">
+        <div class="empty">Loading&hellip;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Bulk / Periodic -->
+  <div id="tab-bulk" class="tab-pane">
+    <div class="card">
+      <h3>Bulk / Periodic Invoice</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:18px">
+        Aggregate all completed orders in a date range into one consolidated KRA invoice.
+        Useful for weekly or monthly invoicing instead of per-order.
+      </p>
+      <div class="period-row">
+        <div class="field">
+          <label>Period Start</label>
+          <input type="datetime-local" id="bulk-start">
+        </div>
+        <div class="field">
+          <label>Period End</label>
+          <input type="datetime-local" id="bulk-end">
+        </div>
+        <div class="field" style="max-width:160px">
+          <label>Billing Period</label>
+          <select id="bulk-period">
+            <option value="daily">Daily</option>
+            <option value="weekly" selected>Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+        <button class="btn btn-outline" onclick="setQuickPeriod('day')">Today</button>
+        <button class="btn btn-outline" onclick="setQuickPeriod('week')">This Week</button>
+        <button class="btn btn-outline" onclick="setQuickPeriod('month')">This Month</button>
+        <button class="btn btn-primary" id="bulk-btn" onclick="doBulk()">Generate Bulk Invoice</button>
+      </div>
+      <div id="bulk-result"></div>
+    </div>
+  </div>
+
+  <!-- TAB: Failed -->
+  <div id="tab-failed" class="tab-pane">
+    <div class="card">
+      <h3>Failed Submissions</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+        These invoices were generated but KRA rejected or timed out.
+        SOKONI retries automatically (5 attempts over ~12 hours). You can also retry manually.
+      </p>
+      <div class="table-wrap" id="failed-table">
+        <div class="empty">Loading&hellip;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Register / Settings -->
+  <div id="tab-register" class="tab-pane">
+    <div class="card">
+      <h3 id="reg-title">Register eTIMS</h3>
+      <div id="reg-alert" style="display:none" class="alert alert-ok">✓ Your eTIMS profile is active.</div>
+
+      <div class="form-grid" id="reg-form">
+        <div class="field">
+          <label>KRA PIN *</label>
+          <input type="text" id="f-pin" placeholder="P051234567T" maxlength="11" oninput="checkPin()">
+          <div class="pin-hint" id="pin-hint"></div>
+        </div>
+        <div class="field">
+          <label>Business Name *</label>
+          <input type="text" id="f-biz" placeholder="Your business name">
+        </div>
+        <div class="field">
+          <label>eTIMS Branch ID</label>
+          <input type="text" id="f-branch" placeholder="00" value="00" maxlength="2">
+        </div>
+        <div class="field">
+          <label>VAT Status *</label>
+          <select id="f-vat">
+            <option value="registered">VAT Registered (16%)</option>
+            <option value="zero_rated">Zero-Rated</option>
+            <option value="exempt">Exempt</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>eTIMS Device Serial *</label>
+          <input type="text" id="f-serial" placeholder="VSCU serial from KRA portal">
+        </div>
+        <div class="field">
+          <label>Taxpayer Secret *</label>
+          <input type="password" id="f-secret" placeholder="Taxpayer secret from KRA portal">
+        </div>
+        <div class="field">
+          <label>Invoice Prefix</label>
+          <input type="text" id="f-prefix" placeholder="INV" maxlength="6" value="INV">
+        </div>
+        <div class="field">
+          <label>Business Address</label>
+          <input type="text" id="f-addr" placeholder="Nairobi, Kenya">
+        </div>
+        <div class="field">
+          <label>Business Phone</label>
+          <input type="tel" id="f-phone" placeholder="+254700000000">
+        </div>
+      </div>
+
+      <div class="alert alert-warn" style="margin-bottom:16px">
+        ⚠ Your eTIMS device serial and taxpayer secret are obtained from the
+        <a href="https://etims.kra.go.ke" target="_blank" rel="noopener" style="color:var(--amber)">KRA eTIMS portal</a>
+        after registering your business as a Virtual VSCU taxpayer.
+        These credentials are encrypted at rest — SOKONI never displays them after saving.
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="reg-btn" onclick="doRegister()">Save &amp; Activate</button>
+        <button class="btn btn-outline" onclick="switchTab('invoices',document.querySelector('.tab'))">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<script>
+/* ─── Auth guard ─────────────────────────────────────────── */
+document.addEventListener("DOMContentLoaded", () => {
+  firebase.auth().onAuthStateChanged(user => {
+    if (!user) { location.href = "/auth.html?next=/etims-seller.html"; return; }
+    loadStats();
+  });
+});
+
+/* ─── Load stats + invoices ──────────────────────────────── */
+async function loadStats() {
+  const res = await SokoniETIMS.getSellerStats().catch(() => null);
+  if (!res || !res.profile) {
+    showRegisterPrompt();
+    return;
+  }
+
+  const { profile, stats, recentInvoices, failedInvoices } = res;
+
+  /* Status pill */
+  const pill = document.getElementById("etims-status-pill");
+  pill.className = `status-pill ${profile.status === "active" ? "active" : "inactive"}`;
+  pill.textContent = profile.status === "active"
+    ? `✓ Active — ${profile.kraPin}`
+    : "Not Active";
+
+  /* Stats */
+  document.getElementById("st-total").textContent = (stats.acceptedCount||0).toLocaleString();
+  document.getElementById("st-rev").textContent   = SokoniETIMS.formatKES(stats.totalRevenue);
+  document.getElementById("st-vat").textContent   = SokoniETIMS.formatKES(stats.vatCollected);
+  document.getElementById("st-pend").textContent  = (stats.pendingCount||0).toString();
+  document.getElementById("st-fail").textContent  = (stats.failedCount||0).toString();
+
+  /* Recent invoices table */
+  renderInvoiceList("invoices-table", recentInvoices);
+  renderFailedList("failed-table", failedInvoices);
+
+  /* Pre-fill settings form */
+  if (profile) {
+    document.getElementById("f-pin").value    = profile.kraPin    || "";
+    document.getElementById("f-biz").value    = profile.businessName || "";
+    document.getElementById("f-branch").value = profile.branchId  || "00";
+    document.getElementById("f-vat").value    = profile.vatStatus || "registered";
+    document.getElementById("f-prefix").value = profile.invoicePrefix || "INV";
+    document.getElementById("f-addr").value   = profile.address   || "";
+    document.getElementById("f-phone").value  = profile.phone     || "";
+    document.getElementById("f-serial").placeholder = "Already set (hidden for security)";
+    document.getElementById("f-secret").placeholder = "Already set (hidden for security)";
+    document.getElementById("reg-title").textContent = "eTIMS Settings";
+    document.getElementById("reg-alert").style.display = "";
+    document.getElementById("reg-btn").textContent = "Update Settings";
+  }
+}
+
+function showRegisterPrompt() {
+  document.getElementById("etims-status-pill").className = "status-pill inactive";
+  document.getElementById("etims-status-pill").textContent = "Not Registered";
+  document.getElementById("st-total").textContent = "0";
+  document.getElementById("st-rev").textContent = "KES 0.00";
+  document.getElementById("st-vat").textContent = "KES 0.00";
+  document.getElementById("st-pend").textContent = "0";
+  document.getElementById("st-fail").textContent = "0";
+  document.getElementById("invoices-table").innerHTML = '<div class="empty">Register eTIMS to start generating KRA invoices.</div>';
+  document.getElementById("failed-table").innerHTML   = '<div class="empty">No data.</div>';
+}
+
+/* ─── Render helpers ─────────────────────────────────────── */
+function renderInvoiceList(containerId, invoices) {
+  const el = document.getElementById(containerId);
+  if (!invoices || !invoices.length) {
+    el.innerHTML = '<div class="empty">No invoices yet.</div>';
+    return;
+  }
+  const rows = invoices.map(inv => `
+    <tr>
+      <td>${esc(inv.invoiceNumber)}</td>
+      <td>${inv.orderId ? esc(inv.orderId.slice(-8)) : "Bulk"}</td>
+      <td>${new Date(inv.createdAt).toLocaleDateString("en-KE")}</td>
+      <td class="r">${SokoniETIMS.formatKES(inv.total)}</td>
+      <td class="r">${SokoniETIMS.formatKES(inv.vat)}</td>
+      <td>${SokoniETIMS.statusBadge(inv.status)}</td>
+      <td>${esc(inv.receiptNumber||"—")}</td>
+      <td>
+        ${inv.pdfUrl ? `<a class="etims-link" href="${esc(inv.pdfUrl)}" target="_blank">View</a>` :
+          inv.invoiceId ? `<button class="etims-link-btn" onclick="dlReceipt('${inv.invoiceId}')">Download</button>` : ""}
+      </td>
+    </tr>`).join("");
+  el.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>Invoice #</th><th>Order</th><th>Date</th>
+      <th class="r">Total</th><th class="r">VAT</th>
+      <th>Status</th><th>KRA Receipt #</th><th>Actions</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderFailedList(containerId, invoices) {
+  const el = document.getElementById(containerId);
+  if (!invoices || !invoices.length) {
+    el.innerHTML = '<div class="empty" style="color:var(--lime)">✓ No failed submissions.</div>';
+    return;
+  }
+  const rows = invoices.map(inv => `
+    <tr>
+      <td>${esc(inv.invoiceNumber||inv.invoiceId.slice(-8))}</td>
+      <td>${inv.orderId ? esc(inv.orderId.slice(-8)) : "—"}</td>
+      <td>${new Date(inv.createdAt).toLocaleDateString("en-KE")}</td>
+      <td style="color:var(--red)">${esc(inv.error||"Unknown")}</td>
+      <td><button class="btn btn-outline" style="font-size:11px;padding:5px 10px" onclick="retryInv('${inv.invoiceId}',this)">Retry</button></td>
+    </tr>`).join("");
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Invoice #</th><th>Order</th><th>Date</th><th>Error</th><th>Action</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+/* ─── Actions ────────────────────────────────────────────── */
+async function dlReceipt(id) {
+  await SokoniETIMS.downloadReceipt(id);
+}
+
+async function retryInv(id, btn) {
+  btn.disabled = true; btn.textContent = "Retrying…";
+  const r = await SokoniETIMS.resubmitInvoice(id).catch(e => ({ error: e.message }));
+  if (r.error) {
+    btn.disabled = false; btn.textContent = "Retry";
+    SokoniETIMS._toast(r.error, false);
+  } else {
+    btn.textContent = "Queued ✓";
+    SokoniETIMS._toast("Invoice queued for resubmission", true);
+  }
+}
+
+/* ─── Bulk invoice ───────────────────────────────────────── */
+function setQuickPeriod(unit) {
+  const now   = new Date();
+  const end   = new Date(now);
+  const start = new Date(now);
+  if (unit === "day") { start.setHours(0,0,0,0); }
+  else if (unit === "week") { start.setDate(now.getDate() - now.getDay()); start.setHours(0,0,0,0); }
+  else { start.setDate(1); start.setHours(0,0,0,0); }
+  document.getElementById("bulk-start").value = start.toISOString().slice(0,16);
+  document.getElementById("bulk-end").value   = end.toISOString().slice(0,16);
+}
+
+async function doBulk() {
+  const btn   = document.getElementById("bulk-btn");
+  const start = document.getElementById("bulk-start").value;
+  const end   = document.getElementById("bulk-end").value;
+  const period= document.getElementById("bulk-period").value;
+  const res   = document.getElementById("bulk-result");
+
+  if (!start || !end) { res.innerHTML = '<div class="alert alert-warn">Select a period start and end.</div>'; return; }
+  if (new Date(start) >= new Date(end)) { res.innerHTML = '<div class="alert alert-warn">End must be after start.</div>'; return; }
+
+  btn.disabled = true; btn.textContent = "Generating…";
+  res.innerHTML = "";
+
+  const r = await SokoniETIMS.generateBulkInvoice(
+    new Date(start).toISOString(), new Date(end).toISOString(), period
+  ).catch(e => ({ error: e.message }));
+
+  btn.disabled = false; btn.textContent = "Generate Bulk Invoice";
+
+  if (r.error) {
+    res.innerHTML = `<div class="alert alert-err">Error: ${esc(r.error)}</div>`;
+  } else if (r.count === 0 || r.message?.includes("No completed")) {
+    res.innerHTML = '<div class="alert alert-warn">No completed orders found in that period.</div>';
+  } else {
+    res.innerHTML = `<div class="alert alert-ok">
+      ✓ Bulk invoice <b>${esc(r.invoiceNumber||"")}</b> generated for <b>${r.orderCount||"?"} orders</b>.<br>
+      Status: <b>${r.status}</b>
+      ${r.status === "accepted" ? " — KRA has accepted this submission." : " — Queued for submission."}
+      ${r.invoiceId ? `<br><button class="btn btn-outline" style="margin-top:10px;font-size:12px" onclick="dlReceipt('${r.invoiceId}')">📄 Download Invoice</button>` : ""}
+    </div>`;
+    loadStats();
+  }
+}
+
+/* ─── Register / Update ──────────────────────────────────── */
+function checkPin() {
+  const v   = document.getElementById("f-pin").value.toUpperCase().trim();
+  const ok  = SokoniETIMS.validatePinFormat(v);
+  const hint= document.getElementById("pin-hint");
+  hint.className = ok ? "pin-hint etims-pin-valid" : "pin-hint etims-pin-invalid";
+  hint.textContent = v.length ? (ok ? "✓ Format valid" : "Expected: P051234567T") : "";
+}
+
+async function doRegister() {
+  const btn  = document.getElementById("reg-btn");
+  const pin  = document.getElementById("f-pin").value.toUpperCase().trim();
+  const biz  = document.getElementById("f-biz").value.trim();
+  const ser  = document.getElementById("f-serial").value.trim();
+  const sec  = document.getElementById("f-secret").value.trim();
+
+  if (!SokoniETIMS.validatePinFormat(pin)) {
+    SokoniETIMS._toast("Invalid KRA PIN format — expected P051234567T", false); return;
+  }
+  if (!biz) { SokoniETIMS._toast("Business name required", false); return; }
+
+  /* On update: serial/secret optional if already set */
+  const isUpdate = btn.textContent.includes("Update");
+
+  btn.disabled = true; btn.textContent = isUpdate ? "Updating…" : "Activating…";
+
+  const payload = {
+    kraPin:         pin,
+    businessName:   biz,
+    branchId:       document.getElementById("f-branch").value.trim() || "00",
+    vatStatus:      document.getElementById("f-vat").value,
+    invoicePrefix:  document.getElementById("f-prefix").value.toUpperCase().trim() || "INV",
+    address:        document.getElementById("f-addr").value.trim(),
+    phone:          document.getElementById("f-phone").value.trim(),
+    deviceSerial:   ser || undefined,
+    taxpayerSecret: sec || undefined,
+  };
+
+  const fn = (isUpdate && !ser) ? SokoniETIMS.updateProfile : SokoniETIMS.register;
+  const r  = await fn(payload).catch(e => ({ error: e.message || e.details }));
+
+  btn.disabled = false; btn.textContent = isUpdate ? "Update Settings" : "Save & Activate";
+
+  if (r.error) { SokoniETIMS._toast(r.error, false); return; }
+  SokoniETIMS._toast("eTIMS profile saved successfully", true);
+  document.getElementById("f-secret").value = "";
+  loadStats();
+}
+
+/* ─── Tab switch ─────────────────────────────────────────── */
+function switchTab(id, btn) {
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.getElementById("tab-" + id).classList.add("active");
+  if (btn) btn.classList.add("active");
+}
+
+/* ─── Escape helper ──────────────────────────────────────── */
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+</script>
+</body>
+</html>

@@ -6734,3 +6734,51 @@ exports.processScheduledDeliveries = onSchedule(
     console.log(`[scheduledDeliveries] activated ${snap.size} delivery/ies`);
   }
 );
+
+/* ══════════════════════════════════════════════════════════════════
+   KRA eTIMS — Kenya Revenue Authority Electronic Tax Invoice System
+   15 Cloud Functions: seller registration, per-order invoicing,
+   bulk/periodic invoicing, SOKONI platform invoices, queue processor,
+   retry scheduler, daily reconciliation, buyer receipts, admin stats.
+══════════════════════════════════════════════════════════════════ */
+const etims = require("./etims");
+
+exports.etimsRegisterSeller    = etims.etimsRegisterSeller;
+exports.etimsGetProfile        = etims.etimsGetProfile;
+exports.etimsUpdateProfile     = etims.etimsUpdateProfile;
+exports.etimsValidatePin       = etims.etimsValidatePin;
+exports.etimsGenerateInvoice   = etims.etimsGenerateInvoice;
+exports.etimsOnOrderCompleted  = etims.etimsOnOrderCompleted;
+exports.etimsResubmitInvoice   = etims.etimsResubmitInvoice;
+exports.etimsProcessQueue      = etims.etimsProcessQueue;
+exports.etimsBulkGenerate      = etims.etimsBulkGenerate;
+exports.etimsPlatformInvoice   = etims.etimsPlatformInvoice;
+exports.etimsGetBuyerReceipts  = etims.etimsGetBuyerReceipts;
+exports.etimsDownloadReceipt   = etims.etimsDownloadReceipt;
+exports.etimsGetSellerStats    = etims.etimsGetSellerStats;
+exports.etimsGetAdminStats     = etims.etimsGetAdminStats;
+exports.etimsReconcileDaily    = etims.etimsReconcileDaily;
+
+/* ══════════════════════════════════════════════════════════════════
+   SOKONI HUB eTIMS & LOGISTICS DOCUMENTS  v1.0
+   13 Cloud Functions: hub management, 5 operational document types,
+   hub tax invoicing for selling/hybrid hubs, audit trail, and
+   hubOnOrderCompleted (auto-dispatch note + hub invoice routing).
+   Invoice authority routing keeps etimsOnOrderCompleted and
+   hubOnOrderCompleted mutually exclusive — no duplicate tax invoices.
+══════════════════════════════════════════════════════════════════ */
+const hubEtims = require("./hub-etims");
+
+exports.hubCreate           = hubEtims.hubCreate;
+exports.hubUpdate           = hubEtims.hubUpdate;
+exports.hubGetProfile       = hubEtims.hubGetProfile;
+exports.hubUpdateTaxConfig  = hubEtims.hubUpdateTaxConfig;
+exports.hubRegisterEtims    = hubEtims.hubRegisterEtims;
+exports.hubGenerateDocument = hubEtims.hubGenerateDocument;
+exports.hubGetDocuments     = hubEtims.hubGetDocuments;
+exports.hubOnOrderCompleted = hubEtims.hubOnOrderCompleted;
+exports.hubGenerateInvoice  = hubEtims.hubGenerateInvoice;
+exports.hubResubmitInvoice  = hubEtims.hubResubmitInvoice;
+exports.hubGetAuditTrail    = hubEtims.hubGetAuditTrail;
+exports.hubGetStats         = hubEtims.hubGetStats;
+exports.hubAdminGetAllStats = hubEtims.hubAdminGetAllStats;
