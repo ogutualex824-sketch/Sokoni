@@ -377,6 +377,9 @@ html, body {
 }
 
 .pos-header-logo { height: 40px; width: auto; flex-shrink: 0; object-fit: contain; filter: drop-shadow(0 0 10px rgba(113,255,0,0.25)); }
+.pos-header-back { display: none; align-items: center; justify-content: center; width: 34px; height: 34px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: rgba(255,255,255,0.7); font-size: 16px; text-decoration: none; flex-shrink: 0; transition: background .15s, color .15s; }
+.pos-header-back:hover, .pos-header-back:active { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00; }
+@media (max-width: 768px) { .pos-header-back { display: flex; } }
 .pos-brand { font-size: 13px; font-weight: 900; color: var(--green); letter-spacing: -.3px; }
 .pos-branch { font-size: 11px; color: var(--txt2); }
 .pos-header-spacer { flex: 1; }
