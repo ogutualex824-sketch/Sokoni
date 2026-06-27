@@ -3518,7 +3518,7 @@ async function renderTeamPane(tab){
       }).join('');
     }
   }catch(err){
-    el.innerHTML = '<div style="color:rgba(255,100,100,0.7);font-size:12px;">Error: '+err.message+'</div>';
+    el.innerHTML = '<div style="color:rgba(255,100,100,0.7);font-size:12px;">Unable to load data — please refresh.</div>';
   }
 }
 
@@ -6152,13 +6152,11 @@ async function _admLoadMpesa() {
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">Loading…</td></tr>';
 
   try {
-    let q = hubFilter
-      ? query(collection(db,'sellerPayments'), where('hub','==',hubFilter), orderBy('createdAt','desc'), limit(100))
-      : query(collection(db,'sellerPayments'), orderBy('createdAt','desc'), limit(100));
-
+    const q = query(collection(db,'sellerPayments'), orderBy('createdAt','desc'), limit(200));
     const snap = await getDocs(q);
-    const rows = [];
-    snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+    const allRows = [];
+    snap.forEach(d => allRows.push({ id: d.id, ...d.data() }));
+    const rows = hubFilter ? allRows.filter(r => r.hub === hubFilter) : allRows;
 
     /* Stats */
     const today = new Date().toDateString();
@@ -6593,7 +6591,7 @@ window.loadSupportQueue = loadSupportQueue;
         '</div>';
       window._lastReportData = snap.docs.map(function(d) { return Object.assign({ _id: d.id }, d.data()); });
     }).catch(function(err) {
-      chart.innerHTML = '<div style="padding:20px;color:#ff6464;">' + err.message + '</div>';
+      chart.innerHTML = '<div style="padding:20px;color:#ff6464;">Unable to generate report — please refresh.</div>';
     });
   };
 
@@ -6676,38 +6674,40 @@ window.loadSupportQueue = loadSupportQueue;
 
   /* ── Moderation — flagged content queue ── */
   window.loadFlags = function() {
-    var db = window.firebaseDB;
-    if (!db) return;
     var grid = document.getElementById('flagsGrid');
     if (grid) grid.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,.4);">Loading flagged content…</div>';
-    db.collection('contentFlags').where('status','==','pending').orderBy('createdAt','desc').limit(100).get().then(function(snap) {
-      if (!grid) return;
-      if (snap.empty) {
-        grid.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">✅</div><p>No flagged content</p></div>';
-        return;
+    (async function(){
+      try{
+        var {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+        var {getFirestore,collection,query,where,orderBy,limit,getDocs}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        var _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+        var _a=getApps().find(function(a){return a.name==="adm-flags";})||initializeApp(_cfg,"adm-flags");
+        var snap=await getDocs(query(collection(getFirestore(_a),'contentFlags'),where('status','==','pending'),orderBy('createdAt','desc'),limit(100)));
+        if(!grid)return;
+        if(snap.empty){grid.innerHTML='<div class="adm-empty"><div class="adm-empty-icon">✅</div><p>No flagged content</p></div>';return;}
+        var _h=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+        var rows=snap.docs.map(function(d){
+          var f=d.data();
+          return '<tr data-flag-id="'+d.id+'">'
+            +'<td><input type="checkbox" class="flag-chk" data-id="'+d.id+'"></td>'
+            +'<td>'+_h(f.contentType||'-')+'</td>'
+            +'<td>'+_h(f.reason||'-')+'</td>'
+            +'<td>'+_h(f.reportedBy||'-')+'</td>'
+            +'<td>'+new Date(f.createdAt?.seconds?f.createdAt.seconds*1000:f.createdAt||0).toLocaleDateString()+'</td>'
+            +'<td>'
+              +'<button class="solid-btn solid-red" style="padding:3px 10px;font-size:11px;" onclick="dismissFlag(\''+d.id+'\')">Dismiss</button> '
+              +'<button class="solid-btn solid-blue" style="padding:3px 10px;font-size:11px;" onclick="escalateFlag(\''+d.id+'\')">Escalate</button>'
+            +'</td></tr>';
+        }).join('');
+        grid.innerHTML='<div class="adm-table-wrap"><table class="adm-table">'
+          +'<thead><tr>'
+          +'<th><input type="checkbox" id="selectAllFlags" onchange="document.querySelectorAll(\'.flag-chk\').forEach(function(c){c.checked=document.getElementById(\'selectAllFlags\').checked;})"></th>'
+          +'<th>Type</th><th>Reason</th><th>Reporter</th><th>Date</th><th>Actions</th>'
+          +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+      }catch(err){
+        if(grid)grid.innerHTML='<div class="adm-empty">Unable to load flagged content — please refresh.</div>';
       }
-      var _h = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
-      var rows = snap.docs.map(function(d) {
-        var f = d.data();
-        return '<tr data-flag-id="'+d.id+'">'
-          +'<td><input type="checkbox" class="flag-chk" data-id="'+d.id+'"></td>'
-          +'<td>'+_h(f.contentType||'-')+'</td>'
-          +'<td>'+_h(f.reason||'-')+'</td>'
-          +'<td>'+_h(f.reportedBy||'-')+'</td>'
-          +'<td>'+new Date(f.createdAt?.seconds ? f.createdAt.seconds*1000 : f.createdAt||0).toLocaleDateString()+'</td>'
-          +'<td>'
-            +'<button class="solid-btn solid-red" style="padding:3px 10px;font-size:11px;" onclick="dismissFlag(\''+d.id+'\')">Dismiss</button> '
-            +'<button class="solid-btn solid-blue" style="padding:3px 10px;font-size:11px;" onclick="escalateFlag(\''+d.id+'\')">Escalate</button>'
-          +'</td></tr>';
-      }).join('');
-      grid.innerHTML = '<div class="adm-table-wrap"><table class="adm-table">'
-        +'<thead><tr>'
-        +'<th><input type="checkbox" id="selectAllFlags" onchange="document.querySelectorAll(\'.flag-chk\').forEach(function(c){c.checked=document.getElementById(\'selectAllFlags\').checked;})"></th>'
-        +'<th>Type</th><th>Reason</th><th>Reporter</th><th>Date</th><th>Actions</th>'
-        +'</tr></thead><tbody>'+rows+'</tbody></table></div>';
-    }).catch(function(err) {
-      if (grid) grid.innerHTML = '<div class="adm-empty">Error loading flags: '+err.message+'</div>';
-    });
+    })();
   };
 
   window.dismissFlag = function(id) {

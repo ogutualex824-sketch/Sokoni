@@ -501,7 +501,7 @@ window.loadMyCommissions = async function() {
     }).join("");
     total.textContent = "Total owed: " + fmtKES(sum);
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Unable to load data — please refresh.</td></tr>`;
   }
 };
 
@@ -583,7 +583,7 @@ window.loadMyFeatured = async function() {
       </tr>`;
     }).join("");
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Unable to load data — please refresh.</td></tr>`;
   }
 };
 
@@ -617,7 +617,7 @@ window.loadMyAds = async function() {
       </tr>`;
     }).join("");
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Error: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Unable to load data — please refresh.</td></tr>`;
   }
 };
 

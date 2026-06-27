@@ -369,7 +369,7 @@ async function loadQuality() {
           </div>`).join("")
       : `<div class="empty-state">Improve your listing quality scores to see top-rated listings here</div>`;
   } catch (e) {
-    document.getElementById("qs-list").innerHTML = `<div class="err-msg">${e.message}</div>`;
+    document.getElementById("qs-list").innerHTML = `<div class="err-msg">Unable to load data — please refresh.</div>`;
   }
 }
 
@@ -460,7 +460,7 @@ async function loadPerformance() {
       document.getElementById("perf-tip-card").style.display = "block";
     }
   } catch (e) {
-    document.getElementById("perf-fast").innerHTML = `<div class="err-msg">${e.message}</div>`;
+    document.getElementById("perf-fast").innerHTML = `<div class="err-msg">Unable to load data — please refresh.</div>`;
   }
 }
 

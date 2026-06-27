@@ -544,10 +544,12 @@ async function loadFraud() {
   try {
     const { collection, query, orderBy, limit, getDocs, where } = await fs();
     const typeFilter = document.getElementById('fr-filter').value;
-    let q = query(collection(db(),'fraudEvents'), orderBy('ts','desc'), limit(50));
-    if (typeFilter) q = query(collection(db(),'fraudEvents'), where('type','==',typeFilter), orderBy('ts','desc'), limit(50));
+    const q = query(collection(db(),'fraudEvents'), limit(100));
     const snap = await getDocs(q);
-    const events = snap.docs.map(d=>d.data());
+    let events = snap.docs.map(d=>d.data())
+      .sort((a,b)=>(b.ts?.toMillis?.()??b.ts??0)-(a.ts?.toMillis?.()??a.ts??0));
+    if (typeFilter) events = events.filter(e=>e.type===typeFilter);
+    events = events.slice(0,50);
 
     const total      = snap.size;
     const unresolved = events.filter(e=>!e.resolved).length;
@@ -578,10 +580,13 @@ document.getElementById('fr-search').addEventListener('input', loadFraud);
 async function loadApprovals() {
   try {
     const { collection, query, where, orderBy, limit, getDocs } = await fs();
-    const [pending, applied] = await Promise.all([
-      getDocs(query(collection(db(),'financialProposals'), where('status','==','pending_approval'), orderBy('proposedAt','desc'), limit(20))),
-      getDocs(query(collection(db(),'financialProposals'), where('status','==','approved'), orderBy('proposedAt','desc'), limit(10))),
-    ]);
+    const allSnap = await getDocs(query(collection(db(),'financialProposals'), limit(100)));
+    const allProps = allSnap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>(b.proposedAt?.toMillis?.()??b.proposedAt??0)-(a.proposedAt?.toMillis?.()??a.proposedAt??0));
+    const pending = { docs: allProps.filter(p=>p.status==='pending_approval').slice(0,20).map(p=>({data:()=>p,id:p.id})), empty: false };
+    const applied = { docs: allProps.filter(p=>p.status==='approved').slice(0,10).map(p=>({data:()=>p,id:p.id})), empty: false };
+    pending.empty = pending.docs.length===0;
+    applied.empty = applied.docs.length===0;
 
     const listEl = document.getElementById('proposals-list');
     if (pending.empty) { listEl.innerHTML = '<div style="color:rgba(113,255,0,.6);font-size:13px">No pending approvals. ✓</div>'; }

@@ -411,9 +411,10 @@ function _startClock() {
 
 /* ── Global subscriptions ── */
 function _subscribeAlerts() {
-  const q = query(collection(db,'eccAlerts'), where('status','==','active'), orderBy('createdAt','desc'), limit(50));
+  const q = query(collection(db,'eccAlerts'), where('status','==','active'), limit(50));
   const unsub = onSnapshot(q, snap => {
-    _alerts = snap.docs.map(d=>({id:d.id,...d.data()}));
+    _alerts = snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>(b.createdAt?.toMillis?.()??b.createdAt??0)-(a.createdAt?.toMillis?.()??a.createdAt??0));
     _renderAlertPanel();
     const cnt = document.getElementById('alert-count');
     const n = _alerts.length;
@@ -593,12 +594,14 @@ function live_ops() {
 }
 
 function _subLiveOrders() {
-  const q = query(collection(db,'orders'), where('status','in',['pending','confirmed','in_transit']), orderBy('createdAt','desc'), limit(15));
+  const q = query(collection(db,'orders'), where('status','in',['pending','confirmed','in_transit']), limit(15));
   const unsub = onSnapshot(q, snap => {
     const el = document.getElementById('feed-orders'); if(!el) return;
     const cnts = document.getElementById('live-counts'); if(cnts) cnts.textContent = `${snap.size} active orders`;
     if(!snap.size) { el.innerHTML='<div class="empty">📦<div>No active orders</div></div>'; return; }
-    el.innerHTML = snap.docs.map(d => {
+    el.innerHTML = snap.docs
+      .sort((a,b)=>(b.data().createdAt?.toMillis?.()??0)-(a.data().createdAt?.toMillis?.()??0))
+      .map(d => {
       const o=d.data(); const icons={'pending':'🕐','confirmed':'✅','in_transit':'🚗'};
       return `<div class="feed-item">
         <div class="feed-icon">${icons[o.status]||'📦'}</div>
