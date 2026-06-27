@@ -7873,6 +7873,7 @@ exports.posLookupCustomer      = posZF.posLookupCustomer;
 exports.posProcessRefund       = posZF.posProcessRefund;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
+exports.posCheckPaymentStatus  = posZF.posCheckPaymentStatus;
 
 /* ── Facebook / Meta Data Deletion Callback + Data Rights ───────────── */
 const fbDeletion = require('./facebook-data-deletion');

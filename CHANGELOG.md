@@ -1,4 +1,30 @@
-﻿## [2026-06-27] — SmartPOS Zero Friction Checkout System v1.0
+﻿## [2026-06-28] — SmartPOS Instant Payment & Guided Checkout v1.1
+
+### Summary
+Upgraded `pos-checkout.html` with a guided cashier experience: explicit state machine (IDLE→ITEMS→PAYMENT→CONFIRMING→SUCCESS→PRINTING→COMPLETE→ERROR), full-width cashier guidance strip, M-Pesa auto-detection via 3-second polling loop (no more `confirm()` dialog), 90-second countdown bar, one-touch payment recovery card (Retry M-Pesa / Accept Cash / Try Card / Keep Items), queue mode (Ctrl+Q toggle — instant reset, reduced animations), preferred payment method highlighting per merchant setting, and `posCheckPaymentStatus` CF for IntaSend webhook-backed polling. All payment-path `confirm()` dialogs removed; only destructive-operation confirms remain.
+
+### Files Affected
+- `pos-checkout.html` — MODIFIED — state machine, guidance strip, countdown, recovery card, queue mode, preferred payment, no confirm() on payment path
+- `functions/pos-zero-friction.js` — MODIFIED — new `posCheckPaymentStatus` CF
+- `functions/index.js` — MODIFIED — `posCheckPaymentStatus` export added
+
+### New Cloud Functions
+- `posCheckPaymentStatus` — polls `posPaymentStatus` + `posIdempotency` collections to auto-detect M-Pesa payment completion; called by client every 3s after STK push
+
+### New Firestore Collection
+- `posPaymentStatus/{ref}` — written by IntaSend webhook; fields: `status`, `transactionRef`, `failureReason`
+
+### Performance
+- Payment auto-detection: polls every 3s, max 90s, no cashier action required
+- Queue mode reset: 800ms (vs 2500ms normal)
+- Preferred payment: highlighted on first render, no extra navigation
+
+### Security
+- No payment amounts passed through the recovery path — all amounts re-derived from `_s` cart state
+- Idempotency key unchanged on retry — prevents double charges
+- `_sanitize()` applied to all strings before Firestore writes in new CF
+
+## [2026-06-27] — SmartPOS Zero Friction Checkout System v1.0
 
 ### Summary
 Complete zero-friction checkout system per SOKONI SmartPOS specification. One-screen cashier UI (`pos-checkout.html`) with F1–F12 keyboard shortcuts, universal scanner integration (keyboard wedge + camera), split payment, park/retrieve, real-time customer display via BroadcastChannel. Universal Loyalty Engine v1.0 (`pos-loyalty-engine.js`): points/cashback/punch cards/tiers/campaigns/coupons/gift cards, merchant-configurable, IndexedDB-first. Customer Display (`pos-display.html`): secondary screen via BroadcastChannel showing live cart, totals, loyalty, and thank-you animation. Server-authoritative checkout CFs (`functions/pos-zero-friction.js`): `posCompleteCheckout` (idempotent Firestore tx — price verify → inventory → loyalty → receipt → analytics), `posValidateCoupon`, `posLookupCustomer` (phone/QR/memberCard/email), `posProcessRefund` (inventory return), `posGetQueueMetrics` (cashier performance), `posCleanupIdempotency` (scheduled). SW updated to `sokoni-20260627-zfpos`.

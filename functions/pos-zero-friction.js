@@ -518,3 +518,44 @@ exports.posCleanupIdempotency = onSchedule({
   snap.docs.forEach(d => batch.delete(d.ref));
   if (!snap.empty) await batch.commit();
 });
+
+/* ════════════════════════════════════════════════════════════════
+   posCheckPaymentStatus — poll IntaSend transaction status (no confirm() dialog)
+   Called by the client every 3s after STK push to auto-detect completion.
+   Returns: { status: 'pending' | 'completed' | 'failed', transactionRef, reason }
+════════════════════════════════════════════════════════════════ */
+exports.posCheckPaymentStatus = onCall(cfg, async ({ data, auth }) => {
+  await _assertAuth(auth);
+  const { ref, merchantId } = data || {};
+  if (!ref) _e('ref required');
+
+  /* Check posPaymentStatus collection first — webhook writes here on IntaSend callback */
+  const statusRef  = db.collection('posPaymentStatus').doc(String(ref));
+  const statusSnap = await statusRef.get();
+
+  if (statusSnap.exists) {
+    const d = statusSnap.data();
+    if (d.status === 'completed') {
+      return { status: 'completed', transactionRef: d.transactionRef || ref };
+    }
+    if (d.status === 'failed' || d.status === 'cancelled') {
+      return { status: 'failed', reason: d.failureReason || 'Payment was not completed' };
+    }
+  }
+
+  /* No webhook yet — check posIdempotency for same-ref completion */
+  if (merchantId) {
+    const idemSnap = await db.collection('posIdempotency')
+      .where('ref', '==', String(ref))
+      .where('merchantId', '==', String(merchantId))
+      .limit(1).get();
+    if (!idemSnap.empty) {
+      const idem = idemSnap.docs[0].data();
+      if (idem.status === 'completed') return { status: 'completed', transactionRef: ref };
+      if (idem.status === 'failed')    return { status: 'failed', reason: 'Payment failed' };
+    }
+  }
+
+  /* Still waiting for webhook */
+  return { status: 'pending' };
+});

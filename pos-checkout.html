@@ -798,6 +798,128 @@ body {
   .pos-grid > *:first-child { display: none; }
   .pos-grid > *:nth-child(3) { display: none; }
 }
+
+/* ── Cashier Guidance Strip ── */
+.cashier-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 38px;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background .3s, color .3s;
+  letter-spacing: .2px;
+}
+.cashier-strip .strip-icon { font-size: 18px; }
+.cashier-strip .strip-msg  { flex: 1; }
+.cashier-strip .strip-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  background: rgba(255,255,255,.2);
+  display: none;
+}
+.cashier-strip .strip-timer.visible { display: block; }
+.cashier-strip.idle    { background: #1565c0; color: white; }
+.cashier-strip.items   { background: #0d47a1; color: white; }
+.cashier-strip.payment { background: #e65100; color: white; }
+.cashier-strip.success { background: #2e7d32; color: white; }
+.cashier-strip.printing{ background: #1b5e20; color: white; }
+.cashier-strip.complete{ background: #2e7d32; color: white; }
+.cashier-strip.error   { background: #c62828; color: white; }
+
+/* ── Preferred payment ── */
+.pay-btn.preferred {
+  transform: none;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.6), 0 4px 16px rgba(0,0,0,.2);
+  position: relative;
+}
+.pay-btn.preferred::before {
+  content: '★ Preferred';
+  position: absolute;
+  left: 10px;
+  font-size: 9px;
+  opacity: .8;
+  font-weight: 400;
+  letter-spacing: .5px;
+}
+
+/* ── Queue mode ── */
+.queue-badge {
+  background: #f9a825;
+  color: #333;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: .5px;
+}
+body.queue-mode .cart-item-row { animation: none !important; }
+body.queue-mode .toast         { transition: none !important; }
+body.queue-mode .cashier-strip { transition: none !important; }
+
+/* ── M-Pesa countdown ring ── */
+.mpesa-countdown-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 12px 0;
+  gap: 8px;
+}
+.mpesa-countdown-bar {
+  width: 100%;
+  height: 6px;
+  background: #e0e0e0;
+  border-radius: 3px;
+  overflow: hidden;
+  display: none;
+}
+.mpesa-countdown-bar.visible { display: block; }
+.mpesa-countdown-fill {
+  height: 100%;
+  background: #00a651;
+  border-radius: 3px;
+  transition: width 1s linear;
+  width: 100%;
+}
+.mpesa-countdown-label {
+  font-size: 13px;
+  color: var(--muted);
+  display: none;
+}
+.mpesa-countdown-label.visible { display: block; }
+
+/* ── Payment recovery card ── */
+.recovery-card {
+  display: none;
+  margin-top: 10px;
+  padding: 14px;
+  background: var(--red-lt);
+  border: 1px solid #ef9a9a;
+  border-radius: 8px;
+}
+.recovery-card.visible { display: block; }
+.recovery-title { font-weight: 700; color: var(--red); margin-bottom: 4px; font-size: 14px; }
+.recovery-msg   { font-size: 13px; color: #555; margin-bottom: 10px; }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.recovery-btn {
+  flex: 1; min-width: 80px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: opacity .15s;
+}
+.recovery-btn:hover { opacity: .85; }
+.recovery-btn.mpesa  { background: #00a651; color: white; }
+.recovery-btn.cash   { background: var(--blue-dk); color: white; }
+.recovery-btn.card   { background: #37474f; color: white; }
+.recovery-btn.cancel { background: var(--gray); color: var(--muted); }
 </style>
 </head>
 <body>
@@ -821,7 +943,15 @@ body {
   <button class="topbar-btn" onclick="Checkout.parkSale()">Park</button>
   <button class="topbar-btn" onclick="Checkout.openParked()">Retrieve</button>
   <button class="topbar-btn" onclick="Checkout.openRefund()">Refund</button>
+  <button class="topbar-btn" id="queue-btn" onclick="Checkout.toggleQueueMode()" title="Ctrl+Q — Toggle Queue Mode">Queue</button>
   <button class="topbar-btn" onclick="window.location.href='pos.html'">&#9776; Menu</button>
+</div>
+
+<!-- Cashier guidance strip -->
+<div class="cashier-strip idle" id="cashier-strip">
+  <span class="strip-icon" id="strip-icon">🔍</span>
+  <span class="strip-msg" id="strip-msg">Scan the next item or search for a product</span>
+  <span class="strip-timer" id="strip-timer"></span>
 </div>
 
 <!-- Main grid -->
@@ -1016,8 +1146,29 @@ body {
     <div class="mpesa-amount" id="mpesa-amount">KES 0.00</div>
     <input type="tel" class="mpesa-phone-input" id="mpesa-phone" placeholder="0712 345 678" maxlength="13">
     <div class="mpesa-status" id="mpesa-status"></div>
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="Checkout.closeModal('mpesa-overlay')">Cancel</button>
+
+    <!-- Countdown bar (visible after STK sent) -->
+    <div class="mpesa-countdown-wrap">
+      <div class="mpesa-countdown-bar" id="mpesa-bar">
+        <div class="mpesa-countdown-fill" id="mpesa-fill"></div>
+      </div>
+      <div class="mpesa-countdown-label" id="mpesa-timer-label">90s remaining</div>
+    </div>
+
+    <!-- Recovery card (shown on failure) -->
+    <div class="recovery-card" id="mpesa-recovery">
+      <div class="recovery-title">⚠ Payment was not completed</div>
+      <div class="recovery-msg" id="recovery-detail">The STK push was not confirmed.</div>
+      <div class="recovery-actions">
+        <button class="recovery-btn mpesa"  onclick="Checkout.retryMpesa()">Retry M-Pesa</button>
+        <button class="recovery-btn cash"   onclick="Checkout.switchToCash()">Accept Cash</button>
+        <button class="recovery-btn card"   onclick="Checkout.switchToCard()">Try Card</button>
+        <button class="recovery-btn cancel" onclick="Checkout.cancelPaymentAttempt()">Keep Items</button>
+      </div>
+    </div>
+
+    <div class="modal-actions" id="mpesa-action-row">
+      <button class="btn-secondary" onclick="Checkout.cancelPaymentAttempt()">Cancel</button>
       <button class="btn-primary" id="mpesa-send-btn" onclick="Checkout.sendMpesa()" style="background:#00a651">Send STK Push</button>
     </div>
   </div>
@@ -1128,25 +1279,59 @@ body {
 
 const Checkout = (() => {
 
+  /* ── Cashier state machine ── */
+  const STATES = {
+    IDLE:      { label: 'Scan the next item or search for a product', icon: '🔍', cls: 'idle' },
+    ITEMS:     { label: 'Add items or proceed to payment',            icon: '🛒', cls: 'items' },
+    PAYMENT:   { label: 'Waiting for customer payment…',             icon: '⏳', cls: 'payment' },
+    CONFIRMING:{ label: 'Verifying payment…',                        icon: '🔄', cls: 'payment' },
+    SUCCESS:   { label: 'Payment received',                          icon: '✅', cls: 'success' },
+    PRINTING:  { label: 'Printing receipt…',                         icon: '🖨', cls: 'printing' },
+    COMPLETE:  { label: 'Ready for the next customer',               icon: '✓',  cls: 'complete' },
+    ERROR:     { label: 'Payment issue — choose an option below',    icon: '⚠',  cls: 'error' },
+  };
+
   /* ── State ── */
   const _s = {
-    merchantId:   '',
-    branchId:     'default',
-    cashierId:    '',
-    cashierName:  '',
-    shiftId:      null,
-    items:        [],          /* cart line items */
-    customer:     null,
-    discount:     { type: 'pct', value: 0 },
-    coupon:       null,        /* { code, discountAmount, description } */
-    loyaltyRedeem: 0,          /* points to redeem */
-    loyaltyData:  null,        /* from PosLoyalty.computeCheckoutLoyalty */
-    taxRate:      0.16,
-    parkedSales:  [],
-    selectedIdx:  -1,          /* keyboard-selected cart row */
-    saleStartTs:  0,           /* for queue metrics */
-    displayChannel: null,      /* BroadcastChannel to pos-display.html */
+    merchantId:        '',
+    branchId:          'default',
+    cashierId:         '',
+    cashierName:       '',
+    shiftId:           null,
+    items:             [],
+    customer:          null,
+    discount:          { type: 'pct', value: 0 },
+    coupon:            null,
+    loyaltyRedeem:     0,
+    loyaltyData:       null,
+    taxRate:           0.16,
+    parkedSales:       [],
+    selectedIdx:       -1,
+    saleStartTs:       0,
+    displayChannel:    null,
+    preferredPayment:  'mpesa',    /* merchant's preferred method */
+    queueMode:         false,
+    currentState:      'IDLE',
+    mpesaWatchTimer:   null,       /* interval handle for M-Pesa polling */
+    mpesaCountdownId:  null,       /* interval handle for countdown bar */
+    lastPaymentTotals: null,       /* kept for retry */
+    lastPaymentMethod: null,
   };
+
+  /* ── State machine ── */
+  function _setState(key) {
+    _s.currentState = key;
+    const def = STATES[key];
+    if (!def) return;
+    const strip = document.getElementById('cashier-strip');
+    const icon  = document.getElementById('strip-icon');
+    const msg   = document.getElementById('strip-msg');
+    if (strip) { strip.className = 'cashier-strip ' + def.cls; }
+    if (icon)  icon.textContent  = def.icon;
+    if (msg)   msg.textContent   = def.label;
+    /* Broadcast to customer display */
+    if (_s.displayChannel) _s.displayChannel.postMessage({ type: 'state', data: { state: key, label: def.label } });
+  }
 
   /* ── Init ── */
   async function init() {
@@ -1213,7 +1398,25 @@ const Checkout = (() => {
       _s.displayChannel = new BroadcastChannel('sokoni_pos_display');
     }
 
+    /* Preferred payment method */
+    _s.preferredPayment = settings.preferredPayment || 'mpesa';
+    _applyPreferredPayment(_s.preferredPayment);
+
+    /* Queue mode from settings */
+    if (settings.queueModeDefault === true) toggleQueueMode();
+
     _s.saleStartTs = Date.now();
+    _setState('IDLE');
+  }
+
+  function _applyPreferredPayment(method) {
+    document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('preferred'));
+    const map = { mpesa: 'pay-mpesa', cash: 'pay-cash', card: 'pay-card', wallet: 'pay-wallet' };
+    const cls = map[method];
+    if (cls) {
+      const btn = document.querySelector('.' + cls);
+      if (btn) btn.classList.add('preferred');
+    }
   }
 
   /* ── Clock ── */
@@ -1390,6 +1593,7 @@ const Checkout = (() => {
     _renderCart();
     _updateTotals();
     _broadcastDisplayUpdate();
+    _setState('ITEMS');
     /* Remove _isNew after animation */
     setTimeout(() => { const it = _s.items.find(i => i.productId === product.id); if (it) it._isNew = false; }, 300);
   }
@@ -1665,21 +1869,25 @@ const Checkout = (() => {
     }
 
     if (method === 'card') {
-      /* Card: confirm directly for now; future: terminal integration */
-      if (!confirm(`Process card payment of ${_kes(totals.total)}?`)) return;
+      _setState('PAYMENT');
+      const msg = document.getElementById('strip-msg');
+      if (msg) msg.textContent = 'Tap or insert customer\'s card on the terminal';
+      /* Proceed immediately — no confirm() dialog; card terminal handles auth */
       _finalize('card', [{ method: 'card', amount: totals.total }], totals);
       return;
     }
 
     if (method === 'wallet') {
       if (!_s.customer) { _toast('Identify customer first (F3)', 'warning'); return; }
-      if (!confirm(`Charge wallet: ${_kes(totals.total)} from ${_s.customer.name}?`)) return;
-      _finalize('wallet', [{ method: 'wallet', amount: totals.total }], totals);
+      _setState('PAYMENT');
+      /* Debit wallet immediately — customer already authenticated via loyalty scan */
+      _finalize('wallet', [{ method: 'wallet', amount: totals.total, customerId: _s.customer.id }], totals);
       return;
     }
 
     if (method === 'gift_card') {
-      const code = giftCode || prompt('Gift card code:');
+      const _gc = giftCode || (window.prompt('Gift card code:') || '').trim().toUpperCase();
+      const code = _gc;
       if (!code) return;
       _processGiftCard(code.trim().toUpperCase(), totals);
       return;
@@ -1687,68 +1895,193 @@ const Checkout = (() => {
   }
 
   async function _processGiftCard(code, totals) {
-    _showLoader('Checking gift card…');
+    _setState('PAYMENT');
     try {
       const gc = await PosLoyalty.checkGiftCard(code);
-      hideLoader();
-      if (!gc.valid) { _toast(gc.error || 'Gift card invalid', 'error'); return; }
+      if (!gc.valid) { _setState('ITEMS'); _toast(gc.error || 'Gift card invalid', 'error'); return; }
       if (gc.balance < totals.total) {
+        _setState('ITEMS');
         _toast(`Insufficient balance: KES ${gc.balance.toFixed(2)} — use split for remainder`, 'warning');
         return;
       }
-      if (!confirm(`Charge gift card ${code}: ${_kes(totals.total)}?`)) return;
       await PosLoyalty.redeemGiftCard(code, totals.total);
       _finalize('gift_card', [{ method: 'gift_card', code, amount: totals.total }], totals);
     } catch (err) {
-      hideLoader();
+      _setState('ITEMS');
       _toast(err.message || 'Gift card error', 'error');
     }
   }
 
-  /* M-Pesa */
+  /* M-Pesa — sends STK push then auto-detects payment, no manual confirm() */
   async function sendMpesa() {
     const phone  = document.getElementById('mpesa-phone').value.trim().replace(/\s/g,'');
     const totals = _updateTotals();
     if (!phone) { _toast('Enter phone number', 'warning'); return; }
 
-    const statusEl = document.getElementById('mpesa-status');
-    statusEl.className  = 'mpesa-status pending visible';
-    statusEl.innerHTML  = '<span class="mpesa-spinner">⏳</span> Sending STK push to ' + phone + '…';
+    _s.lastPaymentTotals = totals;
+    _s.lastPaymentMethod = 'mpesa';
+
+    const statusEl  = document.getElementById('mpesa-status');
+    const actionRow = document.getElementById('mpesa-action-row');
+    statusEl.className = 'mpesa-status pending visible';
+    statusEl.innerHTML = '<span class="mpesa-spinner">⏳</span> Sending STK push to ' + _e(phone) + '…';
     document.getElementById('mpesa-send-btn').disabled = true;
+    document.getElementById('mpesa-recovery').classList.remove('visible');
+    _setState('PAYMENT');
 
     try {
-      /* Use existing SokoniPay if available, otherwise direct IntaSend */
       if (window.SokoniPay) {
-        await new Promise((res, rej) => {
-          SokoniPay.platformBook({
-            providerName:  _s.merchantId,
-            category:      'pos_checkout',
-            serviceDesc:   `POS Sale — ${_s.items.length} item(s)`,
-            totalAmount:   totals.total,
-            depositPct:    100,
-            providerPhone: phone,
-            bookingDetails: { saleItems: _s.items.length, cashierId: _s.cashierId },
-            onSuccess: ref => { statusEl.className='mpesa-status success visible'; statusEl.textContent='✅ Payment confirmed'; setTimeout(() => { closeModal('mpesa-overlay'); _finalize('mpesa', [{ method:'mpesa', amount:totals.total, ref }], totals); }, 1200); res(); },
-            onFail:    err => { rej(new Error(err || 'Payment failed')); },
-          });
+        /* SokoniPay handles the push and calls onSuccess/onFail automatically */
+        SokoniPay.platformBook({
+          providerName:   _s.merchantId,
+          category:       'pos_checkout',
+          serviceDesc:    `POS Sale — ${_s.items.length} item(s)`,
+          totalAmount:    totals.total,
+          depositPct:     100,
+          providerPhone:  phone,
+          bookingDetails: { saleItems: _s.items.length, cashierId: _s.cashierId },
+          onSuccess: ref => {
+            _clearMpesaCountdown();
+            statusEl.className = 'mpesa-status success visible';
+            statusEl.textContent = '✅ Payment received';
+            _setState('CONFIRMING');
+            setTimeout(() => {
+              closeModal('mpesa-overlay');
+              _finalize('mpesa', [{ method:'mpesa', amount: totals.total, ref }], totals);
+            }, 800);
+          },
+          onFail: errMsg => {
+            _clearMpesaCountdown();
+            _showMpesaRecovery(errMsg || 'STK push was not completed');
+          },
+        });
+        /* Start the 90-second countdown regardless — UX progress indicator */
+        _startMpesaCountdown(90, () => {
+          if (_s.currentState === 'PAYMENT') {
+            _showMpesaRecovery('M-Pesa request timed out (90 seconds)');
+          }
         });
       } else {
-        /* Fallback: call posCompleteMpesa CF */
-        const fn = firebase.functions().httpsCallable('posSendMpesa');
-        await fn({ phone, amount: totals.total, merchantId: _s.merchantId });
-        statusEl.className  = 'mpesa-status pending visible';
-        statusEl.innerHTML  = '<span class="mpesa-spinner">⏳</span> Waiting for M-Pesa confirmation…';
-        /* Poll or wait for webhook — simplified: ask cashier to confirm */
-        const confirmed = confirm('Has customer confirmed payment on their phone?');
-        if (!confirmed) { document.getElementById('mpesa-send-btn').disabled = false; return; }
-        closeModal('mpesa-overlay');
-        _finalize('mpesa', [{ method:'mpesa', amount:totals.total, phone }], totals);
+        /* Direct CF path — send STK, then poll posCheckPaymentStatus */
+        const sendFn = firebase.functions().httpsCallable('posSendMpesa');
+        const sent   = await sendFn({ phone, amount: totals.total, merchantId: _s.merchantId });
+        const ref    = sent?.data?.ref || '';
+
+        statusEl.className = 'mpesa-status pending visible';
+        statusEl.innerHTML = '<span class="mpesa-spinner">⏳</span> Waiting for customer to approve on their phone…';
+        actionRow.style.display = 'none';
+
+        _startMpesaCountdown(90, () => _showMpesaRecovery('M-Pesa request timed out (90 seconds)'));
+        _startMpesaPoll(ref, phone, totals);
       }
     } catch (err) {
-      statusEl.className  = 'mpesa-status error visible';
-      statusEl.textContent = '✗ ' + (err.message || 'Payment failed — try again');
-      document.getElementById('mpesa-send-btn').disabled = false;
+      _clearMpesaCountdown();
+      _showMpesaRecovery(err.message || 'Failed to send M-Pesa request');
     }
+  }
+
+  function _startMpesaCountdown(seconds, onExpire) {
+    const bar   = document.getElementById('mpesa-bar');
+    const fill  = document.getElementById('mpesa-fill');
+    const label = document.getElementById('mpesa-timer-label');
+    if (!bar) return;
+    bar.classList.add('visible');
+    label.classList.add('visible');
+    let remaining = seconds;
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+    _clearMpesaCountdown();
+    _s.mpesaCountdownId = setInterval(() => {
+      remaining--;
+      const pct = Math.max(0, remaining / seconds * 100);
+      fill.style.transition = 'width 1s linear';
+      fill.style.width = pct + '%';
+      label.textContent = remaining + 's remaining';
+      if (remaining <= 10) fill.style.background = '#c62828';
+      document.getElementById('strip-timer').textContent = remaining + 's';
+      document.getElementById('strip-timer').classList.add('visible');
+      if (remaining <= 0) {
+        _clearMpesaCountdown();
+        onExpire();
+      }
+    }, 1000);
+  }
+
+  function _clearMpesaCountdown() {
+    if (_s.mpesaCountdownId) { clearInterval(_s.mpesaCountdownId); _s.mpesaCountdownId = null; }
+    if (_s.mpesaWatchTimer)  { clearInterval(_s.mpesaWatchTimer);  _s.mpesaWatchTimer  = null; }
+    const timer = document.getElementById('strip-timer');
+    if (timer) { timer.classList.remove('visible'); timer.textContent = ''; }
+    const bar = document.getElementById('mpesa-bar');
+    if (bar) bar.classList.remove('visible');
+    const label = document.getElementById('mpesa-timer-label');
+    if (label) label.classList.remove('visible');
+  }
+
+  function _startMpesaPoll(ref, phone, totals) {
+    _s.mpesaWatchTimer = setInterval(async () => {
+      try {
+        const fn  = firebase.functions().httpsCallable('posCheckPaymentStatus');
+        const res = await fn({ ref, merchantId: _s.merchantId });
+        if (res.data?.status === 'completed') {
+          _clearMpesaCountdown();
+          document.getElementById('mpesa-status').className = 'mpesa-status success visible';
+          document.getElementById('mpesa-status').textContent = '✅ Payment received';
+          _setState('CONFIRMING');
+          setTimeout(() => {
+            closeModal('mpesa-overlay');
+            _finalize('mpesa', [{ method:'mpesa', amount: totals.total, ref: res.data.transactionRef || ref, phone }], totals);
+          }, 800);
+        } else if (res.data?.status === 'failed') {
+          _clearMpesaCountdown();
+          _showMpesaRecovery(res.data.reason || 'Customer cancelled the payment');
+        }
+        /* 'pending' → keep polling */
+      } catch (_) { /* network hiccup — keep polling */ }
+    }, 3000);
+  }
+
+  function _showMpesaRecovery(msg) {
+    _setState('ERROR');
+    const statusEl = document.getElementById('mpesa-status');
+    statusEl.className = 'mpesa-status error visible';
+    statusEl.textContent = '✗ ' + msg;
+    document.getElementById('recovery-detail').textContent = msg;
+    document.getElementById('mpesa-recovery').classList.add('visible');
+    document.getElementById('mpesa-action-row').style.display = 'none';
+    document.getElementById('mpesa-send-btn').disabled = false;
+  }
+
+  function retryMpesa() {
+    document.getElementById('mpesa-recovery').classList.remove('visible');
+    document.getElementById('mpesa-action-row').style.display = '';
+    const statusEl = document.getElementById('mpesa-status');
+    statusEl.className = 'mpesa-status';
+    statusEl.textContent = '';
+    document.getElementById('mpesa-send-btn').disabled = false;
+    _setState('ITEMS');
+  }
+
+  function switchToCash() {
+    closeModal('mpesa-overlay');
+    _clearMpesaCountdown();
+    pay('cash');
+  }
+
+  function switchToCard() {
+    closeModal('mpesa-overlay');
+    _clearMpesaCountdown();
+    pay('card');
+  }
+
+  function cancelPaymentAttempt() {
+    closeModal('mpesa-overlay');
+    _clearMpesaCountdown();
+    document.getElementById('mpesa-action-row').style.display = '';
+    document.getElementById('mpesa-recovery').classList.remove('visible');
+    document.getElementById('mpesa-send-btn').disabled = false;
+    _setState(_s.items.length ? 'ITEMS' : 'IDLE');
+    _toast('Payment cancelled — items kept', 'info');
   }
 
   /* Cash */
@@ -1817,7 +2150,7 @@ const Checkout = (() => {
 
   /* ── Finalize sale ── */
   async function _finalize(method, payments, totals) {
-    _showLoader('Completing sale…');
+    _setState('CONFIRMING');
     const idempotencyKey = `${_s.merchantId}_${_s.cashierId}_${Date.now()}`;
     try {
       const fn = firebase.functions().httpsCallable('posCompleteCheckout');
@@ -1836,26 +2169,34 @@ const Checkout = (() => {
         grandTotal:    totals.total,
         metadata:      { checkoutStartedAt: _s.saleStartTs },
       });
-      hideLoader();
 
-      const { saleId, receipt, loyaltyAwarded } = res.data;
-      _printReceipt(receipt);
+      const { receipt, loyaltyAwarded } = res.data;
+      _setState('SUCCESS');
       _broadcastThankYou({ customerName: _s.customer?.name, loyaltyEarned: loyaltyAwarded });
-      _toast(`Sale complete! Receipt #${receipt.receiptNo}`, 'success');
-      _resetSale();
+
+      setTimeout(async () => {
+        _setState('PRINTING');
+        await _printReceipt(receipt);
+        _setState('COMPLETE');
+        _toast(`Receipt #${receipt.receiptNo}`, 'success');
+        const resetDelay = _s.queueMode ? 800 : 2500;
+        setTimeout(() => _resetSale(), resetDelay);
+      }, 600);
 
     } catch (err) {
-      hideLoader();
-      /* Offline / CF error: save locally */
       if (!navigator.onLine || err.code === 'unavailable') {
         await PosSales.park({
           items: _s.items, customer: _s.customer, payments, totals,
           status: 'pending_sync', pendingPayment: method, idempotencyKey,
         });
-        _printReceiptLocal(totals, method);
-        _toast('Offline: sale saved and will sync', 'warning');
-        _resetSale();
+        _setState('PRINTING');
+        await _printReceiptLocal(totals, method);
+        _toast('Offline: sale saved, will sync', 'warning');
+        _setState('COMPLETE');
+        const resetDelay = _s.queueMode ? 800 : 2500;
+        setTimeout(() => _resetSale(), resetDelay);
       } else {
+        _setState('ERROR');
         _toast('Checkout failed: ' + (err.message || 'Unknown error'), 'error');
       }
     }
@@ -1890,6 +2231,8 @@ const Checkout = (() => {
     _s.coupon   = null;
     _s.loyaltyRedeem = 0;
     _s.loyaltyData   = null;
+    _s.lastPaymentTotals = null;
+    _s.lastPaymentMethod = null;
     _s.saleStartTs   = Date.now();
     clearCustomer();
     document.getElementById('cart-rows').innerHTML = '';
@@ -1899,8 +2242,10 @@ const Checkout = (() => {
     ['split-mpesa','split-cash','split-card'].forEach(id => { document.getElementById(id).value = ''; });
     _renderCart();
     _updateTotals();
-    document.getElementById('search-input').focus();
+    _setState('IDLE');
     _broadcastDisplayUpdate();
+    document.getElementById('search-input').focus();
+    if (_s.displayChannel) _s.displayChannel.postMessage({ type: 'idle' });
   }
 
   /* ── Discount ── */
@@ -2053,6 +2398,19 @@ const Checkout = (() => {
     closeModal('camera-overlay');
   }
 
+  /* ── Queue mode ── */
+  function toggleQueueMode() {
+    _s.queueMode = !_s.queueMode;
+    document.body.classList.toggle('queue-mode', _s.queueMode);
+    const btn = document.getElementById('queue-btn');
+    if (btn) {
+      btn.innerHTML = _s.queueMode
+        ? 'Queue <span class="queue-badge">ON</span>'
+        : 'Queue';
+    }
+    _toast(_s.queueMode ? 'Queue Mode ON — minimum friction' : 'Queue Mode OFF', 'info');
+  }
+
   /* ── Keyboard shortcuts ── */
   function _onKey(e) {
     /* Ignore if typing in a text input */
@@ -2072,6 +2430,7 @@ const Checkout = (() => {
       case 'F10': e.preventDefault(); parkSale(); break;
       case 'F11': e.preventDefault(); openRefund(); break;
       case 'F12': e.preventDefault(); window.location.href = 'pos.html'; break;
+      case 'q': if (e.ctrlKey) { e.preventDefault(); toggleQueueMode(); } break;
       case 'Escape': closeAllModals(); break;
       case 'ArrowUp':   if (!inInput) { e.preventDefault(); _selectItem(-1); } break;
       case 'ArrowDown': if (!inInput) { e.preventDefault(); _selectItem(1); } break;
@@ -2133,10 +2492,14 @@ const Checkout = (() => {
     /* Payment */
     pay, sendMpesa, cashQuick, cashExact, calcChange, confirmCash,
     toggleSplit, confirmSplit,
+    /* M-Pesa guided flow */
+    retryMpesa, switchToCash, switchToCard, cancelPaymentAttempt,
     /* Discount */
     openDiscount, discType, previewDiscount, applyDiscount,
     /* Sale control */
     voidSale, parkSale, confirmPark, openParked,
+    /* Queue mode */
+    toggleQueueMode,
     /* Refund */
     openRefund,
     /* Camera */
