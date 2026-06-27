@@ -1408,7 +1408,7 @@ itemsEl.innerHTML = _itemsHTML.join("");
       if(inp) inp.value = saved.code;
       var saving = Math.round(subtotal * promoDiscount / 100);
       if(msg){
-        msg.innerHTML = '✅ <strong>' + saved.code + '</strong> applied — ' + (saved.discount > 0 ? saved.discount + '% off (save KES ' + saving.toLocaleString() + ')' : 'Free delivery applied!');
+        msg.innerHTML = '✅ <strong>' + _esc(saved.code) + '</strong> applied — ' + (saved.discount > 0 ? saved.discount + '% off (save KES ' + saving.toLocaleString() + ')' : 'Free delivery applied!');
         msg.style.color = "#71ff00";
       }
     }
@@ -2300,7 +2300,7 @@ function applyDiscount(){
   found.uses = (found.uses||0)+1;
   localStorage.setItem("sokoniPromoCodes", JSON.stringify(codes));
   const saving = Math.round(subtotal * promoDiscount/100);
-  if(msgEl){ msgEl.innerHTML=`✅ <strong>${found.code}</strong> applied — ${promoDiscount > 0 ? promoDiscount+"% off (save KES "+saving.toLocaleString()+")" : "Free delivery applied!"}`;  msgEl.style.color="#71ff00"; }
+  if(msgEl){ msgEl.innerHTML=`✅ <strong>${_esc(found.code)}</strong> applied — ${promoDiscount > 0 ? promoDiscount+"% off (save KES "+saving.toLocaleString()+")" : "Free delivery applied!"}`;  msgEl.style.color="#71ff00"; }
   updateTotals();
 }
 
