@@ -143,6 +143,42 @@ async function loginUser(){
         if(typeof SokoniAudit !== 'undefined')
             SokoniAudit.log(SokoniAudit.ACTIONS.LOGIN_SUCCESS, { email, role: profile.role || 'buyer' });
 
+        /* ── Google account linking ──
+           If the user arrived here because Google found their email already
+           registered with a password, link the Google credential now so both
+           providers work on the same account going forward.             */
+        if (window._pendingGoogleLink) {
+            try {
+                const { GoogleAuthProvider, linkWithCredential } = await import(
+                    'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
+                );
+                const pendingCred = GoogleAuthProvider.credentialFromError(
+                    window._pendingGoogleLink.error
+                );
+                if (pendingCred) {
+                    await linkWithCredential(cred.user, pendingCred);
+                    /* Record the new provider in Firestore (merge-safe) */
+                    try {
+                        const { doc, setDoc, serverTimestamp: _sts } = await import(
+                            'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
+                        );
+                        await setDoc(
+                            doc(window.firebaseDB, 'users', cred.user.uid),
+                            { googleLinked: true, googleLinkedAt: _sts() },
+                            { merge: true }
+                        );
+                    } catch (_) { /* non-fatal */ }
+                    if (typeof SokoniAudit !== 'undefined') {
+                        SokoniAudit.log('GOOGLE_ACCOUNT_LINKED', { email });
+                    }
+                }
+                window._pendingGoogleLink = null;
+            } catch (linkErr) {
+                /* Non-fatal — user is still signed in with password */
+                window._pendingGoogleLink = null;
+            }
+        }
+
         /* ── Employee account detection ── */
         if(profile.role === "employee" && profile.shopOwnerId){
             localStorage.setItem("sokoniEmployeeSession", JSON.stringify({
@@ -527,3 +563,216 @@ async function requestPasswordReset(){
 async function completePasswordReset(){
     showAuthMsg("Please use the reset link in your email to set a new password.", "info");
 }
+
+/* ══════════════════════════════════════════════════════════════
+   GOOGLE OAUTH
+   Supports:
+   • Desktop  → signInWithPopup
+   • Popup blocked → falls back to signInWithRedirect automatically
+   • Installed PWA / iOS Safari → signInWithRedirect from the start
+   • Account linking → if email already exists with password, links
+     Google after the user re-authenticates with their password
+══════════════════════════════════════════════════════════════ */
+
+/* Detect whether popup-based OAuth is reliable.
+   Installed PWAs (standalone display-mode) open auth popups in the
+   system browser — the result never returns to the app context.
+   iOS Safari (any mode) also has popup reliability issues. */
+function _isPopupSupported() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                      || window.navigator.standalone === true;
+    if (isStandalone) return false;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    return !isIOS;
+}
+
+/* Safely update the text span inside the Google button */
+function _googleBtnLabel(btn, text) {
+    if (!btn) return;
+    const span = btn.querySelector('.g-btn-text');
+    if (span) span.textContent = text;
+    else btn.textContent = text;
+}
+
+/* Reset Google button to its default ready state */
+function _resetGoogleBtn() {
+    const btn = document.getElementById('googleSignInBtn');
+    if (!btn) return;
+    btn.disabled = false;
+    _googleBtnLabel(btn, 'Continue with Google');
+}
+
+/* Map Firebase Auth error codes to user-friendly messages */
+function _googleAuthErr(code) {
+    switch (code) {
+        case 'auth/popup-blocked':
+            return 'Popup blocked. Trying redirect…';
+        case 'auth/popup-closed-by-user':
+        case 'auth/cancelled-popup-request':
+            return ''; /* silent — user cancelled intentionally */
+        case 'auth/account-exists-with-different-credential':
+            return 'This email already has a password account. Sign in with your password to link Google.';
+        case 'auth/network-request-failed':
+            return 'Connection error. Check your internet and try again.';
+        case 'auth/user-disabled':
+            return 'This account has been disabled. Contact support.';
+        case 'auth/too-many-requests':
+            return 'Too many attempts. Please wait a moment.';
+        case 'auth/operation-not-allowed':
+            return 'Google sign-in is not enabled. Contact support.';
+        default:
+            return 'Google sign-in failed. Please try again.';
+    }
+}
+
+/* Called after a successful Google sign-in (popup or redirect).
+   firebase.js's onAuthStateChanged handles Firestore — we handle
+   localStorage sync, analytics, and redirect here. */
+async function _handleGoogleResult(result) {
+    const user = result.user;
+
+    /* Small delay so firebase.js's onAuthStateChanged can populate localStorage */
+    await new Promise(resolve => setTimeout(resolve, 900));
+
+    /* Fallback: write minimal profile if onAuthStateChanged was too slow */
+    if (!localStorage.getItem('sokoniUser')) {
+        const parts = (user.displayName || '').split(' ');
+        const fallback = {
+            uid:          user.uid,
+            name:         user.displayName || user.email.split('@')[0],
+            firstName:    parts[0] || '',
+            lastName:     parts.slice(1).join(' ') || '',
+            email:        user.email,
+            photoURL:     user.photoURL || '',
+            provider:     'google',
+            emailVerified: user.emailVerified,
+            roles:        ['buyer'],
+            accountStatus: 'active',
+        };
+        localStorage.setItem('sokoniUser', JSON.stringify(fallback));
+        localStorage.setItem('loggedIn', 'true');
+    }
+
+    /* SokoniSync */
+    if (window.SokoniSync && window.firebaseDB) {
+        window.SokoniSync.init(window.firebaseDB, user.uid);
+        window.SokoniSync.pull(user.uid);
+    } else if (window.firebaseDB) {
+        window._sokoniSyncPending = { db: window.firebaseDB, uid: user.uid };
+    }
+
+    /* Analytics */
+    if (typeof sokoniTrackLogin === 'function') sokoniTrackLogin();
+    if (typeof SokoniAudit !== 'undefined') {
+        SokoniAudit.log(SokoniAudit.ACTIONS.LOGIN_SUCCESS, {
+            email: user.email, provider: 'google'
+        });
+    }
+
+    /* Sessions */
+    if (window.SokoniSessions && window.SokoniSessions.createSession) {
+        window.SokoniSessions.createSession(user.email).catch(() => {});
+    }
+
+    showAuthMsg('Signed in with Google! Taking you home…', 'success');
+    const btn = document.getElementById('googleSignInBtn');
+    if (btn) { btn.disabled = true; _googleBtnLabel(btn, '✓ Signed in'); }
+
+    const _raw  = sessionStorage.getItem('sokoniLoginRedirect') || 'index.html';
+    sessionStorage.removeItem('sokoniLoginRedirect');
+    const _safe = /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(_raw) && !_raw.includes('//') ? _raw : 'index.html';
+    setTimeout(() => { window.location.href = _safe; }, 1200);
+}
+
+/* Handle auth/account-exists-with-different-credential.
+   Stores the pending Google error on window so loginUser() can
+   link the credential after a successful password sign-in. */
+function _handleGoogleLinkError(err) {
+    const email = (err.customData && err.customData.email) || '';
+    /* Preserve the error object — GoogleAuthProvider.credentialFromError()
+       needs it later in loginUser() */
+    window._pendingGoogleLink = { error: err, email };
+
+    const emailField = document.getElementById('loginEmail');
+    if (emailField && email) emailField.value = email;
+
+    showAuthMsg(
+        'This email already has a password account. ' +
+        'Sign in below to link your Google account automatically.',
+        'error'
+    );
+    _resetGoogleBtn();
+}
+
+/* Main entry point — called by onclick="signInWithGoogle()" */
+async function signInWithGoogle() {
+    /* Offline guard */
+    if (!navigator.onLine) {
+        showAuthMsg('Google Sign-In requires an internet connection.', 'error');
+        return;
+    }
+    if (!window.firebaseAuth) {
+        showAuthMsg('Firebase not ready. Please refresh the page.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('googleSignInBtn');
+    if (btn) { btn.disabled = true; _googleBtnLabel(btn, 'Connecting to Google…'); }
+
+    try {
+        const {
+            GoogleAuthProvider,
+            signInWithPopup,
+            signInWithRedirect,
+        } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+
+        const provider = new GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+        provider.setCustomParameters({ prompt: 'select_account' });
+
+        if (_isPopupSupported()) {
+            try {
+                const result = await signInWithPopup(window.firebaseAuth, provider);
+                await _handleGoogleResult(result);
+            } catch (popupErr) {
+                if (popupErr.code === 'auth/popup-blocked') {
+                    /* Transparent fallback to redirect */
+                    _googleBtnLabel(btn, 'Redirecting to Google…');
+                    await signInWithRedirect(window.firebaseAuth, provider);
+                } else if (popupErr.code === 'auth/account-exists-with-different-credential') {
+                    _handleGoogleLinkError(popupErr);
+                } else if (popupErr.code === 'auth/popup-closed-by-user' ||
+                           popupErr.code === 'auth/cancelled-popup-request') {
+                    _resetGoogleBtn(); /* silent */
+                } else {
+                    throw popupErr;
+                }
+            }
+        } else {
+            /* PWA / iOS — redirect flow */
+            _googleBtnLabel(btn, 'Redirecting to Google…');
+            await signInWithRedirect(window.firebaseAuth, provider);
+        }
+    } catch (err) {
+        _resetGoogleBtn();
+        const msg = _googleAuthErr(err.code);
+        if (msg) showAuthMsg(msg, 'error');
+    }
+}
+
+/* Receive redirect result dispatched by firebase.js after getRedirectResult() */
+window.addEventListener('sokoniGoogleRedirectDone', async function(e) {
+    await _handleGoogleResult(e.detail);
+});
+
+window.addEventListener('sokoniGoogleRedirectError', function(e) {
+    const err = e.detail;
+    if (err.code === 'auth/account-exists-with-different-credential') {
+        _handleGoogleLinkError(err);
+    } else {
+        const msg = _googleAuthErr(err.code);
+        if (msg) showAuthMsg(msg, 'error');
+        _resetGoogleBtn();
+    }
+});

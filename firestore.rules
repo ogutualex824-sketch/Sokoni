@@ -109,6 +109,22 @@ service cloud.firestore {
     }
 
     /*
+     * noProviderForgery()
+     * When a client writes 'provider' or 'providers', the value must
+     * match what Firebase Auth actually authenticated with.
+     * This prevents a client from claiming to be a Google user when
+     * they authenticated via password (or vice versa).
+     */
+    function noProviderForgery() {
+      let data = request.resource.data;
+      // If writing 'provider' field, it must match the token's sign-in provider
+      return (!data.keys().hasAny(['provider'])
+              || data.provider == request.auth.token.firebase.sign_in_provider
+              || data.provider == 'google'   && request.auth.token.firebase.sign_in_provider == 'google.com'
+              || data.provider == 'password' && request.auth.token.firebase.sign_in_provider == 'password');
+    }
+
+    /*
      * validPrice(field)
      * Ensures a numeric price/amount field is a positive number.
      */
@@ -143,12 +159,17 @@ service cloud.firestore {
     ══════════════════════════════════════════════════════════════ */
     match /users/{userId} {
       allow read:   if isAdmin() || (isAuthed() && request.auth.uid == userId);
-      allow create: if isAuthed() && request.auth.uid == userId && noAdminFields();
+      allow create: if isAuthed()
+                    && request.auth.uid == userId
+                    && noAdminFields()
+                    && noPrivilegeEscalation()
+                    && noProviderForgery();
       allow update: if isAdmin()
                     || (isAuthed() && request.auth.uid == userId
                         && uidUnchanged()
                         && noAdminFields()
-                        && noPrivilegeEscalation());
+                        && noPrivilegeEscalation()
+                        && noProviderForgery());
       allow delete: if isAdmin();
     }
 

@@ -271,3 +271,63 @@ body{
   .auth-input{padding:11px 12px;font-size:16px;}
   .auth-btn{padding:12px;font-size:14px;}
 }
+
+/* ══════════════════════════════════════════════════════════════
+   GOOGLE OAUTH BUTTON + DIVIDER
+══════════════════════════════════════════════════════════════ */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  font-size: 11px;
+  color: rgba(255,255,255,0.28);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.09);
+}
+
+.auth-google-btn {
+  width: 100%;
+  padding: 14px 16px;
+  background: #ffffff;
+  color: #3c4043;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1.5px solid #dadce0;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: inherit;
+  transition: background .2s, box-shadow .2s, border-color .2s, transform .15s;
+  margin-top: 4px;
+  letter-spacing: .01em;
+  -webkit-tap-highlight-color: transparent;
+}
+.auth-google-btn:hover {
+  background: #f8f9fa;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+  border-color: #c6c9cc;
+}
+.auth-google-btn:active { transform: scale(0.98); }
+.auth-google-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+.auth-google-btn svg { flex-shrink: 0; }
+.auth-google-btn .g-btn-text { flex: 1; text-align: center; }
+
+@media (max-width: 380px) {
+  .auth-google-btn { font-size: 13px; padding: 12px 14px; }
+}

@@ -7,7 +7,10 @@ import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.2/fire
 import {
   getAuth,
   onAuthStateChanged,
-  signOut
+  signOut,
+  GoogleAuthProvider,
+  getRedirectResult,
+  linkWithCredential,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore }    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage }      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
@@ -51,6 +54,40 @@ window.firebaseDB      = db;
 window.firebaseStorage = storage;
 
 /* ══════════════════════════════════════════════════════════════════
+   GOOGLE REDIRECT RESULT
+   After signInWithRedirect() the browser returns to this page.
+   getRedirectResult() resolves with the credential (or null if no
+   redirect was pending).  We dispatch custom events so auth.js
+   (non-module) can handle the result without a direct import.
+══════════════════════════════════════════════════════════════════ */
+(async () => {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
+      window.dispatchEvent(
+        new CustomEvent("sokoniGoogleRedirectDone", { detail: result })
+      );
+    }
+  } catch (err) {
+    /* Ignore no-op codes; surface real errors to auth.js */
+    const silent = [
+      "auth/null-user",
+      "auth/no-auth-event",
+      "auth/operation-not-supported-in-this-environment",
+    ];
+    if (!silent.includes(err.code)) {
+      /* For account-linking errors, attach the credential for auth.js */
+      if (err.code === "auth/account-exists-with-different-credential") {
+        err._pendingCred = GoogleAuthProvider.credentialFromError(err);
+      }
+      window.dispatchEvent(
+        new CustomEvent("sokoniGoogleRedirectError", { detail: err })
+      );
+    }
+  }
+})();
+
+/* ══════════════════════════════════════════════════════════════════
    AUTH STATE OBSERVER
    Keeps localStorage in sync with the real Firebase Auth session.
    Every page benefits: non-module scripts reading loggedIn/sokoniUser
@@ -65,28 +102,70 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     localStorage.setItem("loggedIn", "true");
 
+    /* Determine sign-in provider from Auth token */
+    const providerId = user.providerData?.[0]?.providerId || "password";
+    const isGoogle   = providerId === "google.com";
+
     try {
       const { getDoc, setDoc, doc, serverTimestamp } = await import(
         "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
       );
       const snap = await getDoc(doc(db, "users", user.uid));
+
       if (snap.exists()) {
-        /* Refresh profile from Firestore into localStorage */
-        localStorage.setItem("sokoniUser", JSON.stringify(snap.data()));
+        /* ── Existing user ─────────────────────────────────────────
+           Load the full profile into localStorage (source of truth).
+           For Google users: merge photoURL if it was previously empty.
+           NEVER overwrite roles, seller data, wallet, subscriptions.  */
+        const existing = snap.data();
+        localStorage.setItem("sokoniUser", JSON.stringify(existing));
+
+        if (isGoogle) {
+          const safeUpdates = { lastLogin: serverTimestamp() };
+          if (!existing.photoURL && user.photoURL) {
+            safeUpdates.photoURL = user.photoURL;
+          }
+          /* Record that this account now has google as a provider */
+          if (!existing.providers || !existing.providers.includes("google")) {
+            safeUpdates.providers = [...(existing.providers || ["password"]), "google"];
+          }
+          setDoc(doc(db, "users", user.uid), safeUpdates, { merge: true }).catch(() => {});
+        }
       } else {
-        /* Profile missing — create it now from Firebase Auth data */
-        const _joinedNow = new Date();
+        /* ── New user ──────────────────────────────────────────────
+           Create the authoritative Firestore profile.
+           Google users get firstName/lastName/photoURL/emailVerified.
+           Roles default to ['buyer'] — never write admin-protected
+           fields ('role' singular is blocked by Firestore rules).      */
+        const parts    = (user.displayName || "").split(" ");
+        const firstName = parts[0] || "";
+        const lastName  = parts.slice(1).join(" ") || "";
+        const _now     = new Date();
+
         const profile = {
-          uid:             user.uid,
-          name:            user.displayName || user.email.split("@")[0],
-          email:           user.email,
-          registeredAs:    { user: true },
-          roles:           ['user'],
-          role:            'user',
-          joinedAt:        _joinedNow.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
-          joinedTimestamp: _joinedNow.getTime(),
+          uid:                user.uid,
+          name:               user.displayName || user.email.split("@")[0],
+          email:              user.email,
+          registeredAs:       { user: true },
+          roles:              ["buyer"],
+          accountStatus:      "active",
+          onboardingCompleted: false,
+          joinedAt:           _now.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
+          joinedTimestamp:    _now.getTime(),
+          ...(isGoogle && {
+            firstName,
+            lastName,
+            photoURL:      user.photoURL  || "",
+            provider:      "google",
+            providers:     ["google"],
+            emailVerified: user.emailVerified,
+          }),
         };
-        await setDoc(doc(db, "users", user.uid), { ...profile, createdAt: serverTimestamp() });
+        await setDoc(doc(db, "users", user.uid), {
+          ...profile,
+          createdAt: serverTimestamp(),
+          lastLogin: serverTimestamp(),
+        });
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
       }
     } catch (e) {
