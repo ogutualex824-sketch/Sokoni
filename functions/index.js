@@ -7379,3 +7379,34 @@ exports.handleFailedDelivery      = dispatch.handleFailedDelivery;
 exports.detectGPSFraud            = dispatch.detectGPSFraud;
 exports.optimizeBatchRoute        = dispatch.optimizeBatchRoute;
 exports.aggregateDeliveryAnalytics= dispatch.aggregateDeliveryAnalytics;
+
+/* ══════════════════════════════════════════════════════════════════
+   SOKONI FinOS — Financial Operating System  v1.0
+   18 Cloud Functions: double-entry ledger, commission engine,
+   wallet management, payout processing (IntaSend B2C), refunds,
+   subscription + ad billing, fraud detection, daily snapshots,
+   ledger reconciliation, financial reports, AI insights (Claude),
+   IntaSend webhook, admin reversal + adjustment, tax breakdown.
+   Security: server-side only calculations, RBAC enforced in CF,
+   idempotency on every write, Firestore transactions for balances.
+══════════════════════════════════════════════════════════════════ */
+const finos = require("./finos");
+
+exports.recordPayment           = finos.recordPayment;
+exports.processRefund           = finos.processRefund;
+exports.requestPayout           = finos.requestPayout;
+exports.processPendingPayouts   = finos.processPendingPayouts;
+exports.applyPromoCode          = finos.applyPromoCode;
+exports.createPromotion         = finos.createPromotion;
+exports.billingSubscriptions    = finos.billingSubscriptions;
+exports.billingAdvertising      = finos.billingAdvertising;
+exports.detectFinancialFraud    = finos.detectFinancialFraud;
+exports.generateDailySnapshot   = finos.generateDailySnapshot;
+exports.reconcileLedger         = finos.reconcileLedger;
+exports.getFinancialReport      = finos.getFinancialReport;
+exports.getAIFinancialInsights  = finos.getAIFinancialInsights;
+exports.webhookPaymentCallback  = finos.webhookPaymentCallback;
+exports.reverseTransaction      = finos.reverseTransaction;
+exports.adjustWallet            = finos.adjustWallet;
+exports.getWalletStatement      = finos.getWalletStatement;
+exports.calculateTaxBreakdown   = finos.calculateTaxBreakdown;

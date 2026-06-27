@@ -4179,6 +4179,96 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       FINOS — Financial Operating System  v1.0
+       All financial data is CF-only for writes. Reads follow RBAC:
+       entity reads own; admin reads all.
+    ══════════════════════════════════════════════════════════════ */
+
+    /* Global double-entry ledger — immutable. CF writes only. */
+    match /ledger/{txId} {
+      allow read:   if isAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* Per-entity wallet balances */
+    match /wallets/{entityId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && request.auth.uid == entityId);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+
+      /* Wallet transaction subcollection */
+      match /transactions/{txId} {
+        allow read:   if isAdmin()
+                      || (isAuthed() && request.auth.uid == entityId);
+        allow write:  if false;
+      }
+    }
+
+    /* Commission rules — admin CRUD; signed-in users read for preview */
+    match /commissionRules/{ruleId} {
+      allow read:   if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* Payouts — entity reads own, admin reads all, CF writes */
+    match /payouts/{payoutId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.entityId == request.auth.uid);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* Promotions — admin creates; signed-in users read active promos */
+    match /promotions/{promoId} {
+      allow read:   if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* Promotion usage records — buyer reads own, admin reads all, CF writes */
+    match /promotionUsage/{usageId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.buyerUid == request.auth.uid);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* Tax records — admin read only */
+    match /taxRecords/{taxId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* Daily financial snapshots — admin read only */
+    match /finosSnapshots/{snapId} {
+      allow read:   if isAdmin();
+      allow write:  if false;
+    }
+
+    /* Idempotency keys — CF-only; 7-day TTL enforced in CF */
+    match /finosIdempotency/{key} {
+      allow read:   if false;
+      allow write:  if false;
+    }
+
+    /* Immutable audit log — admin read only; write via CF only */
+    match /finosAuditLog/{logId} {
+      allow read:   if isAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
   }
 }
 

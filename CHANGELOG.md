@@ -1,4 +1,122 @@
-﻿## [2026-06-27] — Logistics Engine v1.1 — Full Spec Completion
+﻿## [2026-06-27] — FinOS — Financial Operating System v1.0
+
+### Summary
+Implements a complete enterprise-grade Financial Operating System replacing all placeholder and manual financial processes. Every transaction on the platform is now accounted for automatically via double-entry accounting ledger, commission engine, wallet management, automated payouts, refund processing, subscription & ad billing, fraud detection, daily snapshots, AI-powered insights via Claude, and an admin financial command center.
+
+### Architecture — Design Decisions
+- **Integer minor currency units**: ALL money stored as KES integer cents (100 = KES 1.00). No floating-point arithmetic anywhere in the financial stack.
+- **Double-entry accounting**: Every financial event produces a debit + credit pair in `ledger/{txId}`. Ledger reconciliation runs nightly at 01:30 EAT and flags any imbalance.
+- **Server-side only**: No amount, commission, tax, or balance calculation on the client. All CFs use `admin.firestore()` — never the client SDK.
+- **Idempotency**: Every CF checks `finosIdempotency/{key}` (SHA-256 of logical parts) before processing. 7-day TTL prevents duplicate transactions on retry.
+- **Firestore transactions**: All wallet balance mutations run inside `db.runTransaction()` — prevents race conditions under concurrent writes.
+- **Zero new composite indexes**: All FinOS queries use single-field equality or subcollection patterns to stay within the 200-index limit (currently 199/200).
+
+### New Files
+| File | Purpose |
+|---|---|
+| `functions/finos-utils.js` | Shared server-side utilities: accounts, tax config, ledger, wallet, commission, VAT/WHT, promo validation, fraud check, audit log, IntaSend B2C |
+| `functions/finos.js` | 18 Gen2 Cloud Functions (see below) |
+| `sokoni-finos.js` | Client library: formatters, read helpers, CF delegates; no financial calculations |
+| `finos.html` | Admin financial command center: 12 panels — Overview, Ledger, Payouts, Wallets, Promotions, Reports, AI Insights, Fraud Alerts, Audit Log, Commission Rules, Admin Tools |
+
+### 18 Cloud Functions (`functions/finos.js`)
+| CF | Type | Purpose |
+|---|---|---|
+| `recordPayment` | callable | Distributes earnings via ledger + wallet credits |
+| `processRefund` | callable | Full/partial refund with ledger reversal + seller clawback |
+| `requestPayout` | callable | Seller/rider payout to M-Pesa via IntaSend B2C |
+| `processPendingPayouts` | scheduled 30min | Batch processes pending payouts with 3-attempt retry |
+| `applyPromoCode` | callable | Server-side promo validation + usage recording |
+| `createPromotion` | callable (admin) | Creates promotion with funding split (platform/seller/shared) |
+| `billingSubscriptions` | scheduled daily 06:00 EAT | Auto-charges active subscriptions; 3-failure grace → suspend |
+| `billingAdvertising` | scheduled daily 07:00 EAT | Deducts daily ad spend; pauses campaign on budget exhaustion |
+| `detectFinancialFraud` | scheduled hourly | Scans refund spikes, same-phone payouts, promo abuse |
+| `generateDailySnapshot` | scheduled daily 00:30 EAT | Aggregates all ledger data into `finosSnapshots` |
+| `reconcileLedger` | scheduled daily 01:30 EAT | Verifies double-entry balance = 0; alerts on imbalance |
+| `getFinancialReport` | callable (admin) | Date-range report from daily snapshots |
+| `getAIFinancialInsights` | callable (admin) | Claude claude-haiku-4-5 analysis: health score, risks, recommendations, forecast |
+| `webhookPaymentCallback` | onRequest | IntaSend webhook: verifies + triggers payment recording |
+| `reverseTransaction` | callable (admin) | Creates offsetting ledger entry; fully audited |
+| `adjustWallet` | callable (admin) | Manual wallet credit/debit; mandatory reason + audit trail |
+| `getWalletStatement` | callable | Paginated wallet transaction history (50 per page) |
+| `calculateTaxBreakdown` | callable | Server-side commission + VAT + WHT preview for any order |
+
+### Commission Engine (`finos-utils.js`)
+Priority: seller-specific rule → hub rule → category rule → global default → hardcoded fallback.
+Commission holiday support: `commission_holiday` rule type with date range and 0% rate.
+
+### Default Commission Rates
+| Category | Rate |
+|---|---|
+| marketplace | 10% |
+| services | 15% |
+| food_delivery | 8% |
+| digital_products | 20% |
+| property | 3% |
+| vehicles | 5% |
+| jobs | 15% |
+| healthcare | 12% |
+| education | 15% |
+| subscriptions/advertising | 100% (full platform revenue) |
+
+### Tax Engine
+- **VAT**: 16% on commission income. Exempt categories: property, jobs, healthcare, education.
+- **WHT** (Withholding Tax): 5% deducted from seller payouts at time of B2C transfer.
+- All tax entries recorded in `ledger` with `type: 'tax'` and `metadata.taxType: 'VAT'|'WHT'`.
+
+### Wallet Architecture
+Three wallet fields per entity:
+- `availableBalance` — withdrawable balance (integer cents)
+- `heldBalance` — held pending payout processing
+- `lifetimeEarnings` / `lifetimeWithdrawals` — historical totals
+- Backward-compatible: existing `balance` field updated via merge writes so all existing code continues to work.
+
+### New Firestore Collections (10)
+| Collection | Description |
+|---|---|
+| `ledger/{txId}` | Global double-entry ledger (immutable) |
+| `wallets/{entityId}/transactions/{txId}` | Per-wallet transaction history (subcollection) |
+| `commissionRules/{ruleId}` | Custom commission overrides |
+| `payouts/{payoutId}` | Payout queue + state machine |
+| `promotions/{promoId}` | Coupon / cashback / referral rules |
+| `promotionUsage/{usageId}` | Per-user promotion consumption tracking |
+| `taxRecords/{taxId}` | Tax filing records |
+| `finosSnapshots/{snapId}` | Daily financial aggregates |
+| `finosIdempotency/{key}` | Idempotency store (7-day TTL) |
+| `finosAuditLog/{logId}` | Immutable admin action log |
+
+### Firestore Security Rules
+10 new rule blocks added. All financial collections are CF-write only. Wallets: entity reads own. Ledger/audit/snapshots: admin read only. Promotions/commission rules: signed-in users read.
+
+### Security Considerations
+- No client can write to `ledger`, `wallets`, `payouts`, or `finosAuditLog` — all writes via authenticated CFs.
+- `finosIdempotency` is fully locked (no read or write from client).
+- Admin-only CFs (`reverseTransaction`, `adjustWallet`, `createPromotion`, `getFinancialReport`) verify `token.admin || token.superAdmin`.
+- Refund CF validates refund amount cannot exceed original order amount (server-side).
+- IntaSend B2C private key read from Firebase Secret Manager (`INTASEND_PRIVATE_KEY`).
+- AI Insights CF reads `ANTHROPIC_API_KEY` from Secret Manager.
+
+### Performance Considerations
+- All scheduled CFs fan out serially to avoid Firestore contention (batch size limited by query).
+- Daily snapshot uses a single ledger scan rather than per-collection queries.
+- Wallet statement is paginated (max 50 per page) with cursor-based pagination.
+- Fraud detection is async (scheduled hourly) — does not add latency to payment flow.
+
+### Deployment Notes
+1. Deploy `functions/finos.js` + `functions/finos-utils.js` with: `firebase deploy --only functions:recordPayment,functions:processRefund,...` (or full `firebase deploy --only functions`)
+2. Ensure `INTASEND_PRIVATE_KEY` and `ANTHROPIC_API_KEY` are provisioned in Firebase Secret Manager.
+3. Add `finos.html` to `firebase.json` hosting rewrites / `cleanUrls` already handles this.
+4. No new Firestore indexes required — all queries use single-field equality or subcollection patterns.
+
+### SW Version
+`sokoni-20260627220000`
+
+### CF Count
+484 exports in `functions/index.js` (466 previous + 18 new FinOS).
+
+---
+
+## [2026-06-27] — Logistics Engine v1.1 — Full Spec Completion
 
 ### Summary
 Implements all remaining spec items from the Logistics Automation & Dispatch System that were not covered in v1.0 (commit 3573ae7). Adds completion rate + cancellation rate to dispatch scoring, QR code proof of delivery, canvas signature capture, buyer CSAT rating, multi-channel WhatsApp + email notifications, rider wallet balance, heat map analytics, and excessive cancellation auto-suspension.
