@@ -15,11 +15,11 @@
   var style = document.createElement('style');
   style.textContent = [
     '#kassBtn{position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;',
-    'background:#71ff00;border:none;cursor:pointer;z-index:9999;',
+    'background:#0f0f0f;border:2px solid #71ff00;cursor:pointer;z-index:9999;',
     'display:flex;align-items:center;justify-content:center;',
-    'box-shadow:0 4px 20px rgba(113,255,0,0.4);transition:transform 0.2s;}',
-    '#kassBtn:hover{transform:scale(1.08);}',
-    '#kassBtn svg{width:26px;height:26px;}',
+    'box-shadow:0 4px 20px rgba(113,255,0,0.25);transition:transform 0.2s;}',
+    '#kassBtn:hover{transform:scale(1.08);background:#1a1a1a;}',
+    '#kassBtn svg{width:26px;height:26px;stroke:#71ff00;}',
     '#kassModal{position:fixed;bottom:148px;right:12px;width:320px;max-height:480px;',
     'background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:18px;',
     'display:none;flex-direction:column;z-index:9998;',
@@ -62,7 +62,7 @@
   var btn = document.createElement('button');
   btn.id = 'kassBtn';
   btn.setAttribute('aria-label', 'Ask KASS AI');
-  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#71ff00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
   var modal = document.createElement('div');
   modal.id = 'kassModal';
