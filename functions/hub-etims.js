@@ -43,7 +43,7 @@ const ETIMS_HOST       = ETIMS_ENV === "production"
   : "etims-api-sandbox.kra.go.ke";
 
 const db      = admin.firestore();
-const bucket  = admin.storage().bucket();
+function _bucket() { return admin.storage().bucket(); }
 
 /* ── Document-type registry ────────────────────────────────────────── */
 const DOC_TYPES = {
@@ -418,7 +418,7 @@ td{padding:6px 8px;border:1px solid #ddd}
 
 /* ── Store HTML to Firebase Storage ────────────────────────────────── */
 async function storeHtml(path, html) {
-  const file = bucket.file(path);
+  const file = _bucket().file(path);
   await file.save(html, { contentType: "text/html; charset=utf-8", resumable: false });
   const [url] = await file.getSignedUrl({ action: "read", expires: "2099-01-01" });
   return url;
