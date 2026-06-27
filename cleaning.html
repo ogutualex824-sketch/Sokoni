@@ -424,6 +424,7 @@
 </nav>
 
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 /* ── PROVIDER DATA ── */
 const PROVIDERS = [
   { id:'CL01', name:'ShineClean Services', emoji:'✨', location:'nairobi', locationLabel:'Nairobi (All Areas)', rate:'KES 3,500', rateType:'per job', rating:4.9, jobs:600, phone:'0778901217', verified:true, available:true,
@@ -629,7 +630,7 @@ function submitBooking() {
     window.open(`https://wa.me/${_waNum}?text=${encodeURIComponent(msg)}`, '_blank');
   }
 
-  if (msgEl) { msgEl.innerHTML = `✅ Booking <strong style="color:#00d4ff;">${booking.id}</strong> sent via WhatsApp! The cleaner will confirm shortly.`; msgEl.style.color = '#22c55e'; }
+  if (msgEl) { msgEl.innerHTML = `✅ Booking <strong style="color:#00d4ff;">${_esc(booking.id)}</strong> sent via WhatsApp! The cleaner will confirm shortly.`; msgEl.style.color = '#22c55e'; }
 
   if(window.SokoniInvoice){
     setTimeout(()=>{

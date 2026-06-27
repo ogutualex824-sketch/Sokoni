@@ -336,6 +336,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0805;color:white;
 </nav>
 
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const HS_TYPES = [
   {key:'plumbing',emoji:'🔧',label:'Plumbing'},
   {key:'electrical',emoji:'⚡',label:'Electrical'},
@@ -484,7 +485,7 @@ function bookHomeService(){
   } else {
     window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
   }
-  if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong>${ref}</strong>`;msgEl.style.color='#f59e0b';}
+  if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#f59e0b';}
   /* Firestore write — fire-and-forget */
   _hsFireWrite('homeServiceBookings',{ref,name,phone,service,loc,date,description:desc,status:'pending',hub:'home-services'});
   /* Invoice */

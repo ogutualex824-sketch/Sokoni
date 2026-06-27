@@ -1896,7 +1896,7 @@ function confirmConsultation(lawyerId){
       `⚖️ *SOKONI Legal Hub  Consultation Request*\n\nRef: ${ref}\n\n👤 Client: ${name}\n📞 Phone: ${phone}\n🔍 Matter: ${matter}\n📅 Date: ${date||"Flexible"}\n🕐 Time: ${time||"TBD"}\n${mpesaCode?`💚 Deposit paid: ${mpesaCode}\n`:""}\n${details?`Details:\n${details}\n\n`:""}`+
       `I found you on SOKONI Legal Hub and would like to book a consultation. Please confirm your availability. Thank you!`
     );
-    if(msgEl){ msgEl.innerHTML=`✅ Opening WhatsApp... Booking ref: <strong>${ref}</strong>`; msgEl.style.color="#71ff00"; }
+    if(msgEl){ msgEl.innerHTML=`✅ Opening WhatsApp... Booking ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color="#71ff00"; }
     /* Track lead fee — recorded when WhatsApp contact is actually shared */
     (async function(){try{
       const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
@@ -3475,10 +3475,10 @@ function checkExistingApp(){
   const info = document.getElementById("existingAppInfo");
   if(info){
     const date = new Date(app.createdAt).toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
-    info.innerHTML = `<strong style="color:white;">Advocate ${app.name}</strong>  Roll #${app.rollNo}<br>
-      ${SPEC_LABELS[app.spec]||app.spec}  ${app.location?.charAt(0).toUpperCase()+app.location?.slice(1)||"Kenya"}<br>
-      <span style="color:#ff9800;">⏳ Status: Pending LSK Verification</span>  Submitted ${date}<br>
-      <span style="color:rgba(255,255,255,0.35);">Ref: ${app.ref}</span>`;
+    info.innerHTML = `<strong style="color:white;">Advocate ${_esc(app.name)}</strong>  Roll #${_esc(app.rollNo)}<br>
+      ${_esc(SPEC_LABELS[app.spec]||app.spec)}  ${_esc(app.location?.charAt(0).toUpperCase()+app.location?.slice(1)||"Kenya")}<br>
+      <span style="color:#ff9800;">⏳ Status: Pending LSK Verification</span>  Submitted ${_esc(date)}<br>
+      <span style="color:rgba(255,255,255,0.35);">Ref: ${_esc(app.ref)}</span>`;
   }
   const waLink = document.getElementById("existingAppWA");
   if(waLink){

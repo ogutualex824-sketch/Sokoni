@@ -392,6 +392,7 @@
 </nav>
 
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const DEMO_REQS = [
   { id:"REQ0000001", name:"iPhone 15 Pro Max 256GB — Natural Titanium", desc:"Must be sealed box, with original Apple Kenya warranty. Prefer Space from an authorised reseller.", budget:195000, category:"electronics", location:"nairobi", poster:"Brian K.", urgency:"hi", votes:42, timestamp:Date.now()-1*3600000, date:"Today", offers:[
     { sellerName:"Sokoni Electronics", price:189000, message:"Sealed iPhone 15 Pro Max, Apple Kenya warranty, can deliver same day. DM for photos.", timestamp:Date.now()-30*60000 },
@@ -707,7 +708,7 @@ function postDeliveryRequest(){
   allDeliveries.unshift(del);
   localStorage.setItem("sokoniDeliveries", JSON.stringify(allDeliveries));
   ["delItem","delPickup","delDropoff","delBudget","delPoster","delOrderRef"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
-  if(msgEl){ msgEl.innerHTML=`✅ Posted! Delivery ID: <strong style="color:#71ff00;">${del.id}</strong> — share this with buyer &amp; seller to track.`; msgEl.style.color="#71ff00"; }
+  if(msgEl){ msgEl.innerHTML=`✅ Posted! Delivery ID: <strong style="color:#71ff00;">${_esc(del.id)}</strong> — share this with buyer &amp; seller to track.`; msgEl.style.color="#71ff00"; }
   setTimeout(()=>{if(msgEl)msgEl.textContent="";},6000);
   const el = document.getElementById("heroDelCount");
   if(el) el.textContent = allDeliveries.length;

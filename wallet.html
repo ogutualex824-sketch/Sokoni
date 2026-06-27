@@ -512,7 +512,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#030d09;color:white;
    Firestore: sokoni-aeb26
    Auth: localStorage "sokoniUser"
 ───────────────────────────────────────── */
-
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 // ── Firebase imports ──
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
@@ -864,7 +864,7 @@ window.topUpWallet = function() {
   }
 
   if(msgEl){
-    msgEl.innerHTML = `&#x2705; <strong>KES ${amount.toLocaleString()}</strong> top-up initiated! Check your phone for M-Pesa prompt.<br><span style="font-size:10px;color:rgba(255,255,255,0.35);">Or pay manually: Paybill <strong style="color:#71ff00;">247247</strong>, Acc: <strong style="color:#71ff00;">SOKONI-${u?(u.uid||'').slice(-6):'USER'}</strong></span>`;
+    msgEl.innerHTML = `&#x2705; <strong>KES ${amount.toLocaleString()}</strong> top-up initiated! Check your phone for M-Pesa prompt.<br><span style="font-size:10px;color:rgba(255,255,255,0.35);">Or pay manually: Paybill <strong style="color:#71ff00;">247247</strong>, Acc: <strong style="color:#71ff00;">SOKONI-${_esc(u?(u.uid||'').slice(-6):'USER')}</strong></span>`;
     msgEl.style.color='#71ff00';
   }
   document.getElementById('topupAmt').value = '';
@@ -951,7 +951,7 @@ window.withdrawFunds = async function() {
   const wa = `💸 *SOKONI Withdrawal*\n\nRef: ${ref}\nPhone: ${phone}\nAmount: KES ${amount.toLocaleString()}${reason?'\nReason: '+reason:''}\nUser: ${u.name||u.uid}\n\nProcess within 24h.`;
   window.open('https://wa.me/254705726803?text='+encodeURIComponent(wa),'_blank','noopener,noreferrer');
 
-  if(msgEl){msgEl.innerHTML=`✅ Request <strong>${ref}</strong> submitted! Processing within 24hrs.`;msgEl.style.color='#71ff00';}
+  if(msgEl){msgEl.innerHTML=`✅ Request <strong>${_esc(ref)}</strong> submitted! Processing within 24hrs.`;msgEl.style.color='#71ff00';}
   document.getElementById('wdPhone').value='';
   document.getElementById('wdAmount').value='';
   renderHero(); renderRecentTxs();
@@ -1033,7 +1033,7 @@ window.sendMoney = function() {
   const waMsg = `&#x1F4B3; *SOKONI Transfer*\n\nFrom: ${u?u.name||u.phone:'User'}\nTo: ${to}\nAmount: KES ${amount.toLocaleString()}\nRef: ${ref}${note?'\nNote: '+note:''}`;
   window.open('https://wa.me/254705726803?text='+encodeURIComponent(waMsg.replace(/&#x1F4B3;/g,'💳')),'_blank','noopener,noreferrer');
 
-  if(msgEl){msgEl.innerHTML=`&#x2705; KES ${amount.toLocaleString()} sent! Ref: <strong>${ref}</strong>`;msgEl.style.color='#71ff00';}
+  if(msgEl){msgEl.innerHTML=`&#x2705; KES ${amount.toLocaleString()} sent! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#71ff00';}
   document.getElementById('sendTo').value='';
   document.getElementById('sendAmount').value='';
   renderHero(); renderRecentTxs();
@@ -1074,7 +1074,7 @@ window.createEscrow = function() {
     }).catch(()=>{});
   }
 
-  if(msgEl){msgEl.innerHTML=`&#x2705; Escrow locked! Ref: <strong>${ref}</strong>. Seller will be notified.`;msgEl.style.color='#f59e0b';}
+  if(msgEl){msgEl.innerHTML=`&#x2705; Escrow locked! Ref: <strong>${_esc(ref)}</strong>. Seller will be notified.`;msgEl.style.color='#f59e0b';}
   const waMsg = `&#x1F512; *SOKONI Escrow*\n\nRef: ${ref}\nItem: ${item}\nAmount: KES ${amount.toLocaleString()}\nBuyer: ${u?u.name||u.phone:'Buyer'}\nRelease condition: ${condition}`;
   window.open(`https://wa.me/254${seller.replace(/^0/,'')}?text=${encodeURIComponent(waMsg.replace(/&#x1F512;/g,'🔒'))}`, '_blank', 'noopener,noreferrer');
   renderHero(); renderEscrowList();

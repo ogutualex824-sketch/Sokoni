@@ -696,7 +696,7 @@ function confirmMechBooking(id){
     }catch(e){}
   }
   const msg=encodeURIComponent(`🔧 *SOKONI Mechanics  Booking Request*\n\nRef: ${ref}\n\n`+plainMsg);
-  if(msgEl){msgEl.innerHTML=`S& Opening WhatsApp⬦ Ref: <strong>${ref}</strong>`;msgEl.style.color="#71ff00";}
+  if(msgEl){msgEl.innerHTML=`✅ Opening WhatsApp... Ref: <strong>${safeHtml(ref)}</strong>`;msgEl.style.color="#71ff00";}
   setTimeout(()=>{window.open(`https://wa.me/${wa}?text=${msg}`,"_blank");setTimeout(closeMechModal,2000);},600);
 }
 
@@ -742,7 +742,7 @@ async function registerGarage(){
   local.unshift(garage); localStorage.setItem("sokoniMechanics",JSON.stringify(local));
   if(msgEl){msgEl.textContent="Saving listing⬦";msgEl.style.color="#a78bfa";}
   const saved=await _saveFs(garage); _fsCache=null;
-  if(msgEl){msgEl.innerHTML=saved?`S& <strong>${garage.name}</strong> is now live on SOKONI Mechanics! Customers can find and book you.`:`S& Listing saved locally. Will sync when connection is restored.`;msgEl.style.color="#71ff00";}
+  if(msgEl){msgEl.innerHTML=saved?`✅ <strong>${safeHtml(garage.name)}</strong> is now live on SOKONI Mechanics! Customers can find and book you.`:`✅ Listing saved locally. Will sync when connection is restored.`;msgEl.style.color="#71ff00";}
   ["rgName","rgPhone","rgArea","rgYears","rgRate","rgServices","rgBio"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   ["ftDiag","ftMpesa","ftWarranty","ft247","ftTow"].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
   await loadMechs();

@@ -595,6 +595,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a0f;color:white;
 
 <script src="sokoni-pay.js" defer></script>
 <script>
+const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 /* ── PANEL SWITCHING ── */
 function showThPanel(name, btn) {
   document.querySelectorAll('.th-panel').forEach(p => p.classList.remove('active'));
@@ -722,7 +723,7 @@ function bookRepair() {
   } else {
     window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`, '_blank');
   }
-  if(msgEl) { msgEl.innerHTML=`✅ Booking sent! Ref: <strong>${ref}</strong>`; msgEl.style.color='#00d4ff'; }
+  if(msgEl) { msgEl.innerHTML=`✅ Booking sent! Ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color='#00d4ff'; }
 }
 window.bookRepair = bookRepair;
 
@@ -974,7 +975,7 @@ function submitITRequest() {
   _thFireWrite('techITRequests',{ref,name,phone,company,service:svc,budget,timeline,desc,hub:'tech-hub'});
   const msg=`🖥️ *SOKONI Tech Hub — IT Service Request*\n\nRef: ${ref}\n👤 ${name}${company?' ('+company+')':''}\n📞 ${phone}\n🛠️ Service: ${svc}\n💰 Budget: ${budget}\n⏱️ Timeline: ${timeline}\n${desc?'\n📝 '+desc:''}\n\nPlease get back to me. Thank you!`;
   window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML=`✅ Request sent! Ref: <strong>${ref}</strong>`;msgEl.style.color='#818cf8';}
+  if(msgEl){msgEl.innerHTML=`✅ Request sent! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#818cf8';}
 }
 window.submitITRequest = submitITRequest;
 
@@ -1067,7 +1068,7 @@ function registerStartup() {
   _thFireWrite('techStartups',{ref,name,founder,phone,sector,stage,funding,pitch,hub:'tech-hub'});
   const msg=`🚀 *SOKONI Startup Zone — Registration*\n\nRef: ${ref}\n🏢 ${name}\n👤 ${founder}\n📞 ${phone}\n📂 Sector: ${sector}\n📈 Stage: ${stage}\n💰 Funding: ${funding}\n${pitch?'\n📝 '+pitch:''}\n\nPlease list us on SOKONI Tech Hub. Thank you!`;
   window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML=`✅ Submitted! Ref: <strong>${ref}</strong>`;msgEl.style.color='#fb923c';}
+  if(msgEl){msgEl.innerHTML=`✅ Submitted! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#fb923c';}
 }
 window.registerStartup = registerStartup;
 
@@ -1160,7 +1161,7 @@ function postJob() {
   _thFireWrite('techJobs',{ref,title,company,phone,type,salary,loc,desc,hub:'tech-hub'});
   const msg=`💼 *SOKONI Tech Hub — Job Posting*\n\nRef: ${ref}\n📌 ${title}\n🏢 ${company}\n📞 ${phone}\n🏷️ Type: ${type}\n💰 ${salary}\n📍 ${loc}\n${desc?'\n📝 '+desc:''}\n\nPlease list this job on SOKONI Tech Hub. Thank you!`;
   window.open(`https://wa.me/254705726803?text=${encodeURIComponent(msg)}`,'_blank');
-  if(msgEl){msgEl.innerHTML=`✅ Job posted! Ref: <strong>${ref}</strong>`;msgEl.style.color='#fb7185';}
+  if(msgEl){msgEl.innerHTML=`✅ Job posted! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#fb7185';}
 }
 window.postJob = postJob;
 
