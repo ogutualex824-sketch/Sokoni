@@ -536,6 +536,8 @@
     },200);
   }
 
+  const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+
   function loadOrders() {
     const list = document.getElementById("myOrdersList");
     if(!list) return;
@@ -565,15 +567,15 @@
     }
 
     list.innerHTML = orders.map(o => `
-      <div class="order-summary-card" onclick="showOrderDetail('${o.id}')">
+      <div class="order-summary-card" onclick="showOrderDetail('${_esc(o.id)}')">
         <div class="osc-left">
-          <div class="osc-id">${o.id}</div>
-          <div class="osc-date">${o.date}</div>
+          <div class="osc-id">${_esc(o.id)}</div>
+          <div class="osc-date">${_esc(o.date)}</div>
           <div class="osc-items">${o.items ? o.items.length : 0} item(s)</div>
         </div>
         <div class="osc-right">
-          <div class="osc-total">KES ${Number(o.total).toLocaleString()}</div>
-          <div class="osc-status status-${o.status}">${formatStatus(o.status)}</div>
+          <div class="osc-total">KES ${Number(o.total||0).toLocaleString()}</div>
+          <div class="osc-status status-${_esc(o.status)}">${formatStatus(o.status)}</div>
           <span class="osc-view-btn">View Details →</span>
         </div>
       </div>
@@ -1386,9 +1388,9 @@
       ${returns.slice(0,5).map(r=>`
         <div style="background:rgba(160,128,255,0.05);border:1px solid rgba(160,128,255,0.12);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
           <div style="flex:1;">
-            <div style="font-weight:700;color:white;font-size:13px;">Order ${r.orderId}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.4);">${r.reason.replace(/-/g," ")} · ${r.date}</div>
-            ${r.details?`<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px;">${r.details}</div>`:""}
+            <div style="font-weight:700;color:white;font-size:13px;">Order ${_esc(r.orderId)}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);">${_esc(r.reason).replace(/-/g," ")} · ${_esc(r.date)}</div>
+            ${r.details?`<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px;">${_esc(r.details)}</div>`:""}
           </div>
           <span style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:${statusCol[r.status]||"#ff9800"}18;color:${statusCol[r.status]||"#ff9800"};">${r.status.toUpperCase()}</span>
         </div>
