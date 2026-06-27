@@ -7497,3 +7497,31 @@ exports.finosGetRevenueAnalytics   = finosRouter.finosGetRevenueAnalytics;
 exports.finosRequestBankPayout     = finosRouter.finosRequestBankPayout;
 exports.finosGetAdminDashboard     = finosRouter.finosGetAdminDashboard;
 exports.finosGenerateReceipt       = finosRouter.finosGenerateReceipt;
+
+/* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
+const trustSafety = require('./trust-safety');
+exports.tsReportContent       = trustSafety.tsReportContent;
+exports.tsGetReports          = trustSafety.tsGetReports;
+exports.tsReviewReport        = trustSafety.tsReviewReport;
+exports.tsBanUser             = trustSafety.tsBanUser;
+exports.tsCalculateRiskScore  = trustSafety.tsCalculateRiskScore;
+exports.tsGetRiskScores       = trustSafety.tsGetRiskScores;
+exports.tsGetBannedTerms      = trustSafety.tsGetBannedTerms;
+exports.tsManageBannedTerm    = trustSafety.tsManageBannedTerm;
+exports.tsGetTrustDashboard   = trustSafety.tsGetTrustDashboard;
+
+/* ── Admin OS v1.0 ────────────────────────────────────────────────────── */
+const adminOs = require('./admin-os');
+exports.adminGetPlatformOverview    = adminOs.adminGetPlatformOverview;
+exports.adminSearchUsers            = adminOs.adminSearchUsers;
+exports.adminGetUser                = adminOs.adminGetUser;
+exports.adminUpdateUserRole         = adminOs.adminUpdateUserRole;
+exports.adminGetPlatformSettings    = adminOs.adminGetPlatformSettings;
+exports.adminUpdatePlatformSettings = adminOs.adminUpdatePlatformSettings;
+exports.adminGetFeatureFlags        = adminOs.adminGetFeatureFlags;
+exports.adminUpdateFeatureFlag      = adminOs.adminUpdateFeatureFlag;
+exports.adminCreateSupportTicket    = adminOs.adminCreateSupportTicket;
+exports.adminGetSupportTickets      = adminOs.adminGetSupportTickets;
+exports.adminResolveSupportTicket   = adminOs.adminResolveSupportTicket;
+exports.adminGetCategories          = adminOs.adminGetCategories;
+exports.adminUpsertCategory         = adminOs.adminUpsertCategory;

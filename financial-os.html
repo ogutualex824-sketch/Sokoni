@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial OS — SOKONI Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090b;--sur:#111113;--sur2:#18181b;--brd:#1e1e22;--brd2:#2a2a30;
+  --g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;--y:#fbbf24;
+  --txt:#e5e7eb;--sub:#6b7280;--radius:12px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* shell */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:230px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.logo{padding:18px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px}
+.logo-text{font-size:13px;font-weight:900;color:var(--g);line-height:1.2}
+.logo-sub{font-size:10px;color:var(--sub)}
+.ng{padding:10px 8px 3px 14px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.1em}
+.ni{display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:8px;margin:1px 8px;font-size:13px;font-weight:500;color:var(--sub);cursor:pointer;transition:.12s}
+.ni:hover{background:var(--sur2);color:var(--txt)}.ni.active{background:rgba(113,255,0,.1);color:var(--g)}
+.ni .material-icons{font-size:17px;flex-shrink:0}
+.badge-count{background:var(--r);color:#fff;border-radius:999px;font-size:9px;font-weight:900;padding:1px 5px;margin-left:auto}
+.sidebar-foot{margin-top:auto;padding:10px 8px;border-top:1px solid var(--brd)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:0 22px;height:58px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:16px;font-weight:900;color:var(--g);flex:1}
+.content{padding:20px;flex:1}
+.panel{display:none}.panel.active{display:block}
+
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--sur);border:1px solid var(--brd);border-radius:var(--radius);padding:14px}
+.stat.alert{border-color:rgba(255,68,68,.3);background:rgba(255,68,68,.04)}
+.stat.warn{border-color:rgba(255,149,0,.3);background:rgba(255,149,0,.04)}
+.sv{font-size:24px;font-weight:900;color:var(--g);line-height:1}
+.sv.b{color:var(--b)}.sv.o{color:var(--o)}.sv.r{color:var(--r)}.sv.p{color:var(--p)}.sv.y{color:var(--y)}.sv.w{color:#fff}
+.sl{font-size:10px;color:var(--sub);margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
+.ss{font-size:11px;color:#444;margin-top:2px}
+
+/* card */
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:var(--radius);margin-bottom:16px}
+.card-hd{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--brd)}
+.card-title{font-size:13px;font-weight:700;flex:1}
+.card-body{padding:16px}
+
+/* table */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;padding:9px 12px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--brd)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--brd);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--sur2)}
+.tbl-empty{text-align:center;padding:32px;color:var(--sub)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:.12s;font-family:inherit}
+.btn-g{background:var(--g);color:#000}.btn-g:hover{background:#5dcc00}
+.btn-o{background:none;border:1.5px solid var(--brd2);color:var(--txt)}.btn-o:hover{background:var(--sur2)}
+.btn-r{background:rgba(255,68,68,.12);color:var(--r);border:1px solid rgba(255,68,68,.22)}.btn-r:hover{background:rgba(255,68,68,.2)}
+.btn-b{background:rgba(0,212,255,.12);color:var(--b);border:1px solid rgba(0,212,255,.2)}.btn-b:hover{background:rgba(0,212,255,.2)}
+.btn-p{background:rgba(168,85,247,.12);color:var(--p);border:1px solid rgba(168,85,247,.2)}.btn-p:hover{background:rgba(168,85,247,.2)}
+.btn-sm{padding:5px 9px;font-size:11px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.bg{background:rgba(113,255,0,.1);color:var(--g)}.bb{background:rgba(0,212,255,.1);color:var(--b)}
+.bo{background:rgba(255,149,0,.1);color:var(--o)}.br{background:rgba(255,68,68,.1);color:var(--r)}
+.bp{background:rgba(168,85,247,.1);color:var(--p)}.by{background:rgba(251,191,36,.1);color:var(--y)}
+.bs{background:rgba(255,255,255,.06);color:var(--sub)}
+
+/* form */
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.fl{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.fi{background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:100%;transition:.12s}
+.fi:focus{border-color:var(--g)}
+.fs{background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:100%;cursor:pointer}
+
+/* toolbar */
+.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+.search-box{display:flex;align-items:center;gap:6px;background:var(--sur);border:1.5px solid var(--brd2);border-radius:8px;padding:0 10px;height:34px;flex:1;min-width:160px}
+.search-box input{flex:1;border:none;background:none;font-size:12px;color:var(--txt);outline:none;font-family:inherit}
+.search-box .material-icons{font-size:16px;color:var(--sub)}
+
+/* modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border:1px solid var(--brd2);border-radius:14px;width:min(520px,92vw);max-height:90vh;overflow-y:auto}
+.mhd{display:flex;align-items:center;gap:9px;padding:16px 20px;border-bottom:1px solid var(--brd);position:sticky;top:0;background:var(--sur);z-index:10}
+.mhd h2{font-size:14px;font-weight:900;flex:1}
+.mbody{padding:20px}
+.mfoot{padding:12px 20px;border-top:1px solid var(--brd);display:flex;gap:9px;justify-content:flex-end;background:var(--sur);position:sticky;bottom:0}
+
+/* bar chart */
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12px}
+.bar-label{width:120px;color:var(--sub);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{flex:1;background:var(--sur2);border-radius:4px;height:9px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;background:var(--g);transition:.4s}
+.bar-val{width:60px;text-align:right;font-weight:700;font-size:11px}
+
+/* forecast card */
+.forecast-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.fc{background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;text-align:center}
+.fc-val{font-size:18px;font-weight:900;color:var(--b)}
+.fc-lbl{font-size:10px;color:var(--sub);margin-top:3px;text-transform:uppercase}
+
+/* settlement rule row */
+.rule-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--brd)}
+.rule-row:last-child{border-bottom:none}
+.rule-hub{width:130px;font-size:12px;font-weight:700;color:var(--txt)}
+
+/* toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1d;border:1px solid var(--brd2);color:var(--txt);padding:9px 16px;border-radius:9px;font-size:12px;font-weight:700;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
+.toast.show{opacity:1}
+.spin{width:18px;height:18px;border:2px solid var(--brd);border-top-color:var(--g);border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* inline number edit */
+.num-input{background:var(--bg);border:1px solid var(--brd2);color:var(--txt);padding:4px 8px;border-radius:6px;width:70px;font-size:12px;font-family:inherit;outline:none;text-align:center}
+.num-input:focus{border-color:var(--g)}
+
+@media(max-width:768px){.sidebar{display:none}.fg2,.fg3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="material-icons" style="color:var(--g);font-size:22px">account_balance</span>
+      <div><div class="logo-text">Financial OS</div><div class="logo-sub">SOKONI v2.0</div></div>
+    </div>
+    <div class="ng">Live</div>
+    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons">dashboard</span>Dashboard</div>
+    <div class="ni" onclick="_nav(this,'analytics')"><span class="material-icons">analytics</span>Analytics</div>
+    <div class="ng">Operations</div>
+    <div class="ni" onclick="_nav(this,'escrow')"><span class="material-icons">lock</span>Escrow <span class="badge-count" id="sbEscrow">…</span></div>
+    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons">gavel</span>Disputes <span class="badge-count" id="sbDisputes">…</span></div>
+    <div class="ni" onclick="_nav(this,'payouts')"><span class="material-icons">send</span>Payouts <span class="badge-count" id="sbPayouts">…</span></div>
+    <div class="ni" onclick="_nav(this,'refunds')"><span class="material-icons">replay</span>Refunds</div>
+    <div class="ng">Config</div>
+    <div class="ni" onclick="_nav(this,'settlement')"><span class="material-icons">schedule</span>Settlement Rules</div>
+    <div class="ni" onclick="_nav(this,'promos')"><span class="material-icons">discount</span>Promotions</div>
+    <div class="ni" onclick="_nav(this,'wallets')"><span class="material-icons">account_balance_wallet</span>Wallets</div>
+    <div class="ng">Admin</div>
+    <div class="ni" onclick="_nav(this,'audit')"><span class="material-icons">history</span>Audit Log</div>
+    <div class="ni" onclick="_nav(this,'tools')"><span class="material-icons">build</span>Admin Tools</div>
+    <div class="sidebar-foot">
+      <a href="finos.html"    class="ni" style="margin:0"><span class="material-icons">bar_chart</span>FinOS v1</a>
+      <a href="commission-engine.html" class="ni" style="margin:0;margin-top:2px"><span class="material-icons">percent</span>Commission</a>
+      <a href="subscription-billing.html" class="ni" style="margin:0;margin-top:2px"><span class="material-icons">subscriptions</span>Billing</a>
+      <a href="admin.html"    class="ni" style="margin:0;margin-top:4px"><span class="material-icons">arrow_back</span>Admin</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1 id="pageTitle">Financial Dashboard</h1>
+      <button class="btn btn-b btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+      <button class="btn btn-o btn-sm" onclick="_nav(document.querySelector('.ni[onclick*=tools]'),'tools')"><span class="material-icons" style="font-size:14px">build</span></button>
+    </div>
+
+    <div class="content">
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <div id="panel-dashboard" class="panel active">
+        <div class="stats" id="dashStats">
+          <div class="stat"><div class="sv" id="d-today-comm">…</div><div class="sl">Today's Commission</div></div>
+          <div class="stat"><div class="sv b" id="d-today-tx">…</div><div class="sl">Today's Transactions</div></div>
+          <div class="stat"><div class="sv w" id="d-week-comm">…</div><div class="sl">Week Commission</div></div>
+          <div class="stat"><div class="sv p" id="d-platform-bal">…</div><div class="sl">Platform Balance</div></div>
+          <div class="stat warn"><div class="sv o" id="d-pending-payout">…</div><div class="sl">Pending Payouts</div></div>
+          <div class="stat warn"><div class="sv y" id="d-escrow-held">…</div><div class="sl">Escrow Held</div></div>
+          <div class="stat alert" id="d-fraud-stat"><div class="sv r" id="d-fraud">…</div><div class="sl">Fraud Alerts</div></div>
+          <div class="stat alert" id="d-dispute-stat"><div class="sv r" id="d-disputes">…</div><div class="sl">Active Disputes</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Today vs Yesterday</span></div>
+            <div class="card-body" id="todayCompare"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Platform Balance</span></div>
+            <div class="card-body" id="platformWallet"><div class="spin"></div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Live Alerts</span></div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>Type</th><th>Detail</th><th>Severity</th><th>When</th><th></th></tr></thead>
+              <tbody id="fraudTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ANALYTICS ═══ -->
+      <div id="panel-analytics" class="panel">
+        <div class="toolbar">
+          <select class="fs" style="height:34px;width:auto" id="analyticsRange" onchange="_loadAnalytics()">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="sv" id="a-rev">…</div><div class="sl">Total Revenue</div></div>
+          <div class="stat"><div class="sv b" id="a-comm">…</div><div class="sl">Commission</div></div>
+          <div class="stat"><div class="sv p" id="a-sub">…</div><div class="sl">Subscription Rev</div></div>
+          <div class="stat"><div class="sv o" id="a-refunds">…</div><div class="sl">Refunds</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Revenue by Hub</span></div>
+            <div class="card-body" id="hubChart"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><span class="card-title">7-Day Revenue Forecast</span></div>
+            <div class="card-body" id="forecastPanel">
+              <p style="font-size:11px;color:var(--sub);margin-bottom:10px">Based on linear trend over the selected period.</p>
+              <div class="forecast-grid" id="forecastGrid"><div class="spin"></div></div>
+              <p id="forecastConfidence" style="font-size:10px;color:var(--sub);margin-top:10px;text-align:center"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Daily Commission Trend</span></div>
+          <div class="card-body" style="overflow-x:auto">
+            <div id="trendChart" style="min-width:500px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ESCROW ═══ -->
+      <div id="panel-escrow" class="panel">
+        <div class="toolbar">
+          <div class="search-box"><span class="material-icons">search</span><input type="text" id="escrowSearch" placeholder="Search transaction ID…" oninput="_filterEscrows()"></div>
+          <select class="fs" style="height:34px;width:auto" id="escrowStatusFilter" onchange="_loadEscrows()">
+            <option value="held">Held</option><option value="released">Released</option>
+            <option value="disputed">Disputed</option><option value="refunded">Refunded</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Transaction</th><th>Hub</th><th>Seller</th><th>Amount</th><th>Release At</th><th>Status</th><th></th></tr></thead>
+            <tbody id="escrowTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ DISPUTES ═══ -->
+      <div id="panel-disputes" class="panel">
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Transaction</th><th>Hub</th><th>Seller</th><th>Buyer</th><th>Net (KES)</th><th>Reason</th><th>Filed</th><th></th></tr></thead>
+            <tbody id="disputesTbl"><tr><td colspan="8" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ PAYOUTS ═══ -->
+      <div id="panel-payouts" class="panel">
+        <div class="toolbar">
+          <select class="fs" style="height:34px;width:auto" id="payoutMethodFilter" onchange="_loadPayouts()">
+            <option value="">All methods</option>
+            <option value="mpesa">M-PESA</option>
+            <option value="bank_transfer">Bank Transfer</option>
+          </select>
+          <select class="fs" style="height:34px;width:auto" id="payoutStatusFilter" onchange="_loadPayouts()">
+            <option value="pending">Pending</option>
+            <option value="pending_review">Bank Pending Review</option>
+            <option value="processing">Processing</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Payout ID</th><th>Entity</th><th>Gross (KES)</th><th>WHT</th><th>Net</th><th>Method</th><th>Status</th><th>Created</th><th></th></tr></thead>
+            <tbody id="payoutsTbl"><tr><td colspan="9" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ REFUNDS ═══ -->
+      <div id="panel-refunds" class="panel">
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Order ID</th><th>Amount (KES)</th><th>Reason</th><th>Date</th><th>By</th></tr></thead>
+            <tbody id="refundsTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ SETTLEMENT RULES ═══ -->
+      <div id="panel-settlement" class="panel">
+        <p style="font-size:12px;color:var(--sub);margin-bottom:14px">Settlement rules control how long funds are held in escrow before being released to sellers. Changes apply immediately to new transactions.</p>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">Rules by Hub Type</span>
+            <button class="btn btn-g btn-sm" onclick="_saveAllRules()"><span class="material-icons" style="font-size:14px">save</span>Save All</button>
+          </div>
+          <div class="card-body" id="settlementRulesList"><div class="spin"></div></div>
+        </div>
+      </div>
+
+      <!-- ═══ PROMOTIONS ═══ -->
+      <div id="panel-promos" class="panel">
+        <div class="toolbar">
+          <button class="btn btn-g btn-sm" onclick="_openCreatePromo()"><span class="material-icons" style="font-size:14px">add</span>New Promo</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Code</th><th>Type</th><th>Discount</th><th>Usage</th><th>Expires</th><th>Status</th></tr></thead>
+            <tbody id="promosTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ WALLETS ═══ -->
+      <div id="panel-wallets" class="panel">
+        <div class="toolbar">
+          <div class="search-box"><span class="material-icons">search</span><input type="text" id="walletSearch" placeholder="Enter UID to look up wallet…" onkeydown="if(event.key==='Enter')_lookupWallet()"></div>
+          <button class="btn btn-b btn-sm" onclick="_lookupWallet()"><span class="material-icons" style="font-size:14px">search</span>Look Up</button>
+        </div>
+        <div id="walletResult"></div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Adjust Wallet (Admin)</span></div>
+          <div class="card-body">
+            <div class="fg2">
+              <div class="fg"><label class="fl">UID</label><input type="text" class="fi" id="adj-uid" placeholder="User UID"></div>
+              <div class="fg"><label class="fl">Entity Type</label>
+                <select class="fs" id="adj-type"><option value="seller">Seller</option><option value="rider">Rider</option><option value="buyer">Buyer</option></select>
+              </div>
+              <div class="fg"><label class="fl">Amount (KES cents)</label><input type="number" class="fi" id="adj-amount" min="1" placeholder="100 = KES 1"></div>
+              <div class="fg"><label class="fl">Direction</label>
+                <select class="fs" id="adj-dir"><option value="credit">Credit (+)</option><option value="debit">Debit (-)</option></select>
+              </div>
+            </div>
+            <div class="fg"><label class="fl">Reason *</label><input type="text" class="fi" id="adj-reason" placeholder="Support ticket #1234 — duplicate charge"></div>
+            <button class="btn btn-r" onclick="_adjustWallet()"><span class="material-icons" style="font-size:14px">edit</span>Apply Adjustment</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ AUDIT LOG ═══ -->
+      <div id="panel-audit" class="panel">
+        <div class="toolbar">
+          <div class="search-box"><span class="material-icons">search</span><input type="text" id="auditSearch" placeholder="Filter by entity ID…" oninput="_filterAudit()"></div>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>Entity Type</th><th>By</th></tr></thead>
+            <tbody id="auditTbl"><tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ ADMIN TOOLS ═══ -->
+      <div id="panel-tools" class="panel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Reverse Ledger Entry</span></div>
+            <div class="card-body">
+              <div class="fg"><label class="fl">Ledger ID</label><input type="text" class="fi" id="rev-id" placeholder="Ledger document ID"></div>
+              <div class="fg"><label class="fl">Reason *</label><input type="text" class="fi" id="rev-reason" placeholder="Emergency reversal reason"></div>
+              <button class="btn btn-r" onclick="_reverseLedger()">Reverse Entry</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Approve Bank Payout</span></div>
+            <div class="card-body">
+              <p style="font-size:11px;color:var(--sub);margin-bottom:10px">Bank transfer payouts require manual confirmation after processing in your bank portal.</p>
+              <div class="fg"><label class="fl">Payout ID</label><input type="text" class="fi" id="bank-payout-id" placeholder="Payout document ID"></div>
+              <div class="fg"><label class="fl">Bank Reference</label><input type="text" class="fi" id="bank-ref" placeholder="Bank transaction reference"></div>
+              <button class="btn btn-g" onclick="_approveBankPayout()">Mark as Completed</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Generate Receipt</span></div>
+            <div class="card-body">
+              <div class="fg2">
+                <div class="fg"><label class="fl">Transaction ID</label><input type="text" class="fi" id="rec-txn" placeholder="Transaction / order ID"></div>
+                <div class="fg"><label class="fl">Amount (KES cents)</label><input type="number" class="fi" id="rec-amt" min="1"></div>
+                <div class="fg"><label class="fl">Hub Type</label><input type="text" class="fi" id="rec-hub" placeholder="marketplace"></div>
+                <div class="fg"><label class="fl">Description</label><input type="text" class="fi" id="rec-desc"></div>
+              </div>
+              <button class="btn btn-b" onclick="_generateReceipt()">Generate Receipt</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><span class="card-title">Tax Breakdown Calculator</span></div>
+            <div class="card-body">
+              <div class="fg2">
+                <div class="fg"><label class="fl">Order Amount (KES cents)</label><input type="number" class="fi" id="tax-amt" min="1" placeholder="100000 = KES 1000"></div>
+                <div class="fg"><label class="fl">Category</label>
+                  <select class="fs" id="tax-cat">
+                    <option value="marketplace">Marketplace</option><option value="food_delivery">Food Delivery</option>
+                    <option value="services">Services</option><option value="property">Property</option>
+                    <option value="vehicles">Vehicles</option><option value="events">Events</option>
+                    <option value="healthcare">Healthcare</option><option value="digital_products">Digital Products</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn btn-b" onclick="_calcTax()">Calculate</button>
+              <div id="taxResult" style="margin-top:12px;font-size:12px;line-height:1.9"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Dispute resolution modal -->
+<div class="overlay" id="resolveModal" onclick="_closeOverlay(event,'resolveModal')">
+  <div class="modal">
+    <div class="mhd"><h2>Resolve Dispute</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('resolveModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <input type="hidden" id="rm-escrowId">
+      <div id="rm-details" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.9"></div>
+      <div class="fg">
+        <label class="fl">Resolution</label>
+        <select class="fs" id="rm-resolution" onchange="_onResolutionChange()">
+          <option value="release_to_seller">Release to Seller (100%)</option>
+          <option value="refund_to_buyer">Refund to Buyer (100%)</option>
+          <option value="split">Split Decision</option>
+        </select>
+      </div>
+      <div class="fg" id="rm-split-wrap" style="display:none">
+        <label class="fl">Seller Share %</label>
+        <input type="number" class="fi" id="rm-split-pct" min="1" max="99" value="50">
+      </div>
+      <div class="fg"><label class="fl">Resolution Note</label><input type="text" class="fi" id="rm-note" placeholder="Brief explanation for the record"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('resolveModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-g" id="resolveBtn" onclick="_submitResolution()">Apply Resolution</button>
+    </div>
+  </div>
+</div>
+
+<!-- Promo create modal -->
+<div class="overlay" id="promoModal" onclick="_closeOverlay(event,'promoModal')">
+  <div class="modal">
+    <div class="mhd"><h2>New Promo Code</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('promoModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <div class="fg2">
+        <div class="fg"><label class="fl">Code *</label><input type="text" class="fi" id="pm-code" placeholder="SOKONI20" style="text-transform:uppercase"></div>
+        <div class="fg"><label class="fl">Discount Type</label>
+          <select class="fs" id="pm-dtype"><option value="percentage">Percentage %</option><option value="fixed">Fixed Amount</option></select>
+        </div>
+        <div class="fg"><label class="fl">Discount Value</label><input type="number" class="fi" id="pm-dval" min="1" placeholder="20"></div>
+        <div class="fg"><label class="fl">Min Order (KES cents)</label><input type="number" class="fi" id="pm-minorder" min="0" placeholder="50000 = KES 500"></div>
+        <div class="fg"><label class="fl">Max Discount (KES cents)</label><input type="number" class="fi" id="pm-maxdisc" min="0" placeholder="500000 = KES 5000"></div>
+        <div class="fg"><label class="fl">Usage Limit</label><input type="number" class="fi" id="pm-uselimit" min="1" placeholder="Leave blank = unlimited"></div>
+        <div class="fg"><label class="fl">Start Date</label><input type="date" class="fi" id="pm-start"></div>
+        <div class="fg"><label class="fl">End Date</label><input type="date" class="fi" id="pm-end"></div>
+      </div>
+      <div class="fg"><label class="fl">Funded By</label>
+        <select class="fs" id="pm-funded"><option value="platform">Platform</option><option value="seller">Seller</option></select>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('promoModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-g" id="createPromoBtn" onclick="_createPromo()">Create Promo</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="firebase.js"></script>
+<script>
+(function(){
+'use strict';
+
+firebase.auth().onAuthStateChanged(function(u){
+  if(!u){location.href='login.html?redirect=financial-os.html';return;}
+  u.getIdTokenResult().then(function(t){
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='index.html';return;}
+    _init();
+  });
+});
+
+var _fns=null,_db=null;
+var _allEscrows=[],_allAudit=[],_allPayouts=[];
+function _cf(n){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(n);}
+function _fs(){if(!_db)_db=firebase.firestore();return _db;}
+
+var TITLES={dashboard:'Financial Dashboard',analytics:'Revenue Analytics',escrow:'Escrow Manager',
+  disputes:'Dispute Manager',payouts:'Payouts',refunds:'Refunds',settlement:'Settlement Rules',
+  promos:'Promotions',wallets:'Wallets',audit:'Audit Log',tools:'Admin Tools'};
+
+function _init(){_loadPanel('dashboard');}
+
+window._nav=function(el,panel){
+  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  document.getElementById('panel-'+panel).classList.add('active');
+  document.getElementById('pageTitle').textContent=TITLES[panel]||panel;
+  _loadPanel(panel);
+};
+window._refresh=function(){var a=document.querySelector('.panel.active');if(a)_loadPanel(a.id.replace('panel-',''));};
+
+function _loadPanel(p){
+  var map={
+    dashboard:_loadDashboard, analytics:_loadAnalytics,
+    escrow:_loadEscrows, disputes:_loadDisputes, payouts:_loadPayouts,
+    refunds:_loadRefunds, settlement:_loadSettlementRules,
+    promos:_loadPromos, wallets:function(){}, audit:_loadAudit, tools:function(){},
+  };
+  if(map[p]) map[p]();
+}
+
+/* ── Dashboard ── */
+function _loadDashboard(){
+  _cf('finosGetAdminDashboard')({}).then(function(r){
+    var d=r.data;
+    document.getElementById('d-today-comm').textContent='KES '+_kes(d.today.commissionCents);
+    document.getElementById('d-today-tx').textContent=d.today.transactionCount.toLocaleString();
+    document.getElementById('d-week-comm').textContent='KES '+_kes(d.week.commissionCents);
+    document.getElementById('d-platform-bal').textContent='KES '+_kes(d.platform.availableBalanceCents);
+    document.getElementById('d-pending-payout').textContent='KES '+_kes(d.live.pendingPayoutCents)+'<span style="font-size:11px;color:var(--sub)"> ('+d.live.pendingPayoutCount+' pending)</span>';
+    document.getElementById('d-pending-payout').innerHTML='KES '+_kes(d.live.pendingPayoutCents)+'<span style="font-size:11px;color:var(--sub)"> · '+d.live.pendingPayoutCount+' items</span>';
+    document.getElementById('d-escrow-held').innerHTML='KES '+_kes(d.live.escrowHeldCents)+'<span style="font-size:11px;color:var(--sub)"> · '+d.live.escrowHeldCount+' held</span>';
+    document.getElementById('d-fraud').textContent=d.live.openFraudAlerts;
+    document.getElementById('d-disputes').textContent=d.live.activeDisputeCount;
+    /* Sidebar badge */
+    document.getElementById('sbEscrow').textContent=d.live.escrowHeldCount;
+    document.getElementById('sbDisputes').textContent=d.live.activeDisputeCount;
+    document.getElementById('sbPayouts').textContent=d.live.pendingPayoutCount+d.live.bankPayoutPendingCount;
+    /* Today vs Yesterday */
+    var t=d.today,y=d.yesterday;
+    var commDiff=t.commissionCents-y.commissionCents;
+    var txDiff=t.transactionCount-y.transactionCount;
+    document.getElementById('todayCompare').innerHTML=
+      '<div style="display:flex;flex-direction:column;gap:10px">'+
+      _compareRow('Commission','KES '+_kes(t.commissionCents),'KES '+_kes(y.commissionCents),commDiff)+
+      _compareRow('Transactions',t.transactionCount,y.transactionCount,txDiff)+
+      _compareRow('Revenue','KES '+_kes(t.revenueCents),'KES '+_kes(y.revenueCents),t.revenueCents-y.revenueCents)+
+      _compareRow('Refunds','KES '+_kes(t.refundsCents),'KES '+_kes(y.refundsCents),-(t.refundsCents-y.refundsCents))+
+      '</div>';
+    /* Platform wallet */
+    document.getElementById('platformWallet').innerHTML=
+      '<div style="display:grid;gap:10px">'+
+      _wRow('Available',d.platform.availableBalanceCents,'var(--g)')+
+      _wRow('Held (Escrow)',d.platform.heldBalanceCents,'var(--y)')+
+      _wRow('Lifetime Revenue',d.platform.lifetimeRevenueCents,'var(--sub)')+
+      '</div>';
+  }).catch(function(e){_toast('Dashboard error: '+e.message,'red');});
+
+  /* Fraud alerts from Firestore */
+  _fs().collection('fraudAlerts').where('status','==','open').orderBy('createdAt','desc').limit(20).get().then(function(s){
+    var tb=document.getElementById('fraudTbl');
+    if(s.empty){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No open alerts</td></tr>';return;}
+    tb.innerHTML=s.docs.map(function(d){
+      var a=d.data();
+      return '<tr>'+
+        '<td><span class="badge '+_alertBadge(a.severity)+'">'+_esc(a.subType||a.type||'unknown')+'</span></td>'+
+        '<td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(a.detail||'')+'</td>'+
+        '<td>'+_sevBadge(a.severity)+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(a.createdAt)+'</td>'+
+        '<td><button class="btn btn-o btn-sm" onclick="_dismissAlert(\''+d.id+'\')">Dismiss</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(){});
+}
+function _compareRow(label,today,yesterday,diff){
+  var color=diff>=0?'var(--g)':'var(--r)';
+  var arrow=diff>=0?'↑':'↓';
+  return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--brd)">'+
+    '<span style="font-size:12px;color:var(--sub)">'+_esc(label)+'</span>'+
+    '<span style="font-size:13px;font-weight:700">'+today+'</span>'+
+    '<span style="font-size:11px;color:var(--sub)">'+yesterday+'</span>'+
+    '<span style="font-size:11px;color:'+color+';font-weight:700">'+arrow+'</span>'+
+  '</div>';
+}
+function _wRow(label,cents,color){
+  return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--brd)">'+
+    '<span style="font-size:12px;color:var(--sub)">'+_esc(label)+'</span>'+
+    '<span style="font-size:15px;font-weight:900;color:'+color+'">KES '+_kes(cents)+'</span>'+
+  '</div>';
+}
+
+window._dismissAlert=function(id){
+  _fs().collection('fraudAlerts').doc(id).update({status:'resolved',resolvedAt:firebase.firestore.FieldValue.serverTimestamp()})
+  .then(function(){_toast('Alert dismissed','green');_loadDashboard();}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Analytics ── */
+window._loadAnalytics=function(){
+  var days=parseInt(document.getElementById('analyticsRange').value)||30;
+  ['a-rev','a-comm','a-sub','a-refunds'].forEach(function(id){document.getElementById(id).textContent='…';});
+  document.getElementById('hubChart').innerHTML='<div class="spin"></div>';
+  document.getElementById('forecastGrid').innerHTML='<div class="spin"></div>';
+  document.getElementById('trendChart').innerHTML='<div class="spin"></div>';
+
+  _cf('finosGetRevenueAnalytics')({days:days}).then(function(r){
+    var d=r.data;
+    document.getElementById('a-rev').textContent='KES '+_kes(d.totals.revenueCents);
+    document.getElementById('a-comm').textContent='KES '+_kes(d.totals.commissionCents);
+    document.getElementById('a-sub').textContent='KES '+_kes(d.totals.subRevCents);
+    document.getElementById('a-refunds').textContent='KES '+_kes(d.totals.refundsCents);
+    /* Hub chart */
+    var hubs=Object.entries(d.byHub||{}).sort(function(a,b){return b[1].commissionCents-a[1].commissionCents;});
+    var maxComm=hubs.length?hubs[0][1].commissionCents:1;
+    document.getElementById('hubChart').innerHTML=hubs.length?hubs.map(function(h){
+      var pct=Math.round(h[1].commissionCents/Math.max(maxComm,1)*100);
+      return '<div class="bar-row">'+
+        '<div class="bar-label" title="'+_esc(h[0])+'">'+_esc(h[0])+'</div>'+
+        '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'+
+        '<div class="bar-val">KES '+_kes(h[1].commissionCents)+'</div>'+
+      '</div>';
+    }).join(''):'<div style="color:var(--sub);font-size:12px">No hub data yet</div>';
+    /* Forecast */
+    var f=d.forecast||{};
+    document.getElementById('forecastGrid').innerHTML=
+      '<div class="fc"><div class="fc-val">KES '+_kes(f.dailyRevenueCents||0)+'</div><div class="fc-lbl">Daily</div></div>'+
+      '<div class="fc"><div class="fc-val">KES '+_kes(f.weeklyRevenueCents||0)+'</div><div class="fc-lbl">Weekly</div></div>'+
+      '<div class="fc"><div class="fc-val">KES '+_kes(f.monthlyRevenueCents||0)+'</div><div class="fc-lbl">Monthly</div></div>';
+    document.getElementById('forecastConfidence').textContent='Confidence: '+(f.confidence||'low')+' (based on '+days+'-day trend)';
+    /* Trend */
+    var trend=d.dailyTrend||[];
+    if(trend.length){
+      var maxRev=Math.max.apply(null,trend.map(function(t){return t.commissionCents||0;}))||1;
+      document.getElementById('trendChart').innerHTML='<div style="display:flex;align-items:flex-end;gap:3px;height:80px">'+
+        trend.map(function(t){
+          var h=Math.max(2,Math.round((t.commissionCents||0)/maxRev*80));
+          return '<div style="flex:1;background:var(--g);opacity:0.8;border-radius:2px 2px 0 0;height:'+h+'px;min-width:4px" title="'+_esc(t.date)+' KES '+_kes(t.commissionCents)+'"></div>';
+        }).join('')+'</div>'+
+        '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--sub)">'+
+        '<span>'+_esc(trend[0]&&trend[0].date||'')+'</span><span>'+_esc(trend[trend.length-1]&&trend[trend.length-1].date||'')+'</span></div>';
+    } else {
+      document.getElementById('trendChart').innerHTML='<div style="color:var(--sub);font-size:12px">No snapshot data yet — run generateDailySnapshot</div>';
+    }
+  }).catch(function(e){_toast('Analytics error: '+e.message,'red');});
+};
+
+/* ── Escrows ── */
+window._loadEscrows=function(){
+  var status=document.getElementById('escrowStatusFilter').value||'held';
+  document.getElementById('escrowTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _fs().collection('escrows').where('status','==',status).orderBy('heldAt','desc').limit(100).get()
+  .then(function(s){
+    _allEscrows=s.docs.map(function(d){return{id:d.id,...d.data()};});
+    _renderEscrows(_allEscrows);
+  }).catch(function(e){document.getElementById('escrowTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+};
+window._filterEscrows=function(){
+  var q=(document.getElementById('escrowSearch').value||'').toLowerCase();
+  _renderEscrows(_allEscrows.filter(function(e){return !q||(e.transactionId||'').toLowerCase().includes(q)||(e.sellerId||'').toLowerCase().includes(q);}));
+};
+function _renderEscrows(list){
+  var tb=document.getElementById('escrowTbl');
+  if(!list.length){tb.innerHTML='<tr><td colspan="7" class="tbl-empty">No escrows found</td></tr>';return;}
+  tb.innerHTML=list.map(function(e){
+    var releaseAt=e.releaseAt&&e.releaseAt.toDate?e.releaseAt.toDate().toLocaleDateString('en-KE'):'—';
+    return '<tr>'+
+      '<td style="font-size:11px;color:var(--b)">'+_esc((e.transactionId||'').slice(0,18))+'</td>'+
+      '<td><span class="badge bb">'+_esc(e.hubType||'?')+'</span></td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc((e.sellerId||'').slice(0,14))+'</td>'+
+      '<td style="font-weight:700;color:var(--g)">KES '+_kes(e.sellerNetCents||0)+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+releaseAt+'</td>'+
+      '<td>'+_escrowBadge(e.status)+'</td>'+
+      '<td style="display:flex;gap:5px">'+
+        (e.status==='held'?'<button class="btn btn-g btn-sm" onclick="_releaseEscrow(\''+e.id+'\')">Release</button>':'')+''+
+        (e.status==='held'?'<button class="btn btn-r btn-sm" onclick="_openDispute(\''+e.id+'\')">Dispute</button>':'')+''+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+window._releaseEscrow=function(escrowId){
+  if(!confirm('Release escrow '+escrowId+' to seller?'))return;
+  _cf('finosReleaseEscrow')({escrowId,reason:'Admin manual release'})
+  .then(function(){_toast('Escrow released','green');_loadEscrows();}).catch(function(e){_toast(e.message,'red');});
+};
+window._openDispute=function(escrowId){
+  var reason=prompt('Dispute reason:');
+  if(!reason)return;
+  _cf('finosDisputeEscrow')({escrowId,reason})
+  .then(function(){_toast('Dispute filed','green');_loadEscrows();}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Disputes ── */
+function _loadDisputes(){
+  document.getElementById('disputesTbl').innerHTML='<tr><td colspan="8" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _fs().collection('escrows').where('status','==','disputed').orderBy('disputedAt','desc').limit(50).get()
+  .then(function(s){
+    var tb=document.getElementById('disputesTbl');
+    if(s.empty){tb.innerHTML='<tr><td colspan="8" class="tbl-empty">No active disputes</td></tr>';return;}
+    tb.innerHTML=s.docs.map(function(doc){
+      var e={id:doc.id,...doc.data()};
+      return '<tr>'+
+        '<td style="font-size:11px;color:var(--b)">'+_esc((e.transactionId||'').slice(0,16))+'</td>'+
+        '<td><span class="badge bb">'+_esc(e.hubType||'?')+'</span></td>'+
+        '<td style="font-size:11px">'+_esc((e.sellerId||'').slice(0,12))+'</td>'+
+        '<td style="font-size:11px">'+_esc((e.buyerId||'—').slice(0,12))+'</td>'+
+        '<td style="font-weight:700;color:var(--g)">'+_kes(e.sellerNetCents||0)+'</td>'+
+        '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_esc(e.disputeReason||'')+'">'+_esc(e.disputeReason||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(e.disputedAt)+'</td>'+
+        '<td><button class="btn btn-p btn-sm" onclick="_openResolveModal(\''+e.id+'\')">Resolve</button></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('disputesTbl').innerHTML='<tr><td colspan="8" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._openResolveModal=function(escrowId){
+  var e=null;
+  _fs().collection('escrows').doc(escrowId).get().then(function(snap){
+    e=snap.data()||{};
+    document.getElementById('rm-escrowId').value=escrowId;
+    document.getElementById('rm-details').innerHTML=
+      'Transaction: <strong>'+_esc(e.transactionId||'?')+'</strong><br>'+
+      'Seller: <strong>'+_esc(e.sellerId||'?')+'</strong> · Buyer: <strong>'+_esc(e.buyerId||'?')+'</strong><br>'+
+      'Net: <strong>KES '+_kes(e.sellerNetCents||0)+'</strong><br>'+
+      'Reason: '+_esc(e.disputeReason||'—');
+    document.getElementById('rm-resolution').value='release_to_seller';
+    document.getElementById('rm-split-wrap').style.display='none';
+    document.getElementById('rm-note').value='';
+    document.getElementById('resolveModal').classList.add('open');
+  });
+};
+window._onResolutionChange=function(){
+  document.getElementById('rm-split-wrap').style.display=document.getElementById('rm-resolution').value==='split'?'':'none';
+};
+window._submitResolution=function(){
+  var escrowId=document.getElementById('rm-escrowId').value;
+  var resolution=document.getElementById('rm-resolution').value;
+  var splitPct=parseInt(document.getElementById('rm-split-pct').value)||50;
+  var note=document.getElementById('rm-note').value.trim();
+  var btn=document.getElementById('resolveBtn');
+  btn.disabled=true;btn.textContent='Applying…';
+  _cf('finosResolveDispute')({escrowId,resolution,splitSellerPct:splitPct,resolutionNote:note})
+  .then(function(){
+    _toast('Dispute resolved: '+resolution,'green');
+    document.getElementById('resolveModal').classList.remove('open');
+    _loadDisputes();
+  }).catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Apply Resolution';});
+};
+
+/* ── Payouts ── */
+window._loadPayouts=function(){
+  var status=document.getElementById('payoutStatusFilter').value||'pending';
+  var method=document.getElementById('payoutMethodFilter').value;
+  document.getElementById('payoutsTbl').innerHTML='<tr><td colspan="9" class="tbl-empty"><div class="spin"></div></td></tr>';
+  var q=_fs().collection('payouts').where('status','==',status).orderBy('createdAt','desc').limit(100);
+  q.get().then(function(s){
+    _allPayouts=s.docs.map(function(d){return{id:d.id,...d.data()};});
+    var filtered=_allPayouts.filter(function(p){return !method||p.method===method;});
+    var tb=document.getElementById('payoutsTbl');
+    if(!filtered.length){tb.innerHTML='<tr><td colspan="9" class="tbl-empty">No payouts</td></tr>';return;}
+    tb.innerHTML=filtered.map(function(p){
+      return '<tr>'+
+        '<td style="font-size:10px;color:var(--sub)">'+_esc((p.id||'').slice(0,12))+'</td>'+
+        '<td style="font-size:11px">'+_esc((p.entityId||'').slice(0,12))+'</td>'+
+        '<td style="font-weight:700;color:var(--g)">'+_kes(p.grossCents||0)+'</td>'+
+        '<td style="font-size:11px;color:var(--r)">'+_kes(p.whtCents||0)+'</td>'+
+        '<td style="font-weight:700">'+_kes(p.netCents||0)+'</td>'+
+        '<td><span class="badge '+(p.method==='bank_transfer'?'bp':'bb')+'">'+_esc(p.method||'?')+'</span></td>'+
+        '<td>'+_payoutStatusBadge(p.status)+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(p.createdAt)+'</td>'+
+        '<td>'+(p.method==='bank_transfer'&&p.status==='pending_review'?'<button class="btn btn-g btn-sm" onclick="_quickApprovePayout(\''+p.id+'\')">Approve</button>':'')+'</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('payoutsTbl').innerHTML='<tr><td colspan="9" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+};
+window._quickApprovePayout=function(payoutId){
+  var ref=prompt('Bank transfer reference:');
+  if(!ref)return;
+  document.getElementById('bank-payout-id').value=payoutId;
+  document.getElementById('bank-ref').value=ref;
+  _approveBankPayoutDirect(payoutId,ref);
+};
+function _approveBankPayoutDirect(payoutId,bankRef){
+  _fs().collection('payouts').doc(payoutId).update({status:'completed',bankRef,completedAt:firebase.firestore.FieldValue.serverTimestamp()})
+  .then(function(){_toast('Bank payout marked completed','green');_loadPayouts();}).catch(function(e){_toast(e.message,'red');});
+}
+
+/* ── Refunds ── */
+function _loadRefunds(){
+  document.getElementById('refundsTbl').innerHTML='<tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _fs().collection('ledger').where('type','==','refund').orderBy('createdAt','desc').limit(100).get()
+  .then(function(s){
+    var tb=document.getElementById('refundsTbl');
+    if(s.empty){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No refunds</td></tr>';return;}
+    tb.innerHTML=s.docs.map(function(d){
+      var r=d.data();
+      return '<tr>'+
+        '<td style="font-size:11px">'+_esc(r.orderId||'—')+'</td>'+
+        '<td style="font-weight:700;color:var(--r)">'+_kes(r.amountCents||0)+'</td>'+
+        '<td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(r.description||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(r.createdAt)+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_esc((r.createdBy||'system').slice(0,12))+'</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('refundsTbl').innerHTML='<tr><td colspan="5" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+
+/* ── Settlement Rules ── */
+var _rules={};
+function _loadSettlementRules(){
+  document.getElementById('settlementRulesList').innerHTML='<div class="spin"></div>';
+  _cf('finosGetSettlementRules')({}).then(function(r){
+    var rules=r.data.rules||[];
+    _rules={};
+    rules.forEach(function(rule){_rules[rule.hubType]=rule;});
+    document.getElementById('settlementRulesList').innerHTML=rules.map(function(rule){
+      return '<div class="rule-row">'+
+        '<div class="rule-hub">'+_esc(rule.hubType)+'</div>'+
+        '<div style="flex:1;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+
+          '<label style="font-size:11px;color:var(--sub)">Hold Days<br><input type="number" class="num-input" id="rule-hold-'+rule.hubType+'" value="'+rule.holdDays+'" min="0" max="90"></label>'+
+          '<label style="font-size:11px;color:var(--sub)">Dispute Window<br><input type="number" class="num-input" id="rule-dispute-'+rule.hubType+'" value="'+rule.disputeWindowDays+'" min="1" max="180"></label>'+
+          '<label style="font-size:11px;color:var(--sub);display:flex;align-items:center;gap:5px;margin-top:10px"><input type="checkbox" id="rule-auto-'+rule.hubType+'" '+(rule.autoRelease?'checked':'')+' style="accent-color:var(--g)"> Auto-release</label>'+
+          '<label style="font-size:11px;color:var(--sub);display:flex;align-items:center;gap:5px;margin-top:10px"><input type="checkbox" id="rule-buyer-'+rule.hubType+'" '+(rule.requireBuyerConfirm?'checked':'')+' style="accent-color:var(--o)"> Require buyer confirm</label>'+
+          (rule.isOverridden?'<span class="badge bg" style="margin-top:10px">Custom</span>':'<span class="badge bs" style="margin-top:10px">Default</span>')+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }).catch(function(e){_toast('Error: '+e.message,'red');});
+}
+window._saveAllRules=function(){
+  var hubs=Object.keys(_rules);
+  var promises=hubs.map(function(hub){
+    return _cf('finosUpdateSettlementRules')({
+      hubType:hub,
+      holdDays:parseInt(document.getElementById('rule-hold-'+hub).value)||0,
+      disputeWindowDays:parseInt(document.getElementById('rule-dispute-'+hub).value)||7,
+      autoRelease:document.getElementById('rule-auto-'+hub).checked,
+      requireBuyerConfirm:document.getElementById('rule-buyer-'+hub).checked,
+    });
+  });
+  Promise.all(promises).then(function(){_toast('All rules saved','green');_loadSettlementRules();}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Promotions ── */
+function _loadPromos(){
+  document.getElementById('promosTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _fs().collection('promotions').orderBy('createdAt','desc').limit(50).get()
+  .then(function(s){
+    var tb=document.getElementById('promosTbl');
+    if(s.empty){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No promotions</td></tr>';return;}
+    tb.innerHTML=s.docs.map(function(d){
+      var p=d.data();
+      var disc=p.discountType==='percentage'?p.discountValue+'%':'KES '+_kes((p.discountValueCents||0));
+      var exp=p.endDate&&p.endDate.toDate?p.endDate.toDate().toLocaleDateString('en-KE'):'Never';
+      return '<tr>'+
+        '<td style="font-weight:700;font-size:13px;color:var(--g)">'+_esc(p.code||'')+'</td>'+
+        '<td><span class="badge bs">'+_esc(p.type||'coupon')+'</span></td>'+
+        '<td style="font-weight:700">'+disc+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+p.usageCount+'/'+(p.usageLimit||'∞')+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+exp+'</td>'+
+        '<td><span class="badge '+(p.isActive?'bg':'bs')+'">'+(p.isActive?'Active':'Inactive')+'</span></td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){_toast(e.message,'red');});
+}
+window._openCreatePromo=function(){
+  document.getElementById('pm-code').value='';
+  document.getElementById('pm-dval').value='';
+  document.getElementById('promoModal').classList.add('open');
+};
+window._createPromo=function(){
+  var code=(document.getElementById('pm-code').value||'').toUpperCase().trim();
+  if(!code)return _toast('Code required','red');
+  var btn=document.getElementById('createPromoBtn');btn.disabled=true;btn.textContent='Creating…';
+  _cf('createPromotion')({
+    code,
+    discountType:document.getElementById('pm-dtype').value,
+    discountValue:parseFloat(document.getElementById('pm-dval').value)||0,
+    discountValueCents:Math.round((parseFloat(document.getElementById('pm-dval').value)||0)*100),
+    minOrderAmountCents:parseInt(document.getElementById('pm-minorder').value)||0,
+    maxDiscountCents:parseInt(document.getElementById('pm-maxdisc').value)||null,
+    usageLimit:parseInt(document.getElementById('pm-uselimit').value)||null,
+    startDate:document.getElementById('pm-start').value||null,
+    endDate:document.getElementById('pm-end').value||null,
+    fundedBy:document.getElementById('pm-funded').value,
+  }).then(function(){
+    _toast('Promo created','green');
+    document.getElementById('promoModal').classList.remove('open');
+    _loadPromos();
+  }).catch(function(e){_toast(e.message,'red');}).finally(function(){btn.disabled=false;btn.textContent='Create Promo';});
+};
+
+/* ── Wallets ── */
+window._lookupWallet=function(){
+  var uid=(document.getElementById('walletSearch').value||'').trim();
+  if(!uid)return;
+  _cf('getWalletStatement')({entityId:uid,limit:10}).then(function(r){
+    var d=r.data;
+    document.getElementById('walletResult').innerHTML=
+      '<div class="card" style="margin-bottom:14px">'+
+      '<div class="card-hd"><span class="card-title">Wallet: '+_esc(uid)+'</span></div>'+
+      '<div class="card-body">'+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">'+
+      '<div class="stat"><div class="sv">KES '+_kes(d.availableBalance||0)+'</div><div class="sl">Available</div></div>'+
+      '<div class="stat"><div class="sv y">KES '+_kes(d.heldBalance||0)+'</div><div class="sl">Held</div></div>'+
+      '<div class="stat"><div class="sv b">KES '+_kes(d.lifetimeEarnings||0)+'</div><div class="sl">Lifetime</div></div>'+
+      '<div class="stat"><div class="sv r">KES '+_kes(d.lifetimeWithdrawals||0)+'</div><div class="sl">Withdrawn</div></div>'+
+      '</div>'+
+      '<table class="tbl"><thead><tr><th>Type</th><th>Amount</th><th>Description</th><th>When</th></tr></thead><tbody>'+
+      (d.transactions||[]).map(function(tx){
+        return '<tr>'+
+          '<td><span class="badge '+(tx.direction==='credit'?'bg':'br')+'">'+_esc(tx.type||tx.direction||'?')+'</span></td>'+
+          '<td style="font-weight:700;color:'+(tx.direction==='credit'?'var(--g)':'var(--r)')+'">KES '+_kes(tx.amountCents||0)+'</td>'+
+          '<td style="font-size:11px;color:var(--sub)">'+_esc(tx.description||'—')+'</td>'+
+          '<td style="font-size:11px;color:var(--sub)">'+_relTime(tx.createdAt)+'</td>'+
+        '</tr>';
+      }).join('')+
+      '</tbody></table>'+
+      '</div></div>';
+  }).catch(function(e){_toast('Error: '+e.message,'red');});
+};
+window._adjustWallet=function(){
+  var uid=(document.getElementById('adj-uid').value||'').trim();
+  var amt=parseInt(document.getElementById('adj-amount').value)||0;
+  var dir=document.getElementById('adj-dir').value;
+  var reason=(document.getElementById('adj-reason').value||'').trim();
+  if(!uid||!amt||!reason)return _toast('UID, amount, and reason required','red');
+  if(!confirm('Adjust wallet '+uid+': '+dir+' KES '+_kes(amt)+'?'))return;
+  _cf('adjustWallet')({entityId:uid,amountCents:amt,direction:dir,reason,entityType:document.getElementById('adj-type').value})
+  .then(function(){_toast('Wallet adjusted','green');}).catch(function(e){_toast(e.message,'red');});
+};
+
+/* ── Audit ── */
+var _allAuditRows=[];
+function _loadAudit(){
+  document.getElementById('auditTbl').innerHTML='<tr><td colspan="5" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _fs().collection('finosAuditLog').orderBy('createdAt','desc').limit(100).get()
+  .then(function(s){
+    _allAuditRows=s.docs.map(function(d){return{id:d.id,...d.data()};});
+    _renderAudit(_allAuditRows);
+  }).catch(function(e){document.getElementById('auditTbl').innerHTML='<tr><td colspan="5" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._filterAudit=function(){
+  var q=(document.getElementById('auditSearch').value||'').toLowerCase();
+  _renderAudit(_allAuditRows.filter(function(a){return !q||(a.entityId||'').toLowerCase().includes(q)||(a.action||'').toLowerCase().includes(q);}));
+};
+function _renderAudit(list){
+  var tb=document.getElementById('auditTbl');
+  if(!list.length){tb.innerHTML='<tr><td colspan="5" class="tbl-empty">No audit records</td></tr>';return;}
+  tb.innerHTML=list.map(function(a){
+    return '<tr>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_relTime(a.createdAt)+'</td>'+
+      '<td><span class="badge bb">'+_esc(a.action||'?')+'</span></td>'+
+      '<td style="font-size:11px">'+_esc((a.entityId||'').slice(0,20))+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc(a.entityType||'—')+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc((a.performedBy||'system').slice(0,14))+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+/* ── Admin Tools ── */
+window._reverseLedger=function(){
+  var id=(document.getElementById('rev-id').value||'').trim();
+  var reason=(document.getElementById('rev-reason').value||'').trim();
+  if(!id||!reason)return _toast('Ledger ID and reason required','red');
+  if(!confirm('Reverse ledger entry '+id+'? This is an emergency action.'))return;
+  _cf('reverseTransaction')({ledgerId:id,reason})
+  .then(function(){_toast('Ledger entry reversed','green');}).catch(function(e){_toast(e.message,'red');});
+};
+window._approveBankPayout=function(){
+  var id=(document.getElementById('bank-payout-id').value||'').trim();
+  var ref=(document.getElementById('bank-ref').value||'').trim();
+  if(!id||!ref)return _toast('Payout ID and bank reference required','red');
+  _approveBankPayoutDirect(id,ref);
+};
+window._generateReceipt=function(){
+  var txn=(document.getElementById('rec-txn').value||'').trim();
+  var amt=parseInt(document.getElementById('rec-amt').value)||0;
+  if(!txn||!amt)return _toast('Transaction ID and amount required','red');
+  _cf('finosGenerateReceipt')({
+    transactionId:txn,amountCents:amt,
+    hubType:document.getElementById('rec-hub').value||'marketplace',
+    description:document.getElementById('rec-desc').value||'',
+  }).then(function(r){_toast('Receipt '+r.data.receiptNumber+' generated','green');}).catch(function(e){_toast(e.message,'red');});
+};
+window._calcTax=function(){
+  var amt=parseInt(document.getElementById('tax-amt').value)||0;
+  if(!amt)return _toast('Amount required','red');
+  _cf('calculateTaxBreakdown')({orderAmountCents:amt,category:document.getElementById('tax-cat').value})
+  .then(function(r){
+    var d=r.data;
+    document.getElementById('taxResult').innerHTML=
+      '<div style="display:grid;gap:5px;background:var(--sur2);padding:12px;border-radius:8px;border:1px solid var(--brd)">'+
+      _taxRow('Buyer pays','KES '+_kes(d.summary.buyerPays),'var(--txt)')+
+      _taxRow('Platform commission ('+d.commission.effectiveRate+'%)','KES '+_kes(d.commission.commissionCents),'var(--b)')+
+      _taxRow('Seller receives','KES '+_kes(d.summary.sellerReceives),'var(--g)')+
+      _taxRow('VAT ('+d.vat.taxRate+'%)','KES '+_kes(d.vat.taxCents),'var(--o)')+
+      _taxRow('Platform net','KES '+_kes(d.summary.platformGets),'var(--p)')+
+      '</div>';
+  }).catch(function(e){_toast(e.message,'red');});
+};
+function _taxRow(label,value,color){
+  return '<div style="display:flex;justify-content:space-between;font-size:12px">'+
+    '<span style="color:var(--sub)">'+_esc(label)+'</span>'+
+    '<span style="font-weight:700;color:'+color+'">'+value+'</span></div>';
+}
+
+/* ── Helpers ── */
+function _kes(cents){return Math.round((cents||0)/100).toLocaleString();}
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _relTime(ts){
+  if(!ts)return'—';
+  var t=ts.toMillis?ts.toMillis():(ts.seconds?ts.seconds*1000:0);
+  if(!t)return'—';
+  var diff=Math.round((Date.now()-t)/1000);
+  if(diff<60)return diff+'s ago';
+  if(diff<3600)return Math.round(diff/60)+'m ago';
+  if(diff<86400)return Math.round(diff/3600)+'h ago';
+  return Math.round(diff/86400)+'d ago';
+}
+function _escrowBadge(s){
+  var cls={held:'by',released:'bg',disputed:'br',refunded:'bo',partially_refunded:'bo',cancelled:'bs'}[s]||'bs';
+  return '<span class="badge '+cls+'">'+_esc(s)+'</span>';
+}
+function _payoutStatusBadge(s){
+  var cls={pending:'bo',pending_review:'bp',processing:'bb',completed:'bg',failed:'br'}[s]||'bs';
+  return '<span class="badge '+cls+'">'+_esc(s)+'</span>';
+}
+function _sevBadge(s){var cls={critical:'br',high:'br',medium:'bo',low:'bs'}[s]||'bs';return '<span class="badge '+cls+'">'+_esc(s||'?')+'</span>';}
+function _alertBadge(s){return {critical:'br',high:'br',medium:'bo',low:'bs'}[s]||'bs';}
+function _toast(msg,c){
+  var t=document.getElementById('toast');t.textContent=msg;
+  t.style.borderColor=c==='red'?'rgba(255,68,68,.3)':c==='green'?'rgba(113,255,0,.3)':'var(--brd2)';
+  t.style.color=c==='red'?'var(--r)':c==='green'?'var(--g)':'var(--txt)';
+  t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
+}
+window._closeOverlay=function(e,id){if(e.target===document.getElementById(id))document.getElementById(id).classList.remove('open');};
+})();
+</script>
+</body>
+</html>

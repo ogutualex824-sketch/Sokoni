@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trust & Safety — SOKONI Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#09090b;--sur:#111113;--sur2:#18181b;--brd:#1e1e22;--brd2:#2a2a30;--g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;--y:#fbbf24;--txt:#e5e7eb;--sub:#6b7280;--radius:12px}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--sur);border-right:1px solid var(--brd);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.logo{padding:18px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px}
+.logo-text{font-size:13px;font-weight:900;color:var(--r);line-height:1.2}
+.logo-sub{font-size:10px;color:var(--sub)}
+.ng{padding:10px 0 3px 14px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.1em}
+.ni{display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:8px;margin:1px 8px;font-size:13px;font-weight:500;color:var(--sub);cursor:pointer;transition:.12s}
+.ni:hover{background:var(--sur2);color:var(--txt)}.ni.active{background:rgba(255,68,68,.1);color:var(--r)}
+.ni .material-icons{font-size:17px;flex-shrink:0}
+.bc{background:var(--r);color:#fff;border-radius:999px;font-size:9px;font-weight:900;padding:1px 5px;margin-left:auto}
+.sidebar-foot{margin-top:auto;padding:10px 8px;border-top:1px solid var(--brd)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:0 22px;height:58px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:16px;font-weight:900;color:var(--r);flex:1}
+.content{padding:20px;flex:1}
+.panel{display:none}.panel.active{display:block}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--sur);border:1px solid var(--brd);border-radius:var(--radius);padding:14px}
+.stat.crit{border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.04)}
+.sv{font-size:24px;font-weight:900;color:var(--r);line-height:1}
+.sv.o{color:var(--o)}.sv.y{color:var(--y)}.sv.p{color:var(--p)}.sv.g{color:var(--g)}.sv.b{color:var(--b)}
+.sl{font-size:10px;color:var(--sub);margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:var(--radius);margin-bottom:16px}
+.card-hd{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--brd)}
+.card-title{font-size:13px;font-weight:700;flex:1}
+.card-body{padding:16px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;padding:9px 12px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--brd)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--brd);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--sur2)}
+.tbl-empty{text-align:center;padding:32px;color:var(--sub)}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:.12s;font-family:inherit}
+.btn-r{background:rgba(255,68,68,.12);color:var(--r);border:1px solid rgba(255,68,68,.22)}.btn-r:hover{background:rgba(255,68,68,.2)}
+.btn-g{background:var(--g);color:#000}.btn-g:hover{background:#5dcc00}
+.btn-o{background:none;border:1.5px solid var(--brd2);color:var(--txt)}.btn-o:hover{background:var(--sur2)}
+.btn-b{background:rgba(0,212,255,.12);color:var(--b);border:1px solid rgba(0,212,255,.2)}.btn-b:hover{background:rgba(0,212,255,.2)}
+.btn-p{background:rgba(168,85,247,.12);color:var(--p);border:1px solid rgba(168,85,247,.2)}.btn-p:hover{background:rgba(168,85,247,.2)}
+.btn-sm{padding:5px 9px;font-size:11px}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.br{background:rgba(255,68,68,.1);color:var(--r)}.bo{background:rgba(255,149,0,.1);color:var(--o)}
+.by{background:rgba(251,191,36,.1);color:var(--y)}.bg{background:rgba(113,255,0,.1);color:var(--g)}
+.bb{background:rgba(0,212,255,.1);color:var(--b)}.bp{background:rgba(168,85,247,.1);color:var(--p)}
+.bs{background:rgba(255,255,255,.06);color:var(--sub)}
+.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+.search-box{display:flex;align-items:center;gap:6px;background:var(--sur);border:1.5px solid var(--brd2);border-radius:8px;padding:0 10px;height:34px;flex:1;min-width:160px}
+.search-box input{flex:1;border:none;background:none;font-size:12px;color:var(--txt);outline:none;font-family:inherit}
+.search-box .material-icons{font-size:16px;color:var(--sub)}
+.fs{background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:0 10px;border-radius:8px;font-size:12px;font-family:inherit;outline:none;height:34px;cursor:pointer}
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fl{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.fi{background:var(--sur2);border:1.5px solid var(--brd2);color:var(--txt);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:100%;transition:.12s}
+.fi:focus{border-color:var(--r)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border:1px solid var(--brd2);border-radius:14px;width:min(480px,92vw);max-height:90vh;overflow-y:auto}
+.mhd{display:flex;align-items:center;gap:9px;padding:16px 20px;border-bottom:1px solid var(--brd);position:sticky;top:0;background:var(--sur);z-index:10}
+.mhd h2{font-size:14px;font-weight:900;flex:1}
+.mbody{padding:20px}
+.mfoot{padding:12px 20px;border-top:1px solid var(--brd);display:flex;gap:9px;justify-content:flex-end;background:var(--sur);position:sticky;bottom:0}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1d;border:1px solid var(--brd2);color:var(--txt);padding:9px 16px;border-radius:9px;font-size:12px;font-weight:700;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.spin{width:18px;height:18px;border:2px solid var(--brd);border-top-color:var(--r);border-radius:50%;animation:sp .7s linear infinite;display:inline-block;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.term-chip{display:inline-flex;align-items:center;gap:5px;background:var(--sur2);border:1px solid var(--brd2);border-radius:20px;padding:4px 10px;font-size:11px;margin:3px}
+.term-chip button{background:none;border:none;cursor:pointer;color:var(--r);font-size:13px;line-height:1;padding:0}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12px}
+.bar-label{width:110px;color:var(--sub);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{flex:1;background:var(--sur2);border-radius:4px;height:9px}
+.bar-fill{height:100%;border-radius:4px;background:var(--r)}
+.bar-val{width:40px;text-align:right;font-weight:700;font-size:11px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="material-icons" style="color:var(--r);font-size:22px">shield</span>
+      <div><div class="logo-text">Trust & Safety</div><div class="logo-sub">SOKONI v1.0</div></div>
+    </div>
+    <div class="ng">Monitor</div>
+    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons">dashboard</span>Dashboard</div>
+    <div class="ni" onclick="_nav(this,'reports')"><span class="material-icons">flag</span>Reports <span class="bc" id="sbReports">…</span></div>
+    <div class="ng">Actions</div>
+    <div class="ni" onclick="_nav(this,'banned')"><span class="material-icons">block</span>Banned Users</div>
+    <div class="ni" onclick="_nav(this,'risk')"><span class="material-icons">warning</span>Risk Scores</div>
+    <div class="ni" onclick="_nav(this,'terms')"><span class="material-icons">manage_search</span>Banned Terms</div>
+    <div class="sidebar-foot">
+      <a href="admin-os.html" class="ni" style="margin:0"><span class="material-icons">admin_panel_settings</span>Admin OS</a>
+      <a href="admin.html"    class="ni" style="margin:0;margin-top:2px"><span class="material-icons">arrow_back</span>Admin</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1 id="pageTitle">Trust & Safety</h1>
+      <button class="btn btn-o btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+    </div>
+    <div class="content">
+
+      <!-- Dashboard -->
+      <div id="panel-dashboard" class="panel active">
+        <div class="stats" id="dashStats">
+          <div class="stat crit"><div class="sv" id="d-pending">…</div><div class="sl">Pending Reports</div></div>
+          <div class="stat crit"><div class="sv" id="d-critical">…</div><div class="sl">Critical Pending</div></div>
+          <div class="stat"><div class="sv o" id="d-actioned">…</div><div class="sl">Actioned</div></div>
+          <div class="stat"><div class="sv y" id="d-dismissed">…</div><div class="sl">Dismissed</div></div>
+          <div class="stat"><div class="sv p" id="d-banned">…</div><div class="sl">Banned Users</div></div>
+          <div class="stat"><div class="sv b" id="d-highrisk">…</div><div class="sl">High Risk</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Report Type Breakdown</span></div>
+          <div class="card-body" id="breakdownChart"><div class="spin"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Critical & High Reports — Action Required</span></div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>Entity</th><th>Type</th><th>Reason</th><th>Severity</th><th>When</th><th></th></tr></thead>
+              <tbody id="criticalTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports -->
+      <div id="panel-reports" class="panel">
+        <div class="toolbar">
+          <select class="fs" id="reportStatus" onchange="_loadReports()">
+            <option value="pending">Pending</option>
+            <option value="actioned">Actioned</option>
+            <option value="dismissed">Dismissed</option>
+            <option value="escalated">Escalated</option>
+          </select>
+          <select class="fs" id="reportSeverity" onchange="_loadReports()">
+            <option value="">All severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select class="fs" id="reportEntityType" onchange="_loadReports()">
+            <option value="">All types</option>
+            <option value="user">User</option>
+            <option value="product">Product</option>
+            <option value="review">Review</option>
+            <option value="listing">Listing</option>
+            <option value="message">Message</option>
+          </select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Entity ID</th><th>Type</th><th>Reason</th><th>Severity</th><th>Reported By</th><th>When</th><th></th></tr></thead>
+            <tbody id="reportsTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Banned Users -->
+      <div id="panel-banned" class="panel">
+        <div class="toolbar">
+          <div class="search-box"><span class="material-icons">search</span><input type="text" id="bannedSearch" placeholder="Search banned users…" oninput="_filterBanned()"></div>
+          <button class="btn btn-r btn-sm" onclick="_openBanModal(null,'ban')"><span class="material-icons" style="font-size:14px">block</span>Ban User</button>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>UID</th><th>Status</th><th>Reason</th><th>Banned By</th><th>When</th><th></th></tr></thead>
+            <tbody id="bannedTbl"><tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Risk Scores -->
+      <div id="panel-risk" class="panel">
+        <div class="toolbar">
+          <select class="fs" id="riskLevelFilter" onchange="_loadRisk()">
+            <option value="">All risk levels</option>
+            <option value="critical">Critical (70+)</option>
+            <option value="high">High (40–69)</option>
+            <option value="medium">Medium (20–39)</option>
+            <option value="low">Low (0–19)</option>
+          </select>
+        </div>
+        <div class="card">
+          <table class="tbl">
+            <thead><tr><th>Entity</th><th>Type</th><th>Score</th><th>Risk Level</th><th>Top Factors</th><th>Updated</th><th></th></tr></thead>
+            <tbody id="riskTbl"><tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Banned Terms -->
+      <div id="panel-terms" class="panel">
+        <div class="card">
+          <div class="card-hd"><span class="card-title">Banned Terms</span>
+            <div style="display:flex;gap:8px">
+              <input type="text" class="fi" id="newTerm" placeholder="New term…" style="height:32px;padding:0 10px;font-size:12px">
+              <button class="btn btn-r btn-sm" onclick="_addTerm()"><span class="material-icons" style="font-size:14px">add</span>Add</button>
+            </div>
+          </div>
+          <div class="card-body" id="termsList"><div class="spin"></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Review modal -->
+<div class="overlay" id="reviewModal" onclick="_closeOv(event,'reviewModal')">
+  <div class="modal">
+    <div class="mhd"><h2>Review Report</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('reviewModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <input type="hidden" id="rv-id">
+      <div id="rv-detail" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.9"></div>
+      <div class="fg"><label class="fl">Action</label>
+        <select class="fs" id="rv-action" style="height:40px;width:100%;font-size:13px">
+          <option value="approve">Approve & Take Action</option>
+          <option value="dismiss">Dismiss</option>
+          <option value="escalate">Escalate</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Resolution Note</label><input type="text" class="fi" id="rv-resolution" placeholder="What action was taken?"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="rv-ban" style="accent-color:var(--r)">
+        Also ban the reported entity (superAdmin only)
+      </label>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('reviewModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-r" id="reviewBtn" onclick="_submitReview()">Apply Action</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ban/suspend modal -->
+<div class="overlay" id="banModal" onclick="_closeOv(event,'banModal')">
+  <div class="modal">
+    <div class="mhd"><h2 id="banModalTitle">Ban User</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('banModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mbody">
+      <input type="hidden" id="bm-action">
+      <div class="fg"><label class="fl">User UID</label><input type="text" class="fi" id="bm-uid"></div>
+      <div class="fg" id="bm-dur-wrap" style="display:none"><label class="fl">Duration (days, blank = permanent)</label><input type="number" class="fi" id="bm-dur" min="1" placeholder="Leave blank for permanent"></div>
+      <div class="fg"><label class="fl">Reason *</label><input type="text" class="fi" id="bm-reason" placeholder="Violation reason"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="document.getElementById('banModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-r" id="banBtn" onclick="_submitBan()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="firebase.js"></script>
+<script>
+(function(){
+'use strict';
+firebase.auth().onAuthStateChanged(function(u){
+  if(!u){location.href='login.html?redirect=trust-safety.html';return;}
+  u.getIdTokenResult().then(function(t){
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='index.html';return;}
+    _isSuperAdmin=t.claims.superAdmin||false;
+    if(!_isSuperAdmin){document.getElementById('rv-ban').parentElement.style.opacity='.4';document.getElementById('rv-ban').disabled=true;}
+    _loadDashboard();
+  });
+});
+
+var _fns=null,_db=null,_isSuperAdmin=false;
+var _allBanned=[],_allTerms=[],_allRisk=[];
+function _cf(n){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(n);}
+function _fs(){if(!_db)_db=firebase.firestore();return _db;}
+
+var TITLES={dashboard:'Dashboard',reports:'Reports Queue',banned:'Banned Users',risk:'Risk Scores',terms:'Banned Terms'};
+
+window._nav=function(el,p){
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+p).classList.add('active');
+  document.getElementById('pageTitle').textContent=TITLES[p]||p;
+  ({dashboard:_loadDashboard,reports:_loadReports,banned:_loadBanned,risk:_loadRisk,terms:_loadTerms}[p]||function(){})();
+};
+window._refresh=function(){var a=document.querySelector('.panel.active');if(a)({dashboard:_loadDashboard,reports:_loadReports,banned:_loadBanned,risk:_loadRisk,terms:_loadTerms}[a.id.replace('panel-','')]||function(){})();};
+
+function _loadDashboard(){
+  _cf('tsGetTrustDashboard')({}).then(function(r){
+    var d=r.data;
+    document.getElementById('d-pending').textContent=d.pending;
+    document.getElementById('d-critical').textContent=d.criticalPending;
+    document.getElementById('d-actioned').textContent=d.actioned;
+    document.getElementById('d-dismissed').textContent=d.dismissed;
+    document.getElementById('d-banned').textContent=d.totalBanned;
+    document.getElementById('d-highrisk').textContent=d.highRiskEntities;
+    document.getElementById('sbReports').textContent=d.pending;
+    /* Breakdown chart */
+    var breakdown=d.entityBreakdown||{};
+    var entries=Object.entries(breakdown);
+    var max=entries.reduce(function(m,e){return Math.max(m,e[1]);},1);
+    document.getElementById('breakdownChart').innerHTML=entries.length?entries.map(function(e){
+      return '<div class="bar-row">'+
+        '<div class="bar-label">'+_esc(e[0])+'</div>'+
+        '<div class="bar-track"><div class="bar-fill" style="width:'+Math.round(e[1]/max*100)+'%"></div></div>'+
+        '<div class="bar-val">'+e[1]+'</div></div>';
+    }).join(''):'<div style="color:var(--sub);font-size:12px">No pending reports</div>';
+  }).catch(function(e){_toast('Error: '+e.message,'red');});
+
+  /* Critical reports table */
+  _cf('tsGetReports')({status:'pending',severity:'critical',limit:20}).then(function(r){
+    var tb=document.getElementById('criticalTbl');
+    if(!r.data.reports.length){
+      _cf('tsGetReports')({status:'pending',limit:10}).then(function(r2){
+        _renderReportRows(r2.data.reports,'criticalTbl',6);
+      });
+      return;
+    }
+    _renderReportRows(r.data.reports,'criticalTbl',6);
+  }).catch(function(){document.getElementById('criticalTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">No critical reports</td></tr>';});
+}
+
+function _loadReports(){
+  var status=document.getElementById('reportStatus').value;
+  var severity=document.getElementById('reportSeverity').value||undefined;
+  var et=document.getElementById('reportEntityType').value||undefined;
+  document.getElementById('reportsTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('tsGetReports')({status,severity,entityType:et,limit:100}).then(function(r){
+    _renderReportRows(r.data.reports,'reportsTbl',7);
+  }).catch(function(e){document.getElementById('reportsTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+
+function _renderReportRows(reports,tbId,cols){
+  var tb=document.getElementById(tbId);
+  if(!reports.length){tb.innerHTML='<tr><td colspan="'+cols+'" class="tbl-empty">No reports</td></tr>';return;}
+  tb.innerHTML=reports.map(function(rep){
+    return '<tr>'+
+      '<td style="font-size:11px;font-family:monospace">'+_esc((rep.entityId||'').slice(0,16))+'</td>'+
+      '<td><span class="badge bb">'+_esc(rep.entityType||'?')+'</span></td>'+
+      '<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_esc(rep.reason||'')+'">'+_esc(rep.reason||'—')+'</td>'+
+      '<td>'+_sevBadge(rep.severity)+'</td>'+
+      (cols===7?'<td style="font-size:11px;color:var(--sub)">'+_esc((rep.reportedBy||'').slice(0,14))+'</td>':'')+''+
+      '<td style="font-size:11px;color:var(--sub)">'+_relTime(rep.createdAt)+'</td>'+
+      '<td><button class="btn btn-r btn-sm" onclick="_openReview(\''+rep.id+'\','+JSON.stringify(rep).replace(/'/g,"\\'")+')">Review</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+window._openReview=function(id,rep){
+  document.getElementById('rv-id').value=id;
+  document.getElementById('rv-detail').innerHTML=
+    'Entity: <strong>'+_esc(rep.entityId||'?')+'</strong> ('+_esc(rep.entityType||'?')+')<br>'+
+    'Reason: <strong>'+_esc(rep.reason||'—')+'</strong><br>'+
+    'Detail: '+_esc(rep.detail||'—')+'<br>'+
+    'Severity: '+_sevBadge(rep.severity)+'&nbsp;&nbsp;Reported: '+_relTime(rep.createdAt);
+  document.getElementById('rv-action').value='approve';
+  document.getElementById('rv-resolution').value='';
+  document.getElementById('rv-ban').checked=false;
+  document.getElementById('reviewModal').classList.add('open');
+};
+window._submitReview=function(){
+  var id=document.getElementById('rv-id').value;
+  var action=document.getElementById('rv-action').value;
+  var resolution=document.getElementById('rv-resolution').value.trim();
+  var banUser=document.getElementById('rv-ban').checked;
+  var btn=document.getElementById('reviewBtn');btn.disabled=true;btn.textContent='Applying…';
+  _cf('tsReviewReport')({reportId:id,action,resolution,banUser})
+  .then(function(){_toast('Report '+action+'d','green');document.getElementById('reviewModal').classList.remove('open');_loadReports();_loadDashboard();})
+  .catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Apply Action';});
+};
+
+function _loadBanned(){
+  document.getElementById('bannedTbl').innerHTML='<tr><td colspan="6" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _fs().collection('users').where('status','in',['banned','suspended']).limit(200).get()
+  .then(function(s){
+    _allBanned=s.docs.map(function(d){return{id:d.id,...d.data()};});
+    _renderBanned(_allBanned);
+  }).catch(function(e){document.getElementById('bannedTbl').innerHTML='<tr><td colspan="6" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._filterBanned=function(){
+  var q=(document.getElementById('bannedSearch').value||'').toLowerCase();
+  _renderBanned(_allBanned.filter(function(u){return !q||u.id.toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q)||(u.displayName||'').toLowerCase().includes(q);}));
+};
+function _renderBanned(list){
+  var tb=document.getElementById('bannedTbl');
+  if(!list.length){tb.innerHTML='<tr><td colspan="6" class="tbl-empty">No banned or suspended users</td></tr>';return;}
+  tb.innerHTML=list.map(function(u){
+    return '<tr>'+
+      '<td style="font-size:11px;font-family:monospace">'+_esc(u.id.slice(0,18))+'</td>'+
+      '<td><span class="badge '+(u.status==='banned'?'br':'bo')+'">'+_esc(u.status)+'</span></td>'+
+      '<td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(u.banReason||u.suspendReason||'—')+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc((u.bannedBy||u.statusUpdatedBy||'—').slice(0,14))+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_relTime(u.bannedAt||u.statusUpdatedAt)+'</td>'+
+      '<td><button class="btn btn-g btn-sm" onclick="_restoreUser(\''+u.id+'\')">Restore</button></td>'+
+    '</tr>';
+  }).join('');
+}
+window._openBanModal=function(uid,action){
+  document.getElementById('bm-action').value=action;
+  document.getElementById('bm-uid').value=uid||'';
+  document.getElementById('banModalTitle').textContent={ban:'Ban User',suspend:'Suspend User',restore:'Restore User'}[action]||'Ban User';
+  document.getElementById('bm-dur-wrap').style.display=action==='suspend'?'':'none';
+  document.getElementById('bm-reason').value='';
+  document.getElementById('banModal').classList.add('open');
+};
+window._submitBan=function(){
+  var uid=document.getElementById('bm-uid').value.trim();
+  var action=document.getElementById('bm-action').value;
+  var reason=document.getElementById('bm-reason').value.trim();
+  var dur=parseInt(document.getElementById('bm-dur').value)||undefined;
+  if(!uid||!reason)return _toast('UID and reason required','red');
+  var btn=document.getElementById('banBtn');btn.disabled=true;btn.textContent='Applying…';
+  _cf('tsBanUser')({uid,action,reason,durationDays:dur})
+  .then(function(){_toast('User '+action+'ned','green');document.getElementById('banModal').classList.remove('open');_loadBanned();})
+  .catch(function(e){_toast(e.message,'red');})
+  .finally(function(){btn.disabled=false;btn.textContent='Confirm';});
+};
+window._restoreUser=function(uid){
+  if(!confirm('Restore user '+uid+'?'))return;
+  _cf('tsBanUser')({uid,action:'restore',reason:'Admin manual restore'})
+  .then(function(){_toast('User restored','green');_loadBanned();}).catch(function(e){_toast(e.message,'red');});
+};
+
+function _loadRisk(){
+  var level=document.getElementById('riskLevelFilter').value||undefined;
+  document.getElementById('riskTbl').innerHTML='<tr><td colspan="7" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('tsGetRiskScores')({riskLevel:level,limit:100}).then(function(r){
+    var tb=document.getElementById('riskTbl');
+    if(!r.data.scores.length){tb.innerHTML='<tr><td colspan="7" class="tbl-empty">No risk scores yet — run tsCalculateRiskScore per entity</td></tr>';return;}
+    tb.innerHTML=r.data.scores.map(function(s){
+      var topFactor=(s.factors&&s.factors[0])?s.factors[0].name:'—';
+      return '<tr>'+
+        '<td style="font-size:11px;font-family:monospace">'+_esc((s.entityId||'').slice(0,18))+'</td>'+
+        '<td><span class="badge bs">'+_esc(s.entityType||'?')+'</span></td>'+
+        '<td style="font-weight:900;font-size:15px;color:'+(s.score>=70?'var(--r)':s.score>=40?'var(--o)':s.score>=20?'var(--y)':'var(--g)')+'">'+s.score+'</td>'+
+        '<td>'+_riskBadge(s.riskLevel)+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_esc(topFactor)+'</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_relTime(s.calculatedAt)+'</td>'+
+        '<td>'+
+          '<button class="btn btn-b btn-sm" style="margin-right:4px" onclick="_recalcRisk(\''+s.entityId+'\',\''+s.entityType+'\')">Recalc</button>'+
+          (s.score>=40?'<button class="btn btn-r btn-sm" onclick="_openBanModal(\''+s.entityId+'\',\'ban\')">Ban</button>':'')+''+
+        '</td>'+
+      '</tr>';
+    }).join('');
+  }).catch(function(e){document.getElementById('riskTbl').innerHTML='<tr><td colspan="7" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+window._recalcRisk=function(entityId,entityType){
+  _cf('tsCalculateRiskScore')({entityId,entityType})
+  .then(function(r){_toast('Score: '+r.data.score+' ('+r.data.riskLevel+')','green');_loadRisk();}).catch(function(e){_toast(e.message,'red');});
+};
+
+function _loadTerms(){
+  document.getElementById('termsList').innerHTML='<div class="spin"></div>';
+  _cf('tsGetBannedTerms')({}).then(function(r){
+    _allTerms=r.data.terms||[];
+    _renderTerms();
+  }).catch(function(e){_toast(e.message,'red');});
+}
+function _renderTerms(){
+  document.getElementById('termsList').innerHTML=_allTerms.length
+    ?_allTerms.map(function(t){return '<span class="term-chip">'+_esc(t.term)+'<button onclick="_deleteTerm(\''+t.id+'\')">×</button></span>';}).join('')
+    :'<div style="color:var(--sub);font-size:12px">No banned terms yet</div>';
+}
+window._addTerm=function(){
+  var t=(document.getElementById('newTerm').value||'').trim();
+  if(!t)return _toast('Enter a term','red');
+  _cf('tsManageBannedTerm')({action:'add',term:t}).then(function(){document.getElementById('newTerm').value='';_toast('Term added','green');_loadTerms();}).catch(function(e){_toast(e.message,'red');});
+};
+window._deleteTerm=function(id){
+  _cf('tsManageBannedTerm')({action:'delete',termId:id}).then(function(){_toast('Term removed','green');_loadTerms();}).catch(function(e){_toast(e.message,'red');});
+};
+
+function _sevBadge(s){return '<span class="badge '+(s==='critical'?'br':s==='high'?'br':s==='medium'?'bo':'bs')+'">'+_esc(s||'?')+'</span>';}
+function _riskBadge(l){return '<span class="badge '+(l==='critical'?'br':l==='high'?'br':l==='medium'?'bo':'bg')+'">'+_esc(l||'?')+'</span>';}
+function _relTime(ts){if(!ts)return'—';var t=ts.seconds?ts.seconds*1000:ts.toMillis?ts.toMillis():0;if(!t)return'—';var d=Math.round((Date.now()-t)/1000);return d<60?d+'s ago':d<3600?Math.round(d/60)+'m ago':d<86400?Math.round(d/3600)+'h ago':Math.round(d/86400)+'d ago';}
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function _toast(msg,c){var t=document.getElementById('toast');t.textContent=msg;t.style.color=c==='red'?'var(--r)':'var(--g)';t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);}
+window._closeOv=function(e,id){if(e.target===document.getElementById(id))document.getElementById(id).classList.remove('open');};
+})();
+</script>
+</body>
+</html>
