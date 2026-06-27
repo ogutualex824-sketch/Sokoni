@@ -1,4 +1,33 @@
-﻿## [2026-06-27] — SmartPOS Phase 2: Enterprise Retail Management Engine v2.0
+﻿## [2026-06-27] — Venue & Resource Booking Engine v1.0
+
+### Summary
+Universal venue and resource booking system covering 30+ resource types (football grounds, studios, event venues, conference halls, co-working spaces, etc.) across all SOKONI hubs. Provides atomic slot locking via Firestore transactions (2-minute holds prevent double-booking), server-authoritative pricing with 8 rate modifiers (hourly/half-day/full-day/weekend/peak/holiday/member/promo), 19 Cloud Functions (search, availability, hold/release, create/cancel/reschedule, check-in/out, calendar, blockouts, reminders, cleanup schedulers), customer booking flow UI with calendar picker, and owner management dashboard with month/week/list calendar views, analytics, and configurable pricing.
+
+### New Files
+- **`sokoni-booking-engine.js`** — Client SDK: slot generation, pricing engine, hold management, CF wrappers, event bus, XSS-safe helpers
+- **`functions/booking.js`** — 19 Cloud Functions: bookingSearchVenues, bookingGetVenue, bookingGetAvailability, bookingHoldSlot, bookingReleaseHold, bookingCreate, bookingCancel, bookingReschedule, bookingCheckIn, bookingCheckOut, bookingGetMyBookings, bookingGetCalendar, bookingBlockSlots, bookingSaveVenue, bookingApprove, bookingReject, bookingSendReminders (scheduled, every 30 min), bookingCleanupHolds (scheduled, every 5 min), bookingAutoComplete (scheduled, daily)
+- **`venue-booking.html`** — Customer-facing: venue search with type/city/indoor filters, live availability status badges, 4-step booking flow (date/slot → add-ons → review → payment), 2-min hold countdown, pricing breakdown
+- **`venue-manager.html`** — Owner dashboard: venue selector, month/week/list calendar views, booking list (approve/reject/check-in/check-out), analytics KPIs + bar charts, venue config (hours per day), pricing config (all rate types + add-ons), date blocking
+
+### Modified Files
+- **`functions/index.js`** — Added 19 booking CF exports
+
+### New Firestore Collections
+- `venues/{venueId}` — venue/resource configuration (name, type, hours, pricing, capacity, config)
+- `bookings/{bookingId}` — all bookings (customer, date/time, pricing, status, reminders, check-in/out)
+- `venueBlockouts/{id}` — maintenance periods, closures
+- `bookingHolds/{holdId}` — 2-minute atomic slot locks (TTL enforced by cleanup CF)
+
+### Architecture
+- **Slot atomicity**: Firestore transaction checks overlap across bookings + holds before writing — zero double-booking risk
+- **Idempotency**: `idempotencyKey` field on every booking creation — duplicate requests return existing booking ID
+- **Pricing**: Server re-calculates price independently of client — client-side calculation for display only
+- **XSS**: All user-supplied strings pass through `_sanitize()` before Firestore write; all HTML output uses `_e()` escaping
+- **Reminders**: Scheduled CF fires every 30 min, sends 24h and 1h pre-booking notifications
+
+---
+
+## [2026-06-27] — SmartPOS Phase 2: Enterprise Retail Management Engine v2.0
 
 ### Summary
 Complete enterprise retail system on top of SOKONI SmartPOS: financial reporting engine (P&L, tax, cash flow, employee commissions), full inventory management UI, customer CRM with loyalty/wallet/credit, supplier management with purchase orders and GRN workflow, analytics dashboard with CSV export, and 5 Cloud Functions for marketplace sync, receipt delivery, and purchase order emailing. All modules are offline-first via IndexedDB with Firestore cloud sync.

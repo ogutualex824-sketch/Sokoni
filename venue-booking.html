@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book a Venue — SOKONI</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root{--bg:#0a0a15;--bg2:#111122;--card:#16162a;--card2:#1e1e38;--border:#252545;--accent:#7c3aed;--accent2:#a855f7;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;--text:#f0f0ff;--muted:#8888aa;--r:14px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:15px;min-height:100vh}
+    /* Header */
+    .hdr{background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;padding:0 16px;height:56px;display:flex;align-items:center;gap:10px}
+    .hdr-back{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px 8px}
+    .hdr-title{font-size:16px;font-weight:700;flex:1}
+    /* Search bar */
+    .search-bar{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin:14px 12px 0;display:flex;align-items:center;gap:10px}
+    .search-bar input{flex:1;background:none;border:none;color:var(--text);font-size:15px;outline:none}
+    .search-bar input::placeholder{color:var(--muted)}
+    /* Filter chips */
+    .filter-row{display:flex;gap:6px;padding:10px 12px;overflow-x:auto;scrollbar-width:none}
+    .filter-row::-webkit-scrollbar{display:none}
+    .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer;white-space:nowrap;flex-shrink:0}
+    .chip.active{border-color:var(--accent);background:rgba(124,58,237,.2);color:var(--accent2)}
+    /* Grid */
+    .venues-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:12px}
+    /* Venue card */
+    .vcard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
+    .vcard:hover{transform:translateY(-2px);border-color:var(--accent)}
+    .vcard-img{height:180px;background:linear-gradient(135deg,var(--accent),var(--accent2));position:relative;overflow:hidden}
+    .vcard-img img{width:100%;height:100%;object-fit:cover}
+    .vcard-status{position:absolute;top:10px;left:10px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase}
+    .st-available{background:rgba(34,197,94,.85);color:#fff}
+    .st-closes_soon{background:rgba(234,179,8,.85);color:#000}
+    .st-opens_soon{background:rgba(59,130,246,.85);color:#fff}
+    .st-closed,.st-maintenance{background:rgba(100,100,120,.85);color:#fff}
+    .vcard-type{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);padding:3px 10px;border-radius:20px;font-size:11px;color:#fff}
+    .vcard-body{padding:14px}
+    .vcard-name{font-size:15px;font-weight:700;margin-bottom:4px}
+    .vcard-loc{font-size:12px;color:var(--muted);margin-bottom:8px}
+    .vcard-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .vcard-price{font-size:16px;font-weight:700;color:var(--accent2)}
+    .vcard-price span{font-size:11px;color:var(--muted);font-weight:400}
+    .vcard-amenities{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+    .amenity-pill{background:rgba(124,58,237,.1);color:var(--accent2);font-size:10px;padding:2px 7px;border-radius:10px}
+    .vcard-rating{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--yellow)}
+    .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+    .empty-icon{font-size:56px;margin-bottom:12px}
+    /* Btn */
+    .btn{padding:10px 18px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent)}
+    .btn-sm{padding:7px 14px;font-size:12px}
+    /* Modal */
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:flex;align-items:flex-end;justify-content:center;padding-top:80px}
+    @media(min-width:600px){.modal-bg{align-items:center;padding-top:0}}
+    .modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:640px;max-height:90vh;overflow-y:auto}
+    @media(min-width:600px){.modal{border-radius:var(--r)}}
+    .modal-hdr{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:10}
+    .modal-title{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+    .modal-body{padding:20px}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--card)}
+    /* Form */
+    .form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+    .form-label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    .form-input{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;color:var(--text);font-size:14px;outline:none;width:100%}
+    .form-input:focus{border-color:var(--accent)}
+    select.form-input{cursor:pointer}
+    /* Slots */
+    .slots-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin:12px 0}
+    .slot{padding:8px 4px;border:1px solid var(--border);border-radius:8px;text-align:center;font-size:12px;cursor:pointer;background:var(--card2);transition:all .15s;user-select:none}
+    .slot:hover{border-color:var(--accent)}
+    .slot.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .slot.unavailable{opacity:.35;cursor:not-allowed;pointer-events:none;text-decoration:line-through}
+    .slot.range{background:rgba(124,58,237,.25);border-color:var(--accent);color:var(--accent2)}
+    /* Duration selector */
+    .dur-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+    .dur-btn{padding:7px 14px;border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;background:var(--card2);color:var(--text);font-weight:500}
+    .dur-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    /* Pricing */
+    .price-table{width:100%;font-size:13px}
+    .price-table tr{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+    .price-table .total-row{font-weight:700;font-size:15px;border-top:1px solid var(--border);border-bottom:none;margin-top:6px;padding-top:10px}
+    /* Add-ons */
+    .addon-item{display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;margin-bottom:6px}
+    .addon-check{accent-color:var(--accent);width:18px;height:18px;cursor:pointer}
+    /* Calendar */
+    .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .cal-nav-title{font-weight:700;font-size:14px}
+    .cal-btn{background:none;border:1px solid var(--border);color:var(--text);border-radius:7px;width:32px;height:32px;cursor:pointer;font-size:16px}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+    .cal-day-header{font-size:11px;color:var(--muted);padding:4px 0;font-weight:600}
+    .cal-day{padding:7px 3px;border-radius:7px;font-size:13px;cursor:pointer;border:1px solid transparent}
+    .cal-day:hover{background:var(--card2)}
+    .cal-day.today{border-color:var(--accent);color:var(--accent2)}
+    .cal-day.selected{background:var(--accent);color:#fff}
+    .cal-day.past{opacity:.3;cursor:not-allowed;pointer-events:none}
+    .cal-day.empty{visibility:hidden}
+    /* Steps */
+    .steps{display:flex;gap:0;margin-bottom:20px}
+    .step{flex:1;text-align:center;padding:8px 4px;font-size:11px;font-weight:600;color:var(--muted);border-bottom:2px solid var(--border);cursor:pointer}
+    .step.active{color:var(--accent2);border-bottom-color:var(--accent)}
+    .step.done{color:var(--green);border-bottom-color:var(--green)}
+    .step-panel{display:none}.step-panel.active{display:block}
+    /* Hold timer */
+    .hold-timer{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:9px;padding:10px 14px;font-size:13px;color:var(--yellow);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+    /* Toast */
+    #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:30px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:480px){.venues-grid{grid-template-columns:1fr}}
+    .section-title{font-size:15px;font-weight:700;margin-bottom:10px}
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <button class="hdr-back" onclick="history.back()">&#8592;</button>
+  <div class="hdr-title">🏟️ Book a Venue</div>
+  <button class="btn btn-sm btn-outline" onclick="window.location.href='venue-manager.html'">My Venues</button>
+</div>
+
+<!-- Search -->
+<div class="search-bar">
+  <span style="font-size:18px">🔍</span>
+  <input id="searchInput" placeholder="Search venues, sports, events…" oninput="debounceSearch()">
+  <button class="btn btn-sm btn-primary" onclick="runSearch()">Search</button>
+</div>
+
+<!-- Filters -->
+<div class="filter-row" id="filterRow">
+  <div class="chip active" data-filter="type" data-value="" onclick="setTypeFilter(this,'')">All Types</div>
+  <div class="chip" data-filter="type" data-value="Football Ground" onclick="setTypeFilter(this,'Football Ground')">⚽ Football</div>
+  <div class="chip" data-filter="type" data-value="Basketball Court" onclick="setTypeFilter(this,'Basketball Court')">🏀 Basketball</div>
+  <div class="chip" data-filter="type" data-value="Tennis Court" onclick="setTypeFilter(this,'Tennis Court')">🎾 Tennis</div>
+  <div class="chip" data-filter="type" data-value="Swimming Pool" onclick="setTypeFilter(this,'Swimming Pool')">🏊 Pool</div>
+  <div class="chip" data-filter="type" data-value="Gym" onclick="setTypeFilter(this,'Gym')">💪 Gym</div>
+  <div class="chip" data-filter="type" data-value="Event Venue" onclick="setTypeFilter(this,'Event Venue')">🎉 Events</div>
+  <div class="chip" data-filter="type" data-value="Conference Hall" onclick="setTypeFilter(this,'Conference Hall')">🏛️ Conference</div>
+  <div class="chip" data-filter="type" data-value="Studio" onclick="setTypeFilter(this,'Studio')">🎙️ Studio</div>
+  <div class="chip" data-filter="type" data-value="Co-working Space" onclick="setTypeFilter(this,'Co-working Space')">💻 Co-working</div>
+  <div class="chip" data-filter="type" data-value="Wedding Venue" onclick="setTypeFilter(this,'Wedding Venue')">💒 Wedding</div>
+</div>
+
+<!-- Date + price filters -->
+<div style="display:flex;gap:8px;padding:0 12px 10px;flex-wrap:wrap;align-items:center">
+  <input type="date" class="form-input" id="dateFilter" style="width:150px" onchange="runSearch()">
+  <select class="form-input" id="cityFilter" style="width:130px" onchange="runSearch()">
+    <option value="">All Cities</option>
+    <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
+    <option>Nakuru</option><option>Eldoret</option><option>Thika</option>
+  </select>
+  <select class="form-input" id="indoorFilter" style="width:120px" onchange="runSearch()">
+    <option value="">Indoor/Outdoor</option>
+    <option value="true">Indoor</option>
+    <option value="false">Outdoor</option>
+  </select>
+</div>
+
+<!-- Results -->
+<div id="venuesGrid" class="venues-grid">
+  <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
+    <span class="spinner"></span> Loading venues…
+  </div>
+</div>
+
+<!-- BOOKING MODAL -->
+<div class="modal-bg" id="bookingModal" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title" id="modalVenueName">Book Venue</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Steps -->
+      <div class="steps">
+        <div class="step active" data-step="1" onclick="goStep(1)">1. Date &amp; Time</div>
+        <div class="step" data-step="2" onclick="goStep(2)">2. Add-ons</div>
+        <div class="step" data-step="3" onclick="goStep(3)">3. Review</div>
+        <div class="step" data-step="4" onclick="goStep(4)">4. Pay</div>
+      </div>
+
+      <!-- Step 1: Date & Slots -->
+      <div class="step-panel active" id="step-1">
+        <!-- Calendar -->
+        <div style="margin-bottom:16px">
+          <div class="cal-nav">
+            <button class="cal-btn" onclick="calPrev()">‹</button>
+            <div class="cal-nav-title" id="calTitle"></div>
+            <button class="cal-btn" onclick="calNext()">›</button>
+          </div>
+          <div class="cal-grid" id="calGrid"></div>
+        </div>
+        <div id="selectedDateLabel" style="font-size:13px;color:var(--muted);margin-bottom:8px"></div>
+        <!-- Booking type -->
+        <div class="form-group">
+          <div class="form-label">Booking Type</div>
+          <div class="dur-row" id="bookingTypeRow"></div>
+        </div>
+        <!-- Slots -->
+        <div id="slotsSection">
+          <div class="form-label" style="margin-bottom:6px">Available Slots</div>
+          <div class="slots-grid" id="slotsGrid"></div>
+          <div id="slotsLoading" style="display:none;text-align:center;padding:16px;color:var(--muted)"><span class="spinner"></span> Checking availability…</div>
+          <div id="slotsDurationRow" style="display:none;margin-top:10px">
+            <div class="form-label">End Time</div>
+            <div class="slots-grid" id="endSlotGrid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Add-ons -->
+      <div class="step-panel" id="step-2">
+        <div class="section-title">Optional Add-ons</div>
+        <div id="addOnList"></div>
+        <div id="noAddons" style="color:var(--muted);font-size:13px;display:none">No add-ons available for this venue.</div>
+        <div class="form-group" style="margin-top:14px">
+          <label class="form-label">Notes for venue owner</label>
+          <textarea class="form-input" id="bookingNotes" rows="2" placeholder="Any special requests or requirements…" style="resize:vertical"></textarea>
+        </div>
+      </div>
+
+      <!-- Step 3: Review -->
+      <div class="step-panel" id="step-3">
+        <div id="reviewSummary"></div>
+      </div>
+
+      <!-- Step 4: Pay -->
+      <div class="step-panel" id="step-4">
+        <div id="paymentSection"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="prevBtn" onclick="goStep(_currentStep-1)" style="display:none">← Back</button>
+      <button class="btn btn-primary" id="nextBtn" onclick="stepAction()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="firebase.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="sokoni-booking-engine.js"></script>
+<script>
+const E   = id => document.getElementById(id);
+const _e  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const KES = n  => 'KES ' + Number(n||0).toFixed(2);
+
+let _venues = [], _activeType = '', _activeVenue = null;
+let _selectedDate = '', _selectedStart = null, _selectedEnd = null;
+let _currentStep = 1, _hold = null, _holdTimer = null, _holdInterval = null;
+let _selectedAddOns = [], _calMonth = new Date();
+let _allSlots = [], _bookingType = 'hourly';
+
+/* ── Toast ── */
+function toast(msg, dur=2500) {
+  const el = E('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>el.classList.remove('show'), dur);
+}
+
+/* ── Date filter default ── */
+E('dateFilter').value = new Date().toISOString().slice(0,10);
+
+/* ── Type filter ── */
+function setTypeFilter(el, val) {
+  document.querySelectorAll('[data-filter="type"]').forEach(c => c.classList.toggle('active', c===el));
+  _activeType = val;
+  runSearch();
+}
+
+/* ── Search ── */
+let _searchTimer;
+function debounceSearch() { clearTimeout(_searchTimer); _searchTimer = setTimeout(runSearch, 400); }
+
+async function runSearch() {
+  const grid = E('venuesGrid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)"><span class="spinner"></span> Loading…</div>';
+  try {
+    const params = {
+      type:   _activeType || undefined,
+      city:   E('cityFilter').value || undefined,
+      date:   E('dateFilter').value || undefined,
+      indoor: E('indoorFilter').value === '' ? undefined : E('indoorFilter').value === 'true',
+    };
+    const q = E('searchInput').value.trim();
+    _venues = await SokoniBooking.searchVenues(params);
+    /* Client-side keyword filter */
+    if (q) _venues = _venues.filter(v => (v.name+v.type+v.area+v.city+v.description).toLowerCase().includes(q.toLowerCase()));
+    renderVenues(_venues);
+  } catch(err) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--red)">⚠️ ${_e(err.message)}</div>`;
+  }
+}
+
+function renderVenues(venues) {
+  const grid = E('venuesGrid');
+  if (!venues.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1"><div class="empty-state"><div class="empty-icon">🏟️</div><div>No venues found.<br>Try different filters or be the first to list one!</div><br><button class="btn btn-primary" onclick="window.location.href=\'venue-manager.html\'">List Your Venue</button></div></div>';
+    return;
+  }
+  grid.innerHTML = venues.map(v => {
+    const status = v.liveStatus || 'available';
+    const stLabel= {available:'Available Now',opens_soon:'Opens Soon',closing_soon:'Closing Soon',closed:'Closed',maintenance:'Maintenance'}[status]||'Available';
+    const stCls  = 'st-'+status;
+    return `<div class="vcard" onclick="openBooking('${_e(v.id)}')">
+      <div class="vcard-img">
+        ${v.photos?.[0] ? `<img src="${_e(v.photos[0])}" alt="${_e(v.name)}" loading="lazy">` : ''}
+        <div class="vcard-status ${stCls}">${stLabel}</div>
+        <div class="vcard-type">${_e(v.type||'Venue')}</div>
+      </div>
+      <div class="vcard-body">
+        <div class="vcard-name">${_e(v.name)}</div>
+        <div class="vcard-loc">📍 ${_e(v.area||'')}${v.area&&v.city?', ':''}${_e(v.city||'')}</div>
+        <div class="vcard-row">
+          <div class="vcard-price">${KES(v.pricing?.hourly||0)} <span>/hour</span></div>
+          ${v.rating?`<div class="vcard-rating">⭐ ${Number(v.rating).toFixed(1)} <span style="color:var(--muted)">(${v.reviewCount||0})</span></div>`:''}
+        </div>
+        ${v.capacity?.max?`<div style="font-size:12px;color:var(--muted);margin-top:4px">👥 Up to ${v.capacity.max} people</div>`:''}
+        ${(v.amenities||[]).length?`<div class="vcard-amenities">${v.amenities.slice(0,4).map(a=>`<span class="amenity-pill">${_e(a)}</span>`).join('')}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ══ BOOKING FLOW ══ */
+async function openBooking(venueId) {
+  const venue = _venues.find(v => v.id === venueId) || await SokoniBooking.getVenue(venueId);
+  _activeVenue = venue;
+  _selectedDate = E('dateFilter').value || new Date().toISOString().slice(0,10);
+  _selectedStart = _selectedEnd = null;
+  _hold = null;
+  _selectedAddOns = [];
+  _currentStep = 1;
+  _bookingType = 'hourly';
+
+  E('modalVenueName').textContent = venue.name || 'Book Venue';
+  E('bookingModal').style.display = '';
+  updateStepUI();
+  renderCalendar();
+  renderBookingTypes();
+  loadSlots();
+  renderAddOns();
+}
+
+function closeModal() {
+  E('bookingModal').style.display = 'none';
+  if (_hold) SokoniBooking.releaseHold(_hold.holdId).catch(()=>{});
+  clearTimeout(_holdTimer); clearInterval(_holdInterval);
+  _hold = null;
+}
+
+/* ── Calendar ── */
+function renderCalendar() {
+  const y = _calMonth.getFullYear(), m = _calMonth.getMonth();
+  E('calTitle').textContent = _calMonth.toLocaleDateString('en-KE',{month:'long',year:'numeric'});
+  const firstDay = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const today = new Date().toISOString().slice(0,10);
+  const days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let html = days.map(d=>`<div class="cal-day-header">${d}</div>`).join('');
+  for (let i=0;i<firstDay;i++) html += '<div class="cal-day empty"></div>';
+  for (let d=1;d<=daysInMonth;d++) {
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const past    = dateStr < today;
+    const sel     = dateStr === _selectedDate;
+    const tod     = dateStr === today;
+    html += `<div class="cal-day ${past?'past':''} ${sel?'selected':''} ${tod&&!sel?'today':''}" onclick="selectDate('${dateStr}')">${d}</div>`;
+  }
+  E('calGrid').innerHTML = html;
+}
+
+function calPrev() { _calMonth = new Date(_calMonth.getFullYear(), _calMonth.getMonth()-1, 1); renderCalendar(); }
+function calNext() { _calMonth = new Date(_calMonth.getFullYear(), _calMonth.getMonth()+1, 1); renderCalendar(); }
+
+function selectDate(d) {
+  _selectedDate = d;
+  _selectedStart = _selectedEnd = null;
+  renderCalendar();
+  E('selectedDateLabel').textContent = '📅 ' + new Date(d).toLocaleDateString('en-KE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  loadSlots();
+}
+
+/* ── Booking type ── */
+function renderBookingTypes() {
+  const types = ['hourly','half_day','full_day'];
+  E('bookingTypeRow').innerHTML = types.map(t => {
+    const labels = {hourly:'Hourly',half_day:'Half Day',full_day:'Full Day'};
+    return `<div class="dur-btn ${t===_bookingType?'active':''}" onclick="setBookingType('${t}')">${labels[t]}</div>`;
+  }).join('');
+}
+
+function setBookingType(t) { _bookingType = t; renderBookingTypes(); _selectedStart=_selectedEnd=null; renderSlots(_allSlots); }
+
+/* ── Slots ── */
+async function loadSlots() {
+  if (!_activeVenue || !_selectedDate) return;
+  E('slotsLoading').style.display='';
+  E('slotsGrid').innerHTML='';
+  try {
+    const res = await SokoniBooking.getAvailability(_activeVenue.id, _selectedDate);
+    _allSlots = res.slots || [];
+    renderSlots(_allSlots);
+  } catch(err) {
+    E('slotsGrid').innerHTML = `<div style="color:var(--red);font-size:13px">⚠️ ${_e(err.message)}</div>`;
+  } finally {
+    E('slotsLoading').style.display = 'none';
+  }
+}
+
+function renderSlots(slots) {
+  E('slotsDurationRow').style.display = 'none';
+  E('slotsGrid').innerHTML = slots.map(s => `
+    <div class="slot ${!s.available?'unavailable':''} ${s.startTime===_selectedStart?.startTime?'selected':''}"
+         onclick="selectStartSlot(${JSON.stringify({startTime:s.startTime,endTime:s.endTime,startMins:s.startMins,endMins:s.endMins}).replace(/"/g,'&quot;')})">
+      ${s.startTime}
+    </div>`).join('');
+}
+
+function selectStartSlot(slot) {
+  _selectedStart = slot;
+  if (_bookingType === 'hourly') {
+    /* Show end time selector */
+    E('slotsDurationRow').style.display = '';
+    const avail = _allSlots.filter(s => s.available && s.startMins >= slot.startMins + 30);
+    E('endSlotGrid').innerHTML = avail.slice(0, 12).map(s => `
+      <div class="slot ${s.endTime===_selectedEnd?.endTime?'selected':''}"
+           onclick="selectEndSlot(${JSON.stringify({startTime:s.startTime,endTime:s.endTime,startMins:s.startMins,endMins:s.endMins}).replace(/"/g,'&quot;')})">
+        ${s.endTime}
+      </div>`).join('');
+  } else {
+    /* For half/full day, compute end automatically */
+    const mins = _bookingType==='half_day' ? 240 : 480;
+    _selectedEnd = { ..._allSlots.find(s=>s.startMins===slot.startMins+mins-30)||slot, endTime: SokoniBooking._minsToTime(slot.startMins+mins) };
+  }
+  renderSlots(_allSlots);
+  updatePrice();
+}
+
+function selectEndSlot(slot) {
+  _selectedEnd = slot;
+  E('endSlotGrid').querySelectorAll('.slot').forEach(el => el.classList.toggle('selected', el.textContent.trim()===slot.endTime));
+  updatePrice();
+}
+
+/* ── Add-ons ── */
+function renderAddOns() {
+  const addons = _activeVenue?.addOns || [];
+  if (!addons.length) { E('noAddons').style.display=''; E('addOnList').innerHTML=''; return; }
+  E('noAddons').style.display = 'none';
+  E('addOnList').innerHTML = addons.map((a, i) => `
+    <div class="addon-item">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
+        <input type="checkbox" class="addon-check" data-index="${i}" onchange="toggleAddon(this,${i})" ${_selectedAddOns.some(x=>x.name===a.name)?'checked':''}>
+        <div><div style="font-weight:600;font-size:13px">${_e(a.name)}</div><div style="font-size:12px;color:var(--muted)">${_e(a.description||'')}</div></div>
+      </label>
+      <div style="font-weight:700;color:var(--accent2)">${KES(a.price)}</div>
+    </div>`).join('');
+}
+
+function toggleAddon(el, idx) {
+  const a = _activeVenue.addOns[idx];
+  if (el.checked) { if (!_selectedAddOns.some(x=>x.name===a.name)) _selectedAddOns.push(a); }
+  else _selectedAddOns = _selectedAddOns.filter(x=>x.name!==a.name);
+  updatePrice();
+}
+
+/* ── Price ── */
+function updatePrice() {
+  if (!_activeVenue || !_selectedStart || !_selectedEnd) return;
+  const p = SokoniBooking.calculatePrice(_activeVenue, _selectedStart.startMins, _selectedEnd.endMins||_selectedEnd.startMins+30, _selectedDate, { addOns: _selectedAddOns });
+  return p;
+}
+
+/* ── Step nav ── */
+function goStep(n) {
+  if (n < 1 || n > 4) return;
+  if (n > 1 && !_selectedStart) { toast('❌ Select a start time first'); return; }
+  if (n > 1 && !_selectedEnd && _bookingType==='hourly') { toast('❌ Select an end time'); return; }
+  _currentStep = n;
+  updateStepUI();
+  if (n===3) renderReview();
+  if (n===4) renderPayment();
+}
+
+function updateStepUI() {
+  document.querySelectorAll('.step').forEach((el,i) => {
+    const sn = i+1;
+    el.classList.toggle('active', sn===_currentStep);
+    el.classList.toggle('done', sn<_currentStep);
+  });
+  document.querySelectorAll('.step-panel').forEach((el,i) => el.classList.toggle('active', i+1===_currentStep));
+  E('prevBtn').style.display = _currentStep>1?'':'none';
+  E('nextBtn').textContent   = _currentStep===4 ? '✅ Confirm Booking' : _currentStep===3 ? 'Proceed to Payment →' : 'Next →';
+}
+
+async function stepAction() {
+  if (_currentStep < 4) { goStep(_currentStep+1); return; }
+  /* Final: confirm booking */
+  await confirmBooking();
+}
+
+/* ── Review ── */
+function renderReview() {
+  const v = _activeVenue;
+  if (!_selectedStart || !_selectedEnd) return;
+  const endMins = _selectedEnd.endMins || _selectedEnd.startMins+30;
+  const p = SokoniBooking.calculatePrice(v, _selectedStart.startMins, endMins, _selectedDate, { addOns: _selectedAddOns });
+  E('reviewSummary').innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:16px;margin-bottom:4px">${_e(v.name)}</div>
+      <div style="font-size:13px;color:var(--muted)">📍 ${_e(v.area||'')} ${_e(v.city||'')}</div>
+      <div style="margin-top:10px;font-size:14px">
+        <div>📅 ${new Date(_selectedDate).toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
+        <div>⏰ ${_selectedStart.startTime} – ${SokoniBooking._minsToTime(endMins)}</div>
+        <div>⏱️ ${Math.round((endMins-_selectedStart.startMins)/60*10)/10} hours</div>
+      </div>
+    </div>
+    <div class="section-title">Price Breakdown</div>
+    <table class="price-table">
+      ${p.breakdown.map(b=>`<tr><td>${_e(b.label)}</td><td>${KES(Math.abs(b.amount))}${b.amount<0?' (discount)':''}</td></tr>`).join('')}
+      ${p.deposit?`<tr><td>Deposit</td><td>${KES(p.deposit)}</td></tr>`:''}
+      <tr class="total-row"><td>Total</td><td style="color:var(--accent2)">${KES(p.total)}</td></tr>
+    </table>
+    ${v.config?.approvalRequired?'<div style="margin-top:12px;padding:10px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:8px;font-size:13px;color:var(--yellow)">⚠️ This venue requires owner approval. Your booking will be confirmed after review.</div>':''}
+  `;
+}
+
+/* ── Payment ── */
+async function renderPayment() {
+  /* Hold the slot */
+  if (!_hold) {
+    const venue  = _activeVenue;
+    const dayStart = new Date(_selectedDate+'T00:00:00').getTime();
+    const endMins  = _selectedEnd?.endMins || _selectedEnd?.startMins+30;
+    const startTs  = dayStart + _selectedStart.startMins * 60000;
+    const endTs    = dayStart + endMins * 60000;
+    try {
+      const holdRes = await SokoniBooking.holdSlot(venue.id, startTs, endTs);
+      _hold = holdRes;
+      startHoldCountdown(2*60);
+    } catch(err) {
+      E('paymentSection').innerHTML = `<div style="color:var(--red)">❌ ${_e(err.message||'Slot no longer available')}</div>`;
+      return;
+    }
+  }
+
+  const endMins = _selectedEnd?.endMins || _selectedEnd?.startMins+30;
+  const p = SokoniBooking.calculatePrice(_activeVenue, _selectedStart.startMins, endMins, _selectedDate, { addOns: _selectedAddOns });
+
+  E('paymentSection').innerHTML = `
+    <div class="hold-timer" id="holdTimerEl">⏳ Slot held for <strong id="holdCountdown">2:00</strong> — complete payment now</div>
+    <div style="text-align:center;margin:20px 0">
+      <div style="font-size:14px;color:var(--muted)">Total to pay</div>
+      <div style="font-size:36px;font-weight:800;color:var(--accent2)">${KES(p.total)}</div>
+    </div>
+    <div style="display:grid;gap:8px">
+      <button class="btn btn-primary" onclick="payWith('mpesa')" style="font-size:15px;padding:14px">
+        📱 Pay with M-Pesa STK Push
+      </button>
+      <button class="btn btn-outline" onclick="payWith('card')">💳 Card Payment</button>
+      <button class="btn btn-outline" onclick="payWith('wallet')">👜 SOKONI Wallet</button>
+    </div>
+  `;
+}
+
+let _holdCountdownInterval;
+function startHoldCountdown(secs) {
+  clearInterval(_holdCountdownInterval);
+  let rem = secs;
+  _holdCountdownInterval = setInterval(() => {
+    rem--;
+    const el = E('holdCountdown');
+    if (el) el.textContent = `${Math.floor(rem/60)}:${String(rem%60).padStart(2,'0')}`;
+    if (rem <= 0) {
+      clearInterval(_holdCountdownInterval);
+      _hold = null;
+      toast('⏰ Your slot hold expired. Please try again.');
+      goStep(1);
+    }
+  }, 1000);
+}
+
+async function payWith(method) {
+  toast('💳 Processing payment…', 10000);
+  /* Integrate with SokoniPay / IntaSend — simplified placeholder */
+  try {
+    const endMins = _selectedEnd?.endMins || _selectedEnd?.startMins+30;
+    const dayStart = new Date(_selectedDate+'T00:00:00').getTime();
+    const startTs  = dayStart + _selectedStart.startMins * 60000;
+    const endTs    = dayStart + endMins * 60000;
+
+    /* Real implementation: call SokoniPay.initiatePayment() then on success call bookingCreate */
+    const result = await SokoniBooking.createBooking({
+      venueId:    _activeVenue.id,
+      holdId:     _hold?.holdId,
+      date:       _selectedDate,
+      startTime:  _selectedStart.startTime,
+      endTime:    SokoniBooking._minsToTime(endMins),
+      addOns:     _selectedAddOns,
+      notes:      E('bookingNotes')?.value || '',
+      paymentId:  'pay_' + Date.now(), // Replace with real payment ID from SokoniPay
+    });
+    clearInterval(_holdCountdownInterval);
+    closeModal();
+    showBookingSuccess(result);
+  } catch(err) {
+    toast('❌ ' + (err.message || 'Booking failed'));
+  }
+}
+
+function showBookingSuccess(result) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);max-width:380px;width:100%;padding:30px;text-align:center">
+    <div style="font-size:64px;margin-bottom:16px">🎉</div>
+    <div style="font-size:20px;font-weight:800;margin-bottom:8px">Booking Confirmed!</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Reference: <strong style="color:var(--text);font-family:monospace">${_e(result.bookingId||'')}</strong></div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">You'll receive a confirmation notification shortly.</div>
+    <button class="btn btn-primary" style="width:100%" onclick="this.closest('.overlay-cls').remove();window.location.reload()">Done</button>
+  </div>`;
+  overlay.className='overlay-cls';
+  document.body.appendChild(overlay);
+}
+
+async function confirmBooking() { /* fallthrough to stepAction */ }
+
+/* ── Init ── */
+runSearch();
+</script>
+</body>
+</html>

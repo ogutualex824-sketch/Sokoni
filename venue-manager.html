@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Venue Manager — SOKONI</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root{--bg:#0a0a15;--bg2:#111122;--card:#16162a;--card2:#1e1e38;--border:#252545;--accent:#7c3aed;--accent2:#a855f7;--green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;--text:#f0f0ff;--muted:#8888aa;--r:14px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:15px;min-height:100vh}
+    /* Top nav */
+    .hdr{background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;height:56px;display:flex;align-items:center;padding:0 16px;gap:10px}
+    .hdr-back{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px 8px}
+    .hdr-title{font-size:16px;font-weight:700;flex:1}
+    /* Tab bar */
+    .tabs{display:flex;border-bottom:1px solid var(--border);padding:0 12px;gap:0;background:var(--card)}
+    .tab{padding:12px 16px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+    .tab.active{color:var(--accent2);border-bottom-color:var(--accent)}
+    .tab-panel{display:none;padding:16px 12px}.tab-panel.active{display:block}
+    /* Cards / shared */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+    .card-title{font-size:14px;font-weight:700;margin-bottom:12px}
+    .section-title{font-size:14px;font-weight:700;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+    .kpi{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .kpi-val{font-size:22px;font-weight:800;color:var(--accent2)}
+    .kpi-label{font-size:11px;color:var(--muted);margin-top:2px}
+    /* Booking row */
+    .brow{display:flex;align-items:center;gap:10px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:10px;margin-bottom:6px}
+    .brow-status{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;white-space:nowrap}
+    .st-pending   {background:rgba(234,179,8,.2);color:var(--yellow)}
+    .st-confirmed {background:rgba(34,197,94,.2);color:var(--green)}
+    .st-active    {background:rgba(59,130,246,.2);color:var(--blue)}
+    .st-completed {background:rgba(100,100,120,.15);color:var(--muted)}
+    .st-cancelled {background:rgba(239,68,68,.15);color:var(--red)}
+    .brow-info{flex:1;min-width:0}
+    .brow-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .brow-detail{font-size:12px;color:var(--muted)}
+    .brow-actions{display:flex;gap:5px;flex-shrink:0}
+    /* Btn */
+    .btn{padding:9px 16px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent)}
+    .btn-danger{background:none;border:1px solid rgba(239,68,68,.4);color:var(--red)}.btn-danger:hover{background:rgba(239,68,68,.1)}
+    .btn-success{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:var(--green)}
+    .btn-sm{padding:5px 10px;font-size:11px}
+    /* Calendar */
+    .cal-wrapper{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+    .cal-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+    .cal-nav-title{font-weight:700;font-size:14px}
+    .cal-nav-btn{background:none;border:1px solid var(--border);color:var(--text);border-radius:7px;width:32px;height:32px;cursor:pointer;font-size:16px}
+    .cal-view-btns{display:flex;gap:4px}
+    .cal-view-btn{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--card);color:var(--muted);cursor:pointer}
+    .cal-view-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    /* Month grid */
+    .cal-month-grid{display:grid;grid-template-columns:repeat(7,1fr);padding:10px;gap:2px}
+    .cal-day-hdr{text-align:center;font-size:11px;color:var(--muted);font-weight:600;padding:4px 0}
+    .cal-day{min-height:80px;padding:4px;border-radius:7px;border:1px solid transparent;vertical-align:top;cursor:pointer;position:relative}
+    .cal-day:hover{background:var(--card)}
+    .cal-day.today{border-color:var(--accent)}
+    .cal-day.past{opacity:.4}
+    .cal-day-num{font-size:11px;font-weight:700;margin-bottom:2px;color:var(--muted)}
+    .cal-event{padding:1px 4px;border-radius:4px;font-size:10px;margin-bottom:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cal-event.confirmed{background:rgba(34,197,94,.2);color:var(--green)}
+    .cal-event.pending{background:rgba(234,179,8,.2);color:var(--yellow)}
+    .cal-event.blocked{background:rgba(239,68,68,.15);color:var(--red)}
+    /* Week view */
+    .cal-week-grid{display:grid;grid-template-columns:60px repeat(7,1fr);gap:0;border-top:1px solid var(--border)}
+    .cal-time-col{font-size:10px;color:var(--muted);text-align:right;padding:0 6px 0 0}
+    .cal-hour-row{border-bottom:1px solid var(--border);height:48px;display:flex;align-items:flex-start;padding-top:3px}
+    .cal-day-col{border-left:1px solid var(--border)}
+    .cal-day-col-hdr{text-align:center;padding:6px 0;font-size:11px;font-weight:700;border-bottom:1px solid var(--border)}
+    /* Form */
+    .form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+    .form-label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    .form-input{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;color:var(--text);font-size:14px;outline:none;width:100%}
+    .form-input:focus{border-color:var(--accent)}
+    select.form-input{cursor:pointer}
+    textarea.form-input{resize:vertical;min-height:70px}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:480px){.form-row{grid-template-columns:1fr}}
+    /* Hours grid */
+    .hours-grid{display:grid;grid-template-columns:80px 1fr 1fr 50px;gap:8px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)}
+    .hours-grid:last-child{border-bottom:none}
+    .hours-day{font-weight:600;color:var(--muted)}
+    /* Pricing row */
+    .price-cfg-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    /* Modal */
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:flex;align-items:flex-end;justify-content:center;padding-top:80px}
+    @media(min-width:600px){.modal-bg{align-items:center;padding-top:0}}
+    .modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:640px;max-height:90vh;overflow-y:auto}
+    @media(min-width:600px){.modal{border-radius:var(--r)}}
+    .modal-hdr{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:10}
+    .modal-title{font-size:15px;font-weight:700}
+    .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+    .modal-body{padding:18px}
+    .modal-footer{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--card)}
+    /* Venue selector */
+    .venue-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;border:1px solid var(--accent);background:rgba(124,58,237,.1);color:var(--accent2);cursor:pointer}
+    .venue-selector{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+    /* Toast */
+    #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:30px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    /* empty state */
+    .empty{text-align:center;padding:40px 20px;color:var(--muted)}
+    .empty-icon{font-size:48px;margin-bottom:12px}
+    /* Analytics bars */
+    .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+    .bar-label{width:100px;flex-shrink:0;color:var(--muted)}
+    .bar-track{flex:1;height:8px;background:var(--card2);border-radius:4px;overflow:hidden}
+    .bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .4s}
+    .bar-val{width:55px;text-align:right;font-weight:700;font-size:11px;color:var(--accent2)}
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <button class="hdr-back" onclick="history.back()">&#8592;</button>
+  <div class="hdr-title">🏟️ Venue Manager</div>
+  <button class="btn btn-primary btn-sm" onclick="openSetupModal()">+ Add Venue</button>
+</div>
+
+<!-- Venue selector -->
+<div style="padding:10px 12px 0">
+  <div id="venueSelectorRow" class="venue-selector">
+    <span style="color:var(--muted);font-size:13px"><span class="spinner"></span> Loading venues…</span>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs" id="tabBar">
+  <div class="tab active" onclick="showTab('calendar')">📅 Calendar</div>
+  <div class="tab" onclick="showTab('bookings')">📋 Bookings</div>
+  <div class="tab" onclick="showTab('analytics')">📊 Analytics</div>
+  <div class="tab" onclick="showTab('config')">⚙️ Config</div>
+  <div class="tab" onclick="showTab('pricing')">💰 Pricing</div>
+</div>
+
+<!-- ── TAB: CALENDAR ── -->
+<div class="tab-panel active" id="tab-calendar">
+  <div class="cal-wrapper">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+      <div class="cal-nav-title" id="calNavTitle">Loading…</div>
+      <button class="cal-nav-btn" onclick="calNext()">›</button>
+      <div class="cal-view-btns">
+        <div class="cal-view-btn active" onclick="setCalView('month')">Month</div>
+        <div class="cal-view-btn" onclick="setCalView('week')">Week</div>
+        <div class="cal-view-btn" onclick="setCalView('list')">List</div>
+      </div>
+    </div>
+    <div id="calBody"></div>
+  </div>
+  <div style="margin-top:12px">
+    <button class="btn btn-outline btn-sm" onclick="openBlockModal()">🚫 Block Dates</button>
+    <button class="btn btn-outline btn-sm" style="margin-left:6px" onclick="loadCalendar()">🔄 Refresh</button>
+  </div>
+</div>
+
+<!-- ── TAB: BOOKINGS ── -->
+<div class="tab-panel" id="tab-bookings">
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="btn btn-sm btn-outline" onclick="filterBookings('')">All</button>
+    <button class="btn btn-sm btn-outline" onclick="filterBookings('pending')">⏳ Pending</button>
+    <button class="btn btn-sm btn-outline" onclick="filterBookings('confirmed')">✅ Confirmed</button>
+    <button class="btn btn-sm btn-outline" onclick="filterBookings('active')">🔵 Active</button>
+    <button class="btn btn-sm btn-outline" onclick="filterBookings('completed')">✔️ Done</button>
+    <button class="btn btn-sm btn-outline" onclick="filterBookings('cancelled')">❌ Cancelled</button>
+  </div>
+  <div id="bookingsList"><div class="empty"><span class="spinner"></span></div></div>
+</div>
+
+<!-- ── TAB: ANALYTICS ── -->
+<div class="tab-panel" id="tab-analytics">
+  <div class="kpi-grid" id="analyticsKpis"></div>
+  <div class="card">
+    <div class="card-title">Bookings by Day of Week</div>
+    <div id="dowChart"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Top Booking Times</div>
+    <div id="timeChart"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Revenue by Month</div>
+    <div id="revenueChart"></div>
+  </div>
+</div>
+
+<!-- ── TAB: CONFIG ── -->
+<div class="tab-panel" id="tab-config">
+  <div class="card">
+    <div class="card-title">Venue Details</div>
+    <div class="form-group">
+      <label class="form-label">Venue Name</label>
+      <input class="form-input" id="cfgName" placeholder="My Venue Name">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Type</label>
+        <select class="form-input" id="cfgType">
+          <option value="">Select type…</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Capacity (max)</label>
+        <input class="form-input" type="number" id="cfgCapacity" placeholder="50">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">City</label>
+        <select class="form-input" id="cfgCity">
+          <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
+          <option>Nakuru</option><option>Eldoret</option><option>Thika</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Area / Neighbourhood</label>
+        <input class="form-input" id="cfgArea" placeholder="Westlands, Karen…">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Address</label>
+      <input class="form-input" id="cfgAddress" placeholder="Full street address">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-input" id="cfgDesc" rows="3" placeholder="Describe your venue…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amenities (comma separated)</label>
+      <input class="form-input" id="cfgAmenities" placeholder="Wi-Fi, Parking, Projector, Catering…">
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="cfgIndoor" style="accent-color:var(--accent)"> Indoor venue
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="cfgApproval" style="accent-color:var(--accent)"> Require owner approval
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cleaning buffer (minutes between bookings)</label>
+      <input class="form-input" type="number" id="cfgBuffer" placeholder="30" style="max-width:120px">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Opening Hours</div>
+    <div id="hoursGrid"></div>
+  </div>
+
+  <button class="btn btn-primary" onclick="saveConfig()" style="width:100%">💾 Save Venue Settings</button>
+</div>
+
+<!-- ── TAB: PRICING ── -->
+<div class="tab-panel" id="tab-pricing">
+  <div class="card">
+    <div class="card-title">Base Rates</div>
+    <div class="price-cfg-row">
+      <div class="form-group">
+        <label class="form-label">Hourly Rate (KES)</label>
+        <input class="form-input" type="number" id="prHourly" placeholder="2000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Half Day (KES)</label>
+        <input class="form-input" type="number" id="prHalfDay" placeholder="7000">
+      </div>
+    </div>
+    <div class="price-cfg-row">
+      <div class="form-group">
+        <label class="form-label">Full Day (KES)</label>
+        <input class="form-input" type="number" id="prFullDay" placeholder="12000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Weekend Day (KES surcharge)</label>
+        <input class="form-input" type="number" id="prWeekend" placeholder="3000">
+      </div>
+    </div>
+    <div class="price-cfg-row">
+      <div class="form-group">
+        <label class="form-label">Holiday Surcharge (KES)</label>
+        <input class="form-input" type="number" id="prHoliday" placeholder="5000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Deposit (KES)</label>
+        <input class="form-input" type="number" id="prDeposit" placeholder="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Peak Hours Surcharge</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Peak rate (KES/h)</label>
+        <input class="form-input" type="number" id="prPeakRate" placeholder="2500">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Peak hour ranges (e.g. 9-12,18-21)</label>
+        <input class="form-input" id="prPeakHours" placeholder="9-12,18-21">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Discounts</div>
+    <div class="price-cfg-row">
+      <div class="form-group">
+        <label class="form-label">Member discount (%)</label>
+        <input class="form-input" type="number" id="prMemberDisc" placeholder="15" min="0" max="100">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Off-peak discount (%)</label>
+        <input class="form-input" type="number" id="prOffPeakDisc" placeholder="20" min="0" max="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Cancellation Policy</div>
+    <div class="price-cfg-row">
+      <div class="form-group">
+        <label class="form-label">Free cancellation window (hours)</label>
+        <input class="form-input" type="number" id="prCancelWindow" placeholder="24">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cancellation fee (%)</label>
+        <input class="form-input" type="number" id="prCancelFee" placeholder="25" min="0" max="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Add-ons / Extras</div>
+    <div id="addOnEditor"></div>
+    <button class="btn btn-outline btn-sm" onclick="addAddonRow()">+ Add Extra</button>
+  </div>
+
+  <button class="btn btn-primary" onclick="savePricing()" style="width:100%">💰 Save Pricing</button>
+</div>
+
+<!-- BLOCK DATES MODAL -->
+<div class="modal-bg" id="blockModal" style="display:none" onclick="if(event.target===this)closeBlock()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">🚫 Block Dates</div>
+      <button class="modal-close" onclick="closeBlock()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">From</label>
+          <input type="datetime-local" class="form-input" id="blkFrom">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Until</label>
+          <input type="datetime-local" class="form-input" id="blkUntil">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason</label>
+        <select class="form-input" id="blkReason">
+          <option value="maintenance">Maintenance</option>
+          <option value="cleaning">Deep cleaning</option>
+          <option value="event">Private event</option>
+          <option value="holiday">Holiday closure</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (optional)</label>
+        <input class="form-input" id="blkNote" placeholder="e.g. Annual maintenance">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeBlock()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitBlock()">Block Dates</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKING DETAIL MODAL -->
+<div class="modal-bg" id="bookingDetailModal" style="display:none" onclick="if(event.target===this)closeDetail()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Booking Details</div>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="bookingDetailBody"></div>
+    <div class="modal-footer" id="bookingDetailFooter"></div>
+  </div>
+</div>
+
+<!-- VENUE SETUP MODAL -->
+<div class="modal-bg" id="setupModal" style="display:none" onclick="if(event.target===this)closeSetup()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">+ List a New Venue</div>
+      <button class="modal-close" onclick="closeSetup()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Venue Name</label>
+        <input class="form-input" id="newName" placeholder="e.g. Westlands Football Ground">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type</label>
+        <select class="form-input" id="newType"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">City</label>
+          <select class="form-input" id="newCity">
+            <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
+            <option>Nakuru</option><option>Eldoret</option><option>Thika</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hourly Rate (KES)</label>
+          <input class="form-input" type="number" id="newRate" placeholder="2000">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeSetup()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitNewVenue()">Create Venue →</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="firebase.js"></script>
+<script src="sokoni-config.js"></script>
+<script src="sokoni-booking-engine.js"></script>
+<script>
+const E   = id => document.getElementById(id);
+const _e  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const KES = n  => 'KES ' + Number(n||0).toFixed(2);
+
+let _venues = [], _activeVenueId = null, _activeVenue = null;
+let _calDate = new Date(), _calView = 'month';
+let _calBookings = [], _calBlocks = [];
+let _allBookings = [], _bookingFilter = '';
+let _addOnRows = [];
+
+/* ── Toast ── */
+function toast(msg, dur=2500) {
+  const el = E('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>el.classList.remove('show'), dur);
+}
+
+/* ── Tab nav ── */
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['calendar','bookings','analytics','config','pricing'][i]===name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id==='tab-'+name));
+  if (name==='analytics') loadAnalytics();
+}
+
+/* ══ INIT ══ */
+(async function init() {
+  /* Populate type dropdowns */
+  const types = SokoniBooking.RESOURCE_TYPES;
+  [E('cfgType'), E('newType')].forEach(sel => {
+    sel.innerHTML = '<option value="">Select type…</option>' + types.map(t=>`<option>${_e(t)}</option>`).join('');
+  });
+  await loadMyVenues();
+})();
+
+async function loadMyVenues() {
+  try {
+    const user = firebase.auth().currentUser;
+    if (!user) { setTimeout(loadMyVenues, 800); return; }
+    /* Get venues owned by current user */
+    const snap = await firebase.firestore().collection('venues').where('ownerId','==',user.uid).get();
+    _venues = snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderVenuePills();
+    if (_venues.length) selectVenue(_venues[0].id);
+    else { E('venueSelectorRow').innerHTML = '<span style="color:var(--muted);font-size:13px">No venues yet — click + Add Venue to list your first.</span>'; }
+  } catch(err) {
+    E('venueSelectorRow').innerHTML = `<span style="color:var(--red);font-size:13px">⚠️ ${_e(err.message)}</span>`;
+  }
+}
+
+function renderVenuePills() {
+  E('venueSelectorRow').innerHTML = _venues.map(v =>
+    `<div class="venue-pill ${v.id===_activeVenueId?'':'inactive'}" onclick="selectVenue('${_e(v.id)}')">${_e(v.name)}</div>`
+  ).join('') + (E('venueSelectorRow').children.length ? '' : '');
+}
+
+function selectVenue(id) {
+  _activeVenueId = id;
+  _activeVenue   = _venues.find(v=>v.id===id) || null;
+  renderVenuePills();
+  loadCalendar();
+  loadBookings();
+  populateConfig();
+  populatePricing();
+}
+
+/* ══ CALENDAR ══ */
+function setCalView(v) {
+  _calView = v;
+  document.querySelectorAll('.cal-view-btn').forEach(el => el.classList.toggle('active', el.textContent.toLowerCase()===v));
+  renderCalendar();
+}
+
+function calPrev() {
+  if (_calView==='month') { _calDate = new Date(_calDate.getFullYear(), _calDate.getMonth()-1, 1); }
+  else { _calDate = new Date(_calDate.getTime() - 7*86400000); }
+  loadCalendar();
+}
+function calNext() {
+  if (_calView==='month') { _calDate = new Date(_calDate.getFullYear(), _calDate.getMonth()+1, 1); }
+  else { _calDate = new Date(_calDate.getTime() + 7*86400000); }
+  loadCalendar();
+}
+
+async function loadCalendar() {
+  if (!_activeVenueId) return;
+  let from, until;
+  if (_calView==='month') {
+    const y = _calDate.getFullYear(), m = _calDate.getMonth();
+    from  = new Date(y,m,1).getTime();
+    until = new Date(y,m+1,1).getTime();
+  } else {
+    const day = _calDate.getDay();
+    from  = _calDate.getTime() - day*86400000;
+    until = from + 7*86400000;
+  }
+  E('calNavTitle').textContent = _calDate.toLocaleDateString('en-KE',{month:'long',year:'numeric'});
+  try {
+    const res = await SokoniBooking.getVenueCalendar(_activeVenueId, from, until);
+    _calBookings = res.bookings || [];
+    _calBlocks   = res.blockouts || [];
+    renderCalendar();
+  } catch(err) {
+    E('calBody').innerHTML = `<div style="padding:20px;color:var(--red)">⚠️ ${_e(err.message)}</div>`;
+  }
+}
+
+function renderCalendar() {
+  if (_calView === 'month') renderMonthCal();
+  else if (_calView === 'week') renderWeekCal();
+  else renderListCal();
+}
+
+function renderMonthCal() {
+  const y = _calDate.getFullYear(), m = _calDate.getMonth();
+  const firstDay = new Date(y,m,1).getDay();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const today = new Date().toISOString().slice(0,10);
+
+  const days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let html = `<div class="cal-month-grid">${days.map(d=>`<div class="cal-day-hdr">${d}</div>`).join('')}`;
+  for (let i=0;i<firstDay;i++) html += '<div></div>';
+  for (let d=1;d<=daysInMonth;d++) {
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const past    = dateStr < today;
+    const isToday = dateStr === today;
+    const dayBookings = _calBookings.filter(b=>b.date===dateStr);
+    const dayBlocks   = _calBlocks.filter(b => new Date(b.startTs).toISOString().slice(0,10)===dateStr);
+    html += `<div class="cal-day ${past?'past':''} ${isToday?'today':''}" onclick="openDayDetail('${dateStr}')">
+      <div class="cal-day-num">${d}</div>
+      ${dayBookings.slice(0,3).map(b=>`<div class="cal-event ${b.status}">${_e(b.customerName||'')}</div>`).join('')}
+      ${dayBlocks.length?`<div class="cal-event blocked">🚫 Blocked</div>`:''}
+      ${dayBookings.length>3?`<div style="font-size:9px;color:var(--muted)">+${dayBookings.length-3} more</div>`:''}
+    </div>`;
+  }
+  html += '</div>';
+  E('calBody').innerHTML = html;
+}
+
+function renderWeekCal() {
+  const day = _calDate.getDay();
+  const weekStart = new Date(_calDate.getTime() - day*86400000);
+  const HOURS = 24;
+  const days = [];
+  for (let i=0;i<7;i++) {
+    const d = new Date(weekStart.getTime()+i*86400000);
+    days.push({ date: d.toISOString().slice(0,10), label: d.toLocaleDateString('en-KE',{weekday:'short',day:'numeric'}) });
+  }
+  let html = `<div class="cal-week-grid">
+    <div class="cal-time-col"></div>
+    ${days.map(d=>`<div class="cal-day-col"><div class="cal-day-col-hdr">${d.label}</div></div>`).join('')}
+  </div>`;
+  for (let h=8;h<22;h++) {
+    html += `<div class="cal-week-grid">
+      <div class="cal-time-col"><div class="cal-hour-row">${h}:00</div></div>
+      ${days.map(d => {
+        const events = _calBookings.filter(b=>b.date===d.date&&Math.floor(parseInt(b.startTime)/100)===h);
+        return `<div class="cal-day-col"><div class="cal-hour-row">${events.map(b=>`<div class="cal-event ${b.status}" style="flex:1" onclick="openBookingDetail('${b.id}')">${_e(b.customerName||b.startTime)}</div>`).join('')}</div></div>`;
+      }).join('')}
+    </div>`;
+  }
+  E('calBody').innerHTML = html;
+}
+
+function renderListCal() {
+  if (!_calBookings.length) { E('calBody').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>No bookings in this period.</div>'; return; }
+  const sorted = [..._calBookings].sort((a,b)=>a.startTs-b.startTs);
+  E('calBody').innerHTML = '<div style="padding:10px">' + sorted.map(b => bookingRowHtml(b)).join('') + '</div>';
+}
+
+function openDayDetail(date) {
+  const dayBookings = _calBookings.filter(b=>b.date===date);
+  if (!dayBookings.length) { toast(`No bookings on ${date}`); return; }
+  /* Open first booking */
+  openBookingDetail(dayBookings[0].id);
+}
+
+/* ══ BOOKINGS ══ */
+async function loadBookings() {
+  if (!_activeVenueId) return;
+  E('bookingsList').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    /* Fetch from calendar data or directly */
+    const from  = Date.now() - 90 * 86400000;
+    const until = Date.now() + 90 * 86400000;
+    if (!_calBookings.length) {
+      const res = await SokoniBooking.getVenueCalendar(_activeVenueId, from, until);
+      _allBookings = res.bookings || [];
+    } else {
+      _allBookings = _calBookings;
+    }
+    renderBookings(_allBookings, _bookingFilter);
+  } catch(err) {
+    E('bookingsList').innerHTML = `<div style="color:var(--red);padding:20px">⚠️ ${_e(err.message)}</div>`;
+  }
+}
+
+function filterBookings(status) { _bookingFilter = status; renderBookings(_allBookings, status); }
+
+function renderBookings(bookings, status='') {
+  const filtered = status ? bookings.filter(b=>b.status===status) : bookings;
+  if (!filtered.length) { E('bookingsList').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>No bookings found.</div>'; return; }
+  const sorted = [...filtered].sort((a,b)=>(b.startTs||0)-(a.startTs||0));
+  E('bookingsList').innerHTML = sorted.map(b => bookingRowHtml(b)).join('');
+}
+
+function bookingRowHtml(b) {
+  const sc = SokoniBooking.STATUS_CONFIG[b.status] || {};
+  return `<div class="brow">
+    <div>
+      <div class="brow-status st-${b.status}">${sc.icon||''} ${sc.label||b.status}</div>
+    </div>
+    <div class="brow-info">
+      <div class="brow-name">${_e(b.customerName||'Guest')}</div>
+      <div class="brow-detail">📅 ${_e(b.date||'')} · ⏰ ${_e(b.startTime||'')}–${_e(b.endTime||'')} · ${KES(b.pricingBreakdown?.total||0)}</div>
+    </div>
+    <div class="brow-actions">
+      ${b.status==='pending'?`<button class="btn btn-success btn-sm" onclick="approveBooking('${_e(b.id)}')">✓</button><button class="btn btn-danger btn-sm" onclick="rejectBookingPrompt('${_e(b.id)}')">✕</button>`:''}
+      <button class="btn btn-outline btn-sm" onclick="openBookingDetail('${_e(b.id)}')">View</button>
+    </div>
+  </div>`;
+}
+
+/* Approval / rejection */
+async function approveBooking(id) {
+  try { await SokoniBooking.approveBooking(id); toast('✅ Booking approved'); loadBookings(); loadCalendar(); }
+  catch(err) { toast('❌ ' + err.message); }
+}
+
+function rejectBookingPrompt(id) {
+  const reason = prompt('Reason for rejection:');
+  if (reason === null) return;
+  SokoniBooking.rejectBooking(id, reason)
+    .then(()=>{ toast('Booking rejected'); loadBookings(); loadCalendar(); })
+    .catch(err=>toast('❌ '+err.message));
+}
+
+/* Booking detail */
+async function openBookingDetail(id) {
+  const b = _allBookings.find(x=>x.id===id) || _calBookings.find(x=>x.id===id);
+  if (!b) return;
+  const sc = SokoniBooking.STATUS_CONFIG[b.status] || {};
+  E('bookingDetailBody').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="brow-status st-${b.status}">${sc.icon||''} ${sc.label||b.status}</div>
+        <span style="font-family:monospace;font-size:11px;color:var(--muted)">${_e(id.slice(0,12))}</span>
+      </div>
+      <div style="font-size:15px;font-weight:700">${_e(b.customerName||'Guest')}</div>
+      <div style="font-size:12px;color:var(--muted)">${_e(b.customerPhone||'')} · ${_e(b.customerEmail||'')}</div>
+    </div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;font-size:13px;display:grid;gap:6px">
+      <div>📅 ${_e(b.date||'')} · ⏰ ${_e(b.startTime||'')} – ${_e(b.endTime||'')}</div>
+      <div>💰 ${KES(b.pricingBreakdown?.total||0)}</div>
+      ${b.notes?`<div>📝 ${_e(b.notes)}</div>`:''}
+      ${b.paymentId?`<div>🧾 Payment: ${_e(b.paymentId)}</div>`:''}
+    </div>
+    ${b.checkIn?`<div style="font-size:12px;color:var(--green);margin-bottom:6px">✅ Checked in ${new Date(b.checkIn.time).toLocaleTimeString()}</div>`:''}
+    ${b.checkOut?`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">✔️ Checked out ${new Date(b.checkOut.time).toLocaleTimeString()}</div>`:''}
+    ${b.cancellationReason?`<div style="font-size:12px;color:var(--red)">Cancelled: ${_e(b.cancellationReason)}</div>`:''}
+  `;
+  const footer = E('bookingDetailFooter');
+  footer.innerHTML = '';
+  const addBtn = (label, cls, fn) => { const bt=document.createElement('button'); bt.className='btn btn-sm '+cls; bt.textContent=label; bt.onclick=fn; footer.appendChild(bt); };
+  addBtn('Close','btn-outline', closeDetail);
+  if (b.status==='pending') { addBtn('✓ Approve','btn-success',()=>approveBooking(b.id)); addBtn('✕ Reject','btn-danger',()=>rejectBookingPrompt(b.id)); }
+  if (b.status==='confirmed') { addBtn('Check In','btn-primary',()=>doCheckIn(b.id)); }
+  if (b.status==='active') { addBtn('Check Out','btn-outline',()=>doCheckOut(b.id)); }
+  if (['confirmed','pending'].includes(b.status)) { addBtn('Cancel','btn-danger',()=>doCancelBooking(b.id)); }
+
+  E('bookingDetailModal').style.display = '';
+}
+
+function closeDetail() { E('bookingDetailModal').style.display = 'none'; }
+
+async function doCheckIn(id)  { try { await SokoniBooking.checkIn(id); toast('✅ Checked in'); closeDetail(); loadBookings(); } catch(e){toast('❌ '+e.message);} }
+async function doCheckOut(id) { try { await SokoniBooking.checkOut(id); toast('✔️ Checked out'); closeDetail(); loadBookings(); } catch(e){toast('❌ '+e.message);} }
+async function doCancelBooking(id) {
+  if (!confirm('Cancel this booking?')) return;
+  try { await SokoniBooking.cancelBooking(id, 'Cancelled by venue owner'); toast('Booking cancelled'); closeDetail(); loadBookings(); } catch(e){toast('❌ '+e.message);}
+}
+
+/* ══ ANALYTICS ══ */
+async function loadAnalytics() {
+  if (!_activeVenueId) return;
+  const bookings = _allBookings.filter(b=>b.status!=='cancelled');
+  /* KPIs */
+  const totalRev  = bookings.reduce((t,b)=>t+(b.pricingBreakdown?.total||0),0);
+  const confirmed = bookings.filter(b=>['confirmed','active','completed'].includes(b.status)).length;
+  const pending   = bookings.filter(b=>b.status==='pending').length;
+  const occupancy = _activeVenue?.openingHours ? Math.min(100, Math.round(confirmed/30*100)) : 0;
+  E('analyticsKpis').innerHTML = `
+    <div class="kpi"><div class="kpi-val">${KES(totalRev)}</div><div class="kpi-label">Total Revenue</div></div>
+    <div class="kpi"><div class="kpi-val">${bookings.length}</div><div class="kpi-label">Total Bookings</div></div>
+    <div class="kpi"><div class="kpi-val">${pending}</div><div class="kpi-label">Pending</div></div>
+    <div class="kpi"><div class="kpi-val">${occupancy}%</div><div class="kpi-label">Occupancy (30d)</div></div>
+  `;
+  /* Day of week chart */
+  const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dowCounts = Array(7).fill(0);
+  bookings.forEach(b => { if (b.date) dowCounts[new Date(b.date).getDay()]++; });
+  const maxDow = Math.max(...dowCounts,1);
+  E('dowChart').innerHTML = dow.map((d,i)=>`
+    <div class="bar-row"><span class="bar-label">${d}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(dowCounts[i]/maxDow*100)}%"></div></div>
+    <span class="bar-val">${dowCounts[i]}</span></div>`).join('');
+  /* Time distribution */
+  const timeMap = {};
+  bookings.forEach(b => { if (b.startTime) { const h=b.startTime.slice(0,2); timeMap[h]=(timeMap[h]||0)+1; } });
+  const timeEntries = Object.entries(timeMap).sort((a,b)=>Number(a[0])-Number(b[0]));
+  const maxT = Math.max(...timeEntries.map(x=>x[1]),1);
+  E('timeChart').innerHTML = timeEntries.map(([h,cnt])=>`
+    <div class="bar-row"><span class="bar-label">${h}:00</span>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.round(cnt/maxT*100)}%"></div></div>
+    <span class="bar-val">${cnt}</span></div>`).join('') || '<div style="color:var(--muted);font-size:13px">No data</div>';
+}
+
+/* ══ CONFIG ══ */
+function populateConfig() {
+  const v = _activeVenue;
+  if (!v) return;
+  E('cfgName').value     = v.name     || '';
+  E('cfgType').value     = v.type     || '';
+  E('cfgCapacity').value = v.capacity?.max || '';
+  E('cfgCity').value     = v.city     || 'Nairobi';
+  E('cfgArea').value     = v.area     || '';
+  E('cfgAddress').value  = v.address  || '';
+  E('cfgDesc').value     = v.description || '';
+  E('cfgAmenities').value= (v.amenities||[]).join(', ');
+  E('cfgIndoor').checked = !!v.indoor;
+  E('cfgApproval').checked = !!v.config?.approvalRequired;
+  E('cfgBuffer').value   = v.config?.cleaningBuffer || '';
+  renderHoursGrid(v.openingHours || {});
+}
+
+const DAYS = ['mon','tue','wed','thu','fri','sat','sun'];
+const DAY_LABELS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+function renderHoursGrid(hours) {
+  E('hoursGrid').innerHTML = DAYS.map((d,i) => {
+    const h = hours[d] || {};
+    return `<div class="hours-grid">
+      <span class="hours-day">${DAY_LABELS[i].slice(0,3)}</span>
+      <input class="form-input" type="time" id="open_${d}" value="${h.open||'08:00'}" ${h.closed?'disabled':''}>
+      <input class="form-input" type="time" id="close_${d}" value="${h.close||'22:00'}" ${h.closed?'disabled':''}>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="closed_${d}" ${h.closed?'checked':''} onchange="toggleDay('${d}')" style="accent-color:var(--accent)"> Closed
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function toggleDay(d) {
+  const closed = E(`closed_${d}`).checked;
+  E(`open_${d}`).disabled  = closed;
+  E(`close_${d}`).disabled = closed;
+}
+
+async function saveConfig() {
+  if (!_activeVenueId) { toast('Select a venue first'); return; }
+  const hours = {};
+  DAYS.forEach(d => {
+    hours[d] = E(`closed_${d}`).checked
+      ? { closed: true }
+      : { open: E(`open_${d}`).value, close: E(`close_${d}`).value };
+  });
+  const data = {
+    id: _activeVenueId,
+    name:        E('cfgName').value.trim(),
+    type:        E('cfgType').value,
+    city:        E('cfgCity').value,
+    area:        E('cfgArea').value.trim(),
+    address:     E('cfgAddress').value.trim(),
+    description: E('cfgDesc').value.trim(),
+    amenities:   E('cfgAmenities').value.split(',').map(a=>a.trim()).filter(Boolean),
+    indoor:      E('cfgIndoor').checked,
+    capacity:    { max: Number(E('cfgCapacity').value)||50 },
+    config:      { approvalRequired: E('cfgApproval').checked, cleaningBuffer: Number(E('cfgBuffer').value)||0 },
+    openingHours: hours,
+  };
+  try { await SokoniBooking.saveVenue(data); toast('✅ Venue settings saved'); await loadMyVenues(); }
+  catch(err) { toast('❌ ' + err.message); }
+}
+
+/* ══ PRICING ══ */
+function populatePricing() {
+  const p = _activeVenue?.pricing || {};
+  E('prHourly').value      = p.hourly    || '';
+  E('prHalfDay').value     = p.halfDay   || '';
+  E('prFullDay').value     = p.fullDay   || '';
+  E('prWeekend').value     = p.weekend   || '';
+  E('prHoliday').value     = p.holiday   || '';
+  E('prDeposit').value     = p.deposit   || '';
+  E('prPeakRate').value    = p.peak?.rate || '';
+  E('prPeakHours').value   = (p.peak?.hours||[]).map(([s,e])=>`${s}-${e}`).join(',');
+  E('prMemberDisc').value  = p.member?.discount ? p.member.discount*100 : '';
+  E('prOffPeakDisc').value = p.offPeak?.discount ? p.offPeak.discount*100 : '';
+  E('prCancelWindow').value= p.cancellationWindow || 24;
+  E('prCancelFee').value   = p.cancellationFeeRate ? p.cancellationFeeRate*100 : 0;
+  /* Add-ons */
+  _addOnRows = [...(p.addOns || [])];
+  renderAddOnEditor();
+}
+
+function renderAddOnEditor() {
+  E('addOnEditor').innerHTML = _addOnRows.map((a,i)=>`
+    <div style="display:grid;grid-template-columns:1fr 120px 34px;gap:6px;margin-bottom:6px;align-items:center">
+      <input class="form-input" value="${_e(a.name||'')}" placeholder="Extra name" onchange="_addOnRows[${i}].name=this.value">
+      <input class="form-input" type="number" value="${a.price||''}" placeholder="KES" onchange="_addOnRows[${i}].price=Number(this.value)">
+      <button class="btn btn-danger btn-sm" onclick="removeAddon(${i})" style="width:34px;padding:0">✕</button>
+    </div>`).join('');
+}
+
+function addAddonRow() { _addOnRows.push({name:'',price:0,description:''}); renderAddOnEditor(); }
+function removeAddon(i) { _addOnRows.splice(i,1); renderAddOnEditor(); }
+
+async function savePricing() {
+  if (!_activeVenueId) { toast('Select a venue first'); return; }
+  const peakHoursRaw = E('prPeakHours').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const peakHours = peakHoursRaw.map(s=>{ const [a,b]=s.split('-').map(Number); return [a,b]; }).filter(p=>p.length===2);
+  const data = {
+    id: _activeVenueId,
+    pricing: {
+      hourly:   Number(E('prHourly').value)||0,
+      halfDay:  Number(E('prHalfDay').value)||0,
+      fullDay:  Number(E('prFullDay').value)||0,
+      weekend:  Number(E('prWeekend').value)||0,
+      holiday:  Number(E('prHoliday').value)||0,
+      deposit:  Number(E('prDeposit').value)||0,
+      peak:     { rate: Number(E('prPeakRate').value)||0, hours: peakHours },
+      member:   { discount: (Number(E('prMemberDisc').value)||0)/100 },
+      offPeak:  { discount: (Number(E('prOffPeakDisc').value)||0)/100 },
+      cancellationWindow:  Number(E('prCancelWindow').value)||24,
+      cancellationFeeRate: (Number(E('prCancelFee').value)||0)/100,
+      addOns:   _addOnRows.filter(a=>a.name),
+    },
+  };
+  try { await SokoniBooking.saveVenue(data); toast('💰 Pricing saved'); await loadMyVenues(); }
+  catch(err) { toast('❌ ' + err.message); }
+}
+
+/* ══ BLOCK DATES ══ */
+function openBlockModal() { E('blockModal').style.display = ''; }
+function closeBlock()     { E('blockModal').style.display = 'none'; }
+
+async function submitBlock() {
+  const from  = new Date(E('blkFrom').value).getTime();
+  const until = new Date(E('blkUntil').value).getTime();
+  if (!from || !until || from >= until) { toast('❌ Invalid date range'); return; }
+  try {
+    await SokoniBooking.blockVenueSlots(_activeVenueId, from, until, E('blkReason').value, E('blkNote').value);
+    toast('🚫 Dates blocked');
+    closeBlock();
+    loadCalendar();
+  } catch(err) { toast('❌ ' + err.message); }
+}
+
+/* ══ NEW VENUE SETUP ══ */
+function openSetupModal() { E('setupModal').style.display = ''; }
+function closeSetup()     { E('setupModal').style.display = 'none'; }
+
+async function submitNewVenue() {
+  const name = E('newName').value.trim();
+  const type = E('newType').value;
+  const city = E('newCity').value;
+  const rate = Number(E('newRate').value)||0;
+  if (!name) { toast('❌ Venue name required'); return; }
+  if (!type) { toast('❌ Select a type'); return; }
+  try {
+    const res = await SokoniBooking.saveVenue({
+      name, type, city, status:'active',
+      pricing: { hourly: rate },
+      openingHours: { mon:{open:'08:00',close:'22:00'}, tue:{open:'08:00',close:'22:00'}, wed:{open:'08:00',close:'22:00'}, thu:{open:'08:00',close:'22:00'}, fri:{open:'08:00',close:'22:00'}, sat:{open:'08:00',close:'22:00'}, sun:{open:'10:00',close:'20:00'} },
+      capacity: { max: 50 },
+    });
+    toast('✅ Venue created!');
+    closeSetup();
+    await loadMyVenues();
+    if (res.venueId) selectVenue(res.venueId);
+  } catch(err) { toast('❌ ' + err.message); }
+}
+</script>
+</body>
+</html>
