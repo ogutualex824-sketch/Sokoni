@@ -171,6 +171,8 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s);"></script>
 <script src="sokoni-delivery-pricing.js"></script>
+<script src="sokoni-dispatch.js"></script>
+<script src="sokoni-logistics.js"></script>
 <script src="sokoni-routing.js"></script>
 <script type="module">
 import SokoniDelivery from './sokoni-delivery.js';
@@ -858,34 +860,159 @@ window.dtRiderPickedUp = async function(ref) {
 };
 
 window.dtRiderShowProof = function(ref) {
-  /* Inline proof form — ask for optional note */
+  /* Full proof of delivery: OTP + photo + GPS */
   const el = document.getElementById('dtActions');
   if (!el) return;
   el.innerHTML = `
-    <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:14px;padding:16px;">
-      <div style="font-size:12px;font-weight:800;color:#71ff00;margin-bottom:10px;">CONFIRM DELIVERY</div>
-      <input id="dtProofNote" class="dt-input" placeholder="Delivery note (optional)" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:white;font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:10px;">
+    <div style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:16px;padding:18px;">
+      <div style="font-size:13px;font-weight:900;color:#71ff00;margin-bottom:14px;">Proof of Delivery</div>
+
+      <!-- OTP verification -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;display:block;margin-bottom:6px;">CUSTOMER OTP CODE</label>
+        <div style="display:flex;gap:8px;">
+          <input id="dtOtpInput" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" class="dt-input" style="flex:1;padding:12px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:white;font-size:20px;font-family:inherit;letter-spacing:4px;text-align:center;box-sizing:border-box;">
+          <button type="button" onclick="dtVerifyOTP('${ref}')" style="padding:12px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;">Verify</button>
+        </div>
+        <div id="dtOtpStatus" style="font-size:11px;margin-top:6px;"></div>
+      </div>
+
+      <!-- Photo capture -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;display:block;margin-bottom:6px;">DELIVERY PHOTO</label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input id="dtPhotoInput" type="file" accept="image/*" capture="environment" style="display:none;" onchange="dtPhotoSelected(this,'${ref}')">
+          <button type="button" onclick="document.getElementById('dtPhotoInput').click()" style="flex:1;padding:11px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;font-weight:700;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;">Take Photo</button>
+          <div id="dtPhotoThumb" style="width:40px;height:40px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;">📷</span></div>
+        </div>
+        <div id="dtPhotoStatus" style="font-size:11px;margin-top:4px;color:rgba(255,255,255,0.4);"></div>
+      </div>
+
+      <!-- GPS stamp -->
+      <div style="margin-bottom:16px;">
+        <label style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:700;display:block;margin-bottom:6px;">GPS LOCATION STAMP</label>
+        <button type="button" onclick="dtCaptureGPS('${ref}')" style="width:100%;padding:10px;background:rgba(255,140,0,0.08);border:1px solid rgba(255,140,0,0.2);color:#ff8c00;font-weight:700;border-radius:10px;cursor:pointer;font-family:inherit;font-size:12px;">Capture My Location</button>
+        <div id="dtGpsStatus" style="font-size:11px;margin-top:4px;color:rgba(255,255,255,0.4);"></div>
+      </div>
+
+      <!-- Hidden fields -->
+      <input type="hidden" id="dtOtpVerified" value="0">
+      <input type="hidden" id="dtPhotoUrl" value="">
+      <input type="hidden" id="dtGpsLat" value="">
+      <input type="hidden" id="dtGpsLng" value="">
+      <input type="hidden" id="dtGpsAccuracy" value="">
+
       <div style="display:flex;gap:8px;">
-        <button class="dt-btn-primary" style="flex:1;" onclick="dtRiderDelivered('${ref}')">✅ Confirm Delivered</button>
+        <button class="dt-btn-primary" style="flex:1;" onclick="dtSubmitProof('${ref}')">Submit & Confirm Delivered</button>
         <button class="dt-btn-secondary" onclick="dtRiderShowCancel()">✕</button>
       </div>
     </div>`;
 };
 
+window.dtVerifyOTP = function (ref) {
+  const input = document.getElementById('dtOtpInput');
+  const statusEl = document.getElementById('dtOtpStatus');
+  if (!input || !statusEl) return;
+  const entered = input.value.trim();
+  if (entered.length !== 6) { statusEl.textContent = 'Enter 6-digit code.'; statusEl.style.color = '#ff6b6b'; return; }
+  /* Validate against Firestore deliveryOTP */
+  firebase.firestore().collection('packageRequests').doc(ref).get().then(function (snap) {
+    const data = snap.data() || {};
+    const expected = String(data.deliveryOTP || '');
+    if (!expected) { statusEl.textContent = 'OTP not set on this delivery.'; statusEl.style.color = '#ff8c00'; return; }
+    if (entered === expected) {
+      statusEl.textContent = 'OTP verified!'; statusEl.style.color = '#71ff00';
+      if (input) { input.style.borderColor = '#71ff00'; input.disabled = true; }
+      document.getElementById('dtOtpVerified').value = '1';
+    } else {
+      statusEl.textContent = 'Incorrect OTP. Ask customer to check their SMS.'; statusEl.style.color = '#ff6b6b';
+    }
+  }).catch(function (e) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = '#ff6b6b'; });
+};
+
+window.dtPhotoSelected = function (input, ref) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('dtPhotoStatus');
+  const thumb    = document.getElementById('dtPhotoThumb');
+  if (statusEl) statusEl.textContent = 'Uploading...';
+  /* Preview */
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    if (thumb) thumb.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:100%;object-fit:cover;">';
+  };
+  reader.readAsDataURL(file);
+  /* Upload to Firebase Storage */
+  const uid = firebase.auth().currentUser?.uid || 'unknown';
+  const path = 'deliveryProofs/'+ref+'_'+uid+'_'+Date.now()+'.jpg';
+  const storageRef = firebase.storage().ref().child(path);
+  storageRef.put(file, { contentType: 'image/jpeg' })
+    .then(function (snap) { return snap.ref.getDownloadURL(); })
+    .then(function (url) {
+      document.getElementById('dtPhotoUrl').value = url;
+      if (statusEl) { statusEl.textContent = 'Photo uploaded.'; statusEl.style.color = '#71ff00'; }
+    })
+    .catch(function (e) {
+      if (statusEl) { statusEl.textContent = 'Upload failed: '+e.message; statusEl.style.color = '#ff6b6b'; }
+    });
+};
+
+window.dtCaptureGPS = function (ref) {
+  const statusEl = document.getElementById('dtGpsStatus');
+  if (!navigator.geolocation) { if (statusEl) statusEl.textContent = 'GPS not supported'; return; }
+  if (statusEl) statusEl.textContent = 'Getting location...';
+  navigator.geolocation.getCurrentPosition(
+    function (pos) {
+      const lat = pos.coords.latitude, lng = pos.coords.longitude, acc = Math.round(pos.coords.accuracy);
+      document.getElementById('dtGpsLat').value      = lat;
+      document.getElementById('dtGpsLng').value      = lng;
+      document.getElementById('dtGpsAccuracy').value = acc;
+      if (statusEl) { statusEl.textContent = 'Location captured: '+lat.toFixed(5)+', '+lng.toFixed(5)+' (±'+acc+'m)'; statusEl.style.color = '#71ff00'; }
+    },
+    function (err) {
+      if (statusEl) { statusEl.textContent = 'GPS error: '+err.message; statusEl.style.color = '#ff6b6b'; }
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+};
+
+window.dtSubmitProof = function (ref) {
+  const uid = _uid(); if (!uid) { toast('Sign in required', false); return; }
+  const otp        = document.getElementById('dtOtpInput')?.value?.trim() || '';
+  const otpVerified= document.getElementById('dtOtpVerified')?.value === '1';
+  const photoUrl   = document.getElementById('dtPhotoUrl')?.value   || '';
+  const gpsLat     = parseFloat(document.getElementById('dtGpsLat')?.value)  || null;
+  const gpsLng     = parseFloat(document.getElementById('dtGpsLng')?.value)  || null;
+  const gpsAcc     = parseFloat(document.getElementById('dtGpsAccuracy')?.value) || null;
+
+  if (!otpVerified && !otp) { toast('Please enter and verify OTP first', false); return; }
+
+  const btn = document.querySelector('#dtActions .dt-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+
+  firebase.functions().httpsCallable('captureProofOfDelivery')({
+    deliveryRef: ref,
+    otp,
+    photoUrl:    photoUrl || null,
+    gpsLat,
+    gpsLng,
+    gpsAccuracyM: gpsAcc,
+  })
+    .then(function () { toast('Delivery confirmed! Payment will be processed shortly.'); })
+    .catch(function (e) {
+      toast(e.message || 'Could not confirm delivery', false);
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit & Confirm Delivered'; }
+    });
+};
+
 window.dtRiderShowCancel = function() {
-  /* Re-render actions for current data */
   if (_currentData) _renderActions(_currentData, 'rider');
 };
 
 window.dtRiderDelivered = async function(ref) {
   const uid = _uid(); if (!uid) { toast('Sign in required', false); return; }
-  const note = document.getElementById('dtProofNote')?.value?.trim() || 'Delivered';
-  const btn  = document.querySelector('#dtActions button');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Confirming…'; }
-  try {
-    await SokoniDelivery.driverDelivered(ref, uid, note);
-    toast('🎉 Delivery confirmed! Well done.');
-  } catch(e) { toast(e.message, false); if (btn) { btn.disabled=false; btn.textContent='✅ Confirm Delivered'; } }
+  /* Legacy path — now redirects to proof flow */
+  window.dtRiderShowProof(ref);
 };
 
 /* ── Hub delivery actions ── */

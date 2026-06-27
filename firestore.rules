@@ -4060,6 +4060,89 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ══════════════════════════════════════════════════════
+       DISPATCH SYSTEM  v1.0
+    ══════════════════════════════════════════════════════ */
+
+    /* dispatchQueue — cascade state per delivery */
+    match /dispatchQueue/{deliveryRef} {
+      /* Rider can read their own offer; seller + admin can read all */
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.rankedRiders[resource.data.currentIndex].riderId == request.auth.uid ||
+        get(/databases/$(database)/documents/packageRequests/$(deliveryRef)).data.sellerUid == request.auth.uid
+      );
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* deliveryProofs — proof of delivery records */
+    match /deliveryProofs/{deliveryRef} {
+      /* Rider, seller, and admin can read proof */
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.riderId == request.auth.uid ||
+        get(/databases/$(database)/documents/packageRequests/$(deliveryRef)).data.sellerUid == request.auth.uid
+      );
+      allow create: if isAdmin();
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* deliveryAttempts — failed delivery attempt log */
+    match /deliveryAttempts/{attemptId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* deliveryBatches — multi-order batch state (rider-owned) */
+    match /deliveryBatches/{batchId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.riderId == request.auth.uid
+      );
+      allow write: if false;
+    }
+
+    /* riderMetrics — aggregated daily rider performance */
+    match /riderMetrics/{docId} {
+      /* Riders can read their own metrics; admin reads all */
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        docId.matches(request.auth.uid + '_.*')
+      );
+      allow write: if false;
+    }
+
+    /* deliveryHubs — hub registry */
+    match /deliveryHubs/{hubId} {
+      allow read:   if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* fraudAlerts — GPS fraud and collusion flags */
+    match /fraudAlerts/{alertId} {
+      allow read:   if isAdmin();
+      allow create: if false;   /* CF-only */
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* analyticsRollup — pre-aggregated delivery stats */
+    match /analyticsRollup/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* smsQueue — internal SMS dispatch queue */
+    match /smsQueue/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
   }
 }
 

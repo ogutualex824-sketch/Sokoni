@@ -1,4 +1,80 @@
-﻿## [2026-06-27] — Launch Certification Sprint (commits a974d49, 22b8c37, d1b50f7, bea12d0)
+﻿## [2026-06-27] — Logistics Automation & Dispatch System v1.0
+
+### Summary
+Complete intelligent delivery logistics platform. Replaces naive first-available rider assignment with a weighted scoring dispatch engine, adds cascade auto-dispatch with 90-second timeouts, multi-order batch routing, hub-based logistics, proof of delivery (OTP + photo + GPS), failed delivery workflows, GPS fraud detection, seller delivery dashboard, admin ops command center, rider app shift management, and daily analytics rollups.
+
+### New Files
+- **`sokoni-dispatch.js`** — Intelligent dispatch engine: `scoreRider()` (6-factor weighted algorithm), `rankRiders()`, cascade state machine, batch compatibility check, TSP nearest-neighbour stop optimizer, hub routing decision, GPS fraud detection (`checkGPSFraud()` + impossible speed flag), failed delivery action table. Exposes `window.SokoniDispatch` + `module.exports`.
+- **`sokoni-logistics.js`** — Hub registry, batch state machine (`createBatch`, `advanceBatchStop`), OTP generation + proof validation, daily rollup builder, per-rider metrics, incentive tier engine, notification template renderer.
+- **`functions/dispatch.js`** — 8 Cloud Functions: `dispatchDelivery` (score + cascade), `respondToDispatch` (rider accept/decline), `processCascadeTimeouts` (scheduled every 1 min), `captureProofOfDelivery` (OTP+photo+GPS validation), `handleFailedDelivery` (retry/return/refund workflows), `detectGPSFraud` (Firestore trigger), `optimizeBatchRoute` (TSP callable), `aggregateDeliveryAnalytics` (daily 01:00 EAT).
+- **`seller-delivery.html`** — Seller delivery dashboard: real-time active deliveries with mini-maps, rider locations, ETA, pending queue, history with search, failed deliveries, analytics (30-day rollup), report issue flow.
+- **`dispatch.html`** — Admin ops command center: real-time map of all riders + deliveries, sidebar panels (active/riders/fraud/queue), detail panel with manual re-dispatch + cancel + rider suspend, fraud alert management.
+
+### Modified Files
+- **`functions/index.js`** — `_autoAssignRider()` replaced with weighted dispatch: queries 100 online riders, scores all via `SokoniDispatch.rankRiders()`, assigns highest scorer in Firestore transaction; `dispatchScore`, `dispatchDistKm`, `dispatchEtaMin` stored on order. 8 new CF exports added.
+- **`driver.html`** — Added shift management (Go Online / Break / End Shift), real-time shift stats (earnings, deliveries, $/hr), incentive bonus tracker (5/10/20/30 delivery tiers), 30-day performance metrics card, multi-stop batch route view, navigation button (Google Maps deep-link), real-time dispatch offer banner with 90-second countdown.
+- **`delivery-tracking.html`** — Full proof of delivery flow: OTP input + Firestore validation, Firebase Storage photo upload (live preview), GPS location capture (geolocation API, ±accuracy display), `captureProofOfDelivery` CF integration; legacy `dtRiderDelivered()` now redirects to proof flow.
+- **`firestore.rules`** — 9 new collection rules: `dispatchQueue`, `deliveryProofs`, `deliveryAttempts`, `deliveryBatches`, `riderMetrics`, `deliveryHubs`, `fraudAlerts`, `analyticsRollup`, `smsQueue`.
+- **`service-worker.js`** — CACHE_VERSION bumped to `sokoni-20260627200000`; `sokoni-dispatch.js` + `sokoni-logistics.js` added to PRECACHE_STATIC.
+
+### Dispatch Algorithm — Scoring Weights
+| Factor | Weight | Notes |
+|---|---|---|
+| Distance to pickup | 25% | Haversine, max radius 15km |
+| ETA | 20% | distance ÷ 25km/h |
+| Workload | 15% | active deliveries / max 3 |
+| Vehicle match | 15% | exact = 1.0, compatible = 0.7, incompatible = 0.3 |
+| Rider rating | 15% | rating / 5.0 |
+| Acceptance rate | 10% | historical rate |
+| Hub affinity bonus | +5% | if rider assigned to pickup hub |
+| Battery penalty | −10% | if battery < 20% |
+| Signal penalty | −5% | if network strength < 2 |
+
+### Cascade Dispatch Flow
+1. Seller confirms order → `dispatchDelivery` CF called → riders ranked → offer sent to #1
+2. Rider sees banner with 90s countdown → accepts or declines
+3. On decline: cascade advances to next rider; offer + 90s timeout reset
+4. `processCascadeTimeouts` (every 1 min) advances any expired offers
+5. If all riders exhausted → `dispatchQueue.status = 'exhausted'` → seller notified
+
+### Failed Delivery Actions
+| Reason | Action |
+|---|---|
+| Customer unavailable | Retry ×2, then return |
+| Wrong address | Immediate refund |
+| Payment failure | Immediate refund |
+| Rider breakdown | Reassign (re-enter dispatch) |
+| Seller delay | Retry ×2 |
+| No riders | Retry ×6 every 10 min |
+
+### New Firestore Collections
+- `dispatchQueue/{deliveryRef}` — cascade state
+- `deliveryProofs/{deliveryRef}` — OTP, photo URL, GPS stamp
+- `deliveryAttempts/{id}` — failed attempt log
+- `deliveryBatches/{batchId}` — multi-order batch
+- `riderMetrics/{riderId_date}` — daily rider stats
+- `deliveryHubs/{hubId}` — hub registry
+- `fraudAlerts/{alertId}` — GPS fraud + collusion flags
+- `analyticsRollup/delivery_{date}` — pre-aggregated daily stats
+- `smsQueue/{id}` — internal SMS dispatch queue
+
+### Security
+- All new collections have Firestore rules enforcing per-role access
+- `captureProofOfDelivery` validates OTP server-side (never trusts client)
+- GPS coordinates validated against Kenya bounding box before storing proof
+- Proof photos uploaded to Firebase Storage via client, URL stored in Firestore (CF validates)
+- `detectGPSFraud` triggers on every `rideDrivers` GPS update — flags impossible speeds and out-of-bounds coordinates
+
+### Deployment Steps
+```bash
+firebase deploy --only firestore:rules
+firebase deploy --only functions:dispatchDelivery,functions:respondToDispatch,functions:processCascadeTimeouts,functions:captureProofOfDelivery,functions:handleFailedDelivery,functions:detectGPSFraud,functions:optimizeBatchRoute,functions:aggregateDeliveryAnalytics
+firebase deploy --only hosting
+```
+
+---
+
+## [2026-06-27] — Launch Certification Sprint (commits a974d49, 22b8c37, d1b50f7, bea12d0)
 
 ### Summary
 Full platform certification for public launch. 10 XSS vectors closed, critical JS syntax error in service-worker.js fixed (28 Unicode curly quotes), Firestore rules audited, secrets restored to real values, payment flow verified, all monitoring active.

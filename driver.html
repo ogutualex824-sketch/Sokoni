@@ -295,6 +295,46 @@
     <div class="section-heading" id="deliveriesHeader">📦 Available Deliveries</div>
     <div id="availableDeliveries"></div>
 
+    <!-- ── Shift Control ── -->
+    <div class="section-heading">🟢 Shift Management</div>
+    <div id="shiftControl" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:18px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:white;" id="shiftStatusLabel">Status: Offline</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;" id="shiftDuration">Shift not started</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" id="btnGoOnline" onclick="shiftGoOnline()" style="padding:10px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Go Online</button>
+          <button type="button" id="btnBreak" onclick="shiftBreak()" style="padding:10px 16px;background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.2);color:#ff8c00;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Take Break</button>
+          <button type="button" id="btnEndShift" onclick="shiftEnd()" style="padding:10px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.18);color:#ff6b6b;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">End Shift</button>
+        </div>
+      </div>
+      <div id="shiftStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;"></div>
+    </div>
+
+    <!-- ── Batch Delivery / Route ── -->
+    <div class="section-heading">🗺️ Multi-Stop Route</div>
+    <div id="batchRouteBox" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:18px;margin-bottom:16px;display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:14px;font-weight:800;color:white;">Active Route</div>
+        <span id="batchStopCount" style="font-size:11px;color:rgba(255,255,255,0.4);"></span>
+      </div>
+      <div id="batchStopList"></div>
+      <button type="button" onclick="openNavigation()" style="width:100%;margin-top:12px;padding:12px;background:rgba(0,170,255,0.12);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-weight:800;font-size:13px;border-radius:12px;cursor:pointer;font-family:inherit;">Open Navigation</button>
+    </div>
+
+    <!-- ── Incentives ── -->
+    <div id="incentiveBox" style="background:linear-gradient(135deg,rgba(113,255,0,0.07),rgba(0,200,80,0.04));border:1px solid rgba(113,255,0,0.18);border-radius:18px;padding:18px;margin-bottom:16px;display:none;">
+      <div style="font-size:14px;font-weight:900;color:#71ff00;margin-bottom:8px;">Bonus Tracker</div>
+      <div id="incentiveContent"></div>
+    </div>
+
+    <!-- ── Performance Metrics ── -->
+    <div class="section-heading">📈 Performance Metrics</div>
+    <div id="performanceMetrics" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:18px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;" id="perfGrid"></div>
+    </div>
+
     <!-- My active deliveries -->
     <div class="section-heading" id="myDeliveriesHeader">🛵 My Active Deliveries</div>
     <div id="myDeliveries"></div>
@@ -2323,6 +2363,279 @@ window.toggleOnline = async function() {
 })();
 </script>
   <script defer src="kass-widget.js"></script>
+  <script src="sokoni-dispatch.js"></script>
+  <script src="sokoni-logistics.js"></script>
+
+  <!-- ── Shift management + performance + incentives + batch routing ── -->
+  <script>
+  (function () {
+    'use strict';
+
+    var _shiftStart    = null;
+    var _shiftStatus   = 'offline'; /* offline | online | break */
+    var _shiftDeliveries = 0;
+    var _shiftEarnings   = 0;
+    var _shiftTimer    = null;
+    var _activeBatch   = null;
+    var _dispatchUnsub = null;
+    var _riderUid      = null;
+
+    /* ── Bootstrap after auth ── */
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) return;
+      _riderUid = user.uid;
+      _loadPerformanceMetrics();
+      _subscribeDispatch();
+    });
+
+    /* ── Shift management ── */
+    window.shiftGoOnline = function () {
+      if (_shiftStatus === 'online') return;
+      _shiftStatus = 'online';
+      _shiftStart  = _shiftStart || Date.now();
+      _updateShiftStatus();
+      _setRiderOnline(true, false);
+      if (_shiftTimer) clearInterval(_shiftTimer);
+      _shiftTimer = setInterval(_tickShift, 30000);
+      _tickShift();
+    };
+
+    window.shiftBreak = function () {
+      if (_shiftStatus === 'break') return;
+      _shiftStatus = 'break';
+      _updateShiftStatus();
+      _setRiderOnline(false, true);
+    };
+
+    window.shiftEnd = function () {
+      if (!confirm('End your shift? You will go offline.')) return;
+      _shiftStatus = 'offline';
+      _updateShiftStatus();
+      _setRiderOnline(false, false);
+      if (_shiftTimer) { clearInterval(_shiftTimer); _shiftTimer = null; }
+      var duration = _shiftStart ? Math.round((Date.now() - _shiftStart) / 60000) : 0;
+      setTimeout(function () {
+        alert('Shift ended. Duration: ' + duration + ' min. Deliveries: ' + _shiftDeliveries + '. Earnings: KES ' + _shiftEarnings.toLocaleString() + '.');
+        _shiftStart = null; _shiftDeliveries = 0; _shiftEarnings = 0;
+      }, 300);
+    };
+
+    function _setRiderOnline(online, onBreak) {
+      if (!_riderUid) return;
+      firebase.firestore().collection('rideDrivers').doc(_riderUid).update({
+        isOnline: online,
+        status:   onBreak ? 'break' : (online ? 'active' : 'offline'),
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      }).catch(function () {});
+    }
+
+    function _updateShiftStatus() {
+      var label = document.getElementById('shiftStatusLabel');
+      var color = _shiftStatus === 'online' ? '#71ff00' : _shiftStatus === 'break' ? '#ff8c00' : 'rgba(255,255,255,0.5)';
+      var icon  = _shiftStatus === 'online' ? '🟢' : _shiftStatus === 'break' ? '🟡' : '⚫';
+      if (label) label.innerHTML = icon + ' Status: ' + _shiftStatus.charAt(0).toUpperCase() + _shiftStatus.slice(1);
+      if (label) label.style.color = color;
+    }
+
+    function _tickShift() {
+      var dur = document.getElementById('shiftDuration');
+      if (!dur || !_shiftStart) return;
+      var mins = Math.round((Date.now() - _shiftStart) / 60000);
+      var h = Math.floor(mins/60), m = mins%60;
+      dur.textContent = 'Shift: ' + (h ? h+'h '+m+'m' : m+'m') + ' · Today: ' + _shiftDeliveries + ' deliveries · KES ' + _shiftEarnings.toLocaleString();
+      _renderShiftStats();
+      _renderIncentives();
+    }
+
+    function _renderShiftStats() {
+      var el = document.getElementById('shiftStats');
+      if (!el) return;
+      var perHour = _shiftStart && _shiftDeliveries ? Math.round(_shiftDeliveries / ((Date.now() - _shiftStart) / 3600000) * 10) / 10 : 0;
+      el.innerHTML = [
+        _miniStat('💰', 'KES '+_shiftEarnings.toLocaleString(), 'Shift Earnings'),
+        _miniStat('📦', _shiftDeliveries, 'Deliveries'),
+        _miniStat('⚡', perHour.toFixed(1), 'Deliveries/hr'),
+      ].join('');
+    }
+
+    function _miniStat(icon, val, label) {
+      return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:16px;margin-bottom:4px;">'+icon+'</div><div style="font-size:16px;font-weight:900;color:#71ff00;">'+val+'</div><div style="font-size:10px;color:rgba(255,255,255,0.4);">'+label+'</div></div>';
+    }
+
+    /* ── Incentive tracker ── */
+    function _renderIncentives() {
+      var box = document.getElementById('incentiveBox');
+      var content = document.getElementById('incentiveContent');
+      if (!box || !content || !window.SokoniLogistics) return;
+      var status = SokoniLogistics.computeIncentives(_shiftDeliveries, _shiftEarnings);
+      box.style.display = 'block';
+      var html = '';
+      if (status.earnedTiers.length) {
+        status.earnedTiers.forEach(function (t) {
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+            '<span style="font-size:16px;">✅</span>' +
+            '<div><div style="font-size:13px;font-weight:700;color:#71ff00;">+KES '+t.bonus+' bonus earned!</div>' +
+            '<div style="font-size:11px;color:rgba(255,255,255,0.4);">Completed '+t.label+'</div></div></div>';
+        });
+      }
+      if (status.nextTier) {
+        var pct = Math.round((_shiftDeliveries / status.nextTier.deliveries) * 100);
+        html += '<div style="margin-top:10px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:6px;">' +
+          '<span>Next: KES '+status.nextTier.bonus+' bonus at '+status.nextTier.deliveries+' deliveries</span>' +
+          '<span>'+status.nextTier.remaining+' to go</span></div>' +
+          '<div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;"><div style="height:100%;width:'+pct+'%;background:#71ff00;border-radius:3px;transition:.5s;"></div></div></div>';
+      }
+      if (status.totalBonus) {
+        html += '<div style="margin-top:10px;font-size:13px;font-weight:800;color:white;">Total with bonuses: KES '+status.totalWithBonus.toLocaleString()+'</div>';
+      }
+      content.innerHTML = html;
+    }
+
+    /* ── Performance metrics from Firestore ── */
+    function _loadPerformanceMetrics() {
+      if (!_riderUid) return;
+      var el = document.getElementById('perfGrid');
+      if (!el) return;
+      /* Last 30-day window */
+      var since = new Date();
+      since.setDate(since.getDate() - 30);
+      firebase.firestore().collection('packageRequests')
+        .where('riderId', '==', _riderUid)
+        .where('createdAt', '>=', since)
+        .get()
+        .then(function (snap) {
+          var deliveries = snap.docs.map(function (d) { return d.data(); });
+          var total     = deliveries.length;
+          var done      = deliveries.filter(function (d) { return ['delivered','buyer_confirmed'].includes(d.status); }).length;
+          var cancelled = deliveries.filter(function (d) { return d.status === 'cancelled'; }).length;
+          var earnings  = deliveries.reduce(function (s,d){ return s+(d.driverNet||0); }, 0);
+          var ratings   = deliveries.filter(function (d) { return d.riderRating; }).map(function (d) { return d.riderRating; });
+          var avgRating = ratings.length ? (ratings.reduce(function(a,b){return a+b;},0)/ratings.length).toFixed(1) : '—';
+          var compRate  = total ? Math.round(done/total*100)+'%' : '—';
+          var accRate   = '—';
+          el.innerHTML = [
+            _perfCard('📦', total, '30-Day Deliveries'),
+            _perfCard('✅', compRate, 'Completion Rate'),
+            _perfCard('⭐', avgRating+'/5', 'Avg Rating'),
+            _perfCard('💰', 'KES '+earnings.toLocaleString(), '30-Day Earnings'),
+            _perfCard('❌', cancelled, 'Cancellations'),
+            _perfCard('⚡', accRate, 'Acceptance Rate'),
+          ].join('');
+        }).catch(function () {
+          el.innerHTML = '<p style="font-size:12px;color:rgba(255,255,255,0.3);">Could not load metrics.</p>';
+        });
+    }
+
+    function _perfCard(icon, val, label) {
+      return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;text-align:center;">' +
+        '<div style="font-size:18px;margin-bottom:6px;">'+icon+'</div>' +
+        '<div style="font-size:16px;font-weight:900;color:white;">'+val+'</div>' +
+        '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">'+label+'</div></div>';
+    }
+
+    /* ── Dispatch subscription — listen for new dispatch offers ── */
+    function _subscribeDispatch() {
+      if (!_riderUid) return;
+      /* Listen for dispatchQueue docs offering this rider */
+      firebase.firestore().collection('dispatchQueue')
+        .where('status', '==', 'offered')
+        .onSnapshot(function (snap) {
+          snap.docChanges().forEach(function (change) {
+            if (change.type !== 'added' && change.type !== 'modified') return;
+            var q = change.doc.data();
+            var current = q.rankedRiders && q.rankedRiders[q.currentIndex];
+            if (!current || current.riderId !== _riderUid) return;
+            /* Show dispatch offer banner */
+            _showDispatchOffer(change.doc.id, q, current);
+          });
+        });
+    }
+
+    function _showDispatchOffer(deliveryRef, queue, candidate) {
+      var existing = document.getElementById('dispatchOfferBanner');
+      if (existing) existing.remove();
+      var banner = document.createElement('div');
+      banner.id = 'dispatchOfferBanner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#1a2a0a,#0d1a05);border-bottom:2px solid #71ff00;padding:16px 20px;';
+      banner.innerHTML = '<div style="font-size:14px;font-weight:900;color:#71ff00;margin-bottom:4px;">New Delivery Request!</div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,0.7);">'+candidate.distKm+'km away · ~'+candidate.etaMin+' min · Score '+Math.round(candidate.score*100)+'%</div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px;">' +
+        '<button onclick="_acceptDispatch(\''+_esc(deliveryRef)+'\')" style="flex:1;padding:11px;background:#71ff00;color:black;font-weight:900;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;">Accept</button>' +
+        '<button onclick="_declineDispatch(\''+_esc(deliveryRef)+'\')" style="flex:1;padding:11px;background:rgba(255,61,61,0.12);border:1px solid rgba(255,61,61,0.25);color:#ff6b6b;font-weight:800;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;">Decline</button>' +
+        '</div><div id="dispatchOfferTimer" style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px;">Offer expires in 90s</div>';
+      document.body.prepend(banner);
+      /* Countdown */
+      var secs = 90;
+      var timer = setInterval(function () {
+        secs--;
+        var timerEl = document.getElementById('dispatchOfferTimer');
+        if (timerEl) timerEl.textContent = 'Offer expires in ' + secs + 's';
+        if (secs <= 0) { clearInterval(timer); banner.remove(); }
+      }, 1000);
+      banner._timer = timer;
+    }
+
+    window._acceptDispatch = function (deliveryRef) {
+      var banner = document.getElementById('dispatchOfferBanner');
+      if (banner && banner._timer) clearInterval(banner._timer);
+      firebase.functions().httpsCallable('respondToDispatch')({ deliveryRef, accept: true })
+        .then(function () {
+          if (banner) banner.remove();
+          _shiftDeliveries++;
+          _renderBatchRoute(deliveryRef);
+        })
+        .catch(function (e) { alert('Error: ' + e.message); });
+    };
+
+    window._declineDispatch = function (deliveryRef) {
+      var banner = document.getElementById('dispatchOfferBanner');
+      if (banner && banner._timer) clearInterval(banner._timer);
+      firebase.functions().httpsCallable('respondToDispatch')({ deliveryRef, accept: false })
+        .then(function () { if (banner) banner.remove(); })
+        .catch(function (e) { alert('Error: ' + e.message); });
+    };
+
+    /* ── Batch route rendering ── */
+    function _renderBatchRoute(deliveryRef) {
+      var box = document.getElementById('batchRouteBox');
+      if (!box) return;
+      /* Just show the latest accepted delivery as a stop list */
+      firebase.firestore().collection('packageRequests').doc(deliveryRef).get().then(function (snap) {
+        if (!snap.exists) return;
+        var d = snap.data();
+        box.style.display = 'block';
+        var pickupAddr  = d.pickupAddress  || 'Pickup';
+        var dropoffAddr = d.deliveryAddress || d.dropoffAddress || 'Dropoff';
+        document.getElementById('batchStopCount').textContent = '1 delivery · 2 stops';
+        document.getElementById('batchStopList').innerHTML =
+          _stopRow('1', 'Pickup', pickupAddr, d.pickupPhone||'') +
+          _stopRow('2', 'Dropoff', dropoffAddr, d.buyerPhone||d.buyerName||'');
+        /* Store for navigation */
+        _activeBatch = { pickupAddress: pickupAddr, dropoffAddress: dropoffAddr, pickupLat: d.pickupLat, pickupLng: d.pickupLng, dropoffLat: d.dropoffLat||d.deliveryCoords?.lat, dropoffLng: d.dropoffLng||d.deliveryCoords?.lng };
+      }).catch(function () {});
+    }
+
+    function _stopRow(num, type, addr, contact) {
+      var color = type === 'Pickup' ? '#00aaff' : '#71ff00';
+      return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+        '<div style="width:22px;height:22px;border-radius:50%;background:'+color+';color:black;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+num+'</div>' +
+        '<div><div style="font-size:11px;font-weight:700;color:'+color+';">'+type+'</div><div style="font-size:13px;color:rgba(255,255,255,0.8);">'+_esc(addr)+'</div>'+(contact?'<div style="font-size:11px;color:rgba(255,255,255,0.4);">'+_esc(contact)+'</div>':'')+  '</div></div>';
+    }
+
+    /* ── Navigate button ── */
+    window.openNavigation = function () {
+      if (!_activeBatch) return;
+      /* Prefer Google Maps with next stop */
+      var dest = _activeBatch.pickupLat ? _activeBatch.pickupLat+','+_activeBatch.pickupLng : encodeURIComponent(_activeBatch.pickupAddress||'');
+      window.open('https://www.google.com/maps/dir/?api=1&destination='+dest+'&travelmode=driving', '_blank');
+    };
+
+    function _esc(s) {
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+    }
+  })();
+  </script>
   <!-- Enterprise v2.0: dashboard stack -->
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
