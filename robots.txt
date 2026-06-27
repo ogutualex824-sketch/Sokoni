@@ -9,6 +9,7 @@ Disallow: /monitor.html
 Disallow: /admin.html
 Disallow: /trust-safety.html
 Disallow: /payment-receipt.html
+Disallow: /automation-engine.html
 Disallow: /verification-admin.html
 Disallow: /profile.html
 Disallow: /checkout.html

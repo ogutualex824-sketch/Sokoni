@@ -7918,3 +7918,29 @@ exports.emailTrustReceipt         = payTrust.emailTrustReceipt;
 exports.verifyTrustReceipt        = payTrust.verifyTrustReceipt;
 exports.getPaymentSecurityAlerts  = payTrust.getPaymentSecurityAlerts;
 exports.detectPaymentAnomalies    = payTrust.detectPaymentAnomalies;
+
+
+/* ── Automation & Decision Engine (ADE) v1.0 ────────────────────────────── */
+const ade = require('./ade');
+// Firestore triggers
+exports.adeOnAccountCreated      = ade.adeOnAccountCreated;
+exports.adeOnPaymentCompleted    = ade.adeOnPaymentCompleted;
+exports.adeOnDisputeCreated      = ade.adeOnDisputeCreated;
+exports.adeOnSellerApplied       = ade.adeOnSellerApplied;
+exports.adeOnSubscriptionChanged = ade.adeOnSubscriptionChanged;
+// Callable — engine
+exports.adeProcessEvent          = ade.adeProcessEvent;
+// Callable — exception queue
+exports.adeGetExceptionQueue     = ade.adeGetExceptionQueue;
+exports.adeResolveException      = ade.adeResolveException;
+// Callable — rules
+exports.adeGetRules              = ade.adeGetRules;
+exports.adeUpsertRule            = ade.adeUpsertRule;
+exports.adeDeleteRule            = ade.adeDeleteRule;
+exports.adeSeedDefaultRules      = ade.adeSeedDefaultRules;
+// Callable — audit & metrics
+exports.adeGetAuditLog           = ade.adeGetAuditLog;
+exports.adeGetMetrics            = ade.adeGetMetrics;
+// Scheduled
+exports.adeRetryFailedJobs       = ade.adeRetryFailedJobs;
+exports.adeDailyMaintenance      = ade.adeDailyMaintenance;

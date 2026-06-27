@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Automation Engine — SOKONI ADE</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#0f1117;--surface:#1a1d2e;--surface2:#222540;--border:rgba(255,255,255,.08);--accent:#00bcd4;--accent2:#7c4dff;--success:#4caf50;--warn:#ff9800;--danger:#f44336;--txt:#e0e0e0;--muted:#888;--r:var(--radius)}
+    --radius:8px
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5}
+    body{display:flex}
+
+    /* ── Sidebar ── */
+    .sb{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;overflow-y:auto;z-index:100}
+    .sb-logo{padding:20px 16px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+    .sb-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:grid;place-items:center;font-size:16px;flex-shrink:0}
+    .sb-title{font-size:13px;font-weight:700;letter-spacing:.4px}
+    .sb-sub{font-size:10px;color:var(--muted)}
+    .ng{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:10px 16px 4px}
+    .ni{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:var(--txt);font-size:13px;border:none;background:none;width:100%;text-align:left;text-decoration:none;transition:background .15s,color .15s}
+    .ni:hover{background:rgba(255,255,255,.05);color:#fff}
+    .ni.active{background:rgba(0,188,212,.14);color:var(--accent);font-weight:600}
+    .ni .ic{font-size:15px;width:18px;text-align:center}
+    .ni .bc{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;border-radius:10px;padding:1px 6px;font-weight:700}
+    .sb-foot{margin-top:auto;padding:16px;border-top:1px solid var(--border)}
+
+    /* ── Main ── */
+    .main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+    .hdr{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:16px}
+    .hdr-title{font-size:18px;font-weight:700;flex:1}
+    .hdr-badge{background:rgba(0,188,212,.15);color:var(--accent);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid rgba(0,188,212,.3)}
+    .content{flex:1;padding:24px;overflow-y:auto}
+    .panel{display:block}.panel[hidden]{display:none!important}
+
+    /* ── Buttons ── */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:opacity .15s}
+    .btn:hover{opacity:.85}
+    .btn-g{background:var(--success);color:#fff}
+    .btn-r{background:var(--danger);color:#fff}
+    .btn-b{background:var(--accent);color:#000}
+    .btn-o{background:var(--warn);color:#000}
+    .btn-ghost{background:rgba(255,255,255,.07);color:var(--txt);border:1px solid var(--border)}
+    .btn-sm{padding:4px 10px;font-size:11px}
+
+    /* ── KPI row ── */
+    .kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:24px}
+    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px}
+    .kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .kpi-val{font-size:26px;font-weight:700;margin:4px 0 2px;line-height:1}
+    .kpi-sub{font-size:11px;color:var(--muted)}
+    .kpi.g{border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05)}
+    .kpi.b{border-color:rgba(0,188,212,.3);background:rgba(0,188,212,.05)}
+    .kpi.w{border-color:rgba(255,152,0,.3);background:rgba(255,152,0,.05)}
+    .kpi.r{border-color:rgba(244,67,54,.3);background:rgba(244,67,54,.05)}
+
+    /* ── Filter bar ── */
+    .filter-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+    .filter-bar select,.filter-bar input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:7px 10px;font-size:12px;outline:none}
+    .filter-bar select:focus,.filter-bar input:focus{border-color:var(--accent)}
+    .filter-bar .spacer{flex:1}
+
+    /* ── Badge ── */
+    .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;white-space:nowrap}
+    .bg{background:rgba(76,175,80,.2);color:#4caf50}
+    .br{background:rgba(244,67,54,.2);color:#f44336}
+    .bo{background:rgba(255,152,0,.2);color:#ff9800}
+    .bb{background:rgba(0,188,212,.2);color:#00bcd4}
+    .bp{background:rgba(124,77,255,.2);color:#7c4dff}
+    .bm{background:rgba(136,136,136,.2);color:#888}
+
+    /* ── Exception cards ── */
+    .ex-list{display:flex;flex-direction:column;gap:12px}
+    .ex-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;transition:border-color .2s}
+    .ex-card:hover{border-color:rgba(0,188,212,.3)}
+    .ex-card.critical{border-left:3px solid var(--danger)}
+    .ex-card.high{border-left:3px solid var(--warn)}
+    .ex-card.medium{border-left:3px solid var(--accent)}
+    .ex-card.low{border-left:3px solid var(--muted)}
+    .ex-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+    .ex-type{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .ex-entity{font-size:12px;font-weight:600;font-family:monospace;color:var(--accent)}
+    .ex-time{margin-left:auto;font-size:11px;color:var(--muted)}
+    .ex-body{padding:14px 16px}
+    .ex-rec{font-size:13px;margin-bottom:10px;line-height:1.5}
+    .ex-rec strong{color:var(--warn)}
+    .conf-bar{background:rgba(255,255,255,.08);border-radius:4px;height:6px;margin-bottom:12px;position:relative}
+    .conf-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--danger),var(--warn),var(--success));transition:width .4s}
+    .conf-label{font-size:10px;color:var(--muted);margin-bottom:4px}
+    .ev-toggle{font-size:11px;color:var(--accent);cursor:pointer;background:none;border:none;padding:0;margin-bottom:8px}
+    .ev-list{display:none;background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:10px}
+    .ev-list.open{display:block}
+    .ev-item{font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px}
+    .ev-item:last-child{border-bottom:none}
+    .ev-item .ew{font-weight:700;width:30px;text-align:right;flex-shrink:0}
+    .ew.pos{color:var(--success)} .ew.neg{color:var(--danger)} .ew.neu{color:var(--muted)}
+    .ex-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+    /* ── Table ── */
+    .tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:24px}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:10px 14px;border-bottom:1px solid var(--border)}
+    td{padding:10px 14px;font-size:12px;border-bottom:1px solid rgba(255,255,255,.04)}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(255,255,255,.025)}
+    .tbl-empty{text-align:center;color:var(--muted);padding:32px;font-size:13px}
+
+    /* ── Toggle switch ── */
+    .toggle{position:relative;display:inline-block;width:36px;height:20px}
+    .toggle input{opacity:0;width:0;height:0}
+    .toggle-track{position:absolute;inset:0;background:rgba(255,255,255,.15);border-radius:20px;cursor:pointer;transition:background .2s}
+    .toggle input:checked+.toggle-track{background:var(--accent)}
+    .toggle-track::after{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
+    .toggle input:checked+.toggle-track::after{left:18px}
+
+    /* ── Modal overlay ── */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;place-items:center}
+    .overlay.open{display:grid}
+    .modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:min(580px,95vw);max-height:90vh;overflow-y:auto;padding:24px}
+    .modal-title{font-size:17px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+    .close-btn{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1}
+    .form-row{margin-bottom:14px}
+    .form-row label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+    .form-row input,.form-row select,.form-row textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:8px 12px;font-size:13px;outline:none;font-family:inherit}
+    .form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:var(--accent)}
+    .form-row textarea{resize:vertical;min-height:72px}
+    .form-row.inline{display:flex;gap:12px}
+    .form-row.inline>*{flex:1}
+    .cond-row{display:flex;gap:8px;margin-bottom:6px;align-items:center}
+    .cond-row select,.cond-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:6px 8px;font-size:12px;outline:none}
+    .cond-row button{background:var(--danger);border:none;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
+    .modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+    .slider-row{display:flex;align-items:center;gap:12px}
+    .slider-row input[type=range]{flex:1;accent-color:var(--accent)}
+    .slider-val{font-size:13px;font-weight:700;color:var(--accent);min-width:36px;text-align:center}
+
+    /* ── Audit timeline ── */
+    .timeline{display:flex;flex-direction:column;gap:0}
+    .tl-entry{display:flex;gap:14px;position:relative;padding-bottom:12px}
+    .tl-entry::before{content:'';position:absolute;left:14px;top:28px;bottom:0;width:1px;background:var(--border)}
+    .tl-entry:last-child::before{display:none}
+    .tl-dot{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;flex-shrink:0;margin-top:2px}
+    .tl-dot.approve{background:rgba(76,175,80,.2);color:var(--success)}
+    .tl-dot.reject{background:rgba(244,67,54,.2);color:var(--danger)}
+    .tl-dot.escalate{background:rgba(255,152,0,.2);color:var(--warn)}
+    .tl-dot.rule{background:rgba(0,188,212,.2);color:var(--accent)}
+    .tl-dot.other{background:rgba(136,136,136,.2);color:var(--muted)}
+    .tl-body{flex:1}
+    .tl-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .tl-action{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+    .tl-entity{font-size:11px;color:var(--muted);font-family:monospace}
+    .tl-time{margin-left:auto;font-size:11px;color:var(--muted)}
+    .tl-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:24px;right:24px;z-index:9999;pointer-events:none}
+    .toast{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;margin-top:8px;font-size:13px;animation:slideIn .2s ease}
+    .toast.green{border-color:var(--success);color:var(--success)}
+    .toast.red{border-color:var(--danger);color:var(--danger)}
+    .toast.blue{border-color:var(--accent);color:var(--accent)}
+    @keyframes slideIn{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+    /* ── Empty state ── */
+    .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+    .empty-state .ico{font-size:48px;margin-bottom:12px;opacity:.4}
+    .empty-state h3{font-size:16px;color:var(--txt);margin-bottom:6px}
+
+    /* ── Metrics ── */
+    .metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+    .metric-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px}
+    .metric-card h4{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .metric-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    .metric-bar-row span:first-child{font-size:11px;min-width:120px;color:var(--txt)}
+    .metric-bar{flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+    .metric-bar-fill{height:100%;background:var(--accent);border-radius:3px}
+    .metric-bar-row span:last-child{font-size:11px;color:var(--muted);min-width:24px;text-align:right}
+
+    @media(max-width:768px){.sb{display:none}.main{margin-left:0}}
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<aside class="sb">
+  <div class="sb-logo">
+    <div class="sb-icon">⚡</div>
+    <div>
+      <div class="sb-title">SOKONI ADE</div>
+      <div class="sb-sub">Automation Engine</div>
+    </div>
+  </div>
+
+  <div class="ng">Operations</div>
+  <button class="ni active" onclick="_tab(this,'queue')"><span class="ic">📥</span>Exception Queue <span class="bc" id="queueBadge">…</span></button>
+  <button class="ni" onclick="_tab(this,'rules')"><span class="ic">⚙️</span>Automation Rules</button>
+  <button class="ni" onclick="_tab(this,'audit')"><span class="ic">📋</span>Audit Log</button>
+  <button class="ni" onclick="_tab(this,'metrics')"><span class="ic">📊</span>Metrics</button>
+
+  <div class="ng">Admin</div>
+  <a href="admin-os.html" class="ni"><span class="ic">🏠</span>Admin OS</a>
+  <a href="financial-os.html" class="ni"><span class="ic">💰</span>Financial OS</a>
+  <a href="trust-safety.html" class="ni"><span class="ic">🛡</span>Trust &amp; Safety</a>
+
+  <div class="sb-foot">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Signed in as</div>
+    <div id="sbUser" style="font-size:12px;font-weight:600">—</div>
+    <button onclick="firebase.auth().signOut().then(()=>location.href='admin.html')" style="margin-top:8px;width:100%;padding:6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-size:11px">Sign out</button>
+  </div>
+</aside>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<div class="main">
+  <header class="hdr">
+    <div class="hdr-title" id="pageTitle">Exception Queue</div>
+    <span class="hdr-badge" id="engineStatus">●&nbsp;Engine Active</span>
+    <button class="btn btn-b btn-sm" onclick="_refresh()">↻ Refresh</button>
+  </header>
+
+  <div class="content">
+
+    <!-- ── Exception Queue ──────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-queue">
+      <div class="kpi-row">
+        <div class="kpi r" id="kq-open"><div class="kpi-lbl">Open</div><div class="kpi-val" id="kq-open-val">—</div><div class="kpi-sub">exceptions</div></div>
+        <div class="kpi w" id="kq-critical"><div class="kpi-lbl">Critical</div><div class="kpi-val" id="kq-crit-val">—</div><div class="kpi-sub">require immediate</div></div>
+        <div class="kpi b" id="kq-high"><div class="kpi-lbl">High Priority</div><div class="kpi-val" id="kq-high-val">—</div><div class="kpi-sub">this week</div></div>
+        <div class="kpi g" id="kq-auto"><div class="kpi-lbl">Auto-resolved</div><div class="kpi-val" id="kq-auto-val">—</div><div class="kpi-sub">last 7 days</div></div>
+      </div>
+
+      <div class="filter-bar">
+        <select id="fStatus" onchange="_loadQueue()"><option value="open">Open</option><option value="in_progress">In Progress</option><option value="resolved">Resolved</option></select>
+        <select id="fPriority" onchange="_loadQueue()"><option value="">All Priorities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+        <select id="fType" onchange="_loadQueue()"><option value="">All Types</option><option value="account_registration">Account</option><option value="seller_application">Seller</option><option value="refund_request">Refund</option><option value="withdrawal">Withdrawal</option><option value="dispute">Dispute</option><option value="payment_received">Payment</option><option value="subscription_change">Subscription</option><option value="content_report">Content</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" onclick="_loadQueue()">↻ Reload</button>
+      </div>
+
+      <div class="ex-list" id="exList"><div class="empty-state"><div class="ico">📥</div><h3>Loading…</h3></div></div>
+    </div>
+
+    <!-- ── Rules ────────────────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-rules" hidden>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <select id="rEventFilter" onchange="_loadRules()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:7px 10px;font-size:12px;outline:none">
+          <option value="">All Event Types</option>
+          <option value="account_registration">Account Registration</option>
+          <option value="seller_application">Seller Application</option>
+          <option value="refund_request">Refund Request</option>
+          <option value="withdrawal">Withdrawal</option>
+          <option value="dispute">Dispute</option>
+          <option value="payment_received">Payment Received</option>
+          <option value="subscription_change">Subscription Change</option>
+          <option value="content_report">Content Report</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" id="seedBtn" onclick="_seedRules()">⬇ Seed Default Rules</button>
+        <button class="btn btn-b btn-sm" onclick="_openRuleModal(null)">+ Add Rule</button>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Event Type</th><th>Action</th><th>Conditions</th><th>Priority</th><th>Confidence</th><th>Enabled</th><th>Actions</th></tr></thead>
+          <tbody id="rulesTbl"><tr><td colspan="8" class="tbl-empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Audit Log ─────────────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-audit" hidden>
+      <div class="filter-bar" style="margin-bottom:20px">
+        <input id="auditEntity" placeholder="Filter by entity ID…" style="width:220px">
+        <select id="auditType"><option value="">All types</option><option value="account_registration">Account</option><option value="seller_application">Seller</option><option value="dispute">Dispute</option><option value="refund_request">Refund</option><option value="withdrawal">Withdrawal</option><option value="payment_received">Payment</option><option value="rule_created">Rule Created</option><option value="rule_updated">Rule Updated</option><option value="exception_resolved">Exception Resolved</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-b btn-sm" onclick="_loadAudit()">Search</button>
+      </div>
+      <div class="tbl-wrap" style="padding:16px">
+        <div class="timeline" id="auditTl"><div class="tbl-empty">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- ── Metrics ───────────────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-metrics" hidden>
+      <div class="kpi-row" id="metricsKpi">
+        <div class="kpi b"><div class="kpi-lbl">Auto-Resolution</div><div class="kpi-val" id="m-rate">—</div><div class="kpi-sub">last 7 days</div></div>
+        <div class="kpi g"><div class="kpi-lbl">Total Decisions</div><div class="kpi-val" id="m-total">—</div><div class="kpi-sub">last 7 days</div></div>
+        <div class="kpi r"><div class="kpi-lbl">Open Exceptions</div><div class="kpi-val" id="m-open">—</div><div class="kpi-sub">in queue now</div></div>
+        <div class="kpi b"><div class="kpi-lbl">Avg Confidence</div><div class="kpi-val" id="m-conf">—</div><div class="kpi-sub">evidence score</div></div>
+        <div class="kpi w"><div class="kpi-lbl">Pending Jobs</div><div class="kpi-val" id="m-jobs">—</div><div class="kpi-sub">retry queue</div></div>
+        <div class="kpi g"><div class="kpi-lbl">Active Rules</div><div class="kpi-val" id="m-rules">—</div><div class="kpi-sub">of total</div></div>
+        <div class="kpi w"><div class="kpi-lbl">Override Rate</div><div class="kpi-val" id="m-override">—</div><div class="kpi-sub">admin overrides</div></div>
+      </div>
+      <div class="metric-grid">
+        <div class="metric-card"><h4>Decisions by Type</h4><div id="m-byDecision">Loading…</div></div>
+        <div class="metric-card"><h4>By Event Category</h4><div id="m-byEvent">Loading…</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Resolve Exception Modal ─────────────────────────────────────────────── -->
+<div class="overlay" id="resolveOverlay">
+  <div class="modal">
+    <div class="modal-title">Resolve Exception <button class="close-btn" onclick="_closeResolve()">×</button></div>
+    <div class="form-row">
+      <label>Recommendation from engine</label>
+      <div id="modalRec" style="background:var(--surface2);border-radius:6px;padding:10px;font-size:12px;color:var(--txt);border-left:3px solid var(--warn)"></div>
+    </div>
+    <div class="form-row">
+      <label>Your Decision</label>
+      <select id="resolveDecision">
+        <option value="approve">✅ Approve</option>
+        <option value="reject">❌ Reject</option>
+        <option value="request_info">ℹ️ Request More Info</option>
+        <option value="hold">⏸ Hold</option>
+        <option value="dismiss">Dismiss (no action)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Reason / Notes (required for reject/hold)</label>
+      <textarea id="resolveReason" rows="3" placeholder="Explain your decision for the audit record…"></textarea>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="resolveApply" checked>
+        Apply decision to entity immediately (update status in Firestore)
+      </label>
+    </div>
+    <div style="background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:16px">
+      <div id="modalEvidence" style="font-size:11px;color:var(--muted)"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="_closeResolve()">Cancel</button>
+      <button class="btn btn-b" onclick="_submitResolve()">Confirm Decision</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Rule Editor Modal ──────────────────────────────────────────────────── -->
+<div class="overlay" id="ruleOverlay">
+  <div class="modal">
+    <div class="modal-title"><span id="rModalTitle">New Rule</span> <button class="close-btn" onclick="_closeRule()">×</button></div>
+    <input type="hidden" id="rId">
+    <div class="form-row inline">
+      <div>
+        <label>Rule Name *</label>
+        <input id="rName" placeholder="e.g. Auto-approve trusted sellers">
+      </div>
+      <div>
+        <label>Priority (higher = first)</label>
+        <input type="number" id="rPriority" value="100" min="0" max="1000">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Description</label>
+      <textarea id="rDesc" placeholder="What does this rule do and why?"></textarea>
+    </div>
+    <div class="form-row inline">
+      <div>
+        <label>Event Type *</label>
+        <select id="rEventType">
+          <option value="account_registration">Account Registration</option>
+          <option value="seller_application">Seller Application</option>
+          <option value="refund_request">Refund Request</option>
+          <option value="withdrawal">Withdrawal</option>
+          <option value="dispute">Dispute</option>
+          <option value="payment_received">Payment Received</option>
+          <option value="subscription_change">Subscription Change</option>
+          <option value="content_report">Content Report</option>
+        </select>
+      </div>
+      <div>
+        <label>Action *</label>
+        <select id="rAction" onchange="_updateActionParams()">
+          <option value="auto_approve">Auto Approve</option>
+          <option value="auto_reject">Auto Reject</option>
+          <option value="escalate">Escalate to Queue</option>
+          <option value="request_info">Request More Info</option>
+          <option value="hold">Hold Entity</option>
+          <option value="notify_only">Log & Notify Only</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Conditions builder -->
+    <div class="form-row">
+      <label style="display:flex;align-items:center;justify-content:space-between">
+        Conditions (all must match; leave empty to match all)
+        <button class="btn btn-ghost btn-sm" onclick="_addCond()">+ Add</button>
+      </label>
+      <div id="condList" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Action params -->
+    <div id="actionParams">
+      <div class="form-row">
+        <label>User Message (sent on action)</label>
+        <input id="rMessage" placeholder="Optional message shown to user">
+      </div>
+    </div>
+    <div id="escalateParams" style="display:none">
+      <div class="form-row inline">
+        <div>
+          <label>Escalation Priority</label>
+          <select id="rEscPriority"><option value="critical">Critical</option><option value="high" selected>High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+        </div>
+        <div>
+          <label>Recommendation text</label>
+          <input id="rEscRec" placeholder="What should the admin do?">
+        </div>
+      </div>
+    </div>
+    <div id="holdParams" style="display:none">
+      <div class="form-row">
+        <label>Hold Duration (hours)</label>
+        <input type="number" id="rHoldHours" value="24" min="1" max="720">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>Confidence Threshold: <span id="confVal">70</span>%</label>
+      <div class="slider-row">
+        <span style="font-size:11px;color:var(--muted)">0%</span>
+        <input type="range" id="rConfidence" min="0" max="100" value="70" oninput="document.getElementById('confVal').textContent=this.value">
+        <span style="font-size:11px;color:var(--muted)">100%</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Engine auto-executes when evidence confidence ≥ threshold. Set to 0 to always auto-execute.</div>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="rEnabled" checked> Rule Enabled
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="_closeRule()">Cancel</button>
+      <button class="btn btn-b" onclick="_saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ─────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ── Firebase + App ─────────────────────────────────────────────────────── -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+
+/* ── State ─────────────────────────────────────────────────────────────────── */
+var _activeException = null;
+var _currentUser     = null;
+var _isSA            = false;
+
+/* ── Auth guard ─────────────────────────────────────────────────────────────── */
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) { location.href = 'admin.html'; return; }
+  _currentUser = user;
+  user.getIdTokenResult().then(function(r) {
+    var t = r.claims;
+    if (!t.isAdmin && !t.isSuperAdmin && !t.isSupport && !t.isFinance)
+      { location.href = 'index.html'; return; }
+    _isSA = !!(t.isSuperAdmin || t.role === 'superAdmin');
+    document.getElementById('sbUser').textContent = user.displayName || user.email;
+    if (!_isSA) document.getElementById('seedBtn').style.display = 'none';
+    _loadQueue();
+    _loadMetrics();
+  });
+});
+
+/* ── CF Helper ─────────────────────────────────────────────────────────────── */
+function _cf(name) { return firebase.functions().httpsCallable(name); }
+
+/* ── Toast ──────────────────────────────────────────────────────────────────── */
+function _toast(msg, color) {
+  var el = document.createElement('div');
+  el.className = 'toast ' + (color || 'blue');
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(function() { el.remove(); }, 3500);
+}
+
+/* ── Escape HTML ────────────────────────────────────────────────────────────── */
+function _esc(s) {
+  return String(s || '').replace(/[<>"'&]/g, function(c) {
+    return {'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[c];
+  });
+}
+
+/* ── Time ago ───────────────────────────────────────────────────────────────── */
+function _ago(ts) {
+  if (!ts) return '—';
+  var s = ts.seconds ? ts.seconds : Math.floor(ts / 1000);
+  var d = Math.floor((Date.now() / 1000 - s));
+  if (d < 60)   return d + 's ago';
+  if (d < 3600) return Math.floor(d/60) + 'm ago';
+  if (d < 86400)return Math.floor(d/3600) + 'h ago';
+  return Math.floor(d/86400) + 'd ago';
+}
+
+/* ── Nav ────────────────────────────────────────────────────────────────────── */
+var TITLES = { queue:'Exception Queue', rules:'Automation Rules', audit:'Audit Log', metrics:'Metrics & Health' };
+function _tab(el, p) {
+  document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.panel').forEach(function(x){x.hidden=true;});
+  document.getElementById('panel-'+p).hidden = false;
+  document.getElementById('pageTitle').textContent = TITLES[p] || p;
+  if (p==='queue')   _loadQueue();
+  if (p==='rules')   _loadRules();
+  if (p==='audit')   _loadAudit();
+  if (p==='metrics') _loadMetrics();
+}
+function _refresh() {
+  var active = document.querySelector('.panel:not([hidden])');
+  if (active) {
+    var p = active.id.replace('panel-','');
+    if (p==='queue')   _loadQueue();
+    if (p==='rules')   _loadRules();
+    if (p==='audit')   _loadAudit();
+    if (p==='metrics') _loadMetrics();
+  }
+}
+
+/* ── Priority helpers ───────────────────────────────────────────────────────── */
+function _priClass(p) { return {critical:'br',high:'bo',medium:'bb',low:'bm'}[p]||'bm'; }
+function _priEmoji(p) { return {critical:'🔴',high:'🟠',medium:'🔵',low:'⚪'}[p]||'⚪'; }
+function _decClass(d) {
+  if (d==='auto_approve'||d==='approve') return 'bg';
+  if (d==='auto_reject'||d==='reject') return 'br';
+  if (d==='escalated'||d==='escalate') return 'bo';
+  if (d==='held'||d==='hold') return 'bp';
+  return 'bm';
+}
+function _dotClass(d) {
+  if (d==='auto_approve'||d==='approve') return 'approve';
+  if (d==='auto_reject'||d==='reject') return 'reject';
+  if (d==='escalated'||d==='escalate') return 'escalate';
+  if (d==='rule_created'||d==='rule_updated'||d==='rule_deleted') return 'rule';
+  return 'other';
+}
+function _dotEmoji(d) {
+  if (d==='auto_approve'||d==='approve') return '✅';
+  if (d==='auto_reject'||d==='reject') return '❌';
+  if (d==='escalated'||d==='escalate') return '⬆️';
+  if (d==='rule_created') return '➕';
+  if (d==='rule_updated') return '✏️';
+  if (d==='rule_deleted') return '🗑️';
+  if (d==='held'||d==='hold') return '⏸';
+  return '•';
+}
+
+/* ─── Exception Queue ───────────────────────────────────────────────────────── */
+function _loadQueue() {
+  var el = document.getElementById('exList');
+  el.innerHTML = '<div class="empty-state"><div class="ico">⏳</div><h3>Loading…</h3></div>';
+  var status    = document.getElementById('fStatus').value;
+  var priority  = document.getElementById('fPriority').value || undefined;
+  var eventType = document.getElementById('fType').value || undefined;
+  _cf('adeGetExceptionQueue')({ status, priority, eventType, limit: 50 }).then(function(r) {
+    var items = r.data.items || [];
+    // Update badge
+    var open  = r.data.total || items.length;
+    document.getElementById('queueBadge').textContent = open || '';
+    document.getElementById('kq-open-val').textContent  = open;
+    var crit  = items.filter(function(i){return i.priority==='critical';}).length;
+    var high  = items.filter(function(i){return i.priority==='high';}).length;
+    document.getElementById('kq-crit-val').textContent  = crit;
+    document.getElementById('kq-high-val').textContent  = high;
+
+    if (!items.length) {
+      el.innerHTML = '<div class="empty-state"><div class="ico">✅</div><h3>Queue is clear</h3><p>No exceptions require your attention right now.</p></div>';
+      return;
+    }
+    el.innerHTML = items.map(function(item) {
+      var evHtml = (item.evidence || []).map(function(e) {
+        var w     = e.weight || 0;
+        var cls   = w > 0 ? 'pos' : w < 0 ? 'neg' : 'neu';
+        var sign  = w > 0 ? '+' : '';
+        return '<div class="ev-item"><span style="flex:1">'+_esc(e.type)+': '+_esc(e.description)+'</span><span class="ew '+cls+'">'+sign+w+'</span></div>';
+      }).join('');
+      var confPct = Math.min(100, Math.max(0, item.confidence || 50));
+      return '<div class="ex-card '+_esc(item.priority || 'medium')+'">'
+        +'<div class="ex-head">'
+          +'<span class="badge '+_priClass(item.priority)+'">'+_priEmoji(item.priority)+' '+_esc(item.priority||'medium')+'</span>'
+          +'<div>'
+            +'<div class="ex-type">'+_esc((item.event_type||'').replace(/_/g,' '))+'</div>'
+            +'<div class="ex-entity">'+_esc(item.entity_type||'')+'&nbsp;/&nbsp;'+_esc((item.entity_id||'').slice(0,20))+'</div>'
+          +'</div>'
+          +'<div class="ex-time">'+_ago(item.created_at)+'</div>'
+        +'</div>'
+        +'<div class="ex-body">'
+          +'<div class="ex-rec">'+_esc(item.recommendation||'Manual review required')+'</div>'
+          +'<div class="conf-label">Evidence confidence: '+confPct+'%</div>'
+          +'<div class="conf-bar"><div class="conf-fill" style="width:'+confPct+'%"></div></div>'
+          +(evHtml ? '<button class="ev-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\');this.textContent=this.nextElementSibling.classList.contains(\'open\')?\'▲ Hide evidence\':\'▼ Show evidence\'">▼ Show evidence ('+item.evidence.length+')</button><div class="ev-list">'+evHtml+'</div>' : '')
+          +'<div class="ex-actions">'
+            +'<button class="btn btn-g btn-sm" onclick="_openResolve('+JSON.stringify(item.id)+',\'approve\')">✅ Approve</button>'
+            +'<button class="btn btn-r btn-sm" onclick="_openResolve('+JSON.stringify(item.id)+',\'reject\')">❌ Reject</button>'
+            +'<button class="btn btn-ghost btn-sm" onclick="_openResolve('+JSON.stringify(item.id)+',\'request_info\')">ℹ️ Request Info</button>'
+            +'<button class="btn btn-ghost btn-sm" onclick="_openResolve('+JSON.stringify(item.id)+',\'hold\')">⏸ Hold</button>'
+          +'</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+    // cache items for modal access
+    window._queueItems = {};
+    items.forEach(function(i){ window._queueItems[i.id] = i; });
+  }).catch(function(e) {
+    el.innerHTML = '<div class="empty-state"><div class="ico">⚠️</div><h3>Error</h3><p>'+_esc(e.message)+'</p></div>';
+  });
+}
+
+/* ── Resolve Modal ──────────────────────────────────────────────────────────── */
+function _openResolve(id, defaultDecision) {
+  _activeException = id;
+  var item = (window._queueItems || {})[id] || {};
+  document.getElementById('resolveDecision').value = defaultDecision || 'approve';
+  document.getElementById('resolveReason').value   = '';
+  document.getElementById('resolveApply').checked  = true;
+  document.getElementById('modalRec').textContent   = item.recommendation || '—';
+  var evHtml = (item.evidence || []).map(function(e) {
+    return _esc(e.type)+': '+_esc(e.description);
+  }).join(' | ');
+  document.getElementById('modalEvidence').textContent = evHtml || 'No evidence collected';
+  document.getElementById('resolveOverlay').classList.add('open');
+}
+function _closeResolve() {
+  document.getElementById('resolveOverlay').classList.remove('open');
+  _activeException = null;
+}
+function _submitResolve() {
+  if (!_activeException) return;
+  var decision    = document.getElementById('resolveDecision').value;
+  var reason      = document.getElementById('resolveReason').value.trim();
+  var applyAction = document.getElementById('resolveApply').checked;
+  if ((decision === 'reject' || decision === 'hold') && !reason)
+    { _toast('Please enter a reason for this decision', 'red'); return; }
+  _cf('adeResolveException')({ exceptionId: _activeException, decision, reason, applyAction }).then(function() {
+    _toast('Exception resolved: ' + decision, 'green');
+    _closeResolve();
+    _loadQueue();
+  }).catch(function(e) { _toast(e.message, 'red'); });
+}
+
+/* ─── Rules ─────────────────────────────────────────────────────────────────── */
+function _loadRules() {
+  var et   = document.getElementById('rEventFilter').value || undefined;
+  var tbody = document.getElementById('rulesTbl');
+  tbody.innerHTML = '<tr><td colspan="8" class="tbl-empty">Loading…</td></tr>';
+  _cf('adeGetRules')({ eventType: et }).then(function(r) {
+    var rules = r.data.rules || [];
+    if (!rules.length) { tbody.innerHTML = '<tr><td colspan="8" class="tbl-empty">No rules yet — click "Seed Default Rules" to get started</td></tr>'; return; }
+    tbody.innerHTML = rules.map(function(rule) {
+      var conds = (rule.conditions || []).length;
+      return '<tr>'
+        +'<td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_esc(rule.description || '')+'">'+_esc(rule.name)+'</td>'
+        +'<td><span class="badge bb">'+_esc((rule.event_type||'').replace(/_/g,' '))+'</span></td>'
+        +'<td><span class="badge '+_decClass(rule.action)+'">'+_esc(rule.action||'')+'</span></td>'
+        +'<td style="color:var(--muted)">'+(conds ? conds+' condition'+(conds>1?'s':'') : 'Match all')+'</td>'
+        +'<td>'+_esc(rule.priority||100)+'</td>'
+        +'<td>'+_esc(rule.confidence_threshold||70)+'%</td>'
+        +'<td>'
+          +'<label class="toggle"><input type="checkbox" '+(rule.enabled!==false?'checked':'')+' onchange="_toggleRule(\''+_esc(rule.id)+'\',this.checked)"><span class="toggle-track"></span></label>'
+        +'</td>'
+        +'<td style="display:flex;gap:6px">'
+          +'<button class="btn btn-ghost btn-sm" onclick="_openRuleModal('+JSON.stringify(rule)+')">Edit</button>'
+          +(_isSA ? '<button class="btn btn-r btn-sm" onclick="_deleteRule(\''+_esc(rule.id)+'\')">Del</button>' : '')
+        +'</td>'
+        +'</tr>';
+    }).join('');
+  }).catch(function(e) { _toast(e.message, 'red'); });
+}
+
+function _toggleRule(id, enabled) {
+  _cf('adeUpsertRule')({ id, enabled }).then(function() {
+    _toast(enabled ? 'Rule enabled' : 'Rule disabled', 'blue');
+  }).catch(function(e) { _toast(e.message,'red'); _loadRules(); });
+}
+
+function _deleteRule(id) {
+  if (!confirm('Delete this rule? This cannot be undone.')) return;
+  _cf('adeDeleteRule')({ id }).then(function() {
+    _toast('Rule deleted', 'green');
+    _loadRules();
+  }).catch(function(e) { _toast(e.message,'red'); });
+}
+
+function _seedRules() {
+  if (!_isSA) return _toast('SuperAdmin required', 'red');
+  _cf('adeSeedDefaultRules')({}).then(function(r) {
+    var d = r.data;
+    _toast(d.skipped ? d.message : 'Seeded '+d.seeded+' default rules', 'green');
+    _loadRules();
+  }).catch(function(e) { _toast(e.message,'red'); });
+}
+
+/* ── Rule modal ─────────────────────────────────────────────────────────────── */
+function _openRuleModal(rule) {
+  document.getElementById('rModalTitle').textContent = rule ? 'Edit Rule' : 'New Rule';
+  document.getElementById('rId').value               = rule ? rule.id : '';
+  document.getElementById('rName').value             = rule ? (rule.name||'') : '';
+  document.getElementById('rDesc').value             = rule ? (rule.description||'') : '';
+  document.getElementById('rEventType').value        = rule ? (rule.event_type||'account_registration') : 'account_registration';
+  document.getElementById('rAction').value           = rule ? (rule.action||'auto_approve') : 'auto_approve';
+  document.getElementById('rPriority').value         = rule ? (rule.priority||100) : 100;
+  document.getElementById('rConfidence').value       = rule ? (rule.confidence_threshold??70) : 70;
+  document.getElementById('confVal').textContent     = rule ? (rule.confidence_threshold??70) : 70;
+  document.getElementById('rEnabled').checked        = rule ? rule.enabled!==false : true;
+  var ap = (rule && rule.action_params) || {};
+  document.getElementById('rMessage').value          = ap.message || '';
+  document.getElementById('rEscPriority').value      = ap.priority || 'high';
+  document.getElementById('rEscRec').value           = ap.recommendation || '';
+  document.getElementById('rHoldHours').value        = ap.hours || 24;
+  // Conditions
+  var cl = document.getElementById('condList');
+  cl.innerHTML = '';
+  (rule && rule.conditions || []).forEach(function(c) { _addCond(c); });
+  _updateActionParams();
+  document.getElementById('ruleOverlay').classList.add('open');
+}
+function _closeRule() { document.getElementById('ruleOverlay').classList.remove('open'); }
+
+function _updateActionParams() {
+  var action = document.getElementById('rAction').value;
+  document.getElementById('actionParams').style.display   = (action==='auto_approve'||action==='auto_reject'||action==='request_info'||action==='notify_only') ? '' : 'none';
+  document.getElementById('escalateParams').style.display = action==='escalate' ? '' : 'none';
+  document.getElementById('holdParams').style.display     = action==='hold' ? '' : 'none';
+}
+
+function _addCond(cond) {
+  var cl  = document.getElementById('condList');
+  var row = document.createElement('div');
+  row.className = 'cond-row';
+  var fields = ['amount','status','accountVerified','idDocument','businessAddress','county','category','disputeCount','violationCount','_evidence_score'];
+  var ops    = ['eq','neq','gt','gte','lt','lte','exists','not_exists','truthy','falsy','in','contains'];
+  row.innerHTML = '<select class="c-field">'
+    + fields.map(function(f){ return '<option value="'+f+'"'+(cond&&cond.field===f?' selected':'')+'>'+f+'</option>'; }).join('')
+    + '</select>'
+    + '<select class="c-op">'
+    + ops.map(function(o){ return '<option value="'+o+'"'+(cond&&cond.operator===o?' selected':'')+'>'+o+'</option>'; }).join('')
+    + '</select>'
+    + '<input class="c-val" placeholder="value" value="'+_esc(cond&&cond.value!==undefined?cond.value:'')+'">'
+    + '<button onclick="this.parentNode.remove()" title="Remove">×</button>';
+  cl.appendChild(row);
+}
+
+function _saveRule() {
+  var id     = document.getElementById('rId').value;
+  var name   = document.getElementById('rName').value.trim();
+  var action = document.getElementById('rAction').value;
+  if (!name)   { _toast('Name is required', 'red'); return; }
+
+  var conditions = Array.from(document.querySelectorAll('#condList .cond-row')).map(function(row) {
+    var field = row.querySelector('.c-field').value;
+    var op    = row.querySelector('.c-op').value;
+    var rawVal = row.querySelector('.c-val').value;
+    var value;
+    if (op === 'truthy' || op === 'falsy' || op === 'exists' || op === 'not_exists') {
+      value = undefined;
+    } else if (!isNaN(rawVal) && rawVal !== '') {
+      value = Number(rawVal);
+    } else {
+      value = rawVal;
+    }
+    return { field, operator: op, value };
+  }).filter(function(c){ return c.field; });
+
+  var ap = {};
+  if (action === 'escalate') {
+    ap.priority       = document.getElementById('rEscPriority').value;
+    ap.recommendation = document.getElementById('rEscRec').value.trim();
+  } else if (action === 'hold') {
+    ap.hours   = Number(document.getElementById('rHoldHours').value) || 24;
+    ap.message = document.getElementById('rMessage').value.trim();
+  } else {
+    ap.message = document.getElementById('rMessage').value.trim();
+  }
+
+  var payload = {
+    name, description: document.getElementById('rDesc').value.trim(),
+    event_type: document.getElementById('rEventType').value,
+    action, action_params: ap, conditions,
+    confidence_threshold: Number(document.getElementById('rConfidence').value),
+    priority: Number(document.getElementById('rPriority').value),
+    enabled: document.getElementById('rEnabled').checked,
+  };
+  if (id) payload.id = id;
+
+  _cf('adeUpsertRule')(payload).then(function() {
+    _toast(id ? 'Rule updated' : 'Rule created', 'green');
+    _closeRule();
+    _loadRules();
+  }).catch(function(e) { _toast(e.message, 'red'); });
+}
+
+/* ─── Audit Log ─────────────────────────────────────────────────────────────── */
+function _loadAudit() {
+  var tl      = document.getElementById('auditTl');
+  var entityId = document.getElementById('auditEntity').value.trim() || undefined;
+  var eventType = document.getElementById('auditType').value || undefined;
+  tl.innerHTML = '<div class="tbl-empty">Loading…</div>';
+  _cf('adeGetAuditLog')({ entityId, eventType, lim: 50 }).then(function(r) {
+    var entries = r.data.entries || [];
+    if (!entries.length) { tl.innerHTML = '<div class="tbl-empty">No audit entries found</div>'; return; }
+    tl.innerHTML = entries.map(function(e) {
+      var d = e.decision || e.action_type || '';
+      return '<div class="tl-entry">'
+        +'<div class="tl-dot '+_dotClass(d)+'">'+_dotEmoji(d)+'</div>'
+        +'<div class="tl-body">'
+          +'<div class="tl-head">'
+            +'<span class="tl-action">'+_esc(d.replace(/_/g,' '))+'</span>'
+            +(e.entity_id ? '<span class="tl-entity">'+_esc(e.entity_type||'')+'&nbsp;/&nbsp;'+_esc(String(e.entity_id).slice(0,20))+'</span>' : '')
+            +(e.confidence ? '<span class="badge bb">'+e.confidence+'%</span>' : '')
+            +(e.automated===false ? '<span class="badge bm">manual</span>' : '<span class="badge bg">auto</span>')
+            +'<span class="tl-time">'+_ago(e.timestamp)+'</span>'
+          +'</div>'
+          +'<div class="tl-sub">'
+            +(e.rule_name ? 'Rule: '+_esc(e.rule_name)+' · ' : '')
+            +(e.actor && e.actor !== 'system' ? 'By: '+_esc(e.actor.slice(0,20)) : 'By: system')
+          +'</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  }).catch(function(e) { tl.innerHTML = '<div class="tbl-empty">Error: '+_esc(e.message)+'</div>'; });
+}
+
+/* ─── Metrics ────────────────────────────────────────────────────────────────── */
+function _loadMetrics() {
+  _cf('adeGetMetrics')({}).then(function(r) {
+    var d = r.data;
+    document.getElementById('m-rate').textContent     = (d.autoResolutionRate||0) + '%';
+    document.getElementById('m-total').textContent    = d.totalDecisions || 0;
+    document.getElementById('m-open').textContent     = d.openExceptions || 0;
+    document.getElementById('m-conf').textContent     = (d.avgConfidence||0) + '%';
+    document.getElementById('m-jobs').textContent     = d.pendingJobs || 0;
+    document.getElementById('m-rules').textContent    = (d.activeRules||0)+'/'+(d.totalRules||0);
+    document.getElementById('m-override').textContent = (d.overrideRate||0) + '%';
+    document.getElementById('kq-auto-val').textContent = d.autoResolved || 0;
+
+    // By decision breakdown
+    var bd    = d.byDecision || {};
+    var total = d.totalDecisions || 1;
+    document.getElementById('m-byDecision').innerHTML = Object.keys(bd).map(function(k) {
+      var pct = Math.round(bd[k] / total * 100);
+      return '<div class="metric-bar-row"><span>'+_esc(k.replace(/_/g,' '))+'</span><div class="metric-bar"><div class="metric-bar-fill" style="width:'+pct+'%"></div></div><span>'+bd[k]+'</span></div>';
+    }).join('') || '<div style="color:var(--muted);font-size:11px">No data yet</div>';
+
+    // By event type
+    var be = d.byEventType || {};
+    document.getElementById('m-byEvent').innerHTML = Object.keys(be).map(function(k) {
+      var pct = Math.round(be[k] / total * 100);
+      return '<div class="metric-bar-row"><span>'+_esc(k.replace(/_/g,' '))+'</span><div class="metric-bar"><div class="metric-bar-fill" style="width:'+pct+'%;background:var(--accent2)"></div></div><span>'+be[k]+'</span></div>';
+    }).join('') || '<div style="color:var(--muted);font-size:11px">No data yet</div>';
+  }).catch(function(e) { _toast('Metrics error: ' + e.message, 'red'); });
+}
+</script>
+</body>
+</html>
