@@ -331,3 +331,177 @@ body{
 @media (max-width: 380px) {
   .auth-google-btn { font-size: 13px; padding: 12px 14px; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SOCIAL PROVIDER GRID — 3 columns, icon + label
+══════════════════════════════════════════════════════════════ */
+.auth-social-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 2px 0 6px;
+}
+
+.auth-social-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 13px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,255,255,0.09);
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.65);
+  font-family: inherit;
+  transition: background .18s, border-color .18s, transform .14s, color .18s;
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1.2;
+  letter-spacing: .01em;
+}
+.auth-social-btn:hover  { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); transform: translateY(-2px); }
+.auth-social-btn:active { transform: scale(0.96); }
+.auth-social-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.auth-social-btn svg,
+.auth-social-btn .ssb-icon { flex-shrink: 0; display: block; }
+
+/* Provider accent colours */
+.auth-social-btn.google-btn  { border-color: rgba(66,133,244,0.22); }
+.auth-social-btn.google-btn:hover  { background: rgba(66,133,244,0.08); border-color: rgba(66,133,244,0.45); }
+.auth-social-btn.apple-btn   { border-color: rgba(255,255,255,0.18); }
+.auth-social-btn.apple-btn:hover   { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.35); }
+.auth-social-btn.phone-btn   { border-color: rgba(113,255,0,0.22); }
+.auth-social-btn.phone-btn:hover   { background: rgba(113,255,0,0.08); border-color: rgba(113,255,0,0.5); color: #71ff00; }
+.auth-social-btn.ms-btn      { border-color: rgba(0,120,212,0.22); }
+.auth-social-btn.ms-btn:hover      { background: rgba(0,120,212,0.08); border-color: rgba(0,120,212,0.45); }
+.auth-social-btn.fb-btn      { border-color: rgba(24,119,242,0.22); }
+.auth-social-btn.fb-btn:hover      { background: rgba(24,119,242,0.08); border-color: rgba(24,119,242,0.45); }
+.auth-social-btn.gh-btn      { border-color: rgba(255,255,255,0.18); }
+.auth-social-btn.gh-btn:hover      { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.32); }
+
+@media (max-width: 380px) {
+  .auth-social-grid { gap: 8px; }
+  .auth-social-btn  { padding: 11px 6px; font-size: 10px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   REMEMBER ME CHECKBOX ROW
+══════════════════════════════════════════════════════════════ */
+.auth-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 10px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+}
+.auth-remember input[type="checkbox"] {
+  accent-color: #71ff00;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.auth-remember label { cursor: pointer; user-select: none; }
+.auth-remember .auth-forgot-link {
+  margin-left: auto;
+  color: rgba(113,255,0,0.75);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.auth-remember .auth-forgot-link:hover { color: #71ff00; }
+
+/* ══════════════════════════════════════════════════════════════
+   PHONE OTP SECTION (collapsible, slides open)
+══════════════════════════════════════════════════════════════ */
+#phoneAuthSection {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .32s ease, opacity .32s ease;
+  opacity: 0;
+  margin-top: 0;
+}
+#phoneAuthSection.open {
+  max-height: 420px;
+  opacity: 1;
+  margin-top: 4px;
+}
+
+.phone-section-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  margin: 12px 0 8px;
+  text-align: center;
+}
+
+.phone-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.phone-code-input {
+  width: 78px;
+  flex-shrink: 0;
+  padding: 15px 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 13px;
+  color: white;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: inherit;
+  text-align: center;
+  transition: border-color .2s;
+}
+.phone-code-input:focus { outline: none; border-color: rgba(113,255,0,0.55); }
+
+/* OTP 6-digit grid */
+.otp-row {
+  display: flex;
+  gap: 7px;
+  justify-content: center;
+  margin: 14px 0 10px;
+}
+.otp-digit {
+  width: 42px;
+  height: 50px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 900;
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  color: #fff;
+  font-family: inherit;
+  transition: border-color .18s;
+  caret-color: #71ff00;
+}
+.otp-digit:focus { outline: none; border-color: #71ff00; background: rgba(113,255,0,0.05); }
+.otp-digit.filled { border-color: rgba(113,255,0,0.5); }
+
+.otp-resend-row {
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255,255,255,0.32);
+  margin-top: 2px;
+}
+.otp-resend-row a {
+  color: rgba(113,255,0,0.75);
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.otp-resend-row a:hover { color: #71ff00; }
+
+@media (max-width: 380px) {
+  .otp-digit { width: 36px; height: 44px; font-size: 19px; }
+  .otp-row   { gap: 5px; }
+}

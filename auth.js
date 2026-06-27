@@ -79,8 +79,11 @@ async function loginUser(){
         }
     }
 
-    const btn = document.querySelector(".auth-btn");
+    const btn = document.querySelector(".auth-btn[onclick*='loginUser']") || document.querySelector(".auth-btn");
     if(btn){ btn.disabled = true; btn.textContent = "Signing in…"; }
+
+    /* Apply Remember Me persistence before Firebase call */
+    await _setPersistenceFromUI();
 
     try {
         /* ── Firebase Authentication ── */
@@ -178,6 +181,9 @@ async function loginUser(){
                 window._pendingGoogleLink = null;
             }
         }
+
+        /* ── Non-Google OAuth provider linking ── */
+        await _linkPendingProvider(cred.user, email);
 
         /* ── Employee account detection ── */
         if(profile.role === "employee" && profile.shopOwnerId){
@@ -761,9 +767,20 @@ async function signInWithGoogle() {
     }
 }
 
-/* Receive redirect result dispatched by firebase.js after getRedirectResult() */
+/* Receive redirect result dispatched by firebase.js after getRedirectResult()
+   NOTE: firebase.js dispatches sokoniOAuthRedirectDone for ALL providers.
+   The Google-specific name is kept for any legacy listeners. */
 window.addEventListener('sokoniGoogleRedirectDone', async function(e) {
     await _handleGoogleResult(e.detail);
+});
+window.addEventListener('sokoniOAuthRedirectDone', async function(e) {
+    const result     = e.detail;
+    const providerId = result.user?.providerData?.[0]?.providerId || 'unknown';
+    /* Google redirects already handled by sokoniGoogleRedirectDone above;
+       this listener handles Apple, Microsoft, Facebook, GitHub, Phone */
+    if (providerId !== 'google.com') {
+        await _handleOAuthResult(result, _providerLabel(providerId));
+    }
 });
 
 window.addEventListener('sokoniGoogleRedirectError', function(e) {
@@ -776,3 +793,459 @@ window.addEventListener('sokoniGoogleRedirectError', function(e) {
         _resetGoogleBtn();
     }
 });
+window.addEventListener('sokoniOAuthRedirectError', function(e) {
+    const err        = e.detail;
+    const providerId = err.customData?._tokenResponse?.providerId || 'unknown';
+    if (err.code === 'auth/account-exists-with-different-credential' && providerId !== 'google.com') {
+        _handleProviderLinkError(err, _providerLabel(providerId));
+    } else if (providerId === 'google.com') {
+        _handleGoogleLinkError(err);
+    } else {
+        const msg = _googleAuthErr(err.code) || 'Sign-in failed. Please try again.';
+        if (msg) showAuthMsg(msg, 'error');
+    }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   UNIVERSAL OAUTH — Apple · Microsoft · Facebook · GitHub
+   All providers share the same popup/redirect detection, linking,
+   and post-auth profile handling.
+══════════════════════════════════════════════════════════════ */
+
+function _providerLabel(providerId) {
+    const map = {
+        'google.com':    'Google',
+        'apple.com':     'Apple',
+        'microsoft.com': 'Microsoft',
+        'facebook.com':  'Facebook',
+        'github.com':    'GitHub',
+        'phone':         'Phone',
+        'password':      'Email',
+    };
+    return map[providerId] || providerId;
+}
+
+async function _handleOAuthResult(result, providerLabel) {
+    const user = result.user;
+
+    await new Promise(function(resolve) { setTimeout(resolve, 900); });
+
+    if (!localStorage.getItem('sokoniUser')) {
+        const parts = (user.displayName || '').split(' ');
+        const fallback = {
+            uid:           user.uid,
+            name:          user.displayName || (user.email || '').split('@')[0] || 'User',
+            firstName:     parts[0] || '',
+            lastName:      parts.slice(1).join(' ') || '',
+            email:         user.email || '',
+            photoURL:      user.photoURL || '',
+            provider:      (providerLabel || 'oauth').toLowerCase(),
+            emailVerified: user.emailVerified,
+            roles:         ['buyer'],
+            accountStatus: 'active',
+        };
+        localStorage.setItem('sokoniUser', JSON.stringify(fallback));
+        localStorage.setItem('loggedIn', 'true');
+    }
+
+    if (window.SokoniSync && window.firebaseDB) {
+        window.SokoniSync.init(window.firebaseDB, user.uid);
+        window.SokoniSync.pull(user.uid);
+    } else if (window.firebaseDB) {
+        window._sokoniSyncPending = { db: window.firebaseDB, uid: user.uid };
+    }
+
+    if (typeof sokoniTrackLogin === 'function') sokoniTrackLogin();
+    if (typeof SokoniAudit !== 'undefined') {
+        SokoniAudit.log(SokoniAudit.ACTIONS.LOGIN_SUCCESS, {
+            email: user.email, provider: (providerLabel || '').toLowerCase()
+        });
+    }
+    if (window.SokoniSessions && window.SokoniSessions.createSession && user.email) {
+        window.SokoniSessions.createSession(user.email).catch(function() {});
+    }
+
+    showAuthMsg('Signed in with ' + providerLabel + '! Taking you home…', 'success');
+
+    const _raw  = sessionStorage.getItem('sokoniLoginRedirect') || 'index.html';
+    sessionStorage.removeItem('sokoniLoginRedirect');
+    const _safe = /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(_raw) && !_raw.includes('//') ? _raw : 'index.html';
+
+    try {
+        const profile = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+        if (profile.onboardingRequired) {
+            sessionStorage.setItem('sokoniPostOnboardingRedirect', _safe);
+            setTimeout(function() { window.location.href = 'onboarding.html'; }, 1200);
+            return;
+        }
+    } catch (_) {}
+
+    setTimeout(function() { window.location.href = _safe; }, 1200);
+}
+
+function _handleProviderLinkError(err, providerLabel) {
+    const email = (err.customData && err.customData.email) || '';
+    window._pendingProviderLink = { error: err, email: email, provider: providerLabel };
+
+    const emailField = document.getElementById('loginEmail');
+    if (emailField && email) emailField.value = email;
+
+    showAuthMsg(
+        'This email already has a password account. ' +
+        'Sign in below — your ' + providerLabel + ' account will link automatically.',
+        'error'
+    );
+    document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = false; });
+    _resetGoogleBtn();
+}
+
+async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
+    if (!navigator.onLine) {
+        showAuthMsg(providerLabel + ' Sign-In requires an internet connection.', 'error');
+        return;
+    }
+    if (!window.firebaseAuth) {
+        showAuthMsg('Firebase not ready. Please refresh the page.', 'error');
+        return;
+    }
+
+    document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = true; });
+    const gBtn = document.getElementById('googleSignInBtn');
+    if (gBtn) gBtn.disabled = true;
+    showAuthMsg('Connecting to ' + providerLabel + '…', '');
+
+    try {
+        const {
+            OAuthProvider,
+            FacebookAuthProvider,
+            GithubAuthProvider,
+            signInWithPopup,
+            signInWithRedirect,
+            setPersistence,
+            browserLocalPersistence,
+            browserSessionPersistence,
+        } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+
+        const remember = document.getElementById('rememberMe')?.checked ?? true;
+        await setPersistence(window.firebaseAuth,
+            remember ? browserLocalPersistence : browserSessionPersistence
+        ).catch(function() {});
+
+        let provider;
+        switch (providerKey) {
+            case 'facebook': provider = new FacebookAuthProvider(); break;
+            case 'github':   provider = new GithubAuthProvider();   break;
+            default:         provider = new OAuthProvider(providerKey); break;
+        }
+        if (configureFn) configureFn(provider);
+
+        try {
+            if (_isPopupSupported()) {
+                const result = await signInWithPopup(window.firebaseAuth, provider);
+                await _handleOAuthResult(result, providerLabel);
+            } else {
+                await signInWithRedirect(window.firebaseAuth, provider);
+            }
+        } catch (err) {
+            if (err.code === 'auth/popup-blocked') {
+                await signInWithRedirect(window.firebaseAuth, provider);
+            } else if (err.code === 'auth/account-exists-with-different-credential') {
+                _handleProviderLinkError(err, providerLabel);
+            } else if (err.code === 'auth/popup-closed-by-user' ||
+                       err.code === 'auth/cancelled-popup-request') {
+                showAuthMsg('', '');
+                document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = false; });
+                if (gBtn) { gBtn.disabled = false; _googleBtnLabel(gBtn, 'Continue with Google'); }
+            } else {
+                throw err;
+            }
+        }
+    } catch (err) {
+        document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = false; });
+        if (gBtn) { gBtn.disabled = false; _googleBtnLabel(gBtn, 'Continue with Google'); }
+        const msg = _googleAuthErr(err.code) || (providerLabel + ' sign-in failed. Please try again.');
+        if (msg) showAuthMsg(msg, 'error');
+    }
+}
+
+function signInWithApple() {
+    _signInWithOAuth('apple.com', 'Apple', function(p) {
+        p.addScope('email');
+        p.addScope('name');
+    });
+}
+
+function signInWithMicrosoft() {
+    _signInWithOAuth('microsoft.com', 'Microsoft', function(p) {
+        p.addScope('email');
+        p.addScope('profile');
+    });
+}
+
+function signInWithFacebook() {
+    _signInWithOAuth('facebook', 'Facebook', function(p) {
+        p.addScope('email');
+        p.addScope('public_profile');
+    });
+}
+
+function signInWithGitHub() {
+    _signInWithOAuth('github', 'GitHub', function(p) {
+        p.addScope('user:email');
+    });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PHONE OTP AUTHENTICATION
+   Firebase Phone Auth with invisible reCAPTCHA.
+   Default prefix: +254 (Kenya). User can type any international code.
+══════════════════════════════════════════════════════════════ */
+let _phoneConfirmResult = null;
+let _recaptchaVerifier  = null;
+let _otpTimerHandle     = null;
+
+function openPhoneAuth() {
+    const section = document.getElementById('phoneAuthSection');
+    if (!section) return;
+    const nowOpen = section.classList.toggle('open');
+    if (nowOpen) {
+        setTimeout(function() { document.getElementById('phoneNumber')?.focus(); }, 300);
+    }
+}
+
+async function sendPhoneOTP() {
+    const countryCode = ((document.getElementById('phoneCountryCode')?.value) || '+254').trim();
+    const rawNumber   = ((document.getElementById('phoneNumber')?.value) || '').replace(/[\s\-()]/g, '').trim();
+
+    if (!rawNumber || rawNumber.length < 6) {
+        showAuthMsg('Please enter a valid phone number.', 'error');
+        return;
+    }
+
+    const fullPhone = countryCode.startsWith('+') ? countryCode + rawNumber : '+' + countryCode + rawNumber;
+
+    if (!navigator.onLine) {
+        showAuthMsg('Phone OTP requires an internet connection.', 'error');
+        return;
+    }
+    if (!window.firebaseAuth) {
+        showAuthMsg('Firebase not ready. Please refresh the page.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('sendOtpBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+    try {
+        const { signInWithPhoneNumber, RecaptchaVerifier } = await import(
+            'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
+        );
+
+        if (!_recaptchaVerifier) {
+            _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'sendOtpBtn', {
+                size: 'invisible',
+                callback: function() {},
+            });
+        }
+
+        _phoneConfirmResult = await signInWithPhoneNumber(window.firebaseAuth, fullPhone, _recaptchaVerifier);
+
+        const otpEntry = document.getElementById('otpEntry');
+        if (otpEntry) otpEntry.style.display = 'block';
+        document.getElementById('otp0')?.focus();
+
+        if (btn) { btn.disabled = false; btn.textContent = 'Resend OTP'; }
+        _startOTPTimer(60);
+        showAuthMsg('OTP sent to ' + fullPhone + '. Check your messages.', 'success');
+
+    } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
+        _recaptchaVerifier = null;
+        showAuthMsg(
+            err.code === 'auth/invalid-phone-number' ? 'Invalid phone number. Use full format e.g. +254700000000.' :
+            err.code === 'auth/too-many-requests'    ? 'Too many SMS requests. Please wait a few minutes.' :
+            err.code === 'auth/captcha-check-failed' ? 'Security check failed. Please try again.' :
+            'Failed to send OTP. Check the number and try again.',
+            'error'
+        );
+    }
+}
+
+async function verifyPhoneOTP() {
+    const code = [0,1,2,3,4,5].map(function(i) {
+        return (document.getElementById('otp' + i)?.value || '').trim();
+    }).join('');
+
+    if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+        showAuthMsg('Please enter the complete 6-digit code.', 'error');
+        return;
+    }
+    if (!_phoneConfirmResult) {
+        showAuthMsg('Session expired. Please request a new OTP.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('verifyOtpBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+
+    try {
+        const result = await _phoneConfirmResult.confirm(code);
+        clearInterval(_otpTimerHandle);
+        await _handleOAuthResult(result, 'Phone');
+    } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify →'; }
+        showAuthMsg(
+            err.code === 'auth/invalid-verification-code' ? 'Incorrect code. Please check and try again.' :
+            err.code === 'auth/code-expired'              ? 'Code expired. Please request a new OTP.' :
+            'Verification failed. Please try again.',
+            'error'
+        );
+    }
+}
+
+function resendPhoneOTP() {
+    _phoneConfirmResult = null;
+    _recaptchaVerifier  = null;
+    [0,1,2,3,4,5].forEach(function(i) {
+        const el = document.getElementById('otp' + i);
+        if (el) { el.value = ''; el.classList.remove('filled'); }
+    });
+    const resendEl = document.getElementById('otpResendLink');
+    if (resendEl) resendEl.style.display = 'none';
+    sendPhoneOTP();
+}
+
+function _startOTPTimer(seconds) {
+    const timerEl  = document.getElementById('otpTimerDisplay');
+    const resendEl = document.getElementById('otpResendLink');
+    let remaining  = seconds;
+
+    if (timerEl)  timerEl.textContent = 'Resend in ' + remaining + 's';
+    if (resendEl) resendEl.style.display = 'none';
+
+    clearInterval(_otpTimerHandle);
+    _otpTimerHandle = setInterval(function() {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(_otpTimerHandle);
+            if (timerEl)  timerEl.textContent = '';
+            if (resendEl) resendEl.style.display = 'inline';
+        } else {
+            if (timerEl) timerEl.textContent = 'Resend in ' + remaining + 's';
+        }
+    }, 1000);
+}
+
+function _setupOtpInputs() {
+    [0,1,2,3,4,5].forEach(function(i) {
+        const el = document.getElementById('otp' + i);
+        if (!el) return;
+
+        el.addEventListener('input', function() {
+            this.value = this.value.replace(/\D/g, '').slice(0, 1);
+            this.classList.toggle('filled', this.value.length > 0);
+            if (this.value && i < 5) {
+                document.getElementById('otp' + (i + 1))?.focus();
+            }
+            if (i === 5 && this.value) {
+                const all = [0,1,2,3,4,5].map(function(j) {
+                    return document.getElementById('otp' + j)?.value || '';
+                }).join('');
+                if (all.length === 6) setTimeout(verifyPhoneOTP, 150);
+            }
+        });
+
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && !this.value && i > 0) {
+                document.getElementById('otp' + (i - 1))?.focus();
+            }
+        });
+
+        el.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData)
+                .getData('text').replace(/\D/g, '').slice(0, 6);
+            [...text].forEach(function(ch, j) {
+                const t = document.getElementById('otp' + (i + j));
+                if (t) { t.value = ch; t.classList.add('filled'); }
+            });
+            document.getElementById('otp' + Math.min(i + text.length, 5))?.focus();
+        });
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _setupOtpInputs);
+} else {
+    _setupOtpInputs();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   REMEMBER ME — Firebase persistence toggle
+══════════════════════════════════════════════════════════════ */
+async function _setPersistenceFromUI() {
+    try {
+        const remember = document.getElementById('rememberMe')?.checked ?? true;
+        const { setPersistence, browserLocalPersistence, browserSessionPersistence } = await import(
+            'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
+        );
+        await setPersistence(
+            window.firebaseAuth,
+            remember ? browserLocalPersistence : browserSessionPersistence
+        );
+    } catch (_) {}
+}
+
+function toggleLoginPw() {
+    const f = document.getElementById('loginPassword');
+    if (!f) return;
+    f.type = f.type === 'password' ? 'text' : 'password';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PENDING PROVIDER LINK — non-Google OAuth credential linking
+   Called from loginUser() after successful password sign-in
+   when _pendingProviderLink is set by _handleProviderLinkError.
+══════════════════════════════════════════════════════════════ */
+async function _linkPendingProvider(credUser, email) {
+    if (!window._pendingProviderLink) return;
+    try {
+        const {
+            OAuthProvider,
+            FacebookAuthProvider,
+            GithubAuthProvider,
+            linkWithCredential,
+        } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+
+        const err      = window._pendingProviderLink.error;
+        const provider = window._pendingProviderLink.provider;
+        let pendingCred;
+
+        switch (provider) {
+            case 'Facebook':
+                pendingCred = FacebookAuthProvider.credentialFromError(err); break;
+            case 'GitHub':
+                pendingCred = GithubAuthProvider.credentialFromError(err); break;
+            default:
+                pendingCred = OAuthProvider.credentialFromError(err); break;
+        }
+
+        if (pendingCred) {
+            await linkWithCredential(credUser, pendingCred);
+            try {
+                const { doc, setDoc, serverTimestamp: _sts } = await import(
+                    'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
+                );
+                await setDoc(
+                    doc(window.firebaseDB, 'users', credUser.uid),
+                    { linkedProviders: [provider.toLowerCase()], linkedAt: _sts() },
+                    { merge: true }
+                );
+            } catch (_) {}
+            if (typeof SokoniAudit !== 'undefined') {
+                SokoniAudit.log(provider.toUpperCase() + '_ACCOUNT_LINKED', { email });
+            }
+        }
+    } catch (_) {}
+    finally { window._pendingProviderLink = null; }
+}

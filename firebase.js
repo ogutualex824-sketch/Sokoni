@@ -9,6 +9,9 @@ import {
   onAuthStateChanged,
   signOut,
   GoogleAuthProvider,
+  OAuthProvider,
+  FacebookAuthProvider,
+  GithubAuthProvider,
   getRedirectResult,
   linkWithCredential,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -64,25 +67,32 @@ window.firebaseStorage = storage;
   try {
     const result = await getRedirectResult(auth);
     if (result && result.user) {
-      window.dispatchEvent(
-        new CustomEvent("sokoniGoogleRedirectDone", { detail: result })
-      );
+      const providerId = result.user.providerData?.[0]?.providerId || "unknown";
+      /* Dispatch provider-specific event for Google (backward compat) + generic for all */
+      if (providerId === "google.com") {
+        window.dispatchEvent(new CustomEvent("sokoniGoogleRedirectDone", { detail: result }));
+      }
+      window.dispatchEvent(new CustomEvent("sokoniOAuthRedirectDone", { detail: result }));
     }
   } catch (err) {
-    /* Ignore no-op codes; surface real errors to auth.js */
     const silent = [
       "auth/null-user",
       "auth/no-auth-event",
       "auth/operation-not-supported-in-this-environment",
     ];
     if (!silent.includes(err.code)) {
-      /* For account-linking errors, attach the credential for auth.js */
       if (err.code === "auth/account-exists-with-different-credential") {
-        err._pendingCred = GoogleAuthProvider.credentialFromError(err);
+        /* Attach the matching credential for the linking flow in auth.js */
+        const pid = err.customData?._tokenResponse?.providerId || "";
+        try {
+          if (pid === "google.com")       err._pendingCred = GoogleAuthProvider.credentialFromError(err);
+          else if (pid === "facebook.com") err._pendingCred = FacebookAuthProvider.credentialFromError(err);
+          else if (pid === "github.com")   err._pendingCred = GithubAuthProvider.credentialFromError(err);
+          else                             err._pendingCred = OAuthProvider.credentialFromError(err);
+        } catch (_) {}
       }
-      window.dispatchEvent(
-        new CustomEvent("sokoniGoogleRedirectError", { detail: err })
-      );
+      window.dispatchEvent(new CustomEvent("sokoniGoogleRedirectError", { detail: err }));
+      window.dispatchEvent(new CustomEvent("sokoniOAuthRedirectError",  { detail: err }));
     }
   }
 })();
@@ -142,6 +152,13 @@ onAuthStateChanged(auth, async (user) => {
         const lastName  = parts.slice(1).join(" ") || "";
         const _now     = new Date();
 
+        /* Generate unique referral code: SKN + 7 alphanumeric chars */
+        const _refChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        let _refCode = "SKN";
+        for (let _i = 0; _i < 7; _i++) {
+          _refCode += _refChars[Math.floor(Math.random() * _refChars.length)];
+        }
+
         const profile = {
           uid:                user.uid,
           name:               user.displayName || user.email.split("@")[0],
@@ -150,6 +167,8 @@ onAuthStateChanged(auth, async (user) => {
           roles:              ["buyer"],
           accountStatus:      "active",
           onboardingCompleted: false,
+          onboardingRequired: true,
+          referralCode:       _refCode,
           joinedAt:           _now.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
           joinedTimestamp:    _now.getTime(),
           ...(isGoogle && {
@@ -167,6 +186,42 @@ onAuthStateChanged(auth, async (user) => {
           lastLogin: serverTimestamp(),
         });
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
+
+        /* ── First-login initialisation: wallet + notification prefs ──
+           These are fire-and-forget; failure is non-fatal.            */
+        (async () => {
+          try {
+            const { doc: _doc, setDoc: _set, serverTimestamp: _sts, getDoc: _get } = await import(
+              "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+            );
+            /* Wallet — initialised with zero balance */
+            const walletRef  = _doc(db, "wallets", user.uid);
+            const walletSnap = await _get(walletRef);
+            if (!walletSnap.exists()) {
+              await _set(walletRef, {
+                uid:       user.uid,
+                balance:   0,
+                currency:  "KES",
+                createdAt: _sts(),
+              });
+            }
+            /* Notification preferences */
+            const notifRef  = _doc(db, "notificationPrefs", user.uid);
+            const notifSnap = await _get(notifRef);
+            if (!notifSnap.exists()) {
+              await _set(notifRef, {
+                uid:        user.uid,
+                email:      true,
+                push:       true,
+                sms:        false,
+                marketing:  false,
+                orders:     true,
+                security:   true,
+                createdAt:  _sts(),
+              });
+            }
+          } catch (_) {}
+        })();
       }
     } catch (e) {
       /* Keep existing localStorage data if Firestore is temporarily unreachable */

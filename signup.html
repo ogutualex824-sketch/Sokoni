@@ -94,17 +94,34 @@
         Create Account →
       </button>
 
-      <div class="auth-divider">or</div>
+      <div class="auth-divider">or sign up with</div>
 
-      <button type="button" class="auth-google-btn" id="googleSignInBtn" onclick="signInWithGoogle()" aria-label="Continue with Google">
-        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-          <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-          <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-          <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-        </svg>
-        <span class="g-btn-text">Continue with Google</span>
-      </button>
+      <div class="auth-social-grid" style="grid-template-columns:repeat(3,1fr);">
+        <!-- Google -->
+        <button type="button" class="auth-social-btn google-btn" id="googleSignInBtn" onclick="signInWithGoogle()">
+          <svg class="ssb-icon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
+          <span class="g-btn-text">Google</span>
+        </button>
+        <!-- Apple -->
+        <button type="button" class="auth-social-btn apple-btn" onclick="signInWithApple()">
+          <svg class="ssb-icon" width="17" height="18" viewBox="0 0 814 1000" fill="white" aria-hidden="true">
+            <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.3-161-39.3c-73.4 0-99.9 40.8-165.5 40.8s-105.9-57-155.5-127.4C46 376.6 46 256.4 46 240c0-145.8 95.2-222.5 188.9-222.5 50.6 0 92.6 33.3 124.4 33.3 30.7 0 78.8-35.2 136.5-35.2 23.3 0 108.2 2.6 168.9 70.3zm-41.4-129.7c-19.2 12.2-66.4 37.6-66.4 108.9 0 71.5 65.3 124.5 96.2 138.3-4.5 9-28.9 62.8-90 62.8-40 0-70.4-26.3-115.4-26.3-47.3 0-93.6 30.2-129.5 30.2-57.8 0-110-71.4-130.4-121.9"/>
+          </svg>
+          Apple
+        </button>
+        <!-- Phone -->
+        <button type="button" class="auth-social-btn phone-btn" onclick="window.location.href='login.html#phone'">
+          <svg class="ssb-icon" width="16" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+          </svg>
+          Phone
+        </button>
+      </div>
 
       <!-- Role Selection (shown after successful signup) -->
       <div id="roleSelectionSection" style="display:none;margin-top:24px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.1);max-height:65vh;overflow-y:auto;overscroll-behavior:contain;">

@@ -117,11 +117,19 @@ service cloud.firestore {
      */
     function noProviderForgery() {
       let data = request.resource.data;
-      // If writing 'provider' field, it must match the token's sign-in provider
-      return (!data.keys().hasAny(['provider'])
-              || data.provider == request.auth.token.firebase.sign_in_provider
-              || data.provider == 'google'   && request.auth.token.firebase.sign_in_provider == 'google.com'
-              || data.provider == 'password' && request.auth.token.firebase.sign_in_provider == 'password');
+      let tokenProvider = request.auth.token.firebase.sign_in_provider;
+      // Allow the write if no 'provider' field is written, or if it matches
+      // the canonical mapping between our short names and Firebase's provider IDs.
+      return !data.keys().hasAny(['provider'])
+             || data.provider == tokenProvider
+             || (data.provider == 'google'    && tokenProvider == 'google.com')
+             || (data.provider == 'apple'     && tokenProvider == 'apple.com')
+             || (data.provider == 'microsoft' && tokenProvider == 'microsoft.com')
+             || (data.provider == 'facebook'  && tokenProvider == 'facebook.com')
+             || (data.provider == 'github'    && tokenProvider == 'github.com')
+             || (data.provider == 'phone'     && tokenProvider == 'phone')
+             || (data.provider == 'password'  && tokenProvider == 'password')
+             || (data.provider == 'oauth'     && tokenProvider != 'password');
     }
 
     /*
@@ -2110,6 +2118,21 @@ service cloud.firestore {
     }
 
     /* ══════════════════════════════════════════════════════════════
+       NOTIFICATION PREFERENCES  (notificationPrefs/{uid})
+       • One doc per user, keyed by uid.
+       • Owner: full read/write on their own doc.
+       • Admin: read only (for support).
+    ══════════════════════════════════════════════════════════════ */
+    match /notificationPrefs/{prefUid} {
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == prefUid);
+      allow create: if isAuthed() && request.auth.uid == prefUid
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthed() && request.auth.uid == prefUid
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid']);
+      allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
        WALLET TRANSACTIONS  (walletTxns/{txId})
        • create: authenticated users, uid in payload must match.
        • read: owner or admin.
@@ -3895,6 +3918,54 @@ service cloud.firestore {
       allow create: if isAuthed() && request.resource.data.driverUid == request.auth.uid;
       allow update: if isAuthed() && resource.data.driverUid == request.auth.uid || isAdmin();
       allow delete: if isAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       KRA eTIMS — SELLER PROFILES
+       Seller reads their own profile. All writes via CF (admin SDK).
+    ══════════════════════════════════════════════════════════════ */
+    match /etimsProfiles/{uid} {
+      allow read:   if isAuthed() && (request.auth.uid == uid || isAdmin());
+      allow write:  if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       KRA eTIMS — CREDENTIALS (AES-256-GCM encrypted, CF-only)
+       Never accessible to any client — admin SDK only.
+    ══════════════════════════════════════════════════════════════ */
+    match /etimsCredentials/{uid}     { allow read, write: if false; }
+    match /etimsSequences/{uid}       { allow read, write: if false; }
+    match /etimsReconciliations/{docId}{ allow read, write: if false; }
+
+    /* ══════════════════════════════════════════════════════════════
+       KRA eTIMS — INVOICES
+       Seller or buyer read their own invoices. Immutable to clients.
+    ══════════════════════════════════════════════════════════════ */
+    match /etimsInvoices/{invoiceId} {
+      allow read:   if isAuthed() && (
+                      resource.data.sellerUid == request.auth.uid ||
+                      resource.data.buyerUid  == request.auth.uid ||
+                      isAdmin()
+                    );
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       KRA eTIMS — QUEUE, BULK JOBS, ALERTS (CF-managed)
+    ══════════════════════════════════════════════════════════════ */
+    match /etimsQueue/{queueId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /etimsBulkJobs/{jobId} {
+      allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /etimsAlerts/{alertId} {
+      allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
+      allow write: if false;
     }
 
   }

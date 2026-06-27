@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" data-splash="1">
 <head><script src="security.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>SOKONI — Login</title>
+  <title>SOKONI — Sign In</title>
   <meta name="description" content="Sign in to your SOKONI account — Kenya's #1 online marketplace.">
-  <meta property="og:title" content="SOKONI — Login">
+  <meta property="og:title" content="SOKONI — Sign In">
   <meta property="og:description" content="Sign in to your SOKONI account — Kenya's #1 online marketplace.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
@@ -17,16 +17,17 @@
   <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
   <link rel="stylesheet" href="auth.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SOKONI">
-<link rel="stylesheet" href="premium.css">
-<link rel="stylesheet" href="mobile.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
   <link rel="stylesheet" href="sokoni-desktop.css">
-<script src="shared-header.js" defer></script>
+  <script src="shared-header.js" defer></script>
 </head>
 <body>
 <script src="splash.js"></script>
@@ -48,50 +49,142 @@
       </div>
 
       <h2 class="auth-title">👋 Welcome Back</h2>
-      <p class="auth-sub">Sign in to your Sokoni account</p>
+      <p class="auth-sub">Sign in to your SOKONI account</p>
 
       <div id="authMsg" class="auth-msg"></div>
 
+      <!-- Email + Password -->
       <div class="auth-field">
         📧
-        <input type="email" id="loginEmail" placeholder="Email address" onkeydown="if(event.key==='Enter')loginUser()">
+        <input type="email" id="loginEmail" placeholder="Email address"
+               autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
       </div>
 
-      <div class="auth-field">
+      <div class="auth-field" style="position:relative;">
         🔒
-        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginUser()">
+        <input type="password" id="loginPassword" placeholder="Password"
+               autocomplete="current-password" onkeydown="if(event.key==='Enter')loginUser()" style="padding-right:44px;">
+        <button type="button" onclick="toggleLoginPw()" tabindex="-1"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:16px;padding:4px;" title="Show/hide password">👁</button>
       </div>
 
-      <button type="button" class="auth-btn" onclick="loginUser()">
-        Sign In →
-      </button>
-
-      <div class="auth-divider">or</div>
-
-      <button type="button" class="auth-google-btn" id="googleSignInBtn" onclick="signInWithGoogle()" aria-label="Continue with Google">
-        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-          <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-          <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-          <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-        </svg>
-        <span class="g-btn-text">Continue with Google</span>
-      </button>
-
-      <p style="text-align:center;margin:14px 0 0;font-size:13px;">
+      <!-- Remember Me + Forgot -->
+      <div class="auth-remember">
+        <input type="checkbox" id="rememberMe" checked>
+        <label for="rememberMe">Remember me</label>
         <a href="javascript:void(0)" onclick="document.getElementById('resetModal').style.display='flex'"
-           style="color:rgba(113,255,0,0.7);text-decoration:none;">Forgot password?</a>
-      </p>
+           class="auth-forgot-link">Forgot password?</a>
+      </div>
+
+      <button type="button" class="auth-btn" onclick="loginUser()">Sign In →</button>
+
+      <div class="auth-divider">or sign in with</div>
+
+      <!-- Social provider grid: Google · Apple · Phone / Microsoft · Facebook · GitHub -->
+      <div class="auth-social-grid">
+
+        <!-- Google -->
+        <button type="button" class="auth-social-btn google-btn" id="googleSignInBtn" onclick="signInWithGoogle()">
+          <svg class="ssb-icon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
+          <span class="g-btn-text">Google</span>
+        </button>
+
+        <!-- Apple -->
+        <button type="button" class="auth-social-btn apple-btn" onclick="signInWithApple()">
+          <svg class="ssb-icon" width="17" height="18" viewBox="0 0 814 1000" fill="white" aria-hidden="true">
+            <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.3-161-39.3c-73.4 0-99.9 40.8-165.5 40.8s-105.9-57-155.5-127.4C46 376.6 46 256.4 46 240c0-145.8 95.2-222.5 188.9-222.5 50.6 0 92.6 33.3 124.4 33.3 30.7 0 78.8-35.2 136.5-35.2 23.3 0 108.2 2.6 168.9 70.3zm-41.4-129.7c-19.2 12.2-66.4 37.6-66.4 108.9 0 71.5 65.3 124.5 96.2 138.3-4.5 9-28.9 62.8-90 62.8-40 0-70.4-26.3-115.4-26.3-47.3 0-93.6 30.2-129.5 30.2-57.8 0-110-71.4-130.4-121.9"/>
+          </svg>
+          Apple
+        </button>
+
+        <!-- Phone OTP -->
+        <button type="button" class="auth-social-btn phone-btn" onclick="openPhoneAuth()">
+          <svg class="ssb-icon" width="16" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+          </svg>
+          Phone
+        </button>
+
+        <!-- Microsoft -->
+        <button type="button" class="auth-social-btn ms-btn" onclick="signInWithMicrosoft()">
+          <svg class="ssb-icon" width="16" height="16" viewBox="0 0 23 23" aria-hidden="true">
+            <path d="M0 0h11v11H0z" fill="#f25022"/>
+            <path d="M12 0h11v11H12z" fill="#7fba00"/>
+            <path d="M0 12h11v11H0z" fill="#00a4ef"/>
+            <path d="M12 12h11v11H12z" fill="#ffb900"/>
+          </svg>
+          Microsoft
+        </button>
+
+        <!-- Facebook -->
+        <button type="button" class="auth-social-btn fb-btn" onclick="signInWithFacebook()">
+          <svg class="ssb-icon" width="17" height="17" viewBox="0 0 24 24" fill="#1877F2" aria-hidden="true">
+            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073c0 6.027 4.388 11.026 10.125 11.927V15.563H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.234 2.686.234v2.953H15.83c-1.491 0-1.956.927-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.437C19.612 23.1 24 18.1 24 12.073z"/>
+          </svg>
+          Facebook
+        </button>
+
+        <!-- GitHub -->
+        <button type="button" class="auth-social-btn gh-btn" onclick="signInWithGitHub()">
+          <svg class="ssb-icon" width="17" height="17" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+          </svg>
+          GitHub
+        </button>
+
+      </div>
+
+      <!-- Phone OTP section (collapsible) -->
+      <div id="phoneAuthSection">
+        <p class="phone-section-label">📱 Phone Sign In</p>
+        <div class="phone-row">
+          <input type="text" class="phone-code-input" id="phoneCountryCode" value="+254" maxlength="5"
+                 inputmode="tel" aria-label="Country code">
+          <div class="auth-field" style="flex:1;margin:0;">
+            <span>📱</span>
+            <input type="tel" id="phoneNumber" placeholder="7XX XXX XXX" inputmode="numeric"
+                   onkeydown="if(event.key==='Enter')sendPhoneOTP()">
+          </div>
+        </div>
+        <button type="button" class="auth-btn" id="sendOtpBtn" onclick="sendPhoneOTP()" style="margin-top:8px;">
+          Send OTP →
+        </button>
+
+        <!-- OTP entry (hidden until SMS sent) -->
+        <div id="otpEntry" style="display:none;margin-top:4px;">
+          <p style="font-size:12px;color:rgba(255,255,255,0.38);text-align:center;margin:12px 0 2px;">
+            Enter the 6-digit code sent to your phone
+          </p>
+          <div class="otp-row">
+            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp0" autocomplete="one-time-code">
+            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp1">
+            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp2">
+            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp3">
+            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp4">
+            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp5">
+          </div>
+          <button type="button" class="auth-btn" id="verifyOtpBtn" onclick="verifyPhoneOTP()">
+            Verify Code →
+          </button>
+          <p class="otp-resend-row">
+            <span id="otpTimerDisplay"></span>
+            <a id="otpResendLink" onclick="resendPhoneOTP()" style="display:none;">Resend OTP</a>
+          </p>
+        </div>
+      </div>
 
       <p class="auth-switch">
         Don't have an account? <a href="signup.html">Create Account</a>
       </p>
 
-      <a href="index.html" class="auth-skip">
-        🏪 Continue as Guest
-      </a>
+      <a href="index.html" class="auth-skip">🏪 Continue as Guest</a>
 
-      <!-- Employee Login Divider -->
+      <!-- Employee Access -->
       <div style="margin:22px 0 0;border-top:1px solid rgba(255,255,255,0.07);padding-top:18px;text-align:center;">
         <p style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:10px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">Employee Access</p>
         <div style="background:rgba(0,180,255,0.06);border:1px solid rgba(0,180,255,0.18);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;text-align:left;">
@@ -110,9 +203,7 @@
   <div id="resetModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;padding:20px;">
     <div style="background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:32px 24px;max-width:380px;width:100%;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;">
       <h3 style="margin:0 0 6px;font-size:18px;font-weight:900;">🔑 Reset Password</h3>
-      <p style="font-size:13px;color:rgba(255,255,255,0.45);margin:0 0 20px;line-height:1.5;">Enter your email and date of birth to verify your identity.</p>
-
-      <!-- Step 1: Verify identity -->
+      <p style="font-size:13px;color:rgba(255,255,255,0.45);margin:0 0 20px;line-height:1.5;">Enter your registered email — we'll send a secure reset link.</p>
       <div id="resetStep1">
         <div class="auth-field">
           📧
@@ -122,10 +213,8 @@
           🎂
           <input type="date" id="resetDobDate" placeholder="Date of birth" style="color-scheme:dark;">
         </div>
-        <button onclick="requestPasswordReset()" style="width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;margin-bottom:10px;">Verify Identity</button>
+        <button onclick="requestPasswordReset()" style="width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;margin-bottom:10px;">Send Reset Link</button>
       </div>
-
-      <!-- Step 2: New password -->
       <div id="resetStep2" style="display:none;">
         <div class="auth-field">
           🔒
@@ -137,7 +226,6 @@
         </div>
         <button onclick="completePasswordReset()" style="width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;margin-bottom:10px;">Set New Password</button>
       </div>
-
       <button onclick="document.getElementById('resetModal').style.display='none'" style="width:100%;padding:10px;background:transparent;border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;">Cancel</button>
     </div>
   </div>
@@ -148,28 +236,23 @@
   <script type="module" src="firebase.js"></script>
   <script type="module" src="session-manager.js"></script>
   <script src="auth.js"></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="scroll-top.js" defer></script>
-<script src="seo.js" defer></script>
-<script src="analytics.js" defer></script>
-<script src="sw-register.js" defer></script>
-<script>
-/* Nav state init */
-(function(){
-  try{
-    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
-    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
-    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
-  }catch(e){}
-})();
-</script>
+  <script src="sokoni-audit.js" defer></script>
+  <script src="scroll-top.js" defer></script>
+  <script src="seo.js" defer></script>
+  <script src="analytics.js" defer></script>
+  <script src="sw-register.js" defer></script>
+  <script>
+  (function(){
+    try{
+      var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
+      var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
+      if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
+    }catch(e){}
+  })();
+  </script>
   <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: core stack -->
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
 </body>
 </html>
-
-
-
