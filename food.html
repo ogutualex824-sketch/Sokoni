@@ -223,11 +223,11 @@ function renderGrid(){
     return;
   }
   el.innerHTML=list.map(r=>`
-  <div class="food-card" onclick="window.location.href='food-menu.html?id=${r.id}'">
+  <div class="food-card" data-provider-id="food_${r.id}" onclick="window.location.href='food-menu.html?id=${r.id}'">
     <div class="food-card-cover" style="background:${r.coverGrad};">
       ${r.emoji}
       <div class="food-card-badges">${r.featured?'<span class="food-badge featured">⭐ Featured</span>':''}${r.promo?'<span class="food-badge promo">🏷️ Promo</span>':''}</div>
-      <div class="food-card-open" style="${r.open?'':'background:rgba(80,80,80,0.9);color:rgba(255,255,255,0.7);'}">${r.open?'🟢 Open':'🔴 Closed'}</div>
+      <div data-avail-provider="food_${r.id}" style="position:absolute;top:8px;right:8px;"></div>
     </div>
     <div class="food-card-body">
       <div class="food-card-name">${r.name}</div>
@@ -289,5 +289,6 @@ if(_urlCat&&SokoniFood.CATEGORIES.find(c=>c.id===_urlCat)) setCat(_urlCat);
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+  <script src="sokoni-availability.js" defer></script>
 </body>
 </html>

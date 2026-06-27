@@ -459,6 +459,7 @@
     <!-- Category filter chips (horizontally scrollable) -->
     <div class="lc-filter-bar">
       <button type="button" onclick="filterLawyers('',this)" class="lc-filter-btn active-lf">⚖️ All</button>
+      <button type="button" id="lglOpenNowBtn" onclick="toggleLglOpenNow(this)" class="lc-filter-btn" style="border-color:rgba(16,185,129,.4);color:#10b981;">🟢 Open Now</button>
       <button type="button" onclick="filterLawyers('property',this)" class="lc-filter-btn">🏠 Property</button>
       <button type="button" onclick="filterLawyers('family',this)" class="lc-filter-btn">👨‍👩‍👧 Family</button>
       <button type="button" onclick="filterLawyers('criminal',this)" class="lc-filter-btn">🏛️ Criminal</button>
@@ -1715,7 +1716,7 @@ function _renderLawyerCards(lawyers){
     const loc         = (l.location||"Kenya").charAt(0).toUpperCase()+(l.location||"kenya").slice(1);
     const skills      = (l.skills||[]).slice(0,3);
 
-    return `<div class="lawyer-card" onclick="bookLawyer('${_esc(l.id)}')">
+    return `<div class="lawyer-card" data-provider-id="lgl_${_esc(l.id)}" onclick="bookLawyer('${_esc(l.id)}')">
       <div class="lc-header">
         <div class="lc-avatar">${_esc(initials)}</div>
         <div class="lc-info">
@@ -1723,7 +1724,10 @@ function _renderLawyerCards(lawyers){
           <div class="lc-spec">${_esc(l.spec||l.category||"General Practice")}</div>
           ${l.firm ? `<div class="lc-firm">🏢 ${_esc(l.firm)}</div>` : ""}
         </div>
-        <div class="lc-badge ${l.verified?"lc-badge-lsk":"lc-badge-pending"}">${l.verified?"✅ LSK":"⏳ Pending"}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          <div class="lc-badge ${l.verified?"lc-badge-lsk":"lc-badge-pending"}">${l.verified?"✅ LSK":"⏳ Pending"}</div>
+          <div data-avail-provider="lgl_${_esc(l.id)}" onclick="event.stopPropagation()"></div>
+        </div>
       </div>
 
       <div class="lc-body">
@@ -4720,6 +4724,27 @@ function _setPct(labelId, barId, pct){
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+  <script src="sokoni-availability.js" defer></script>
+  <script>
+  let _lglOpenNow = false;
+  async function toggleLglOpenNow(btn) {
+    _lglOpenNow = !_lglOpenNow;
+    btn.style.background = _lglOpenNow ? "rgba(16,185,129,.15)" : "";
+    btn.classList.toggle("active-lf", _lglOpenNow);
+    const grid = document.getElementById("lawyersGrid");
+    if (!grid) return;
+    const cards = [...grid.querySelectorAll(".lawyer-card[data-provider-id]")];
+    if (!_lglOpenNow) { cards.forEach(c => c.style.display = ""); return; }
+    const ids = cards.map(c => c.dataset.providerId).filter(Boolean);
+    if (!ids.length || !window.db) return;
+    const snaps = await Promise.all(ids.map(id => db.collection("availabilityStatus").doc(id).get().catch(() => null)));
+    cards.forEach((card, i) => {
+      const snap = snaps[i];
+      const isOpen = snap && snap.exists ? snap.data().isOpen : false;
+      card.style.display = isOpen ? "" : "none";
+    });
+  }
+  </script>
 </body>
 </html>
 

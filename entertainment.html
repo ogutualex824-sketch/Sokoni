@@ -1339,9 +1339,10 @@ function filterPerformers(scroll){
     `;
 
     return `
-    <div class="en-card" style="${p.featured?"border-color:rgba(168,85,247,0.4);box-shadow:0 0 24px rgba(168,85,247,0.12);":""}">
+    <div class="en-card" data-provider-id="en_${p.id}" style="${p.featured?"border-color:rgba(168,85,247,0.4);box-shadow:0 0 24px rgba(168,85,247,0.12);":""}">
       <div class="en-card-banner" style="background:${p.bannerBg};position:relative;flex-direction:column;gap:0;">
         ${featuredRibbon}
+        <div data-avail-provider="en_${p.id}" style="position:absolute;top:8px;right:8px;z-index:3;"></div>
         <span style="font-size:48px;">${p.emoji}</span>
         ${waveHtml}
         <div class="genre-strip">${genreTags}</div>
@@ -2348,6 +2349,7 @@ if (typeof _initFsArtists === 'function') _initFsArtists();
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+  <script src="sokoni-availability.js" defer></script>
 </body>
 </html>
 

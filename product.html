@@ -207,8 +207,11 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 </section>
 
-
-
+<!-- Reviews & Ratings Section -->
+<section id="productReviewsSection" style="padding:0 16px 32px;max-width:600px;margin:0 auto;display:none;">
+  <div style="font-size:16px;font-weight:900;color:rgba(255,255,255,0.9);margin-bottom:16px;">⭐ Reviews & Ratings</div>
+  <div id="productReviewsContainer"></div>
+</section>
 
 
 
@@ -346,6 +349,28 @@ window.addEventListener('DOMContentLoaded',function(){
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+  <script src="sokoni-reviews.js" defer></script>
+  <script>
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    var productId = params.get("id") || params.get("product");
+    if (!productId) return;
+    var section   = document.getElementById("productReviewsSection");
+    var container = document.getElementById("productReviewsContainer");
+    if (!section || !container) return;
+    section.style.display = "block";
+    function _initReviews() {
+      if (window.SokoniReviews) {
+        var rv = new SokoniReviews("product_" + productId, "product", { targetName: document.title });
+        rv.render(container);
+      } else {
+        setTimeout(_initReviews, 200);
+      }
+    }
+    document.addEventListener("DOMContentLoaded", _initReviews);
+    if (document.readyState !== "loading") _initReviews();
+  })();
+  </script>
 </body>
 
 </html>

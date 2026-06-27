@@ -212,6 +212,7 @@
   <div class="hc-search-bar">
     <input type="text" id="hcSearch" placeholder="Search e.g. 'pharmacy Westlands', 'paediatric clinic'..." oninput="filterProviders()">
     <button type="button" class="hc-search-btn" onclick="filterProviders()">🔍 Search</button>
+    <button type="button" id="hcOpenNowBtn" onclick="toggleHcOpenNow(this)" style="padding:10px 14px;border-radius:10px;border:1px solid rgba(16,185,129,.4);background:transparent;color:#10b981;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">🟢 Open Now</button>
   </div>
 </div>
 
@@ -804,7 +805,7 @@ function renderProviders(){
   empty.style.display="none";
 
   grid.innerHTML = list.map(p=>`
-    <div class="hc-card">
+    <div class="hc-card" data-provider-id="hc_${p.id}">
       <div class="hc-card-head">
         <div class="hc-card-emoji ${CARD_BG[p.type]||''}">${p.emoji}</div>
         <div class="hc-card-meta">
@@ -821,7 +822,7 @@ function renderProviders(){
             <div class="hc-card-hours"><i class="fas fa-clock" style="margin-right:4px;"></i>${p.hours}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-            <span class="hc-open-badge ${p.open?'open-now':'closed'}">${p.open?"✅ Open Now":"❌ Closed"}</span>
+            <div data-avail-provider="hc_${p.id}"></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               ${p.phone?`<a href="tel:${p.phone}" class="hc-book-btn" style="background:rgba(0,200,120,0.15);border:1px solid rgba(0,200,120,0.25);text-decoration:none;">📞 Call</a>`:""}
               <button type="button" class="hc-book-btn" onclick="openAppt('${p.id}','${p.name.replace(/'/g,"\\'")}')">📅 Book</button>
@@ -1521,6 +1522,26 @@ window.loadMyHealthDash=loadMyHealthDash; window.submitProviderReg=submitProvide
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
   <script src="sw-register.js" defer></script>
+<script src="sokoni-availability.js" defer></script>
+<script>
+let _hcOpenNow = false;
+async function toggleHcOpenNow(btn) {
+  _hcOpenNow = !_hcOpenNow;
+  btn.style.background = _hcOpenNow ? "rgba(16,185,129,.15)" : "transparent";
+  const grid = document.getElementById("hcGrid");
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll(".hc-card[data-provider-id]")];
+  if (!_hcOpenNow) { cards.forEach(c => c.style.display = ""); return; }
+  const ids = cards.map(c => c.dataset.providerId).filter(Boolean);
+  if (!ids.length || !window.db) return;
+  const snaps = await Promise.all(ids.map(id => db.collection("availabilityStatus").doc(id).get().catch(() => null)));
+  cards.forEach((card, i) => {
+    const snap = snaps[i];
+    const isOpen = snap && snap.exists ? snap.data().isOpen : false;
+    card.style.display = isOpen ? "" : "none";
+  });
+}
+</script>
 <script type="module">import SokoniDB from './sokoni-db.js'; window.SokoniDB = SokoniDB;</script>
 <script type="module">import SokoniHealth from './sokoni-health.js'; window.SokoniHealth = SokoniHealth;</script>
 <script>

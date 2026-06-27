@@ -425,6 +425,7 @@
   <div class="sv-cats-wrap">
   <div class="sv-cats" id="svCatPills">
     <a class="sv-cat-pill active" onclick="setCat('',this);return false;" href="javascript:void(0)">🌍 All Services</a>
+    <a class="sv-cat-pill" id="openNowPill" onclick="toggleOpenNowFilter(this);return false;" href="javascript:void(0)" style="border-color:rgba(16,185,129,.4);color:#10b981;">🟢 Open Now</a>
     <a class="sv-cat-pill sv-cat-featured" href="cleaning.html">🧹 Cleaning & Laundry</a>
     <a class="sv-cat-pill" onclick="setCat('phone-repair',this);return false;" href="javascript:void(0)">📱 Phone Repair</a>
     <a class="sv-cat-pill" onclick="setCat('plumbing',this);return false;" href="javascript:void(0)">🔧 Plumbing</a>
@@ -1121,15 +1122,19 @@ function renderProviders(){
     const locLabel   = p.location.charAt(0).toUpperCase()+p.location.slice(1);
     const bioText    = p.bio ? p.bio.substring(0,72)+(p.bio.length>72?"...":"") : "";
     const rateLabel  = RATE_LABEL[p.rateType]||p.rateType||"";
+    const pid        = p.uid || p.id;
     return `
-    <div class="pv-card ${p.available===false?'pv-unavail':''}">
+    <div class="pv-card ${p.available===false?'pv-unavail':''}" data-provider-id="${pid}">
       <div class="pv-cover ${coverCls}">
         <div class="pv-avatar-wrap">
           <div class="pv-avatar">${initials}</div>
         </div>
       </div>
       <div class="pv-body">
-        <div class="pv-name">${p.name}${p.verified?`<span class="pv-verified">✅ Verified</span>`:""}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;">
+          <div class="pv-name" style="margin-bottom:0;">${p.name}${p.verified?`<span class="pv-verified">✅ Verified</span>`:""}</div>
+          <div data-avail-provider="${pid}" style="flex-shrink:0;"></div>
+        </div>
         <div class="pv-cat">${CAT_EMOJI[p.category]||"🛠️"} ${CAT_LABEL[p.category]||p.category} · 📍 ${locLabel}</div>
         <div class="pv-stars">${stars} <span>${p.rating||"5.0"} · ${p.jobsCompleted||0} jobs</span></div>
         <div class="pv-skills">${(p.skills||[]).slice(0,3).map(s=>`<span class="pv-skill">${s}</span>`).join("")}</div>
@@ -2138,6 +2143,31 @@ document.addEventListener('DOMContentLoaded', function() {
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+  <!-- Availability Engine -->
+  <script src="sokoni-availability.js" defer></script>
+  <script>
+  let _openNowActive = false;
+  async function toggleOpenNowFilter(btn) {
+    _openNowActive = !_openNowActive;
+    btn.classList.toggle("active", _openNowActive);
+    btn.style.background = _openNowActive ? "rgba(16,185,129,.15)" : "";
+    const grid = document.getElementById("providerGrid");
+    if (!grid) return;
+    if (!_openNowActive) {
+      grid.querySelectorAll(".pv-card[data-provider-id]").forEach(c => c.style.display = "");
+      return;
+    }
+    const cards = [...grid.querySelectorAll(".pv-card[data-provider-id]")];
+    const ids = cards.map(c => c.dataset.providerId).filter(Boolean);
+    if (!ids.length || !window.db) return;
+    const snaps = await Promise.all(ids.map(id => db.collection("availabilityStatus").doc(id).get().catch(() => null)));
+    cards.forEach((card, i) => {
+      const snap = snaps[i];
+      const isOpen = snap && snap.exists ? snap.data().isOpen : false;
+      card.style.display = isOpen ? "" : "none";
+    });
+  }
+  </script>
 </body>
 </html>
 

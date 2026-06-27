@@ -295,11 +295,14 @@ function _renderCard(p) {
   const color = CAT_COLORS[p.category] || 'rgba(14,165,233,.1)';
   const mode  = p.mode || (p.category === 'Online Course' ? 'Online' : 'In-Person');
   return `
-  <div class="ed-card" onclick="EDApp.openDetail('${_esc(p._id)}')">
+  <div class="ed-card" data-provider-id="ed_${_esc(p._id)}" onclick="EDApp.openDetail('${_esc(p._id)}')">
     <div class="ed-card-head">
       <div class="ed-card-icon" style="background:${color};">${icon}</div>
       <div class="ed-card-meta">
-        <div class="ed-card-name">${_esc(p.name)}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+          <div class="ed-card-name" style="margin-bottom:0;">${_esc(p.name)}</div>
+          <div data-avail-provider="ed_${_esc(p._id)}" style="flex-shrink:0;"></div>
+        </div>
         <div class="ed-card-sub">${_esc(p.location || 'Kenya')}</div>
         <div class="ed-card-tags">
           <span class="ed-tag ed-tag-cat">${_esc(p.category)}</span>
@@ -444,5 +447,6 @@ _load();
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
+  <script src="sokoni-availability.js" defer></script>
 </body>
 </html>

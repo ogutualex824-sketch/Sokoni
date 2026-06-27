@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260629120000";
+const CACHE_VERSION = "sokoni-20260627-reviews";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -170,6 +170,11 @@ const PRECACHE_STATIC = [
   "/sokoni-chat-engine.js",
   /* ── Subscription & Billing Engine v1.0 ── */
   "/sokoni-subscription.js",
+  /* ── Universal Availability & Scheduling Engine v1.0 ── */
+  "/sokoni-availability.js",
+  "/availability-manager.html",
+  /* ── Reviews & Ratings ── */
+  "/sokoni-reviews.js",
 ];
 
 const CDN_ORIGINS = [

@@ -1096,6 +1096,23 @@
         </div>
         <a href="loyalty.html" class="co-loyalty-link">Manage →</a>
       </div>
+      <!-- Loyalty Redemption Toggle -->
+      <div id="coLoyaltyRedeemRow" style="display:none;padding:10px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div>
+            <div style="font-size:13px;font-weight:800;color:rgba(255,255,255,0.85);">🏆 Use Loyalty Points</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">
+              <span id="coRedeemDesc">—</span>
+            </div>
+          </div>
+          <label style="position:relative;display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0;">
+            <input type="checkbox" id="coRedeemToggle" style="width:0;height:0;opacity:0;position:absolute;" onchange="toggleLoyaltyRedeem(this.checked)">
+            <span id="coRedeemTrack" style="display:inline-block;width:40px;height:22px;background:rgba(255,255,255,0.1);border-radius:11px;transition:background .2s;position:relative;">
+              <span id="coRedeemThumb" style="position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left .2s;"></span>
+            </span>
+          </label>
+        </div>
+      </div>
 
       <!-- Place Order -->
       <button type="button" class="co-place-btn" onclick="placeOrder()">
@@ -1113,6 +1130,7 @@
       <div class="os-row"><span class="os-row-label">Delivery</span><span class="os-free" id="summaryDelivery">FREE</span></div>
       <div class="os-row" id="platformFeeRow" style="display:none"><span class="os-row-label" style="display:flex;align-items:center;gap:5px;">Platform Fee <span id="platformFeeRate" style="font-size:10px;background:rgba(113,255,0,0.1);color:#71ff00;border-radius:4px;padding:1px 5px;font-weight:700;"></span></span><span class="os-row-val" id="platformFeeVal">KES 0</span></div>
       <div class="os-row" id="promoRow" style="display:none"><span class="os-row-label" style="color:#71ff00;">Promo Discount</span><span class="os-row-val" style="color:#71ff00;" id="promoSavingRow">—</span></div>
+      <div class="os-row" id="loyaltyDiscountRow" style="display:none"><span class="os-row-label" style="color:#71ff00;">🏆 Points Redeemed <span id="loyaltyPtsUsedLabel" style="font-size:10px;background:rgba(113,255,0,0.1);color:#71ff00;border-radius:4px;padding:1px 5px;font-weight:700;"></span></span><span class="os-row-val" style="color:#71ff00;" id="loyaltyDiscountVal">—</span></div>
       <div class="os-row"><span class="os-row-label">M-PESA Fee</span><span class="os-row-val" id="mpesaFeeRow">KES 0</span></div>
       <div class="os-total-row">
         <span class="os-total-label">Total</span>
@@ -1394,6 +1412,10 @@ const mpesaFeeEl = document.getElementById("mpesaFeeRow");
 let subtotal = 0;
 let promoDiscount = 0;
 let deliveryFee = 0;
+let _loyaltyBalance = 0;    // user's raw point balance
+let _loyaltyRedeeming = false; // toggle state
+const POINTS_TO_KES = 0.5;  // 1 point = KES 0.50
+const MAX_REDEEM_PCT = 0.25; // max 25% of order total can be paid with points
 const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const _itemsHTML = [];
 cart.forEach(item => {
@@ -1441,11 +1463,42 @@ function setPlatformFee(ratePct){
   updateTotals();
 }
 
+function _calcLoyaltyDiscount(baseTotal) {
+  if (!_loyaltyRedeeming || _loyaltyBalance <= 0) return 0;
+  const maxDiscount = Math.floor(baseTotal * MAX_REDEEM_PCT);
+  const pointsValue = Math.floor(_loyaltyBalance * POINTS_TO_KES);
+  return Math.min(maxDiscount, pointsValue);
+}
+
+function toggleLoyaltyRedeem(checked) {
+  _loyaltyRedeeming = checked;
+  const track = document.getElementById("coRedeemTrack");
+  const thumb = document.getElementById("coRedeemThumb");
+  if (track) track.style.background = checked ? "rgba(113,255,0,0.4)" : "rgba(255,255,255,0.1)";
+  if (thumb) thumb.style.left = checked ? "21px" : "3px";
+  updateTotals();
+}
+
 function updateTotals(){
   const mpesaFee    = selectedPayment === "mpesa" ? Math.round(subtotal * 0.01) : 0;
   const promoSaving = Math.round(subtotal * (promoDiscount/100));
   _platformFee      = _platformFeeRate > 0 ? Math.round(subtotal * _platformFeeRate / 100) : 0;
-  orderTotal        = subtotal + mpesaFee + deliveryFee + _platformFee - promoSaving;
+  const baseTotal   = subtotal + mpesaFee + deliveryFee + _platformFee - promoSaving;
+  const loyaltyDisc = _calcLoyaltyDiscount(baseTotal);
+  orderTotal        = Math.max(0, baseTotal - loyaltyDisc);
+
+  /* Loyalty discount row */
+  const loyaltyDiscRow = document.getElementById("loyaltyDiscountRow");
+  if (loyaltyDiscRow) {
+    if (loyaltyDisc > 0 && _loyaltyRedeeming) {
+      loyaltyDiscRow.style.display = "";
+      document.getElementById("loyaltyDiscountVal").textContent = "−KES " + loyaltyDisc.toLocaleString();
+      const ptsUsed = Math.ceil(loyaltyDisc / POINTS_TO_KES);
+      document.getElementById("loyaltyPtsUsedLabel").textContent = `(${ptsUsed} pts)`;
+    } else {
+      loyaltyDiscRow.style.display = "none";
+    }
+  }
 
   if(subtotalEl) subtotalEl.textContent = "KES " + subtotal.toLocaleString();
   if(totalEl)    totalEl.textContent    = "KES " + orderTotal.toLocaleString();
@@ -2069,6 +2122,20 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
   const pts        = basePoints * multiplier;
   let ptsData = {total:0,history:[]};
   try{ ptsData = JSON.parse(localStorage.getItem("sokoniPoints"))||ptsData; }catch(e){}
+
+  /* Deduct redeemed points first */
+  let sokoniLoyalty = {points:0};
+  try { sokoniLoyalty = JSON.parse(localStorage.getItem("sokoniLoyalty")||"{}"); } catch(e) {}
+  if (_loyaltyRedeeming && _loyaltyBalance > 0) {
+    const loyaltyDisc = _calcLoyaltyDiscount(orderTotal + _calcLoyaltyDiscount(orderTotal)); // pre-discount base
+    const ptsUsed     = Math.ceil(loyaltyDisc / POINTS_TO_KES);
+    if (ptsUsed > 0) {
+      sokoniLoyalty.points  = Math.max(0, (sokoniLoyalty.points || 0) - ptsUsed);
+      ptsData.total         = Math.max(0, ptsData.total - ptsUsed);
+      ptsData.history.unshift({ points: -ptsUsed, orderId, date:newOrder.date, description:`Redeemed ${ptsUsed} pts — KES ${loyaltyDisc} off order ${orderId}` });
+    }
+  }
+
   ptsData.total += pts;
   const pointsDesc = hasDigital
     ? `Purchase reward × 3 (digital bonus!)`
@@ -2085,6 +2152,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
   }
 
   localStorage.setItem("sokoniPoints", JSON.stringify(ptsData));
+  if (_loyaltyRedeeming) localStorage.setItem("sokoniLoyalty", JSON.stringify(sokoniLoyalty));
 
   // Thank-you DM
   let msgs = [];
@@ -2639,6 +2707,15 @@ window.processPaypalPayment = processPaypalPayment;
       if (pts === null) return;
       widget.style.display = 'flex';
       ptsEl.textContent = pts.toLocaleString();
+      // Wire redemption toggle
+      _loyaltyBalance = pts;
+      const redeemRow = document.getElementById('coLoyaltyRedeemRow');
+      if (redeemRow && pts >= 20) {
+        const maxDisc = Math.floor(Math.min(pts * POINTS_TO_KES, subtotal * MAX_REDEEM_PCT));
+        document.getElementById('coRedeemDesc').textContent =
+          pts.toLocaleString() + ' pts = up to KES ' + maxDisc.toLocaleString() + ' off';
+        redeemRow.style.display = 'block';
+      }
 
       function _updateEarn() {
         const raw   = document.getElementById('btnTotal') ? document.getElementById('btnTotal').textContent : '';
