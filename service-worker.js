@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-loyalty-v2";
+const CACHE_VERSION = "sokoni-20260628-appcheck-v1";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -179,6 +179,15 @@ const PRECACHE_STATIC = [
   "/availability-manager.html",
   /* ── Reviews & Ratings ── */
   "/sokoni-reviews.js",
+  /* ── Navigation & Dispatch v1.0 ── */
+  "/sokoni-navigation.js", "/sokoni-appcheck.js",
+  "/rider-nav.html", "/fleet-monitor.html",
+  /* ── Loyalty v2 + Wallet v2 + Jobs Hub ── */
+  "/sokoni-wallet.js", "/sokoni-jobs.js",
+  "/dispute-portal.html", "/job-post.html",
+  /* ── Delivery pricing & merchant success ── */
+  "/sokoni-delivery-pricing.js", "/sokoni-merchant-success.js",
+  "/sokoni-payment-trust.js",
 ];
 
 const CDN_ORIGINS = [

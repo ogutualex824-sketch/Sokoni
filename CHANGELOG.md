@@ -1,4 +1,74 @@
-﻿## [v1.2.0] — 2026-06-28
+﻿## [2026-06-28] — Platform Security & Feature Completion Sprint
+
+### App Check, Navigation, Wallet, Jobs, Disputes — Full Deployment
+
+#### Added
+- **Firebase App Check** (`sokoni-appcheck.js`): ReCaptchaV3Provider platform-wide. All 15 compat-SDK pages wired. 35 CFs enforced. Console enforcement: Functions + Firestore + Storage.
+- **Navigation & Intelligent Dispatch v1.0** (`sokoni-navigation.js`, `rider-nav.html`, `track.html`, `fleet-monitor.html`): GPS turn-by-turn, OSRM routing, geofence arrival, deviation detection, TSP multi-stop, offline queue, public tracking, fleet monitor. 16 CFs.
+- **Wallet v2** (`sokoni-wallet.js`, `functions/wallet.js`): STK push top-up, seller payouts, `processDriverEarning` trigger credits driver wallets on delivery.
+- **Loyalty v2** (`sokoni-loyalty.js`, `functions/loyalty.js`): Bronze→Platinum tiers, 8 CFs.
+- **Jobs Hub** (`sokoni-jobs.js`, `job-post.html`, `functions/jobs.js`): Employer posting, seeker profiles, applications. 11 CFs.
+- **Dispute Portal** (`dispute-portal.html`): Buyer dispute management, evidence upload, seller inline response in seller.html, admin resolution in trust-safety.html. 9 CFs.
+- **Driver Navigate button**: Cyan button on active delivery cards → rider-nav.html.
+- **Track link in notifications**: `track.html?code=` injected into buyer en_route_delivery notification.
+
+#### Fixed
+- Leaflet CDN: unpkg.com → cdn.jsdelivr.net (better Africa coverage).
+- Navigation load screen shows map immediately; retry button on CF failure.
+- Firestore rules trimmed to 261KB (under 256KB limit).
+
+#### Security
+- App Check enforced platform-wide.
+- Service worker updated with all new files. Sitemap updated with Jobs Hub pages.
+
+---
+
+## [2026-06-28] — UI/UX Overhaul v2.0 + Mobile Critical Fixes
+
+### Summary
+Platform-wide UI/UX refinement targeting mobile overflow, iOS safe-area regressions, duplicate floating elements, and premium design consistency. All fixes delivered via three global stylesheets and `shared-header.js` injection — zero per-page HTML changes required except `index.html` cleanup.
+
+### Files Added
+- `sokoni-responsive.css` — new global stylesheet (350 lines): safe-area–aware FAB positioning, fluid typography (`clamp()`), universal card hover system, touch targets, iOS auto-zoom prevention, grid collapse, horizontal-scroll containment, bottom-sheet modals, skeleton shimmer, `prefers-reduced-motion` support, `focus-visible` rings, page-specific overrides for checkout/profile/wallet/chat, print styles
+
+### Files Modified
+- `index.html` — removed duplicate static `#sokoniScrollTop` button (was stacking on top of the dynamically-created one from `scroll-top.js`); removed competing `#sk-offline-banner` HTML element and its inline offline-detection IIFE (two systems were fighting — offline bar permanently stuck visible on mobile)
+- `sokoni-ui.js` — offline bar improvements: added ×-dismiss button; extended boot grace period to 15 s; first probe delayed to 15 s (was 5 s, too fast for slow-network SW install on mobile); added `navigator.onLine === false` shortcut to skip unnecessary fetch; `navigator.onLine === true` after gstatic block treated as online (avoids false positive on corporate firewalls)
+- `services.html` — provider card footer (`.pv-foot`): changed `flex-direction` from row to column; both action buttons now `width: 100%`; chat button relabelled "💬 Message [name]" instead of icon-only 42px button
+- `sokoni-tokens.css` — corrected `--sk-header-h` from `56px` to `64px` (actual top nav is 64px; stale value caused misaligned sticky calculations)
+- `sokoni-mobile-fixes.css` — critical FAB positioning fix: added `#sokoniScrollTop` and `#kassBtn` to safe-area rule (both were previously excluded); corrected formula from `calc(env(safe-area-inset-bottom) + 16px)` to `max(82px, calc(env(safe-area-inset-bottom) + 82px))` — on iPhones with 34px home-indicator inset the old formula produced 80px, which placed buttons behind the 100px-tall bottom nav
+- `shared-header.js` — injects `sokoni-responsive.css` after `sokoni-mobile-fixes.css` on every page
+
+### Bugs Fixed
+| Bug | Root Cause | Fix |
+|---|---|---|
+| Duplicate scroll-up button on homepage (mobile) | Static HTML element in `index.html` + SW-cached `scroll-top.js` both created `#sokoniScrollTop` | Removed static element; `scroll-top.js` v3 creates dynamically with existence check |
+| Offline banner permanently visible on mobile | Two competing systems: inline IIFE controlling `#sk-offline-banner` vs `sokoni-ui.js` controlling `#sk-offline-bar` | Removed `index.html` system entirely; improved `sokoni-ui.js` probe |
+| Provider card buttons squeezed side-by-side (services page) | `.pv-foot { display:flex }` defaulted to row; chat button had hardcoded `width:42px` | `flex-direction: column`, buttons `width:100%` |
+| Scroll button + KASS button hidden behind iOS bottom nav | Bottom nav is `66px + 34px safe-area = 100px` on iPhone; FABs at flat `bottom:80px` were behind it | Safe-area–aware formula: `max(82px, env(safe-area-inset-bottom) + 82px)` |
+| Header height token stale | `--sk-header-h: 56px` in `sokoni-tokens.css` but actual nav is 64px | Corrected to `64px` |
+
+### Security
+- No auth or payment changes — UI/CSS only
+
+### Performance
+- `will-change: transform, opacity` scoped to animated elements only (FABs, modals, drawers)
+- `will-change: scroll-position` on scroll containers
+- `overflow-x: clip` on `html/body` (clip does not create a new scroll container unlike `hidden`)
+- `prefers-reduced-motion` disables all transitions/animations for users with vestibular disorders
+- Fluid `clamp()` typography eliminates layout shifts at breakpoints
+
+### Breaking Changes
+None — all changes are additive CSS overrides and HTML cleanup.
+
+### Deployment
+- Hosting: ✅ deployed 2026-06-28 (1,283 files)
+- Functions: no changes
+- Firestore: no changes
+
+---
+
+## [v1.2.0] — 2026-06-28
 
 ### v1.2 Platform Expansion Sprint
 
