@@ -8,18 +8,17 @@
 | # | Item | Status |
 |---|------|--------|
 | 1 | Firebase Secret Manager — 8 secrets | ✅ Done (2026-06-28) |
-| 2 | Firebase Auth — Apple, Microsoft, GitHub, Facebook OAuth | ❌ Not done |
+| 2 | Firebase Auth — Apple, Microsoft, GitHub, Facebook OAuth | ✅ Done (2026-06-28) |
 | 3 | App Check — reCAPTCHA v3 enforcement | ✅ Done (2026-06-28) |
 | 4 | IntaSend — switch to live keys | ✅ Done (2026-06-28) |
-| 5 | DNS — mysokoni.co.ke → Firebase Hosting | ❌ Not done |
-| 6 | EmailJS — service ID + template IDs | ❌ Not done |
-| 7 | FCM — VAPID key | ❌ Not done |
-| 8 | Firestore PITR daily backup | ❌ Not done |
+| 5 | DNS — mysokoni.co.ke → Firebase Hosting | ✅ Done (2026-06-28) |
+| 6 | EmailJS — service ID + template IDs | ✅ Done (2026-06-28) |
+| 7 | FCM — VAPID key | ✅ Done (2026-06-28) |
+| 8 | Firestore PITR daily backup | ✅ Done (2026-06-28) |
 | 9 | Cloud Functions — Impact Platform (25 CFs) | ✅ Done (2026-06-28) |
-| 10 | Post-launch verification | ❌ Not done |
+| 10 | Post-launch verification | ✅ Done (2026-06-28) |
 
-**Blocking soft launch:** Item 5 (DNS)  
-**Nice to have:** Items 2 (OAuth), 6 (email), 7 (FCM), 8 (backup)
+**Status: ALL ITEMS COMPLETE — Phase 0 soft launch ready ✅**
 
 ---
 

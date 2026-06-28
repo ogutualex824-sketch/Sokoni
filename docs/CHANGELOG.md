@@ -2,6 +2,25 @@
 
 ---
 
+## 2026-06-28 — Impact Platform v1.0 + Pending Fixes
+
+### Summary
+Social Impact Platform (25 CFs): Foundation double-entry ledger, campaigns, grants, scholarships, corporate giving, round-up donations, 3-tier disbursement approval (initiate → approve → superAdmin authorize + M-Pesa B2C), daily reconciliation. `seller-delivery.html` fixed. SW bumped to `sokoni-20260628-impact-v1` with drawer + nav engine files in PRECACHE_STATIC.
+
+### Files Added
+- `functions/impact.js` — 25 CFs across 18 Firestore collections
+
+### Files Modified
+- `service-worker.js` — CACHE_VERSION bumped; 4 new static assets precached
+- `seller-delivery.html` — Inline nav → `.bottom-nav`; `shared-header.js` + `sw-register.js` added
+- `INFRA_CHECKLIST.md` — Progress tracker added (3/10 done)
+
+### Security
+- 3-tier disbursement approval (different admins at each level; superAdmin final)
+- Idempotency on marketplace contributions; rate limits on grant/scholarship applications
+
+---
+
 ## 2026-06-28 — Seller Navigation UX Redesign (Nav Engine v1.1)
 
 ### Summary
