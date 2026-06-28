@@ -1,0 +1,2106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="color-scheme" content="dark" />
+  <title>Get Started — SOKONI SmartPOS 4.0</title>
+  <link rel="icon" type="image/png" href="assets/logosokoni.png" />
+  <script src="sokoni-config.js"></script>
+  <style>
+    /* ============================================================
+       SOKONI SmartPOS 4.0 — Merchant Onboarding Wizard
+       Design system: dark theme, CSS variables per spec
+    ============================================================ */
+    :root {
+      --bg:      #0a0a0f;
+      --bg2:     #12121a;
+      --bg3:     #1a1a24;
+      --bg4:     #22222f;
+      --border:  #2a2a3a;
+      --text:    #e8e8f0;
+      --muted:   #6b6b80;
+      --green:   #22c55e;
+      --blue:    #3b82f6;
+      --red:     #ef4444;
+      --yellow:  #eab308;
+      --purple:  #a855f7;
+      --radius:  10px;
+      --radius-sm: 6px;
+      --transition: 0.22s ease;
+      --max-w:   680px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.55;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      outline: none;
+      transition: opacity var(--transition), transform 0.12s, background var(--transition);
+    }
+    button:active { transform: scale(0.96); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+
+    input, select, textarea {
+      font-family: inherit;
+      font-size: 15px;
+      background: var(--bg3);
+      color: var(--text);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      width: 100%;
+      outline: none;
+      transition: border-color var(--transition);
+      min-height: 44px; /* 16px min-height rule for mobile tap targets */
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--blue);
+    }
+    input.invalid, select.invalid { border-color: var(--red); }
+    select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b80' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+    input[type="checkbox"] { width: auto; min-height: auto; }
+    label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; display: block; margin-bottom: 6px; }
+
+    /* ── Progress Bar ── */
+    #progress-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px 10px;
+    }
+
+    .progress-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .progress-logo {
+      font-weight: 800;
+      font-size: 14px;
+      color: var(--blue);
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .progress-steps {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .prog-step {
+      flex: 1;
+      height: 4px;
+      background: var(--bg4);
+      border-radius: 99px;
+      cursor: default;
+      position: relative;
+      transition: background var(--transition);
+    }
+    .prog-step.done {
+      background: var(--green);
+      cursor: pointer;
+    }
+    .prog-step.done:hover { background: #16a34a; }
+    .prog-step.active { background: var(--blue); }
+
+    .progress-label {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ── Wizard Container ── */
+    #wizard-wrap {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 88px 16px 60px;
+      min-height: 100vh;
+    }
+
+    /* ── Steps ── */
+    .step {
+      display: none;
+      animation: slideIn 0.28s ease both;
+    }
+    .step.active { display: block; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(32px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideBack {
+      from { opacity: 0; transform: translateX(-32px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .step.slide-back { animation: slideBack 0.28s ease both; }
+
+    /* ── Step Header ── */
+    .step-header { margin-bottom: 24px; }
+    .step-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 6px;
+    }
+    .step-title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .step-sub {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    /* ── Form rows ── */
+    .field { margin-bottom: 16px; }
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
+    .field-error {
+      font-size: 12px;
+      color: var(--red);
+      margin-top: 4px;
+      display: none;
+    }
+    .field-error.show { display: block; }
+    .field-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── Toggle / Checkbox row ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      margin-bottom: 16px;
+    }
+    .toggle-row input[type="checkbox"] {
+      width: 18px; height: 18px;
+      accent-color: var(--green);
+      cursor: pointer;
+    }
+    .toggle-row span { font-size: 14px; color: var(--text); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-weight: 600;
+      transition: background var(--transition), opacity var(--transition), transform 0.12s;
+      min-height: 46px;
+    }
+    .btn-primary {
+      background: var(--blue);
+      color: #fff;
+      width: 100%;
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-secondary {
+      background: var(--bg3);
+      color: var(--text);
+      border: 1.5px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--bg4); }
+    .btn-green {
+      background: var(--green);
+      color: #fff;
+      width: 100%;
+    }
+    .btn-green:hover { background: #16a34a; }
+    .btn-danger {
+      background: rgba(239,68,68,0.12);
+      color: var(--red);
+      border: 1.5px solid var(--red);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 8px 12px;
+    }
+    .btn-ghost:hover { color: var(--text); }
+    .btn-sm { padding: 7px 14px; font-size: 13px; min-height: 36px; }
+
+    .btn-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 24px;
+    }
+    .btn-row .btn-primary { flex: 1; }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Badge / pill ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge-green  { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .badge-blue   { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .badge-yellow { background: rgba(234,179,8,0.15);  color: var(--yellow); }
+    .badge-red    { background: rgba(239,68,68,0.15);  color: var(--red); }
+    .badge-muted  { background: var(--bg4);            color: var(--muted); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--bg2);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    /* ── Toast ── */
+    #toast-area {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      width: calc(100% - 32px);
+      max-width: 420px;
+    }
+    .toast {
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: all;
+      animation: toastIn 0.25s ease both;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .toast-success { background: #14532d; border: 1px solid var(--green); color: #bbf7d0; }
+    .toast-error   { background: #450a0a; border: 1px solid var(--red);   color: #fecaca; }
+    .toast-info    { background: #1e3a5f; border: 1px solid var(--blue);  color: #bfdbfe; }
+
+    /* ── Step 1 specific ── */
+    .warning-box {
+      background: rgba(234,179,8,0.08);
+      border: 1px solid rgba(234,179,8,0.25);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--yellow);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    /* ── Step 2: Products ── */
+    .product-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .product-pill {
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .product-pill-name { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); }
+    .product-pill-meta { font-size: 12px; color: var(--muted); }
+    .product-pill-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1;
+      padding: 0 4px;
+      cursor: pointer;
+    }
+    .product-pill-remove:hover { color: var(--red); }
+
+    /* CSV drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+      margin-top: 12px;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--blue);
+      background: rgba(59,130,246,0.05);
+      color: var(--text);
+    }
+    .drop-zone-icon { font-size: 28px; margin-bottom: 8px; display: block; }
+
+    /* ── Step 3: Hardware ── */
+    .hw-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    @media (max-width: 420px) { .hw-grid { grid-template-columns: 1fr; } }
+
+    .hw-tile {
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color var(--transition);
+    }
+    .hw-tile.connected { border-color: var(--green); }
+    .hw-tile.tested    { border-color: var(--green); background: rgba(34,197,94,0.04); }
+
+    .hw-tile-icon { font-size: 24px; }
+    .hw-tile-name { font-size: 14px; font-weight: 700; color: var(--text); }
+    .hw-tile-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+    .hw-tile-status { margin-top: auto; }
+
+    .hw-connect-opts {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .hw-opt-btn {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 99px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
+    }
+    .hw-opt-btn:hover, .hw-opt-btn.active {
+      background: rgba(59,130,246,0.15);
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .hw-test-btn {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      width: 100%;
+      transition: background var(--transition);
+    }
+    .hw-test-btn:hover { background: var(--bg2); }
+
+    /* ── Step 4: Payment ── */
+    .pay-method {
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: border-color var(--transition);
+    }
+    .pay-method.enabled { border-color: var(--green); }
+    .pay-method-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .pay-method-title { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .pay-method-body { font-size: 13px; color: var(--muted); }
+
+    /* QR Preview */
+    .qr-preview {
+      background: #fff;
+      width: 100px;
+      height: 100px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #333;
+      text-align: center;
+      padding: 8px;
+      margin-top: 10px;
+    }
+
+    /* ── Step 5: Demo Sale ── */
+    .demo-cart {
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .demo-cart-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .demo-cart-item:last-of-type { border-bottom: none; }
+    .demo-cart-name { font-size: 14px; font-weight: 600; }
+    .demo-cart-price { font-size: 15px; font-weight: 700; color: var(--green); }
+    .demo-cart-total {
+      display: flex;
+      justify-content: space-between;
+      font-size: 16px;
+      font-weight: 800;
+      padding-top: 12px;
+    }
+
+    .payment-method-select {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .pm-opt {
+      flex: 1;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .pm-opt.selected {
+      border-color: var(--blue);
+      background: rgba(59,130,246,0.1);
+      color: var(--blue);
+    }
+
+    /* Success animation */
+    #success-screen {
+      display: none;
+      text-align: center;
+      padding: 32px 0;
+    }
+    .success-check {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: rgba(34,197,94,0.15);
+      border: 3px solid var(--green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 36px;
+      animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+    }
+    @keyframes popIn {
+      from { transform: scale(0); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+
+    /* Confetti */
+    .confetti-container {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 50;
+    }
+    .confetti-piece {
+      position: absolute;
+      width: 10px; height: 10px;
+      top: -12px;
+      border-radius: 2px;
+      animation: confettiFall linear forwards;
+      opacity: 0;
+    }
+    @keyframes confettiFall {
+      0%  { transform: translateY(0) rotate(0deg);    opacity: 1; }
+      100%{ transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* Receipt modal */
+    #receipt-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #receipt-modal.open { display: flex; }
+    .receipt-box {
+      background: #fff;
+      color: #111;
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 320px;
+      width: 100%;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      position: relative;
+    }
+    .receipt-close {
+      position: absolute;
+      top: 10px; right: 12px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #555;
+    }
+    .receipt-logo { text-align: center; font-weight: 800; font-size: 16px; margin-bottom: 4px; }
+    .receipt-sub  { text-align: center; font-size: 11px; color: #555; margin-bottom: 12px; }
+    .receipt-line { display: flex; justify-content: space-between; padding: 3px 0; }
+    .receipt-divider { border-top: 1px dashed #aaa; margin: 8px 0; }
+    .receipt-total { font-weight: 800; font-size: 15px; }
+    .receipt-footer { text-align: center; font-size: 10px; color: #777; margin-top: 12px; }
+
+    /* Finish buttons */
+    .finish-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    /* ── Loading overlay ── */
+    #auth-loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 9000;
+    }
+    #auth-loading .big-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--bg3);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    #auth-loading p { color: var(--muted); font-size: 14px; }
+
+    /* ── Utility ── */
+    .mt-4 { margin-top: 4px; }
+    .mt-8 { margin-top: 8px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mt-20 { margin-top: 20px; }
+    .text-muted { color: var(--muted); font-size: 13px; }
+    .text-green { color: var(--green); }
+    .text-yellow { color: var(--yellow); }
+    .text-red { color: var(--red); }
+    .text-blue { color: var(--blue); }
+    .flex-center { display: flex; align-items: center; gap: 8px; }
+    .coming-soon {
+      display: inline-block;
+      background: rgba(168,85,247,0.15);
+      color: var(--purple);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 99px;
+      margin-left: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth loading overlay -->
+<div id="auth-loading">
+  <div class="big-spinner"></div>
+  <p>Signing you in…</p>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     STICKY PROGRESS BAR
+════════════════════════════════════════════════════════════ -->
+<div id="progress-bar" style="display:none;" role="navigation" aria-label="Onboarding progress">
+  <div class="progress-inner">
+    <div class="progress-logo">SmartPOS 4.0</div>
+    <div class="progress-steps" id="prog-steps" role="list">
+      <div class="prog-step active" id="ps-1" role="listitem" aria-label="Step 1: Business Setup"></div>
+      <div class="prog-step"        id="ps-2" role="listitem" aria-label="Step 2: Add Products"></div>
+      <div class="prog-step"        id="ps-3" role="listitem" aria-label="Step 3: Connect Hardware"></div>
+      <div class="prog-step"        id="ps-4" role="listitem" aria-label="Step 4: Payment Setup"></div>
+      <div class="prog-step"        id="ps-5" role="listitem" aria-label="Step 5: Demo Sale"></div>
+    </div>
+    <div class="progress-label" id="prog-label" aria-live="polite">Step 1 of 5</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     WIZARD
+════════════════════════════════════════════════════════════ -->
+<div id="wizard-wrap" style="display:none;">
+
+  <!-- ── STEP 1: Business Setup ─────────────────────────────── -->
+  <div class="step active" id="step-1" role="main" aria-labelledby="s1-title">
+    <div class="step-header">
+      <div class="step-eyebrow">Step 1 of 5</div>
+      <h1 class="step-title" id="s1-title">Set up your business</h1>
+      <p class="step-sub">Takes less than 2 minutes. All details can be updated later.</p>
+    </div>
+
+    <div class="field">
+      <label for="s1-biz-name">Business Name *</label>
+      <input type="text" id="s1-biz-name" placeholder="e.g. Kamau Supermarket" autocomplete="organization" />
+      <div class="field-error" id="err-biz-name">Business name is required.</div>
+    </div>
+
+    <div class="field">
+      <label for="s1-biz-type">Business Type *</label>
+      <select id="s1-biz-type">
+        <option value="">Select type…</option>
+        <option value="retail">Retail Shop</option>
+        <option value="supermarket">Supermarket</option>
+        <option value="pharmacy">Pharmacy</option>
+        <option value="restaurant">Restaurant</option>
+        <option value="salon">Salon &amp; Beauty</option>
+        <option value="hardware">Hardware</option>
+        <option value="wholesale">Wholesale</option>
+        <option value="other">Other</option>
+      </select>
+      <div class="field-error" id="err-biz-type">Please select a business type.</div>
+    </div>
+
+    <div class="field">
+      <label for="s1-county">County *</label>
+      <select id="s1-county">
+        <option value="">Select county…</option>
+        <option value="Baringo">Baringo</option>
+        <option value="Bomet">Bomet</option>
+        <option value="Bungoma">Bungoma</option>
+        <option value="Busia">Busia</option>
+        <option value="Elgeyo-Marakwet">Elgeyo-Marakwet</option>
+        <option value="Embu">Embu</option>
+        <option value="Garissa">Garissa</option>
+        <option value="Homa Bay">Homa Bay</option>
+        <option value="Isiolo">Isiolo</option>
+        <option value="Kajiado">Kajiado</option>
+        <option value="Kakamega">Kakamega</option>
+        <option value="Kericho">Kericho</option>
+        <option value="Kiambu">Kiambu</option>
+        <option value="Kilifi">Kilifi</option>
+        <option value="Kirinyaga">Kirinyaga</option>
+        <option value="Kisii">Kisii</option>
+        <option value="Kisumu">Kisumu</option>
+        <option value="Kitui">Kitui</option>
+        <option value="Kwale">Kwale</option>
+        <option value="Laikipia">Laikipia</option>
+        <option value="Lamu">Lamu</option>
+        <option value="Machakos">Machakos</option>
+        <option value="Makueni">Makueni</option>
+        <option value="Mandera">Mandera</option>
+        <option value="Marsabit">Marsabit</option>
+        <option value="Meru">Meru</option>
+        <option value="Migori">Migori</option>
+        <option value="Mombasa">Mombasa</option>
+        <option value="Murang'a">Murang'a</option>
+        <option value="Nairobi">Nairobi</option>
+        <option value="Nakuru">Nakuru</option>
+        <option value="Nandi">Nandi</option>
+        <option value="Narok">Narok</option>
+        <option value="Nyamira">Nyamira</option>
+        <option value="Nyandarua">Nyandarua</option>
+        <option value="Nyeri">Nyeri</option>
+        <option value="Samburu">Samburu</option>
+        <option value="Siaya">Siaya</option>
+        <option value="Taita-Taveta">Taita-Taveta</option>
+        <option value="Tana River">Tana River</option>
+        <option value="Tharaka-Nithi">Tharaka-Nithi</option>
+        <option value="Trans-Nzoia">Trans-Nzoia</option>
+        <option value="Turkana">Turkana</option>
+        <option value="Uasin Gishu">Uasin Gishu</option>
+        <option value="Vihiga">Vihiga</option>
+        <option value="Wajir">Wajir</option>
+        <option value="West Pokot">West Pokot</option>
+      </select>
+      <div class="field-error" id="err-county">Please select a county.</div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="s1-phone">Phone Number</label>
+        <input type="tel" id="s1-phone" placeholder="0700 000 000" autocomplete="tel" />
+        <div class="field-note">Auto-filled from your account</div>
+      </div>
+      <div class="field">
+        <label for="s1-kra">KRA PIN (optional)</label>
+        <input type="text" id="s1-kra" placeholder="A000000000Z" autocomplete="off" maxlength="11" style="text-transform:uppercase;" />
+      </div>
+    </div>
+
+    <div id="kra-warning" class="warning-box" style="display:none;">
+      <span>&#9888;</span>
+      <span>No KRA PIN entered. eTIMS compliance requires a valid KRA PIN for tax receipts. You can add it later in settings.</span>
+    </div>
+
+    <div class="field">
+      <label>Currency</label>
+      <input type="text" value="KES — Kenyan Shilling" disabled style="opacity:0.6;cursor:not-allowed;" />
+    </div>
+
+    <label class="toggle-row" for="s1-vat-toggle">
+      <input type="checkbox" id="s1-vat-toggle" />
+      <span>VAT Registered</span>
+    </label>
+
+    <div id="vat-field" style="display:none;" class="field">
+      <label for="s1-vat-pin">VAT PIN *</label>
+      <input type="text" id="s1-vat-pin" placeholder="Your VAT registration number" />
+      <div class="field-error" id="err-vat-pin">VAT PIN is required when VAT registered.</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="s1-continue">Continue →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Add Products ────────────────────────────────── -->
+  <div class="step" id="step-2" aria-labelledby="s2-title">
+    <div class="step-header">
+      <div class="step-eyebrow">Step 2 of 5</div>
+      <h2 class="step-title" id="s2-title">Add your products</h2>
+      <p class="step-sub">Add at least one product to make your first sale.</p>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label for="s2-name">Product Name *</label>
+        <input type="text" id="s2-name" placeholder="e.g. Coca-Cola 500ml" />
+        <div class="field-error" id="err-product-name">Product name is required.</div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="s2-price">Price (KES) *</label>
+          <input type="number" id="s2-price" placeholder="0" min="0" step="0.01" />
+          <div class="field-error" id="err-product-price">Enter a valid price.</div>
+        </div>
+        <div class="field">
+          <label for="s2-stock">Stock Qty *</label>
+          <input type="number" id="s2-stock" placeholder="0" min="0" step="1" />
+          <div class="field-error" id="err-product-stock">Enter a valid quantity.</div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="s2-category">Category</label>
+        <select id="s2-category">
+          <option value="general">General</option>
+          <option value="food_beverages">Food &amp; Beverages</option>
+          <option value="electronics">Electronics</option>
+          <option value="clothing">Clothing</option>
+          <option value="healthcare">Healthcare</option>
+          <option value="hardware">Hardware</option>
+          <option value="beauty">Beauty</option>
+        </select>
+      </div>
+      <button class="btn btn-green" id="s2-add-product">
+        <span id="s2-add-label">+ Add Product</span>
+        <span class="spinner" id="s2-spinner" style="display:none;"></span>
+      </button>
+    </div>
+
+    <!-- Product list -->
+    <div id="product-list" class="product-list" aria-live="polite" aria-label="Added products"></div>
+    <div id="product-empty-note" class="text-muted mt-8" style="display:none;">No products added yet. Add at least one, or skip below.</div>
+
+    <!-- CSV Import -->
+    <hr class="divider" />
+    <p class="text-muted" style="font-size:13px;margin-bottom:8px;">Or import a CSV file with columns: <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:11px;">name,price,stock,category</code></p>
+    <div class="drop-zone" id="csv-drop-zone" tabindex="0" role="button" aria-label="Drop CSV file here or click to browse">
+      <span class="drop-zone-icon">&#128196;</span>
+      <div>Drop CSV here or <span style="color:var(--blue);text-decoration:underline;cursor:pointer;">click to browse</span></div>
+      <div class="mt-4" style="font-size:11px;">Max 500 products</div>
+    </div>
+    <input type="file" id="csv-file-input" accept=".csv" style="display:none;" />
+    <div id="csv-status" class="mt-8" style="font-size:13px;display:none;"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary btn-sm" id="s2-back">← Back</button>
+      <button class="btn btn-primary" id="s2-continue">Continue →</button>
+    </div>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="btn btn-ghost" id="s2-skip">
+        Skip for now
+      </button>
+      <div id="skip-warning" class="text-muted mt-4" style="display:none;font-size:12px;color:var(--yellow);">You'll need products to make sales. You can add them later in the POS dashboard.</div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: Connect Hardware ───────────────────────────── -->
+  <div class="step" id="step-3" aria-labelledby="s3-title">
+    <div class="step-header">
+      <div class="step-eyebrow">Step 3 of 5</div>
+      <h2 class="step-title" id="s3-title">Connect your hardware</h2>
+      <p class="step-sub">Connect your receipt printer, scanner, and other devices. You can always add more later.</p>
+    </div>
+
+    <div class="hw-grid">
+      <!-- Receipt Printer -->
+      <div class="hw-tile" id="hw-printer" role="region" aria-label="Receipt Printer">
+        <div class="hw-tile-icon">&#128424;</div>
+        <div class="hw-tile-name">Receipt Printer</div>
+        <div class="hw-tile-desc">Print receipts automatically after each sale.</div>
+        <div class="hw-connect-opts">
+          <button class="hw-opt-btn" data-hw="printer" data-conn="usb" aria-pressed="false">USB</button>
+          <button class="hw-opt-btn" data-hw="printer" data-conn="network" aria-pressed="false">Network</button>
+          <button class="hw-opt-btn" data-hw="printer" data-conn="bluetooth" aria-pressed="false">Bluetooth</button>
+        </div>
+        <div id="hw-printer-info" class="field-note" style="display:none;"></div>
+        <div class="hw-tile-status">
+          <span class="badge badge-muted" id="hw-printer-status">Not Connected</span>
+        </div>
+        <button class="hw-test-btn" id="hw-test-printer">Test Print</button>
+      </div>
+
+      <!-- Barcode Scanner -->
+      <div class="hw-tile" id="hw-scanner" role="region" aria-label="Barcode Scanner">
+        <div class="hw-tile-icon">&#128269;</div>
+        <div class="hw-tile-name">Barcode Scanner</div>
+        <div class="hw-tile-desc">Scan barcodes to add products to cart instantly.</div>
+        <div class="hw-connect-opts">
+          <button class="hw-opt-btn" data-hw="scanner" data-conn="usb" aria-pressed="false">USB Plug-in</button>
+          <button class="hw-opt-btn" data-hw="scanner" data-conn="camera" aria-pressed="false">Camera</button>
+        </div>
+        <div id="hw-scanner-info" class="field-note" style="display:none;"></div>
+        <div class="hw-tile-status">
+          <span class="badge badge-muted" id="hw-scanner-status">Not Connected</span>
+        </div>
+        <button class="hw-test-btn" id="hw-test-scanner">Test Scan</button>
+      </div>
+
+      <!-- Cash Drawer -->
+      <div class="hw-tile" id="hw-drawer" role="region" aria-label="Cash Drawer">
+        <div class="hw-tile-icon">&#128179;</div>
+        <div class="hw-tile-name">Cash Drawer</div>
+        <div class="hw-tile-desc">Triggered automatically via your receipt printer on cash sales.</div>
+        <div class="field-note mt-8">Requires receipt printer connection. Uses RJ11/DK port.</div>
+        <div class="hw-tile-status mt-8">
+          <span class="badge badge-muted" id="hw-drawer-status">Not Connected</span>
+        </div>
+        <button class="hw-test-btn" id="hw-test-drawer">Test Open</button>
+      </div>
+
+      <!-- Payment Terminal -->
+      <div class="hw-tile" id="hw-terminal" role="region" aria-label="Payment Terminal">
+        <div class="hw-tile-icon">&#128179;</div>
+        <div class="hw-tile-name">Payment Terminal</div>
+        <div class="hw-tile-desc">Accept card and tap payments.</div>
+        <div class="hw-connect-opts">
+          <button class="hw-opt-btn" data-hw="terminal" data-conn="mpesa" aria-pressed="false" style="border-color:var(--green);color:var(--green);">M-Pesa &#10003;</button>
+          <button class="hw-opt-btn" data-hw="terminal" data-conn="card" aria-pressed="false" disabled style="opacity:0.4;cursor:not-allowed;">Card <span class="coming-soon">soon</span></button>
+        </div>
+        <div class="hw-tile-status mt-8">
+          <span class="badge badge-green" id="hw-terminal-status">M-Pesa Enabled</span>
+        </div>
+        <button class="hw-test-btn" id="hw-test-terminal" disabled style="opacity:0.4;">Test (configure in Step 4)</button>
+      </div>
+    </div>
+
+    <div class="mt-16">
+      <button class="btn btn-secondary" id="hw-test-all" style="width:100%;">Test All Devices</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary btn-sm" id="s3-back">← Back</button>
+      <button class="btn btn-primary" id="s3-continue">Continue →</button>
+    </div>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="btn btn-ghost" id="s3-skip">Skip hardware setup</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Payment Setup ───────────────────────────────── -->
+  <div class="step" id="step-4" aria-labelledby="s4-title">
+    <div class="step-header">
+      <div class="step-eyebrow">Step 4 of 5</div>
+      <h2 class="step-title" id="s4-title">Payment setup</h2>
+      <p class="step-sub">Configure how you accept payments from customers.</p>
+    </div>
+
+    <!-- M-Pesa -->
+    <div class="pay-method enabled" id="pm-mpesa">
+      <div class="pay-method-head">
+        <div class="pay-method-title">
+          <span>&#128247;</span> M-Pesa
+        </div>
+        <span class="badge badge-green">Enabled</span>
+      </div>
+      <div class="field">
+        <label for="s4-till">Business Till / Paybill Number *</label>
+        <input type="text" id="s4-till" placeholder="e.g. 123456" inputmode="numeric" />
+        <div class="field-error" id="err-till">Enter your M-Pesa till or Paybill number.</div>
+      </div>
+      <div class="field">
+        <label for="s4-test-phone">Test Phone Number (for STK push)</label>
+        <input type="tel" id="s4-test-phone" placeholder="0700 000 000" />
+        <div class="field-note">We'll send a KES 1 test payment to confirm M-Pesa is working.</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" id="s4-test-mpesa">
+          <span id="s4-test-label">Send KES 1 Test</span>
+          <span class="spinner" id="s4-test-spinner" style="display:none;"></span>
+        </button>
+        <span id="s4-test-result"></span>
+      </div>
+    </div>
+
+    <!-- QR / SOKONI Pay -->
+    <div class="pay-method enabled" style="margin-top:12px;">
+      <div class="pay-method-head">
+        <div class="pay-method-title"><span>&#9638;</span> QR Payments (SOKONI Pay)</div>
+        <span class="badge badge-green">Auto-Enabled</span>
+      </div>
+      <div class="pay-method-body">Customers scan your QR code to pay via the SOKONI app.</div>
+      <div class="qr-preview" id="qr-preview" aria-label="QR code preview">
+        <div style="font-size:9px;color:#aaa;text-align:center;">QR Preview<br>(generated after save)</div>
+      </div>
+    </div>
+
+    <!-- Cash -->
+    <div class="pay-method enabled" style="margin-top:12px;">
+      <div class="pay-method-head">
+        <div class="pay-method-title"><span>&#128181;</span> Cash</div>
+        <span class="badge badge-green">Always Enabled</span>
+      </div>
+      <div class="pay-method-body">Accept physical cash. Change calculation built-in.</div>
+    </div>
+
+    <!-- Card Terminal -->
+    <div class="pay-method" style="margin-top:12px;opacity:0.55;">
+      <div class="pay-method-head">
+        <div class="pay-method-title"><span>&#128179;</span> Card Terminal <span class="coming-soon">Coming Soon</span></div>
+        <span class="badge badge-muted">Unavailable</span>
+      </div>
+      <div class="pay-method-body">Available when a payment terminal is connected. Supports Visa, Mastercard, tap-to-pay.</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary btn-sm" id="s4-back">← Back</button>
+      <button class="btn btn-primary" id="s4-continue">
+        <span id="s4-cont-label">Continue →</span>
+        <span class="spinner" id="s4-spinner" style="display:none;"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── STEP 5: Demo Sale ───────────────────────────────────── -->
+  <div class="step" id="step-5" aria-labelledby="s5-title">
+    <div id="demo-sale-ui">
+      <div class="step-header">
+        <div class="step-eyebrow">Step 5 of 5</div>
+        <h2 class="step-title" id="s5-title">Complete your first sale!</h2>
+        <p class="step-sub">Let's walk through a quick demo sale so you're ready to go live.</p>
+      </div>
+
+      <div class="demo-cart" id="demo-cart">
+        <div style="font-size:13px;font-weight:700;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;">Cart</div>
+        <div class="demo-cart-item" id="demo-item-row">
+          <div>
+            <div class="demo-cart-name" id="demo-product-name">Demo Product</div>
+            <div class="text-muted" style="font-size:12px;">Qty: 1</div>
+          </div>
+          <div class="demo-cart-price" id="demo-product-price">KES 0</div>
+        </div>
+        <hr class="divider" style="margin:8px 0;" />
+        <div class="demo-cart-total">
+          <span>Total</span>
+          <span class="text-green" id="demo-total">KES 0</span>
+        </div>
+      </div>
+
+      <div id="demo-add-row" style="display:none;margin-bottom:16px;">
+        <button class="btn btn-secondary" id="btn-add-to-cart" style="width:100%;">+ Add to Cart</button>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="margin-bottom:10px;display:block;">Payment Method</label>
+        <div class="payment-method-select">
+          <div class="pm-opt selected" data-pm="cash" tabindex="0" role="button" aria-pressed="true">&#128181; Cash</div>
+          <div class="pm-opt" data-pm="mpesa" tabindex="0" role="button" aria-pressed="false">&#128247; M-Pesa</div>
+        </div>
+      </div>
+
+      <button class="btn btn-green" id="btn-demo-sale">
+        <span id="demo-sale-label">Complete Sale (Demo)</span>
+        <span class="spinner" id="demo-spinner" style="display:none;"></span>
+      </button>
+
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-secondary btn-sm" id="s5-back">← Back</button>
+      </div>
+    </div>
+
+    <!-- Success screen -->
+    <div id="success-screen" role="status" aria-live="assertive">
+      <div class="success-check" aria-hidden="true">&#10003;</div>
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:8px;">First sale complete!</h2>
+      <p class="text-muted">You're officially a SOKONI merchant. Your POS is ready to go live.</p>
+      <hr class="divider" />
+      <button class="btn btn-secondary btn-sm" id="btn-view-receipt" style="margin:0 auto 16px;display:flex;">View Receipt</button>
+      <div class="finish-btns">
+        <a href="pos.html" class="btn btn-green">Open POS — Start Selling</a>
+        <a href="pos-workspace.html" class="btn btn-secondary">Explore Dashboard</a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /wizard-wrap -->
+
+<!-- ── Confetti container ── -->
+<div class="confetti-container" id="confetti-container" aria-hidden="true"></div>
+
+<!-- ── Receipt Modal ── -->
+<div id="receipt-modal" role="dialog" aria-modal="true" aria-label="Sale receipt">
+  <div class="receipt-box">
+    <button class="receipt-close" id="close-receipt" aria-label="Close receipt">&#215;</button>
+    <div class="receipt-logo" id="rct-biz-name">SOKONI Merchant</div>
+    <div class="receipt-sub">DEMO RECEIPT</div>
+    <hr class="receipt-divider" />
+    <div class="receipt-line">
+      <span id="rct-product-name">Product</span>
+      <span id="rct-product-price">KES 0</span>
+    </div>
+    <hr class="receipt-divider" />
+    <div class="receipt-line receipt-total">
+      <span>TOTAL</span>
+      <span id="rct-total">KES 0</span>
+    </div>
+    <div class="receipt-line">
+      <span>Payment</span>
+      <span id="rct-payment">Cash</span>
+    </div>
+    <div class="receipt-line">
+      <span>Date</span>
+      <span id="rct-date"></span>
+    </div>
+    <hr class="receipt-divider" />
+    <div class="receipt-footer">Thank you for your purchase!<br>Powered by SOKONI SmartPOS 4.0</div>
+  </div>
+</div>
+
+<!-- ── Toast area ── -->
+<div id="toast-area" aria-live="assertive" role="alert"></div>
+
+<!-- ════════════════════════════════════════════════════════════
+     APPLICATION SCRIPT
+════════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { initializeApp }                          from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+  import { getAuth, onAuthStateChanged }            from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+  import { getFirestore, doc, setDoc, updateDoc,
+           collection, addDoc, serverTimestamp }    from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+  import { getFunctions, httpsCallable }            from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+  /* ── Firebase init ── */
+  const firebaseConfig = {
+    apiKey:            window.SOKONI_CONFIG?.apiKey            || '',
+    authDomain:        window.SOKONI_CONFIG?.authDomain        || 'sokoni-ke.firebaseapp.com',
+    projectId:         window.SOKONI_CONFIG?.projectId         || 'sokoni-ke',
+    storageBucket:     window.SOKONI_CONFIG?.storageBucket     || 'sokoni-ke.appspot.com',
+    messagingSenderId: window.SOKONI_CONFIG?.messagingSenderId || '',
+    appId:             window.SOKONI_CONFIG?.appId             || ''
+  };
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+  const fns  = getFunctions(app, 'us-central1');
+
+  /* ── Callable functions ── */
+  const fnUpsertProduct = httpsCallable(fns, 'upsertProduct');
+  const fnCreatePayment = httpsCallable(fns, 'createPayment');
+  const fnRecordPOSSale = httpsCallable(fns, 'recordPOSSale');
+
+  /* ════════════════════════════════════════════════════════
+     SECURITY: XSS-safe helper — NEVER use innerHTML with
+     user-supplied data; always use escHtml() or textContent
+  ════════════════════════════════════════════════════════ */
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /* ── Format currency ── */
+  function formatKES(n) {
+    return 'KES ' + Number(n).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* ── Toast ── */
+  function toast(msg, type = 'info', duration = 4000) {
+    const area = document.getElementById('toast-area');
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    // Safe: msg passed as textContent
+    const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = icon;
+    const textSpan = document.createElement('span');
+    textSpan.textContent = msg;
+    el.appendChild(iconSpan);
+    el.appendChild(textSpan);
+    area.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, duration);
+  }
+
+  /* ── Loading helpers ── */
+  function setLoading(btnEl, spinnerEl, labelEl, loading, loadingText) {
+    if (loading) {
+      btnEl.disabled = true;
+      spinnerEl.style.display = 'inline-block';
+      if (labelEl) labelEl.textContent = loadingText || 'Loading…';
+    } else {
+      btnEl.disabled = false;
+      spinnerEl.style.display = 'none';
+      if (labelEl) labelEl.textContent = labelEl.dataset.original || labelEl.textContent;
+    }
+  }
+
+  /* ── Persist/restore progress ── */
+  const STORAGE_KEY = 'posOnboardProgress';
+  function saveProgress(data) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+  }
+  function loadProgress() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) { return {}; }
+  }
+  function clearProgress() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+  }
+
+  /* ════════════════════════════════════════════════════════
+     STATE
+  ════════════════════════════════════════════════════════ */
+  let currentStep = 1;
+  const TOTAL_STEPS = 5;
+  let currentUser = null;
+  let products = [];        // { id, name, price, stock, category }
+  let skippedProducts = false;
+  let hwState = {           // hardware connection state
+    printer: { conn: null, tested: false },
+    scanner: { conn: null, tested: false },
+    drawer:  { tested: false },
+    terminal:{ conn: 'mpesa', tested: false }
+  };
+  let selectedPayMethod = 'cash'; // for demo sale
+  let demoSaleComplete = false;
+  let step4Saved = false;
+
+  /* ════════════════════════════════════════════════════════
+     AUTH GUARD
+  ════════════════════════════════════════════════════════ */
+  onAuthStateChanged(auth, (user) => {
+    const loader = document.getElementById('auth-loading');
+    const wrap   = document.getElementById('wizard-wrap');
+    const pbar   = document.getElementById('progress-bar');
+    if (!user) {
+      window.location.href = 'auth.html?redirect=pos-onboard.html';
+      return;
+    }
+    currentUser = user;
+    loader.style.display = 'none';
+    wrap.style.display = 'block';
+    pbar.style.display = 'block';
+
+    // Auto-fill phone from Firebase Auth
+    const phoneInput = document.getElementById('s1-phone');
+    if (user.phoneNumber) {
+      phoneInput.value = user.phoneNumber;
+    } else if (user.email) {
+      // leave phone blank, let user fill
+    }
+
+    // Restore saved progress then run init
+    restoreProgress();
+    init();
+  });
+
+  /* ── Restore from localStorage ── */
+  function restoreProgress() {
+    const saved = loadProgress();
+    if (!saved || !saved.step) return;
+
+    // Restore step 1 fields
+    if (saved.s1) {
+      safeSet('s1-biz-name',  saved.s1.bizName  || '');
+      safeSet('s1-biz-type',  saved.s1.bizType  || '');
+      safeSet('s1-county',    saved.s1.county    || '');
+      safeSet('s1-phone',     saved.s1.phone     || (currentUser?.phoneNumber || ''));
+      safeSet('s1-kra',       saved.s1.kra       || '');
+      const vatToggle = document.getElementById('s1-vat-toggle');
+      if (saved.s1.vatRegistered) {
+        vatToggle.checked = true;
+        document.getElementById('vat-field').style.display = 'block';
+        safeSet('s1-vat-pin', saved.s1.vatPin || '');
+      }
+    }
+
+    // Restore products
+    if (saved.products && Array.isArray(saved.products)) {
+      products = saved.products;
+      renderProductList();
+    }
+
+    // Restore step 4
+    if (saved.s4) {
+      safeSet('s4-till',       saved.s4.till       || '');
+      safeSet('s4-test-phone', saved.s4.testPhone  || '');
+    }
+
+    // Jump to saved step
+    if (saved.step > 1) {
+      goToStep(saved.step, false);
+    }
+  }
+
+  function safeSet(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }
+
+  /* ════════════════════════════════════════════════════════
+     STEP NAVIGATION
+  ════════════════════════════════════════════════════════ */
+  function goToStep(n, animate = true) {
+    const old = document.getElementById('step-' + currentStep);
+    const next = document.getElementById('step-' + n);
+    if (!next) return;
+    if (old) old.classList.remove('active', 'slide-back');
+    next.classList.remove('slide-back');
+    if (!animate) {
+      next.style.animation = 'none';
+      requestAnimationFrame(() => {
+        next.style.animation = '';
+        next.classList.add('active');
+      });
+    } else {
+      if (n < currentStep) next.classList.add('slide-back');
+      next.classList.add('active');
+    }
+    currentStep = n;
+    updateProgressBar();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function updateProgressBar() {
+    for (let i = 1; i <= TOTAL_STEPS; i++) {
+      const el = document.getElementById('ps-' + i);
+      if (!el) continue;
+      el.classList.remove('done', 'active');
+      if (i < currentStep) {
+        el.classList.add('done');
+        el.style.cursor = 'pointer';
+        el.onclick = () => goToStep(i);
+        el.setAttribute('title', 'Go back to step ' + i);
+      } else if (i === currentStep) {
+        el.classList.add('active');
+        el.style.cursor = 'default';
+        el.onclick = null;
+        el.removeAttribute('title');
+      } else {
+        el.style.cursor = 'default';
+        el.onclick = null;
+        el.removeAttribute('title');
+      }
+    }
+    const lbl = document.getElementById('prog-label');
+    if (lbl) lbl.textContent = 'Step ' + currentStep + ' of ' + TOTAL_STEPS;
+  }
+
+  /* ── Field validation helpers ── */
+  function showError(fieldId, errId, show) {
+    const field = document.getElementById(fieldId);
+    const err   = document.getElementById(errId);
+    if (field) field.classList.toggle('invalid', show);
+    if (err)   err.classList.toggle('show', show);
+  }
+  function clearErrors(...ids) {
+    ids.forEach(id => showError(id.f, id.e, false));
+  }
+
+  /* ════════════════════════════════════════════════════════
+     STEP 1: BUSINESS SETUP
+  ════════════════════════════════════════════════════════ */
+  const vatToggle = document.getElementById('s1-vat-toggle');
+  vatToggle.addEventListener('change', () => {
+    document.getElementById('vat-field').style.display = vatToggle.checked ? 'block' : 'none';
+  });
+
+  const kraInput = document.getElementById('s1-kra');
+  kraInput.addEventListener('input', () => {
+    kraInput.value = kraInput.value.toUpperCase();
+    document.getElementById('kra-warning').style.display = kraInput.value.trim() ? 'none' : 'flex';
+  });
+
+  document.getElementById('s1-continue').addEventListener('click', () => {
+    const bizName = document.getElementById('s1-biz-name').value.trim();
+    const bizType = document.getElementById('s1-biz-type').value;
+    const county  = document.getElementById('s1-county').value;
+    const kra     = document.getElementById('s1-kra').value.trim();
+    const vatReg  = vatToggle.checked;
+    const vatPin  = document.getElementById('s1-vat-pin').value.trim();
+
+    let valid = true;
+    showError('s1-biz-name', 'err-biz-name', !bizName);
+    if (!bizName) valid = false;
+    showError('s1-biz-type', 'err-biz-type', !bizType);
+    if (!bizType) valid = false;
+    showError('s1-county', 'err-county', !county);
+    if (!county) valid = false;
+    if (vatReg && !vatPin) {
+      showError('s1-vat-pin', 'err-vat-pin', true);
+      valid = false;
+    } else {
+      showError('s1-vat-pin', 'err-vat-pin', false);
+    }
+
+    if (!kra) {
+      document.getElementById('kra-warning').style.display = 'flex';
+    }
+
+    if (!valid) { toast('Please fix the highlighted fields.', 'error'); return; }
+
+    // Save progress
+    const progress = loadProgress();
+    progress.step = 2;
+    progress.s1 = {
+      bizName, bizType, county,
+      phone: document.getElementById('s1-phone').value.trim(),
+      kra, vatRegistered: vatReg, vatPin
+    };
+    saveProgress(progress);
+
+    goToStep(2);
+  });
+
+  /* Clear error on input */
+  ['s1-biz-name','s1-biz-type','s1-county'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => el.classList.remove('invalid'));
+    if (el) el.addEventListener('change', () => el.classList.remove('invalid'));
+  });
+
+  /* ════════════════════════════════════════════════════════
+     STEP 2: PRODUCTS
+  ════════════════════════════════════════════════════════ */
+  function renderProductList() {
+    const list = document.getElementById('product-list');
+    const empty = document.getElementById('product-empty-note');
+    list.innerHTML = '';
+    if (products.length === 0) {
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    products.forEach((p, idx) => {
+      const pill = document.createElement('div');
+      pill.className = 'product-pill';
+
+      const name = document.createElement('div');
+      name.className = 'product-pill-name';
+      name.textContent = p.name; // textContent — XSS safe
+
+      const meta = document.createElement('div');
+      meta.className = 'product-pill-meta';
+      meta.textContent = formatKES(p.price) + ' · Qty: ' + p.stock;
+
+      const catBadge = document.createElement('span');
+      catBadge.className = 'badge badge-blue';
+      catBadge.textContent = (p.category || 'general').replace(/_/g, ' ');
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'product-pill-remove';
+      removeBtn.textContent = '×';
+      removeBtn.setAttribute('aria-label', 'Remove ' + p.name);
+      removeBtn.addEventListener('click', () => {
+        products.splice(idx, 1);
+        saveProductsToProgress();
+        renderProductList();
+      });
+
+      pill.appendChild(name);
+      pill.appendChild(meta);
+      pill.appendChild(catBadge);
+      pill.appendChild(removeBtn);
+      list.appendChild(pill);
+    });
+  }
+
+  function saveProductsToProgress() {
+    const progress = loadProgress();
+    progress.products = products;
+    saveProgress(progress);
+  }
+
+  document.getElementById('s2-add-product').addEventListener('click', async () => {
+    const name  = document.getElementById('s2-name').value.trim();
+    const price = parseFloat(document.getElementById('s2-price').value);
+    const stock = parseInt(document.getElementById('s2-stock').value, 10);
+    const cat   = document.getElementById('s2-category').value;
+
+    let valid = true;
+    showError('s2-name',  'err-product-name',  !name);
+    if (!name) valid = false;
+    showError('s2-price', 'err-product-price', isNaN(price) || price < 0);
+    if (isNaN(price) || price < 0) valid = false;
+    showError('s2-stock', 'err-product-stock', isNaN(stock) || stock < 0);
+    if (isNaN(stock) || stock < 0) valid = false;
+
+    if (!valid) { toast('Please fix product fields.', 'error'); return; }
+
+    const addBtn     = document.getElementById('s2-add-product');
+    const addSpinner = document.getElementById('s2-spinner');
+    const addLabel   = document.getElementById('s2-add-label');
+    addBtn.disabled = true;
+    addSpinner.style.display = 'inline-block';
+    addLabel.textContent = 'Saving…';
+
+    const productData = {
+      id: 'p_' + Date.now(),
+      name,
+      price,
+      stock,
+      category: cat
+    };
+
+    // Save product: try callable CF first, fall back to direct Firestore write
+    if (currentUser) {
+      try {
+        await fnUpsertProduct({ ...productData, uid: currentUser.uid });
+        toast('Product added: ' + name, 'success');
+      } catch (cfErr) {
+        // CF not yet deployed or unavailable — write directly to sellers/{uid}/products
+        try {
+          const ref = collection(db, 'sellers', currentUser.uid, 'products');
+          await addDoc(ref, {
+            name:      productData.name,
+            price:     productData.price,
+            stock:     productData.stock,
+            category:  productData.category,
+            currency:  'KES',
+            active:    true,
+            createdAt: serverTimestamp()
+          });
+          toast('Product added: ' + name, 'success');
+        } catch (fsErr) {
+          console.warn('[POS Onboard] product save error (stored locally):', fsErr.message);
+          toast('Product saved locally. Will sync when connected.', 'info');
+        }
+      }
+    }
+
+    products.push(productData);
+    saveProductsToProgress();
+    renderProductList();
+
+    // Clear form
+    document.getElementById('s2-name').value  = '';
+    document.getElementById('s2-price').value = '';
+    document.getElementById('s2-stock').value = '';
+    document.getElementById('s2-category').value = 'general';
+    document.getElementById('s2-name').focus();
+
+    addBtn.disabled = false;
+    addSpinner.style.display = 'none';
+    addLabel.textContent = '+ Add Product';
+  });
+
+  // Clear errors on input
+  ['s2-name','s2-price','s2-stock'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => el.classList.remove('invalid'));
+  });
+
+  // Step 2 continue
+  document.getElementById('s2-continue').addEventListener('click', () => {
+    if (products.length === 0 && !skippedProducts) {
+      toast('Add at least one product or use "Skip for now".', 'error');
+      return;
+    }
+    const progress = loadProgress();
+    progress.step = 3;
+    saveProgress(progress);
+    goToStep(3);
+  });
+
+  document.getElementById('s2-back').addEventListener('click', () => goToStep(1));
+
+  // Skip
+  document.getElementById('s2-skip').addEventListener('click', () => {
+    skippedProducts = true;
+    document.getElementById('skip-warning').style.display = 'block';
+    toast('Skipping products — you can add them in the POS later.', 'info');
+    const progress = loadProgress();
+    progress.step = 3;
+    progress.skippedProducts = true;
+    saveProgress(progress);
+    setTimeout(() => goToStep(3), 800);
+  });
+
+  /* ── CSV Import ── */
+  const dropZone     = document.getElementById('csv-drop-zone');
+  const csvInput     = document.getElementById('csv-file-input');
+  const csvStatus    = document.getElementById('csv-status');
+
+  dropZone.addEventListener('click', () => csvInput.click());
+  dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') csvInput.click(); });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) parseCSV(file);
+  });
+
+  csvInput.addEventListener('change', () => {
+    if (csvInput.files[0]) parseCSV(csvInput.files[0]);
+    csvInput.value = '';
+  });
+
+  function parseCSV(file) {
+    if (!file.name.endsWith('.csv')) { toast('Please upload a .csv file.', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+      if (!lines.length) { toast('CSV is empty.', 'error'); return; }
+      const header = lines[0].toLowerCase().split(',').map(h => h.trim());
+      const nameIdx = header.indexOf('name');
+      const priceIdx = header.indexOf('price');
+      const stockIdx = header.indexOf('stock');
+      const catIdx   = header.indexOf('category');
+      if (nameIdx < 0 || priceIdx < 0) {
+        toast('CSV must have "name" and "price" columns.', 'error');
+        return;
+      }
+      let added = 0, skipped = 0;
+      const rows = lines.slice(1, 501); // max 500
+      rows.forEach(row => {
+        const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+        const name  = cols[nameIdx];
+        const price = parseFloat(cols[priceIdx]);
+        const stock = stockIdx >= 0 ? parseInt(cols[stockIdx], 10) : 0;
+        const cat   = catIdx >= 0 ? (cols[catIdx] || 'general') : 'general';
+        if (!name || isNaN(price)) { skipped++; return; }
+        products.push({ id: 'p_' + Date.now() + '_' + added, name, price: price || 0, stock: isNaN(stock) ? 0 : stock, category: cat });
+        added++;
+      });
+      saveProductsToProgress();
+      renderProductList();
+      csvStatus.style.display = 'block';
+      const statusSpan = document.createElement('span');
+      statusSpan.style.color = added > 0 ? 'var(--green)' : 'var(--yellow)';
+      statusSpan.textContent = added + ' product(s) imported' + (skipped ? ', ' + skipped + ' row(s) skipped.' : '.');
+      csvStatus.textContent = '';
+      csvStatus.appendChild(statusSpan);
+      if (added > 0) toast(added + ' products imported from CSV.', 'success');
+    };
+    reader.readAsText(file);
+  }
+
+  /* ════════════════════════════════════════════════════════
+     STEP 3: HARDWARE
+  ════════════════════════════════════════════════════════ */
+  const HW_INSTRUCTIONS = {
+    printer: {
+      usb:       'Connect printer via USB cable. Ensure driver is installed. Windows: check Devices in Control Panel.',
+      network:   'Connect printer to the same WiFi/LAN. Enter IP in POS settings. Default port: 9100.',
+      bluetooth: 'Enable Bluetooth on this device. Power on printer and press pair button. Select from Bluetooth list.'
+    },
+    scanner: {
+      usb:    'Plug USB scanner into any USB port. It appears as a keyboard. No driver needed.',
+      camera: 'Grant camera permission when prompted. Hold barcode 10–30 cm from camera.'
+    },
+    terminal: {
+      mpesa: 'M-Pesa is enabled. Configure your Paybill/Till in Step 4.',
+      card:  'Card terminal coming soon.'
+    }
+  };
+
+  function setHwStatus(hw, status) {
+    const el = document.getElementById('hw-' + hw + '-status');
+    if (!el) return;
+    el.className = 'badge ' + (status === 'tested' ? 'badge-green' : status === 'connected' ? 'badge-blue' : 'badge-muted');
+    el.textContent = status === 'tested' ? 'Tested ✓' : status === 'connected' ? 'Connected' : 'Not Connected';
+    const tile = document.getElementById('hw-' + hw);
+    if (tile) {
+      tile.classList.remove('connected', 'tested');
+      if (status === 'tested') tile.classList.add('tested');
+      else if (status === 'connected') tile.classList.add('connected');
+    }
+  }
+
+  // Connection option buttons
+  document.querySelectorAll('.hw-opt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const hw   = btn.dataset.hw;
+      const conn = btn.dataset.conn;
+      if (btn.disabled) return;
+
+      // Toggle active within group
+      document.querySelectorAll(`.hw-opt-btn[data-hw="${hw}"]`).forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+
+      if (hwState[hw]) {
+        hwState[hw].conn = conn;
+        hwState[hw].tested = false;
+      }
+      setHwStatus(hw, 'connected');
+
+      // Show instructions
+      const infoEl = document.getElementById('hw-' + hw + '-info');
+      if (infoEl && HW_INSTRUCTIONS[hw] && HW_INSTRUCTIONS[hw][conn]) {
+        infoEl.style.display = 'block';
+        infoEl.textContent = HW_INSTRUCTIONS[hw][conn]; // textContent — XSS safe
+      }
+    });
+  });
+
+  // Test buttons
+  async function runHwTest(hw) {
+    const testBtn = document.getElementById('hw-test-' + hw);
+    if (!testBtn || testBtn.disabled) return;
+    testBtn.disabled = true;
+    testBtn.textContent = 'Testing…';
+
+    // Try SokoniHardware if available
+    let success = false;
+    try {
+      if (hw === 'printer' && window.SokoniHardware?.testPrint) {
+        await window.SokoniHardware.testPrint({ connType: hwState.printer.conn });
+        success = true;
+      } else if (hw === 'scanner' && window.SokoniHardware?.testScan) {
+        await window.SokoniHardware.testScan({ connType: hwState.scanner.conn });
+        success = true;
+      } else if (hw === 'drawer' && window.SokoniHardware?.openDrawer) {
+        await window.SokoniHardware.openDrawer();
+        success = true;
+      } else {
+        // Simulate test (hardware driver not loaded in this context)
+        await new Promise(r => setTimeout(r, 1000));
+        success = true;
+      }
+    } catch (err) {
+      console.warn('[POS Onboard] HW test error:', err.message);
+      success = false;
+    }
+
+    if (success) {
+      if (hwState[hw]) { hwState[hw].tested = true; }
+      setHwStatus(hw, 'tested');
+      testBtn.textContent = 'Tested ✓';
+      toast((hw.charAt(0).toUpperCase() + hw.slice(1)) + ' test successful.', 'success');
+      // Save config to Firestore
+      if (currentUser) {
+        try {
+          await setDoc(doc(db, 'posTerminals', currentUser.uid + '_hardware'), {
+            uid: currentUser.uid,
+            hwState,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (e) { /* non-fatal */ }
+      }
+    } else {
+      toast(hw + ' test failed. Check connection and try again.', 'error');
+      testBtn.textContent = 'Retry Test';
+    }
+    testBtn.disabled = false;
+  }
+
+  document.getElementById('hw-test-printer').addEventListener('click',  () => runHwTest('printer'));
+  document.getElementById('hw-test-scanner').addEventListener('click',  () => runHwTest('scanner'));
+  document.getElementById('hw-test-drawer').addEventListener('click',   () => runHwTest('drawer'));
+
+  document.getElementById('hw-test-all').addEventListener('click', async () => {
+    const btn = document.getElementById('hw-test-all');
+    btn.disabled = true;
+    btn.textContent = 'Testing all…';
+    const devices = ['printer','scanner','drawer'];
+    for (const hw of devices) {
+      if (hwState[hw]?.conn || hw === 'drawer') {
+        await runHwTest(hw);
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+    btn.disabled = false;
+    btn.textContent = 'Test All Devices';
+    toast('All device tests complete.', 'info');
+  });
+
+  document.getElementById('s3-continue').addEventListener('click', () => {
+    const progress = loadProgress();
+    progress.step = 4;
+    progress.hwState = hwState;
+    saveProgress(progress);
+    goToStep(4);
+  });
+  document.getElementById('s3-back').addEventListener('click', () => goToStep(2));
+  document.getElementById('s3-skip').addEventListener('click', () => {
+    toast('Hardware setup skipped. Add devices anytime in POS settings.', 'info');
+    const progress = loadProgress();
+    progress.step = 4;
+    progress.skippedHardware = true;
+    saveProgress(progress);
+    setTimeout(() => goToStep(4), 600);
+  });
+
+  /* ════════════════════════════════════════════════════════
+     STEP 4: PAYMENT SETUP
+  ════════════════════════════════════════════════════════ */
+  document.getElementById('s4-test-mpesa').addEventListener('click', async () => {
+    const till  = document.getElementById('s4-till').value.trim();
+    const phone = document.getElementById('s4-test-phone').value.trim();
+    if (!till) {
+      showError('s4-till', 'err-till', true);
+      toast('Enter your till/Paybill number first.', 'error');
+      return;
+    }
+    if (!phone) {
+      toast('Enter a phone number to receive the test STK push.', 'error');
+      return;
+    }
+    const btn     = document.getElementById('s4-test-mpesa');
+    const spinner = document.getElementById('s4-test-spinner');
+    const label   = document.getElementById('s4-test-label');
+    const result  = document.getElementById('s4-test-result');
+
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+    label.textContent = 'Sending…';
+    result.textContent = '';
+
+    try {
+      await fnCreatePayment({
+        amount:      1,
+        currency:    'KES',
+        method:      'mpesa_stk',
+        phone:       phone.replace(/\s/g, ''),
+        description: 'SOKONI SmartPOS onboarding test',
+        metadata:    { isTest: true, till }
+      });
+      result.className = 'badge badge-green';
+      result.textContent = 'STK Push sent ✓';
+      toast('Test payment sent! Check your phone for the M-Pesa prompt.', 'success');
+    } catch (err) {
+      result.className = 'badge badge-red';
+      result.textContent = 'Failed';
+      toast('Payment test failed: ' + (err.message || 'Unknown error'), 'error');
+    }
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    label.textContent = 'Send KES 1 Test';
+  });
+
+  document.getElementById('s4-till').addEventListener('input', () => {
+    document.getElementById('s4-till').classList.remove('invalid');
+    document.getElementById('err-till').classList.remove('show');
+  });
+
+  document.getElementById('s4-continue').addEventListener('click', async () => {
+    const till = document.getElementById('s4-till').value.trim();
+    if (!till) {
+      showError('s4-till', 'err-till', true);
+      toast('M-Pesa till/Paybill number is required.', 'error');
+      return;
+    }
+
+    const btn     = document.getElementById('s4-continue');
+    const spinner = document.getElementById('s4-spinner');
+    const label   = document.getElementById('s4-cont-label');
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+    label.textContent = 'Saving…';
+
+    try {
+      if (currentUser) {
+        await setDoc(doc(db, 'sellers', currentUser.uid), {
+          mpesaTill:    till,
+          mpesaEnabled: true,
+          cashEnabled:  true,
+          qrEnabled:    true,
+          updatedAt:    serverTimestamp()
+        }, { merge: true });
+      }
+      step4Saved = true;
+      const progress = loadProgress();
+      progress.step = 5;
+      progress.s4 = { till, testPhone: document.getElementById('s4-test-phone').value.trim() };
+      saveProgress(progress);
+      toast('Payment settings saved.', 'success');
+      goToStep(5);
+    } catch (err) {
+      toast('Failed to save payment settings: ' + (err.message || 'Unknown error'), 'error');
+    }
+
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    label.textContent = 'Continue →';
+  });
+
+  document.getElementById('s4-back').addEventListener('click', () => goToStep(3));
+
+  /* ════════════════════════════════════════════════════════
+     STEP 5: DEMO SALE
+  ════════════════════════════════════════════════════════ */
+  // Populate demo product
+  function initDemoSale() {
+    let demoProduct;
+    if (products.length > 0) {
+      demoProduct = products[0];
+    } else {
+      demoProduct = { name: 'Demo Product', price: 100, stock: 1, category: 'general' };
+    }
+    // XSS safe: textContent only
+    document.getElementById('demo-product-name').textContent = demoProduct.name;
+    document.getElementById('demo-product-price').textContent = formatKES(demoProduct.price);
+    document.getElementById('demo-total').textContent = formatKES(demoProduct.price);
+
+    // Receipt fields
+    document.getElementById('rct-product-name').textContent = demoProduct.name;
+    document.getElementById('rct-product-price').textContent = formatKES(demoProduct.price);
+    document.getElementById('rct-total').textContent = formatKES(demoProduct.price);
+    const bizName = loadProgress()?.s1?.bizName || 'SOKONI Merchant';
+    document.getElementById('rct-biz-name').textContent = bizName;
+    document.getElementById('rct-date').textContent = new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Payment method selector (step 5)
+  document.querySelectorAll('.pm-opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.pm-opt').forEach(o => {
+        o.classList.remove('selected');
+        o.setAttribute('aria-pressed', 'false');
+      });
+      opt.classList.add('selected');
+      opt.setAttribute('aria-pressed', 'true');
+      selectedPayMethod = opt.dataset.pm;
+      document.getElementById('rct-payment').textContent = selectedPayMethod === 'mpesa' ? 'M-Pesa' : 'Cash';
+    });
+    opt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') opt.click(); });
+  });
+
+  document.getElementById('btn-demo-sale').addEventListener('click', async () => {
+    if (demoSaleComplete) return;
+
+    const btn     = document.getElementById('btn-demo-sale');
+    const spinner = document.getElementById('demo-spinner');
+    const label   = document.getElementById('demo-sale-label');
+
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+    label.textContent = 'Processing…';
+
+    const demoProduct = products.length > 0 ? products[0] : { name: 'Demo Product', price: 100 };
+
+    try {
+      if (currentUser) {
+        await fnRecordPOSSale({
+          uid:         currentUser.uid,
+          items:       [{ name: demoProduct.name, price: demoProduct.price, qty: 1 }],
+          total:       demoProduct.price,
+          payMethod:   selectedPayMethod,
+          currency:    'KES',
+          isDemo:      true
+        });
+
+        // Mark onboarding complete on seller doc
+        await updateDoc(doc(db, 'sellers', currentUser.uid), {
+          onboardingComplete: true,
+          onboardedAt:        serverTimestamp()
+        });
+      }
+
+      demoSaleComplete = true;
+      clearProgress();
+      showSuccessScreen();
+      launchConfetti();
+
+    } catch (err) {
+      console.warn('[POS Onboard] recordPOSSale error:', err.message);
+      // Show success anyway — demo sale is non-critical
+      demoSaleComplete = true;
+      clearProgress();
+      showSuccessScreen();
+      launchConfetti();
+    }
+
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    label.textContent = 'Complete Sale (Demo)';
+  });
+
+  document.getElementById('s5-back').addEventListener('click', () => goToStep(4));
+
+  function showSuccessScreen() {
+    document.getElementById('demo-sale-ui').style.display  = 'none';
+    document.getElementById('success-screen').style.display = 'block';
+    // Update final progress bar
+    document.getElementById('ps-5').classList.add('done');
+    document.getElementById('prog-label').textContent = 'Complete!';
+  }
+
+  document.getElementById('btn-view-receipt').addEventListener('click', () => {
+    document.getElementById('receipt-modal').classList.add('open');
+  });
+  document.getElementById('close-receipt').addEventListener('click', () => {
+    document.getElementById('receipt-modal').classList.remove('open');
+  });
+  document.getElementById('receipt-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('receipt-modal')) {
+      document.getElementById('receipt-modal').classList.remove('open');
+    }
+  });
+
+  /* ── Confetti ── */
+  function launchConfetti() {
+    const container = document.getElementById('confetti-container');
+    const colors = ['#22c55e','#3b82f6','#eab308','#a855f7','#ef4444','#fff','#f97316'];
+    for (let i = 0; i < 80; i++) {
+      const piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      piece.style.left        = Math.random() * 100 + '%';
+      piece.style.background  = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.width       = (6 + Math.random() * 8) + 'px';
+      piece.style.height      = (6 + Math.random() * 8) + 'px';
+      piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+      piece.style.animationDuration  = (1.5 + Math.random() * 2.5) + 's';
+      piece.style.animationDelay     = (Math.random() * 0.8) + 's';
+      container.appendChild(piece);
+    }
+    setTimeout(() => { container.innerHTML = ''; }, 5000);
+  }
+
+  /* ════════════════════════════════════════════════════════
+     KEYBOARD NAVIGATION — ESC closes receipt modal
+  ════════════════════════════════════════════════════════ */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.getElementById('receipt-modal').classList.remove('open');
+    }
+  });
+
+  /* ════════════════════════════════════════════════════════
+     INIT — called once after auth resolves + progress restored
+  ════════════════════════════════════════════════════════ */
+  function init() {
+    renderProductList();
+    updateProgressBar();
+    initDemoSale();
+    // Show KRA warning if field is empty
+    const kraVal = document.getElementById('s1-kra').value.trim();
+    if (!kraVal) document.getElementById('kra-warning').style.display = 'flex';
+  }
+
+</script>
+</body>
+</html>

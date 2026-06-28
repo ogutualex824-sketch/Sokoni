@@ -3607,5 +3607,129 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ── Healthcare Hub v1.0 ─────────────────────────────────────────────── */
+    match /healthProviders/{providerId} {
+      allow read:  if resource.data.status == 'active' || isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /healthAppointments/{apptId} {
+      allow read:  if isAuthed() && (
+                     resource.data.patientUid == request.auth.uid ||
+                     resource.data.providerId == request.auth.uid ||
+                     isAdmin()
+                   );
+      allow write: if false; // CF-only
+    }
+    match /healthRecords/{recordId} {
+      allow read:  if isAuthed() && (resource.data.patientUid == request.auth.uid || isAdmin());
+      allow write: if false; // CF-only
+    }
+    match /healthPrescriptions/{rxId} {
+      allow read:  if isAuthed() && (resource.data.patientUid == request.auth.uid || isAdmin());
+      allow write: if false; // CF-only
+    }
+    match /healthApptIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    /* ── Property Hub v1.0 ───────────────────────────────────────────────── */
+    match /propertyListings/{listingId} {
+      allow read:  if resource.data.status == 'active'
+                   || (isAuthed() && resource.data.agentUid == request.auth.uid)
+                   || isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /propertyEnquiries/{enquiryId} {
+      allow read:  if isAuthed() && (
+                     resource.data.buyerUid == request.auth.uid ||
+                     resource.data.agentUid == request.auth.uid ||
+                     isAdmin()
+                   );
+      allow write: if false; // CF-only
+    }
+    match /propertyViewings/{viewingId} {
+      allow read:  if isAuthed() && (
+                     resource.data.buyerUid == request.auth.uid ||
+                     resource.data.agentUid == request.auth.uid ||
+                     isAdmin()
+                   );
+      allow write: if false; // CF-only
+    }
+
+    /* ── Vehicle Hub v1.0 ────────────────────────────────────────────────── */
+    match /vehicleListings/{listingId} {
+      allow read:  if resource.data.status == 'active'
+                   || (isAuthed() && resource.data.sellerUid == request.auth.uid)
+                   || isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /vehicleEnquiries/{enquiryId} {
+      allow read:  if isAuthed() && (
+                     resource.data.buyerUid == request.auth.uid ||
+                     resource.data.sellerUid == request.auth.uid ||
+                     isAdmin()
+                   );
+      allow write: if false; // CF-only
+    }
+    match /vehicleReports/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only
+    }
+
+    /* ── Digital Products Hub v1.0 ───────────────────────────────────────── */
+    match /digitalProducts/{productId} {
+      allow read:  if resource.data.status == 'active'
+                   || (isAuthed() && resource.data.sellerUid == request.auth.uid)
+                   || isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /digitalPurchases/{purchaseId} {
+      allow read:  if isAuthed() && (resource.data.buyerUid == request.auth.uid || isAdmin());
+      allow write: if false; // CF-only
+    }
+    match /digitalPurchaseIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    /* ── Legal Services Hub v1.0 ─────────────────────────────────────────── */
+    match /legalProviders/{providerId} {
+      allow read:  if resource.data.status == 'active' || isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /legalConsultations/{consultationId} {
+      allow read:  if isAuthed() && (
+                     resource.data.clientUid == request.auth.uid ||
+                     resource.data.providerId == request.auth.uid ||
+                     isAdmin()
+                   );
+      allow write: if false; // CF-only
+    }
+    match /legalConsultIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    /* ── Entertainment Hub v1.0 ──────────────────────────────────────────── */
+    match /entertainmentListings/{listingId} {
+      allow read:  if resource.data.status == 'active'
+                   || (isAuthed() && resource.data.creatorUid == request.auth.uid)
+                   || isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /entertainmentPurchases/{purchaseId} {
+      allow read:  if isAuthed() && (resource.data.buyerUid == request.auth.uid || isAdmin());
+      allow write: if false; // CF-only
+    }
+    match /entertainmentPurchaseIdempotency/{key} {
+      allow read:  if false;
+      allow write: if false;
+    }
+    match /entertainmentReviews/{reviewId} {
+      allow read:  if true; // public reviews
+      allow write: if false; // CF-only
+    }
+
   }
 }

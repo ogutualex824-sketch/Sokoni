@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Daily Operations — SOKONI SmartPOS 4.0</title>
+  <link rel="icon" href="assets/logosokoni.png">
+  <script src="sokoni-config.js"></script>
+  <style>
+    /* ── Design tokens ── */
+    :root {
+      --bg:      #0a0a0f;
+      --bg2:     #12121a;
+      --bg3:     #1a1a24;
+      --bg4:     #22222f;
+      --border:  #2a2a3a;
+      --text:    #e8e8f0;
+      --muted:   #6b6b80;
+      --green:   #22c55e;
+      --blue:    #3b82f6;
+      --red:     #ef4444;
+      --yellow:  #eab308;
+      --purple:  #a855f7;
+      --r:       12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── Header ── */
+    .hdr {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 60px;
+    }
+    .hdr-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 16px;
+      white-space: nowrap;
+    }
+    .hdr-logo img { width: 28px; height: 28px; object-fit: contain; }
+    .hdr-title { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+    .hdr-spacer { flex: 1; }
+    #hdr-clock {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      min-width: 120px;
+      text-align: right;
+    }
+    #hdr-date { font-size: 11px; color: var(--muted); text-align: right; }
+    .role-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(59,130,246,.18);
+      color: var(--blue);
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+    .hdr-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: none;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s;
+    }
+    .hdr-back:hover { color: var(--text); border-color: var(--blue); }
+
+    /* ── Layout ── */
+    .main { max-width: 900px; margin: 0 auto; padding: 20px 14px 40px; }
+
+    /* ── Section ── */
+    .section {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .section-hd {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s;
+    }
+    .section-hd:hover { background: var(--bg3); }
+    .section-icon { font-size: 20px; }
+    .section-label {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: .3px;
+    }
+    .section-sub { font-size: 12px; color: var(--muted); }
+    .status-strip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .status-strip.pending  { background: rgba(107,107,128,.18); color: var(--muted); }
+    .status-strip.progress { background: rgba(234,179,8,.18);   color: var(--yellow); }
+    .status-strip.done     { background: rgba(34,197,94,.18);   color: var(--green); }
+    .section-chevron {
+      font-size: 12px;
+      color: var(--muted);
+      transition: transform .2s;
+    }
+    .section.open .section-chevron { transform: rotate(180deg); }
+    .section-body { display: none; padding: 0 16px 20px; }
+    .section.open .section-body { display: block; }
+
+    /* ── Checklist items ── */
+    .ck-item {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px;
+      margin-bottom: 10px;
+      position: relative;
+      transition: border-color .15s;
+    }
+    .ck-item.done { border-color: var(--green); }
+    .ck-item.done::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--r);
+      background: rgba(34,197,94,.04);
+      pointer-events: none;
+    }
+    .ck-hd {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .ck-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--bg4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      color: var(--muted);
+    }
+    .ck-item.done .ck-num {
+      background: var(--green);
+      color: #fff;
+    }
+    .ck-title { font-size: 14px; font-weight: 600; flex: 1; }
+    .ck-badge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .ck-badge.req { background: rgba(239,68,68,.18); color: var(--red); }
+    .ck-badge.ok  { background: rgba(34,197,94,.18);  color: var(--green); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--blue);   color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #2563eb; }
+    .btn-green  { background: var(--green);  color: #fff; }
+    .btn-green:hover:not(:disabled)  { background: #16a34a; }
+    .btn-red    { background: var(--red);    color: #fff; }
+    .btn-red:hover:not(:disabled)    { background: #dc2626; }
+    .btn-ghost  { background: var(--bg4);   color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled)  { border-color: var(--blue); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* ── Input ── */
+    .inp {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      width: 100%;
+      min-height: 44px;
+    }
+    .inp:focus { border-color: var(--blue); }
+    .inp-prefix {
+      display: flex;
+      align-items: center;
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .inp-prefix span {
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+      height: 44px;
+      display: flex;
+      align-items: center;
+    }
+    .inp-prefix input {
+      background: none;
+      border: none;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      flex: 1;
+      min-height: 44px;
+    }
+    label.lbl { font-size: 12px; color: var(--muted); font-weight: 600; display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .3px; }
+
+    /* ── Device tiles ── */
+    .device-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 8px; }
+    @media (min-width: 600px) { .device-grid { grid-template-columns: repeat(4, 1fr); } }
+    .dev-tile {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 12px;
+      text-align: center;
+      transition: border-color .15s;
+    }
+    .dev-tile.ok   { border-color: var(--green); }
+    .dev-tile.fail { border-color: var(--red); }
+    .dev-icon { font-size: 24px; margin-bottom: 6px; }
+    .dev-name { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .dev-status { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+    .dev-status.ok   { color: var(--green); }
+    .dev-status.fail { color: var(--red); }
+    .dev-status.idle { color: var(--muted); }
+
+    /* ── Inventory alert list ── */
+    .alert-list { margin-top: 8px; display: none; }
+    .alert-list.open { display: block; }
+    .alert-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background: var(--bg4);
+      border-radius: 8px;
+      margin-bottom: 6px;
+    }
+    .alert-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .alert-dot.low     { background: var(--red); }
+    .alert-dot.expiry  { background: var(--yellow); }
+    .alert-name { flex: 1; font-size: 13px; font-weight: 500; }
+    .alert-detail { font-size: 11px; color: var(--muted); }
+
+    /* ── Progress ring ── */
+    .target-ring-wrap {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    .ring-svg { flex-shrink: 0; }
+    .ring-bg  { fill: none; stroke: var(--bg4); }
+    .ring-arc { fill: none; stroke: var(--blue); stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
+    .ring-arc.full  { stroke: var(--green); }
+    .ring-pct { font-size: 14px; font-weight: 700; fill: var(--text); text-anchor: middle; dominant-baseline: central; }
+    .target-info { flex: 1; }
+    .target-info .ti-label { font-size: 11px; color: var(--muted); }
+    .target-info .ti-val   { font-size: 20px; font-weight: 700; margin: 2px 0; }
+
+    /* ── Trading metrics strip ── */
+    .metrics-strip {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    @media (min-width: 600px) { .metrics-strip { grid-template-columns: repeat(4, 1fr); } }
+    .metric-card {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 12px;
+    }
+    .metric-lbl { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+    .metric-val { font-size: 20px; font-weight: 700; margin-top: 3px; }
+    .metric-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Quick actions grid ── */
+    .qa-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (min-width: 600px) { .qa-grid { grid-template-columns: repeat(3, 1fr); } }
+    .qa-btn {
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      position: relative;
+      text-decoration: none;
+      display: block;
+      color: var(--text);
+    }
+    .qa-btn:hover { border-color: var(--blue); background: var(--bg3); }
+    .qa-icon { font-size: 26px; margin-bottom: 6px; }
+    .qa-label { font-size: 13px; font-weight: 600; }
+    .qa-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: var(--red);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    /* ── Variance bar ── */
+    .variance-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .variance-row.ok     { background: rgba(34,197,94,.12); color: var(--green); }
+    .variance-row.warn   { background: rgba(234,179,8,.12); color: var(--yellow); }
+    .variance-row.danger { background: rgba(239,68,68,.12); color: var(--red); }
+
+    /* ── Shift report table ── */
+    .rep-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    .rep-table td { padding: 7px 0; border-bottom: 1px solid rgba(42,42,58,.5); }
+    .rep-table td:last-child { text-align: right; font-weight: 600; }
+    .rep-table tr.total td { font-size: 14px; font-weight: 700; border-top: 1px solid var(--border); border-bottom: none; padding-top: 10px; }
+
+    /* ── Ready banners ── */
+    .ready-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(34,197,94,.12);
+      border: 1px solid rgba(34,197,94,.3);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--green);
+      margin-top: 10px;
+    }
+    .ready-banner.show { display: flex; }
+    .ready-banner .rb-icon { font-size: 22px; }
+
+    /* ── Confetti (CSS animation) ── */
+    @keyframes confetti-fall {
+      0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+      100% { transform: translateY(80px)  rotate(360deg); opacity: 0; }
+    }
+    .confetti-piece {
+      position: fixed;
+      top: 0;
+      pointer-events: none;
+      width: 8px;
+      height: 10px;
+      border-radius: 2px;
+      z-index: 9999;
+      animation: confetti-fall 1.6s ease-in forwards;
+    }
+
+    /* ── Approval timer ── */
+    .appr-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg4);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .appr-info { flex: 1; }
+    .appr-title { font-size: 13px; font-weight: 600; }
+    .appr-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .appr-timer { font-size: 11px; font-weight: 700; color: var(--yellow); min-width: 48px; text-align: center; }
+    .appr-actions { display: flex; gap: 6px; }
+
+    /* ── Shimmer ── */
+    .shimmer {
+      background: linear-gradient(90deg, var(--bg4) 25%, var(--bg3) 50%, var(--bg4) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 6px;
+      height: 18px;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .shimmer-block { padding: 8px 0; }
+
+    /* ── Modals ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 22px;
+      width: 100%;
+      max-width: 460px;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      transform: scale(.96);
+      transition: transform .2s;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+    /* ── Toast ── */
+    #toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 16px;
+      z-index: 9000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast-item {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 13px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      animation: toast-in .25s ease;
+      max-width: 300px;
+    }
+    .toast-item.success { border-color: var(--green); }
+    .toast-item.error   { border-color: var(--red); }
+    .toast-item.warn    { border-color: var(--yellow); }
+    @keyframes toast-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    /* ── Misc ── */
+    .row-flex { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .row-flex > * { flex: 1; min-width: 120px; }
+    .mt8  { margin-top: 8px;  }
+    .mt12 { margin-top: 12px; }
+    .mt16 { margin-top: 16px; }
+    .sep  { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+    .info-box {
+      background: rgba(59,130,246,.08);
+      border: 1px solid rgba(59,130,246,.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .txt-green  { color: var(--green); }
+    .txt-yellow { color: var(--yellow); }
+    .txt-red    { color: var(--red); }
+    .txt-blue   { color: var(--blue); }
+    .txt-muted  { color: var(--muted); }
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .pill-green  { background: rgba(34,197,94,.15);  color: var(--green); }
+    .pill-yellow { background: rgba(234,179,8,.15);  color: var(--yellow); }
+    .pill-red    { background: rgba(239,68,68,.15);  color: var(--red); }
+    .range-wrap { width: 100%; margin-top: 8px; }
+    .range-wrap input[type=range] { width: 100%; accent-color: var(--blue); }
+    .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+    /* ── Auth screen ── */
+    #auth-screen {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; flex-direction: column; gap: 12px;
+    }
+    #auth-screen .auth-msg { color: var(--muted); font-size: 14px; }
+
+    /* ── Slider for loyalty ── */
+    .loyalty-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+    .loyalty-row span { font-size: 13px; font-weight: 700; color: var(--green); min-width: 80px; text-align: right; }
+
+    @media (max-width: 500px) {
+      .hdr-title { display: none; }
+      .hdr-logo span { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Auth gate ══ -->
+<div id="auth-screen">
+  <span class="spinner" style="width:32px;height:32px;border-width:3px"></span>
+  <div class="auth-msg">Verifying credentials…</div>
+</div>
+
+<!-- ══ Header ══ -->
+<header class="hdr" id="main-hdr" style="display:none">
+  <div class="hdr-logo">
+    <img src="assets/Sokonilogo2.png" alt="SOKONI" onerror="this.style.display='none'">
+    <span>SmartPOS</span>
+  </div>
+  <div class="hdr-title">Daily Operations</div>
+  <div class="hdr-spacer"></div>
+  <div style="text-align:right">
+    <div id="hdr-clock">--:--:--</div>
+    <div id="hdr-date">Loading…</div>
+  </div>
+  <div class="role-badge" id="role-badge">–</div>
+  <a href="pos.html" class="hdr-back">&#8592; POS</a>
+</header>
+
+<!-- ══ Main ══ -->
+<main class="main" id="main-content" style="display:none">
+
+  <!-- ─── MORNING ─── -->
+  <div class="section" id="sec-morning">
+    <div class="section-hd" onclick="toggleSection('morning')">
+      <span class="section-icon">🌅</span>
+      <div>
+        <div class="section-label">Morning Setup</div>
+        <div class="section-sub">Open shift · Cash count · Device check · Inventory · Targets</div>
+      </div>
+      <div class="status-strip pending" id="morning-status">Pending</div>
+      <span class="section-chevron">▼</span>
+    </div>
+    <div class="section-body" id="morning-body">
+
+      <!-- 1. Open Shift -->
+      <div class="ck-item" id="ck-openshift">
+        <div class="ck-hd">
+          <div class="ck-num">1</div>
+          <div class="ck-title">Open Shift</div>
+          <span class="ck-badge req" id="shift-badge">Required</span>
+        </div>
+        <div id="shift-info" class="info-box" style="display:none"></div>
+        <div class="mt8">
+          <button class="btn btn-green" id="btn-open-shift" onclick="openShiftAction()">
+            ▶ Open Shift
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Opening Cash Count -->
+      <div class="ck-item" id="ck-cashcount">
+        <div class="ck-hd">
+          <div class="ck-num">2</div>
+          <div class="ck-title">Opening Cash Count</div>
+          <span class="ck-badge req" id="cash-badge">Required</span>
+        </div>
+        <label class="lbl mt8">Amount in drawer (KES)</label>
+        <div class="inp-prefix">
+          <span>KES</span>
+          <input type="number" id="opening-cash" min="0" step="1" placeholder="0" oninput="saveCashCount()">
+        </div>
+        <div class="mt8">
+          <button class="btn btn-primary btn-sm" onclick="confirmCashCount()">Confirm Count ✓</button>
+        </div>
+        <div id="cashcount-confirm" style="display:none;margin-top:8px" class="txt-green">
+          ✓ Opening cash recorded
+        </div>
+      </div>
+
+      <!-- 3. Device Check -->
+      <div class="ck-item" id="ck-devices">
+        <div class="ck-hd">
+          <div class="ck-num">3</div>
+          <div class="ck-title">Device Check</div>
+          <span class="ck-badge req" id="device-badge">Pending</span>
+        </div>
+        <div class="device-grid" id="device-grid">
+          <!-- rendered by JS -->
+        </div>
+        <div class="mt8">
+          <button class="btn btn-ghost btn-sm" onclick="pingAllDevices()">Ping All</button>
+        </div>
+      </div>
+
+      <!-- 4. Inventory Alerts -->
+      <div class="ck-item" id="ck-inventory">
+        <div class="ck-hd">
+          <div class="ck-num">4</div>
+          <div class="ck-title">Inventory Alerts</div>
+          <span class="ck-badge" id="inv-badge" style="background:rgba(107,107,128,.18);color:var(--muted)">Loading…</span>
+        </div>
+        <div id="inv-summary" class="info-box"></div>
+        <div class="alert-list" id="inv-alert-list"></div>
+        <div class="mt8" id="inv-toggle-wrap" style="display:none">
+          <button class="btn btn-ghost btn-sm" onclick="toggleAlertList()">
+            <span id="inv-toggle-lbl">Show Items ▼</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 5. Today's Targets -->
+      <div class="ck-item" id="ck-targets">
+        <div class="ck-hd">
+          <div class="ck-num">5</div>
+          <div class="ck-title">Today's Revenue Target</div>
+          <span class="ck-badge" id="target-badge" style="background:rgba(107,107,128,.18);color:var(--muted)">Not set</span>
+        </div>
+        <div id="yesterday-ctx" class="info-box" style="margin-bottom:10px"></div>
+        <label class="lbl">Set target (KES)</label>
+        <div class="inp-prefix">
+          <span>KES</span>
+          <input type="number" id="target-input" min="0" step="100" placeholder="e.g. 50000" oninput="saveTarget()">
+        </div>
+        <div class="target-ring-wrap mt12" id="target-ring-wrap" style="display:none">
+          <svg class="ring-svg" width="80" height="80" viewBox="0 0 80 80">
+            <circle class="ring-bg"  cx="40" cy="40" r="32" stroke-width="6"/>
+            <circle class="ring-arc" cx="40" cy="40" r="32" stroke-width="6"
+              stroke-dasharray="201.06" stroke-dashoffset="201.06" id="ring-arc"
+              transform="rotate(-90 40 40)"/>
+            <text class="ring-pct" x="40" y="40" id="ring-pct">0%</text>
+          </svg>
+          <div class="target-info">
+            <div class="ti-label">Revenue today</div>
+            <div class="ti-val txt-green" id="target-revenue-val">KES 0</div>
+            <div class="ti-label mt8">Target</div>
+            <div style="font-size:15px;font-weight:600" id="target-display-val">KES 0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Morning ready banner -->
+      <div class="ready-banner" id="morning-banner">
+        <span class="rb-icon">✅</span>
+        Morning Ready — all checks complete. You're good to start trading!
+      </div>
+
+    </div><!-- /morning-body -->
+  </div><!-- /sec-morning -->
+
+  <!-- ─── TRADING ─── -->
+  <div class="section" id="sec-trading">
+    <div class="section-hd" onclick="toggleSection('trading')">
+      <span class="section-icon">💼</span>
+      <div>
+        <div class="section-label">Trading</div>
+        <div class="section-sub">Live metrics · Sales · Refunds · Customers · Approvals</div>
+      </div>
+      <div class="status-strip pending" id="trading-status">Live</div>
+      <span class="section-chevron">▼</span>
+    </div>
+    <div class="section-body" id="trading-body">
+
+      <!-- Live metrics -->
+      <div class="metrics-strip" id="metrics-strip">
+        <div class="metric-card"><div class="metric-lbl">Revenue</div><div class="metric-val" id="m-revenue"><span class="shimmer" style="width:80px"></span></div></div>
+        <div class="metric-card"><div class="metric-lbl">Transactions</div><div class="metric-val" id="m-txn"><span class="shimmer" style="width:40px"></span></div></div>
+        <div class="metric-card"><div class="metric-lbl">Avg Basket</div><div class="metric-val" id="m-avg"><span class="shimmer" style="width:60px"></span></div></div>
+        <div class="metric-card"><div class="metric-lbl">Top Product</div><div class="metric-val" style="font-size:14px" id="m-top"><span class="shimmer" style="width:90px"></span></div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">
+        Auto-refreshes every 30 s &nbsp;·&nbsp; <span id="metrics-last-update">–</span>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="qa-grid">
+        <a href="pos.html" class="qa-btn">
+          <div class="qa-icon">💳</div>
+          <div class="qa-label">New Sale</div>
+        </a>
+        <div class="qa-btn" onclick="openModal('modal-refund')">
+          <div class="qa-icon">🔄</div>
+          <div class="qa-label">Process Refund</div>
+        </div>
+        <div class="qa-btn" onclick="openModal('modal-customer')">
+          <div class="qa-icon">👤</div>
+          <div class="qa-label">Customer Lookup</div>
+        </div>
+        <div class="qa-btn manager-only" onclick="openModal('modal-loyalty')">
+          <div class="qa-icon">🎁</div>
+          <div class="qa-label">Loyalty Redeem</div>
+        </div>
+        <div class="qa-btn" onclick="openModal('modal-qr')">
+          <div class="qa-icon">📲</div>
+          <div class="qa-label">QR Payment</div>
+        </div>
+        <div class="qa-btn manager-only" onclick="loadApprovals()" id="qa-approvals">
+          <div class="qa-icon">✅</div>
+          <div class="qa-label">Pending Approvals</div>
+          <div class="qa-badge" id="approval-count" style="display:none">0</div>
+        </div>
+      </div>
+
+      <!-- Approvals list -->
+      <div id="approvals-panel" style="display:none">
+        <hr class="sep">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px">Pending Approvals</div>
+        <div id="approvals-list"></div>
+      </div>
+
+    </div><!-- /trading-body -->
+  </div><!-- /sec-trading -->
+
+  <!-- ─── CLOSING ─── -->
+  <div class="section" id="sec-closing">
+    <div class="section-hd" onclick="toggleSection('closing')">
+      <span class="section-icon">🌙</span>
+      <div>
+        <div class="section-label">End of Day</div>
+        <div class="section-sub">Cash reconciliation · Shift report · Close shift · Backup</div>
+      </div>
+      <div class="status-strip pending" id="closing-status">Pending</div>
+      <span class="section-chevron">▼</span>
+    </div>
+    <div class="section-body" id="closing-body">
+
+      <!-- 1. Cash Reconciliation -->
+      <div class="ck-item" id="ck-reconcile">
+        <div class="ck-hd">
+          <div class="ck-num">1</div>
+          <div class="ck-title">Cash Reconciliation</div>
+          <span class="ck-badge req" id="recon-badge">Required</span>
+        </div>
+        <div class="row-flex mt8">
+          <div>
+            <label class="lbl">Expected Cash (KES)</label>
+            <div class="inp-prefix">
+              <span>KES</span>
+              <input type="number" id="recon-expected" placeholder="0" min="0" step="1">
+            </div>
+          </div>
+          <div>
+            <label class="lbl">Actual Cash in Drawer (KES)</label>
+            <div class="inp-prefix">
+              <span>KES</span>
+              <input type="number" id="recon-actual" placeholder="0" min="0" step="1" oninput="calcVariance()">
+            </div>
+          </div>
+        </div>
+        <div id="variance-display" style="display:none"></div>
+        <div class="mt8">
+          <button class="btn btn-primary" id="btn-submit-recon" onclick="submitReconciliation()">
+            Submit Reconciliation
+          </button>
+        </div>
+        <div id="recon-confirm" style="display:none;margin-top:8px" class="txt-green">
+          ✓ Reconciliation submitted
+        </div>
+      </div>
+
+      <!-- 2. Shift Report -->
+      <div class="ck-item manager-only" id="ck-shift-report">
+        <div class="ck-hd">
+          <div class="ck-num">2</div>
+          <div class="ck-title">Shift Report</div>
+        </div>
+        <div id="shift-report-body">
+          <button class="btn btn-ghost btn-sm" onclick="loadShiftReport()">Load Report</button>
+        </div>
+      </div>
+
+      <!-- 3. Inventory Summary -->
+      <div class="ck-item" id="ck-inv-summary">
+        <div class="ck-hd">
+          <div class="ck-num">3</div>
+          <div class="ck-title">Inventory Summary</div>
+        </div>
+        <div id="inv-summary-eod">
+          <button class="btn btn-ghost btn-sm" onclick="loadEODInventory()">Load Summary</button>
+        </div>
+      </div>
+
+      <!-- 4. Daily Sales Report -->
+      <div class="ck-item manager-only" id="ck-sales-report">
+        <div class="ck-hd">
+          <div class="ck-num">4</div>
+          <div class="ck-title">Daily Sales Report</div>
+        </div>
+        <div id="daily-sales-body">
+          <button class="btn btn-ghost btn-sm" onclick="loadDailySalesReport()">Generate Report</button>
+        </div>
+      </div>
+
+      <!-- 5. Close Shift -->
+      <div class="ck-item" id="ck-closeshift">
+        <div class="ck-hd">
+          <div class="ck-num">5</div>
+          <div class="ck-title">Close Shift</div>
+          <span class="ck-badge req" id="close-badge">Required</span>
+        </div>
+        <div class="info-box" style="margin-bottom:10px;font-size:12px">
+          Cash reconciliation must be submitted before closing the shift.
+        </div>
+        <button class="btn btn-red" id="btn-close-shift" disabled onclick="closeShiftAction()">
+          ■ Close Shift
+        </button>
+        <div id="closeshift-confirm" style="display:none;margin-top:8px" class="txt-green">
+          ✓ Shift closed successfully
+        </div>
+      </div>
+
+      <!-- 6. Backup Verification -->
+      <div class="ck-item" id="ck-backup">
+        <div class="ck-hd">
+          <div class="ck-num">6</div>
+          <div class="ck-title">Backup Verification</div>
+          <span class="ck-badge" id="backup-badge" style="background:rgba(107,107,128,.18);color:var(--muted)">Checking…</span>
+        </div>
+        <div id="backup-status" class="info-box">Checking backup integrity…</div>
+      </div>
+
+      <!-- Day complete banner -->
+      <div class="ready-banner" id="closing-banner">
+        <span class="rb-icon">🎉</span>
+        Day Complete — great work! All closing tasks are done.
+      </div>
+
+    </div><!-- /closing-body -->
+  </div><!-- /sec-closing -->
+
+</main>
+
+<!-- ═══ MODALS ═══ -->
+
+<!-- Refund -->
+<div class="modal-overlay" id="modal-refund" role="dialog" aria-modal="true" aria-label="Process Refund" onclick="handleOverlayClick(event,'modal-refund')">
+  <div class="modal" id="modal-refund-inner">
+    <div class="modal-title">🔄 Process Refund <button class="modal-close" onclick="closeModal('modal-refund')">✕</button></div>
+    <label class="lbl">Sale ID or Customer Phone</label>
+    <input class="inp" id="refund-lookup" placeholder="Sale ID or 07XXXXXXXX">
+    <button class="btn btn-primary btn-sm mt8" onclick="lookupSale()">Look Up Sale</button>
+    <div id="refund-sale-info" style="display:none;margin-top:12px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-refund')">Cancel</button>
+      <button class="btn btn-red" id="btn-confirm-refund" style="display:none" onclick="confirmRefund()">Confirm Refund</button>
+    </div>
+  </div>
+</div>
+
+<!-- Customer Lookup -->
+<div class="modal-overlay" id="modal-customer" role="dialog" aria-modal="true" aria-label="Customer Lookup" onclick="handleOverlayClick(event,'modal-customer')">
+  <div class="modal" id="modal-customer-inner">
+    <div class="modal-title">👤 Customer Lookup <button class="modal-close" onclick="closeModal('modal-customer')">✕</button></div>
+    <label class="lbl">Customer Phone</label>
+    <input class="inp" id="cust-phone" placeholder="07XXXXXXXX" type="tel">
+    <button class="btn btn-primary btn-sm mt8" onclick="lookupCustomer()">Search</button>
+    <div id="cust-profile" style="display:none;margin-top:12px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-customer')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loyalty Redeem -->
+<div class="modal-overlay" id="modal-loyalty" role="dialog" aria-modal="true" aria-label="Loyalty Redeem" onclick="handleOverlayClick(event,'modal-loyalty')">
+  <div class="modal" id="modal-loyalty-inner">
+    <div class="modal-title">🎁 Loyalty Redeem <button class="modal-close" onclick="closeModal('modal-loyalty')">✕</button></div>
+    <label class="lbl">Customer Phone</label>
+    <input class="inp" id="loyalty-phone" placeholder="07XXXXXXXX" type="tel">
+    <button class="btn btn-primary btn-sm mt8" onclick="lookupLoyalty()">Load Points</button>
+    <div id="loyalty-info" style="display:none;margin-top:12px"></div>
+    <div id="loyalty-slider-wrap" style="display:none">
+      <label class="lbl mt12">Redeem Amount (KES)</label>
+      <div class="loyalty-row">
+        <input type="range" id="loyalty-slider" min="0" max="0" step="10" oninput="updateLoyaltySlider()">
+        <span id="loyalty-redeem-val">KES 0</span>
+      </div>
+      <div class="range-labels"><span>0</span><span id="loyalty-max-lbl">Max 0</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-loyalty')">Cancel</button>
+      <button class="btn btn-green" id="btn-redeem" style="display:none" onclick="redeemLoyalty()">Redeem</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR Payment -->
+<div class="modal-overlay" id="modal-qr" role="dialog" aria-modal="true" aria-label="QR Payment" onclick="handleOverlayClick(event,'modal-qr')">
+  <div class="modal" id="modal-qr-inner">
+    <div class="modal-title">📲 QR Payment <button class="modal-close" onclick="closeModal('modal-qr')">✕</button></div>
+    <label class="lbl">Amount (KES)</label>
+    <div class="inp-prefix">
+      <span>KES</span>
+      <input type="number" id="qr-amount" placeholder="0" min="1" step="1">
+    </div>
+    <div class="mt8">
+      <button class="btn btn-primary btn-sm" onclick="generateQRPayment()">Generate QR</button>
+    </div>
+    <div id="qr-display" style="display:none;text-align:center;margin-top:16px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-qr')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shift Summary (on close) -->
+<div class="modal-overlay" id="modal-shift-summary" role="dialog" aria-modal="true" aria-label="Shift Summary" onclick="handleOverlayClick(event,'modal-shift-summary')">
+  <div class="modal" id="modal-shift-summary-inner">
+    <div class="modal-title">🏁 Shift Complete <button class="modal-close" onclick="closeModal('modal-shift-summary')">✕</button></div>
+    <div id="shift-summary-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-green" onclick="closeModal('modal-shift-summary')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- ═══ SCRIPT ═══ -->
+<script type="module">
+'use strict';
+
+import { initializeApp, getApps }    from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFirestore, collection, query, where, getDocs, getCountFromServer }
+  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+/* ── Firebase init ── */
+const FB_CFG = {
+  apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+  authDomain:        'sokoni-aeb26.firebaseapp.com',
+  projectId:         'sokoni-aeb26',
+  storageBucket:     'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId: '24799054989',
+  appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4',
+};
+const app   = getApps().find(a => a.name === 'pos-daily') || initializeApp(FB_CFG, 'pos-daily');
+const auth  = getAuth(app);
+const db    = getFirestore(app);
+const fns   = getFunctions(app, 'us-central1');
+
+/* ── CF helpers ── */
+const CF = name => httpsCallable(fns, name, { timeout: 30000 });
+
+/* ── XSS-safe escaper ── */
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* ── KES formatter ── */
+function KES(n) {
+  return 'KES ' + Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+/* ── localStorage keys (per-day) ── */
+const TODAY = (() => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); })();
+const LSK = key => `pos_daily_${TODAY}_${key}`;
+
+function lsGet(key, fallback = null) {
+  try { const v = localStorage.getItem(LSK(key)); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(LSK(key), JSON.stringify(val)); } catch {}
+}
+
+/* ══ State ══ */
+let _uid        = null;
+let _role       = 'cashier';   // cashier | manager | owner
+let _sellerId   = null;
+let _shiftId    = null;
+let _metricsTimer = null;
+let _approvalTimers = {};
+let _currentRevenue = 0;
+let _reconSubmitted = false;
+let _shiftClosed    = false;
+let _currentSaleForRefund = null;
+let _loyaltyData    = null;
+
+/* ═══════════════════════════════════
+   TOAST
+═══════════════════════════════════ */
+function toast(msg, type = 'info', ms = 3500) {
+  const el = document.createElement('div');
+  el.className = 'toast-item ' + (type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warn' ? 'warn' : '');
+  el.textContent = msg;
+  const c = document.getElementById('toast-container');
+  c.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 350); }, ms);
+}
+
+/* ═══════════════════════════════════
+   CLOCK
+═══════════════════════════════════ */
+function startClock() {
+  function tick() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const dateStr = now.toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('hdr-clock').textContent = timeStr;
+    document.getElementById('hdr-date').textContent  = dateStr;
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+/* ═══════════════════════════════════
+   SECTION TOGGLE
+═══════════════════════════════════ */
+window.toggleSection = function(name) {
+  const el = document.getElementById('sec-' + name);
+  if (!el) return;
+  el.classList.toggle('open');
+};
+
+function autoExpandSection() {
+  const h = new Date().getHours();
+  if (h >= 6  && h < 11) document.getElementById('sec-morning').classList.add('open');
+  if (h >= 11 && h < 18) document.getElementById('sec-trading').classList.add('open');
+  if (h >= 18)            document.getElementById('sec-closing').classList.add('open');
+  // Always expand morning if shift not yet opened
+  if (!lsGet('shift_opened')) document.getElementById('sec-morning').classList.add('open');
+}
+
+/* ═══════════════════════════════════
+   SECTION STATUS UPDATER
+═══════════════════════════════════ */
+function updateMorningStatus() {
+  const checks = [
+    lsGet('shift_opened'),
+    lsGet('cash_confirmed'),
+    lsGet('devices_checked'),
+    lsGet('inventory_checked'),
+    lsGet('target_set'),
+  ];
+  const done = checks.filter(Boolean).length;
+  const all  = checks.length;
+  const strip = document.getElementById('morning-status');
+  if (done === 0)        { strip.className = 'status-strip pending';  strip.textContent = 'Pending'; }
+  else if (done < all)   { strip.className = 'status-strip progress'; strip.textContent = done + '/' + all + ' done'; }
+  else                   { strip.className = 'status-strip done';     strip.textContent = 'Ready ✓'; }
+
+  // Individual item done state
+  if (lsGet('shift_opened'))     { markDone('ck-openshift');  document.getElementById('shift-badge').className = 'ck-badge ok'; document.getElementById('shift-badge').textContent = 'Open'; }
+  if (lsGet('cash_confirmed'))   { markDone('ck-cashcount');  document.getElementById('cash-badge').className = 'ck-badge ok'; document.getElementById('cash-badge').textContent = 'Done ✓'; }
+  if (lsGet('devices_checked'))  { markDone('ck-devices');    document.getElementById('device-badge').className = 'ck-badge ok'; document.getElementById('device-badge').textContent = 'Checked ✓'; }
+  if (lsGet('inventory_checked')){ markDone('ck-inventory'); }
+  if (lsGet('target_set'))       { markDone('ck-targets');   document.getElementById('target-badge').className = 'ck-badge ok'; document.getElementById('target-badge').textContent = 'Set ✓'; }
+
+  if (done === all) document.getElementById('morning-banner').classList.add('show');
+  else              document.getElementById('morning-banner').classList.remove('show');
+}
+
+function updateClosingStatus() {
+  const checks = [
+    _reconSubmitted || lsGet('recon_submitted'),
+    lsGet('shift_report_loaded'),
+    lsGet('eod_inv_loaded'),
+    lsGet('daily_sales_loaded'),
+    _shiftClosed || lsGet('shift_closed'),
+    lsGet('backup_ok'),
+  ];
+  const done = checks.filter(Boolean).length;
+  const all  = checks.length;
+  const strip = document.getElementById('closing-status');
+  if (done === 0)      { strip.className = 'status-strip pending';  strip.textContent = 'Pending'; }
+  else if (done < all) { strip.className = 'status-strip progress'; strip.textContent = done + '/' + all + ' done'; }
+  else                 { strip.className = 'status-strip done';     strip.textContent = 'Done ✓'; }
+
+  if (done === all) {
+    document.getElementById('closing-banner').classList.add('show');
+    launchConfetti();
+  }
+}
+
+function markDone(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('done');
+}
+
+/* ═══════════════════════════════════
+   MODALS
+═══════════════════════════════════ */
+window.openModal = function(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('open');
+  // Focus first focusable
+  const first = el.querySelector('input, button, select, textarea, a[href]');
+  if (first) setTimeout(() => first.focus(), 50);
+};
+
+window.closeModal = function(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+};
+
+window.handleOverlayClick = function(e, id) {
+  if (e.target.id === id) closeModal(id);
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
+/* ═══════════════════════════════════
+   SHIMMER HELPER
+═══════════════════════════════════ */
+function shimmerBlock(rows = 3) {
+  return Array.from({length: rows}, () =>
+    `<div class="shimmer-block"><div class="shimmer" style="width:${60+Math.random()*30|0}%"></div></div>`
+  ).join('');
+}
+
+/* ═══════════════════════════════════
+   1. OPEN SHIFT
+═══════════════════════════════════ */
+window.openShiftAction = async function() {
+  if (lsGet('shift_opened')) { toast('Shift already open today', 'warn'); return; }
+  const btn = document.getElementById('btn-open-shift');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Opening…';
+  try {
+    const res = await CF('openShift')({ sellerId: _sellerId });
+    const d   = res.data || {};
+    _shiftId  = d.shiftId || d.id || null;
+    lsSet('shift_opened', true);
+    lsSet('shift_id', _shiftId);
+    const info = document.getElementById('shift-info');
+    info.style.display = 'block';
+    info.innerHTML = `<strong class="txt-green">✓ Shift open</strong> &nbsp;·&nbsp; Cashier: <strong>${esc(d.cashierName || _uid)}</strong> &nbsp;·&nbsp; Opened: <strong>${new Date().toLocaleTimeString('en-KE')}</strong>`;
+    btn.style.display = 'none';
+    toast('Shift opened successfully!', 'success');
+    updateMorningStatus();
+    // Enable close shift button
+    document.getElementById('btn-close-shift').disabled = _reconSubmitted ? false : true;
+  } catch (err) {
+    console.error('openShift', err);
+    toast('Failed to open shift: ' + esc(err.message), 'error');
+    btn.disabled = false;
+    btn.innerHTML = '▶ Open Shift';
+  }
+};
+
+/* Restore shift state if already open */
+function restoreShiftState() {
+  if (lsGet('shift_opened')) {
+    _shiftId = lsGet('shift_id');
+    document.getElementById('btn-open-shift').style.display = 'none';
+    const info = document.getElementById('shift-info');
+    info.style.display = 'block';
+    info.innerHTML = `<strong class="txt-green">✓ Shift open</strong> &nbsp;·&nbsp; (resumed from earlier today)`;
+  }
+  if (lsGet('cash_confirmed')) {
+    document.getElementById('cashcount-confirm').style.display = 'block';
+    const saved = lsGet('opening_cash');
+    if (saved) document.getElementById('opening-cash').value = saved;
+  }
+  if (_reconSubmitted || lsGet('recon_submitted')) {
+    _reconSubmitted = true;
+    document.getElementById('recon-confirm').style.display = 'block';
+    const cs = lsGet('shift_closed');
+    document.getElementById('btn-close-shift').disabled = cs ? true : false;
+    if (cs) {
+      _shiftClosed = true;
+      document.getElementById('closeshift-confirm').style.display = 'block';
+      document.getElementById('btn-close-shift').disabled = true;
+    }
+  }
+}
+
+/* ═══════════════════════════════════
+   2. OPENING CASH COUNT
+═══════════════════════════════════ */
+window.saveCashCount = function() {
+  const v = document.getElementById('opening-cash').value;
+  lsSet('opening_cash', v);
+};
+
+window.confirmCashCount = function() {
+  const v = parseFloat(document.getElementById('opening-cash').value);
+  if (isNaN(v) || v < 0) { toast('Enter a valid amount', 'warn'); return; }
+  lsSet('cash_confirmed', true);
+  lsSet('opening_cash', v);
+  document.getElementById('cashcount-confirm').style.display = 'block';
+  toast('Opening cash recorded: ' + KES(v), 'success');
+  updateMorningStatus();
+};
+
+/* ═══════════════════════════════════
+   3. DEVICE CHECK
+═══════════════════════════════════ */
+const DEVICES = [
+  { id: 'printer',  label: 'Receipt Printer',   icon: '🖨️',  hwCategory: 'receipt_printer' },
+  { id: 'scanner',  label: 'Barcode Scanner',    icon: '📷',  hwCategory: 'barcode_scanner' },
+  { id: 'drawer',   label: 'Cash Drawer',        icon: '💰',  hwCategory: 'cash_drawer' },
+  { id: 'mpesa',    label: 'M-Pesa Connection',  icon: '📲',  hwCategory: null /* network ping */ },
+];
+
+function renderDeviceGrid() {
+  const grid = document.getElementById('device-grid');
+  grid.innerHTML = DEVICES.map(d => `
+    <div class="dev-tile" id="dev-${d.id}">
+      <div class="dev-icon">${d.icon}</div>
+      <div class="dev-name">${esc(d.label)}</div>
+      <div class="dev-status idle" id="dev-status-${d.id}">Unknown</div>
+      <button class="btn btn-ghost btn-sm" onclick="pingDevice('${d.id}')">Ping</button>
+    </div>
+  `).join('');
+}
+
+window.pingDevice = async function(devId) {
+  const tile    = document.getElementById('dev-' + devId);
+  const statusEl = document.getElementById('dev-status-' + devId);
+  statusEl.className = 'dev-status idle';
+  statusEl.innerHTML = '<span class="spinner"></span>';
+
+  let ok = false;
+  try {
+    if (window.SokoniHardware && devId !== 'mpesa') {
+      // Find first registered device of matching category
+      const dev = DEVICES.find(d => d.id === devId);
+      const allDev = Object.values(window.SokoniHardware._registry || {});
+      const match  = allDev.find(d => d.category === dev.hwCategory);
+      if (match && typeof match.ping === 'function') {
+        await match.ping();
+        ok = true;
+      } else {
+        // Attempt discovery
+        const summary = await window.SokoniHardware.discoverDevices();
+        if (devId === 'printer') ok = summary?.printers?.found;
+        else if (devId === 'scanner') ok = summary?.scanners?.found;
+        else if (devId === 'drawer')  ok = summary?.cashDrawers?.found ?? summary?.printers?.found; // drawer often via printer
+      }
+    } else if (devId === 'mpesa') {
+      // Lightweight connectivity check via functions ping
+      await CF('getLivePOSMetrics')({ sellerId: _sellerId });
+      ok = true;
+    } else {
+      // SokoniHardware not loaded — simulate browser capability check
+      if (devId === 'printer')  ok = !!(navigator.usb || localStorage.getItem('_posNetworkPrinterIP'));
+      if (devId === 'scanner')  ok = !!(navigator.usb || navigator.hid);
+      if (devId === 'drawer')   ok = !!(navigator.usb || navigator.serial);
+    }
+  } catch (e) {
+    console.warn('pingDevice', devId, e.message);
+    ok = false;
+  }
+
+  tile.className    = 'dev-tile ' + (ok ? 'ok' : 'fail');
+  statusEl.className = 'dev-status ' + (ok ? 'ok' : 'fail');
+  statusEl.textContent = ok ? '● Online' : '✕ No response';
+
+  checkAllDevicesDone();
+};
+
+window.pingAllDevices = async function() {
+  for (const d of DEVICES) await pingDevice(d.id);
+};
+
+function checkAllDevicesDone() {
+  const allStatuses = DEVICES.map(d => {
+    const el = document.getElementById('dev-status-' + d.id);
+    return el ? el.textContent : '';
+  });
+  const anyChecked = allStatuses.some(s => s === '● Online' || s === '✕ No response');
+  if (anyChecked && !lsGet('devices_checked')) {
+    lsSet('devices_checked', true);
+    document.getElementById('device-badge').textContent = 'Checked ✓';
+    document.getElementById('device-badge').className   = 'ck-badge ok';
+    updateMorningStatus();
+  }
+}
+
+/* ═══════════════════════════════════
+   4. INVENTORY ALERTS
+═══════════════════════════════════ */
+let _alertItems = [];
+let _alertListOpen = false;
+
+async function loadInventoryAlerts() {
+  const sumEl  = document.getElementById('inv-summary');
+  const badge  = document.getElementById('inv-badge');
+  sumEl.innerHTML = shimmerBlock(2);
+  try {
+    const res  = await CF('getInventoryAlerts')({ sellerId: _sellerId });
+    const data = res.data || {};
+    _alertItems = [
+      ...(data.lowStock    || []).map(i => ({ ...i, alertType: 'low' })),
+      ...(data.expiringSoon || []).map(i => ({ ...i, alertType: 'expiry' })),
+    ];
+    const count = _alertItems.length;
+    if (count === 0) {
+      badge.style.background = 'rgba(34,197,94,.18)'; badge.style.color = 'var(--green)';
+      badge.textContent = 'All Good ✓';
+      sumEl.textContent = 'No alerts — inventory looks healthy.';
+      lsSet('inventory_checked', true);
+      markDone('ck-inventory');
+      updateMorningStatus();
+      return;
+    }
+    badge.style.background = 'rgba(239,68,68,.18)'; badge.style.color = 'var(--red)';
+    badge.textContent = count + ' item' + (count !== 1 ? 's' : '') + ' need attention';
+    sumEl.innerHTML = `<span class="txt-yellow">⚠</span> ${esc(count)} item${count !== 1 ? 's' : ''} need attention — tap "Show Items" to review.`;
+    renderAlertList();
+    document.getElementById('inv-toggle-wrap').style.display = 'block';
+    lsSet('inventory_checked', true);
+    updateMorningStatus();
+  } catch (e) {
+    console.error('getInventoryAlerts', e);
+    badge.textContent = 'Error';
+    sumEl.textContent = 'Could not load alerts: ' + esc(e.message);
+  }
+}
+
+function renderAlertList() {
+  const list = document.getElementById('inv-alert-list');
+  list.innerHTML = _alertItems.map(item => `
+    <div class="alert-row">
+      <div class="alert-dot ${esc(item.alertType)}"></div>
+      <div class="alert-name">${esc(item.name || item.productName || '–')}</div>
+      <div class="alert-detail">
+        ${item.alertType === 'low'
+          ? `Stock: <strong>${esc(item.currentStock ?? '?')}</strong> / Reorder: ${esc(item.reorderPoint ?? '?')}`
+          : `Expires: <strong>${esc(item.expiryDate || item.expiry || '–')}</strong>`
+        }
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="createPOForItem('${esc(item.productId || item.id || '')}','${esc(item.name || item.productName || '')}')">PO</button>
+    </div>
+  `).join('');
+}
+
+window.toggleAlertList = function() {
+  _alertListOpen = !_alertListOpen;
+  document.getElementById('inv-alert-list').classList.toggle('open', _alertListOpen);
+  document.getElementById('inv-toggle-lbl').textContent = _alertListOpen ? 'Hide Items ▲' : 'Show Items ▼';
+};
+
+window.createPOForItem = function(id, name) {
+  toast('Creating PO for: ' + esc(name), 'info');
+  window.open('pos.html#inventory', '_blank');
+};
+
+/* ═══════════════════════════════════
+   5. TODAY'S TARGETS
+═══════════════════════════════════ */
+window.saveTarget = function() {
+  const v = parseFloat(document.getElementById('target-input').value);
+  if (!isNaN(v) && v > 0) {
+    lsSet('daily_target', v);
+    lsSet('target_set', true);
+    document.getElementById('target-badge').className   = 'ck-badge ok';
+    document.getElementById('target-badge').textContent = 'Set ✓';
+    markDone('ck-targets');
+    updateMorningStatus();
+    document.getElementById('target-ring-wrap').style.display = 'flex';
+    document.getElementById('target-display-val').textContent = KES(v);
+    updateTargetRing();
+  }
+};
+
+function updateTargetRing() {
+  const target  = lsGet('daily_target') || 0;
+  const revenue = _currentRevenue;
+  if (!target) return;
+  const pct = Math.min(revenue / target, 1);
+  const C   = 2 * Math.PI * 32; // circumference
+  const arc = document.getElementById('ring-arc');
+  const txt = document.getElementById('ring-pct');
+  if (arc) { arc.style.strokeDashoffset = C * (1 - pct); arc.className = 'ring-arc' + (pct >= 1 ? ' full' : ''); }
+  if (txt) txt.textContent = Math.round(pct * 100) + '%';
+  document.getElementById('target-revenue-val').textContent = KES(revenue);
+}
+
+async function loadYesterdayRevenue() {
+  const ctxEl = document.getElementById('yesterday-ctx');
+  ctxEl.innerHTML = '<span class="spinner"></span> Loading yesterday…';
+  try {
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    const start = new Date(yesterday); start.setHours(0,0,0,0);
+    const end   = new Date(yesterday); end.setHours(23,59,59,999);
+    const res   = await CF('getPOSAnalytics')({ sellerId: _sellerId, startDate: start.toISOString(), endDate: end.toISOString() });
+    const rev   = res.data?.salesRep?.netRevenue || res.data?.revenue || 0;
+    ctxEl.textContent = 'Yesterday\'s revenue: ' + KES(rev) + '. Set a target for today:';
+  } catch {
+    ctxEl.textContent = 'Set today\'s revenue target (KES):';
+  }
+
+  // Restore saved target
+  const saved = lsGet('daily_target');
+  if (saved) {
+    document.getElementById('target-input').value = saved;
+    document.getElementById('target-ring-wrap').style.display = 'flex';
+    document.getElementById('target-display-val').textContent = KES(saved);
+    updateTargetRing();
+  }
+}
+
+/* ═══════════════════════════════════
+   TRADING — LIVE METRICS
+═══════════════════════════════════ */
+async function fetchLiveMetrics() {
+  try {
+    const res  = await CF('getLivePOSMetrics')({ sellerId: _sellerId });
+    const d    = res.data || {};
+    _currentRevenue = d.revenue || d.totalRevenue || 0;
+    document.getElementById('m-revenue').textContent = KES(_currentRevenue);
+    document.getElementById('m-txn').textContent     = String(d.transactions || d.transactionCount || 0);
+    document.getElementById('m-avg').textContent     = KES(d.avgBasket || d.avgSaleValue || 0);
+    document.getElementById('m-top').textContent     = esc(d.topProduct || d.topProductName || '–');
+    document.getElementById('metrics-last-update').textContent = 'Updated ' + new Date().toLocaleTimeString('en-KE');
+    updateTargetRing();
+  } catch (e) {
+    console.warn('getLivePOSMetrics', e.message);
+  }
+}
+
+function startMetricsRefresh() {
+  fetchLiveMetrics();
+  _metricsTimer = setInterval(fetchLiveMetrics, 30000);
+}
+
+/* ═══════════════════════════════════
+   REFUND MODAL
+═══════════════════════════════════ */
+window.lookupSale = async function() {
+  const raw = document.getElementById('refund-lookup').value.trim();
+  if (!raw) { toast('Enter a sale ID or phone number', 'warn'); return; }
+  const infoEl = document.getElementById('refund-sale-info');
+  infoEl.style.display = 'block';
+  infoEl.innerHTML = shimmerBlock(3);
+  document.getElementById('btn-confirm-refund').style.display = 'none';
+  _currentSaleForRefund = null;
+  try {
+    // Try to find sale by ID or phone via getPOSAnalytics / direct Firestore
+    const q = isNaN(raw[0])
+      ? query(collection(db, 'posSales'), where('saleId', '==', raw))
+      : query(collection(db, 'posSales'), where('customerPhone', '==', raw));
+    const snap = await getDocs(q);
+    if (snap.empty) { infoEl.innerHTML = '<span class="txt-red">No sale found.</span>'; return; }
+    const doc  = snap.docs[0];
+    const sale = { id: doc.id, ...doc.data() };
+    _currentSaleForRefund = sale;
+    infoEl.innerHTML = `
+      <table class="rep-table">
+        <tr><td>Sale ID</td><td>${esc(sale.saleId || sale.id)}</td></tr>
+        <tr><td>Customer</td><td>${esc(sale.customerName || sale.customerPhone || '–')}</td></tr>
+        <tr><td>Amount</td><td class="txt-green">${KES(sale.total || sale.grandTotal || 0)}</td></tr>
+        <tr><td>Date</td><td>${esc(sale.createdAt?.toDate ? sale.createdAt.toDate().toLocaleString('en-KE') : '–')}</td></tr>
+        <tr><td>Status</td><td>${esc(sale.status || '–')}</td></tr>
+      </table>`;
+    if ((sale.status || '') !== 'voided') {
+      document.getElementById('btn-confirm-refund').style.display = 'inline-flex';
+    } else {
+      infoEl.innerHTML += '<div class="txt-muted" style="margin-top:6px">Sale already voided.</div>';
+    }
+  } catch (e) {
+    infoEl.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span>';
+  }
+};
+
+window.confirmRefund = async function() {
+  if (!_currentSaleForRefund) return;
+  const btn = document.getElementById('btn-confirm-refund');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing…';
+  try {
+    await CF('voidPOSSale')({ saleId: _currentSaleForRefund.saleId || _currentSaleForRefund.id, sellerId: _sellerId });
+    toast('Refund processed successfully', 'success');
+    closeModal('modal-refund');
+    document.getElementById('refund-sale-info').innerHTML = '';
+    _currentSaleForRefund = null;
+    btn.style.display = 'none';
+    fetchLiveMetrics();
+  } catch (e) {
+    toast('Refund failed: ' + esc(e.message), 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Confirm Refund';
+  }
+};
+
+/* ═══════════════════════════════════
+   CUSTOMER LOOKUP MODAL
+═══════════════════════════════════ */
+window.lookupCustomer = async function() {
+  const phone  = document.getElementById('cust-phone').value.trim();
+  if (!phone)  { toast('Enter a phone number', 'warn'); return; }
+  const profEl = document.getElementById('cust-profile');
+  profEl.style.display = 'block';
+  profEl.innerHTML     = shimmerBlock(4);
+  try {
+    const q    = query(collection(db, 'users'), where('phone', '==', phone));
+    const snap = await getDocs(q);
+    if (snap.empty) { profEl.innerHTML = '<span class="txt-red">Customer not found.</span>'; return; }
+    const u = snap.docs[0].data();
+    profEl.innerHTML = `
+      <div class="info-box">
+        <strong>${esc(u.displayName || u.name || 'Unknown')}</strong><br>
+        <span class="txt-muted">${esc(phone)}</span><br><br>
+        <span class="pill pill-green">${esc(u.loyaltyTier || 'Bronze')}</span>
+        &nbsp; Points: <strong>${esc(u.loyaltyPoints || 0)}</strong>
+        &nbsp; Wallet: <strong class="txt-green">${KES(u.walletBalance || 0)}</strong>
+      </div>`;
+  } catch (e) {
+    profEl.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span>';
+  }
+};
+
+/* ═══════════════════════════════════
+   LOYALTY REDEEM MODAL
+═══════════════════════════════════ */
+window.lookupLoyalty = async function() {
+  const phone = document.getElementById('loyalty-phone').value.trim();
+  if (!phone)  { toast('Enter a phone number', 'warn'); return; }
+  const infoEl = document.getElementById('loyalty-info');
+  infoEl.style.display = 'block';
+  infoEl.innerHTML     = shimmerBlock(3);
+  document.getElementById('loyalty-slider-wrap').style.display = 'none';
+  document.getElementById('btn-redeem').style.display = 'none';
+  _loyaltyData = null;
+  try {
+    const q    = query(collection(db, 'users'), where('phone', '==', phone));
+    const snap = await getDocs(q);
+    if (snap.empty) { infoEl.innerHTML = '<span class="txt-red">Customer not found.</span>'; return; }
+    const u = snap.docs[0].data();
+    _loyaltyData = { uid: snap.docs[0].id, ...u };
+    const points    = u.loyaltyPoints    || 0;
+    const maxRedeem = Math.floor(points / 10); // 10 pts = KES 1 (example rate)
+    infoEl.innerHTML = `
+      <strong>${esc(u.displayName || u.name || '–')}</strong><br>
+      Tier: <span class="pill pill-green">${esc(u.loyaltyTier || 'Bronze')}</span>
+      &nbsp; Points: <strong>${esc(points)}</strong>
+      &nbsp; Max redeem: <strong class="txt-green">${KES(maxRedeem)}</strong>`;
+    if (maxRedeem > 0) {
+      const slider = document.getElementById('loyalty-slider');
+      slider.max   = maxRedeem;
+      slider.value = 0;
+      document.getElementById('loyalty-redeem-val').textContent = KES(0);
+      document.getElementById('loyalty-max-lbl').textContent    = 'Max ' + KES(maxRedeem);
+      document.getElementById('loyalty-slider-wrap').style.display = 'block';
+      document.getElementById('btn-redeem').style.display = 'inline-flex';
+    }
+  } catch (e) {
+    infoEl.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span>';
+  }
+};
+
+window.updateLoyaltySlider = function() {
+  const v = parseFloat(document.getElementById('loyalty-slider').value) || 0;
+  document.getElementById('loyalty-redeem-val').textContent = KES(v);
+};
+
+window.redeemLoyalty = async function() {
+  const v   = parseFloat(document.getElementById('loyalty-slider').value) || 0;
+  if (!v || !_loyaltyData) { toast('Select an amount to redeem', 'warn'); return; }
+  const btn = document.getElementById('btn-redeem');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Redeeming…';
+  try {
+    // Loyalty redemption via a generic callable (adjust CF name if different in your stack)
+    await CF('redeemLoyaltyPoints')({ uid: _loyaltyData.uid, amountKES: v, sellerId: _sellerId });
+    toast('Redeemed ' + KES(v) + ' for ' + esc(_loyaltyData.displayName || _loyaltyData.name || ''), 'success');
+    closeModal('modal-loyalty');
+  } catch (e) {
+    toast('Redemption failed: ' + esc(e.message), 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Redeem';
+  }
+};
+
+/* ═══════════════════════════════════
+   QR PAYMENT MODAL
+═══════════════════════════════════ */
+window.generateQRPayment = async function() {
+  const amt = parseFloat(document.getElementById('qr-amount').value);
+  if (!amt || amt < 1) { toast('Enter a valid amount', 'warn'); return; }
+  const display = document.getElementById('qr-display');
+  display.style.display = 'block';
+  display.innerHTML = '<span class="spinner" style="width:48px;height:48px;border-width:4px"></span><br><span class="txt-muted">Generating…</span>';
+  try {
+    const res = await CF('createPayment')({ amount: amt, currency: 'KES', method: 'qr', sellerId: _sellerId });
+    const d   = res.data || {};
+    const url = d.paymentUrl || d.qrUrl || d.checkoutUrl || '';
+    if (url) {
+      const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`;
+      display.innerHTML = `
+        <img src="${qrSrc}" alt="QR Code" style="border-radius:8px;background:#fff;padding:8px;max-width:220px">
+        <div class="txt-muted" style="font-size:12px;margin-top:6px">Scan to pay ${KES(amt)}</div>
+        <div style="margin-top:8px"><span class="pill pill-green">Payment ID: ${esc(d.paymentId || d.id || '–')}</span></div>`;
+    } else {
+      display.innerHTML = '<span class="txt-red">Payment created but no QR URL returned.</span>';
+    }
+  } catch (e) {
+    display.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span>';
+  }
+};
+
+/* ═══════════════════════════════════
+   APPROVALS
+═══════════════════════════════════ */
+window.loadApprovals = async function() {
+  const panel = document.getElementById('approvals-panel');
+  const list  = document.getElementById('approvals-list');
+  panel.style.display = 'block';
+  list.innerHTML      = shimmerBlock(3);
+  Object.values(_approvalTimers).forEach(clearInterval);
+  _approvalTimers = {};
+  try {
+    const res   = await CF('getPendingApprovals')({ sellerId: _sellerId });
+    const items = res.data?.approvals || res.data || [];
+    if (!items.length) { list.innerHTML = '<div class="txt-muted">No pending approvals.</div>'; return; }
+    list.innerHTML = '';
+    items.forEach((item, idx) => {
+      const div = document.createElement('div');
+      div.className = 'appr-row';
+      div.id        = 'appr-' + idx;
+      const expiry  = item.expiresAt ? new Date(item.expiresAt) : null;
+      div.innerHTML = `
+        <div class="appr-info">
+          <div class="appr-title">${esc(item.description || item.type || 'Approval request')}</div>
+          <div class="appr-sub">${esc(item.requestedBy || '–')} &nbsp;·&nbsp; ${esc(item.itemName || '')}</div>
+        </div>
+        <div class="appr-timer" id="appr-timer-${idx}">${expiry ? timeLeft(expiry) : '–'}</div>
+        <div class="appr-actions">
+          <button class="btn btn-green btn-sm" onclick="handleApproval('${esc(item.approvalId || item.id)}','approve',${idx})">✓</button>
+          <button class="btn btn-red   btn-sm" onclick="handleApproval('${esc(item.approvalId || item.id)}','reject',${idx})">✕</button>
+        </div>`;
+      list.appendChild(div);
+      if (expiry) {
+        _approvalTimers[idx] = setInterval(() => {
+          const el = document.getElementById('appr-timer-' + idx);
+          if (el) el.textContent = timeLeft(expiry);
+        }, 1000);
+      }
+    });
+    const cnt = document.getElementById('approval-count');
+    cnt.style.display  = 'flex';
+    cnt.textContent    = items.length;
+  } catch (e) {
+    list.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span>';
+  }
+};
+
+function timeLeft(expiry) {
+  const diff = Math.max(0, expiry - Date.now());
+  const m    = Math.floor(diff / 60000);
+  const s    = Math.floor((diff % 60000) / 1000);
+  return (diff <= 0) ? 'Expired' : m + ':' + String(s).padStart(2, '0');
+}
+
+window.handleApproval = async function(approvalId, action, idx) {
+  try {
+    await CF('resolveApproval')({ approvalId, action, sellerId: _sellerId });
+    clearInterval(_approvalTimers[idx]);
+    const row = document.getElementById('appr-' + idx);
+    if (row) row.remove();
+    toast(action === 'approve' ? 'Approved ✓' : 'Rejected', action === 'approve' ? 'success' : 'warn');
+    // Update badge
+    const cnt = document.getElementById('approval-count');
+    const cur = parseInt(cnt.textContent) || 1;
+    if (cur - 1 <= 0) cnt.style.display = 'none';
+    else cnt.textContent = cur - 1;
+  } catch (e) {
+    toast('Failed: ' + esc(e.message), 'error');
+  }
+};
+
+/* ═══════════════════════════════════
+   CLOSING — CASH RECONCILIATION
+═══════════════════════════════════ */
+window.calcVariance = function() {
+  const exp  = parseFloat(document.getElementById('recon-expected').value) || 0;
+  const act  = parseFloat(document.getElementById('recon-actual').value)   || 0;
+  const diff = act - exp;
+  const disp = document.getElementById('variance-display');
+  disp.style.display = 'block';
+  let cls, msg;
+  if (Math.abs(diff) <= 50) { cls = 'ok';     msg = '✓ Balanced (variance: ' + KES(Math.abs(diff)) + ')'; }
+  else if (diff < 0)         { cls = 'warn';   msg = '↓ Short by ' + KES(Math.abs(diff)); }
+  else                       { cls = 'danger'; msg = '↑ Over by '  + KES(diff); }
+  disp.innerHTML = `<div class="variance-row ${cls}">${msg}</div>`;
+};
+
+window.submitReconciliation = async function() {
+  const exp = parseFloat(document.getElementById('recon-expected').value) || 0;
+  const act = parseFloat(document.getElementById('recon-actual').value)   || 0;
+  if (!act && act !== 0) { toast('Enter actual cash amount', 'warn'); return; }
+  const btn = document.getElementById('btn-submit-recon');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Submitting…';
+  try {
+    const shiftId = _shiftId || lsGet('shift_id');
+    await CF('submitCashCount')({ shiftId, expectedCash: exp, actualCash: act, sellerId: _sellerId });
+    _reconSubmitted = true;
+    lsSet('recon_submitted', true);
+    document.getElementById('recon-confirm').style.display = 'block';
+    document.getElementById('btn-close-shift').disabled   = false;
+    markDone('ck-reconcile');
+    document.getElementById('recon-badge').className    = 'ck-badge ok';
+    document.getElementById('recon-badge').textContent  = 'Submitted ✓';
+    toast('Reconciliation submitted', 'success');
+    updateClosingStatus();
+  } catch (e) {
+    toast('Submit failed: ' + esc(e.message), 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Submit Reconciliation';
+  }
+};
+
+/* ═══════════════════════════════════
+   CLOSING — SHIFT REPORT
+═══════════════════════════════════ */
+window.loadShiftReport = async function() {
+  const body = document.getElementById('shift-report-body');
+  body.innerHTML = shimmerBlock(5);
+  try {
+    const res = await CF('getStaffPerformanceDashboard')({ sellerId: _sellerId, shiftId: _shiftId || lsGet('shift_id') || null });
+    const d   = res.data || {};
+    const emp = (d.employees || [])[0] || d;
+    body.innerHTML = `
+      <table class="rep-table">
+        <tr><td>Total Revenue</td><td class="txt-green">${KES(emp.revenue || d.totalRevenue || 0)}</td></tr>
+        <tr><td>Transactions</td><td>${esc(emp.transactions || d.transactions || 0)}</td></tr>
+        <tr><td>Avg Basket</td><td>${KES(emp.avgSale || d.avgBasket || 0)}</td></tr>
+        <tr><td>Top Product</td><td>${esc(emp.topProduct || d.topProduct || '–')}</td></tr>
+        <tr><td>Cash Sales</td><td>${KES(emp.cashRevenue || d.cashRevenue || 0)}</td></tr>
+        <tr><td>M-Pesa Sales</td><td>${KES(emp.mpesaRevenue || d.mpesaRevenue || 0)}</td></tr>
+        <tr><td>Refunds</td><td class="txt-red">${esc(emp.refunds || 0)}</td></tr>
+      </table>
+      <button class="btn btn-ghost btn-sm mt8" onclick="window.print()">⬇ Download PDF</button>`;
+    markDone('ck-shift-report');
+    lsSet('shift_report_loaded', true);
+    updateClosingStatus();
+  } catch (e) {
+    body.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span><br><button class="btn btn-ghost btn-sm mt8" onclick="loadShiftReport()">Retry</button>';
+  }
+};
+
+/* ═══════════════════════════════════
+   CLOSING — EOD INVENTORY
+═══════════════════════════════════ */
+window.loadEODInventory = async function() {
+  const body = document.getElementById('inv-summary-eod');
+  body.innerHTML = shimmerBlock(4);
+  try {
+    const res   = await CF('getInventoryAlerts')({ sellerId: _sellerId });
+    const data  = res.data || {};
+    const zeros = (data.outOfStock || data.zeroStock || []);
+    const low   = (data.lowStock || []);
+    body.innerHTML = `
+      <div class="info-box">
+        <strong>Low stock items:</strong> ${esc(low.length)}<br>
+        <strong>Out of stock:</strong> <span class="${zeros.length ? 'txt-red' : ''}">${esc(zeros.length)}</span>
+      </div>
+      ${zeros.length ? '<div class="mt8" style="font-size:12px;color:var(--red)">Items that hit zero today:<br>' +
+        zeros.map(i => `• ${esc(i.name || i.productName || i.id)}`).join('<br>') + '</div>' : ''}`;
+    markDone('ck-inv-summary');
+    lsSet('eod_inv_loaded', true);
+    updateClosingStatus();
+  } catch (e) {
+    body.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span><br><button class="btn btn-ghost btn-sm mt8" onclick="loadEODInventory()">Retry</button>';
+  }
+};
+
+/* ═══════════════════════════════════
+   CLOSING — DAILY SALES REPORT
+═══════════════════════════════════ */
+window.loadDailySalesReport = async function() {
+  const body = document.getElementById('daily-sales-body');
+  body.innerHTML = shimmerBlock(5);
+  try {
+    const start = new Date(); start.setHours(0,0,0,0);
+    const end   = new Date(); end.setHours(23,59,59,999);
+    const res   = await CF('getPOSAnalytics')({ sellerId: _sellerId, startDate: start.toISOString(), endDate: end.toISOString() });
+    const s     = res.data?.salesRep || res.data || {};
+    body.innerHTML = `
+      <table class="rep-table">
+        <tr><td>Revenue</td><td class="txt-green">${KES(s.netRevenue || s.revenue || 0)}</td></tr>
+        <tr><td>COGS</td><td>${KES(s.cogs || s.totalCost || 0)}</td></tr>
+        <tr class="total"><td>Gross Profit</td><td class="txt-green">${KES((s.netRevenue || s.revenue || 0) - (s.cogs || s.totalCost || 0))}</td></tr>
+        <tr><td>Tax Collected (VAT)</td><td>${KES(s.taxCollected || s.vat || 0)}</td></tr>
+        <tr><td>Transactions</td><td>${esc(s.transactions || 0)}</td></tr>
+      </table>
+      <div class="mt8">
+        <button class="btn btn-ghost btn-sm" onclick="emailDailyReport()">📧 Email Report</button>
+        <button class="btn btn-ghost btn-sm" onclick="window.print()" style="margin-left:8px">🖨 Print</button>
+      </div>`;
+    markDone('ck-sales-report');
+    lsSet('daily_sales_loaded', true);
+    updateClosingStatus();
+  } catch (e) {
+    body.innerHTML = '<span class="txt-red">Error: ' + esc(e.message) + '</span><br><button class="btn btn-ghost btn-sm mt8" onclick="loadDailySalesReport()">Retry</button>';
+  }
+};
+
+window.emailDailyReport = async function() {
+  try {
+    await CF('emailReceipt')({ type: 'daily_report', sellerId: _sellerId, date: new Date().toISOString().slice(0,10) });
+    toast('Daily report emailed', 'success');
+  } catch (e) {
+    toast('Email failed: ' + esc(e.message), 'error');
+  }
+};
+
+/* ═══════════════════════════════════
+   CLOSING — CLOSE SHIFT
+═══════════════════════════════════ */
+window.closeShiftAction = async function() {
+  if (!_reconSubmitted && !lsGet('recon_submitted')) { toast('Submit cash reconciliation first', 'warn'); return; }
+  const btn = document.getElementById('btn-close-shift');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Closing…';
+  try {
+    const shiftId = _shiftId || lsGet('shift_id');
+    const start   = new Date(); start.setHours(0,0,0,0);
+    const res     = await CF('closeShift')({ shiftId, sellerId: _sellerId });
+    const d       = res.data || {};
+    _shiftClosed  = true;
+    lsSet('shift_closed', true);
+    document.getElementById('closeshift-confirm').style.display = 'block';
+    document.getElementById('close-badge').className   = 'ck-badge ok';
+    document.getElementById('close-badge').textContent = 'Closed ✓';
+    markDone('ck-closeshift');
+    // Show summary modal
+    const sumBody = document.getElementById('shift-summary-body');
+    const dur     = d.durationMinutes || d.duration || 0;
+    sumBody.innerHTML = `
+      <table class="rep-table">
+        <tr><td>Total Sales</td><td class="txt-green">${KES(d.totalRevenue || d.revenue || _currentRevenue)}</td></tr>
+        <tr><td>Transactions</td><td>${esc(d.transactions || '–')}</td></tr>
+        <tr><td>Duration</td><td>${Math.floor(dur/60)}h ${dur%60}m</td></tr>
+        <tr><td>Cashier</td><td>${esc(d.cashierName || _uid)}</td></tr>
+      </table>`;
+    openModal('modal-shift-summary');
+    toast('Shift closed successfully', 'success');
+    updateClosingStatus();
+    runBackupCheck();
+  } catch (e) {
+    toast('Close shift failed: ' + esc(e.message), 'error');
+    btn.disabled = false;
+    btn.innerHTML = '■ Close Shift';
+  }
+};
+
+/* ═══════════════════════════════════
+   CLOSING — BACKUP VERIFICATION
+═══════════════════════════════════ */
+async function runBackupCheck() {
+  const badge  = document.getElementById('backup-badge');
+  const status = document.getElementById('backup-status');
+  badge.textContent = 'Checking…';
+  try {
+    const start = new Date(); start.setHours(0,0,0,0);
+    const end   = new Date(); end.setHours(23,59,59,999);
+    const [salesSnap, auditSnap] = await Promise.all([
+      getCountFromServer(query(collection(db, 'posSales'),    where('createdAt', '>=', start), where('createdAt', '<=', end))),
+      getCountFromServer(query(collection(db, 'posAuditLog'), where('timestamp', '>=', start), where('timestamp', '<=', end))),
+    ]);
+    const salesCount = salesSnap.data().count;
+    const auditCount = auditSnap.data().count;
+    const ok = auditCount >= salesCount;
+    if (ok) {
+      badge.style.background = 'rgba(34,197,94,.18)'; badge.style.color = 'var(--green)';
+      badge.textContent = 'Backup OK ✓';
+      status.innerHTML  = `<span class="txt-green">✓</span> Sales: ${salesCount} · Audit log: ${auditCount} · All records verified.`;
+      markDone('ck-backup');
+      lsSet('backup_ok', true);
+      updateClosingStatus();
+    } else {
+      badge.style.background = 'rgba(234,179,8,.18)'; badge.style.color = 'var(--yellow)';
+      badge.textContent = 'Discrepancy';
+      status.innerHTML  = `<span class="txt-yellow">⚠</span> Sales: ${salesCount} · Audit log: ${auditCount} · Discrepancy detected — contact support.`;
+    }
+  } catch (e) {
+    badge.textContent = 'Error';
+    status.innerHTML  = '<span class="txt-red">Backup check failed: ' + esc(e.message) + '</span>';
+  }
+}
+
+/* ═══════════════════════════════════
+   CONFETTI
+═══════════════════════════════════ */
+let _confettiDone = false;
+function launchConfetti() {
+  if (_confettiDone) return;
+  _confettiDone = true;
+  const colors = ['#22c55e','#3b82f6','#a855f7','#eab308','#ef4444'];
+  for (let i = 0; i < 40; i++) {
+    const el = document.createElement('div');
+    el.className    = 'confetti-piece';
+    el.style.left   = Math.random() * 100 + 'vw';
+    el.style.background = colors[i % colors.length];
+    el.style.animationDelay    = (Math.random() * .8)   + 's';
+    el.style.animationDuration = (1.2 + Math.random() * .8) + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+}
+
+/* ═══════════════════════════════════
+   ROLE-BASED VISIBILITY
+═══════════════════════════════════ */
+function applyRoleVisibility() {
+  const isManager = _role === 'manager' || _role === 'owner' || _role === 'admin';
+  document.querySelectorAll('.manager-only').forEach(el => {
+    el.style.display = isManager ? '' : 'none';
+  });
+}
+
+/* ═══════════════════════════════════
+   AUTH + BOOTSTRAP
+═══════════════════════════════════ */
+onAuthStateChanged(auth, async user => {
+  if (!user) {
+    window.location.href = 'auth.html?next=' + encodeURIComponent(window.location.pathname);
+    return;
+  }
+  _uid = user.uid;
+
+  // Get role from custom claims
+  try {
+    const token = await user.getIdTokenResult();
+    _role     = token.claims.role  || token.claims.userRole || 'cashier';
+    _sellerId = token.claims.sellerId || token.claims.storeId || user.uid;
+  } catch {
+    _role     = 'cashier';
+    _sellerId = user.uid;
+  }
+
+  // Show UI
+  document.getElementById('auth-screen').style.display   = 'none';
+  document.getElementById('main-hdr').style.display      = 'flex';
+  document.getElementById('main-content').style.display  = 'block';
+
+  const roleLabels = { cashier: 'Cashier', manager: 'Manager', owner: 'Owner', admin: 'Admin' };
+  document.getElementById('role-badge').textContent = roleLabels[_role] || _role;
+
+  applyRoleVisibility();
+  startClock();
+  autoExpandSection();
+  renderDeviceGrid();
+
+  // Restore persisted state
+  restoreShiftState();
+  updateMorningStatus();
+  updateClosingStatus();
+
+  // Async fetches
+  loadInventoryAlerts();
+  loadYesterdayRevenue();
+  startMetricsRefresh();
+  // Lazy backup check
+  if (lsGet('shift_closed')) runBackupCheck();
+  else {
+    const badge  = document.getElementById('backup-badge');
+    const status = document.getElementById('backup-status');
+    badge.textContent = 'Pending';
+    status.textContent = 'Backup check runs automatically when the shift is closed.';
+  }
+});
+</script>
+</body>
+</html>

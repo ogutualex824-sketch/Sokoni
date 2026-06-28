@@ -8674,3 +8674,86 @@ exports.requestDataExport   = dataExport.requestDataExport;
 exports.getDataExportStatus = dataExport.getDataExportStatus;
 exports.processDataExport   = dataExport.processDataExport;
 exports.autoEndEvents          = eventHub.autoEndEvents;
+
+/* ── Healthcare Hub v1.0 ────────────────────────────────────────────────── */
+const healthcareHub = require('./healthcare-hub');
+exports.registerHealthProvider  = healthcareHub.registerHealthProvider;
+exports.approveHealthProvider   = healthcareHub.approveHealthProvider;
+exports.getHealthProviders      = healthcareHub.getHealthProviders;
+exports.getHealthProvider       = healthcareHub.getHealthProvider;
+exports.bookAppointment         = healthcareHub.bookAppointment;
+exports.getMyAppointments       = healthcareHub.getMyAppointments;
+exports.getProviderAppointments = healthcareHub.getProviderAppointments;
+exports.updateAppointmentStatus = healthcareHub.updateAppointmentStatus;
+exports.createHealthRecord      = healthcareHub.createHealthRecord;
+exports.getHealthRecords        = healthcareHub.getHealthRecords;
+exports.createPrescription      = healthcareHub.createPrescription;
+exports.getPrescriptions        = healthcareHub.getPrescriptions;
+exports.searchHealthProviders   = healthcareHub.searchHealthProviders;
+exports.rateHealthProvider      = healthcareHub.rateHealthProvider;
+exports.getHealthDashboard      = healthcareHub.getHealthDashboard;
+
+/* ── Property Hub v1.0 ──────────────────────────────────────────────────── */
+const propertyHub = require('./property-hub');
+exports.createPropertyListing    = propertyHub.createPropertyListing;
+exports.updatePropertyListing    = propertyHub.updatePropertyListing;
+exports.publishPropertyListing   = propertyHub.publishPropertyListing;
+exports.deactivatePropertyListing= propertyHub.deactivatePropertyListing;
+exports.getProperty              = propertyHub.getProperty;
+exports.listProperties           = propertyHub.listProperties;
+exports.searchProperties         = propertyHub.searchProperties;
+exports.submitPropertyEnquiry    = propertyHub.submitPropertyEnquiry;
+exports.getPropertyEnquiries     = propertyHub.getPropertyEnquiries;
+exports.scheduleViewing          = propertyHub.scheduleViewing;
+exports.getViewings              = propertyHub.getViewings;
+exports.getPropertyAnalytics     = propertyHub.getPropertyAnalytics;
+
+/* ── Vehicle Hub v1.0 ───────────────────────────────────────────────────── */
+const vehicleHub = require('./vehicle-hub');
+exports.createVehicleListing  = vehicleHub.createVehicleListing;
+exports.updateVehicleListing  = vehicleHub.updateVehicleListing;
+exports.publishVehicleListing = vehicleHub.publishVehicleListing;
+exports.getVehicle            = vehicleHub.getVehicle;
+exports.listVehicles          = vehicleHub.listVehicles;
+exports.searchVehicles        = vehicleHub.searchVehicles;
+exports.submitVehicleEnquiry  = vehicleHub.submitVehicleEnquiry;
+exports.getVehicleEnquiries   = vehicleHub.getVehicleEnquiries;
+exports.compareVehicles       = vehicleHub.compareVehicles;
+exports.reportVehicleListing  = vehicleHub.reportVehicleListing;
+
+/* ── Digital Products Hub v1.0 ──────────────────────────────────────────── */
+const digitalHub = require('./digital-hub');
+exports.createDigitalProduct     = digitalHub.createDigitalProduct;
+exports.updateDigitalProduct     = digitalHub.updateDigitalProduct;
+exports.publishDigitalProduct    = digitalHub.publishDigitalProduct;
+exports.getDigitalProduct        = digitalHub.getDigitalProduct;
+exports.listDigitalProducts      = digitalHub.listDigitalProducts;
+exports.purchaseDigitalProduct   = digitalHub.purchaseDigitalProduct;
+exports.getMyDigitalPurchases    = digitalHub.getMyDigitalPurchases;
+exports.downloadDigitalProduct   = digitalHub.downloadDigitalProduct;
+exports.rateDigitalProduct       = digitalHub.rateDigitalProduct;
+exports.getDigitalSellerDashboard= digitalHub.getDigitalSellerDashboard;
+
+/* ── Legal Services Hub v1.0 ────────────────────────────────────────────── */
+const legalHub = require('./legal-hub');
+exports.registerLegalProvider    = legalHub.registerLegalProvider;
+exports.approveLegalProvider     = legalHub.approveLegalProvider;
+exports.getLegalProviders        = legalHub.getLegalProviders;
+exports.getLegalProvider         = legalHub.getLegalProvider;
+exports.bookLegalConsultation    = legalHub.bookLegalConsultation;
+exports.getMyLegalConsultations  = legalHub.getMyLegalConsultations;
+exports.getProviderConsultations = legalHub.getProviderConsultations;
+exports.updateConsultationStatus = legalHub.updateConsultationStatus;
+exports.rateLegalProvider        = legalHub.rateLegalProvider;
+
+/* ── Entertainment Hub v1.0 ─────────────────────────────────────────────── */
+const entertainmentHub = require('./entertainment-hub');
+exports.createEntertainmentListing  = entertainmentHub.createEntertainmentListing;
+exports.publishEntertainmentListing = entertainmentHub.publishEntertainmentListing;
+exports.getEntertainmentListing     = entertainmentHub.getEntertainmentListing;
+exports.listEntertainmentContent    = entertainmentHub.listEntertainmentContent;
+exports.searchEntertainment         = entertainmentHub.searchEntertainment;
+exports.purchaseEntertainment       = entertainmentHub.purchaseEntertainment;
+exports.getMyEntertainmentPurchases = entertainmentHub.getMyEntertainmentPurchases;
+exports.rateEntertainmentContent    = entertainmentHub.rateEntertainmentContent;
+exports.getCreatorDashboard         = entertainmentHub.getCreatorDashboard;

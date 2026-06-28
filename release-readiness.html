@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOKONI · Release Readiness Certification</title>
+  <script src="/sokoni-config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --card:      #161b22;
+      --border:    #30363d;
+      --green:     #3fb950;
+      --red:       #f85149;
+      --orange:    #d29922;
+      --blue:      #58a6ff;
+      --purple:    #bc8cff;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --hover:     #1c2128;
+      --input-bg:  #0d1117;
+    }
+
+    html { font-size: 14px; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ---- HEADER ---- */
+    .top-header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-brand .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--blue);
+      letter-spacing: -0.5px;
+    }
+    .header-brand .page-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .env-badge {
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--red);
+      border: 1px solid rgba(248, 81, 73, 0.4);
+      border-radius: 12px;
+      padding: 2px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .version-display {
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 8px;
+    }
+    .header-spacer { flex: 1; }
+    .live-clock {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .header-user {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .user-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--blue);
+      color: #0d1117;
+      border-color: var(--blue);
+    }
+    .btn-primary:hover:not(:disabled) { background: #79b8ff; border-color: #79b8ff; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { background: var(--hover); }
+    .btn-green {
+      background: var(--green);
+      color: #0d1117;
+      border-color: var(--green);
+    }
+    .btn-green:hover:not(:disabled) { background: #56d364; }
+    .btn-red {
+      background: var(--red);
+      color: #fff;
+      border-color: var(--red);
+    }
+    .btn-red:hover:not(:disabled) { background: #ff6b6b; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ---- MAIN LAYOUT ---- */
+    .main { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
+    .section { margin-bottom: 28px; }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ---- CERTIFICATION BANNER ---- */
+    .cert-banner {
+      border-radius: 10px;
+      padding: 20px 24px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .cert-banner.go { background: rgba(63, 185, 80, 0.1); border-color: rgba(63, 185, 80, 0.5); }
+    .cert-banner.conditional { background: rgba(210, 153, 34, 0.1); border-color: rgba(210, 153, 34, 0.5); }
+    .cert-banner.nogo { background: rgba(248, 81, 73, 0.1); border-color: rgba(248, 81, 73, 0.5); }
+    .cert-banner.none { background: var(--card); border-color: var(--border); }
+    .cert-icon { font-size: 32px; line-height: 1; }
+    .cert-text .cert-headline {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .cert-banner.go .cert-headline { color: var(--green); }
+    .cert-banner.conditional .cert-headline { color: var(--orange); }
+    .cert-banner.nogo .cert-headline { color: var(--red); }
+    .cert-banner.none .cert-headline { color: var(--muted); }
+    .cert-meta { font-size: 13px; color: var(--muted); font-family: 'Courier New', monospace; }
+
+    /* ---- CHECK CONTROLS ---- */
+    .controls-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .individual-checks {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .individual-checks .label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+    .btn-check {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-check:hover { background: var(--hover); border-color: var(--blue); color: var(--blue); }
+    .btn-check:disabled { opacity: 0.5; cursor: not-allowed; }
+    .running-indicator {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--orange);
+    }
+    .running-indicator.active { display: flex; }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- SCORE SECTION ---- */
+    .score-grid { display: grid; grid-template-columns: 180px 1fr 180px; gap: 20px; }
+    @media (max-width: 768px) { .score-grid { grid-template-columns: 1fr; } }
+
+    .score-ring-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .ring-container {
+      position: relative;
+      width: 150px;
+      height: 150px;
+    }
+    .ring-svg {
+      width: 150px;
+      height: 150px;
+      transform: rotate(-90deg);
+    }
+    .ring-bg { fill: none; stroke: var(--border); stroke-width: 10; }
+    .ring-fill {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke-dasharray: 408;
+      stroke-dashoffset: 408;
+      transition: stroke-dashoffset 1s ease, stroke 0.5s ease;
+    }
+    .ring-label {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .ring-score { font-size: 32px; font-weight: 800; font-family: 'Courier New', monospace; line-height: 1; }
+    .ring-denom { font-size: 13px; color: var(--muted); }
+    .ring-caption { font-size: 12px; color: var(--muted); text-align: center; }
+
+    .score-table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .score-table { width: 100%; border-collapse: collapse; }
+    .score-table th {
+      background: var(--hover);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .score-table td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    .score-table tr:last-child td { border-bottom: none; font-weight: 700; background: var(--hover); }
+    .score-table .mono { font-family: 'Courier New', monospace; }
+    .score-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .score-bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.8s ease;
+    }
+
+    .rec-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+    }
+    .rec-badge {
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      border: 2px solid;
+    }
+    .rec-badge.go { background: rgba(63, 185, 80, 0.1); color: var(--green); border-color: var(--green); }
+    .rec-badge.conditional { background: rgba(210, 153, 34, 0.1); color: var(--orange); border-color: var(--orange); }
+    .rec-badge.nogo { background: rgba(248, 81, 73, 0.1); color: var(--red); border-color: var(--red); }
+    .rec-badge.none { background: var(--hover); color: var(--muted); border-color: var(--border); }
+    .run-meta { font-size: 12px; color: var(--muted); font-family: 'Courier New', monospace; line-height: 1.8; }
+
+    /* ---- CHECK CARDS ---- */
+    .check-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .check-card.pass { border-left: 3px solid var(--green); }
+    .check-card.warn { border-left: 3px solid var(--orange); }
+    .check-card.fail { border-left: 3px solid var(--red); }
+    .check-card.running { border-left: 3px solid var(--blue); }
+    .check-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .check-card-header:hover { background: var(--hover); }
+    .check-icon { font-size: 20px; width: 28px; text-align: center; }
+    .check-name { font-weight: 600; font-size: 14px; flex: 1; }
+    .status-badge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .badge-pass { background: rgba(63, 185, 80, 0.15); color: var(--green); border: 1px solid rgba(63, 185, 80, 0.3); }
+    .badge-warn { background: rgba(210, 153, 34, 0.15); color: var(--orange); border: 1px solid rgba(210, 153, 34, 0.3); }
+    .badge-fail { background: rgba(248, 81, 73, 0.15); color: var(--red); border: 1px solid rgba(248, 81, 73, 0.3); }
+    .badge-pending { background: var(--hover); color: var(--muted); border: 1px solid var(--border); }
+    .badge-running { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid rgba(88, 166, 255, 0.3); }
+    .check-score-text { font-family: 'Courier New', monospace; font-size: 13px; color: var(--muted); min-width: 55px; text-align: right; }
+    .check-duration { font-size: 12px; color: var(--muted); font-family: 'Courier New', monospace; min-width: 40px; text-align: right; }
+    .expand-arrow { font-size: 12px; color: var(--muted); transition: transform 0.2s; margin-left: 8px; }
+    .expand-arrow.open { transform: rotate(180deg); }
+
+    .check-body { display: none; border-top: 1px solid var(--border); }
+    .check-body.open { display: block; }
+    .check-body-inner { padding: 16px; }
+
+    .detail-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 13px; }
+    .detail-table th {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      padding: 6px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-table td { padding: 7px 10px; border-bottom: 1px solid rgba(48, 54, 61, 0.5); }
+    .detail-table tr:last-child td { border-bottom: none; }
+    .di-pass { color: var(--green); }
+    .di-warn { color: var(--orange); }
+    .di-fail { color: var(--red); }
+    .di-skip { color: var(--muted); }
+
+    .issues-box { padding: 10px 12px; border-radius: 6px; margin-top: 10px; font-size: 13px; }
+    .issues-box.blockers { background: rgba(248, 81, 73, 0.08); border: 1px solid rgba(248, 81, 73, 0.25); }
+    .issues-box.warnings { background: rgba(210, 153, 34, 0.08); border: 1px solid rgba(210, 153, 34, 0.25); }
+    .issues-box .issues-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .issues-box.blockers .issues-title { color: var(--red); }
+    .issues-box.warnings .issues-title { color: var(--orange); }
+    .issues-box ul { list-style: none; padding: 0; }
+    .issues-box ul li { padding: 3px 0; padding-left: 14px; position: relative; color: var(--text); }
+    .issues-box ul li::before { content: '•'; position: absolute; left: 0; }
+    .issues-box.blockers ul li::before { color: var(--red); }
+    .issues-box.warnings ul li::before { color: var(--orange); }
+
+    .individual-note {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: rgba(88, 166, 255, 0.08);
+      border: 1px solid rgba(88, 166, 255, 0.2);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--blue);
+    }
+    .check-placeholder {
+      padding: 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ---- APPROVAL SECTION ---- */
+    .approval-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .approval-grid { grid-template-columns: 1fr; } }
+    .approval-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+    .approval-card.approve-card { border-color: rgba(63, 185, 80, 0.3); }
+    .approval-card.reject-card { border-color: rgba(248, 81, 73, 0.3); }
+    .approval-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+    .approval-card.approve-card h3 { color: var(--green); }
+    .approval-card.reject-card h3 { color: var(--red); }
+    .approval-textarea {
+      width: 100%;
+      min-height: 80px;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 10px 12px;
+      resize: vertical;
+      font-family: inherit;
+      margin-bottom: 12px;
+    }
+    .approval-textarea:focus { outline: none; border-color: var(--blue); }
+    .approval-result {
+      margin-top: 14px;
+      padding: 12px 16px;
+      border-radius: 6px;
+      background: rgba(63, 185, 80, 0.1);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+      color: var(--green);
+      font-size: 13px;
+      display: none;
+    }
+    .approval-result.visible { display: block; }
+
+    /* ---- HISTORY TABLE ---- */
+    .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
+    .data-table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    .data-table th {
+      background: var(--hover);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .data-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--hover); }
+    .data-table .mono { font-family: 'Courier New', monospace; font-size: 12px; }
+    .empty-row td { text-align: center; color: var(--muted); padding: 24px; }
+
+    /* ---- INFO GRID ---- */
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+    .info-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .info-card-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .info-card ul { list-style: none; padding: 0; }
+    .info-card ul li {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .info-card ul li:last-child { border-bottom: none; }
+    .info-card ul li::before { content: '›'; color: var(--blue); flex-shrink: 0; }
+
+    /* ---- ACCESS DENIED ---- */
+    .access-denied {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 16px;
+      text-align: center;
+      padding: 24px;
+    }
+    .access-denied .icon { font-size: 48px; }
+    .access-denied h1 { font-size: 22px; color: var(--red); }
+    .access-denied p { color: var(--muted); max-width: 400px; }
+
+    /* ---- TOAST ---- */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+    }
+    .toast {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      max-width: 340px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: toastIn 0.25s ease;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--blue); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+    /* ---- LOADING OVERLAY ---- */
+    #authLoading {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 10000;
+    }
+    #authLoading .spinner { width: 32px; height: 32px; border-width: 3px; }
+    #authLoading p { color: var(--muted); font-size: 14px; }
+
+    #app { display: none; }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+    /* ---- UTIL ---- */
+    .text-green { color: var(--green); }
+    .text-red { color: var(--red); }
+    .text-orange { color: var(--orange); }
+    .text-blue { color: var(--blue); }
+    .text-muted { color: var(--muted); }
+    .fw-bold { font-weight: 700; }
+    .mono { font-family: 'Courier New', monospace; }
+    .mt-8 { margin-top: 8px; }
+    .hidden { display: none !important; }
+
+    /* Responsive */
+    @media (max-width: 900px) { .score-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) {
+      .top-header { padding: 10px 14px; }
+      .main { padding: 16px 12px 40px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth Loading -->
+<div id="authLoading">
+  <div class="spinner"></div>
+  <p>Authenticating...</p>
+</div>
+
+<!-- Access Denied -->
+<div id="accessDenied" class="access-denied hidden">
+  <div class="icon">🔒</div>
+  <h1>Access Denied</h1>
+  <p>This dashboard requires Admin access (role &ge; 4). Redirecting in 3 seconds&hellip;</p>
+</div>
+
+<!-- Main App -->
+<div id="app">
+
+  <!-- Header -->
+  <header class="top-header">
+    <div class="header-brand">
+      <span class="logo">SOKONI</span>
+      <span class="page-title">Release Readiness</span>
+    </div>
+    <span class="env-badge">PRODUCTION</span>
+    <span class="version-display" id="headerVersion">v—</span>
+    <div class="header-spacer"></div>
+    <div class="running-indicator" id="headerRunning">
+      <div class="spinner"></div>
+      <span id="headerRunningText">Running&hellip;</span>
+    </div>
+    <span class="live-clock" id="liveClock"></span>
+    <div class="header-user">
+      <div class="user-dot"></div>
+      <span id="headerEmail">—</span>
+    </div>
+    <button class="btn btn-primary" id="headerRunBtn" onclick="runFullCheck()">▶ Run Check</button>
+  </header>
+
+  <div class="main">
+
+    <!-- Section 1: Certification Banner -->
+    <div class="section">
+      <div class="section-title">Certification Status</div>
+      <div class="cert-banner none" id="certBanner">
+        <div class="cert-icon">○</div>
+        <div class="cert-text">
+          <div class="cert-headline" id="certHeadline">NO CERTIFICATION</div>
+          <div class="cert-meta" id="certMeta">Run a check before deploying to production</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Check Controls -->
+    <div class="section">
+      <div class="section-title">Check Controls</div>
+      <div class="controls-row">
+        <button class="btn btn-primary" id="runFullBtn" onclick="runFullCheck()">▶ Run Full Check</button>
+        <button class="btn btn-secondary" id="loadLatestBtn" onclick="loadLatestReport()">⟳ Load Latest Report</button>
+        <div class="running-indicator" id="runningIndicator">
+          <div class="spinner"></div>
+          <span id="elapsedText">Running&hellip; 0s</span>
+        </div>
+      </div>
+      <div class="individual-checks">
+        <span class="label">Individual:</span>
+        <button class="btn-check" onclick="runIndividualCheck('infrastructure')">🏗 Infrastructure</button>
+        <button class="btn-check" onclick="runIndividualCheck('security')">🔒 Security</button>
+        <button class="btn-check" onclick="runIndividualCheck('platform')">📦 Platform</button>
+        <button class="btn-check" onclick="runIndividualCheck('performance')">⚡ Performance</button>
+        <button class="btn-check" onclick="runIndividualCheck('compliance')">📋 Compliance</button>
+      </div>
+    </div>
+
+    <!-- Section 3: Overall Score -->
+    <div class="section">
+      <div class="section-title">Overall Score</div>
+      <div class="score-grid">
+        <!-- Score Ring -->
+        <div class="score-ring-wrap">
+          <div class="ring-container">
+            <svg class="ring-svg" viewBox="0 0 150 150">
+              <circle class="ring-bg" cx="75" cy="75" r="65" />
+              <circle class="ring-fill" id="ringFill" cx="75" cy="75" r="65" />
+            </svg>
+            <div class="ring-label">
+              <div class="ring-score" id="ringScore">—</div>
+              <div class="ring-denom">/100</div>
+            </div>
+          </div>
+          <div class="ring-caption" id="ringCaption">No data</div>
+        </div>
+
+        <!-- Score Breakdown Table -->
+        <div class="score-table-wrap">
+          <table class="score-table" id="scoreTable">
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Weight</th>
+                <th>Score</th>
+                <th>Bar</th>
+                <th>Contribution</th>
+              </tr>
+            </thead>
+            <tbody id="scoreTableBody">
+              <tr>
+                <td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">
+                  Run a check to see score breakdown
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Recommendation Box -->
+        <div class="rec-box">
+          <div class="rec-badge none" id="recBadge">—</div>
+          <div class="run-meta" id="runMeta">
+            No report loaded
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4: Check Results -->
+    <div class="section">
+      <div class="section-title">Check Results</div>
+
+      <!-- Infrastructure -->
+      <div class="check-card" id="card-infrastructure">
+        <div class="check-card-header" onclick="toggleCard('infrastructure')">
+          <span class="check-icon">🏗</span>
+          <span class="check-name">Infrastructure</span>
+          <span class="status-badge badge-pending" id="badge-infrastructure">PENDING</span>
+          <span class="check-score-text" id="score-infrastructure">—</span>
+          <span class="check-duration" id="dur-infrastructure"></span>
+          <span class="expand-arrow" id="arrow-infrastructure">▼</span>
+        </div>
+        <div class="check-body" id="body-infrastructure">
+          <div class="check-body-inner">
+            <div class="check-placeholder">⚠ No data. Run a check to see infrastructure results.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security -->
+      <div class="check-card" id="card-security">
+        <div class="check-card-header" onclick="toggleCard('security')">
+          <span class="check-icon">🔒</span>
+          <span class="check-name">Security</span>
+          <span class="status-badge badge-pending" id="badge-security">PENDING</span>
+          <span class="check-score-text" id="score-security">—</span>
+          <span class="check-duration" id="dur-security"></span>
+          <span class="expand-arrow" id="arrow-security">▼</span>
+        </div>
+        <div class="check-body" id="body-security">
+          <div class="check-body-inner">
+            <div class="check-placeholder">⚠ No data. Run a check to see security results.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Platform Modules -->
+      <div class="check-card" id="card-platform">
+        <div class="check-card-header" onclick="toggleCard('platform')">
+          <span class="check-icon">📦</span>
+          <span class="check-name">Platform Modules</span>
+          <span class="status-badge badge-pending" id="badge-platform">PENDING</span>
+          <span class="check-score-text" id="score-platform">—</span>
+          <span class="check-duration" id="dur-platform"></span>
+          <span class="expand-arrow" id="arrow-platform">▼</span>
+        </div>
+        <div class="check-body" id="body-platform">
+          <div class="check-body-inner">
+            <div class="check-placeholder">⚠ No data. Run a check to see platform module results.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance -->
+      <div class="check-card" id="card-performance">
+        <div class="check-card-header" onclick="toggleCard('performance')">
+          <span class="check-icon">⚡</span>
+          <span class="check-name">Performance</span>
+          <span class="status-badge badge-pending" id="badge-performance">PENDING</span>
+          <span class="check-score-text" id="score-performance">—</span>
+          <span class="check-duration" id="dur-performance"></span>
+          <span class="expand-arrow" id="arrow-performance">▼</span>
+        </div>
+        <div class="check-body" id="body-performance">
+          <div class="check-body-inner">
+            <div class="check-placeholder">⚠ No data. Run a check to see performance results.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compliance -->
+      <div class="check-card" id="card-compliance">
+        <div class="check-card-header" onclick="toggleCard('compliance')">
+          <span class="check-icon">📋</span>
+          <span class="check-name">Compliance</span>
+          <span class="status-badge badge-pending" id="badge-compliance">PENDING</span>
+          <span class="check-score-text" id="score-compliance">—</span>
+          <span class="check-duration" id="dur-compliance"></span>
+          <span class="expand-arrow" id="arrow-compliance">▼</span>
+        </div>
+        <div class="check-body" id="body-compliance">
+          <div class="check-body-inner">
+            <div class="check-placeholder">⚠ No data. Run a check to see compliance results.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 5: Approval Workflow (super_admin only) -->
+    <div class="section hidden" id="approvalSection">
+      <div class="section-title">Approval Workflow</div>
+      <div class="approval-grid">
+        <div class="approval-card approve-card">
+          <h3>✓ Approve for Production</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+            Approval is logged to the immutable audit trail and cannot be reversed.
+          </p>
+          <textarea
+            class="approval-textarea"
+            id="approveNotes"
+            placeholder="Approval notes (required) — e.g. All checks passed. Green for deploy.">
+          </textarea>
+          <button class="btn btn-green" onclick="approveRelease(true)">✓ Approve Deployment</button>
+        </div>
+        <div class="approval-card reject-card">
+          <h3>✗ Reject / Send Back</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+            Rejection blocks deployment and requires a new full check run.
+          </p>
+          <textarea
+            class="approval-textarea"
+            id="rejectNotes"
+            placeholder="Rejection reason (required) — e.g. Security warnings not resolved.">
+          </textarea>
+          <button class="btn btn-red" onclick="approveRelease(false)">✗ Reject</button>
+        </div>
+      </div>
+      <div class="approval-result" id="approvalResult"></div>
+    </div>
+
+    <!-- Section 6: Report History -->
+    <div class="section">
+      <div class="section-title">Report History</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Version</th>
+              <th>Date (EAT)</th>
+              <th>Score</th>
+              <th>Recommendation</th>
+              <th>Status</th>
+              <th>Triggered By</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr class="empty-row"><td colspan="7">No reports found. Run a check to generate the first report.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 7: What Gets Checked -->
+    <div class="section">
+      <div class="section-title">What Gets Checked</div>
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-card-title">🏗 Infrastructure</div>
+          <ul>
+            <li>Firebase project connectivity</li>
+            <li>Firestore database availability</li>
+            <li>Cloud Functions deployment status</li>
+            <li>Cloud Storage bucket access</li>
+            <li>Secret Manager secrets present</li>
+            <li>Redis connectivity (if configured)</li>
+            <li>DNS resolution &amp; SSL certificates</li>
+            <li>Environment variable completeness</li>
+          </ul>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">🔒 Security</div>
+          <ul>
+            <li>Firestore security rules valid</li>
+            <li>App Check enforcement active</li>
+            <li>Authentication providers configured</li>
+            <li>CORS policy headers correct</li>
+            <li>API rate limiting active</li>
+            <li>No plaintext secrets in code</li>
+            <li>CSP headers configured</li>
+            <li>Admin role assignments verified</li>
+          </ul>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">📦 Platform Modules</div>
+          <ul>
+            <li>All Cloud Functions callable</li>
+            <li>Marketplace module responsive</li>
+            <li>Payment (IntaSend/M-Pesa) live</li>
+            <li>SmartPOS CFs reachable</li>
+            <li>eTIMS integration active</li>
+            <li>Notification engine live</li>
+            <li>Search platform reachable</li>
+            <li>AI (KASS) module responsive</li>
+          </ul>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">⚡ Performance</div>
+          <ul>
+            <li>CF cold start times &lt; 3s</li>
+            <li>Firestore query latency &lt; 500ms</li>
+            <li>Critical-path CF p95 latency</li>
+            <li>Hosting response times</li>
+            <li>Firestore index coverage</li>
+            <li>Service Worker cache hit rate</li>
+            <li>Memory usage within limits</li>
+            <li>No timeout errors in last 24h</li>
+          </ul>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">📋 Compliance</div>
+          <ul>
+            <li>eTIMS KRA registration valid</li>
+            <li>Data retention policies set</li>
+            <li>PITR backup enabled</li>
+            <li>Audit logs collecting</li>
+            <li>Privacy policy accessible</li>
+            <li>Terms of service accessible</li>
+            <li>Cookie consent implemented</li>
+            <li>User data export available</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+'use strict';
+
+// ── Globals ──────────────────────────────────────────────────────────────────
+let app, db, auth, functions;
+let currentUser = null;
+let currentRole = 0;
+let currentReport = null;
+let latestReportId = null;
+let historyUnsubscribe = null;
+let liveUnsubscribe = null;
+let elapsedInterval = null;
+let elapsedSeconds = 0;
+let isRunning = false;
+
+const CHECK_KEYS = ['infrastructure', 'security', 'platform', 'performance', 'compliance'];
+const CHECK_CONFIG = {
+  infrastructure: { label: 'Infrastructure', icon: '🏗', weight: 20, cfName: 'checkInfrastructure' },
+  security:       { label: 'Security',        icon: '🔒', weight: 30, cfName: 'checkSecurityReadiness' },
+  platform:       { label: 'Platform',        icon: '📦', weight: 25, cfName: 'checkPlatformModules' },
+  performance:    { label: 'Performance',     icon: '⚡', weight: 15, cfName: 'checkPerformanceReadiness' },
+  compliance:     { label: 'Compliance',      icon: '📋', weight: 10, cfName: 'checkComplianceReadiness' },
+};
+
+// ── Security Helper ───────────────────────────────────────────────────────────
+function escHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const opts = { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+  const timeStr = now.toLocaleTimeString('en-KE', opts);
+  const dateStr = now.toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' });
+  const el = document.getElementById('liveClock');
+  if (el) el.textContent = dateStr + ' · ' + timeStr + ' EAT';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info', duration = 4000) {
+  const container = document.getElementById('toastContainer');
+  const icons = { success: '✓', error: '✗', info: 'ℹ' };
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + type;
+  toast.innerHTML = '<span>' + icons[type] + '</span><span>' + escHtml(msg) + '</span>';
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 350); }, duration);
+}
+
+// ── Format helpers ────────────────────────────────────────────────────────────
+function fmtEAT(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) + ' EAT';
+}
+
+function fmtScore(score) {
+  if (score === null || score === undefined) return '—';
+  return Number(score).toFixed(1);
+}
+
+function scoreColor(score) {
+  if (score >= 80) return 'var(--green)';
+  if (score >= 60) return 'var(--orange)';
+  return 'var(--red)';
+}
+
+function recommendationClass(rec) {
+  if (!rec) return 'none';
+  const r = rec.toLowerCase();
+  if (r === 'go') return 'go';
+  if (r.includes('conditional')) return 'conditional';
+  if (r === 'no-go' || r === 'nogo') return 'nogo';
+  return 'none';
+}
+
+function recommendationLabel(rec) {
+  if (!rec) return '—';
+  const r = rec.toLowerCase();
+  if (r === 'go') return 'GO';
+  if (r.includes('conditional')) return 'CONDITIONAL GO';
+  if (r === 'no-go' || r === 'nogo') return 'NO-GO';
+  return escHtml(rec).toUpperCase();
+}
+
+// ── Firebase Init ─────────────────────────────────────────────────────────────
+function initFirebase() {
+  const config = window.SOKONI_CONFIG || {};
+  app = firebase.initializeApp(config, 'release-readiness');
+  auth = firebase.auth(app);
+  db = firebase.firestore(app);
+  functions = firebase.functions(app);
+  functions.region = 'us-central1';
+
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      showAccessDenied();
+      return;
+    }
+    currentUser = user;
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      const data = snap.data() || {};
+      currentRole = data.role || 0;
+      if (currentRole < 4) {
+        showAccessDenied();
+        return;
+      }
+      document.getElementById('headerEmail').textContent = escHtml(user.email || user.uid);
+      showApp();
+      loadLatestReport();
+      subscribeHistory();
+      subscribeLive();
+    } catch (e) {
+      console.error('Auth role check error:', e);
+      showToast('Failed to verify access: ' + e.message, 'error');
+      showAccessDenied();
+    }
+  });
+}
+
+function showAccessDenied() {
+  document.getElementById('authLoading').style.display = 'none';
+  document.getElementById('accessDenied').classList.remove('hidden');
+  document.getElementById('app').style.display = 'none';
+  setTimeout(() => { window.location.href = '/'; }, 3000);
+}
+
+function showApp() {
+  document.getElementById('authLoading').style.display = 'none';
+  document.getElementById('accessDenied').classList.add('hidden');
+  document.getElementById('app').style.display = 'block';
+}
+
+// ── Running State ─────────────────────────────────────────────────────────────
+function setRunning(state) {
+  isRunning = state;
+  const ri = document.getElementById('runningIndicator');
+  const hr = document.getElementById('headerRunning');
+  const runBtn = document.getElementById('runFullBtn');
+  const headerRunBtn = document.getElementById('headerRunBtn');
+
+  if (state) {
+    ri.classList.add('active');
+    hr.classList.add('active');
+    if (runBtn) runBtn.disabled = true;
+    if (headerRunBtn) headerRunBtn.disabled = true;
+    elapsedSeconds = 0;
+    elapsedInterval = setInterval(() => {
+      elapsedSeconds++;
+      const txt = 'Running… ' + elapsedSeconds + 's';
+      document.getElementById('elapsedText').textContent = txt;
+      document.getElementById('headerRunningText').textContent = txt;
+    }, 1000);
+  } else {
+    ri.classList.remove('active');
+    hr.classList.remove('active');
+    if (runBtn) runBtn.disabled = false;
+    if (headerRunBtn) headerRunBtn.disabled = false;
+    clearInterval(elapsedInterval);
+    elapsedInterval = null;
+  }
+}
+
+// ── Run Full Check ────────────────────────────────────────────────────────────
+async function runFullCheck() {
+  if (isRunning) return;
+  setRunning(true);
+  showToast('Running full release readiness check…', 'info', 3000);
+
+  const timeoutHandle = setTimeout(() => {
+    setRunning(false);
+    showToast('Check timed out after 90s. The Cloud Function may still be running. Try loading the latest report in a moment.', 'error', 8000);
+  }, 90000);
+
+  try {
+    const fn = functions.httpsCallable('runReleaseReadinessCheck');
+    const result = await fn({});
+    clearTimeout(timeoutHandle);
+    setRunning(false);
+    const report = result.data;
+    if (!report) throw new Error('Empty response from check function');
+    populateReport(report);
+    showToast('Release readiness check complete', 'success');
+  } catch (e) {
+    clearTimeout(timeoutHandle);
+    setRunning(false);
+    console.error('runFullCheck error:', e);
+    showToast('Check failed: ' + escHtml(e.message), 'error', 6000);
+  }
+}
+
+// ── Load Latest Report ────────────────────────────────────────────────────────
+async function loadLatestReport() {
+  try {
+    const snap = await db.collection('releaseReports')
+      .orderBy('triggeredAt', 'desc')
+      .limit(1)
+      .get();
+    if (snap.empty) {
+      showToast('No reports found. Run a check first.', 'info');
+      return;
+    }
+    const doc = snap.docs[0];
+    const report = { id: doc.id, ...doc.data() };
+    populateReport(report);
+    showToast('Latest report loaded', 'success');
+  } catch (e) {
+    console.error('loadLatestReport error:', e);
+    showToast('Failed to load report: ' + escHtml(e.message), 'error');
+  }
+}
+
+// ── Subscribe Live (onSnapshot) ───────────────────────────────────────────────
+function subscribeLive() {
+  if (liveUnsubscribe) liveUnsubscribe();
+  liveUnsubscribe = db.collection('releaseReports')
+    .orderBy('triggeredAt', 'desc')
+    .limit(1)
+    .onSnapshot((snap) => {
+      if (!snap.empty) {
+        const doc = snap.docs[0];
+        const report = { id: doc.id, ...doc.data() };
+        if (report.id !== latestReportId) {
+          latestReportId = report.id;
+          populateReport(report);
+        }
+      }
+    }, (e) => {
+      console.error('Live snapshot error:', e);
+    });
+}
+
+// ── Populate Report ───────────────────────────────────────────────────────────
+function populateReport(report) {
+  if (!report) return;
+  currentReport = report;
+  latestReportId = report.id || null;
+
+  const score = report.overallScore !== undefined ? report.overallScore : null;
+  const rec = report.recommendation || null;
+  const version = report.version || 'v—';
+  const triggeredAt = report.triggeredAt || null;
+  const approvedBy = report.approvedBy || null;
+  const approvedAt = report.approvedAt || null;
+  const blockerCount = report.blockerCount || 0;
+  const warningCount = report.warningCount || 0;
+
+  // Header version
+  document.getElementById('headerVersion').textContent = escHtml(version);
+
+  // Banner
+  updateBanner({ score, rec, version, triggeredAt, approvedBy, approvedAt, blockerCount, warningCount });
+
+  // Score ring and breakdown
+  if (score !== null) {
+    updateScoreRing(score);
+    updateScoreTable(report.checks || {});
+    updateRecBox(rec, score, report);
+  }
+
+  // Check cards
+  CHECK_KEYS.forEach((key) => {
+    const checkData = (report.checks || {})[key] || null;
+    updateCheckCard(key, checkData);
+  });
+
+  // Approval section
+  updateApprovalSection(report);
+}
+
+// ── Banner ────────────────────────────────────────────────────────────────────
+function updateBanner({ score, rec, version, triggeredAt, approvedBy, approvedAt, blockerCount, warningCount }) {
+  const banner = document.getElementById('certBanner');
+  const headline = document.getElementById('certHeadline');
+  const meta = document.getElementById('certMeta');
+
+  banner.className = 'cert-banner';
+
+  if (!rec) {
+    banner.classList.add('none');
+    banner.querySelector('.cert-icon').textContent = '○';
+    headline.textContent = 'NO CERTIFICATION';
+    meta.textContent = 'Run a check before deploying to production';
+    return;
+  }
+
+  const cls = recommendationClass(rec);
+  banner.classList.add(cls);
+
+  const scoreDisplay = score !== null ? 'Score: ' + fmtScore(score) + '/100' : '';
+  const dateDisplay = triggeredAt ? fmtEAT(triggeredAt) : '';
+
+  if (cls === 'go') {
+    banner.querySelector('.cert-icon').textContent = '✓';
+    headline.textContent = 'APPROVED FOR PRODUCTION DEPLOYMENT';
+    let metaStr = escHtml(version);
+    if (approvedBy) metaStr += ' · Certified ' + (dateDisplay || '') + ' · ' + scoreDisplay;
+    if (approvedBy) metaStr += ' · Approved by: ' + escHtml(approvedBy);
+    else metaStr += ' · ' + scoreDisplay + (dateDisplay ? ' · ' + dateDisplay : '');
+    meta.textContent = metaStr;
+  } else if (cls === 'conditional') {
+    banner.querySelector('.cert-icon').textContent = '⚠';
+    headline.textContent = 'CONDITIONAL APPROVAL — REVIEW WARNINGS BEFORE DEPLOYING';
+    meta.textContent = escHtml(version) + ' · ' + scoreDisplay + (warningCount ? ' · ' + warningCount + ' warning' + (warningCount !== 1 ? 's' : '') + ' require review' : '');
+  } else if (cls === 'nogo') {
+    banner.querySelector('.cert-icon').textContent = '✗';
+    headline.textContent = 'DEPLOYMENT BLOCKED — RESOLVE BLOCKERS FIRST';
+    meta.textContent = escHtml(version) + ' · ' + scoreDisplay + (blockerCount ? ' · ' + blockerCount + ' critical blocker' + (blockerCount !== 1 ? 's' : '') + ' must be resolved' : '');
+  } else {
+    banner.querySelector('.cert-icon').textContent = '○';
+    headline.textContent = recommendationLabel(rec);
+    meta.textContent = escHtml(version) + ' · ' + scoreDisplay;
+  }
+}
+
+// ── Score Ring ────────────────────────────────────────────────────────────────
+function updateScoreRing(score) {
+  const pct = Math.min(100, Math.max(0, score));
+  const circumference = 2 * Math.PI * 65; // ~408.41
+  const offset = circumference - (pct / 100) * circumference;
+  const fill = document.getElementById('ringFill');
+  const scoreEl = document.getElementById('ringScore');
+  const caption = document.getElementById('ringCaption');
+
+  fill.style.strokeDashoffset = offset.toFixed(2);
+  fill.style.stroke = scoreColor(score);
+  scoreEl.textContent = Math.round(score);
+  scoreEl.style.color = scoreColor(score);
+
+  if (score >= 80) caption.textContent = 'Ready for production';
+  else if (score >= 60) caption.textContent = 'Needs attention';
+  else caption.textContent = 'Not ready';
+}
+
+// ── Score Table ───────────────────────────────────────────────────────────────
+function updateScoreTable(checks) {
+  const tbody = document.getElementById('scoreTableBody');
+  let totalContrib = 0;
+  let rows = '';
+
+  const checkEntries = [
+    { key: 'infrastructure', label: 'Infrastructure', weight: 20 },
+    { key: 'security',       label: 'Security',       weight: 30 },
+    { key: 'platform',       label: 'Platform Modules', weight: 25 },
+    { key: 'performance',    label: 'Performance',    weight: 15 },
+    { key: 'compliance',     label: 'Compliance',     weight: 10 },
+  ];
+
+  checkEntries.forEach(({ key, label, weight }) => {
+    const data = checks[key] || {};
+    const score = data.score !== undefined ? data.score : null;
+    const contrib = score !== null ? (score * weight / 100) : 0;
+    totalContrib += contrib;
+
+    const scoreDisplay = score !== null ? fmtScore(score) : '—';
+    const contribDisplay = score !== null ? fmtScore(contrib) : '—';
+    const barWidth = score !== null ? score : 0;
+    const barColor = score !== null ? scoreColor(score) : 'var(--border)';
+
+    rows += '<tr>';
+    rows += '<td>' + escHtml(label) + '</td>';
+    rows += '<td class="mono">' + weight + '%</td>';
+    rows += '<td class="mono" style="color:' + barColor + '">' + scoreDisplay + '</td>';
+    rows += '<td><div class="score-bar"><div class="score-bar-track"><div class="score-bar-fill" style="width:' + barWidth + '%;background:' + barColor + '"></div></div></div></td>';
+    rows += '<td class="mono">' + contribDisplay + '</td>';
+    rows += '</tr>';
+  });
+
+  rows += '<tr>';
+  rows += '<td>TOTAL</td>';
+  rows += '<td class="mono">100%</td>';
+  rows += '<td class="mono" style="color:' + scoreColor(totalContrib) + '">' + fmtScore(totalContrib) + '</td>';
+  rows += '<td></td>';
+  rows += '<td class="mono"></td>';
+  rows += '</tr>';
+
+  tbody.innerHTML = rows;
+}
+
+// ── Rec Box ───────────────────────────────────────────────────────────────────
+function updateRecBox(rec, score, report) {
+  const badge = document.getElementById('recBadge');
+  const meta = document.getElementById('runMeta');
+
+  const cls = recommendationClass(rec);
+  badge.className = 'rec-badge ' + cls;
+  badge.textContent = recommendationLabel(rec);
+
+  const lines = [];
+  if (report.version) lines.push('Version: ' + escHtml(report.version));
+  if (report.triggeredAt) lines.push('Run: ' + fmtEAT(report.triggeredAt));
+  if (report.triggeredBy) lines.push('By: ' + escHtml(report.triggeredBy));
+  if (report.duration) lines.push('Duration: ' + Number(report.duration).toFixed(1) + 's');
+  if (report.status) lines.push('Status: ' + escHtml(report.status));
+  meta.innerHTML = lines.map(l => escHtml(l)).join('<br>');
+}
+
+// ── Check Card Update ─────────────────────────────────────────────────────────
+function updateCheckCard(key, data) {
+  if (!data) return;
+
+  const card = document.getElementById('card-' + key);
+  const badge = document.getElementById('badge-' + key);
+  const scoreEl = document.getElementById('score-' + key);
+  const durEl = document.getElementById('dur-' + key);
+  const body = document.getElementById('body-' + key);
+  const arrow = document.getElementById('arrow-' + key);
+
+  const score = data.score !== undefined ? data.score : null;
+  const status = data.status || 'unknown';
+  const duration = data.duration !== undefined ? data.duration : null;
+  const items = data.items || [];
+  const blockers = data.blockers || [];
+  const warnings = data.warnings || [];
+
+  // Card class
+  card.className = 'check-card';
+  let statusClass = 'pending';
+  let badgeClass = 'badge-pending';
+  let badgeText = 'PENDING';
+
+  const s = status.toLowerCase();
+  if (s === 'pass' || s === 'passed') { statusClass = 'pass'; badgeClass = 'badge-pass'; badgeText = 'PASS'; }
+  else if (s === 'warn' || s === 'warning') { statusClass = 'warn'; badgeClass = 'badge-warn'; badgeText = 'WARN'; }
+  else if (s === 'fail' || s === 'failed' || s === 'error') { statusClass = 'fail'; badgeClass = 'badge-fail'; badgeText = 'FAIL'; }
+  else if (s === 'running') { statusClass = 'running'; badgeClass = 'badge-running'; badgeText = 'RUNNING'; }
+
+  card.classList.add(statusClass);
+  badge.className = 'status-badge ' + badgeClass;
+  badge.textContent = badgeText;
+  scoreEl.textContent = score !== null ? fmtScore(score) + '/100' : '—';
+  if (duration !== null) durEl.textContent = Number(duration).toFixed(1) + 's';
+
+  // Build body content
+  let html = '<div class="check-body-inner">';
+
+  if (items.length > 0) {
+    html += '<table class="detail-table"><thead><tr><th>Item</th><th>Status</th><th>Message</th></tr></thead><tbody>';
+    items.forEach((item) => {
+      const iStatus = (item.status || '').toLowerCase();
+      let iClass = 'di-skip';
+      let iIcon = '○';
+      if (iStatus === 'pass' || iStatus === 'ok') { iClass = 'di-pass'; iIcon = '✓'; }
+      else if (iStatus === 'warn' || iStatus === 'warning') { iClass = 'di-warn'; iIcon = '⚠'; }
+      else if (iStatus === 'fail' || iStatus === 'error') { iClass = 'di-fail'; iIcon = '✗'; }
+      html += '<tr>';
+      html += '<td>' + escHtml(item.name || item.item || '') + '</td>';
+      html += '<td class="' + iClass + ' mono">' + iIcon + ' ' + escHtml(iStatus.toUpperCase() || '—') + '</td>';
+      html += '<td style="color:var(--muted);font-size:12px">' + escHtml(item.message || '') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  } else {
+    html += '<div class="check-placeholder">No detailed items returned by this check.</div>';
+  }
+
+  if (blockers.length > 0) {
+    html += '<div class="issues-box blockers"><div class="issues-title">✗ Blockers (' + blockers.length + ')</div><ul>';
+    blockers.forEach(b => { html += '<li>' + escHtml(b) + '</li>'; });
+    html += '</ul></div>';
+  }
+
+  if (warnings.length > 0) {
+    html += '<div class="issues-box warnings"><div class="issues-title">⚠ Warnings (' + warnings.length + ')</div><ul>';
+    warnings.forEach(w => { html += '<li>' + escHtml(w) + '</li>'; });
+    html += '</ul></div>';
+  }
+
+  html += '</div>';
+  body.innerHTML = html;
+
+  // Auto-expand non-passing checks
+  const shouldExpand = statusClass === 'warn' || statusClass === 'fail';
+  if (shouldExpand) {
+    body.classList.add('open');
+    arrow.classList.add('open');
+  }
+}
+
+// ── Individual Check ──────────────────────────────────────────────────────────
+async function runIndividualCheck(key) {
+  const cfg = CHECK_CONFIG[key];
+  if (!cfg) return;
+
+  const card = document.getElementById('card-' + key);
+  const badge = document.getElementById('badge-' + key);
+  const body = document.getElementById('body-' + key);
+  const arrow = document.getElementById('arrow-' + key);
+
+  // Set running state on card
+  card.className = 'check-card running';
+  badge.className = 'status-badge badge-running';
+  badge.textContent = 'RUNNING';
+  body.innerHTML = '<div class="check-body-inner"><div class="check-placeholder"><div class="spinner" style="margin:0 auto 8px;"></div>Running ' + escHtml(cfg.label) + ' check…</div></div>';
+  body.classList.add('open');
+  arrow.classList.add('open');
+
+  showToast('Running ' + cfg.label + ' check…', 'info', 3000);
+
+  try {
+    const fn = functions.httpsCallable(cfg.cfName);
+    const result = await fn({});
+    const data = result.data || {};
+    updateCheckCard(key, data);
+
+    // Add individual note
+    const bodyInner = body.querySelector('.check-body-inner');
+    if (bodyInner) {
+      const note = document.createElement('div');
+      note.className = 'individual-note';
+      note.textContent = 'ℹ Individual check complete. Run a full check to update the overall score.';
+      bodyInner.appendChild(note);
+    }
+    showToast(cfg.label + ' check complete', 'success');
+  } catch (e) {
+    console.error('Individual check error (' + key + '):', e);
+    card.className = 'check-card fail';
+    badge.className = 'status-badge badge-fail';
+    badge.textContent = 'ERROR';
+    body.innerHTML = '<div class="check-body-inner"><div class="check-placeholder">⚠ Check failed to load. Run a full check.<br><span style="color:var(--red);font-size:12px">' + escHtml(e.message) + '</span></div></div>';
+    showToast(cfg.label + ' check failed: ' + escHtml(e.message), 'error');
+  }
+}
+
+// ── Toggle Card ───────────────────────────────────────────────────────────────
+function toggleCard(key) {
+  const body = document.getElementById('body-' + key);
+  const arrow = document.getElementById('arrow-' + key);
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+// ── Approval Section ──────────────────────────────────────────────────────────
+function updateApprovalSection(report) {
+  const section = document.getElementById('approvalSection');
+  if (!section) return;
+
+  // Only visible for super_admin (role 5) and if report is complete and < 2h old
+  if (currentRole < 5) { section.classList.add('hidden'); return; }
+
+  const status = (report.status || '').toLowerCase();
+  if (status !== 'complete' && status !== 'completed') { section.classList.add('hidden'); return; }
+
+  const triggeredAt = report.triggeredAt;
+  if (!triggeredAt) { section.classList.add('hidden'); return; }
+
+  const triggeredDate = triggeredAt.toDate ? triggeredAt.toDate() : new Date(triggeredAt);
+  const ageMs = Date.now() - triggeredDate.getTime();
+  if (ageMs > 2 * 60 * 60 * 1000) { section.classList.add('hidden'); return; }
+
+  section.classList.remove('hidden');
+}
+
+async function approveRelease(approved) {
+  if (!currentReport) { showToast('No report loaded. Run a check first.', 'error'); return; }
+
+  const notesId = approved ? 'approveNotes' : 'rejectNotes';
+  const notesEl = document.getElementById(notesId);
+  const notes = (notesEl ? notesEl.value : '').trim();
+
+  if (!notes) {
+    showToast('Notes are required before ' + (approved ? 'approving' : 'rejecting') + '.', 'error');
+    if (notesEl) notesEl.focus();
+    return;
+  }
+
+  const version = currentReport.version || 'this version';
+  const action = approved ? 'approving' : 'rejecting';
+  const msg = 'You are ' + action + ' ' + version + ' for production. This action is logged to the immutable audit trail. Continue?';
+  if (!confirm(msg)) return;
+
+  try {
+    const fn = functions.httpsCallable('approveRelease');
+    const result = await fn({
+      reportId: currentReport.id || null,
+      approved: approved,
+      notes: notes,
+    });
+
+    const data = result.data || {};
+    const resultEl = document.getElementById('approvalResult');
+    const approverName = currentUser.displayName || currentUser.email;
+    const timeStr = fmtEAT({ toDate: () => new Date() });
+
+    if (approved) {
+      resultEl.textContent = '✓ Deployment approved by ' + approverName + ' at ' + timeStr + '. Proceed with `firebase deploy --only functions`.';
+    } else {
+      resultEl.textContent = '✗ Release rejected by ' + approverName + ' at ' + timeStr + '. A new check run is required before deployment.';
+    }
+    resultEl.classList.add('visible');
+    showToast('Release ' + (approved ? 'approved' : 'rejected') + ' successfully', 'success');
+
+    // Update banner
+    if (approved) {
+      updateBanner({
+        score: currentReport.overallScore,
+        rec: 'go',
+        version: currentReport.version,
+        triggeredAt: currentReport.triggeredAt,
+        approvedBy: approverName,
+        blockerCount: 0,
+        warningCount: 0,
+      });
+    }
+  } catch (e) {
+    console.error('approveRelease error:', e);
+    showToast('Approval action failed: ' + escHtml(e.message), 'error');
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+function subscribeHistory() {
+  if (historyUnsubscribe) historyUnsubscribe();
+  historyUnsubscribe = db.collection('releaseReports')
+    .orderBy('triggeredAt', 'desc')
+    .limit(10)
+    .onSnapshot((snap) => {
+      renderHistory(snap.docs);
+    }, (e) => {
+      console.error('History snapshot error:', e);
+    });
+}
+
+function renderHistory(docs) {
+  const tbody = document.getElementById('historyBody');
+  if (!docs || docs.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No reports found. Run a check to generate the first report.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  docs.forEach((doc) => {
+    const d = doc.data();
+    const score = d.overallScore !== undefined ? fmtScore(d.overallScore) : '—';
+    const rec = d.recommendation || '—';
+    const cls = recommendationClass(rec);
+    const colorMap = { go: 'var(--green)', conditional: 'var(--orange)', nogo: 'var(--red)', none: 'var(--muted)' };
+    const recColor = colorMap[cls] || 'var(--muted)';
+    const status = d.status || '—';
+    const version = d.version || '—';
+    const triggeredBy = d.triggeredBy || '—';
+
+    let statusBadge = '';
+    const sl = status.toLowerCase();
+    if (sl === 'complete' || sl === 'completed') {
+      statusBadge = '<span class="status-badge badge-pass">' + escHtml(status.toUpperCase()) + '</span>';
+    } else if (sl === 'running') {
+      statusBadge = '<span class="status-badge badge-running">RUNNING</span>';
+    } else if (sl === 'error' || sl === 'failed') {
+      statusBadge = '<span class="status-badge badge-fail">' + escHtml(status.toUpperCase()) + '</span>';
+    } else {
+      statusBadge = '<span class="status-badge badge-pending">' + escHtml(status.toUpperCase()) + '</span>';
+    }
+
+    html += '<tr>';
+    html += '<td class="mono">' + escHtml(version) + '</td>';
+    html += '<td class="mono" style="white-space:nowrap">' + escHtml(fmtEAT(d.triggeredAt)) + '</td>';
+    html += '<td class="mono" style="color:' + scoreColor(d.overallScore) + '">' + escHtml(score) + '</td>';
+    html += '<td style="color:' + recColor + ';font-weight:700;font-size:12px">' + escHtml(recommendationLabel(rec)) + '</td>';
+    html += '<td>' + statusBadge + '</td>';
+    html += '<td style="font-size:12px;color:var(--muted)">' + escHtml(triggeredBy) + '</td>';
+    html += '<td><button class="btn btn-secondary btn-sm" onclick="loadReportById(' + "'" + escHtml(doc.id) + "'" + ')">View</button></td>';
+    html += '</tr>';
+  });
+
+  tbody.innerHTML = html;
+}
+
+async function loadReportById(reportId) {
+  try {
+    const doc = await db.collection('releaseReports').doc(reportId).get();
+    if (!doc.exists) { showToast('Report not found', 'error'); return; }
+    const report = { id: doc.id, ...doc.data() };
+    populateReport(report);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast('Report loaded', 'success');
+  } catch (e) {
+    console.error('loadReportById error:', e);
+    showToast('Failed to load report: ' + escHtml(e.message), 'error');
+  }
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+(function bootstrap() {
+  if (typeof firebase === 'undefined') {
+    document.getElementById('authLoading').innerHTML =
+      '<p style="color:var(--red)">Firebase SDK failed to load. Check network connection.</p>';
+    return;
+  }
+  if (!window.SOKONI_CONFIG) {
+    document.getElementById('authLoading').innerHTML =
+      '<p style="color:var(--red)">sokoni-config.js failed to load. Cannot initialise Firebase.</p>';
+    return;
+  }
+  initFirebase();
+})();
+</script>
+</body>
+</html>

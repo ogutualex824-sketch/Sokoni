@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0f172a">
+  <title>Marketplace Integration — SOKONI SmartPOS</title>
+  <link rel="icon" href="assets/logosokoni.png">
+  <script src="sokoni-config.js"></script>
+  <style>
+    /* ── Design tokens ── */
+    :root {
+      --pos-bg:      #0f172a;
+      --pos-bg2:     #1e293b;
+      --pos-bg3:     #253347;
+      --pos-bg4:     #2d3f57;
+      --pos-border:  #334155;
+      --pos-text:    #f1f5f9;
+      --pos-muted:   #94a3b8;
+      --pos-green:   #22c55e;
+      --pos-blue:    #3b82f6;
+      --pos-orange:  #f59e0b;
+      --pos-red:     #ef4444;
+      --pos-purple:  #a855f7;
+      --pos-accent:  #06b6d4;
+      --r:           12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--pos-bg);
+      color: var(--pos-text);
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── Auth screen ── */
+    #auth-screen {
+      position: fixed; inset: 0; background: var(--pos-bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; flex-direction: column; gap: 12px;
+    }
+    #auth-screen .auth-msg { color: var(--pos-muted); font-size: 14px; }
+
+    /* ── Header ── */
+    .hdr {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: var(--pos-bg2);
+      border-bottom: 1px solid var(--pos-border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 60px;
+    }
+    .hdr-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 16px;
+      white-space: nowrap;
+    }
+    .hdr-logo img { width: 28px; height: 28px; object-fit: contain; }
+    .hdr-title { font-size: 13px; font-weight: 600; color: var(--pos-muted); white-space: nowrap; }
+    .hdr-spacer { flex: 1; }
+    #hdr-clock {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--pos-text);
+      white-space: nowrap;
+      min-width: 110px;
+      text-align: right;
+    }
+    .role-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(59,130,246,.18);
+      color: var(--pos-blue);
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+    .hdr-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border: 1px solid var(--pos-border);
+      border-radius: 8px;
+      background: none;
+      color: var(--pos-muted);
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s;
+      min-height: 44px;
+    }
+    .hdr-back:hover { color: var(--pos-text); border-color: var(--pos-blue); }
+
+    /* ── Nav tabs ── */
+    .nav-tabs {
+      background: var(--pos-bg2);
+      border-bottom: 1px solid var(--pos-border);
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab {
+      flex-shrink: 0;
+      padding: 0 20px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--pos-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .nav-tab:hover { color: var(--pos-text); }
+    .nav-tab.active { color: var(--pos-accent); border-bottom-color: var(--pos-accent); }
+    .nav-tab .tab-badge {
+      background: var(--pos-red);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      min-width: 18px;
+      text-align: center;
+    }
+    .nav-tab .tab-badge.hidden { display: none; }
+
+    /* ── Layout ── */
+    .main { max-width: 960px; margin: 0 auto; padding: 20px 14px 40px; }
+
+    /* ── Section ── */
+    .page-section { display: none; }
+    .page-section.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--pos-bg2);
+      border: 1px solid var(--pos-border);
+      border-radius: var(--r);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Tabs inside sections ── */
+    .inner-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .inner-tab {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--pos-bg3);
+      color: var(--pos-muted);
+      border: 1px solid var(--pos-border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s, color .15s, border-color .15s;
+      min-height: 44px;
+      user-select: none;
+    }
+    .inner-tab.active {
+      background: rgba(6,182,212,.15);
+      color: var(--pos-accent);
+      border-color: var(--pos-accent);
+    }
+    .inner-tab .ib {
+      background: var(--pos-red);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      min-width: 18px;
+      text-align: center;
+    }
+    .inner-tab .ib.zero { background: var(--pos-bg4); color: var(--pos-muted); }
+
+    /* ── Order cards ── */
+    .order-card {
+      background: var(--pos-bg3);
+      border: 1px solid var(--pos-border);
+      border-radius: var(--r);
+      padding: 14px;
+      margin-bottom: 10px;
+      transition: border-color .15s;
+    }
+    .order-card.pending  { border-left: 3px solid var(--pos-orange); }
+    .order-card.ready    { border-left: 3px solid var(--pos-green); }
+    .order-card.collected { border-left: 3px solid var(--pos-muted); }
+    .order-card-hd {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .order-customer { font-size: 14px; font-weight: 700; }
+    .order-phone    { font-size: 12px; color: var(--pos-muted); margin-top: 2px; }
+    .order-time     { font-size: 11px; color: var(--pos-muted); white-space: nowrap; }
+    .pay-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .pay-badge.prepaid  { background: rgba(34,197,94,.18);  color: var(--pos-green); }
+    .pay-badge.counter  { background: rgba(245,158,11,.18); color: var(--pos-orange); }
+    .order-items { font-size: 13px; margin-bottom: 8px; }
+    .order-item-row { display: flex; justify-content: space-between; padding: 3px 0; color: var(--pos-muted); }
+    .order-item-row strong { color: var(--pos-text); }
+    .order-total { font-size: 14px; font-weight: 700; color: var(--pos-green); margin-top: 4px; margin-bottom: 8px; }
+    .order-notes { font-size: 12px; color: var(--pos-muted); font-style: italic; margin-bottom: 6px; }
+    .order-pickup { font-size: 12px; color: var(--pos-accent); margin-bottom: 8px; }
+    .order-collected-ts { font-size: 12px; color: var(--pos-muted); margin-top: 4px; }
+    .order-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all .15s;
+      white-space: nowrap;
+      min-height: 44px;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary  { background: var(--pos-blue);   color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #2563eb; }
+    .btn-green    { background: var(--pos-green);  color: #fff; }
+    .btn-green:hover:not(:disabled)  { background: #16a34a; }
+    .btn-red      { background: var(--pos-red);    color: #fff; }
+    .btn-red:hover:not(:disabled)    { background: #dc2626; }
+    .btn-red-outline { background: transparent; color: var(--pos-red); border: 1px solid var(--pos-red); }
+    .btn-red-outline:hover:not(:disabled) { background: rgba(239,68,68,.1); }
+    .btn-ghost    { background: var(--pos-bg4); color: var(--pos-text); border: 1px solid var(--pos-border); }
+    .btn-ghost:hover:not(:disabled)  { border-color: var(--pos-blue); }
+    .btn-accent   { background: var(--pos-accent); color: #1e293b; }
+    .btn-accent:hover:not(:disabled) { background: #0891b2; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; min-height: 36px; }
+    .btn-lg { padding: 12px 24px; font-size: 15px; min-height: 52px; }
+
+    /* ── Date range pills ── */
+    .date-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .date-pill {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--pos-bg3);
+      color: var(--pos-muted);
+      border: 1px solid var(--pos-border);
+      transition: all .15s;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+    .date-pill.active { background: rgba(59,130,246,.15); color: var(--pos-blue); border-color: var(--pos-blue); }
+    .date-pill:hover:not(.active) { border-color: var(--pos-muted); color: var(--pos-text); }
+    .custom-dates { display: none; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-end; }
+    .custom-dates.show { display: flex; }
+
+    /* ── Input ── */
+    .inp {
+      background: var(--pos-bg4);
+      border: 1px solid var(--pos-border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--pos-text);
+      font-size: 16px;
+      outline: none;
+      width: 100%;
+      min-height: 44px;
+    }
+    .inp:focus { border-color: var(--pos-blue); }
+    label.lbl { font-size: 12px; color: var(--pos-muted); font-weight: 600; display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .3px; }
+
+    /* ── Channel summary cards ── */
+    .channel-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 600px) { .channel-grid { grid-template-columns: 1fr; } }
+    .channel-card {
+      background: var(--pos-bg3);
+      border: 1px solid var(--pos-border);
+      border-radius: var(--r);
+      padding: 14px;
+    }
+    .channel-card.blue   { border-top: 3px solid var(--pos-blue); }
+    .channel-card.purple { border-top: 3px solid var(--pos-purple); }
+    .channel-card.green  { border-top: 3px solid var(--pos-green); }
+    .ch-name { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--pos-muted); margin-bottom: 6px; }
+    .ch-revenue { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+    .ch-revenue.blue   { color: var(--pos-blue); }
+    .ch-revenue.purple { color: var(--pos-purple); }
+    .ch-revenue.green  { color: var(--pos-green); }
+    .ch-meta { font-size: 11px; color: var(--pos-muted); }
+
+    /* ── Revenue mix bar ── */
+    .mix-bar-wrap { margin-bottom: 16px; }
+    .mix-bar-label { font-size: 11px; font-weight: 700; color: var(--pos-muted); text-transform: uppercase; margin-bottom: 6px; }
+    .mix-bar { display: flex; height: 20px; border-radius: 10px; overflow: hidden; background: var(--pos-bg4); }
+    .mix-seg { height: 100%; transition: width .4s ease; }
+    .mix-seg.blue   { background: var(--pos-blue); }
+    .mix-seg.purple { background: var(--pos-purple); }
+    .mix-seg.green  { background: var(--pos-green); }
+    .mix-legend { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+    .mix-leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--pos-muted); }
+    .mix-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* ── Canvas chart ── */
+    .chart-wrap {
+      position: relative;
+      background: var(--pos-bg3);
+      border: 1px solid var(--pos-border);
+      border-radius: var(--r);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .chart-wrap canvas { width: 100% !important; height: 200px !important; }
+    .chart-tooltip {
+      position: absolute;
+      background: var(--pos-bg2);
+      border: 1px solid var(--pos-border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+      min-width: 140px;
+    }
+
+    /* ── Data table ── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th { padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; color: var(--pos-muted); text-transform: uppercase; border-bottom: 1px solid var(--pos-border); }
+    .data-table td { padding: 9px 10px; border-bottom: 1px solid rgba(51,65,85,.5); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table td:first-child { color: var(--pos-muted); font-weight: 600; }
+    .data-table td.num { text-align: right; font-weight: 600; }
+    .data-table tr:hover td { background: var(--pos-bg3); }
+
+    /* ── Promo cards ── */
+    .promo-card {
+      background: var(--pos-bg3);
+      border: 1px solid var(--pos-border);
+      border-radius: var(--r);
+      padding: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .promo-body { flex: 1; }
+    .promo-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .promo-discount { font-size: 13px; color: var(--pos-orange); font-weight: 600; margin-bottom: 4px; }
+    .promo-meta { font-size: 12px; color: var(--pos-muted); }
+    .promo-meta span { margin-right: 12px; }
+    .promo-active-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      background: rgba(34,197,94,.18);
+      color: var(--pos-green);
+      margin-top: 6px;
+    }
+    .promo-inactive-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      background: rgba(148,163,184,.12);
+      color: var(--pos-muted);
+      margin-top: 6px;
+    }
+    .promo-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
+    /* ── Reserve table ── */
+    .reserve-summary-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: rgba(245,158,11,.12);
+      border: 1px solid rgba(245,158,11,.3);
+      color: var(--pos-orange);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .reserve-table-wrap { overflow-x: auto; }
+    .expandable-row td { cursor: pointer; }
+    .expand-detail {
+      display: none;
+      padding: 8px 10px;
+      background: var(--pos-bg4);
+      font-size: 12px;
+      color: var(--pos-muted);
+    }
+    .expand-detail.open { display: table-row; }
+    .expand-detail td { padding: 10px; }
+    .order-sub-row { display: flex; gap: 16px; padding: 4px 0; border-bottom: 1px solid var(--pos-border); }
+    .order-sub-row:last-child { border-bottom: none; }
+    .all-clear {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(34,197,94,.08);
+      border: 1px solid rgba(34,197,94,.25);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--pos-green);
+    }
+
+    /* ── Shimmer ── */
+    .shimmer {
+      background: linear-gradient(90deg, var(--pos-bg4) 25%, var(--pos-bg3) 50%, var(--pos-bg4) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 6px;
+      height: 18px;
+    }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .shimmer-row { padding: 6px 0; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid var(--pos-border);
+      border-top-color: var(--pos-blue);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    .spinner-lg { width: 32px; height: 32px; border-width: 3px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--pos-muted);
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-msg  { font-size: 14px; font-weight: 500; }
+    .empty-sub  { font-size: 12px; margin-top: 6px; }
+
+    /* ── Inline modal (cancel confirm) ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--pos-bg2);
+      border: 1px solid var(--pos-border);
+      border-radius: var(--r);
+      padding: 22px;
+      width: 100%;
+      max-width: 420px;
+      position: relative;
+      transform: scale(.96);
+      transition: transform .2s;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+    .modal-msg   { font-size: 13px; color: var(--pos-muted); margin-bottom: 16px; line-height: 1.5; }
+    .modal-footer { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ── Toast ── */
+    #toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 16px;
+      z-index: 9000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast-item {
+      background: var(--pos-bg2);
+      border: 1px solid var(--pos-border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 13px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      animation: toast-in .25s ease;
+      max-width: 320px;
+    }
+    .toast-item.success { border-color: var(--pos-green); }
+    .toast-item.error   { border-color: var(--pos-red); }
+    .toast-item.warn    { border-color: var(--pos-orange); }
+    @keyframes toast-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    /* ── Misc ── */
+    .sep { border: none; border-top: 1px solid var(--pos-border); margin: 14px 0; }
+    .mt8  { margin-top: 8px; }
+    .mt12 { margin-top: 12px; }
+    .mt16 { margin-top: 16px; }
+    .row-flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .row-flex > * { flex: 1; min-width: 140px; }
+    .txt-green  { color: var(--pos-green); }
+    .txt-red    { color: var(--pos-red); }
+    .txt-orange { color: var(--pos-orange); }
+    .txt-muted  { color: var(--pos-muted); }
+    .txt-blue   { color: var(--pos-blue); }
+    .txt-purple { color: var(--pos-purple); }
+    .section-hdr { font-size: 16px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .auto-refresh-note { font-size: 11px; color: var(--pos-muted); margin-bottom: 14px; }
+
+    @media (max-width: 480px) {
+      .hdr-title { display: none; }
+      .hdr-logo span { display: none; }
+      .channel-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 360px) {
+      .channel-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Auth gate ══ -->
+<div id="auth-screen">
+  <span class="spinner spinner-lg"></span>
+  <div class="auth-msg">Verifying credentials…</div>
+</div>
+
+<!-- ══ Header ══ -->
+<header class="hdr" id="main-hdr" style="display:none">
+  <div class="hdr-logo">
+    <img src="assets/Sokonilogo2.png" alt="SOKONI" onerror="this.style.display='none'">
+    <span>SmartPOS</span>
+  </div>
+  <div class="hdr-title">Marketplace Integration</div>
+  <div class="hdr-spacer"></div>
+  <div id="hdr-clock">--:--</div>
+  <div class="role-badge" id="role-badge">–</div>
+  <a href="pos.html" class="hdr-back">&#8592; Back to POS</a>
+</header>
+
+<!-- ══ Navigation tabs ══ -->
+<nav class="nav-tabs" id="main-nav" style="display:none">
+  <div class="nav-tab active" id="nav-cc" onclick="switchSection('cc')">
+    &#128230; C&amp;C Orders
+    <span class="tab-badge hidden" id="nav-badge-cc">0</span>
+  </div>
+  <div class="nav-tab manager-tab" id="nav-report" onclick="switchSection('report')">
+    &#128202; Unified Report
+  </div>
+  <div class="nav-tab manager-tab" id="nav-promo" onclick="switchSection('promo')">
+    &#127881; Promotions
+  </div>
+  <div class="nav-tab manager-tab" id="nav-reserve" onclick="switchSection('reserve')">
+    &#128230; Inventory
+  </div>
+</nav>
+
+<!-- ══ Main ══ -->
+<main class="main" id="main-content" style="display:none">
+
+  <!-- ─────────────────────────────────────────
+       SECTION 1 — Click & Collect Orders
+  ───────────────────────────────────────── -->
+  <div class="page-section active" id="sec-cc">
+    <div class="section-hdr">&#128230; Click &amp; Collect Orders</div>
+
+    <!-- Inner tabs -->
+    <div class="inner-tabs">
+      <div class="inner-tab active" id="cc-tab-pending" onclick="switchCCTab('pending')">
+        Pending
+        <span class="ib zero" id="cc-badge-pending">0</span>
+      </div>
+      <div class="inner-tab" id="cc-tab-ready" onclick="switchCCTab('ready')">
+        Ready
+        <span class="ib zero" id="cc-badge-ready">0</span>
+      </div>
+      <div class="inner-tab" id="cc-tab-collected" onclick="switchCCTab('collected')">
+        Collected Today
+      </div>
+    </div>
+
+    <!-- Order lists -->
+    <div id="cc-list-pending"></div>
+    <div id="cc-list-ready"   style="display:none"></div>
+    <div id="cc-list-collected" style="display:none"></div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       SECTION 2 — Unified Sales Report
+  ───────────────────────────────────────── -->
+  <div class="page-section" id="sec-report">
+    <div class="section-hdr">&#128202; Unified Sales Report</div>
+
+    <!-- Date range pills -->
+    <div class="date-pills">
+      <div class="date-pill active" id="pill-today"   onclick="selectRange('today')">Today</div>
+      <div class="date-pill"       id="pill-week"    onclick="selectRange('week')">This Week</div>
+      <div class="date-pill"       id="pill-month"   onclick="selectRange('month')">This Month</div>
+      <div class="date-pill"       id="pill-custom"  onclick="selectRange('custom')">Custom</div>
+    </div>
+    <div class="custom-dates" id="custom-dates-wrap">
+      <div>
+        <label class="lbl">From</label>
+        <input type="date" class="inp" id="range-from" style="font-size:16px">
+      </div>
+      <div>
+        <label class="lbl">To</label>
+        <input type="date" class="inp" id="range-to" style="font-size:16px">
+      </div>
+      <div style="flex:0">
+        <button class="btn btn-primary" onclick="loadReport()" style="margin-top:22px">Apply</button>
+      </div>
+    </div>
+
+    <div id="report-body">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       SECTION 3 — Active Promotions
+  ───────────────────────────────────────── -->
+  <div class="page-section" id="sec-promo">
+    <div class="section-hdr">&#127881; Active Promotions at POS</div>
+    <div id="promo-body">
+      <div class="empty-state">
+        <span class="spinner"></span>
+        <div class="empty-msg mt8">Loading promotions…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       SECTION 4 — Inventory Reserve Monitor
+  ───────────────────────────────────────── -->
+  <div class="page-section" id="sec-reserve">
+    <div class="section-hdr">&#128230; Inventory Reserve Monitor</div>
+    <div class="auto-refresh-note" id="reserve-refresh-note">Auto-refreshes every 60 s</div>
+    <div style="margin-bottom:14px">
+      <button class="btn btn-accent" id="btn-check-reserves" onclick="loadReserves()">
+        &#128202; Check Reserves
+      </button>
+    </div>
+    <div id="reserve-body">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+</main>
+
+<!-- ══ Cancel confirm modal ══ -->
+<div class="modal-overlay" id="modal-cancel" onclick="handleModalOverlay(event,'modal-cancel')">
+  <div class="modal">
+    <div class="modal-title">Cancel Order</div>
+    <div class="modal-msg" id="cancel-modal-msg">Are you sure you want to cancel this order? This action cannot be undone.</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-cancel')">Keep Order</button>
+      <button class="btn btn-red" id="btn-confirm-cancel" onclick="confirmCancelOrder()">Yes, Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- ══════════════════════════════════════════
+     MODULE SCRIPT
+══════════════════════════════════════════ -->
+<script type="module">
+'use strict';
+
+import { initializeApp, getApps }
+  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged }
+  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFunctions, httpsCallable }
+  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+import { getFirestore, collection, query, where, orderBy, onSnapshot }
+  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+
+/* ══════════════════════════════════════
+   Firebase init
+══════════════════════════════════════ */
+const FB_CFG = window.SOKONI_CONFIG || {
+  apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+  authDomain:        'sokoni-aeb26.firebaseapp.com',
+  projectId:         'sokoni-aeb26',
+  storageBucket:     'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId: '24799054989',
+  appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4',
+};
+const app = getApps().find(a => a.name === 'pos-marketplace')
+  || initializeApp(FB_CFG, 'pos-marketplace');
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const fns  = getFunctions(app, 'us-central1');
+
+/* ══════════════════════════════════════
+   Helpers
+══════════════════════════════════════ */
+const CF = (name) => httpsCallable(fns, name, { timeout: 30000 });
+
+/** XSS-safe HTML entity escaper */
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** KES formatter */
+const kes = (n) =>
+  'KES ' + (n ?? 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Relative time (e.g. "12 min ago") */
+function relTime(ts) {
+  if (!ts) return '–';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 1)  return 'Just now';
+  if (mins < 60) return mins + ' min ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return hrs + ' hr ago';
+  return Math.floor(hrs / 24) + ' day' + (Math.floor(hrs / 24) > 1 ? 's' : '') + ' ago';
+}
+
+/** Format a JS Date to "Sun 28 Jun, 14:35" */
+function fmtDate(d) {
+  if (!d) return '–';
+  const dt = d.toDate ? d.toDate() : new Date(d);
+  return dt.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })
+    + ', ' + dt.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function isToday(d) {
+  if (!d) return false;
+  const dt = d.toDate ? d.toDate() : new Date(d);
+  const now = new Date();
+  return dt.getFullYear() === now.getFullYear()
+    && dt.getMonth() === now.getMonth()
+    && dt.getDate() === now.getDate();
+}
+
+function shimmerRows(n = 3) {
+  return Array.from({ length: n }, () =>
+    `<div class="shimmer-row"><div class="shimmer" style="width:${55 + (Math.random() * 35 | 0)}%"></div></div>`
+  ).join('');
+}
+
+/* ══════════════════════════════════════
+   Toast
+══════════════════════════════════════ */
+function toast(msg, type = 'info', ms = 3500) {
+  const el = document.createElement('div');
+  el.className = 'toast-item' + (type === 'success' ? ' success' : type === 'error' ? ' error' : type === 'warn' ? ' warn' : '');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity .3s';
+    setTimeout(() => el.remove(), 350);
+  }, ms);
+}
+
+/* ══════════════════════════════════════
+   Clock
+══════════════════════════════════════ */
+function startClock() {
+  const tick = () => {
+    const now = new Date();
+    document.getElementById('hdr-clock').textContent =
+      now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
+/* ══════════════════════════════════════
+   State
+══════════════════════════════════════ */
+let _uid        = null;
+let _role       = 'cashier';  // cashier | manager | owner | admin | super_admin
+let _sellerId   = null;
+let _unsubPending   = null;
+let _unsubReady     = null;
+let _unsubCollected = null;
+let _ccTab      = 'pending';
+let _reportRange   = 'today';
+let _pendingOrders  = [];
+let _readyOrders    = [];
+let _collectedOrders = [];
+let _cancelTargetOrderId = null;
+let _reserveTimer   = null;
+
+const MANAGER_ROLES = new Set(['manager', 'owner', 'admin', 'super_admin']);
+
+function isManager() { return MANAGER_ROLES.has(_role); }
+
+/* ══════════════════════════════════════
+   Auth guard
+══════════════════════════════════════ */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    window.location.href = 'auth.html?redirect=pos-marketplace.html';
+    return;
+  }
+  _uid = user.uid;
+
+  // Read role + sellerId from custom claims or Firestore profile
+  try {
+    const token = await user.getIdTokenResult();
+    _role     = token.claims?.role     || 'cashier';
+    _sellerId = token.claims?.sellerId || _uid;
+  } catch {
+    _role     = 'cashier';
+    _sellerId = _uid;
+  }
+
+  // Show UI
+  document.getElementById('auth-screen').style.display  = 'none';
+  document.getElementById('main-hdr').style.display     = 'flex';
+  document.getElementById('main-nav').style.display     = 'flex';
+  document.getElementById('main-content').style.display = 'block';
+
+  // Role badge
+  document.getElementById('role-badge').textContent = _role.replace('_', ' ').toUpperCase();
+
+  // Manager-only tabs: hide for cashier
+  if (!isManager()) {
+    document.querySelectorAll('.manager-tab').forEach(t => t.style.display = 'none');
+  }
+
+  startClock();
+  initCCOrders();
+  if (isManager()) {
+    loadReport();
+    loadPromotions();
+    // Reserve section loaded on demand but also kickoff auto-refresh
+    startReserveAutoRefresh();
+  }
+});
+
+/* ══════════════════════════════════════
+   Section switcher
+══════════════════════════════════════ */
+window.switchSection = function(name) {
+  // Guard: cashier can only see cc
+  if (!isManager() && name !== 'cc') {
+    toast('Manager access required for this section', 'warn');
+    return;
+  }
+  ['cc', 'report', 'promo', 'reserve'].forEach(n => {
+    document.getElementById('sec-' + n).classList.toggle('active', n === name);
+    const navEl = document.getElementById('nav-' + n);
+    if (navEl) navEl.classList.toggle('active', n === name);
+  });
+};
+
+/* ══════════════════════════════════════
+   Modal helpers
+══════════════════════════════════════ */
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('open');
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+window.closeModal = closeModal;
+window.handleModalOverlay = function(e, id) {
+  if (e.target.id === id) closeModal(id);
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
+/* ══════════════════════════════════════
+   ────────────────────────────────────
+   SECTION 1 — Click & Collect Orders
+   ────────────────────────────────────
+══════════════════════════════════════ */
+
+function initCCOrders() {
+  attachSnapshot('pending');
+  attachSnapshot('ready');
+  attachSnapshot('collected');
+}
+
+function attachSnapshot(status) {
+  const colRef = collection(db, 'sellers', _sellerId, 'clickAndCollect');
+  const q = query(colRef, where('status', '==', status), orderBy('createdAt', 'desc'));
+
+  const unsub = onSnapshot(q, (snap) => {
+    const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (status === 'pending') {
+      _pendingOrders = orders;
+      updateCCBadge('pending', orders.length);
+      updateNavBadge(orders.length);
+    } else if (status === 'ready') {
+      _readyOrders = orders;
+      updateCCBadge('ready', orders.length);
+    } else {
+      // Filter client-side for today
+      _collectedOrders = orders.filter(o => isToday(o.collectedAt || o.updatedAt));
+    }
+    if (_ccTab === status) renderCCList(status);
+  }, (err) => {
+    console.error('CC snapshot error', status, err);
+    toast('Real-time feed error: ' + esc(err.message), 'error');
+  });
+
+  if (status === 'pending')   _unsubPending   = unsub;
+  if (status === 'ready')     _unsubReady     = unsub;
+  if (status === 'collected') _unsubCollected = unsub;
+}
+
+function updateCCBadge(status, count) {
+  const el = document.getElementById('cc-badge-' + status);
+  if (!el) return;
+  el.textContent = count;
+  el.classList.toggle('zero', count === 0);
+}
+
+function updateNavBadge(count) {
+  const el = document.getElementById('nav-badge-cc');
+  if (!el) return;
+  el.textContent = count;
+  el.classList.toggle('hidden', count === 0);
+}
+
+window.switchCCTab = function(tab) {
+  _ccTab = tab;
+  ['pending', 'ready', 'collected'].forEach(t => {
+    document.getElementById('cc-tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('cc-list-' + t).style.display = t === tab ? 'block' : 'none';
+  });
+  renderCCList(tab);
+};
+
+function renderCCList(status) {
+  const container = document.getElementById('cc-list-' + status);
+  if (!container) return;
+
+  let orders;
+  if (status === 'pending')   orders = _pendingOrders;
+  else if (status === 'ready') orders = _readyOrders;
+  else                         orders = _collectedOrders;
+
+  if (!orders || orders.length === 0) {
+    const icons  = { pending: '&#128336;', ready: '&#9989;', collected: '&#128197;' };
+    const labels = { pending: 'pending', ready: 'ready for pickup', collected: 'collected today' };
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">${icons[status]}</div>
+        <div class="empty-msg">No ${esc(labels[status])} orders</div>
+        <div class="empty-sub">Orders will appear here in real time</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = orders.map(o => renderOrderCard(o, status)).join('');
+  // Start live timers (every 30s re-render elapsed times)
+  clearTimeout(window._ccTimerHandle);
+  window._ccTimerHandle = setTimeout(() => renderCCList(status), 30000);
+}
+
+function renderOrderCard(o, status) {
+  const isPrepaid = (o.paymentStatus === 'paid' || o.paymentMethod === 'prepaid');
+  const payBadge  = isPrepaid
+    ? '<span class="pay-badge prepaid">&#10003; Prepaid</span>'
+    : '<span class="pay-badge counter">&#9679; Counter Payment</span>';
+
+  const items = Array.isArray(o.items) ? o.items : [];
+  const itemsHtml = items.length
+    ? items.map(it => `
+        <div class="order-item-row">
+          <strong>${esc(it.name || it.productName || 'Item')}</strong>
+          &nbsp;&times;&nbsp;${esc(it.qty || it.quantity || 1)}
+          <span>${esc(kes(it.price || it.unitPrice || 0))}</span>
+        </div>`).join('')
+    : '<div class="order-item-row txt-muted">No item details</div>';
+
+  const notesHtml = o.notes
+    ? `<div class="order-notes">Note: ${esc(o.notes)}</div>` : '';
+
+  const pickupHtml = o.pickupTime
+    ? `<div class="order-pickup">&#128336; Pickup: ${esc(o.pickupTime)}</div>` : '';
+
+  let actionsHtml = '';
+  if (status === 'pending') {
+    actionsHtml = `
+      <div class="order-actions">
+        <button class="btn btn-green btn-sm" onclick="markOrderReady('${esc(o.id)}')" id="btn-ready-${esc(o.id)}">
+          &#10003; Mark Ready
+        </button>
+        <button class="btn btn-red-outline btn-sm" onclick="promptCancelOrder('${esc(o.id)}','${esc(o.customerName||'customer')}')">
+          Cancel
+        </button>
+      </div>`;
+  } else if (status === 'ready') {
+    actionsHtml = `
+      <div class="order-actions">
+        <button class="btn btn-green btn-sm" onclick="confirmCollected('${esc(o.id)}')" id="btn-collect-${esc(o.id)}">
+          &#128230; Confirm Collected
+        </button>
+        <button class="btn btn-red-outline btn-sm" onclick="promptCancelOrder('${esc(o.id)}','${esc(o.customerName||'customer')}')">
+          Cancel
+        </button>
+      </div>`;
+  } else {
+    const collectedTs = o.collectedAt ? fmtDate(o.collectedAt) : '–';
+    actionsHtml = `<div class="order-collected-ts txt-muted">Collected: ${esc(collectedTs)}</div>`;
+  }
+
+  return `
+    <div class="order-card ${esc(status)}" id="order-card-${esc(o.id)}">
+      <div class="order-card-hd">
+        <div>
+          <div class="order-customer">${esc(o.customerName || 'Customer')}</div>
+          ${o.customerPhone ? `<div class="order-phone">&#128222; ${esc(o.customerPhone)}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          ${payBadge}
+          <div class="order-time" id="order-time-${esc(o.id)}">${esc(relTime(o.createdAt))}</div>
+        </div>
+      </div>
+      <div class="order-items">${itemsHtml}</div>
+      <div class="order-total">${esc(kes(o.total || o.totalAmount || 0))}</div>
+      ${notesHtml}
+      ${pickupHtml}
+      ${actionsHtml}
+    </div>`;
+}
+
+/* ── C&C Actions ── */
+window.markOrderReady = async function(orderId) {
+  const btn = document.getElementById('btn-ready-' + orderId);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Updating…'; }
+  try {
+    await CF('updateClickAndCollectStatus')({ sellerId: _sellerId, orderId, status: 'ready' });
+    toast('Order marked ready for pickup', 'success');
+  } catch (err) {
+    console.error('markOrderReady', err);
+    toast('Failed: ' + esc(err.message), 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#10003; Mark Ready'; }
+  }
+};
+
+window.confirmCollected = async function(orderId) {
+  const btn = document.getElementById('btn-collect-' + orderId);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Confirming…'; }
+  try {
+    await CF('updateClickAndCollectStatus')({ sellerId: _sellerId, orderId, status: 'collected' });
+    toast('Order confirmed collected!', 'success');
+  } catch (err) {
+    console.error('confirmCollected', err);
+    toast('Failed: ' + esc(err.message), 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#128230; Confirm Collected'; }
+  }
+};
+
+window.promptCancelOrder = function(orderId, customerName) {
+  _cancelTargetOrderId = orderId;
+  document.getElementById('cancel-modal-msg').textContent =
+    'Cancel the order for ' + (customerName || 'this customer') + '? This cannot be undone.';
+  openModal('modal-cancel');
+};
+
+window.confirmCancelOrder = async function() {
+  if (!_cancelTargetOrderId) return;
+  const orderId = _cancelTargetOrderId;
+  const btn = document.getElementById('btn-confirm-cancel');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+  try {
+    await CF('updateClickAndCollectStatus')({ sellerId: _sellerId, orderId, status: 'cancelled' });
+    closeModal('modal-cancel');
+    toast('Order cancelled', 'warn');
+  } catch (err) {
+    console.error('cancelOrder', err);
+    toast('Failed: ' + esc(err.message), 'error');
+  } finally {
+    _cancelTargetOrderId = null;
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Yes, Cancel'; }
+  }
+};
+
+/* ══════════════════════════════════════
+   ────────────────────────────────────
+   SECTION 2 — Unified Sales Report
+   ────────────────────────────────────
+══════════════════════════════════════ */
+
+window.selectRange = function(range) {
+  _reportRange = range;
+  ['today', 'week', 'month', 'custom'].forEach(r => {
+    document.getElementById('pill-' + r).classList.toggle('active', r === range);
+  });
+  const customWrap = document.getElementById('custom-dates-wrap');
+  customWrap.classList.toggle('show', range === 'custom');
+  if (range !== 'custom') loadReport();
+};
+
+function getDateRange(range) {
+  const now   = new Date();
+  const start = new Date(now);
+  const end   = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  if (range === 'today') {
+    start.setHours(0, 0, 0, 0);
+  } else if (range === 'week') {
+    const day = start.getDay();
+    start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+    start.setHours(0, 0, 0, 0);
+  } else if (range === 'month') {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    // custom: read inputs
+    const fromVal = document.getElementById('range-from').value;
+    const toVal   = document.getElementById('range-to').value;
+    if (!fromVal || !toVal) { toast('Select start and end dates', 'warn'); return null; }
+    const s = new Date(fromVal + 'T00:00:00');
+    const e = new Date(toVal   + 'T23:59:59');
+    if (s > e) { toast('Start date must be before end date', 'warn'); return null; }
+    return { startDate: s.toISOString(), endDate: e.toISOString() };
+  }
+
+  return { startDate: start.toISOString(), endDate: end.toISOString() };
+}
+
+window.loadReport = async function() {
+  const range = getDateRange(_reportRange);
+  if (!range) return;
+
+  const body = document.getElementById('report-body');
+  body.innerHTML = `
+    <div class="card">
+      <div class="card-title">Channel Summary</div>
+      ${shimmerRows(3)}
+    </div>
+    <div class="card">${shimmerRows(5)}</div>`;
+
+  try {
+    const res  = await CF('getUnifiedSalesReport')({ sellerId: _sellerId, ...range });
+    const data = res.data || {};
+    renderReport(data);
+  } catch (err) {
+    console.error('getUnifiedSalesReport', err);
+    body.innerHTML = `<div class="card"><div class="empty-state">
+      <div class="empty-icon">&#10060;</div>
+      <div class="empty-msg">Failed to load report</div>
+      <div class="empty-sub">${esc(err.message)}</div>
+      <button class="btn btn-ghost btn-sm mt12" onclick="loadReport()">Retry</button>
+    </div></div>`;
+  }
+};
+
+function renderReport(data) {
+  const pos   = data.pos   || {};
+  const mkt   = data.marketplace || {};
+  const cc    = data.clickAndCollect || {};
+  const trend = data.dailyTrend || [];
+  const top10 = data.topProducts  || [];
+
+  const totalRev = (pos.revenue || 0) + (mkt.revenue || 0) + (cc.revenue || 0);
+  const posShare = totalRev > 0 ? ((pos.revenue || 0) / totalRev * 100).toFixed(1) : 0;
+  const mktShare = totalRev > 0 ? ((mkt.revenue || 0) / totalRev * 100).toFixed(1) : 0;
+  const ccShare  = totalRev > 0 ? ((cc.revenue  || 0) / totalRev * 100).toFixed(1) : 0;
+
+  const body = document.getElementById('report-body');
+  body.innerHTML = `
+    <!-- Channel summary -->
+    <div class="card">
+      <div class="card-title">&#128202; Channel Summary</div>
+      <div class="channel-grid">
+        <div class="channel-card blue">
+          <div class="ch-name">POS Sales</div>
+          <div class="ch-revenue blue">${esc(kes(pos.revenue || 0))}</div>
+          <div class="ch-meta">${esc(pos.transactions || 0)} transactions &nbsp;·&nbsp; ${esc(pos.itemsSold || 0)} items</div>
+        </div>
+        <div class="channel-card purple">
+          <div class="ch-name">Marketplace Orders</div>
+          <div class="ch-revenue purple">${esc(kes(mkt.revenue || 0))}</div>
+          <div class="ch-meta">${esc(mkt.transactions || 0)} orders &nbsp;·&nbsp; ${esc(mkt.itemsSold || 0)} items</div>
+        </div>
+        <div class="channel-card green">
+          <div class="ch-name">Click &amp; Collect</div>
+          <div class="ch-revenue green">${esc(kes(cc.revenue || 0))}</div>
+          <div class="ch-meta">${esc(cc.transactions || 0)} pickups &nbsp;·&nbsp; ${esc(cc.itemsSold || 0)} items</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Revenue mix bar -->
+    <div class="card">
+      <div class="card-title">&#128200; Revenue Mix</div>
+      <div class="mix-bar-wrap">
+        <div class="mix-bar-label">Revenue Split</div>
+        <div class="mix-bar">
+          <div class="mix-seg blue"   style="width:${esc(posShare)}%"></div>
+          <div class="mix-seg purple" style="width:${esc(mktShare)}%"></div>
+          <div class="mix-seg green"  style="width:${esc(ccShare)}%"></div>
+        </div>
+        <div class="mix-legend">
+          <div class="mix-leg-item"><div class="mix-dot" style="background:var(--pos-blue)"></div> POS ${esc(posShare)}%</div>
+          <div class="mix-leg-item"><div class="mix-dot" style="background:var(--pos-purple)"></div> Marketplace ${esc(mktShare)}%</div>
+          <div class="mix-leg-item"><div class="mix-dot" style="background:var(--pos-green)"></div> C&amp;C ${esc(ccShare)}%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily trend chart -->
+    <div class="card">
+      <div class="card-title">&#128201; Daily Revenue Trend</div>
+      <div class="chart-wrap" id="chart-wrap">
+        ${trend.length === 0
+          ? `<div class="empty-state"><div class="empty-icon">&#128202;</div><div class="empty-msg">No sales data for this period</div></div>`
+          : `<canvas id="trend-canvas" height="200"></canvas>
+             <div class="chart-tooltip" id="chart-tooltip"></div>`}
+      </div>
+    </div>
+
+    <!-- Top 10 products -->
+    <div class="card">
+      <div class="card-title">&#127942; Top Products</div>
+      ${top10.length === 0
+        ? `<div class="empty-state"><div class="empty-msg">No product data for this period</div></div>`
+        : `<div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Product</th>
+                  <th style="text-align:right">Qty Sold</th>
+                  <th style="text-align:right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${top10.map((p, i) => `
+                  <tr>
+                    <td>${esc(i + 1)}</td>
+                    <td>${esc(p.name || p.productName || '–')}</td>
+                    <td class="num">${esc(p.qtySold || p.quantity || 0)}</td>
+                    <td class="num txt-green">${esc(kes(p.revenue || 0))}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`}
+    </div>`;
+
+  // Draw chart if data exists
+  if (trend.length > 0) {
+    requestAnimationFrame(() => drawTrendChart(trend));
+  }
+}
+
+/* ── Canvas bar chart ── */
+function drawTrendChart(trend) {
+  const canvas = document.getElementById('trend-canvas');
+  if (!canvas) return;
+
+  const dpr    = window.devicePixelRatio || 1;
+  const W      = canvas.parentElement.clientWidth - 32; // subtract card padding
+  const H      = 200;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx    = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const PAD    = { top: 20, right: 10, bottom: 40, left: 64 };
+  const cW     = W - PAD.left - PAD.right;
+  const cH     = H - PAD.top  - PAD.bottom;
+  const n      = trend.length;
+  const barW   = Math.max(8, Math.floor(cW / n) - 4);
+
+  // Compute max stacked value
+  const maxVal = trend.reduce((m, d) => {
+    return Math.max(m, (d.pos || 0) + (d.marketplace || 0) + (d.cc || 0));
+  }, 0) || 1;
+
+  // Grid lines
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth   = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = PAD.top + cH - (i / 4) * cH;
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, y);
+    ctx.lineTo(PAD.left + cW, y);
+    ctx.stroke();
+    ctx.fillStyle = '#94a3b8';
+    ctx.font      = '10px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText(kes(maxVal * i / 4).replace('KES ', ''), PAD.left - 4, y + 4);
+  }
+
+  // Bars
+  trend.forEach((d, i) => {
+    const posH = ((d.pos || 0) / maxVal) * cH;
+    const mktH = ((d.marketplace || 0) / maxVal) * cH;
+    const ccH  = ((d.cc || 0) / maxVal) * cH;
+    const x    = PAD.left + i * (cW / n) + (cW / n - barW) / 2;
+    let   y    = PAD.top + cH;
+
+    // POS (blue)
+    if (posH > 0) {
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillRect(x, y - posH, barW, posH);
+      y -= posH;
+    }
+    // Marketplace (purple)
+    if (mktH > 0) {
+      ctx.fillStyle = '#a855f7';
+      ctx.fillRect(x, y - mktH, barW, mktH);
+      y -= mktH;
+    }
+    // C&C (green)
+    if (ccH > 0) {
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(x, y - ccH, barW, ccH);
+    }
+
+    // X-axis label
+    const label = d.label || d.date || '';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(label.slice(-5), PAD.left + i * (cW / n) + cW / n / 2, H - PAD.bottom + 14);
+  });
+
+  // Tooltip on hover
+  const tooltip = document.getElementById('chart-tooltip');
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx   = e.clientX - rect.left;
+    const idx  = Math.floor((mx - PAD.left) / (cW / n));
+    if (idx < 0 || idx >= trend.length) { if (tooltip) tooltip.style.display = 'none'; return; }
+    const d = trend[idx];
+    if (!tooltip) return;
+    tooltip.style.display = 'block';
+    tooltip.style.left    = (mx + 12) + 'px';
+    tooltip.style.top     = '10px';
+    tooltip.innerHTML = `
+      <strong>${esc(d.label || d.date || '')}</strong><br>
+      <span style="color:var(--pos-blue)">POS: ${esc(kes(d.pos || 0))}</span><br>
+      <span style="color:var(--pos-purple)">Mkt: ${esc(kes(d.marketplace || 0))}</span><br>
+      <span style="color:var(--pos-green)">C&amp;C: ${esc(kes(d.cc || 0))}</span>`;
+  });
+  canvas.addEventListener('mouseleave', () => { if (tooltip) tooltip.style.display = 'none'; });
+}
+
+/* ══════════════════════════════════════
+   ────────────────────────────────────
+   SECTION 3 — Active Promotions
+   ────────────────────────────────────
+══════════════════════════════════════ */
+
+async function loadPromotions() {
+  const body = document.getElementById('promo-body');
+  body.innerHTML = `<div class="card">${shimmerRows(4)}</div>`;
+  try {
+    const res   = await CF('getActivePOSPromotions')({ sellerId: _sellerId });
+    const promos = res.data?.promotions || res.data || [];
+    renderPromotions(promos);
+  } catch (err) {
+    console.error('getActivePOSPromotions', err);
+    body.innerHTML = `<div class="card"><div class="empty-state">
+      <div class="empty-icon">&#10060;</div>
+      <div class="empty-msg">Failed to load promotions</div>
+      <div class="empty-sub">${esc(err.message)}</div>
+      <button class="btn btn-ghost btn-sm mt12" onclick="loadPromotions()">Retry</button>
+    </div></div>`;
+  }
+}
+window.loadPromotions = loadPromotions;
+
+function renderPromotions(promos) {
+  const body = document.getElementById('promo-body');
+  if (!promos || promos.length === 0) {
+    body.innerHTML = `<div class="card"><div class="empty-state">
+      <div class="empty-icon">&#127881;</div>
+      <div class="empty-msg">No active promotions</div>
+      <div class="empty-sub">Create promotions in Marketplace &#8594; Promotions</div>
+    </div></div>`;
+    return;
+  }
+
+  body.innerHTML = promos.map(p => {
+    const isActive  = p.applyAtPOS === true;
+    const discLabel = p.discountType === 'percent'
+      ? esc(p.discountValue) + '% off'
+      : 'KES ' + esc((p.discountValue || 0).toLocaleString('en-KE')) + ' off';
+    const validUntil = p.validUntil ? fmtDate(p.validUntil) : '–';
+    const badgeHtml  = isActive
+      ? `<span class="promo-active-badge">&#9679; ACTIVE AT POS</span>`
+      : `<span class="promo-inactive-badge">&#9675; Inactive at POS</span>`;
+    const btnLabel   = isActive ? 'Disable at POS' : 'Enable at POS';
+    const btnClass   = isActive ? 'btn btn-red-outline btn-sm' : 'btn btn-green btn-sm';
+
+    return `
+      <div class="promo-card" id="promo-card-${esc(p.id)}">
+        <div class="promo-body">
+          <div class="promo-name">${esc(p.name || p.title || 'Promotion')}</div>
+          <div class="promo-discount">${discLabel}</div>
+          <div class="promo-meta">
+            ${p.code ? `<span>Code: <strong>${esc(p.code)}</strong></span>` : ''}
+            <span>Valid until: ${esc(validUntil)}</span>
+            ${p.usageCount != null ? `<span>Used: ${esc(p.usageCount)} times</span>` : ''}
+          </div>
+          ${badgeHtml}
+        </div>
+        <div class="promo-actions">
+          <button class="${btnClass}" id="promo-btn-${esc(p.id)}"
+            onclick="togglePromo('${esc(p.id)}',${!isActive})">
+            ${esc(btnLabel)}
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+window.togglePromo = async function(promotionId, applyAtPOS) {
+  const btn = document.getElementById('promo-btn-' + promotionId);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+  try {
+    await CF('syncPromotionToPOS')({ sellerId: _sellerId, promotionId, applyAtPOS });
+    toast(applyAtPOS ? 'Promotion enabled at POS' : 'Promotion disabled at POS', 'success');
+    await loadPromotions(); // re-render fresh state
+  } catch (err) {
+    console.error('syncPromotionToPOS', err);
+    toast('Failed: ' + esc(err.message), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = applyAtPOS ? 'Enable at POS' : 'Disable at POS'; }
+  }
+};
+
+/* ══════════════════════════════════════
+   ────────────────────────────────────
+   SECTION 4 — Inventory Reserve Monitor
+   ────────────────────────────────────
+══════════════════════════════════════ */
+
+function startReserveAutoRefresh() {
+  if (_reserveTimer) clearInterval(_reserveTimer);
+  _reserveTimer = setInterval(() => {
+    // Only auto-refresh if the section is visible
+    if (document.getElementById('sec-reserve').classList.contains('active')) {
+      loadReserves(true);
+    }
+  }, 60000);
+}
+
+window.loadReserves = async function(silent = false) {
+  const body = document.getElementById('reserve-body');
+  const btn  = document.getElementById('btn-check-reserves');
+  if (!silent) {
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Checking…'; }
+    body.innerHTML = `<div class="card">${shimmerRows(5)}</div>`;
+  }
+  try {
+    const res  = await CF('getInventoryReserveStatus')({ sellerId: _sellerId });
+    const data = res.data || {};
+    renderReserves(data);
+    const note = document.getElementById('reserve-refresh-note');
+    if (note) note.textContent = 'Last checked: ' + new Date().toLocaleTimeString('en-KE') + ' · Auto-refreshes every 60 s';
+  } catch (err) {
+    console.error('getInventoryReserveStatus', err);
+    body.innerHTML = `<div class="card"><div class="empty-state">
+      <div class="empty-icon">&#10060;</div>
+      <div class="empty-msg">Failed to load reserve data</div>
+      <div class="empty-sub">${esc(err.message)}</div>
+      <button class="btn btn-ghost btn-sm mt12" onclick="loadReserves()">Retry</button>
+    </div></div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#128202; Check Reserves'; }
+  }
+};
+
+function renderReserves(data) {
+  const body     = document.getElementById('reserve-body');
+  const products = data.products || data.reserves || [];
+  const totalOrders = data.totalPendingOrders || products.reduce((s, p) => s + (p.pendingOrders?.length || 0), 0);
+  const totalValue  = data.totalReservedValue  || products.reduce((s, p) => s + (p.reservedValue || 0), 0);
+
+  if (products.length === 0) {
+    body.innerHTML = `
+      <div class="all-clear">
+        <span style="font-size:24px">&#9989;</span>
+        All clear — no stock reserved for pending pickup orders
+      </div>`;
+    return;
+  }
+
+  const summaryPill = `
+    <div class="reserve-summary-pill">
+      &#128230; ${esc(products.length)} product${products.length !== 1 ? 's' : ''}
+      with ${esc(totalOrders)} order${totalOrders !== 1 ? 's' : ''} pending pickup
+      &nbsp;|&nbsp; ${esc(kes(totalValue))} reserved
+    </div>`;
+
+  const tableRows = products.map((p, idx) => {
+    const avail    = (p.currentStock || 0) - (p.reserved || 0);
+    const ordersHtml = Array.isArray(p.pendingOrders) && p.pendingOrders.length > 0
+      ? p.pendingOrders.map(o => `
+          <div class="order-sub-row">
+            <span style="color:var(--pos-muted);min-width:100px;font-size:11px">#${esc(o.orderId || o.id || '–')}</span>
+            <span style="flex:1;font-size:12px">${esc(o.customerName || 'Customer')}</span>
+            <span style="font-size:12px">Qty: <strong>${esc(o.qty || o.quantity || 1)}</strong></span>
+            <span class="pill" style="background:rgba(245,158,11,.15);color:var(--pos-orange);font-size:10px">${esc(o.status || 'pending')}</span>
+          </div>`).join('')
+      : '<div style="color:var(--pos-muted);font-size:12px">No order details available</div>';
+
+    return `
+      <tr class="expandable-row" onclick="toggleReserveExpand(${idx})">
+        <td>${esc(p.name || p.productName || '–')}</td>
+        <td class="num">${esc(p.currentStock || 0)}</td>
+        <td class="num txt-orange"><strong>${esc(p.reserved || 0)}</strong></td>
+        <td class="num ${avail <= 0 ? 'txt-red' : 'txt-green'}">${esc(avail)}</td>
+        <td class="num">${esc(kes(p.reservedValue || 0))}</td>
+        <td style="color:var(--pos-muted);font-size:12px">&#9660;</td>
+      </tr>
+      <tr class="expand-detail" id="expand-${idx}">
+        <td colspan="6">
+          <div style="margin-bottom:6px;font-weight:600;font-size:12px;color:var(--pos-muted)">Pending orders holding stock:</div>
+          ${ordersHtml}
+        </td>
+      </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    ${summaryPill}
+    <div class="reserve-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th style="text-align:right">In Stock</th>
+            <th style="text-align:right">Reserved</th>
+            <th style="text-align:right">Available</th>
+            <th style="text-align:right">Reserved Value</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
+}
+
+window.toggleReserveExpand = function(idx) {
+  const row = document.getElementById('expand-' + idx);
+  if (!row) return;
+  row.classList.toggle('open');
+  // flip arrow on parent row
+  const rows = document.querySelectorAll('.expandable-row');
+  if (rows[idx]) {
+    const arrow = rows[idx].querySelector('td:last-child');
+    if (arrow) arrow.textContent = row.classList.contains('open') ? '&#9650;' : '&#9660;';
+    // use innerHTML for entity
+    arrow.innerHTML = row.classList.contains('open') ? '&#9650;' : '&#9660;';
+  }
+};
+
+/* ══════════════════════════════════════
+   Cleanup listeners on page hide
+══════════════════════════════════════ */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    if (_reserveTimer) clearInterval(_reserveTimer);
+  } else if (document.visibilityState === 'visible' && isManager()) {
+    startReserveAutoRefresh();
+  }
+});
+
+</script>
+</body>
+</html>

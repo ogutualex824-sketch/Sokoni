@@ -1,4 +1,92 @@
-﻿## [2026-06-28] — Event Hub v1.0
+﻿## [2026-06-28] — Platform Hubs v1.0 (Healthcare · Property · Vehicle · Digital · Legal · Entertainment)
+
+### Summary
+Six production-grade hub Cloud Function modules built and wired into index.js. All CFs on standby
+pending Cloud Run quota increase. Firestore security rules deployed for 20 new collections.
+Hosting deployed with updated service worker cache version.
+
+**Total new CFs: 65 (all on standby — quota pending)**
+
+### New Cloud Function Modules
+
+#### `functions/healthcare-hub.js` — 15 CFs
+- `registerHealthProvider`, `approveHealthProvider` — provider onboarding with admin approval
+- `getHealthProviders`, `getHealthProvider`, `searchHealthProviders` — discovery
+- `bookAppointment` — slot conflict detection ±30 min, idempotency key, future-date validation
+- `getMyAppointments`, `getProviderAppointments`, `updateAppointmentStatus` — lifecycle
+- `createHealthRecord`, `getHealthRecords` — secure patient records (patient-owned)
+- `createPrescription`, `getPrescriptions` — provider-issued Rx with expiry
+- `rateHealthProvider` — post-completion only, running weighted average
+- `getHealthDashboard` — admin aggregate metrics
+
+#### `functions/property-hub.js` — 12 CFs
+- `createPropertyListing`, `updatePropertyListing`, `publishPropertyListing`, `deactivatePropertyListing` — agent lifecycle
+- `getProperty`, `listProperties`, `searchProperties` — public discovery with price/bedroom/location filters
+- `submitPropertyEnquiry` — increments `enquiryCount` atomically
+- `getPropertyEnquiries` — agent-only view of enquiry inbox
+- `scheduleViewing`, `getViewings` — buyer/agent viewing management
+- `getPropertyAnalytics` — agent dashboard: views, enquiries, conversions
+
+#### `functions/vehicle-hub.js` — 10 CFs
+- `createVehicleListing`, `updateVehicleListing`, `publishVehicleListing` — seller lifecycle
+- `getVehicle`, `listVehicles`, `searchVehicles` — discovery with make/year/fuel/county/price filters
+- `submitVehicleEnquiry`, `getVehicleEnquiries` — buyer-seller communication
+- `compareVehicles` — side-by-side comparison (2–4 vehicles)
+- `reportVehicleListing` — community moderation
+
+#### `functions/digital-hub.js` — 10 CFs
+- `createDigitalProduct`, `updateDigitalProduct`, `publishDigitalProduct` — creator lifecycle
+- `getDigitalProduct`, `listDigitalProducts` — `fileStoragePath` never exposed publicly
+- `purchaseDigitalProduct` — idempotency + license key generation + 10% platform fee
+- `getMyDigitalPurchases`, `downloadDigitalProduct` — GCS signed URL (15 min expiry), download-count enforcement
+- `rateDigitalProduct` — purchase-gated rating
+- `getDigitalSellerDashboard` — revenue split display (90% seller / 10% platform)
+
+#### `functions/legal-hub.js` — 9 CFs
+- `registerLegalProvider`, `approveLegalProvider` — LSK license number + admin approval
+- `getLegalProviders`, `getLegalProvider` — `array-contains` query on multi-specialization
+- `bookLegalConsultation` — idempotency key, future-date guard
+- `getMyLegalConsultations`, `getProviderConsultations` — dual-role access
+- `updateConsultationStatus` — confirmed/cancelled/completed/no_show/rescheduled
+- `rateLegalProvider` — completed-only rating gate
+
+#### `functions/entertainment-hub.js` — 9 CFs
+- `createEntertainmentListing`, `publishEntertainmentListing` — creator lifecycle (free/ppv/subscription)
+- `getEntertainmentListing` — streaming URL conditionally revealed post-purchase only
+- `listEntertainmentContent`, `searchEntertainment` — public discovery
+- `purchaseEntertainment` — 15% PPV platform fee, free-content access logging
+- `getMyEntertainmentPurchases`, `rateEntertainmentContent` — library + ratings
+- `getCreatorDashboard` — revenue and view analytics
+
+### Firestore Rules (DEPLOYED)
+20 new collections added, all `write: if false` (CF-only):
+- Healthcare: `healthProviders`, `healthAppointments`, `healthRecords`, `healthPrescriptions`, `healthApptIdempotency`
+- Property: `propertyListings`, `propertyEnquiries`, `propertyViewings`
+- Vehicle: `vehicleListings`, `vehicleEnquiries`, `vehicleReports`
+- Digital: `digitalProducts`, `digitalPurchases`, `digitalPurchaseIdempotency`
+- Legal: `legalProviders`, `legalConsultations`, `legalConsultIdempotency`
+- Entertainment: `entertainmentListings`, `entertainmentPurchases`, `entertainmentPurchaseIdempotency`, `entertainmentReviews`
+
+### Security Notes
+- Patient health records readable only by `patientUid` or admin
+- Digital file storage paths never returned from public CF endpoints
+- Entertainment streaming URLs gated behind purchase verification
+- All monetary operations use idempotency keys
+- Provider registrations require admin approval before going live
+
+### Performance Notes
+- All list queries use single-field Firestore indexes (within 200/200 limit)
+- Client-side filtering applied after server-side status/type filter for price/location range queries
+- Download signed URLs expire in 15 minutes to prevent link sharing
+
+### Deployment Status
+- Firestore rules: **DEPLOYED**
+- Hosting: **DEPLOYED** (SW cache bumped to `sokoni-20260628-platform-hubs-v1`)
+- Functions: **STANDBY** — awaiting Cloud Run quota increase (currently 1,017/1,300)
+
+---
+
+## [2026-06-28] — Event Hub v1.0
 
 ### Summary
 Full event lifecycle platform: event creation, multi-tier ticketing, QR gate check-in, organizer

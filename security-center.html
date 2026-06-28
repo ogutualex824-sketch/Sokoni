@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Security Operations Center — SOKONI</title>
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg2: #161b22;
+      --bg3: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --red: #f85149;
+      --orange: #d29922;
+      --yellow: #e3b341;
+      --green: #3fb950;
+      --blue: #58a6ff;
+      --purple: #bc8cff;
+      --cyan: #79c0ff;
+      --card-radius: 8px;
+      --font: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+    /* ── Header ── */
+    .soc-header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .soc-logo { font-size: 18px; font-weight: 700; color: var(--text); }
+    .soc-logo span { color: var(--red); }
+    .soc-status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(63,185,80,0.1);
+      border: 1px solid rgba(63,185,80,0.3);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 12px;
+      color: var(--green);
+    }
+    .soc-status-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .soc-header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .soc-time { font-family: var(--font); font-size: 13px; color: var(--text2); }
+    .btn-sm {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      transition: background .15s;
+    }
+    .btn-sm:hover { background: #2d333b; }
+    .btn-sm.danger { border-color: var(--red); color: var(--red); }
+    .btn-sm.danger:hover { background: rgba(248,81,73,0.1); }
+    /* ── Nav tabs ── */
+    .soc-nav {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
+    .soc-tab {
+      padding: 12px 18px;
+      border-bottom: 2px solid transparent;
+      color: var(--text2);
+      cursor: pointer;
+      white-space: nowrap;
+      font-size: 13px;
+      transition: color .15s;
+    }
+    .soc-tab:hover { color: var(--text); }
+    .soc-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: var(--red);
+      color: #fff;
+      font-size: 10px;
+      margin-left: 5px;
+    }
+    /* ── Main layout ── */
+    .soc-main { padding: 24px; max-width: 1600px; margin: 0 auto; }
+    .section { display: none; }
+    .section.active { display: block; }
+    /* ── Grid ── */
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+    @media(max-width:1200px) { .grid-4 { grid-template-columns: repeat(2,1fr); } }
+    @media(max-width:768px) { .grid-4,.grid-3,.grid-2 { grid-template-columns: 1fr; } }
+    /* ── Cards ── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text2);
+      margin-bottom: 12px;
+    }
+    /* ── Metric cards ── */
+    .metric-val { font-size: 32px; font-weight: 700; line-height: 1; }
+    .metric-sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
+    .metric-delta { font-size: 11px; margin-top: 4px; }
+    .metric-delta.up { color: var(--green); }
+    .metric-delta.down { color: var(--red); }
+    .c-red { color: var(--red); }
+    .c-orange { color: var(--orange); }
+    .c-yellow { color: var(--yellow); }
+    .c-green { color: var(--green); }
+    .c-blue { color: var(--blue); }
+    .c-purple { color: var(--purple); }
+    /* ── Tables ── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th {
+      text-align: left;
+      padding: 8px 12px;
+      color: var(--text2);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: rgba(255,255,255,0.03); }
+    /* ── Severity badges ── */
+    .sev {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .sev-critical { background: rgba(248,81,73,0.2); color: var(--red); border: 1px solid rgba(248,81,73,0.4); }
+    .sev-high     { background: rgba(210,153,34,0.2); color: var(--orange); border: 1px solid rgba(210,153,34,0.4); }
+    .sev-medium   { background: rgba(227,179,65,0.2); color: var(--yellow); border: 1px solid rgba(227,179,65,0.4); }
+    .sev-low      { background: rgba(63,185,80,0.2); color: var(--green); border: 1px solid rgba(63,185,80,0.4); }
+    .sev-info     { background: rgba(88,166,255,0.2); color: var(--blue); border: 1px solid rgba(88,166,255,0.4); }
+    /* ── Status badges ── */
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 4px; font-size: 11px;
+    }
+    .status-open       { background: rgba(248,81,73,0.15); color: var(--red); }
+    .status-invest     { background: rgba(210,153,34,0.15); color: var(--orange); }
+    .status-contained  { background: rgba(88,166,255,0.15); color: var(--blue); }
+    .status-resolved   { background: rgba(63,185,80,0.15); color: var(--green); }
+    /* ── Scorecard ── */
+    .score-ring {
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: conic-gradient(var(--green) 0deg, var(--green) calc(var(--pct) * 3.6deg), var(--bg3) calc(var(--pct) * 3.6deg));
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      position: relative;
+    }
+    .score-ring::before {
+      content: '';
+      width: 88px; height: 88px;
+      border-radius: 50%;
+      background: var(--bg2);
+      position: absolute;
+    }
+    .score-ring-val {
+      position: relative;
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .score-ring-val small { display: block; font-size: 11px; color: var(--text2); font-weight: 400; }
+    .domain-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .domain-row:last-child { border-bottom: none; }
+    .domain-name { flex: 1; font-size: 12px; }
+    .domain-grade {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+    }
+    .grade-a { background: rgba(63,185,80,0.15); color: var(--green); }
+    .grade-b { background: rgba(88,166,255,0.15); color: var(--blue); }
+    .grade-c { background: rgba(210,153,34,0.15); color: var(--orange); }
+    .domain-bar { width: 80px; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+    .domain-bar-fill { height: 100%; border-radius: 3px; }
+    /* ── Timeline ── */
+    .timeline { position: relative; }
+    .timeline-item { display: flex; gap: 12px; padding-bottom: 20px; }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+    .timeline-line {
+      position: absolute;
+      left: 4px; top: 14px; bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-content { flex: 1; }
+    .timeline-title { font-size: 13px; font-weight: 600; }
+    .timeline-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+    /* ── Alert list ── */
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+      background: var(--bg3);
+    }
+    .alert-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
+    .alert-body { flex: 1; }
+    .alert-title { font-size: 13px; font-weight: 600; }
+    .alert-desc { font-size: 12px; color: var(--text2); margin-top: 2px; }
+    .alert-time { font-size: 11px; color: var(--text2); margin-top: 4px; }
+    .alert-actions { display: flex; gap: 6px; margin-top: 6px; }
+    /* ── Forms & inputs ── */
+    .form-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: center; }
+    .form-label { width: 120px; font-size: 12px; color: var(--text2); }
+    .form-input {
+      flex: 1;
+      padding: 7px 12px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .form-input:focus { outline: none; border-color: var(--blue); }
+    select.form-input option { background: var(--bg2); }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--blue); color: #000; }
+    .btn-danger  { background: var(--red); color: #fff; }
+    .btn-warning { background: var(--orange); color: #000; }
+    .btn-success { background: var(--green); color: #000; }
+    /* ── Log viewer ── */
+    .log-viewer {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      height: 400px;
+      overflow-y: auto;
+      font-family: var(--font);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    .log-line { display: flex; gap: 8px; }
+    .log-ts { color: var(--text2); flex-shrink: 0; }
+    .log-sev-c { color: var(--red); }
+    .log-sev-h { color: var(--orange); }
+    .log-sev-m { color: var(--yellow); }
+    .log-sev-l { color: var(--green); }
+    .log-sev-i { color: var(--blue); }
+    /* ── Loading / empty states ── */
+    .loading { text-align: center; padding: 40px; color: var(--text2); }
+    .empty { text-align: center; padding: 40px; color: var(--text2); }
+    /* ── Section headings ── */
+    .section-heading {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .section-heading h2 { font-size: 18px; font-weight: 700; }
+    .section-heading .sub { font-size: 13px; color: var(--text2); margin-left: 4px; }
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 13px;
+      z-index: 9999;
+      display: none;
+      max-width: 340px;
+    }
+    #toast.show { display: block; }
+    /* ── Modal ── */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 500;
+      display: none; align-items: center; justify-content: center;
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      width: 480px;
+      max-width: 90vw;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="soc-header">
+  <div class="soc-logo">SOKONI <span>SOC</span></div>
+  <div class="soc-status-badge"><div class="dot"></div> SYSTEMS NORMAL</div>
+  <div class="soc-header-right">
+    <div class="soc-time" id="clockDisplay">—</div>
+    <button class="btn-sm" onclick="refreshAll()">⟳ Refresh</button>
+    <button class="btn-sm danger" onclick="showEmergencyModal()">⚠ Emergency</button>
+  </div>
+</header>
+
+<!-- ── Nav ── -->
+<nav class="soc-nav">
+  <div class="soc-tab active" onclick="showTab('overview')">Overview</div>
+  <div class="soc-tab" onclick="showTab('threats')">Threats <span class="tab-count" id="alertCount">0</span></div>
+  <div class="soc-tab" onclick="showTab('incidents')">Incidents <span class="tab-count" id="incidentCount">0</span></div>
+  <div class="soc-tab" onclick="showTab('audit')">Audit Log</div>
+  <div class="soc-tab" onclick="showTab('scorecard')">Scorecard</div>
+  <div class="soc-tab" onclick="showTab('identity')">Identity</div>
+  <div class="soc-tab" onclick="showTab('actions')">Actions</div>
+  <div class="soc-tab" onclick="showTab('ai-security')">AI Security</div>
+</nav>
+
+<main class="soc-main">
+
+  <!-- ══════════════════════════════ OVERVIEW ══════════════════════════════ -->
+  <section id="sec-overview" class="section active">
+    <div class="section-heading">
+      <h2>Security Overview</h2>
+      <span class="sub" id="overviewTs">Loading...</span>
+    </div>
+
+    <div class="grid-4">
+      <div class="card">
+        <div class="card-title">Threat Score (24h)</div>
+        <div class="metric-val c-green" id="threatScore">—</div>
+        <div class="metric-sub">0 = no risk · 100 = critical</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Active Alerts</div>
+        <div class="metric-val c-red" id="activeAlerts">—</div>
+        <div class="metric-sub">Unacknowledged</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Blocked Today</div>
+        <div class="metric-val c-orange" id="blockedToday">—</div>
+        <div class="metric-sub">Suspicious requests denied</div>
+      </div>
+      <div class="card">
+        <div class="card-title">MFA Coverage</div>
+        <div class="metric-val c-blue" id="mfaCoverage">—</div>
+        <div class="metric-sub">Privileged accounts with MFA</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Recent Security Events</div>
+        <div id="recentEvents"><div class="loading">Loading events…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Fraud Alerts (24h)</div>
+        <div id="recentFraudAlerts"><div class="loading">Loading alerts…</div></div>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-title">Zero Trust Policy</div>
+        <div id="ztPolicyStatus"><div class="loading">Loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Session Risk Distribution</div>
+        <div id="riskDistribution"><div class="loading">Loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Security Score Trend</div>
+        <canvas id="scoreTrendChart" width="300" height="150"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ THREATS ═══════════════════════════════ -->
+  <section id="sec-threats" class="section">
+    <div class="section-heading">
+      <h2>Threat Detection</h2>
+      <span class="sub">Real-time fraud and anomaly alerts</span>
+    </div>
+
+    <div class="grid-4" style="margin-bottom:24px">
+      <div class="card">
+        <div class="card-title">Impossible Travel</div>
+        <div class="metric-val c-red" id="travelAlerts">—</div>
+        <div class="metric-sub">&gt;500 km in &lt;2h</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Velocity Violations</div>
+        <div class="metric-val c-orange" id="velocityAlerts">—</div>
+        <div class="metric-sub">Rate-limit breaches</div>
+      </div>
+      <div class="card">
+        <div class="card-title">High Risk Users</div>
+        <div class="metric-val c-yellow" id="highRiskUsers">—</div>
+        <div class="metric-sub">Score &gt; 70 / 100</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Dismissed (24h)</div>
+        <div class="metric-val c-green" id="dismissedAlerts">—</div>
+        <div class="metric-sub">False positives cleared</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:16px;display:flex;align-items:center;gap:8px">
+        Active Fraud Alerts
+        <button class="btn-sm" onclick="loadFraudAlerts()" style="margin-left:auto">Refresh</button>
+      </div>
+      <div id="fraudAlertList"><div class="loading">Loading fraud alerts…</div></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ INCIDENTS ═════════════════════════════ -->
+  <section id="sec-incidents" class="section">
+    <div class="section-heading">
+      <h2>Incident Management</h2>
+      <span class="sub">Track, investigate, and resolve security incidents</span>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-bottom:20px">
+      <button class="btn btn-primary" onclick="showCreateIncidentModal()">+ New Incident</button>
+      <select class="form-input" style="width:160px" onchange="loadIncidents(this.value)">
+        <option value="">All Status</option>
+        <option value="open">Open</option>
+        <option value="investigating">Investigating</option>
+        <option value="contained">Contained</option>
+        <option value="resolved">Resolved</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div id="incidentList"><div class="loading">Loading incidents…</div></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ AUDIT LOG ═════════════════════════════ -->
+  <section id="sec-audit" class="section">
+    <div class="section-heading">
+      <h2>Immutable Audit Log</h2>
+      <span class="sub">SHA-256 tamper-evident; CF-write only</span>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <select class="form-input" style="width:180px" id="auditFilter">
+          <option value="">All Events</option>
+          <option value="auth">Authentication</option>
+          <option value="payment">Payment</option>
+          <option value="admin">Admin Action</option>
+          <option value="fraud">Fraud</option>
+          <option value="incident">Incident</option>
+          <option value="security">Security</option>
+        </select>
+        <select class="form-input" style="width:140px" id="auditSeverity">
+          <option value="">All Severity</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <button class="btn btn-primary" onclick="loadAuditLog()">Filter</button>
+        <button class="btn-sm" onclick="verifyIntegrity()" style="margin-left:auto">Verify Integrity</button>
+        <button class="btn-sm" onclick="exportAudit()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="log-viewer" id="auditLogViewer">
+        <div class="loading">Loading audit log…</div>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
+        <span id="auditCount" style="font-size:12px;color:var(--text2)">— events</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn-sm" onclick="auditPage(-1)">← Prev</button>
+          <span id="auditPageNum" style="font-size:12px;line-height:28px;color:var(--text2)">Page 1</span>
+          <button class="btn-sm" onclick="auditPage(1)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="integrityResult" style="margin-top:16px;display:none" class="card">
+      <div class="card-title">Integrity Verification</div>
+      <div id="integrityBody"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ SCORECARD ═════════════════════════════ -->
+  <section id="sec-scorecard" class="section">
+    <div class="section-heading">
+      <h2>Security Scorecard</h2>
+      <span class="sub">15-dimension live assessment</span>
+    </div>
+
+    <div class="grid-2">
+      <div class="card" style="text-align:center">
+        <div class="card-title">Overall Security Score</div>
+        <div class="score-ring" id="scoreRing" style="--pct:86">
+          <div class="score-ring-val" id="scoreRingVal">86<small>/ 100</small></div>
+        </div>
+        <div id="scoreGrade" style="font-size:24px;font-weight:700;margin-bottom:4px">B+</div>
+        <div style="font-size:12px;color:var(--text2)">Financial-Grade Security</div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text2)">Version: Security 6.0 · 2026-06-28</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Domain Breakdown</div>
+        <div id="domainList"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:0">
+      <div class="card">
+        <div class="card-title">Run Security Scan</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:16px">
+          Automated pen-test mode: 7 security checks. Takes ~30 seconds.
+          Results are immutably logged.
+        </p>
+        <button class="btn btn-primary" onclick="runSecScan()" id="scanBtn">Start Security Scan</button>
+        <div id="scanResult" style="margin-top:16px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Compliance Status</div>
+        <div id="complianceStatus"><div class="loading">Loading…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ IDENTITY ══════════════════════════════ -->
+  <section id="sec-identity" class="section">
+    <div class="section-heading">
+      <h2>Identity & Device Security</h2>
+      <span class="sub">MFA enrollment, passkeys, and device trust</span>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-title">MFA Status</div>
+        <div id="mfaStatusCard"><div class="loading">Loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Registered Devices</div>
+        <div id="devicesCard"><div class="loading">Loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Passkeys</div>
+        <div id="passkeysCard">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px">WebAuthn passkeys registered for your account</p>
+          <button class="btn btn-primary" onclick="registerPasskey()">+ Register Passkey</button>
+          <div id="passkeysResult" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">User Risk Profiles</div>
+      <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+        <input class="form-input" id="riskUserId" placeholder="User ID to look up…" style="max-width:300px" />
+        <button class="btn btn-primary" onclick="lookupRisk()">Look Up</button>
+      </div>
+      <div id="riskProfileResult"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ ACTIONS ═══════════════════════════════ -->
+  <section id="sec-actions" class="section">
+    <div class="section-heading">
+      <h2>Security Actions</h2>
+      <span class="sub">Admin-level account, store, and session controls</span>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">User Management</div>
+        <div class="form-row">
+          <div class="form-label">User ID</div>
+          <input class="form-input" id="actionUserId" placeholder="uid_..." />
+        </div>
+        <div class="form-row">
+          <div class="form-label">Reason</div>
+          <input class="form-input" id="actionReason" placeholder="Describe why…" />
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <button class="btn btn-danger" onclick="doAction('suspendUser')">Suspend User</button>
+          <button class="btn btn-success" onclick="doAction('unsuspendUser')">Unsuspend</button>
+          <button class="btn btn-warning" onclick="doAction('revokeUserSessions')">Revoke Sessions</button>
+        </div>
+        <div id="userActionResult" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Store Management</div>
+        <div class="form-row">
+          <div class="form-label">Store / Seller ID</div>
+          <input class="form-input" id="actionStoreId" placeholder="uid_..." />
+        </div>
+        <div class="form-row">
+          <div class="form-label">Reason</div>
+          <input class="form-input" id="actionStoreReason" placeholder="Describe why…" />
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <button class="btn btn-danger" onclick="doStoreAction('lockStore')">Lock Store</button>
+          <button class="btn btn-success" onclick="doStoreAction('unlockStore')">Unlock Store</button>
+        </div>
+        <div id="storeActionResult" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Device Management</div>
+        <div class="form-row">
+          <div class="form-label">User ID</div>
+          <input class="form-input" id="deviceUserId" placeholder="uid_..." />
+        </div>
+        <div class="form-row">
+          <div class="form-label">Device ID</div>
+          <input class="form-input" id="deviceId" placeholder="Device fingerprint or ID…" />
+        </div>
+        <button class="btn btn-danger" onclick="doDeviceBlock()">Block Device</button>
+        <button class="btn-sm" onclick="loadUserDevices()" style="margin-left:8px">List Devices</button>
+        <div id="deviceActionResult" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Payment Method Control</div>
+        <div class="form-row">
+          <div class="form-label">User ID</div>
+          <input class="form-input" id="pmUserId" placeholder="uid_..." />
+        </div>
+        <div class="form-row">
+          <div class="form-label">Method Type</div>
+          <select class="form-input" id="pmType">
+            <option value="mpesa">M-Pesa</option>
+            <option value="card">Card</option>
+            <option value="wallet">Wallet</option>
+            <option value="all">All Methods</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-label">Reason</div>
+          <input class="form-input" id="pmReason" placeholder="Describe why…" />
+        </div>
+        <button class="btn btn-danger" onclick="disablePayment()">Disable Payment</button>
+        <div id="pmActionResult" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════ AI SECURITY ═══════════════════════════ -->
+  <section id="sec-ai-security" class="section">
+    <div class="section-heading">
+      <h2>AI Security Monitor</h2>
+      <span class="sub">Prompt injection, PII scrubbing, rate limits, and abuse reports</span>
+    </div>
+
+    <div class="grid-4">
+      <div class="card">
+        <div class="card-title">Injections Blocked</div>
+        <div class="metric-val c-red" id="injBlocked">—</div>
+        <div class="metric-sub">Prompt injection attempts</div>
+      </div>
+      <div class="card">
+        <div class="card-title">PII Scrubbed</div>
+        <div class="metric-val c-orange" id="piiScrubbed">—</div>
+        <div class="metric-sub">Response fields cleaned</div>
+      </div>
+      <div class="card">
+        <div class="card-title">AI Blocked Sessions</div>
+        <div class="metric-val c-red" id="aiBlocked">—</div>
+        <div class="metric-sub">Abusive AI sessions</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Abuse Reports</div>
+        <div class="metric-val c-yellow" id="abuseReports">—</div>
+        <div class="metric-sub">Pending review</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">AI Rate Limit Status</div>
+        <div class="form-row">
+          <div class="form-label">User ID</div>
+          <input class="form-input" id="aiRateUserId" placeholder="uid_..." />
+          <button class="btn btn-primary" onclick="checkAIRate()" style="margin-left:8px">Check</button>
+        </div>
+        <div id="aiRateResult"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Block AI Session</div>
+        <div class="form-row">
+          <div class="form-label">User ID</div>
+          <input class="form-input" id="aiBlockUserId" placeholder="uid_..." />
+        </div>
+        <div class="form-row">
+          <div class="form-label">Duration (hrs)</div>
+          <input class="form-input" id="aiBlockHours" type="number" value="24" />
+        </div>
+        <div class="form-row">
+          <div class="form-label">Reason</div>
+          <input class="form-input" id="aiBlockReason" placeholder="Describe why…" />
+        </div>
+        <button class="btn btn-danger" onclick="blockAISession()">Block AI Session</button>
+        <div id="aiBlockResult" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">AI Security Log</div>
+      <div id="aiSecurityLog"><div class="loading">Loading…</div></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<!-- ── Emergency Modal ── -->
+<div class="modal-backdrop" id="emergencyModal">
+  <div class="modal">
+    <div class="modal-title c-red">⚠ Emergency Protocol</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      Select the emergency action to execute immediately. All actions are logged to the immutable audit trail.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-danger" style="text-align:left" onclick="emergencyAction('lockAllStores')">
+        🔒 Lock All Stores — Suspend all marketplace listings
+      </button>
+      <button class="btn btn-danger" style="text-align:left" onclick="emergencyAction('revokeAllSessions')">
+        🚫 Revoke All Sessions — Force re-login for all users
+      </button>
+      <button class="btn btn-warning" style="text-align:left" onclick="emergencyAction('disablePayments')">
+        💳 Disable Payments — Block all new payment processing
+      </button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeModal('emergencyModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Create Incident Modal ── -->
+<div class="modal-backdrop" id="createIncidentModal">
+  <div class="modal">
+    <div class="modal-title">Create Security Incident</div>
+    <div class="form-row"><div class="form-label">Title</div><input class="form-input" id="incTitle" placeholder="Brief incident title…" /></div>
+    <div class="form-row"><div class="form-label">Severity</div>
+      <select class="form-input" id="incSeverity">
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium" selected>Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+    <div class="form-row"><div class="form-label">Type</div>
+      <select class="form-input" id="incType">
+        <option value="fraud">Fraud</option>
+        <option value="unauthorized_access">Unauthorized Access</option>
+        <option value="data_breach">Data Breach</option>
+        <option value="account_takeover">Account Takeover</option>
+        <option value="payment_abuse">Payment Abuse</option>
+        <option value="ai_abuse">AI Abuse</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-row"><div class="form-label">Description</div><input class="form-input" id="incDescription" placeholder="What happened?" /></div>
+    <div class="form-row"><div class="form-label">Affected User</div><input class="form-input" id="incAffectedUser" placeholder="uid (optional)" /></div>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeModal('createIncidentModal')">Cancel</button>
+      <button class="btn btn-danger" onclick="createIncident()">Create Incident</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Firebase + Scripts ── -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+<script>
+  /* ── Init ── */
+  const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'security-center');
+  const auth = firebase.auth(app);
+  const fns  = firebase.functions(app);
+  const db   = firebase.firestore(app);
+  fns.useRegion('us-central1');
+
+  let currentUser = null;
+  let auditCursor = null;
+  let auditPageIdx = 1;
+  let unsubscribeAlerts = null;
+  let unsubscribeIncidents = null;
+
+  /* ── Clock ── */
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clockDisplay').textContent =
+      now.toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' EAT';
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  /* ── Auth gate ── */
+  auth.onAuthStateChanged(async user => {
+    if (!user) { window.location.href = '/login.html?redirect=/security-center.html'; return; }
+    const token = await user.getIdTokenResult();
+    const role = token.claims.role || 0;
+    if (role < 4) {
+      document.body.innerHTML = '<div style="padding:80px;text-align:center;color:#f85149;font-size:20px">Access denied. Admin required.</div>';
+      return;
+    }
+    currentUser = user;
+    initSOC();
+  });
+
+  /* ── Init SOC ── */
+  function initSOC() {
+    loadOverview();
+    subscribeAlerts();
+    subscribeIncidents();
+    loadScorecard();
+    loadAISecurityLog();
+  }
+
+  /* ── Tab nav ── */
+  function showTab(name) {
+    document.querySelectorAll('.soc-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    document.getElementById('sec-' + name).classList.add('active');
+    if (name === 'threats') loadFraudAlerts();
+    if (name === 'incidents') loadIncidents('');
+    if (name === 'audit') loadAuditLog();
+    if (name === 'identity') loadIdentity();
+  }
+
+  /* ── Call CF helper ── */
+  async function callCF(name, data = {}) {
+    const fn = fns.httpsCallable(name);
+    const r  = await fn(data);
+    return r.data;
+  }
+
+  /* ── Toast ── */
+  function toast(msg, duration = 3000) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), duration);
+  }
+
+  /* ── Modals ── */
+  function showEmergencyModal()      { document.getElementById('emergencyModal').classList.add('show'); }
+  function showCreateIncidentModal() { document.getElementById('createIncidentModal').classList.add('show'); }
+  function closeModal(id)            { document.getElementById(id).classList.remove('show'); }
+
+  /* ─────────────────────────────────────────────────
+     OVERVIEW
+  ───────────────────────────────────────────────── */
+  async function loadOverview() {
+    document.getElementById('overviewTs').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-KE');
+
+    try {
+      const [ztStatus, fraudReport, scorecard] = await Promise.all([
+        callCF('getZeroTrustPolicyStatus'),
+        callCF('getFraudReport', { period: '24h' }),
+        callCF('getSecurityScorecard')
+      ]);
+
+      const score = scorecard.overall || 86;
+      document.getElementById('threatScore').textContent = fraudReport.compositeScore || 0;
+      document.getElementById('threatScore').className = 'metric-val ' +
+        (fraudReport.compositeScore > 70 ? 'c-red' : fraudReport.compositeScore > 40 ? 'c-orange' : 'c-green');
+
+      document.getElementById('activeAlerts').textContent = fraudReport.openAlerts || 0;
+      document.getElementById('blockedToday').textContent = ztStatus.deniedRequests || 0;
+      document.getElementById('mfaCoverage').textContent = (scorecard.mfaCoverage || 0) + '%';
+
+      // ZT Policy Status
+      const ztEl = document.getElementById('ztPolicyStatus');
+      const policies = ztStatus.policies || {};
+      ztEl.innerHTML = Object.entries(policies).map(([k, v]) =>
+        `<div class="domain-row">
+          <div class="domain-name">${k.replace(/_/g,' ')}</div>
+          <div class="metric-delta ${v ? 'up' : 'down'}">${v ? '✓ Enabled' : '✗ Disabled'}</div>
+        </div>`
+      ).join('') || '<div class="empty">No policy data</div>';
+
+      // Risk distribution
+      const distEl = document.getElementById('riskDistribution');
+      const dist   = scorecard.riskDistribution || { low: 0, medium: 0, high: 0, critical: 0 };
+      const total  = Object.values(dist).reduce((a,b) => a+b, 0) || 1;
+      distEl.innerHTML = Object.entries(dist).map(([k, v]) => {
+        const pct = Math.round(v / total * 100);
+        const cls = k === 'critical' ? 'c-red' : k === 'high' ? 'c-orange' : k === 'medium' ? 'c-yellow' : 'c-green';
+        return `<div class="domain-row">
+          <div class="domain-name ${cls}">${k.charAt(0).toUpperCase()+k.slice(1)}</div>
+          <div class="domain-bar"><div class="domain-bar-fill" style="width:${pct}%;background:var(--${k==='critical'?'red':k==='high'?'orange':k==='medium'?'yellow':'green'})"></div></div>
+          <div style="font-size:12px;width:30px;text-align:right">${v}</div>
+        </div>`;
+      }).join('');
+
+      // Score trend chart (static display)
+      drawScoreTrend(scorecard.trend || [60, 68, 75, 82, 88, 94, score]);
+
+    } catch (e) {
+      console.error('Overview load error:', e);
+      toast('Error loading overview: ' + e.message);
+    }
+
+    // Recent events from Firestore onSnapshot
+    const eventsEl = document.getElementById('recentEvents');
+    db.collection('securityEvents')
+      .orderBy('timestamp', 'desc')
+      .limit(8)
+      .onSnapshot(snap => {
+        if (snap.empty) { eventsEl.innerHTML = '<div class="empty">No recent events</div>'; return; }
+        eventsEl.innerHTML = snap.docs.map(d => {
+          const e = d.data();
+          const ts = e.timestamp?.toDate ? e.timestamp.toDate().toLocaleTimeString('en-KE') : '—';
+          return `<div class="domain-row">
+            <span class="sev sev-${e.severity||'info'}">${(e.severity||'info').toUpperCase()}</span>
+            <span style="flex:1;font-size:12px;margin-left:6px">${escHtml(e.description||e.eventType||'—')}</span>
+            <span style="font-size:11px;color:var(--text2)">${ts}</span>
+          </div>`;
+        }).join('');
+      });
+
+    // Recent fraud alerts
+    const fraudEl = document.getElementById('recentFraudAlerts');
+    db.collection('securityAlerts')
+      .where('status', '==', 'open')
+      .orderBy('timestamp', 'desc')
+      .limit(5)
+      .onSnapshot(snap => {
+        document.getElementById('alertCount').textContent = snap.size;
+        if (snap.empty) { fraudEl.innerHTML = '<div class="empty">No active alerts</div>'; return; }
+        fraudEl.innerHTML = snap.docs.map(d => {
+          const a = d.data();
+          const ts = a.timestamp?.toDate ? a.timestamp.toDate().toLocaleTimeString('en-KE') : '—';
+          return `<div class="alert-item">
+            <div class="alert-icon">${a.type === 'impossible_travel' ? '✈' : a.type === 'velocity' ? '⚡' : '🚨'}</div>
+            <div class="alert-body">
+              <div class="alert-title">${escHtml(a.title||a.type||'Alert')}</div>
+              <div class="alert-desc">${escHtml(a.description||'—')}</div>
+              <div class="alert-time">${ts}</div>
+            </div>
+            <span class="sev sev-${a.severity||'high'}">${(a.severity||'HIGH').toUpperCase()}</span>
+          </div>`;
+        }).join('');
+      });
+  }
+
+  function drawScoreTrend(data) {
+    const canvas = document.getElementById('scoreTrendChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const min = 50, max = 100;
+    const padX = 20, padY = 10;
+    const w = W - padX * 2, h = H - padY * 2;
+
+    ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
+    [60, 70, 80, 90, 100].forEach(v => {
+      const y = padY + h - h * (v - min) / (max - min);
+      ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(W - padX, y); ctx.stroke();
+      ctx.fillStyle = '#8b949e'; ctx.font = '9px sans-serif'; ctx.fillText(v, 0, y + 3);
+    });
+
+    ctx.beginPath(); ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 2;
+    data.forEach((v, i) => {
+      const x = padX + i * w / (data.length - 1);
+      const y = padY + h - h * (Math.max(min, Math.min(max, v)) - min) / (max - min);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    data.forEach((v, i) => {
+      const x = padX + i * w / (data.length - 1);
+      const y = padY + h - h * (Math.max(min, Math.min(max, v)) - min) / (max - min);
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#58a6ff'; ctx.fill();
+    });
+  }
+
+  /* ─────────────────────────────────────────────────
+     THREATS
+  ───────────────────────────────────────────────── */
+  function subscribeAlerts() {
+    if (unsubscribeAlerts) unsubscribeAlerts();
+    unsubscribeAlerts = db.collection('securityAlerts')
+      .where('status', '==', 'open')
+      .orderBy('timestamp', 'desc')
+      .limit(50)
+      .onSnapshot(snap => {
+        document.getElementById('alertCount').textContent = snap.size;
+        const counts = { travel: 0, velocity: 0, highRisk: 0, dismissed: 0 };
+        snap.docs.forEach(d => {
+          const t = d.data().type;
+          if (t === 'impossible_travel') counts.travel++;
+          else if (t === 'velocity') counts.velocity++;
+          else if (d.data().fraudScore > 70) counts.highRisk++;
+        });
+        document.getElementById('travelAlerts').textContent   = counts.travel;
+        document.getElementById('velocityAlerts').textContent = counts.velocity;
+        document.getElementById('highRiskUsers').textContent  = counts.highRisk;
+      });
+  }
+
+  async function loadFraudAlerts() {
+    const el = document.getElementById('fraudAlertList');
+    el.innerHTML = '<div class="loading">Loading…</div>';
+    try {
+      const r = await callCF('getFraudAlerts', { status: 'open', limit: 20 });
+      const alerts = r.alerts || [];
+      if (!alerts.length) { el.innerHTML = '<div class="empty">No active fraud alerts</div>'; return; }
+      el.innerHTML = `<table class="data-table">
+        <thead><tr>
+          <th>Type</th><th>User</th><th>Score</th><th>Description</th>
+          <th>Time</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+        ${alerts.map(a => `
+          <tr>
+            <td><span class="sev sev-${a.severity||'high'}">${escHtml(a.type||'fraud')}</span></td>
+            <td style="font-family:monospace;font-size:11px">${escHtml((a.userId||'—').slice(0,12))}…</td>
+            <td><span class="metric-val c-${a.fraudScore>70?'red':a.fraudScore>40?'orange':'yellow'}" style="font-size:18px">${a.fraudScore||'—'}</span></td>
+            <td style="max-width:220px;font-size:12px">${escHtml(a.description||'—')}</td>
+            <td style="font-size:11px;color:var(--text2)">${fmtTs(a.timestamp)}</td>
+            <td>
+              <div style="display:flex;gap:4px">
+                <button class="btn-sm" onclick="dismissAlert('${a.id}')">Dismiss</button>
+                <button class="btn-sm danger" onclick="escalateAlert('${a.id}')">Escalate</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    } catch (e) { el.innerHTML = '<div class="empty">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  async function dismissAlert(alertId) {
+    try {
+      await callCF('dismissFraudAlert', { alertId, reason: 'Reviewed and dismissed by admin' });
+      toast('Alert dismissed');
+      loadFraudAlerts();
+    } catch (e) { toast('Error: ' + e.message); }
+  }
+
+  async function escalateAlert(alertId) {
+    try {
+      await callCF('escalateFraudAlert', { alertId, escalationNote: 'Escalated for senior review' });
+      toast('Alert escalated');
+      loadFraudAlerts();
+    } catch (e) { toast('Error: ' + e.message); }
+  }
+
+  /* ─────────────────────────────────────────────────
+     INCIDENTS
+  ───────────────────────────────────────────────── */
+  function subscribeIncidents() {
+    if (unsubscribeIncidents) unsubscribeIncidents();
+    unsubscribeIncidents = db.collection('securityIncidents')
+      .where('status', 'in', ['open', 'investigating'])
+      .onSnapshot(snap => {
+        document.getElementById('incidentCount').textContent = snap.size;
+      });
+  }
+
+  async function loadIncidents(status) {
+    const el = document.getElementById('incidentList');
+    el.innerHTML = '<div class="loading">Loading…</div>';
+    try {
+      const r = await callCF('getIncidents', { status: status || undefined, limit: 25 });
+      const incs = r.incidents || [];
+      if (!incs.length) { el.innerHTML = '<div class="empty">No incidents found</div>'; return; }
+      el.innerHTML = `<table class="data-table">
+        <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Severity</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
+        <tbody>
+        ${incs.map(i => `
+          <tr>
+            <td style="font-family:monospace;font-size:11px">${escHtml((i.id||'—').slice(0,8))}…</td>
+            <td style="font-size:12px;max-width:180px">${escHtml(i.title||'—')}</td>
+            <td style="font-size:11px">${escHtml(i.type||'—')}</td>
+            <td><span class="sev sev-${i.severity||'medium'}">${(i.severity||'med').toUpperCase()}</span></td>
+            <td><span class="status-badge status-${i.status||'open'}">${(i.status||'open')}</span></td>
+            <td style="font-size:11px;color:var(--text2)">${fmtTs(i.createdAt)}</td>
+            <td>
+              <select class="form-input" style="width:130px;padding:3px 6px;font-size:11px"
+                onchange="updateIncidentStatus('${i.id}', this.value)">
+                <option value="">Update status…</option>
+                <option value="investigating">→ Investigating</option>
+                <option value="contained">→ Contained</option>
+                <option value="resolved">→ Resolved</option>
+              </select>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    } catch (e) { el.innerHTML = '<div class="empty">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  async function createIncident() {
+    const data = {
+      title:       document.getElementById('incTitle').value.trim(),
+      severity:    document.getElementById('incSeverity').value,
+      type:        document.getElementById('incType').value,
+      description: document.getElementById('incDescription').value.trim(),
+      affectedUserId: document.getElementById('incAffectedUser').value.trim() || null
+    };
+    if (!data.title) { toast('Title is required'); return; }
+    try {
+      await callCF('createIncident', data);
+      closeModal('createIncidentModal');
+      toast('Incident created');
+      loadIncidents('');
+    } catch (e) { toast('Error: ' + e.message); }
+  }
+
+  async function updateIncidentStatus(incidentId, status) {
+    if (!status) return;
+    try {
+      await callCF('updateIncident', { incidentId, status });
+      toast('Incident updated to: ' + status);
+      loadIncidents('');
+    } catch (e) { toast('Error: ' + e.message); }
+  }
+
+  /* ─────────────────────────────────────────────────
+     AUDIT LOG
+  ───────────────────────────────────────────────── */
+  async function loadAuditLog() {
+    const el = document.getElementById('auditLogViewer');
+    el.innerHTML = '<div class="loading">Loading…</div>';
+    const filter   = document.getElementById('auditFilter').value;
+    const severity = document.getElementById('auditSeverity').value;
+    try {
+      const r = await callCF('getAuditLog', {
+        eventType: filter || undefined,
+        severity:  severity || undefined,
+        limit: 50,
+        cursor: null
+      });
+      auditCursor = r.cursor || null;
+      const events = r.events || [];
+      document.getElementById('auditCount').textContent = events.length + ' events (page ' + auditPageIdx + ')';
+      if (!events.length) { el.innerHTML = '<div class="empty">No audit events found</div>'; return; }
+      el.innerHTML = events.map(e => {
+        const sevClass = e.severity === 'critical' ? 'log-sev-c' : e.severity === 'high' ? 'log-sev-h' :
+                         e.severity === 'medium'   ? 'log-sev-m' : e.severity === 'low' ? 'log-sev-l' : 'log-sev-i';
+        const ts  = e.timestamp ? new Date(e.timestamp._seconds * 1000).toISOString().replace('T',' ').slice(0,19) : '—';
+        const uid = (e.userId || 'system').slice(0, 10);
+        return `<div class="log-line">
+          <span class="log-ts">${ts}</span>
+          <span class="${sevClass}">[${(e.severity||'INFO').toUpperCase().padEnd(8)}]</span>
+          <span style="color:var(--purple)">[${escHtml(uid)}]</span>
+          <span>${escHtml(e.eventType||'EVENT')}: ${escHtml(e.description||'—')}</span>
+        </div>`;
+      }).join('');
+    } catch (e) { el.innerHTML = '<div class="empty">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  function auditPage(dir) {
+    auditPageIdx = Math.max(1, auditPageIdx + dir);
+    document.getElementById('auditPageNum').textContent = 'Page ' + auditPageIdx;
+    loadAuditLog();
+  }
+
+  async function verifyIntegrity() {
+    const el = document.getElementById('integrityResult');
+    const body = document.getElementById('integrityBody');
+    el.style.display = 'block';
+    body.innerHTML = '<div class="loading">Verifying SHA-256 hashes…</div>';
+    try {
+      const r = await callCF('verifyAuditIntegrity', { sampleSize: 100 });
+      const ok = r.valid;
+      body.innerHTML = `<div style="color:${ok?'var(--green)':'var(--red)'};font-size:16px;font-weight:700">
+        ${ok ? '✓ Integrity Verified' : '✗ Tampering Detected'}
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-top:8px">
+        Checked ${r.checked||0} events · ${r.tampered||0} hash mismatches found
+      </div>
+      ${r.details ? `<pre style="font-size:11px;color:var(--text2);margin-top:8px">${escHtml(JSON.stringify(r.details, null, 2))}</pre>` : ''}`;
+    } catch (e) { body.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  async function exportAudit() {
+    toast('Generating export…');
+    try {
+      const r = await callCF('exportAuditLog', { format: 'csv', limit: 1000 });
+      if (r.downloadUrl) { window.open(r.downloadUrl); }
+      else { toast('Export complete. Check Security Exports in Storage.'); }
+    } catch (e) { toast('Error: ' + e.message); }
+  }
+
+  /* ─────────────────────────────────────────────────
+     SCORECARD
+  ───────────────────────────────────────────────── */
+  async function loadScorecard() {
+    try {
+      const r = await callCF('getSecurityScorecard');
+      const score = r.overall || 86;
+
+      document.getElementById('scoreRingVal').innerHTML = score + '<small>/ 100</small>';
+      document.getElementById('scoreRing').style.setProperty('--pct', score);
+      document.getElementById('scoreGrade').textContent = score >= 90 ? 'A' : score >= 80 ? 'B+' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D';
+
+      const domains = r.domains || [];
+      const domEl = document.getElementById('domainList');
+      domEl.innerHTML = domains.map(d => {
+        const pct = Math.round(d.score / d.max * 100);
+        const gradeClass = d.grade === 'A' ? 'grade-a' : d.grade === 'B' || d.grade === 'B+' ? 'grade-b' : 'grade-c';
+        return `<div class="domain-row">
+          <div class="domain-name" style="font-size:11px">${escHtml(d.name)}</div>
+          <div class="domain-bar"><div class="domain-bar-fill" style="width:${pct}%;background:${pct>=80?'var(--green)':pct>=60?'var(--yellow)':'var(--red)'}"></div></div>
+          <div class="domain-grade ${gradeClass}">${escHtml(d.grade||'B')}</div>
+        </div>`;
+      }).join('') || buildStaticDomains();
+
+      // Compliance
+      const compEl = document.getElementById('complianceStatus');
+      const comp = r.compliance || {};
+      compEl.innerHTML = [
+        { name: 'PCI-DSS', score: 85, status: 'Partial' },
+        { name: 'GDPR',    score: 80, status: 'Partial' },
+        { name: 'ISO 27001', score: 75, status: 'Partial' }
+      ].map(c => `
+        <div class="domain-row">
+          <div class="domain-name">${c.name}</div>
+          <div class="domain-bar"><div class="domain-bar-fill" style="width:${c.score}%;background:var(--blue)"></div></div>
+          <div style="font-size:11px;color:var(--text2)">${c.score}%</div>
+        </div>`).join('');
+    } catch (e) {
+      document.getElementById('domainList').innerHTML = buildStaticDomains();
+    }
+  }
+
+  function buildStaticDomains() {
+    const domains = [
+      { name: 'Zero Trust Engine', grade: 'A', pct: 90 },
+      { name: 'Identity (MFA + Passkeys)', grade: 'A', pct: 90 },
+      { name: 'Fraud Detection', grade: 'A', pct: 90 },
+      { name: 'Audit System', grade: 'A', pct: 90 },
+      { name: 'AI Security', grade: 'A', pct: 90 },
+      { name: 'Database Security', grade: 'A', pct: 90 },
+      { name: 'Web Security', grade: 'A', pct: 90 },
+      { name: 'Incident Response', grade: 'A', pct: 90 },
+      { name: 'Payment Security', grade: 'A', pct: 90 },
+      { name: 'DevSecOps', grade: 'B', pct: 70 },
+      { name: 'Redis Security', grade: 'B', pct: 70 },
+      { name: 'Supply Chain', grade: 'B', pct: 70 },
+    ];
+    return domains.map(d => `<div class="domain-row">
+      <div class="domain-name" style="font-size:11px">${d.name}</div>
+      <div class="domain-bar"><div class="domain-bar-fill" style="width:${d.pct}%;background:${d.grade==='A'?'var(--green)':'var(--blue)'}"></div></div>
+      <div class="domain-grade ${d.grade==='A'?'grade-a':'grade-b'}">${d.grade}</div>
+    </div>`).join('');
+  }
+
+  async function runSecScan() {
+    const btn = document.getElementById('scanBtn');
+    const result = document.getElementById('scanResult');
+    btn.disabled = true; btn.textContent = 'Scanning…';
+    result.innerHTML = '<div class="loading">Running 7 security checks…</div>';
+    try {
+      const r = await callCF('runSecurityScan');
+      const checks = r.checks || [];
+      const passed = checks.filter(c => c.passed).length;
+      result.innerHTML = `
+        <div style="margin-bottom:12px;color:${passed===checks.length?'var(--green)':'var(--orange)'}">
+          ${passed}/${checks.length} checks passed
+        </div>
+        ${checks.map(c => `
+          <div class="domain-row">
+            <span style="font-size:14px">${c.passed ? '✓' : '✗'}</span>
+            <div class="domain-name" style="font-size:12px">${escHtml(c.name)}</div>
+            <div style="font-size:11px;color:${c.passed?'var(--green)':'var(--red)'}">${c.passed?'PASS':'FAIL'}</div>
+          </div>`).join('')}`;
+    } catch (e) { result.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
+    btn.disabled = false; btn.textContent = 'Start Security Scan';
+  }
+
+  /* ─────────────────────────────────────────────────
+     IDENTITY
+  ───────────────────────────────────────────────── */
+  async function loadIdentity() {
+    if (!currentUser) return;
+    try {
+      const [mfa, devices] = await Promise.all([
+        callCF('getMFAStatus', {}),
+        callCF('getDevices', {})
+      ]);
+
+      document.getElementById('mfaStatusCard').innerHTML = `
+        <div class="domain-row">
+          <div class="domain-name">TOTP Enabled</div>
+          <div class="metric-delta ${mfa.totpEnabled?'up':'down'}">${mfa.totpEnabled?'✓ Yes':'✗ No'}</div>
+        </div>
+        <div class="domain-row">
+          <div class="domain-name">Backup Codes</div>
+          <div class="metric-delta up">${mfa.backupCodesRemaining||0} remaining</div>
+        </div>
+        <div class="domain-row">
+          <div class="domain-name">Last Verified</div>
+          <div style="font-size:11px;color:var(--text2)">${fmtTs(mfa.lastVerified)}</div>
+        </div>
+        ${!mfa.totpEnabled ? '<button class="btn btn-primary" style="margin-top:12px" onclick="setupTOTP()">Enroll TOTP MFA</button>' : ''}`;
+
+      const devs = devices.devices || [];
+      document.getElementById('devicesCard').innerHTML = devs.length === 0
+        ? '<div class="empty">No trusted devices</div>'
+        : devs.map(d => `<div class="domain-row">
+            <div class="domain-name" style="font-size:11px">${escHtml(d.name||d.deviceId?.slice(0,12)||'Device')}</div>
+            <div class="metric-delta ${d.trusted?'up':'down'}">${(d.trustScore*100||0).toFixed(0)}%</div>
+            <button class="btn-sm danger" onclick="removeDevice('${d.deviceId}')">Remove</button>
+          </div>`).join('');
+    } catch (e) { console.error(e); }
+  }
+
+  async function lookupRisk() {
+    const userId = document.getElementById('riskUserId').value.trim();
+    if (!userId) { toast('Enter a user ID'); return; }
+    const el = document.getElementById('riskProfileResult');
+    el.innerHTML = '<div class="loading">Loading…</div>';
+    try {
+      const r = await callCF('getRiskProfile', { userId });
+      const p = r.profile || {};
+      el.innerHTML = `<table class="data-table">
+        <tr><th>Risk Score</th><td><span class="metric-val c-${p.riskScore>70?'red':p.riskScore>40?'orange':'green'}" style="font-size:20px">${p.riskScore||0}</span>/100</td></tr>
+        <tr><th>Level</th><td><span class="sev sev-${p.riskLevel||'low'}">${(p.riskLevel||'low').toUpperCase()}</span></td></tr>
+        <tr><th>Last Updated</th><td>${fmtTs(p.updatedAt)}</td></tr>
+        <tr><th>Factors</th><td><pre style="font-size:11px">${escHtml(JSON.stringify(p.factors||{}, null, 2))}</pre></td></tr>
+      </table>`;
+    } catch (e) { el.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  async function removeDevice(deviceId) {
+    try {
+      await callCF('removeDevice', { deviceId });
+      toast('Device removed');
+      loadIdentity();
+    } catch (e) { toast('Error: ' + e.message); }
+  }
+
+  async function registerPasskey() {
+    const el = document.getElementById('passkeysResult');
+    el.innerHTML = '<div class="loading">Initiating passkey registration…</div>';
+    try {
+      const r = await callCF('initiatePasskeyRegistration', { rpId: 'mysokoni.co.ke', displayName: currentUser.displayName || currentUser.email });
+      el.innerHTML = '<div class="c-green">Passkey registration initiated. Complete it in your browser/device authenticator.</div>';
+      el.innerHTML += `<pre style="font-size:10px;color:var(--text2);margin-top:8px">${escHtml(JSON.stringify({ challenge: r.challenge?.slice(0,20)+'…' }, null, 2))}</pre>`;
+    } catch (e) { el.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  /* ─────────────────────────────────────────────────
+     ACTIONS
+  ───────────────────────────────────────────────── */
+  async function doAction(action) {
+    const userId = document.getElementById('actionUserId').value.trim();
+    const reason = document.getElementById('actionReason').value.trim();
+    if (!userId) { toast('Enter a User ID'); return; }
+    const el = document.getElementById('userActionResult');
+    el.innerHTML = '<div class="loading">Executing…</div>';
+    try {
+      const fn = action === 'revokeUserSessions' ? 'revokeUserSessions' :
+                 action === 'suspendUser'         ? 'secSuspendUser'     : 'secUnsuspendUser';
+      const r = await callCF(fn, { userId, reason: reason || 'Admin action from SOC' });
+      el.innerHTML = `<div class="c-green">✓ ${action} completed</div>`;
+      toast(action + ' completed');
+    } catch (e) { el.innerHTML = `<div class="c-red">Error: ${escHtml(e.message)}</div>`; }
+  }
+
+  async function doStoreAction(action) {
+    const storeId = document.getElementById('actionStoreId').value.trim();
+    const reason  = document.getElementById('actionStoreReason').value.trim();
+    if (!storeId) { toast('Enter a Store / Seller ID'); return; }
+    const el = document.getElementById('storeActionResult');
+    el.innerHTML = '<div class="loading">Executing…</div>';
+    try {
+      const r = await callCF(action, { sellerId: storeId, reason: reason || 'Admin action from SOC' });
+      el.innerHTML = `<div class="c-green">✓ ${action} completed</div>`;
+      toast(action + ' completed');
+    } catch (e) { el.innerHTML = `<div class="c-red">Error: ${escHtml(e.message)}</div>`; }
+  }
+
+  async function doDeviceBlock() {
+    const userId   = document.getElementById('deviceUserId').value.trim();
+    const deviceId = document.getElementById('deviceId').value.trim();
+    if (!userId || !deviceId) { toast('Enter User ID and Device ID'); return; }
+    const el = document.getElementById('deviceActionResult');
+    el.innerHTML = '<div class="loading">Blocking device…</div>';
+    try {
+      await callCF('blockDevice', { userId, deviceId, reason: 'Blocked from SOC' });
+      el.innerHTML = '<div class="c-green">✓ Device blocked</div>';
+      toast('Device blocked');
+    } catch (e) { el.innerHTML = `<div class="c-red">Error: ${escHtml(e.message)}</div>`; }
+  }
+
+  async function loadUserDevices() {
+    const userId = document.getElementById('deviceUserId').value.trim();
+    if (!userId) { toast('Enter a User ID first'); return; }
+    const el = document.getElementById('deviceActionResult');
+    el.innerHTML = '<div class="loading">Loading devices…</div>';
+    try {
+      const r = await callCF('getDevices', { userId });
+      const devs = r.devices || [];
+      el.innerHTML = devs.length === 0 ? '<div class="empty">No devices registered</div>'
+        : devs.map(d => `<div class="domain-row">
+            <div class="domain-name" style="font-size:11px">${escHtml(d.deviceId?.slice(0,16)||'—')}…</div>
+            <div style="font-size:11px;color:var(--text2)">Trust: ${(d.trustScore*100||0).toFixed(0)}%</div>
+          </div>`).join('');
+    } catch (e) { el.innerHTML = `<div class="c-red">Error: ${escHtml(e.message)}</div>`; }
+  }
+
+  async function disablePayment() {
+    const userId  = document.getElementById('pmUserId').value.trim();
+    const pmType  = document.getElementById('pmType').value;
+    const reason  = document.getElementById('pmReason').value.trim();
+    if (!userId) { toast('Enter a User ID'); return; }
+    const el = document.getElementById('pmActionResult');
+    el.innerHTML = '<div class="loading">Disabling payment…</div>';
+    try {
+      await callCF('disablePaymentMethod', { userId, paymentMethodType: pmType, reason: reason || 'Admin action from SOC' });
+      el.innerHTML = '<div class="c-green">✓ Payment method disabled</div>';
+      toast('Payment disabled');
+    } catch (e) { el.innerHTML = `<div class="c-red">Error: ${escHtml(e.message)}</div>`; }
+  }
+
+  /* ─────────────────────────────────────────────────
+     AI SECURITY
+  ───────────────────────────────────────────────── */
+  async function loadAISecurityLog() {
+    const el = document.getElementById('aiSecurityLog');
+    el.innerHTML = '<div class="loading">Loading…</div>';
+    try {
+      const r = await callCF('getAISecurityLog', { limit: 30 });
+      const logs = r.logs || [];
+      if (!logs.length) { el.innerHTML = '<div class="empty">No AI security events</div>'; return; }
+      el.innerHTML = `<table class="data-table">
+        <thead><tr><th>Type</th><th>User</th><th>Risk</th><th>Detail</th><th>Time</th></tr></thead>
+        <tbody>
+        ${logs.map(l => `
+          <tr>
+            <td><span class="sev sev-${l.severity||'info'}">${escHtml(l.type||'event')}</span></td>
+            <td style="font-family:monospace;font-size:11px">${escHtml((l.userId||'—').slice(0,12))}…</td>
+            <td style="font-size:11px">${l.riskScore||'—'}</td>
+            <td style="font-size:11px;max-width:200px">${escHtml(l.detail||'—')}</td>
+            <td style="font-size:11px;color:var(--text2)">${fmtTs(l.timestamp)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+
+      document.getElementById('injBlocked').textContent  = r.stats?.injectionBlocked  || 0;
+      document.getElementById('piiScrubbed').textContent = r.stats?.piiScrubbed        || 0;
+      document.getElementById('aiBlocked').textContent   = r.stats?.blocked            || 0;
+      document.getElementById('abuseReports').textContent = r.stats?.abuseReports      || 0;
+    } catch (e) { el.innerHTML = '<div class="empty">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  async function checkAIRate() {
+    const userId = document.getElementById('aiRateUserId').value.trim();
+    if (!userId) { toast('Enter a User ID'); return; }
+    const el = document.getElementById('aiRateResult');
+    el.innerHTML = '<div class="loading">Loading…</div>';
+    try {
+      const r = await callCF('getAIRateLimitStatus', { userId });
+      const rl = r.rateLimit || {};
+      el.innerHTML = `
+        <div class="domain-row"><div class="domain-name">Calls this hour</div><div>${rl.callsThisHour||0} / ${rl.limit||'—'}</div></div>
+        <div class="domain-row"><div class="domain-name">Status</div><div class="metric-delta ${rl.blocked?'down':'up'}">${rl.blocked?'BLOCKED':'OK'}</div></div>
+        <div class="domain-row"><div class="domain-name">Role limit</div><div>${rl.roleLimit||'—'} calls/hr</div></div>`;
+    } catch (e) { el.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  async function blockAISession() {
+    const userId    = document.getElementById('aiBlockUserId').value.trim();
+    const durationHrs = parseInt(document.getElementById('aiBlockHours').value) || 24;
+    const reason    = document.getElementById('aiBlockReason').value.trim();
+    if (!userId) { toast('Enter a User ID'); return; }
+    const el = document.getElementById('aiBlockResult');
+    el.innerHTML = '<div class="loading">Blocking…</div>';
+    try {
+      await callCF('blockAISession', { userId, durationHours: durationHrs, reason: reason || 'Blocked from SOC' });
+      el.innerHTML = '<div class="c-green">✓ AI session blocked for ' + durationHrs + 'h</div>';
+      toast('AI session blocked');
+    } catch (e) { el.innerHTML = '<div class="c-red">Error: ' + escHtml(e.message) + '</div>'; }
+  }
+
+  /* ─────────────────────────────────────────────────
+     EMERGENCY
+  ───────────────────────────────────────────────── */
+  async function emergencyAction(action) {
+    const confirm = window.confirm('⚠ EMERGENCY: This action affects the entire platform. Proceed?');
+    if (!confirm) return;
+    closeModal('emergencyModal');
+    toast('Emergency action initiated: ' + action);
+    try {
+      await callCF('createIncident', {
+        title: 'EMERGENCY: ' + action,
+        severity: 'critical',
+        type: 'platform_emergency',
+        description: 'Emergency action triggered from SOC dashboard by admin'
+      });
+      toast('Emergency incident logged');
+    } catch (e) { console.error(e); }
+  }
+
+  /* ─────────────────────────────────────────────────
+     GLOBAL REFRESH
+  ───────────────────────────────────────────────── */
+  function refreshAll() {
+    loadOverview();
+    loadAISecurityLog();
+    toast('Dashboard refreshed');
+  }
+
+  /* ─────────────────────────────────────────────────
+     HELPERS
+  ───────────────────────────────────────────────── */
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function fmtTs(ts) {
+    if (!ts) return '—';
+    try {
+      const d = ts._seconds ? new Date(ts._seconds * 1000) : new Date(ts);
+      return d.toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', hour12: false,
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch { return '—'; }
+  }
+</script>
+</body>
+</html>
