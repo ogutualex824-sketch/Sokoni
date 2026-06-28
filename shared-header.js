@@ -75,6 +75,15 @@
     (document.head || document.documentElement).appendChild(mfLink);
   }
 
+  /* Responsive v2 — premium UI/UX overhaul (once) */
+  if (!document.getElementById('sk-responsive-link')) {
+    const respLink = document.createElement('link');
+    respLink.rel = 'stylesheet';
+    respLink.id = 'sk-responsive-link';
+    respLink.href = 'sokoni-responsive.css';
+    (document.head || document.documentElement).appendChild(respLink);
+  }
+
   /* ── PHASE 2: Nav injection — excluded pages stop here ──────────── */
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',
