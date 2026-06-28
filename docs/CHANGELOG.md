@@ -2,6 +2,69 @@
 
 ---
 
+## 2026-06-28 — Enterprise Production Security & Operations Audit (18 Fixes)
+
+**Commit:** `ed2297a` | **Files Changed:** 14 | **Scope:** Full platform security hardening pre-launch
+
+### CRITICAL Fixes (2)
+- **`payment-orchestrator.js`** — `confirmPayment` now requires auth via `_authRequired()`; eliminates auth bypass where `null` auth short-circuited ownership check
+- **`manager-auth.js`** — `registerManagerFCMToken` IDOR fixed; UID must match `managerId` parameter; eliminates push-notification hijacking of manager authorization flows
+
+### HIGH Fixes (7)
+- **`security-zero-trust.js`** — `SOKONI_HMAC_KEY` hardcoded fallback removed; boot throws if secret unset
+- **`payment-trust.js`** — `_assertAdmin` uses JWT claims (`token.admin/superAdmin`) not Firestore role field; eliminates TOCTOU
+- **`wallet.js`** — `requestSellerPayout` balance check atomic via `runTransaction()`; `adminProcessPayout` throws on insufficient funds
+- **`index.js`** — `sokoniChat` rate limit: `.allowed` → `.ok` (limit was completely unenforced)
+- **`admin-os.js`** — `enforceAppCheck: true` added to all 40+ admin callable functions
+- **`super-admin.js`** — `enforceAppCheck: true` added to `setUserRole` and all privileged CFs
+- **`wallet.js`** — `enforceAppCheck: true` added to all 9 financial callable functions
+
+### MEDIUM Fixes (9)
+- **`firestore.rules`** — `managerFCMTokens` write restricted to own UID
+- **`firestore.rules`** — `driverLocations` read changed from `if true` → `if isAuthed()`
+- **`firestore.rules`** — `trackingShares` read restricted to owner/sharedWith
+- **`firestore.rules`** — `gipDispatch` create requires ownership + field keys
+- **`firestore.rules`** — `posConfig` read restricted to seller owner or admin
+- **`firestore.rules`** — `bookingHolds` read restricted to own userId
+- **`firestore.rules`** — `venueBlockouts` create requires venue ownership check
+- **`firestore.rules`** — `platformServices/Health/Dependencies` restricted to admin only
+- **`firestore.rules`** — Duplicate `/payments` rule at line 1589 removed (CF-only rule at 2531 is authoritative)
+- **`firestore.rules`** — 8 missing collections added with proper rules: `supportTickets`, `reports`, `receiptEvents`, `adminAudit`, `adminAuditLog`, `adminAuditLogs`, `mediaAssets`, `posWebhookDeliveryLog`, `posOfflineQueue`
+- **`security-ai.js`** — Rate limit check moved before injection detection (cost optimisation)
+- **`storage.rules`** — `image/.*` wildcard replaced with `safeImageOnly()` on 7 paths
+- **`etims.js`** — `ETIMS_ENV` now throws at boot if not set; `ETIMS_ENV=sandbox` added to `functions/.env`
+- **`foundation.js`** — `foundationCheckPayment` stats update made atomic via batch; audit log added per donation
+
+### Security Impact
+- Eliminated 2 CRITICAL authentication bypasses
+- Closed 5 HIGH privilege escalation / race condition vectors
+- Tightened Firestore rules across 10+ collections
+- 40+ admin CFs now protected by App Check enforcement
+
+---
+
+## 2026-06-28 — SmartPOS 4.0 Polish, Scale & Market Readiness
+
+Focus: UX excellence, merchant onboarding, daily operational workflows, live observability,
+and market readiness. No new backend modules — polish, speed, reliability.
+
+**New Pages:** `pos-onboard.html` (5-step wizard), `pos-daily.html` (morning/trading/closing hub),
+`pos-observability.html` (live ops center)
+
+**pos.html UX Audit:** 10 improvements — bottom nav, empty cart state, charge button spinner,
+payment method clarity, tier badges, keyboard shortcuts (`/`, `?`, `Escape`, `Enter`),
+44px tap targets, no more `alert()`, iOS 16px font fix
+
+**Documentation:** `SMARTPOS_ENTERPRISE_LAUNCH_REPORT.md` — 12-section launch readiness report,
+52-capability matrix, hardware matrix, 6 merchant testing checklists, score 96/100
+
+**Service Worker:** `sokoni-20260628-smartpos40-v1`
+
+**Blocker:** Cloud Run quota increase (1,017→1,300 services, us-central1) submitted 2026-06-28;
+~48h processing; after approval run `firebase deploy --only functions` to go live with all 139 SmartPOS 3.0 CFs
+
+---
+
 ## 2026-06-28 — SmartPOS 3.0 Enterprise Business Operating System
 
 Transforms SmartPOS from a POS terminal into a full Business Operating System (BOS) for SMEs,
