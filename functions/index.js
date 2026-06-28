@@ -577,11 +577,56 @@ async function executeTool(name, input) {
       case "get_tax_stats": {
         const now = new Date();
         const COMMISSION = 0.10; // SOKONI takes 10% commission
+        const period = input.period || "month";
+
+        /* ── Year path: aggregate pre-built daily FinOS snapshots (avoids full orders scan) ── */
+        if (period === "year") {
+          const year      = now.getFullYear();
+          const yearStart = `${year}-01-01`;
+          const yearEnd   = `${year}-12-31`;
+
+          const snapSnap = await db.collection("finosSnapshots")
+            .where("dateStr", ">=", yearStart)
+            .where("dateStr", "<=", yearEnd)
+            .get();
+
+          const snapDocs = snapSnap.docs.map(d => d.data());
+
+          const totalRevCents   = snapDocs.reduce((s, d) => s + (d.totalRevenueCents  || 0), 0);
+          const commissionCents = snapDocs.reduce((s, d) => s + (d.commissionCents    || 0), 0);
+          const vatCents        = snapDocs.reduce((s, d) => s + (d.vatCollectedCents  || 0), 0);
+          const whtCents        = snapDocs.reduce((s, d) => s + (d.whtCollectedCents  || 0), 0);
+          const txCount         = snapDocs.reduce((s, d) => s + (d.transactionCount   || 0), 0);
+
+          // Convert cents → KES for display
+          const gross        = totalRevCents   / 100;
+          const commission   = commissionCents / 100;
+          const sellerPayout = Math.round((gross - commission) * 100) / 100;
+
+          // Use ledger-captured tax figures when available; fall back to calculated estimates
+          const vatOwed = vatCents > 0 ? vatCents / 100 : Math.round(commission * 16 / 116 * 100) / 100;
+          const whtOwed = whtCents > 0 ? whtCents / 100 : Math.round(sellerPayout * 0.05 * 100) / 100;
+          const dstOwed = Math.round(gross * 0.015 * 100) / 100;
+
+          return {
+            period,
+            source: "finosSnapshots",   // signals pre-aggregated data was used
+            orders: { total: txCount },
+            revenue: { gross, commission, sellerPayout },
+            taxObligations: {
+              vat: { amount: vatOwed, desc: "16% VAT on SOKONI commission — remit monthly" },
+              wht: { amount: whtOwed, desc: "5% WHT deducted from seller/provider payouts — remit to KRA" },
+              dst: { amount: dstOwed, desc: "1.5% Digital Service Tax on gross transactions" },
+              totalOwed: Math.round((vatOwed + whtOwed + dstOwed) * 100) / 100,
+            },
+          };
+        }
+
+        /* ── Sub-year paths (today / week / month): live orders scan (bounded window) ── */
         let since;
-        if (input.period === "today")  since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        else if (input.period === "week")  since = new Date(now - 7 * 86400000);
-        else if (input.period === "year")  since = new Date(now.getFullYear(), 0, 1);
-        else                               since = new Date(now.getFullYear(), now.getMonth(), 1);
+        if (period === "today") since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        else if (period === "week") since = new Date(now - 7 * 86400000);
+        else                        since = new Date(now.getFullYear(), now.getMonth(), 1);
 
         const snap = await db.collection("orders")
           .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(since))
@@ -602,7 +647,7 @@ async function executeTool(name, input) {
         const dstOwed      = Math.round(gross * 0.015);           // 1.5% Digital Service Tax
 
         return {
-          period: input.period || "month",
+          period,
           orders: { total: snap.size, byStatus },
           revenue: { gross, commission, sellerPayout },
           taxObligations: {
@@ -8622,4 +8667,10 @@ exports.getEventAnalytics      = eventHub.getEventAnalytics;
 exports.getOrganizerDashboard  = eventHub.getOrganizerDashboard;
 exports.createEventPromoCode   = eventHub.createEventPromoCode;
 exports.validateEventPromoCode = eventHub.validateEventPromoCode;
+
+/* ── Data Portability — GDPR Art. 20 / Kenya DPA §26 ───────────────────── */
+const dataExport = require('./data-export');
+exports.requestDataExport   = dataExport.requestDataExport;
+exports.getDataExportStatus = dataExport.getDataExportStatus;
+exports.processDataExport   = dataExport.processDataExport;
 exports.autoEndEvents          = eventHub.autoEndEvents;

@@ -32,7 +32,7 @@ function _assertAdmin(req) {
    Records an incoming payment, distributes earnings to wallets.
 ──────────────────────────────────────────────────────────────*/
 exports.recordPayment = onCall(
-  { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const {
@@ -59,22 +59,64 @@ exports.recordPayment = onCall(
     const platformDeliv = deliveryCents - riderEarnings;
 
     const db = _db();
-    const batch = db.batch();
+
+    /* ── Ledger entries: all written atomically in one batch ──────────────
+       createLedgerEntry() internally runs a per-entry mini-transaction.
+       To avoid partial writes when the function crashes mid-sequence we
+       inline the doc construction and commit everything in a single batch.
+       The outer idempotency key (ikey) guards the whole function, so
+       duplicate invocations are rejected before the batch is built.
+    ─────────────────────────────────────────────────────────────────────*/
+    const ledgerBatch = db.batch();
+    const _now_ts = admin.firestore.FieldValue.serverTimestamp;
+    const createdBy = _uid(request);
+
+    /* Helper: add one ledger entry + idempotency record to the batch */
+    const batchLedger = (entryData) => {
+      const ref  = db.collection('ledger').doc();
+      const data = {
+        id:             ref.id,
+        type:           entryData.type,
+        amountCents:    entryData.amountCents,
+        currency:       'KES',
+        debitAccount:   entryData.debitAccount,
+        creditAccount:  entryData.creditAccount,
+        description:    entryData.description   || '',
+        orderId:        entryData.orderId        || null,
+        sellerId:       entryData.sellerId       || null,
+        riderId:        entryData.riderId        || null,
+        buyerId:        entryData.buyerId        || null,
+        category:       entryData.category       || null,
+        metadata:       entryData.metadata       || {},
+        status:         'settled',
+        reversalRef:    null,
+        createdBy:      entryData.createdBy      || 'system',
+        idempotencyKey: entryData.idempotencyKey,
+        createdAt:      _now_ts(),
+        settledAt:      _now_ts(),
+      };
+      ledgerBatch.set(ref, data);
+      ledgerBatch.set(db.collection('finosIdempotency').doc(entryData.idempotencyKey), {
+        key:       entryData.idempotencyKey,
+        result:    { ledgerId: ref.id },
+        createdAt: _now_ts(),
+      });
+    };
 
     /* Ledger: payment received from gateway */
-    await U.createLedgerEntry(db, {
+    batchLedger({
       type: 'payment_received', amountCents: orderAmountCents,
       debitAccount:  U.ACCOUNTS.EXTERNAL_GATEWAY,
       creditAccount: U.ACCOUNTS.PLATFORM_CLEARING,
       description:   `Payment for order ${orderId}`,
       orderId, sellerId, buyerId, category,
       metadata: { commission: comm, vat },
-      createdBy: _uid(request), idempotencyKey: ikey,
+      createdBy, idempotencyKey: ikey,
     });
 
     /* Ledger: seller earning */
     const sellerKey = U.generateIdempotencyKey(['seller_earn', orderId]);
-    await U.createLedgerEntry(db, {
+    batchLedger({
       type: 'seller_earning', amountCents: comm.sellerNetCents,
       debitAccount:  U.ACCOUNTS.PLATFORM_CLEARING,
       creditAccount: U.ACCOUNTS.seller(sellerId),
@@ -84,7 +126,7 @@ exports.recordPayment = onCall(
 
     /* Ledger: platform commission */
     const commKey = U.generateIdempotencyKey(['commission', orderId]);
-    await U.createLedgerEntry(db, {
+    batchLedger({
       type: 'commission', amountCents: comm.commissionCents,
       debitAccount:  U.ACCOUNTS.PLATFORM_CLEARING,
       creditAccount: U.ACCOUNTS.PLATFORM_REVENUE,
@@ -96,7 +138,7 @@ exports.recordPayment = onCall(
     /* Ledger: VAT on commission */
     if (vat.taxCents > 0) {
       const vatKey = U.generateIdempotencyKey(['vat', orderId]);
-      await U.createLedgerEntry(db, {
+      batchLedger({
         type: 'tax', amountCents: vat.taxCents,
         debitAccount:  U.ACCOUNTS.PLATFORM_REVENUE,
         creditAccount: U.ACCOUNTS.PLATFORM_TAX,
@@ -109,7 +151,7 @@ exports.recordPayment = onCall(
     /* Ledger: delivery fee → rider */
     if (deliveryCents > 0 && riderId) {
       const delKey = U.generateIdempotencyKey(['delivery_fee', orderId]);
-      await U.createLedgerEntry(db, {
+      batchLedger({
         type: 'delivery_fee', amountCents: riderEarnings,
         debitAccount:  U.ACCOUNTS.PLATFORM_CLEARING,
         creditAccount: U.ACCOUNTS.rider(riderId),
@@ -122,13 +164,16 @@ exports.recordPayment = onCall(
     /* Ledger: tip → rider */
     if (tipCts > 0 && riderId) {
       const tipKey = U.generateIdempotencyKey(['tip', orderId]);
-      await U.createLedgerEntry(db, {
+      batchLedger({
         type: 'tip', amountCents: tipCts,
         debitAccount: U.ACCOUNTS.PLATFORM_CLEARING,
         creditAccount: U.ACCOUNTS.rider(riderId),
         description: `Tip for order ${orderId}`, orderId, riderId, idempotencyKey: tipKey,
       });
     }
+
+    /* Commit all ledger entries atomically */
+    await ledgerBatch.commit();
 
     /* Wallet credits */
     await db.runTransaction(async (txn) => {
@@ -166,7 +211,7 @@ exports.recordPayment = onCall(
    Full or partial refund with ledger reversal + wallet clawback.
 ──────────────────────────────────────────────────────────────*/
 exports.processRefund = onCall(
-  { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const { orderId, refundAmountCents, reason, fullRefund, buyerPhone } = request.data;
@@ -273,7 +318,7 @@ exports.processRefund = onCall(
 ──────────────────────────────────────────────────────────────*/
 exports.requestPayout = onCall(
   { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private',
-    secrets: [INTASEND_PRIV] },
+    enforceAppCheck: true, secrets: [INTASEND_PRIV] },
   async (request) => {
     _assertAuth(request);
     const uid = _uid(request);
@@ -421,7 +466,7 @@ exports.processPendingPayouts = onSchedule(
    Validates promo and returns discount details. Consumption on order completion.
 ──────────────────────────────────────────────────────────────*/
 exports.applyPromoCode = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const { code, orderAmountCents, category, orderId } = request.data;
@@ -455,7 +500,7 @@ exports.applyPromoCode = onCall(
    6. createPromotion — callable (admin)
 ──────────────────────────────────────────────────────────────*/
 exports.createPromotion = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAdmin(request);
     const data = request.data;
@@ -789,7 +834,7 @@ exports.reconcileLedger = onSchedule(
    Returns aggregated report for a date range.
 ──────────────────────────────────────────────────────────────*/
 exports.getFinancialReport = onCall(
-  { region: REGION, timeoutSeconds: 120, memory: '512MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 120, memory: '512MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAdmin(request);
     const { startDate, endDate, entityId, entityType } = request.data;
@@ -854,7 +899,7 @@ exports.getFinancialReport = onCall(
 ──────────────────────────────────────────────────────────────*/
 exports.getAIFinancialInsights = onCall(
   { region: REGION, timeoutSeconds: 120, memory: '512MiB', invoker: 'private',
-    secrets: [ANTHROPIC_API_KEY] },
+    enforceAppCheck: true, secrets: [ANTHROPIC_API_KEY] },
   async (request) => {
     _assertAdmin(request);
     const db = _db();
@@ -1001,7 +1046,7 @@ exports.webhookPaymentCallback = onRequest(
    Emergency reversal of a specific ledger entry.
 ──────────────────────────────────────────────────────────────*/
 exports.reverseTransaction = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAdmin(request);
     const { ledgerId, reason } = request.data;
@@ -1019,7 +1064,7 @@ exports.reverseTransaction = onCall(
    Manual wallet adjustment with mandatory audit trail.
 ──────────────────────────────────────────────────────────────*/
 exports.adjustWallet = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAdmin(request);
     const { entityId, amountCents, direction, reason, entityType } = request.data;
@@ -1065,7 +1110,7 @@ exports.adjustWallet = onCall(
    Returns paginated wallet transaction history.
 ──────────────────────────────────────────────────────────────*/
 exports.getWalletStatement = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const uid     = _uid(request);
@@ -1104,7 +1149,7 @@ exports.getWalletStatement = onCall(
    Returns full tax breakdown for a given order amount + category.
 ──────────────────────────────────────────────────────────────*/
 exports.calculateTaxBreakdown = onCall(
-  { region: REGION, timeoutSeconds: 10, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 10, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const { orderAmountCents, category, payoutAmountCents } = request.data;

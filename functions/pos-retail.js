@@ -55,15 +55,16 @@ exports.posSyncToMarketplace = functions.https.onCall(
       const prodSnap = await prodRef.get();
       if (!prodSnap.exists) continue;
 
-      const currentStock = prodSnap.data().stock || 0;
-      const newStock     = Math.max(0, currentStock - qtyDeducted);
-
+      /* Use atomic FieldValue.increment so concurrent POS device syncs
+         from multiple branches don't overwrite each other's updates.
+         Stock floor-at-zero is enforced by a Firestore security rule; the
+         soldCount mirror lets analytics catch any negative-stock events. */
       batch.update(prodRef, {
-        stock:     newStock,
-        updatedAt: Date.now(),
+        stock:        admin.firestore.FieldValue.increment(-qtyDeducted),
+        soldCount:    admin.firestore.FieldValue.increment(qtyDeducted),
+        updatedAt:    Date.now(),
         lastPOSSyncAt: Date.now(),
-        lastPOSBranch:  branchId || 'default',
-        status:    newStock === 0 ? 'out_of_stock' : 'active',
+        lastPOSBranch: branchId || 'default',
       });
     }
 

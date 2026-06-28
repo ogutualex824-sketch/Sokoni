@@ -611,9 +611,7 @@ const TRANSFORMERS = {
     subcategory:    _str(data.subcategory),
     logo:           _str(data.logo || data.shopLogo || data.photoURL),
     coverImage:     _str(data.coverImage || data.banner),
-    phone:          _str(data.phone),
-    whatsapp:       _str(data.whatsapp || data.phone),
-    email:          _str(data.publicEmail || data.email),
+    /* PII OMITTED: phone, whatsapp, email — never pushed to Algolia */
     website:        _str(data.website),
     rating:         _num(data.rating),
     reviewCount:    _num(data.reviewCount),
@@ -761,7 +759,7 @@ const TRANSFORMERS = {
       agent: {
         id:       _str(data.agentId || data.uid),
         name:     _str(data.agentName || data.agent || data.sellerName),
-        phone:    _str(data.agentPhone || data.phone),
+        /* PII OMITTED: phone — never pushed to Algolia */
         verified: Boolean(data.agentVerified || data.verified),
         avatar:   _str(data.agentAvatar || data.photoURL),
       },
@@ -823,7 +821,7 @@ const TRANSFORMERS = {
       seller: {
         id:       _str(data.sellerId || data.uid),
         name:     _str(data.sellerName || data.name),
-        phone:    _str(data.phone),
+        /* PII OMITTED: phone — never pushed to Algolia */
         verified: Boolean(data.verified || data.sellerVerified),
         dealer:   Boolean(data.isDealer),
       },
