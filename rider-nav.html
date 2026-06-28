@@ -250,16 +250,25 @@ firebase.auth().onAuthStateChanged(function(user) {
 });
 
 function _loadTrip(uid) {
+  var ls = document.getElementById('loadScreen');
+  ls.innerHTML = '<div class="spin"></div><p>Loading trip…</p>';
   _cf('navGetActiveTrip')({}).then(function(r) {
     var trip = r.data.trip;
     if (!trip) {
-      document.getElementById('loadScreen').innerHTML = '<div style="text-align:center;padding:40px"><p style="font-size:22px;margin-bottom:8px">No active trip</p><p style="color:rgba(255,255,255,.5);font-size:14px">Accept a delivery to start navigation.</p><a href="driver.html" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">← Driver Dashboard</a></div>';
+      ls.innerHTML = '<div style="text-align:center;padding:40px"><p style="font-size:22px;margin-bottom:8px">No active trip</p><p style="color:rgba(255,255,255,.5);font-size:14px">Accept a delivery to start navigation.</p><a href="driver.html" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">← Driver Dashboard</a></div>';
       return;
     }
     _trip = trip;
     _initNav(uid, trip);
   }).catch(function(e) {
-    document.getElementById('loadScreen').innerHTML = '<div style="color:#f44336;padding:24px;text-align:center">'+_esc(e.message)+'<br><a href="driver.html" style="color:#71ff00;font-size:13px;margin-top:10px;display:block">← Go back</a></div>';
+    var isNetwork = e.code === 'functions/unavailable' || e.code === 'functions/internal' ||
+      (e.message && (e.message.toLowerCase().includes('network') || e.message.toLowerCase().includes('internet') || e.message.toLowerCase().includes('unavailable')));
+    ls.innerHTML = '<div style="text-align:center;padding:32px">' +
+      '<p style="font-size:28px;margin-bottom:10px">' + (isNetwork ? '📶' : '⚠️') + '</p>' +
+      '<p style="font-size:16px;font-weight:700;margin-bottom:6px">' + (isNetwork ? 'No connection' : 'Could not load trip') + '</p>' +
+      '<p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px">' + (isNetwork ? 'Check your data connection and try again.' : _esc(e.message)) + '</p>' +
+      '<button onclick="location.reload()" style="padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:10px;width:200px">Retry</button><br>' +
+      '<a href="driver.html" style="color:rgba(255,255,255,.4);font-size:12px;margin-top:4px;display:inline-block">← Driver Dashboard</a></div>';
   });
 }
 
@@ -278,19 +287,22 @@ function _initNav(uid, trip) {
     onOfflineQueued:  function(n) { _connChip(false, n + ' queued'); },
   });
 
-  // Init map
+  // Init map first — show it immediately, don't wait for route
   nav.initMap('map');
+  document.getElementById('loadScreen').style.display = 'none';
+  _renderStopList();
+  _updateTopBar();
+  nav.startTracking();
 
-  // Calculate route from trip stops
-  nav.calculateRoute(trip.stops).then(function() {
-    document.getElementById('loadScreen').style.display = 'none';
-    _renderStopList();
-    _updateTopBar();
-    nav.startTracking();
+  // Load route in background — draws polyline when ready, no blocking
+  nav.calculateRoute(trip.stops).then(function(route) {
+    if (!route) _addRibbon('no-route', '⚠ No route — GPS tracking active');
+  }).catch(function() {
+    _addRibbon('no-route', '⚠ No route — GPS tracking active');
   });
 
   // Connectivity
-  window.addEventListener('online',  function() { _connChip(true); });
+  window.addEventListener('online',  function() { _connChip(true); document.querySelector('.ribbon-item.no-route') && nav.calculateRoute(trip.stops); });
   window.addEventListener('offline', function() { _connChip(false); });
 }
 
