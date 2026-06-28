@@ -64,7 +64,7 @@
     "headers": [
 
       {
-        "source": "service-worker.js",
+        "source": "/service-worker.js",
         "headers": [
           { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" },
           { "key": "CDN-Cache-Control",     "value": "no-store" },
@@ -74,7 +74,7 @@
         ]
       },
       {
-        "source": "firebase-messaging-sw.js",
+        "source": "/firebase-messaging-sw.js",
         "headers": [
           { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" },
           { "key": "CDN-Cache-Control",     "value": "no-store" },
