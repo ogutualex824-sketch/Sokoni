@@ -1,4 +1,48 @@
-﻿## [2026-06-29] — Commerce OS Dashboard — Unified Merchant Command Center SPA
+﻿## [2026-06-29] — HR & Payroll Portal — Staff, Payroll, Attendance & Leaves SPA
+
+### Summary
+Created `hr-payroll.html`, a complete HR & Payroll management portal for SOKONI merchants.
+Dark-theme SPA with 5 tab sections: Dashboard (KPI tiles + department bar chart + pending
+actions), Staff (full CRUD table + Add Staff modal), Payroll (run/view/approve payroll runs
+with PAYE/NHIF/NSSF/Housing Levy breakdown modal), Attendance (daily clock-in/out grid +
+monthly summary toggle), and Leaves & Training (approve/reject leaves + assign training
+programs via sub-tabs). All interactions wired to existing Cloud Functions in `hrPayroll.*`.
+
+### Files Changed
+- `hr-payroll.html` — NEW (~650 lines): HRPayroll IIFE; Firebase compat v10.12.0 (App, Auth,
+  Functions, Firestore); auth gate via `onAuthStateChanged` redirect to login.html; merchant
+  bar pattern consistent with loyalty-merchant.html; 5 tabs + 2 sub-tabs; 3 modals (Add Staff,
+  View Payroll Breakdown, Assign Training); CSS-only department bar chart; monthly attendance
+  toggle; XSS-safe `esc()` helper throughout; keyboard ESC + backdrop click modal dismissal;
+  accessible ARIA attributes on all dialogs and tables.
+
+### CF calls wired
+`getStaffDashboard`, `addStaffMember`, `getPayrollSummary`, `runPayroll`, `approvePayrollRun`,
+`recordAttendance`, `approveLeave`, `assignTraining`
+
+### Firestore reads wired
+`merchants/{id}/staff` (orderBy name), `merchants/{id}/leaveRequests` (orderBy createdAt desc,
+limit 50), `merchants/{id}/trainingPrograms` (orderBy createdAt desc, limit 30)
+
+### Security
+- XSS: all dynamic HTML rendered via `esc()` — no raw user data injected into innerHTML
+- Auth gate enforced; unauthenticated users redirected to login.html on page load
+- `security.js` loaded as first script in `<head>`
+- No secrets or credentials in client-side code
+- Confirm dialogs guard all destructive operations (run payroll, approve payroll, approve/reject leave)
+
+### Performance
+- Staff list loaded via Firestore client SDK (avoids extra CF hop for simple collection reads)
+- Attendance and monthly summary use targeted `type` parameter to avoid over-fetching
+- Training programs loaded lazily only when the Training sub-tab is activated
+- All CSS transitions hardware-accelerated via `transform` and `opacity`
+
+### Breaking Changes
+None — additive new file only.
+
+---
+
+## [2026-06-29] — Commerce OS Dashboard — Unified Merchant Command Center SPA
 
 ### Summary
 Created `commerce-os.html`, the flagship unified merchant command center. A full-screen
