@@ -2116,7 +2116,9 @@ async function _empSuspend(uid, isSuspended) {
   showNotification(isSuspended ? "Employee reinstated" : "Employee suspended", isSuspended ? "success" : "warning");
 }
 function _empResetPin(uid) {
-  const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+  const _pinArr = new Uint32Array(1);
+  crypto.getRandomValues(_pinArr);
+  const newPin = String(1000 + (_pinArr[0] % 9000));
   _empUpdateLocal(uid, { pin: newPin, pinReset: Date.now() });
   /* Show new PIN in a toast — production would email it */
   showNotification(`PIN reset. New temporary PIN: ${newPin} — share securely.`, "info");

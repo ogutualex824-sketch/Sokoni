@@ -56,7 +56,9 @@ function _delRef() {
 }
 
 function _pin4() {
-  return String(Math.floor(1000 + Math.random() * 9000));
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  return String(1000 + (arr[0] % 9000));
 }
 
 function _haversine(lat1, lng1, lat2, lng2) {

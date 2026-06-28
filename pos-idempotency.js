@@ -12,18 +12,22 @@
   'use strict';
 
   /* ── Unique ID Generation ──────────────────────────────────── */
-  /* Format: {device-prefix}-{timestamp-base36}-{random-5chars}
-     Collision probability: effectively zero for retail POS volumes */
+  /* Format: {device-prefix}-{timestamp-base36}-{random-8hex}
+     Uses Web Crypto CSPRNG — cryptographically unpredictable IDs */
   function generateTxnId() {
-    const device = _devicePrefix();
-    const ts     = Date.now().toString(36).toUpperCase();
-    const rand   = Math.random().toString(36).slice(2, 7).toUpperCase();
+    const device  = _devicePrefix();
+    const ts      = Date.now().toString(36).toUpperCase();
+    const bytes   = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    const rand    = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
     return `TXN-${device}-${ts}-${rand}`;
   }
 
   function generateReceiptNo(prefix = 'R') {
-    const ts   = Date.now().toString(36).toUpperCase().slice(-6);
-    const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+    const ts    = Date.now().toString(36).toUpperCase().slice(-6);
+    const bytes = new Uint8Array(2);
+    crypto.getRandomValues(bytes);
+    const rand  = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').slice(0, 3).toUpperCase();
     return `${prefix}${ts}${rand}`;
   }
 
