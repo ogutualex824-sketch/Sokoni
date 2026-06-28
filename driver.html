@@ -1346,6 +1346,7 @@ function renderDeliveries(){
             <option value="arrived" ${d.status==="arrived"?"selected":""}>🏠 Arrived at Location</option>
             <option value="delivered" ${d.status==="delivered"?"selected":""}>✅ Delivered</option>
           </select>
+          <button type="button" class="dc-accept-btn" style="background:#00d4ff;color:#000;flex:0 0 auto;" onclick="location.href='rider-nav.html'">🗺 Navigate</button>
         `:`<span style="color:#71ff00;font-weight:800;">✅ Delivered · KES ${d.net||d.fee} earned</span>`}
       </div>
     </div>

@@ -4754,6 +4754,9 @@ const DASH_PAGES = {
   ],
   team: [
     "employees-section","verify-section","restock-section","danger-section"
+  ],
+  disputes: [
+    "disputes-section"
   ]
 };
 
@@ -4765,7 +4768,8 @@ const ALL_DASH_SECTIONS = [
   "wallet-section","expense-section","restock-section","sales-history-section",
   "delivery-performance-section","seller-ratings-section","profit-section",
   "sales-analytics-section","offers-section","returns-section","mpesa-insights-section",
-  "premium-section","inventory-section","customers-section","receipts-section","danger-section"
+  "premium-section","inventory-section","customers-section","receipts-section","danger-section",
+  "disputes-section"
 ];
 
 function showDashPage(page, navEl) {
@@ -4785,6 +4789,11 @@ function showDashPage(page, navEl) {
   /* Scroll to top of main content */
   const main = document.querySelector(".main-content");
   if (main) main.scrollTop = 0;
+
+  /* Lazy-load disputes when the section is first navigated to */
+  if (page === "disputes" && typeof window.loadSellerDisputes === "function") {
+    setTimeout(window.loadSellerDisputes, 80);
+  }
 }
 
 /* On load: default to overview, hiding everything else */

@@ -153,6 +153,7 @@
       <li class="nav-item" onclick="showDashPage('flash',this)">⚡ Flash Sale</li>
       <li class="nav-item" onclick="showDashPage('store',this)">🏪 My Store</li>
       <li class="nav-item" onclick="showDashPage('team',this)">👥 Team & Verify</li>
+      <li class="nav-item" onclick="showDashPage('disputes',this)">⚖️ Disputes</li>
       <li class="nav-item" onclick="showDashPage('pos',this)" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.16);border-radius:10px;">🏷️ POS / Cashier</li>
     </ul>
 
@@ -271,6 +272,11 @@
       <button type="button" onclick="sdSwitchTab('inbox')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
         <span style="font-size:24px;">💬</span>
         <span id="sdmInboxBadge" style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Messages</span>
+      </button>
+
+      <button type="button" onclick="showDashPage('disputes',null)" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
+        <span style="font-size:24px;">⚖️</span>
+        <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Disputes</span>
       </button>
 
       <button type="button" onclick="goToMyStore()" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
@@ -3456,6 +3462,25 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       </div>
     </section>
 
+    <!-- ============================================================
+         DISPUTES
+    ============================================================ -->
+    <section class="seller-section-card" id="disputes-section" data-sdtab="disputes">
+      <div class="seller-section-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>⚖️ Disputes</h2>
+          <p class="seller-section-sub">Respond to buyer disputes and protect your seller record</p>
+        </div>
+        <button type="button" onclick="loadSellerDisputes()" style="padding:8px 16px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:10px;color:#71ff00;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">↻ Refresh</button>
+      </div>
+      <div id="disputesList">
+        <div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);">
+          <div style="font-size:32px;margin-bottom:12px;">⚖️</div>
+          <div style="font-size:13px;">Loading disputes…</div>
+        </div>
+      </div>
+    </section>
+
     <!-- DANGER ZONE -->
     <section class="seller-section-card" id="danger-section" data-sdtab="store" style="background:rgba(220,38,38,0.03);border-color:rgba(220,38,38,0.18);">
       <div class="seller-section-header">
@@ -3837,9 +3862,10 @@ if(typeof window.showDashPage !== 'function') {
       history:   ['sales-history-section'],
       store:     ['ministore-section','premium-section'],
       team:      ['employees-section','verify-section','restock-section'],
+      disputes:  ['disputes-section'],
       pos:       ['pos-section'],
     };
-    var ALL = ['upload-section','seller-stats','analytics-section','orders-section','products-section','flash-section','tax-section','ads-section','buyer-orders-section','seller-dms','marketing-section','verify-section','bulk-upload-section','customer-analytics-section','qa-section','employees-section','ai-desc-section','ministore-section','stories-section','wallet-section','expense-section','restock-section','sales-history-section','delivery-performance-section','seller-ratings-section','profit-section','sales-analytics-section','offers-section','returns-section','mpesa-insights-section','premium-section','inventory-section','customers-section','receipts-section','pos-section'];
+    var ALL = ['upload-section','seller-stats','analytics-section','orders-section','products-section','flash-section','tax-section','ads-section','buyer-orders-section','seller-dms','marketing-section','verify-section','bulk-upload-section','customer-analytics-section','qa-section','employees-section','ai-desc-section','ministore-section','stories-section','wallet-section','expense-section','restock-section','sales-history-section','delivery-performance-section','seller-ratings-section','profit-section','sales-analytics-section','offers-section','returns-section','mpesa-insights-section','premium-section','inventory-section','customers-section','receipts-section','disputes-section','pos-section'];
     window.showDashPage = function(page, navEl) {
       var show = PAGES[page] || PAGES.overview;
       ALL.forEach(function(id){
@@ -3896,6 +3922,172 @@ function quickAIDesc(btn){
   }, 900);
 }
 window.quickAIDesc = quickAIDesc;
+
+/* ══════════════════════════════════════════
+   DISPUTES — Seller response UI
+══════════════════════════════════════════ */
+
+/** Status badge HTML */
+function _disputeStatusBadge(status) {
+  var configs = {
+    open:              { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)',   label: 'Open' },
+    investigating:     { color: '#fb923c', bg: 'rgba(251,146,60,0.1)',  border: 'rgba(251,146,60,0.25)',  label: 'Investigating' },
+    seller_responded:  { color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',  border: 'rgba(96,165,250,0.25)',  label: 'Responded' },
+    resolved:          { color: '#71ff00', bg: 'rgba(113,255,0,0.08)',  border: 'rgba(113,255,0,0.2)',    label: 'Resolved' },
+    closed:            { color: 'rgba(255,255,255,0.35)', bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.1)', label: 'Closed' }
+  };
+  var c = configs[status] || configs.closed;
+  return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.04em;color:' + c.color + ';background:' + c.bg + ';border:1px solid ' + c.border + ';">' + c.label + '</span>';
+}
+
+/** Format a Firestore Timestamp or ISO string */
+function _fmtDisputeDate(ts) {
+  if (!ts) return '—';
+  try {
+    var d = (ts && ts.toDate) ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
+    return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch(e) { return '—'; }
+}
+
+/** Escape HTML to prevent XSS */
+function _escDisp(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/** Render the disputes table */
+function _renderDisputesTable(disputes) {
+  var container = document.getElementById('disputesList');
+  if (!container) return;
+
+  if (!disputes || disputes.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:48px 20px;color:rgba(255,255,255,0.3);"><div style="font-size:36px;margin-bottom:12px;">✅</div><div style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.5);">No disputes</div><div style="font-size:12px;margin-top:6px;">Your seller record is clean.</div></div>';
+    return;
+  }
+
+  var actionable = ['open', 'investigating'];
+  var rows = disputes.map(function(d) {
+    var canRespond = actionable.indexOf(d.status) > -1;
+    var actionCell = canRespond
+      ? '<button type="button" onclick="showDisputeReplyForm(this,\'' + _escDisp(d.id) + '\')" style="padding:6px 14px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);border-radius:8px;color:#60a5fa;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Respond</button>'
+      : '<span style="font-size:11px;color:rgba(255,255,255,0.25);font-style:italic;">' + (d.status === 'seller_responded' ? 'Awaiting review' : 'No action needed') + '</span>';
+    return '<tr data-dispute-id="' + _escDisp(d.id) + '">'
+      + '<td style="padding:10px 12px;font-size:12px;color:rgba(255,255,255,0.8);font-weight:700;white-space:nowrap;">' + _escDisp(d.orderId || d.orderRef || '—') + '</td>'
+      + '<td style="padding:10px 12px;font-size:11px;color:rgba(255,255,255,0.55);">' + _escDisp(d.category || d.type || '—') + '</td>'
+      + '<td style="padding:10px 12px;font-size:11px;color:rgba(255,255,255,0.65);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _escDisp(d.buyerNote || d.description || '') + '">' + _escDisp(d.buyerNote || d.description || '—') + '</td>'
+      + '<td style="padding:10px 12px;">' + _disputeStatusBadge(d.status) + '</td>'
+      + '<td style="padding:10px 12px;font-size:11px;color:rgba(255,255,255,0.4);white-space:nowrap;">' + _fmtDisputeDate(d.createdAt || d.raisedAt) + '</td>'
+      + '<td style="padding:10px 12px;">' + actionCell + '</td>'
+      + '</tr>'
+      + '<tr class="dispute-reply-row" id="reply-row-' + _escDisp(d.id) + '" style="display:none;">'
+      + '<td colspan="6" style="padding:0 12px 12px;">'
+      + '<div class="dispute-reply" data-dispute-id="' + _escDisp(d.id) + '" style="padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;margin-top:8px;">'
+      + '<textarea placeholder="Explain your position and any resolution you\'re offering..." rows="3" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:white;padding:10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>'
+      + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">'
+      + '<button onclick="hideDisputeReplyForm(\'' + _escDisp(d.id) + '\')" style="padding:8px 14px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:white;cursor:pointer;font-size:12px;">Cancel</button>'
+      + '<button onclick="submitDisputeResponse(this)" style="padding:8px 14px;background:#71ff00;border:none;border-radius:8px;color:#000;font-weight:700;cursor:pointer;font-size:12px;">Send Response</button>'
+      + '</div></div></td></tr>';
+  }).join('');
+
+  container.innerHTML = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'
+    + '<table style="width:100%;border-collapse:collapse;min-width:580px;">'
+    + '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.07);">'
+    + '<th style="padding:8px 12px;font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-align:left;text-transform:uppercase;letter-spacing:.06em;">Order</th>'
+    + '<th style="padding:8px 12px;font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-align:left;text-transform:uppercase;letter-spacing:.06em;">Category</th>'
+    + '<th style="padding:8px 12px;font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-align:left;text-transform:uppercase;letter-spacing:.06em;">Buyer Note</th>'
+    + '<th style="padding:8px 12px;font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-align:left;text-transform:uppercase;letter-spacing:.06em;">Status</th>'
+    + '<th style="padding:8px 12px;font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-align:left;text-transform:uppercase;letter-spacing:.06em;">Raised</th>'
+    + '<th style="padding:8px 12px;font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-align:left;text-transform:uppercase;letter-spacing:.06em;">Actions</th>'
+    + '</tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table></div>';
+}
+
+/** Load disputes from Cloud Function */
+function loadSellerDisputes() {
+  var container = document.getElementById('disputesList');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);"><div style="font-size:28px;margin-bottom:10px;">⏳</div><div style="font-size:12px;">Loading disputes…</div></div>';
+
+  try {
+    var fn = firebase.functions().httpsCallable('getSellerDisputes');
+    fn({}).then(function(result) {
+      var disputes = (result && result.data && result.data.disputes) ? result.data.disputes
+                   : (Array.isArray(result && result.data) ? result.data : []);
+      _renderDisputesTable(disputes);
+    }).catch(function(err) {
+      if (container) {
+        container.innerHTML = '<div style="padding:20px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:12px;color:#ef4444;font-size:13px;">⚠️ ' + _escDisp(err.message || 'Could not load disputes') + '</div>';
+      }
+    });
+  } catch(e) {
+    if (container) {
+      container.innerHTML = '<div style="padding:20px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:12px;color:#ef4444;font-size:13px;">⚠️ Firebase not ready. Please refresh.</div>';
+    }
+  }
+}
+
+/** Show inline reply form for a dispute */
+function showDisputeReplyForm(btn, disputeId) {
+  /* Hide any other open reply forms first */
+  document.querySelectorAll('.dispute-reply-row').forEach(function(row) {
+    row.style.display = 'none';
+  });
+  var replyRow = document.getElementById('reply-row-' + disputeId);
+  if (replyRow) {
+    replyRow.style.display = '';
+    replyRow.querySelector('textarea') && replyRow.querySelector('textarea').focus();
+  }
+}
+
+/** Hide inline reply form */
+function hideDisputeReplyForm(disputeId) {
+  var replyRow = document.getElementById('reply-row-' + disputeId);
+  if (replyRow) replyRow.style.display = 'none';
+}
+
+/** Submit the seller's dispute response */
+function submitDisputeResponse(btn) {
+  var container = btn.closest('.dispute-reply');
+  var textarea = container.querySelector('textarea');
+  var response = textarea.value.trim();
+  var disputeId = container.dataset.disputeId;
+  if (!response) { textarea.style.borderColor = 'rgba(239,68,68,0.5)'; textarea.focus(); return; }
+  textarea.style.borderColor = '';
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    firebase.functions().httpsCallable('sellerRespondToDispute')({ disputeId: disputeId, response: response })
+      .then(function() {
+        container.innerHTML = '<p style="color:#71ff00;font-size:13px;padding:8px 0;">&#x2705; Response submitted — the platform team will review it shortly.</p>';
+        loadSellerDisputes();
+      })
+      .catch(function(e) {
+        btn.disabled = false;
+        btn.textContent = 'Send Response';
+        alert(e.message || 'Failed to submit response. Please try again.');
+      });
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Send Response';
+    alert('Firebase not ready. Please refresh the page.');
+  }
+}
+
+window.loadSellerDisputes   = loadSellerDisputes;
+window.submitDisputeResponse = submitDisputeResponse;
+window.showDisputeReplyForm  = showDisputeReplyForm;
+window.hideDisputeReplyForm  = hideDisputeReplyForm;
+
+/* Auto-load disputes when the section first becomes visible */
+(function() {
+  var _origShow = window.showDashPage;
+  window.showDashPage = function(page, navEl) {
+    if (typeof _origShow === 'function') _origShow(page, navEl);
+    if (page === 'disputes') {
+      setTimeout(loadSellerDisputes, 80);
+    }
+  };
+})();
 </script>
 
   <!-- NOTIFICATIONS -->

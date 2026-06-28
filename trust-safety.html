@@ -98,6 +98,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
     <div class="ni" onclick="_nav(this,'banned')"><span class="material-icons">block</span>Banned Users</div>
     <div class="ni" onclick="_nav(this,'risk')"><span class="material-icons">warning</span>Risk Scores</div>
     <div class="ni" onclick="_nav(this,'terms')"><span class="material-icons">manage_search</span>Banned Terms</div>
+    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons">gavel</span>Disputes<span class="bc" id="sbDisputes">0</span></div>
     <div class="sidebar-foot">
       <a href="admin-os.html" class="ni" style="margin:0"><span class="material-icons">admin_panel_settings</span>Admin OS</a>
       <a href="admin.html"    class="ni" style="margin:0;margin-top:2px"><span class="material-icons">arrow_back</span>Admin</a>
@@ -215,6 +216,32 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
         </div>
       </div>
 
+      <!-- Disputes Panel -->
+      <div id="panel-disputes" class="panel">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">Buyer Disputes</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select class="fs" id="disputeStatusFilter" onchange="_loadDisputes()" style="height:32px;font-size:12px;padding:0 8px">
+                <option value="">All</option>
+                <option value="open">Open</option>
+                <option value="investigating">Investigating</option>
+                <option value="seller_responded">Seller Responded</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+              <button class="btn btn-b btn-sm" onclick="_loadDisputes()">Refresh</button>
+            </div>
+          </div>
+          <div class="card-body" style="overflow-x:auto">
+            <table class="tbl" style="min-width:700px">
+              <thead><tr><th>ID</th><th>Buyer</th><th>Order</th><th>Category</th><th>Status</th><th>Amount</th><th>Raised</th><th>Actions</th></tr></thead>
+              <tbody id="disputesTbl"><tr><td colspan="8" class="tbl-empty">Select Disputes tab to load</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -288,7 +315,7 @@ var _allBanned=[],_allTerms=[],_allRisk=[];
 function _cf(n){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(n);}
 function _fs(){if(!_db)_db=firebase.firestore();return _db;}
 
-var TITLES={dashboard:'Dashboard',reports:'Reports Queue',banned:'Banned Users',risk:'Risk Scores',terms:'Banned Terms'};
+var TITLES={dashboard:'Dashboard',reports:'Reports Queue',banned:'Banned Users',risk:'Risk Scores',terms:'Banned Terms',disputes:'Disputes'};
 
 window._nav=function(el,p){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
@@ -296,9 +323,9 @@ window._nav=function(el,p){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+p).classList.add('active');
   document.getElementById('pageTitle').textContent=TITLES[p]||p;
-  ({dashboard:_loadDashboard,reports:_loadReports,banned:_loadBanned,risk:_loadRisk,terms:_loadTerms}[p]||function(){})();
+  ({dashboard:_loadDashboard,reports:_loadReports,banned:_loadBanned,risk:_loadRisk,terms:_loadTerms,disputes:_loadDisputes}[p]||function(){})();
 };
-window._refresh=function(){var a=document.querySelector('.panel.active');if(a)({dashboard:_loadDashboard,reports:_loadReports,banned:_loadBanned,risk:_loadRisk,terms:_loadTerms}[a.id.replace('panel-','')]||function(){})();};
+window._refresh=function(){var a=document.querySelector('.panel.active');if(a)({dashboard:_loadDashboard,reports:_loadReports,banned:_loadBanned,risk:_loadRisk,terms:_loadTerms,disputes:_loadDisputes}[a.id.replace('panel-','')]||function(){})();};
 
 function _loadDashboard(){
   _cf('tsGetTrustDashboard')({}).then(function(r){
@@ -484,6 +511,48 @@ window._addTerm=function(){
 };
 window._deleteTerm=function(id){
   _cf('tsManageBannedTerm')({action:'delete',termId:id}).then(function(){_toast('Term removed','green');_loadTerms();}).catch(function(e){_toast(e.message,'red');});
+};
+
+// Disputes
+var _allDisputes=[];
+function _loadDisputes(){
+  var status=document.getElementById('disputeStatusFilter').value||undefined;
+  document.getElementById('disputesTbl').innerHTML='<tr><td colspan="8" class="tbl-empty"><div class="spin"></div></td></tr>';
+  _cf('adminGetAllDisputes')({status:status,limit:100}).then(function(r){
+    _allDisputes=(r.data&&r.data.disputes)||[];
+    _renderDisputeRows(_allDisputes);
+    var openCount=_allDisputes.filter(function(d){return d.status==='open'||d.status==='investigating';}).length;
+    document.getElementById('sbDisputes').textContent=openCount||'';
+  }).catch(function(e){document.getElementById('disputesTbl').innerHTML='<tr><td colspan="8" class="tbl-empty">Error: '+_esc(e.message)+'</td></tr>';});
+}
+function _renderDisputeRows(list){
+  var tb=document.getElementById('disputesTbl');
+  if(!list.length){tb.innerHTML='<tr><td colspan="8" class="tbl-empty">No disputes found</td></tr>';return;}
+  tb.innerHTML=list.map(function(d){
+    var statusColor={open:'bb',investigating:'bo',seller_responded:'bs',resolved:'bg',closed:'bg'}[d.status]||'bs';
+    return '<tr>'+
+      '<td style="font-size:10px;font-family:monospace">'+_esc((d.id||'').slice(0,12))+'</td>'+
+      '<td style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis">'+_esc((d.buyerId||'—').slice(0,16))+'</td>'+
+      '<td style="font-size:11px;font-family:monospace">'+_esc((d.orderId||'—').slice(0,12))+'</td>'+
+      '<td style="font-size:11px">'+_esc(d.category||d.reason||'—')+'</td>'+
+      '<td><span class="badge '+statusColor+'">'+_esc(d.status||'—')+'</span></td>'+
+      '<td style="font-size:11px;color:var(--y)">'+((d.claimedAmount||d.disputedAmount||d.amount)?'KES '+(d.claimedAmount||d.disputedAmount||d.amount).toLocaleString():'—')+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_relTime(d.createdAt)+'</td>'+
+      '<td style="display:flex;gap:4px;flex-wrap:wrap">'+
+        (d.status!=='resolved'&&d.status!=='closed'?
+          '<button class="btn btn-g btn-sm" onclick="_resolveDispute(\''+_esc(d.id)+'\',\'resolved\')">Resolve</button>'+
+          '<button class="btn btn-o btn-sm" onclick="_resolveDispute(\''+_esc(d.id)+'\',\'investigating\')">Investigate</button>':
+          '<span style="font-size:11px;color:var(--sub)">'+_esc(d.resolution||'Closed')+'</span>')+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+window._resolveDispute=function(disputeId,action){
+  var note=action==='resolved'?prompt('Resolution note (required):','Dispute resolved by admin'):'';
+  if(action==='resolved'&&!note)return;
+  _cf('adminResolveDispute')({disputeId:disputeId,action:action,resolution:note})
+  .then(function(){_toast('Dispute '+action,'green');_loadDisputes();})
+  .catch(function(e){_toast(e.message,'red');});
 };
 
 function _sevBadge(s){return '<span class="badge '+(s==='critical'?'br':s==='high'?'br':s==='medium'?'bo':'bs')+'">'+_esc(s||'?')+'</span>';}

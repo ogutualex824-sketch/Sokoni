@@ -1,4 +1,66 @@
-﻿## [2026-06-28] — Loyalty & Rewards System v2.0
+﻿## [2026-06-28] — Jobs Marketplace v1.0
+
+### Summary
+Full Jobs Marketplace for SOKONI — employer posting + seeker apply flow + profile + applications management. Two public pages (`jobs.html`, `job-post.html`) and one shared client engine (`sokoni-jobs.js`). 12 Gen2 Cloud Functions. Zero new composite Firestore indexes.
+
+### Files Added
+- `jobs.html` — public listings with search, category/type filters, featured strip, job detail modal, apply form, My Applications panel, seeker profile editor
+- `job-post.html` — employer dashboard: Post Job / My Jobs / Applications tabs
+- `sokoni-jobs.js` — shared IIFE client engine; `initPublic()` + `initEmployer()` entry points
+- `functions/jobs.js` — 12 Gen2 CFs
+
+### Files Modified
+- `functions/index.js` — 12 CF exports appended
+- `firestore.rules` — 4 new collection rules: `jobs`, `jobApplications`, `jobSeekerProfiles`, `savedJobs`
+
+### Cloud Functions (12)
+`createJob`, `updateJob`, `closeJob`, `listJobs`, `getJob`, `applyForJob`, `getJobApplications`, `updateApplicationStatus`, `getMyApplications`, `saveJobSeekerProfile`, `getJobSeekerProfile`, `getFeaturedJobs`
+
+### New Firestore Collections (0 composite indexes)
+- `jobs/{jobId}` — public read for active; employer owns their own; CF write
+- `jobApplications/{jobId_seekerUid}` — deterministic doc-ID for idempotent apply; CF write
+- `jobSeekerProfiles/{uid}` — auth-read; CF write
+- `savedJobs/{uid_jobId}` — owner read/create/delete
+
+### Security
+- `employerUid` never returned to public callers (IDOR prevention)
+- Apply idempotency via `{jobId}_{seekerUid}` doc-ID — prevents duplicate applications
+- Expired jobs (`expiresAt < now`) filtered out in JS on all public queries
+- `_san()` on all user text inputs; `_esc()` in client before all innerHTML
+
+---
+
+## [2026-06-28] — Wallet & Seller Payouts v1.0
+
+### Summary
+Buyer wallet (M-Pesa top-up via IntaSend STK push, spend at checkout) and seller payout request system. 10 Gen2 Cloud Functions with atomic balance updates, idempotent spend/refund, and masked account numbers for admin payouts.
+
+### Files Added
+- `wallet.html` — balance card, top-up form (quick chips + STK polling), transaction history, payout request + history
+- `sokoni-wallet.js` — client engine; seller detection; 3s polling loop with 90s timeout; bank fields for 10 Kenyan banks
+- `functions/wallet.js` — 10 Gen2 CFs
+
+### Files Modified
+- `functions/index.js` — 10 CF exports appended
+- `firestore.rules` — 3 new collection rules: `wallets`, `walletTransactions`, `payoutRequests`
+
+### Cloud Functions (10)
+`getWalletBalance`, `initiateWalletTopUp`, `confirmWalletTopUp`, `spendFromWallet`, `getWalletTransactions`, `requestSellerPayout`, `getPayoutHistory`, `adminProcessPayout`, `adminGetPendingPayouts`, `refundToWallet`
+
+### New Firestore Collections (0 composite indexes)
+- `wallets/{uid}` — owner or admin read; CF write (atomic balance)
+- `walletTransactions/{txId}` — owner or admin read; CF write
+- `payoutRequests/{reqId}` — seller or admin read; CF write
+
+### Security
+- Spend and refund idempotent via `{uid}_{orderId}_spend` / `_refund` doc-IDs
+- Account numbers masked to last 4 digits in admin listing
+- Phone numbers never logged
+- M-Pesa STK failure rolls back pending transaction immediately
+
+---
+
+## [2026-06-28] — Loyalty & Rewards System v2.0
 
 ### Summary
 Complete rebuild of `loyalty.html` and `sokoni-loyalty.js` from a localStorage-based client-side engine to a Firebase Cloud Functions-backed buyer-facing loyalty dashboard. Introduces the light `#f8f9ff` design system, `window.SokoniLoyalty` IIFE, and three CF callables (`getLoyaltyAccount`, `getLoyaltyHistory`, `getLoyaltyTiers`). The UI features a purple gradient hero with animated tier progress, 4-card KPI strip, 4 tabs (Earn / Redeem / History / Tiers), interactive redeem slider with live KSh preview, lazy-loaded history and tiers, and server-authoritative account data with graceful offline degradation.

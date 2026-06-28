@@ -5,8 +5,9 @@
  * All queries use single-field filters to respect the 200/200 composite index cap.
  */
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onSchedule }        = require('firebase-functions/v2/scheduler');
+const { onCall, HttpsError }   = require('firebase-functions/v2/https');
+const { onSchedule }           = require('firebase-functions/v2/scheduler');
+const { onDocumentCreated }    = require('firebase-functions/v2/firestore');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
 
@@ -233,11 +234,13 @@ exports.navUpdateTripStatus = onCall({ enforceAppCheck: false }, async request =
   if (status === 'en_route_delivery' && trip.stops) {
     const delivery = trip.stops.find(s => s.type === 'delivery');
     if (delivery && delivery.buyerId) {
+      const trackingUrl = `https://mysokoni.co.ke/track.html?code=${trip.trackingCode}`;
       await db.collection('notifications').add({
         targetUid: delivery.buyerId,
         type:      'rider_on_way',
         title:     '🏍 Rider on the way!',
-        body:      'Your delivery is on the way. Track live in the app.',
+        body:      `Your delivery is on the way. Track live in the app.\nTrack your delivery: ${trackingUrl}`,
+        url:       trackingUrl,
         data:      { tripId, orderId: trip.orderId, trackingCode: trip.trackingCode },
         read:      false,
         createdAt: FieldValue.serverTimestamp(),
@@ -720,6 +723,51 @@ exports.navResolveFleetEvent = onCall({ enforceAppCheck: false }, async request 
     resolveNote:_san(note || '', 500),
   });
   return { ok: true };
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   15. processDriverEarning — credit wallet on driverEarningQueue write
+═══════════════════════════════════════════════════════════════════════ */
+exports.processDriverEarning = onDocumentCreated('driverEarningQueue/{docId}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const data = snap.data();
+  const { riderId, amount, orderId, tripId, source } = data;
+  if (!riderId || !amount) return;
+
+  const batch = db.batch();
+
+  // Credit wallet
+  const walletRef = db.collection('wallets').doc(riderId);
+  batch.set(walletRef, {
+    balance:   FieldValue.increment(amount),
+    currency:  'KES',
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  // Wallet transaction record
+  const txRef = db.collection('walletTransactions').doc();
+  batch.set(txRef, {
+    userId:      riderId,
+    type:        'credit',
+    amount,
+    currency:    'KES',
+    description: `Delivery earning — Order ${(orderId || '').slice(0, 8).toUpperCase()}`,
+    source:      'delivery_earning',
+    orderId:     orderId || null,
+    tripId:      tripId  || null,
+    status:      'completed',
+    createdAt:   FieldValue.serverTimestamp(),
+  });
+
+  // Mark queue doc processed
+  batch.update(snap.ref, {
+    processed:   true,
+    processedAt: FieldValue.serverTimestamp(),
+  });
+
+  await batch.commit();
+  console.log(`Driver earning processed: ${riderId} +KES ${amount} for order ${orderId}`);
 });
 
 /* ═══════════════════════════════════════════════════════════════════════

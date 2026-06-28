@@ -218,3 +218,79 @@ exports.getSellerDisputes = onCall({ enforceAppCheck: false }, async request => 
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   return { disputes: items };
 });
+
+// ─── adminGetAllDisputes — admin/superAdmin lists all disputes ────────────────
+exports.adminGetAllDisputes = onCall({ enforceAppCheck: false }, async request => {
+  _requireAuth(request.auth);
+  const t = request.auth.token;
+  if (!t.admin && !t.superAdmin && !t.isAdmin && !t.isSuperAdmin)
+    throw new HttpsError('permission-denied', 'Admin access required');
+
+  const { status, limit } = request.data || {};
+  let q = db.collection('disputes').orderBy('createdAt', 'desc');
+  if (status) q = q.where('status', '==', status);
+  q = q.limit(Math.min(Number(limit) || 100, 500));
+
+  const snap = await q.get();
+  const disputes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return { disputes };
+});
+
+// ─── adminResolveDispute — admin resolves or updates a dispute status ─────────
+exports.adminResolveDispute = onCall({ enforceAppCheck: false }, async request => {
+  _requireAuth(request.auth);
+  const t = request.auth.token;
+  if (!t.admin && !t.superAdmin && !t.isAdmin && !t.isSuperAdmin)
+    throw new HttpsError('permission-denied', 'Admin access required');
+
+  const uid = request.auth.uid;
+  const { disputeId, action, resolution } = request.data || {};
+  if (!disputeId) throw new HttpsError('invalid-argument', 'disputeId required');
+  if (!action)    throw new HttpsError('invalid-argument', 'action required');
+
+  const VALID_ACTIONS = ['open', 'investigating', 'resolved', 'closed'];
+  if (!VALID_ACTIONS.includes(action))
+    throw new HttpsError('invalid-argument', 'Invalid action. Must be one of: ' + VALID_ACTIONS.join(', '));
+
+  const snap = await db.collection('disputes').doc(disputeId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Dispute not found');
+
+  if (action === 'resolved' && (!resolution || String(resolution).trim().length < 2))
+    throw new HttpsError('invalid-argument', 'A resolution note is required when resolving a dispute');
+
+  const tlEntry = {
+    event:     'admin_action',
+    actor:     uid,
+    actorRole: 'admin',
+    note:      `Status changed to ${action}${resolution ? ': ' + _san(resolution, 500) : ''}`,
+    ts:        new Date().toISOString(),
+  };
+
+  const update = {
+    status:    action,
+    updatedAt: FieldValue.serverTimestamp(),
+    timeline:  FieldValue.arrayUnion(tlEntry),
+    adminNotes: _san(resolution || '', 1000),
+  };
+
+  if (action === 'resolved' || action === 'closed') {
+    update.resolution  = _san(resolution || '', 1000);
+    update.resolvedAt  = FieldValue.serverTimestamp();
+    update.resolvedBy  = uid;
+  }
+
+  await snap.ref.update(update);
+
+  // Sync the linked order's dispute status when fully resolved
+  if (action === 'resolved' || action === 'closed') {
+    const orderId = snap.data().orderId;
+    if (orderId) {
+      await db.collection('orders').doc(orderId).update({
+        disputeStatus: action,
+        disputeResolvedAt: FieldValue.serverTimestamp(),
+      }).catch(() => { /* order may not exist — safe to ignore */ });
+    }
+  }
+
+  return { success: true, disputeId, action };
+});

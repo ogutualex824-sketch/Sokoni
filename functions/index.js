@@ -7829,7 +7829,6 @@ exports.adminGetDeliveryStats       = adminOs.adminGetDeliveryStats;
 exports.adminGetPendingPayouts      = adminOs.adminGetPendingPayouts;
 exports.adminApprovePayouts         = adminOs.adminApprovePayouts;
 exports.adminGetDisputes            = adminOs.adminGetDisputes;
-exports.adminResolveDispute         = adminOs.adminResolveDispute;
 exports.adminGetReviews             = adminOs.adminGetReviews;
 exports.adminRemoveReview           = adminOs.adminRemoveReview;
 exports.adminSendPushNotification   = adminOs.adminSendPushNotification;
@@ -7974,6 +7973,8 @@ exports.addDisputeEvidence      = disputes.addDisputeEvidence;
 exports.sellerRespondToDispute  = disputes.sellerRespondToDispute;
 exports.cancelDispute           = disputes.cancelDispute;
 exports.getSellerDisputes       = disputes.getSellerDisputes;
+exports.adminGetAllDisputes     = disputes.adminGetAllDisputes;
+exports.adminResolveDispute     = disputes.adminResolveDispute;
 
 /* ── Merchant Success & Growth Engine v1.0 ──────────────────────────────── */
 const merchantSuccess = require('./merchant-success');
@@ -8006,6 +8007,7 @@ exports.navCancelStop             = navigation.navCancelStop;
 exports.navAssignTrip             = navigation.navAssignTrip;
 exports.navResolveFleetEvent      = navigation.navResolveFleetEvent;
 exports.navCleanupStaleLocations  = navigation.navCleanupStaleLocations;
+exports.processDriverEarning      = navigation.processDriverEarning;
 
 /* ── Loyalty & Rewards Engine v1.0 ──────────────────────────────────────── */
 const loyalty = require('./loyalty');

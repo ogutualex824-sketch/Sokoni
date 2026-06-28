@@ -1,0 +1,304 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Post a Job — SOKONI</title>
+  <meta name="description" content="Post a job on SOKONI and reach thousands of qualified candidates across Kenya.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2196f3">
+  <style>
+    :root{--bg:#f5f7ff;--surface:#fff;--border:#e4e8f5;--accent:#2196f3;--accent2:#1976d2;--green:#4caf50;--orange:#ff9800;--red:#f44336;--purple:#7c4dff;--text:#1a1a2e;--muted:#6b7280;--card:#fff;--radius:12px;--shadow:0 2px 12px rgba(0,0,0,.06);}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter','Segoe UI',system-ui,sans-serif;font-size:15px;background:var(--bg);color:var(--text);min-height:100vh}
+    input,select,textarea,button{font-family:inherit;font-size:16px}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{text-decoration:underline}
+    @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    /* Header */
+    .site-header{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:200;height:60px;display:flex;align-items:center;padding:0 20px;gap:12px;box-shadow:var(--shadow)}
+    .header-brand{display:flex;align-items:center;gap:2px;font-size:20px;font-weight:900;color:var(--text);text-decoration:none}
+    .header-brand .ba{color:var(--accent)}
+    .header-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+    .user-badge{display:none;align-items:center;gap:6px;font-size:13px;color:var(--muted);background:var(--bg);padding:5px 10px;border-radius:20px;border:1px solid var(--border)}
+    .user-dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:9px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:background .15s,transform .1s;white-space:nowrap;text-decoration:none}
+    .btn:active{transform:scale(.97)}
+    .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-primary:hover{background:var(--accent2);color:#fff;text-decoration:none}
+    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
+    .btn-outline:hover{border-color:var(--accent);color:var(--accent);text-decoration:none}
+    .btn-danger{background:none;border:1px solid var(--red);color:var(--red)}
+    .btn-danger:hover{background:#ffebee;text-decoration:none}
+    .btn-ghost{background:none;border:none;color:var(--muted)}
+    .btn-ghost:hover{color:var(--text);text-decoration:none}
+    .btn-sm{padding:7px 14px;font-size:13px}
+    /* Layout */
+    .page{max-width:900px;margin:0 auto;padding:28px 20px 60px}
+    .page-title{font-size:22px;font-weight:800;margin-bottom:24px}
+    /* Tabs */
+    .tabs-bar{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:4px;margin-bottom:28px}
+    [data-tab]{flex:1;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:var(--muted);border-radius:9px;transition:all .15s;white-space:nowrap}
+    [data-tab]:hover{color:var(--text);background:rgba(0,0,0,.03)}
+    [data-tab].active{background:var(--surface);color:var(--accent);box-shadow:var(--shadow)}
+    [data-tab-panel]{display:none}
+    [data-tab-panel].active{display:block}
+    /* Form */
+    .form-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;box-shadow:var(--shadow)}
+    .form-card-title{font-size:16px;font-weight:700;margin-bottom:20px}
+    .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:18px}
+    .form-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .form-input{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-size:15px;outline:none;width:100%;transition:border-color .15s}
+    .form-input:focus{border-color:var(--accent);background:#fff}
+    select.form-input{cursor:pointer}
+    textarea.form-input{resize:vertical;min-height:110px}
+    .form-hint{font-size:12px;color:var(--muted);margin-top:3px}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media(max-width:520px){.form-row{grid-template-columns:1fr}}
+    .form-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+    .form-divider{height:1px;background:var(--border);margin:20px 0}
+    .required-star{color:var(--red)}
+    /* Employer cards */
+    .employer-job-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;box-shadow:var(--shadow)}
+    .employer-job-main{flex:1;min-width:0}
+    .employer-job-title{font-size:16px;font-weight:700;margin-bottom:8px}
+    .employer-job-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .employer-job-actions{display:flex;gap:8px;flex-shrink:0;align-items:center}
+    .employer-apps-count{font-size:13px;color:var(--muted)}
+    .employer-posted{font-size:12px;color:var(--muted)}
+    .employer-loading{padding:40px;text-align:center;color:var(--muted)}
+    .employer-error{padding:16px;color:var(--red);font-size:13px}
+    .job-type-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:#e3f2fd;color:var(--accent2)}
+    .job-type-full-time{background:#e8f5e9;color:#2e7d32}
+    .job-type-part-time{background:#fff3e0;color:#e65100}
+    .job-type-contract{background:#f3e5f5;color:#6a1b9a}
+    .job-type-internship{background:#e1f5fe;color:#0277bd}
+    .job-type-remote{background:#e8f5e9;color:#1b5e20}
+    .status-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+    /* Apps */
+    .apps-selector-row{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+    .apps-selector-label{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+    #jpAppJobSelector{flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:15px;outline:none;cursor:pointer}
+    .app-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
+    .app-card-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+    .app-avatar{width:48px;height:48px;min-width:48px;border-radius:12px;background:linear-gradient(135deg,var(--purple),#9c27b0);color:#fff;font-size:20px;font-weight:800;display:flex;align-items:center;justify-content:center}
+    .app-info{flex:1;min-width:0}
+    .app-name{font-size:16px;font-weight:700;margin-bottom:2px}
+    .app-headline{font-size:13px;color:var(--muted);margin-bottom:2px}
+    .app-location{font-size:12px;color:var(--muted)}
+    .app-meta-right{flex-shrink:0}
+    .app-date{font-size:12px;color:var(--muted);white-space:nowrap}
+    .app-skills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+    .skill-tag{background:#e8f0fe;color:#3949ab;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
+    .app-cover{margin-bottom:14px}
+    .app-cover-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+    .app-cover-text{font-size:13px;line-height:1.65;color:var(--text)}
+    .app-read-more{background:none;border:none;cursor:pointer;color:var(--accent);font-size:12px;font-weight:600;padding:4px 0;margin-top:4px;text-decoration:underline}
+    .app-cv{margin-bottom:14px}
+    .cv-link{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--accent);padding:7px 14px;border:1px solid var(--border);border-radius:8px;transition:border-color .15s}
+    .cv-link:hover{border-color:var(--accent);text-decoration:none}
+    .app-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--border)}
+    .status-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+    .status-controls{display:flex;align-items:center;gap:8px}
+    .status-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-size:14px;outline:none;cursor:pointer}
+    /* Empty */
+    .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+    .empty-icon{font-size:52px;margin-bottom:14px}
+    .empty-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}
+    .empty-sub{font-size:14px}
+    /* Auth gate */
+    #authGate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;padding:32px}
+    .auth-gate-icon{font-size:60px;margin-bottom:16px}
+    .auth-gate-title{font-size:22px;font-weight:800;margin-bottom:8px}
+    .auth-gate-sub{font-size:15px;color:var(--muted);margin-bottom:24px}
+    /* Toasts */
+    #jpToasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:max-content;max-width:calc(100vw - 32px)}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="header-brand" href="index.html"><span class="ba">S</span>OKONI</a>
+  <div class="header-actions">
+    <a href="jobs.html" class="btn btn-ghost btn-sm">← Browse Jobs</a>
+    <div class="user-badge" id="userBadge">
+      <div class="user-dot" aria-hidden="true"></div>
+      <span id="userEmail"></span>
+    </div>
+    <a href="profile.html" class="btn btn-outline btn-sm">My Account</a>
+  </div>
+</header>
+
+<div id="authGate">
+  <div class="auth-gate-icon">🔒</div>
+  <div class="auth-gate-title">Sign In Required</div>
+  <div class="auth-gate-sub">You must be signed in to post jobs and manage applications.</div>
+  <a href="login.html?return=job-post.html" class="btn btn-primary">Sign In / Register</a>
+</div>
+
+<div id="employerDashboard" class="hidden">
+  <div class="page">
+    <h1 class="page-title">Employer Dashboard</h1>
+
+    <div class="tabs-bar" role="tablist" aria-label="Dashboard sections">
+      <button data-tab="post-job"     class="active" role="tab">✏️ Post Job</button>
+      <button data-tab="my-jobs"      role="tab">📋 My Jobs</button>
+      <button data-tab="applications" role="tab">👥 Applications</button>
+    </div>
+
+    <!-- POST JOB -->
+    <div data-tab-panel="post-job" class="active" role="tabpanel">
+      <div class="form-card">
+        <div class="form-card-title">📢 Create a New Job Listing</div>
+        <form id="jpJobForm" novalidate>
+
+          <div class="form-section-title">Job Details</div>
+          <div class="form-group">
+            <label class="form-label" for="jpTitle">Job Title <span class="required-star">*</span></label>
+            <input id="jpTitle" class="form-input" type="text" placeholder="e.g. Senior Software Engineer" maxlength="100" required aria-required="true" aria-describedby="jpTitleHint">
+            <span id="jpTitleHint" class="form-hint">3 – 100 characters</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="jpCategory">Category <span class="required-star">*</span></label>
+              <select id="jpCategory" class="form-input" required aria-required="true">
+                <option value="">Select a category</option>
+                <option value="technology">💻 Technology</option>
+                <option value="finance">💰 Finance</option>
+                <option value="healthcare">🏥 Healthcare</option>
+                <option value="retail">🛒 Retail</option>
+                <option value="logistics">🚚 Logistics</option>
+                <option value="education">📚 Education</option>
+                <option value="hospitality">🍽️ Hospitality</option>
+                <option value="marketing">📣 Marketing</option>
+                <option value="legal">⚖️ Legal</option>
+                <option value="engineering">⚙️ Engineering</option>
+                <option value="admin">📋 Admin</option>
+                <option value="other">💼 Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="jpType">Job Type <span class="required-star">*</span></label>
+              <select id="jpType" class="form-input" required aria-required="true">
+                <option value="">Select type</option>
+                <option value="full-time">Full-time</option>
+                <option value="part-time">Part-time</option>
+                <option value="contract">Contract</option>
+                <option value="internship">Internship</option>
+                <option value="remote">Remote</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="jpLocation">Location</label>
+            <input id="jpLocation" class="form-input" type="text" placeholder="e.g. Nairobi CBD, Remote, or Hybrid" maxlength="200">
+          </div>
+
+          <div class="form-divider" aria-hidden="true"></div>
+          <div class="form-section-title">Salary (optional, KSh / month)</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="jpSalaryMin">Minimum</label>
+              <input id="jpSalaryMin" class="form-input" type="number" placeholder="e.g. 50000" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="jpSalaryMax">Maximum</label>
+              <input id="jpSalaryMax" class="form-input" type="number" placeholder="e.g. 120000" min="0">
+            </div>
+          </div>
+          <span class="form-hint" style="display:block;margin-top:-10px;margin-bottom:16px">Leave blank to display "Competitive salary"</span>
+
+          <div class="form-divider" aria-hidden="true"></div>
+          <div class="form-section-title">Role Description</div>
+          <div class="form-group">
+            <label class="form-label" for="jpDescription">Job Description <span class="required-star">*</span></label>
+            <textarea id="jpDescription" class="form-input" placeholder="Describe the role, day-to-day responsibilities, team context and growth opportunities…" rows="7" maxlength="5000" required aria-required="true" aria-describedby="jpDescHint"></textarea>
+            <span id="jpDescHint" class="form-hint">20 – 5000 characters</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="jpRequirements">Requirements &amp; Qualifications</label>
+            <textarea id="jpRequirements" class="form-input" placeholder="Minimum qualifications, skills, experience and certifications needed…" rows="4" maxlength="3000"></textarea>
+          </div>
+
+          <div class="form-divider" aria-hidden="true"></div>
+          <div class="form-section-title">Listing Settings</div>
+          <div class="form-group">
+            <label class="form-label" for="jpExpiresIn">Listing Duration</label>
+            <select id="jpExpiresIn" class="form-input" aria-describedby="jpExpiresHint">
+              <option value="7">7 days</option>
+              <option value="14">14 days</option>
+              <option value="30" selected>30 days (recommended)</option>
+              <option value="60">60 days</option>
+              <option value="90">90 days</option>
+            </select>
+            <span id="jpExpiresHint" class="form-hint">Job closes automatically after this period</span>
+          </div>
+
+          <button id="jpSubmitBtn" type="submit" class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;margin-top:8px">
+            📢 Post Job
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MY JOBS -->
+    <div data-tab-panel="my-jobs" role="tabpanel">
+      <div id="jpMyJobsList" aria-live="polite">
+        <div class="employer-loading">Loading your jobs…</div>
+      </div>
+    </div>
+
+    <!-- APPLICATIONS -->
+    <div data-tab-panel="applications" role="tabpanel">
+      <div class="apps-selector-row">
+        <span class="apps-selector-label">Viewing applications for:</span>
+        <select id="jpAppJobSelector" aria-label="Select job to view applications" onchange="SokoniJobs.loadApplications(this.value)">
+          <option value="">— Select a job —</option>
+        </select>
+      </div>
+      <div id="jpAppsList" aria-live="polite">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <div class="empty-title">Select a job above</div>
+          <div class="empty-sub">Choose one of your posted jobs to view its applicants.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="jpToasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="/__/firebase/init.js"></script>
+<script src="sokoni-jobs.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    SokoniJobs.initEmployer();
+
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (user) {
+        document.getElementById('authGate').style.display = 'none';
+        document.getElementById('employerDashboard').classList.remove('hidden');
+        var badge   = document.getElementById('userBadge');
+        var emailEl = document.getElementById('userEmail');
+        if (badge)   badge.style.display = 'flex';
+        if (emailEl) emailEl.textContent = user.displayName || user.email || 'You';
+      } else {
+        document.getElementById('authGate').style.display = 'flex';
+        document.getElementById('employerDashboard').classList.add('hidden');
+      }
+    });
+  });
+</script>
+</body>
+</html>
