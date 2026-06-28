@@ -829,3 +829,191 @@ html, body {
     margin: 18mm 14mm;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   VIEWPORT RANGE FIXES — 320px → 1440px
+   Supplements sokoni-nav-engine.css breakpoints with
+   layout-level fixes across the full platform.
+═══════════════════════════════════════════════════════════ */
+
+/* ── 320px: smallest Android / legacy phones ────────────── */
+@media (max-width: 320px) {
+  html { font-size: 13px; }
+
+  /* Cards never overflow viewport */
+  .sk-card, [class*="-card"], .product-card, .pv-card,
+  .trust-tile, .ko-card { max-width: 100% !important; }
+
+  /* Inputs: prevent zoom + fit screen */
+  input, select, textarea, button {
+    font-size: 16px !important;
+    max-width: 100% !important;
+  }
+
+  /* Grid forced single column */
+  .sk-grid, [class*="-grid"]:not(.sk-snav-item) {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tables: full horizontal scroll in wrapper */
+  table { font-size: 11px !important; }
+
+  /* Header padding tighter */
+  .co-card, .sk-card, [class*="section"] { padding: 12px !important; }
+
+  /* Modals/drawers: full-width */
+  .sk-modal-box, [class*="-modal-box"] { width: 100vw !important; border-radius: 0 !important; }
+}
+
+/* ── 360px: most popular Android size ───────────────────── */
+@media (max-width: 360px) {
+  html { font-size: 13.5px; }
+
+  .checkout-grid,
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Two-column stat grids → single column */
+  .stc-stats, [class*="stats-grid"], [class*="kpi-grid"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Trust center chips wrap */
+  .stc-indicators { gap: 6px !important; }
+  .stc-chip { padding: 5px 10px !important; font-size: 11px !important; }
+}
+
+/* ── 375px: iPhone SE / iPhone 8 ───────────────────────── */
+@media (max-width: 375px) {
+  /* Product grid: 2-col on 375px, not 3 */
+  .products-grid, [class*="product-grid"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Drawer: full-width */
+  .sk-drawer { width: 100vw !important; max-width: 100vw !important; }
+}
+
+/* ── 390px: iPhone 14/15 ────────────────────────────────── */
+@media (max-width: 390px) {
+  /* Checkout page: single column */
+  .checkout-grid { grid-template-columns: 1fr !important; }
+
+  /* Stats: 2x2 grid */
+  .stc-stats { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Detail cards: single column on trust page */
+  .stc-details { grid-template-columns: 1fr !important; }
+}
+
+/* ── 412px: Pixel / Galaxy A series ────────────────────── */
+@media (max-width: 412px) {
+  /* Hero padding */
+  .hero-section, [class*="-hero"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* Section headers */
+  .section-title, h2 { font-size: clamp(16px, 4.5vw, 20px) !important; }
+}
+
+/* ── 430px: iPhone 14/15 Plus ───────────────────────────── */
+@media (max-width: 430px) {
+  /* Floating action buttons clear bottom nav */
+  #sokoniScrollTop, #kassBtn, #sokoni-wa-support,
+  .back-to-top-btn, .sk-fab, [class*="float-btn"], .fab {
+    bottom: max(86px, calc(env(safe-area-inset-bottom, 0px) + 86px)) !important;
+    right: 14px !important;
+    left: auto !important;
+  }
+
+  /* Modal/paywall: prevent overflow */
+  .paypal-modal-box, [class*="-modal-box"] {
+    max-width: min(96vw, 420px) !important;
+    width: 96vw !important;
+  }
+}
+
+/* ── 768px: Tablets ─────────────────────────────────────── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Three-column product grids on tablets */
+  .products-grid, [class*="product-grid"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  /* Bottom nav hidden on tablet+ */
+  .bottom-nav { display: none !important; }
+
+  /* Seller subnav: wider padding */
+  #sk-seller-subnav { padding: 0 24px; }
+  .sk-snav-item { padding: 4px 18px; font-size: 11px; }
+}
+
+/* ── 1024px: Small laptop ───────────────────────────────── */
+@media (min-width: 1024px) {
+  /* 4-column grids on desktop */
+  .products-grid, [class*="product-grid"] {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+
+  /* Seller subnav on desktop: centre-aligned tabs */
+  #sk-seller-subnav { justify-content: center; }
+  .sk-snav-item { padding: 4px 20px; font-size: 11px; }
+
+  /* Back button + role chip visible on desktop */
+  #sk-nav-role-chip { display: inline-flex !important; }
+}
+
+/* ── 1440px: Wide desktop ───────────────────────────────── */
+@media (min-width: 1440px) {
+  /* Cap content width for readability */
+  .page-wide, .checkout-page, [class*="page-container"] {
+    max-width: 1320px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* 5-column product grids on wide screens */
+  .products-grid, [class*="product-grid"] {
+    grid-template-columns: repeat(5, 1fr) !important;
+  }
+}
+
+/* ── Horizontal overflow guard (all sizes) ─────────────── */
+/* Applied globally: elements that escape viewport are clipped */
+img, video, canvas, svg, iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent any single card wider than viewport */
+.sk-card, [class*="-card"]:not(.sk-nav-icon-btn) {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* All flex rows: wrap to avoid horizontal scroll */
+.sk-row, [class*="-row"]:not(.sk-snav) {
+  flex-wrap: wrap;
+}
+
+/* ── Floating buttons: never cover forms / bottom nav ──── */
+/* When keyboard is open (viewport height shrinks < 500px) hide FABs */
+@media (max-height: 500px) {
+  #sokoniScrollTop, #kassBtn, #sokoni-wa-support,
+  .back-to-top-btn, .sk-fab, [class*="float-btn"], .fab {
+    display: none !important;
+  }
+}
+
+/* ── No-horizontal-scroll enforcement ───────────────────── */
+html, body {
+  overflow-x: hidden;
+  /* clip instead of hidden so fixed children aren't clipped */
+  max-width: 100vw;
+}
+}

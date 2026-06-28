@@ -3011,5 +3011,71 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ── SOKONI Impact Enterprise Platform ──────────────────────────── */
+    match /impactLedger/{entryId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /impactBalance/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /impactCampaigns/{campId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /impactGrants/{grantId} {
+      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;
+    }
+    match /impactScholarships/{schId} {
+      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;
+    }
+    match /impactCorporate/{corpId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /impactUserProfiles/{uid} {
+      allow read: if isAuthed() && request.auth.uid == uid || isAdmin();
+      allow write: if false;
+    }
+    match /impactBadges/{badgeId} {
+      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;
+    }
+    match /impactDisbursements/{disbId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /impactRoundupSettings/{uid} {
+      allow read: if isAuthed() && request.auth.uid == uid;
+      allow write: if false;
+    }
+    match /impactBusinessScores/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /impactBookmarks/{bookmarkId} {
+      allow read: if isAuthed() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+    match /impactEnvironmental/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /impactEnvProjects/{projId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /impactAlerts/{alertId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /impactMonthlySnapshots/{snapshotId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
   }
 }

@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-foundation-v1";
+const CACHE_VERSION = "sokoni-20260628-impact-v1";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -190,6 +190,9 @@ const PRECACHE_STATIC = [
   /* ── Delivery pricing & merchant success ── */
   "/sokoni-delivery-pricing.js", "/sokoni-merchant-success.js",
   "/sokoni-payment-trust.js",
+  /* ── Mobile Drawer UX + Role-Based Navigation Engine ── */
+  "/sokoni-drawers.css", "/sokoni-drawer.js",
+  "/sokoni-nav-engine.css", "/sokoni-nav-engine.js",
 ];
 
 const CDN_ORIGINS = [

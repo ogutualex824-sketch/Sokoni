@@ -98,8 +98,14 @@
 <nav class="seller-navbar">
 
     <div class="seller-nav-left">
+        <!-- Mobile-only back to marketplace — desktop uses sidebar ← SOKONI Home -->
+        <a href="index.html" class="seller-nav-back-home" aria-label="Back to SOKONI Marketplace" title="Back to Marketplace"
+           style="display:none;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;
+                  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.75);
+                  font-size:16px;text-decoration:none;flex-shrink:0;transition:background .15s,color .15s;margin-right:2px;">&#8592;</a>
         <img loading="lazy" src="assets/Sokonilogo2.png" alt="Sokoni" class="seller-nav-logo-img" id="sellerLogoSecret" style="cursor:pointer;touch-action:manipulation;">
     </div>
+    <style>@media(max-width:768px){.seller-nav-back-home{display:flex!important;}}</style>
 
     <div class="seller-nav-center" style="display:flex;align-items:center;gap:10px;">
         <span class="seller-nav-title">⚡ Seller Dashboard</span>
@@ -121,12 +127,12 @@
 </nav>
 
 <!-- MOBILE SECTION BACK BAR — hidden on desktop, shown by sdSwitchTab() on mobile when not on Home -->
-<div id="sdm-back-bar" style="display:none;">
+<div id="sdm-back-bar" style="display:none;" role="navigation" aria-label="Section navigation">
   <button type="button" id="sdm-back-btn" onclick="sdSwitchTab('home')" aria-label="Back to Dashboard">
     ← Dashboard
   </button>
   <span id="sdm-section-title"></span>
-  <span></span>
+  <button type="button" id="sdm-close-btn" onclick="sdSwitchTab('home')" aria-label="Close section" title="Close section">&#10005;</button>
 </div>
 
   <!-- SIDEBAR -->
@@ -3510,14 +3516,19 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
      SELLER LIVE PANEL — desktop: fixed right panel
                           phone/tablet: right-side drawer
 ══════════════════════════════════════════════════ -->
-<div id="sellerLivePanel">
-  <!-- Close button (phones/tablets only) -->
-  <button id="slpCloseBtn" type="button" onclick="closeLivePanel()" title="Close">✕</button>
-
-  <div class="slp-header">
-    <span class="slp-dot"></span>
-    <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;color:#71ff00;letter-spacing:.08em;text-transform:uppercase;">🇰🇪 Live Dashboard</span>
+<div id="sellerLivePanel" role="dialog" aria-label="Live Dashboard" aria-hidden="true">
+  <!-- Sticky drawer header (phones/tablets only — hidden on ≥1280px) -->
+  <div id="slpDrawerHeader" class="slp-drawer-header">
+    <button type="button" class="slp-drawer-back" onclick="closeLivePanel()" aria-label="Close Live Panel">&#8592;</button>
+    <span class="slp-drawer-title">
+      <span class="slp-dot" style="display:inline-block;"></span>
+      &#x1F1F0;&#x1F1EA; Live Dashboard
+    </span>
+    <button type="button" class="slp-drawer-close" onclick="closeLivePanel()" aria-label="Close">&#10005;</button>
   </div>
+
+  <!-- Scrollable cards body -->
+  <div id="slpBody">
 
   <!-- Kenya time clock -->
   <div class="slp-card slp-clock-card">
@@ -3556,6 +3567,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     <div style="font-size:9px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">💡 Seller Tip</div>
     <div id="slpTip" style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"></div>
   </div>
+
+  </div><!-- /slpBody -->
 </div>
 
 <style>
@@ -3812,22 +3825,70 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 })();
 
 /* ── Live Panel drawer: open / close on phones/tablets ── */
-function openLivePanel() {
-  var panel = document.getElementById('sellerLivePanel');
-  var backdrop = document.getElementById('slpBackdrop');
-  if (panel) panel.classList.add('slp-active');
-  if (backdrop) backdrop.classList.add('slp-active');
-  document.body.style.overflow = 'hidden';
-}
-function closeLivePanel() {
-  var panel = document.getElementById('sellerLivePanel');
-  var backdrop = document.getElementById('slpBackdrop');
-  if (panel) panel.classList.remove('slp-active');
-  if (backdrop) backdrop.classList.remove('slp-active');
-  document.body.style.overflow = '';
-}
-window.openLivePanel = openLivePanel;
-window.closeLivePanel = closeLivePanel;
+(function () {
+  var _slpScrollY = 0;
+  var _slpSwipeTX = 0, _slpSwipeTY = 0;
+
+  function _slpLock() {
+    _slpScrollY = window.scrollY;
+    document.body.style.top = '-' + _slpScrollY + 'px';
+    document.body.classList.add('sk-body-locked');
+  }
+  function _slpUnlock() {
+    document.body.classList.remove('sk-body-locked');
+    document.body.style.top = '';
+    window.scrollTo(0, _slpScrollY);
+  }
+
+  function openLivePanel() {
+    var panel    = document.getElementById('sellerLivePanel');
+    var backdrop = document.getElementById('slpBackdrop');
+    if (!panel) return;
+    panel.classList.add('slp-active');
+    panel.setAttribute('aria-hidden', 'false');
+    if (backdrop) backdrop.classList.add('slp-active');
+    _slpLock();
+
+    /* Swipe-right to close */
+    panel.addEventListener('touchstart', function (e) {
+      _slpSwipeTX = e.touches[0].clientX;
+      _slpSwipeTY = e.touches[0].clientY;
+    }, { passive: true });
+    panel.addEventListener('touchend', function (e) {
+      var dx = e.changedTouches[0].clientX - _slpSwipeTX;
+      var dy = e.changedTouches[0].clientY - _slpSwipeTY;
+      if (dx >= 80 && Math.abs(dy) < 60) closeLivePanel();
+    }, { passive: true });
+
+    /* Focus first interactive element */
+    requestAnimationFrame(function () {
+      var first = panel.querySelector('.slp-drawer-back, .slp-drawer-close, button');
+      if (first) first.focus();
+    });
+  }
+
+  function closeLivePanel() {
+    var panel    = document.getElementById('sellerLivePanel');
+    var backdrop = document.getElementById('slpBackdrop');
+    if (panel) {
+      panel.classList.remove('slp-active');
+      panel.setAttribute('aria-hidden', 'true');
+    }
+    if (backdrop) backdrop.classList.remove('slp-active');
+    _slpUnlock();
+  }
+
+  /* ESC key to close Live Panel */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var panel = document.getElementById('sellerLivePanel');
+      if (panel && panel.classList.contains('slp-active')) closeLivePanel();
+    }
+  });
+
+  window.openLivePanel  = openLivePanel;
+  window.closeLivePanel = closeLivePanel;
+}());
 
 /* ── Premium mobile photo zone: update preview + class ── */
 function mobilePhotoZoneUpdate(input) {
@@ -4288,7 +4349,7 @@ class="notification-container"
 <!-- ══ SELLER DASHBOARD MOBILE TAB BAR ══ -->
 <nav id="sdmTabBar" style="display:none;">
   <button type="button" class="sdm-tab active" id="sdmtab-home"     onclick="sdSwitchTab('home')">
-    🏠<span>Home</span>
+    🏠<span>Dashboard</span>
   </button>
   <button type="button" class="sdm-tab" id="sdmtab-products"  onclick="sdSwitchTab('products')">
     📦<span>Products</span>
@@ -4297,11 +4358,11 @@ class="notification-container"
     🛒<span>Orders</span>
   </button>
   <button type="button" class="sdm-tab" id="sdmtab-analyse"   onclick="sdSwitchTab('analyse')">
-    📈<span>Stats</span>
+    📈<span>Analytics</span>
   </button>
-  <a href="profile.html" class="sdm-tab" id="sdmtab-profile" style="text-decoration:none;">
-    👤<span>Profile</span>
-  </a>
+  <button type="button" class="sdm-tab" id="sdmtab-kra"       onclick="sdSwitchTab('kra')">
+    💰<span>Earnings</span>
+  </button>
   <button type="button" class="sdm-tab" id="sdmtab-more"      onclick="sdSwitchTab('more')">
     ⋯<span>More</span>
   </button>
@@ -4404,6 +4465,109 @@ class="notification-container"
   font-weight: 800;
   color: white;
   letter-spacing: -.01em;
+}
+/* Close (✕) button in back bar */
+#sdm-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: rgba(255,255,255,0.4);
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+#sdm-close-btn:active { background: rgba(255,60,60,0.12); border-color: rgba(255,60,60,0.25); color: #ff6464; }
+
+/* Live Panel drawer header — shown only on phones/tablets */
+@media (max-width: 1279px) {
+  .slp-drawer-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 52px;
+    padding: 0 12px 0 8px;
+    padding-top: env(safe-area-inset-top, 0px);
+    background: rgba(8,8,8,0.99);
+    border-bottom: 1px solid rgba(113,255,0,0.12);
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .slp-drawer-back, .slp-drawer-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    color: rgba(255,255,255,0.8);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .slp-drawer-back { width: 36px; min-width: 36px; height: 36px; font-size: 16px; }
+  .slp-drawer-close { width: 32px; min-width: 32px; height: 32px; font-size: 14px; border-radius: 8px; color: rgba(255,255,255,0.4); }
+  .slp-drawer-back:active { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00; }
+  .slp-drawer-close:active { background: rgba(255,60,60,0.12); border-color: rgba(255,60,60,0.25); color: #ff6464; }
+  .slp-drawer-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 800;
+    color: #71ff00;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  /* Remove old .slp-header on mobile since slp-drawer-header replaces it */
+  #sellerLivePanel .slp-header { display: none !important; }
+  /* Remove old close button style on mobile */
+  #slpCloseBtn { display: none !important; }
+  /* Ensure panel is a flex column so header sticks */
+  #sellerLivePanel {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  /* Scrollable cards body */
+  #slpBody {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    flex: 1;
+  }
+}
+@media (min-width: 1280px) {
+  /* On desktop: hide the new header, show old slp-header */
+  .slp-drawer-header { display: none !important; }
+  #slpCloseBtn { display: none !important; }
+}
+
+/* ── Seller section slide-in animation (mobile only) ── */
+@keyframes sdm-slide-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+@media (max-width: 768px) {
+  body.sdm-mobile-mode section[data-sdtab].sdm-visible,
+  body.sdm-mobile-mode .seller-section-card.sdm-visible,
+  body.sdm-mobile-mode #sdm-home-screen.sdm-visible {
+    animation: sdm-slide-in 0.28s cubic-bezier(0.34, 1.1, 0.64, 1) both;
+  }
 }
 
 /* ══ SELLER DASH MOBILE TABS — only active on small screens ══ */
@@ -4612,6 +4776,21 @@ class="notification-container"
     more:     '⋯ More'
   };
 
+  /* ── Scroll lock for section panels ── */
+  var _sdmScrollY = 0;
+  function _sdmLock() {
+    if (document.body.classList.contains('sk-body-locked')) return;
+    _sdmScrollY = window.scrollY;
+    document.body.style.top = '-' + _sdmScrollY + 'px';
+    document.body.classList.add('sk-body-locked');
+  }
+  function _sdmUnlock() {
+    if (!document.body.classList.contains('sk-body-locked')) return;
+    document.body.classList.remove('sk-body-locked');
+    document.body.style.top = '';
+    window.scrollTo(0, _sdmScrollY);
+  }
+
   window.sdSwitchTab = function(name){
     if(name==='more'){
       var drawer = document.getElementById('sdmMoreDrawer');
@@ -4631,15 +4810,45 @@ class="notification-container"
       if(name === 'home'){
         backBar.style.display = 'none';
         document.body.classList.remove('sdm-backbar-visible');
+        _sdmUnlock();
       } else {
         backBar.style.display = 'flex';
         document.body.classList.add('sdm-backbar-visible');
         if(titleEl) titleEl.textContent = TAB_LABELS[name] || name;
+        _sdmLock();
       }
     }
 
-    window.scrollTo(0,0);
+    window.scrollTo(0, 0);
   };
+
+  /* ESC key closes active section, returns to Home */
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+      var backBar = document.getElementById('sdm-back-bar');
+      if(backBar && backBar.style.display !== 'none') sdSwitchTab('home');
+    }
+  });
+
+  /* Swipe-right on main content to go back to Home */
+  (function(){
+    var main = document.querySelector('.main-content');
+    if(!main) return;
+    var tx0=0, ty0=0;
+    main.addEventListener('touchstart', function(e){
+      tx0 = e.touches[0].clientX;
+      ty0 = e.touches[0].clientY;
+    }, { passive: true });
+    main.addEventListener('touchend', function(e){
+      var dx = e.changedTouches[0].clientX - tx0;
+      var dy = e.changedTouches[0].clientY - ty0;
+      /* swipe from left edge (< 40px) rightward ≥ 80px = back gesture */
+      if(tx0 < 40 && dx >= 80 && Math.abs(dy) < 60){
+        var backBar = document.getElementById('sdm-back-bar');
+        if(backBar && backBar.style.display !== 'none') sdSwitchTab('home');
+      }
+    }, { passive: true });
+  }());
 
   /* Start on Home tab */
   sdSwitchTab('home');
@@ -4756,6 +4965,74 @@ class="notification-container"
       showDashPage('overview', overviewBtn);
     });
   }
+
+  /* ── Hash deep-link: seller.html#products / #orders / #earnings etc. ── */
+  /* Lets the seller sub-nav and bottom nav on other pages link directly   */
+  /* into specific sections without a separate route.                      */
+  (function () {
+    /* URL hash → sdSwitchTab name (mobile) / showDashPage name (desktop) */
+    var _HASH_MOBILE = {
+      products:     'products',
+      orders:       'orders',
+      analytics:    'analyse',
+      analyse:      'analyse',
+      earnings:     'kra',
+      kra:          'kra',
+      payments:     'kra',
+      marketing:    'market',
+      market:       'market',
+      flash:        'flash',
+      store:        'store',
+      team:         'team',
+      disputes:     'disputes',
+      availability: 'store',
+      inbox:        'inbox',
+      messages:     'inbox',
+      live:         'home',
+      settings:     'settings',
+    };
+    var _HASH_DESKTOP = {
+      products:     'products',
+      orders:       'orders',
+      analytics:    'analytics',
+      analyse:      'analytics',
+      earnings:     'tax',
+      kra:          'tax',
+      payments:     'tax',
+      marketing:    'marketing',
+      market:       'marketing',
+      flash:        'flash',
+      store:        'store',
+      team:         'team',
+      disputes:     'disputes',
+      availability: 'store',
+      inbox:        'messages',
+      messages:     'messages',
+      live:         'overview',
+      settings:     'settings',
+    };
+
+    function _applyHash() {
+      var hash = (location.hash || '').slice(1).toLowerCase();
+      if (!hash) return;
+      var isMobile = window.matchMedia('(max-width:768px)').matches;
+      if (isMobile && typeof window.sdSwitchTab === 'function') {
+        var target = _HASH_MOBILE[hash] || hash;
+        window.sdSwitchTab(target);
+      } else if (typeof window.showDashPage === 'function') {
+        var target = _HASH_DESKTOP[hash] || hash;
+        window.showDashPage(target, null);
+      }
+      /* Clean hash from URL so browser doesn't anchor-scroll */
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () { setTimeout(_applyHash, 150); });
+    } else {
+      setTimeout(_applyHash, 150);
+    }
+  })();
 })();
 </script>
 

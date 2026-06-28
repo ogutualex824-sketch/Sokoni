@@ -702,6 +702,11 @@
     }
 
     function _setBar(visible) {
+      /* Never show banner if browser API says device is online.
+         This prevents false positives when cached SW content is being served,
+         or when gstatic.com is blocked by a corporate/carrier firewall.
+         Rule: show only when navigator.onLine === false AND probes confirm unreachable. */
+      if (visible && typeof navigator !== 'undefined' && navigator.onLine === true) return;
       /* Suppress banner during grace period — avoids SW-install false positives on mobile */
       if (visible && (Date.now() - _bootTime) < _GRACE_MS) return;
       if (_showing === visible) return;

@@ -1,0 +1,222 @@
+/* ================================================================
+   SOKONI Navigation Engine v1.0 — Role-Based Navigation Styles
+   Back button | Role chip | Seller sub-nav | Role-themed bottom nav
+   Viewport: 320px → 1440px
+================================================================ */
+
+/* ── Smart back button (top nav) ────────────────────────────── */
+#sk-nav-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+  font-size: 17px;
+  color: rgba(255,255,255,0.8);
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+  margin-right: 2px;
+}
+#sk-nav-back-btn:hover {
+  background: rgba(113,255,0,0.1);
+  border-color: rgba(113,255,0,0.28);
+  color: #71ff00;
+  transform: translateX(-2px);
+}
+
+/* ── Role chip (top nav — workspace label) ───────────────── */
+#sk-nav-role-chip {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(113,255,0,0.08);
+  border: 1px solid rgba(113,255,0,0.2);
+  color: rgba(113,255,0,0.8);
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+  margin-right: 6px;
+  text-transform: uppercase;
+}
+body.sk-workspace-admin      #sk-nav-role-chip { background: rgba(0,170,255,0.08);   border-color: rgba(0,170,255,0.22);   color: rgba(0,170,255,0.85); }
+body.sk-workspace-superAdmin #sk-nav-role-chip { background: rgba(255,215,0,0.08);   border-color: rgba(255,215,0,0.22);   color: rgba(255,215,0,0.85); }
+body.sk-workspace-driver     #sk-nav-role-chip { background: rgba(255,124,0,0.08);   border-color: rgba(255,124,0,0.22);   color: rgba(255,124,0,0.85); }
+body.sk-workspace-rider      #sk-nav-role-chip { background: rgba(255,77,109,0.08);  border-color: rgba(255,77,109,0.22);  color: rgba(255,77,109,0.85); }
+body.sk-workspace-provider   #sk-nav-role-chip { background: rgba(182,109,255,0.08); border-color: rgba(182,109,255,0.22); color: rgba(182,109,255,0.85); }
+
+@media (max-width: 440px) { #sk-nav-role-chip { display: none; } }
+
+/* ── Seller Sub-Nav (persistent horizontal scroll strip) ── */
+#sk-seller-subnav {
+  position: fixed;
+  top: var(--sk-snav-top, 64px);
+  left: 0;
+  right: 0;
+  z-index: 100000;
+  height: 46px;
+  background: rgba(6,6,6,0.98);
+  border-bottom: 1px solid rgba(113,255,0,0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  will-change: transform;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.5);
+}
+#sk-seller-subnav::-webkit-scrollbar { display: none; }
+
+.sk-snav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 14px;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.38);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  cursor: pointer;
+  flex-shrink: 0;
+  min-width: 52px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.sk-snav-item:hover {
+  color: rgba(255,255,255,0.75);
+  background: rgba(255,255,255,0.04);
+}
+.sk-snav-item.active {
+  color: #71ff00;
+  border-bottom-color: #71ff00;
+}
+.sk-snav-icon { font-size: 14px; line-height: 1; }
+
+/* Body padding compensation: seller subnav adds 46px below the top nav */
+body.sk-workspace-seller {
+  /* JS sets --sk-snav-top from measured #sk-top-nav.offsetHeight */
+  padding-top: calc(var(--sk-snav-top, 64px) + 46px) !important;
+}
+@media (max-width: 600px) {
+  /* Mobile top nav is ~120px (two-row with search) — JS overrides this via --sk-snav-top */
+  body.sk-workspace-seller.sk-has-search {
+    padding-top: calc(var(--sk-snav-top, 120px) + 46px) !important;
+  }
+}
+
+/* ── Role-themed bottom nav active states ─────────────────── */
+.bottom-nav .active-bnav                            { color: #71ff00; }
+body.sk-workspace-admin      .active-bnav           { color: #00aaff; }
+body.sk-workspace-superAdmin .active-bnav           { color: #ffd700; }
+body.sk-workspace-driver     .active-bnav           { color: #ff7c00; }
+body.sk-workspace-rider      .active-bnav           { color: #ff4d6d; }
+body.sk-workspace-provider   .active-bnav           { color: #b66dff; }
+
+/* Emoji glow on active tab */
+.active-bnav .bnav-emoji {
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+/* Super admin has 6 items — compress slightly */
+.bottom-nav[data-workspace="superAdmin"] .bnav-item {
+  padding: 7px 2px;
+  font-size: 9px;
+  min-width: 0;
+}
+.bottom-nav[data-workspace="superAdmin"] .bnav-emoji { font-size: 17px; }
+
+/* ── Injected .bottom-nav (pages that had none — .sk-nav-injected) ──── */
+/* Scoped to .sk-nav-injected to avoid overriding pages that already     */
+/* have their own .bottom-nav styles via sokoni-ui.css / mobile.css      */
+.bottom-nav.sk-nav-injected {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 200;
+  display: flex;
+  align-items: stretch;
+  background: rgba(8,8,8,0.97);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.bottom-nav.sk-nav-injected .bnav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px 6px;
+  color: rgba(255,255,255,0.38);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s;
+}
+.bottom-nav.sk-nav-injected .bnav-emoji { font-size: 20px; line-height: 1; }
+/* ── "Seller More" drawer grid ────────────────────────────── */
+#sk-seller-more-drawer .sk-drawer-body {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 16px;
+  align-content: start;
+}
+.sk-more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 14px 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  text-decoration: none;
+  color: rgba(255,255,255,0.7);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+  cursor: pointer;
+}
+.sk-more-item:hover, .sk-more-item:focus {
+  background: rgba(113,255,0,0.06);
+  border-color: rgba(113,255,0,0.2);
+  color: #71ff00;
+  transform: translateY(-2px);
+  outline: none;
+}
+.sk-more-icon { font-size: 22px; line-height: 1; }
+
+/* ── Viewport fixes: 320px → 430px ───────────────────────── */
+@media (max-width: 430px) {
+  .sk-snav-item { padding: 4px 11px; min-width: 48px; }
+}
+@media (max-width: 380px) {
+  .sk-snav-item { padding: 4px 9px; min-width: 44px; }
+  .sk-snav-icon { font-size: 13px; }
+}
+@media (max-width: 360px) {
+  .bnav-emoji { font-size: 17px !important; }
+  .bottom-nav .bnav-item { padding: 7px 3px !important; font-size: 9px !important; }
+  #sk-seller-subnav { height: 42px !important; }
+  .sk-snav-item { padding: 4px 9px !important; min-width: 42px !important; }
+  #sk-seller-more-drawer .sk-drawer-body { grid-template-columns: repeat(2,1fr); }
+}
+@media (max-width: 320px) {
+  .bnav-emoji { font-size: 15px !important; }
+  .bottom-nav .bnav-item { padding: 6px 2px !important; font-size: 8px !important; }
+  .sk-snav-item { padding: 4px 7px !important; min-width: 38px !important; }
+}

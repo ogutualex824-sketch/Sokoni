@@ -147,13 +147,22 @@
         })
         .catch(err => console.warn("[SOKONI SW] Registration failed:", err));
 
-      /* Also register FCM messaging SW */
-      if (SOKONI_VAPID_KEY !== "YOUR_VAPID_KEY_HERE") {
-        navigator.serviceWorker
-          .register("/firebase-messaging-sw.js", { scope: "/" })
-          .then(() => console.log("[SOKONI FCM SW] Registered"))
-          .catch(() => {});
-      }
+      /* FCM messaging SW — Firebase's getToken() in firebase.js handles push
+         subscription using the main SW. We must NOT explicitly register
+         firebase-messaging-sw.js at scope '/' because it would compete with
+         service-worker.js for the same scope, causing spurious updatefound events,
+         phantom "Update Available" toasts, and controllerchange→reload loops.
+         Proactively unregister any stale FCM SW previously installed at root scope. */
+      navigator.serviceWorker.getRegistrations().then(allRegs => {
+        for (const r of allRegs) {
+          const scriptURL = (r.active || r.waiting || r.installing)?.scriptURL || "";
+          if (scriptURL.includes("firebase-messaging-sw.js") &&
+              (r.scope === location.origin + "/" || r.scope === "/")) {
+            r.unregister();
+            console.log("[SOKONI SW] Removed stale FCM SW from root scope");
+          }
+        }
+      }).catch(() => {});
 
       /* Always reload when a new SW takes control — ensures the page HTML
          and inline scripts are always in sync with the active SW version.

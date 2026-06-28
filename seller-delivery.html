@@ -418,12 +418,10 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- Bottom nav -->
-<nav style="position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid rgba(255,255,255,0.06);display:flex;z-index:90;">
-  <a href="seller.html" style="flex:1;padding:12px 0;text-align:center;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">🏪</span>Shop</a>
-  <a href="seller-delivery.html" style="flex:1;padding:12px 0;text-align:center;color:#71ff00;text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">🚚</span>Deliveries</a>
-  <a href="seller-success.html" style="flex:1;padding:12px 0;text-align:center;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">📊</span>Analytics</a>
-  <a href="profile.html" style="flex:1;padding:12px 0;text-align:center;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:18px">👤</span>Profile</a>
-</nav>
+<!-- Bottom nav — replaced by sokoni-nav-engine.js with seller tabs -->
+<nav class="bottom-nav"></nav>
+
+<script src="shared-header.js" defer></script>
+<script src="sw-register.js" defer></script>
 </body>
 </html>

@@ -84,6 +84,38 @@
     (document.head || document.documentElement).appendChild(respLink);
   }
 
+  /* Universal drawer system — CSS + JS (once) */
+  if (!document.getElementById('sk-drawers-link')) {
+    const drawLink = document.createElement('link');
+    drawLink.rel = 'stylesheet';
+    drawLink.id = 'sk-drawers-link';
+    drawLink.href = 'sokoni-drawers.css';
+    (document.head || document.documentElement).appendChild(drawLink);
+  }
+  if (!document.getElementById('sk-drawer-script')) {
+    const drawScript = document.createElement('script');
+    drawScript.id = 'sk-drawer-script';
+    drawScript.src = 'sokoni-drawer.js';
+    drawScript.defer = true;
+    (document.head || document.documentElement).appendChild(drawScript);
+  }
+
+  /* Role-based navigation engine — CSS + JS (once, runs on all pages) */
+  if (!document.getElementById('sk-nav-engine-link')) {
+    const navCss = document.createElement('link');
+    navCss.rel = 'stylesheet';
+    navCss.id = 'sk-nav-engine-link';
+    navCss.href = 'sokoni-nav-engine.css';
+    (document.head || document.documentElement).appendChild(navCss);
+  }
+  if (!document.getElementById('sk-nav-engine-script')) {
+    const navJs = document.createElement('script');
+    navJs.id = 'sk-nav-engine-script';
+    navJs.src = 'sokoni-nav-engine.js';
+    navJs.defer = true;
+    (document.head || document.documentElement).appendChild(navJs);
+  }
+
   /* ── PHASE 2: Nav injection — excluded pages stop here ──────────── */
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',

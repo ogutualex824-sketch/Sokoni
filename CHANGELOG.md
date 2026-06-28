@@ -1,4 +1,136 @@
-﻿## [2026-06-28] — Platform Security & Feature Completion Sprint
+﻿## [2026-06-28] — Impact Platform v1.0 + Pending Fixes Sprint
+
+### Summary
+Social Impact Platform (25 CFs): Foundation ledger, campaigns, grants, scholarships, corporate giving, round-up donations, 3-tier disbursement approval, daily reconciliation. SW version bumped to `sokoni-20260628-navengine-v2`. `seller-delivery.html` fixed (missing `shared-header.js`, replaced inline nav). New SW static assets: `sokoni-drawers.css`, `sokoni-drawer.js`, `sokoni-nav-engine.css`, `sokoni-nav-engine.js`.
+
+### Files Modified
+- `service-worker.js` — Bump CACHE_VERSION to `sokoni-20260628-navengine-v2`; add 4 new static assets to PRECACHE_STATIC
+- `seller-delivery.html` — Replace inline hardcoded nav with `<nav class="bottom-nav">` (nav engine takes over); add `shared-header.js` + `sw-register.js`
+
+### Files Added
+- `functions/impact.js` — 25 Cloud Functions for Social Impact Platform:
+  `impactGetPublicDashboard` · `impactGetUserProfile` · `impactCheckoutDonate` · `impactSetRoundUp` · `impactCorporateApply` · `impactGetBusinessScore` · `impactCreateCampaign` · `impactUpdateCampaign` · `impactGetCampaignDetail` · `impactSubmitGrant` · `impactSubmitScholarship` · `impactInitiateDisbursement` · `impactApproveDisbursement` · `impactAuthorizeDisbursement` · `impactGetFinancialReport` · `impactAdminCorporateApprove` · `impactAdminGrantReview` · `impactRecordMarketplaceContribution` · `impactGetCampaigns` · `impactBookmarkCampaign` · `impactGetAdminGrants` · `impactScheduledDailyReconciliation` · `impactGetEnvironmental` · `impactAdminUpdateEnvironmental` · `impactAdminCreateEnvProject`
+
+### Firestore Collections (Impact Platform)
+`impactLedger` · `impactBalance` · `impactCampaigns` · `foundationDonations` · `impactBadges` · `impactRoundupSettings` · `impactCorporate` · `impactGrants` · `impactScholarships` · `impactDisbursements` · `impactUserProfiles` · `impactBusinessScores` · `foundationStats` · `impactMonthlySnapshots` · `impactAlerts` · `impactBookmarks` · `impactEnvironmental` · `impactEnvProjects`
+
+### Security
+- Disbursement requires 3 distinct admins (initiate → approve → superAdmin authorize)
+- Idempotency on `impactRecordMarketplaceContribution` (orderId dedup)
+- Rate limits: corporate applications (2/day), grants (2/month), scholarships (1/90 days)
+- INTASEND_PRIVATE_KEY accessed only in `impactAuthorizeDisbursement`
+
+---
+
+## [2026-06-28] — Role-Based Navigation Engine v1.1 (Seller Nav UX Redesign)
+
+### Summary
+Seller Dashboard Navigation UX Redesign. Context-aware seller nav now auto-injects on all seller pages including those without any bottom nav (`minishop-admin`, `qr-center`, `merchant-success`, `seller-revenue`, `seller-success`, `seller-delivery`). `seller.html` mobile tab bar upgraded to Dashboard/Products/Orders/Analytics/Earnings/More. Hash deep-linking lets the seller sub-nav route directly into seller.html sections (`#products`, `#orders`, `#earnings`, etc.). Role detection now also reads `isSeller`/`isAdmin`/`isDriver` boolean fields in addition to the `roles[]` array.
+
+### Files Modified
+- `sokoni-nav-engine.js` — Fix: `_buildBottomNav()` creates `.bottom-nav.sk-nav-injected` when none exists; Fix: `_role()` now checks `isSeller`/`isAdmin`/`isDriver` booleans; Added: `minishop-admin.html`, `seller-analytics.html`, `seller-revenue.html`, `seller-delivery.html`, `seller-success.html`, `pos-inventory.html`, `pos-customers.html`, `pos-suppliers.html`, `pos-reports.html` to `_WS_MAP`; Updated: `_SUBNAV` uses `minishop-admin.html` (admin page) not `minishop.html` (public); Updated: Seller bottom nav Revenue tab links to `seller-revenue.html`
+- `sokoni-nav-engine.css` — Added: `.bottom-nav.sk-nav-injected` baseline styles scoped to engine-injected navs only (avoids conflicts)
+- `seller.html` — `#sdmTabBar` updated: Stats renamed to Analytics, Profile tab replaced with 💰 Earnings tab (`sdSwitchTab('kra')`); Added: Hash deep-link handler to route incoming `#products`/`#orders`/`#earnings`/`#analytics`/`#marketing`/`#disputes` etc. to the correct section on both mobile + desktop
+- `minishop-admin.html` — Added: `shared-header.js` + `sw-register.js` (page was missing the shared header entirely)
+
+### Nav Configs per Role (updated)
+| Workspace | Mobile Tabs |
+|---|---|
+| Buyer | Home · Categories · Cart · Orders · Profile |
+| Seller | Dashboard · Products · Orders · Revenue · More |
+| Rider | Dashboard · Jobs · Deliveries · Earnings · Account |
+| Driver | Dashboard · Trips · Navigation · Earnings · Account |
+| Provider | Dashboard · Bookings · Customers · Earnings · Profile |
+| Admin | Dashboard · Marketplace · Users · Reports · Settings |
+| Super Admin | Dashboard · Platform · Finance · Security · AI · Settings |
+
+### Seller Tab Bar (seller.html mobile)
+Home=Dashboard · Products · Orders · Analytics · **Earnings** (was Profile) · More
+
+---
+
+## [2026-06-28] — Role-Based Navigation Engine v1.0
+
+### Summary
+Enterprise-grade role-based navigation architecture. Bottom nav now switches dynamically based on the user's active workspace. Seller workspace gets a persistent 17-item horizontal sub-nav. Non-buyer dashboards get a smart back button + workspace chip in the top nav. Platform-wide viewport fixes covering 320px → 1440px. No individual page edits required — all features inject globally via `shared-header.js`.
+
+### Files Added
+- `sokoni-nav-engine.js` — Core navigation engine: role detection, workspace mapping, dynamic bottom nav, seller sub-nav, back button, "Seller More" drawer, menu badge, storage event re-wiring
+- `sokoni-nav-engine.css` — Role nav styles: back button, workspace chip, seller sub-nav (46px fixed strip), role-themed bottom nav colours, "Seller More" drawer grid, 320/360/375/390/430px breakpoints
+
+### Files Modified
+- `shared-header.js` — Phase 1 now injects `sokoni-nav-engine.css` + `sokoni-nav-engine.js` on every page before the EXCLUDED check, so the engine boots even on full-screen dashboards
+- `sokoni-responsive.css` — Added comprehensive viewport range section: 320/360/375/390/412/430/768/1024/1440px breakpoints; horizontal overflow guard; FAB keyboard-open hide rule; `max-width:100%` on img/video/canvas; `overflow-x:hidden` on html+body
+
+### Nav Configs per Role
+| Workspace | Items |
+|---|---|
+| Buyer (default) | Home · Categories · Cart · Orders · Profile |
+| Seller | Dashboard · Products · Orders · Earnings · More (drawer) |
+| Rider | Dashboard · Jobs · Deliveries · Earnings · Account |
+| Driver | Dashboard · Trips · Navigation · Earnings · Account |
+| Provider | Dashboard · Bookings · Customers · Earnings · Profile |
+| Admin | Dashboard · Marketplace · Users · Reports · Settings |
+| Super Admin | Dashboard · Platform · Finance · Security · AI · Settings |
+
+### Seller Sub-Nav (17 items, horizontal scroll, sticky below top nav)
+Dashboard · MiniShop · Products · Inventory · Orders · Analytics · Marketing · Flash Sales · Payments · Revenue · POS · QR · Messages · Disputes · Availability · Live · Settings
+
+### Architecture
+- Role source: `localStorage.sokoniUser.roles[]` — superAdmin > admin > seller > driver > rider > provider > buyer
+- Workspace: page URL overrides role (e.g., `finos.html` always = superAdmin workspace regardless of who opens it)
+- Guard: only elevates workspace if user actually holds that role — visitors without the role see buyer nav
+- Excluded pages: same list as shared-header.js (pos.html, seller.html, admin.html, etc.) — their own navs are untouched
+- Re-init: `window.addEventListener('storage')` on `sokoniUser` key — nav updates instantly on login/logout
+- Public API: `window.SokoniNavEngine.refresh()` / `.workspace()` / `.role()`
+
+### Security
+- No auth or Firestore changes
+- Role is read from localStorage only — cannot be spoofed to gain access to protected pages (page guards remain on the server)
+- Workspace elevation guarded: visiting `finos.html` without `superAdmin` role shows buyer nav
+
+### Breaking Changes
+None — purely additive. Existing `.bottom-nav` HTML on each page is replaced dynamically; the static HTML serves as a fallback if JS is disabled.
+
+### Deployment
+- Hosting: ✅ deployed 2026-06-28
+- Functions: no changes
+- Firestore: no changes
+
+---
+
+## [2026-06-28] — Secure Payments Trust Center v2.0 + IntaSend Badge Rollout
+
+### Summary
+Platform-wide IntaSend trust badge deployment across all payment touchpoints. trust.html rebuilt as a premium enterprise Trust Center. Empty `data-trust="badge"` placeholder divs in checkout.html and payment-security.html replaced with the official IntaSend badge. Offline banner hardened to only show when device is provably offline.
+
+### Files Modified
+- `trust.html` — Payment Trust Center v2: stats row (99.9% / 256-bit / 24/7 / Fast), official IntaSend badge (width 375, `intasend-trust-badge-with-mpesa-hr-dark.png`), 12 trust chips, JS-detected payment methods (M-PESA/Visa/MC/Apple Pay/Google Pay), trust paragraph, 8 detail cards (E2E encryption / secure processing / no card storage / fraud monitoring / buyer checkout / seller payouts / refunds / real-time verification), ambient glow animations, fully responsive (700px + 420px breakpoints)
+- `checkout.html` — Replaced two empty `data-trust="badge"` placeholders: (1) order summary sidebar compact badge (width 260), (2) M-Pesa modal badge (width 240). Both use official `intasend-trust-badge-with-mpesa-hr-dark.png` with `onerror` fallback, lazy loading, hover scale animation
+- `payment-security.html` — Replaced empty `data-trust="badge" data-variant="full"` with full-width premium badge card (max-width 520px, "OFFICIAL PAYMENT PARTNER" pill, CBK-Regulated · PCI DSS Certified · M-Pesa Approved note, Verify link)
+- `sokoni-ui.js` — Offline banner hardened: added `navigator.onLine === true` guard in `_setBar()` — banner now suppressed entirely when browser API reports device is online, regardless of probe results. Eliminates false positives from SW-cached content, corporate firewalls blocking gstatic.com, and carrier-level filtering
+
+### Badge Spec (all placements)
+- Image: `https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png`
+- Link: `https://intasend.com/security` — `target="_blank" rel="noopener noreferrer"`
+- Fallback: `onerror` hides `<img>` and shows "🔐 Secured by IntaSend" text — never blank
+- Performance: `loading="lazy" decoding="async"` on all instances
+
+### Security
+- No auth or payment logic changes — badge and UI only
+- Offline banner guard prevents UI misleading users who are online but on a filtered network
+
+### Breaking Changes
+None
+
+### Deployment
+- Hosting: ✅ deployed 2026-06-28
+- Functions: no changes
+- Firestore: no changes
+
+---
+
+## [2026-06-28] — Platform Security & Feature Completion Sprint
 
 ### App Check, Navigation, Wallet, Jobs, Disputes — Full Deployment
 

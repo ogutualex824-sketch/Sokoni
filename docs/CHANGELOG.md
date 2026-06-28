@@ -2,6 +2,151 @@
 
 ---
 
+## 2026-06-28 — Seller Navigation UX Redesign (Nav Engine v1.1)
+
+### Summary
+Seller Dashboard Navigation UX complete redesign. Context-aware seller bottom nav auto-injects on all seller pages including pages that previously had no navigation at all (`minishop-admin`, `qr-center`, `merchant-success`, `seller-revenue`, `seller-success`, `seller-delivery`). `seller.html` mobile tab bar upgraded: Stats renamed Analytics, Profile tab replaced with 💰 Earnings tab. Hash deep-linking routes `seller.html#products` / `#orders` / `#earnings` / `#analytics` etc. directly into the correct section. Role detection expanded to cover `isSeller`/`isAdmin`/`isDriver` boolean fields. `minishop-admin.html` wired to `shared-header.js` (was missing entirely).
+
+### Files Modified
+- `sokoni-nav-engine.js` — `_buildBottomNav()` creates `.bottom-nav.sk-nav-injected` when none exists; `_role()` checks `isSeller`/`isAdmin`/`isDriver` booleans; 12 new pages in `_WS_MAP`; `_SUBNAV` uses `minishop-admin.html` + `seller-analytics.html` + `seller-revenue.html` + `merchant-success.html`
+- `sokoni-nav-engine.css` — `.bottom-nav.sk-nav-injected` baseline styles
+- `seller.html` — `#sdmTabBar` 6 tabs: Dashboard/Products/Orders/Analytics/Earnings/More; hash deep-link handler
+- `minishop-admin.html` — Added `shared-header.js` + `sw-register.js`
+- `CHANGELOG.md` / `docs/CHANGELOG.md` — Updated
+
+### Deployment
+- Hosting: ✅ deployed 2026-06-28
+- Functions: no changes
+- Firestore: no changes
+
+---
+
+## 2026-06-28 — Role-Based Navigation Engine v1.0
+
+### Summary
+Enterprise-grade role-based navigation. Bottom nav switches dynamically per workspace (buyer/seller/rider/driver/provider/admin/superAdmin). Seller workspace gets a persistent 17-item horizontal sub-nav. Non-buyer dashboards get a smart back button + workspace chip. Platform-wide viewport fixes 320px → 1440px. seller.html gets a mobile back-to-marketplace button. All changes inject globally via `shared-header.js` — no per-page edits.
+
+### Files Added
+- `sokoni-nav-engine.js` — role detection, workspace mapping, dynamic bottom nav, seller subnav, back button, "Seller More" drawer, menu badge
+- `sokoni-nav-engine.css` — nav engine styles; baseline .bottom-nav; 320–430px breakpoints
+
+### Files Modified
+- `shared-header.js` — Phase 1 injects nav engine CSS+JS on all pages
+- `sokoni-responsive.css` — full viewport range section 320/360/375/390/412/430/768/1024/1440px; overflow guard; FAB keyboard-hide rule
+- `seller.html` — added mobile `← Marketplace` back button to seller-nav-left (hidden on desktop; shown ≤768px)
+
+### Nav Configs
+| Workspace | Items |
+|---|---|
+| Buyer | Home · Categories · Cart · Orders · Profile |
+| Seller | Dashboard · Products · Orders · Earnings · More |
+| Rider | Dashboard · Jobs · Deliveries · Earnings · Account |
+| Driver | Dashboard · Trips · Navigation · Earnings · Account |
+| Provider | Dashboard · Bookings · Customers · Earnings · Profile |
+| Admin | Dashboard · Marketplace · Users · Reports · Settings |
+| Super Admin | Dashboard · Platform · Finance · Security · AI · Settings |
+
+### Seller Sub-Nav (17 items)
+Dashboard · MiniShop · Products · Inventory · Orders · Analytics · Marketing · Flash Sales · Payments · Revenue · POS · QR · Messages · Disputes · Availability · Live · Settings
+
+---
+
+## 2026-06-28 — Secure Payments Trust Center v2.0
+
+### Summary
+`trust.html` rebuilt as a premium enterprise Trust Center: stats row (99.9% uptime / 256-bit / 24/7 monitoring / Fast checkout), official IntaSend badge, 12 trust chips, 8 detail cards. `checkout.html` and `payment-security.html` empty badge placeholders replaced with official IntaSend badge. Offline banner now only shows when `navigator.onLine === false`.
+
+---
+
+## 2026-06-28 — Mobile Drawer UX Overhaul v1.0
+
+### Summary
+Complete UX redesign of all mobile slide-out panels: universal drawer CSS/JS system, Live Dashboard panel upgraded to 90vw/420px with a sticky header (← back + title + ✕ close), slide-in animation for all seller sections, body scroll lock, swipe-right-to-dismiss gesture, ESC key support, focus trap, and platform-wide injection via `shared-header.js`.
+
+### Files Added
+| File | Purpose |
+|------|---------|
+| `sokoni-drawers.css` | Universal drawer component — `.sk-drawer`, `.sk-drawer-header`, `.sk-drawer-back`, `.sk-drawer-title`, `.sk-drawer-close`, `.sk-drawer-body`; CSS custom properties for width/animation/z-index; light mode + reduced motion support |
+| `sokoni-drawer.js` | `SokoniDrawer` global JS manager — `open(id, title?)` / `close(id)` / `closeAll()`; shared backdrop; scroll lock (iOS-safe `position:fixed` strategy); swipe-right gesture; focus trap; focus restore; ESC key handler |
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `seller.html` | `#sdm-back-bar` — added ✕ close button; Live Panel header restructured to sticky `.slp-drawer-header` (← back + title + ✕); Live Panel content wrapped in `#slpBody` scrollable container; `sdSwitchTab()` upgraded with body scroll lock + slide-in animation + ESC + swipe-right; `openLivePanel`/`closeLivePanel` upgraded with scroll lock + swipe + ESC + focus |
+| `mobile.css` | `#sellerLivePanel` width `min(300px, 88vw)` → `min(90vw, 420px)`; `top: 56px` → `top: 0` (full-height drawer); `#slpBody` scrollable area with safe-area insets |
+| `shared-header.js` | Injects `sokoni-drawers.css` + `sokoni-drawer.js` into every page |
+
+### Behaviour Changes
+- **Live Panel** slides in from the right at 90vw max 420px with a sticky green-branded header; scrollable body below
+- **Seller sections** (Orders, Analytics, Products, etc.) animate in with a 28px slide when switching tabs on mobile
+- Tapping ← or ✕ in `#sdm-back-bar` returns to Home and unlocks body scroll
+- Swiping right from the left edge of `.main-content` returns to Home on mobile
+- ESC key closes the topmost open panel on any page that uses `SokoniDrawer`
+- `SokoniDrawer.open/close/closeAll` available globally for any page to use
+
+### Security Implications
+None.
+
+### Performance Implications
+- Drawer animations use `transform` + `will-change: transform` — GPU-composited, zero layout reflow
+- Shared backdrop is lazy-created once per page load
+- Scroll lock saves/restores `window.scrollY` to prevent content jump
+
+---
+
+## 2026-06-28 — PWA Redirect Loop Fix + SW Hardening (v4)
+
+### Summary
+Fixed `ERR_TOO_MANY_REDIRECTS` in the installed PWA caused by a server-side infinite redirect loop in `manifest.json`'s `start_url`. Also hardened the service worker with redirect-loop recovery, persistent tile cache, and clean-URL PWA shortcuts.
+
+### Root Cause
+`manifest.json` had `start_url: "./index.html?source=pwa"`. Firebase `cleanUrls: true` correctly redirects `/index.html` → `Location: /`, but for `/index.html?source=pwa` it returns `Location: ?source=pwa` (a relative URL with no path component). Per RFC 3986, `?source=pwa` relative to `/index.html?source=pwa` resolves back to `/index.html?source=pwa` — the SAME URL — creating an infinite 301 chain (`ERR_TOO_MANY_REDIRECTS`). Browser and mobile users were unaffected because they navigate to `https://mysokoni.co.ke/` (clean URL, no loop); only the PWA which opens via `start_url` hit the loop.
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `manifest.json` | `start_url` changed from `"./index.html?source=pwa"` → `"/?source=pwa"`; `scope` from `"./"` → `"/"`; all shortcut `.html` URLs → clean URLs; `share_target.action` → `/product`; version bumped to `1.1.0` |
+| `service-worker.js` | CACHE_VERSION `v4`; `PRECACHE_PAGES` includes `"/?source=pwa"`; `networkFirstPage()` hardened with redirect-loop recovery (root `/` fallback on TypeError); `TILE_CACHE` promoted to module-scope constant so map tiles survive SW version bumps |
+
+### Security Implications
+None.
+
+### Performance Implications
+- Map tiles now survive service worker version bumps (`TILE_CACHE = "sokoni-tiles-v1"` is kept across updates)
+- PWA launch is now a single 200 OK request instead of a redirect chain
+
+### Migration Steps
+**User action required for existing PWA installs**: Existing installs have the broken `start_url` baked into their installation. Users must **reinstall the PWA** (uninstall from home screen and add again) to get the fixed `start_url`. Chrome will automatically update the manifest in the background within 24 hours and re-prompt if needed.
+
+---
+
+## 2026-06-28 — Service Worker Redirect Loop Fix (v3)
+
+### Summary
+Eliminated `ERR_TOO_MANY_REDIRECTS` on desktop caused by two distinct service worker issues:
+1. `firebase-messaging-sw.js` was explicitly registered at scope `/`, directly competing with `service-worker.js` and triggering spurious `updatefound → controllerchange → reload` cycles
+2. `networkFirstPage()` passed `redirect:'manual'` to `fetch()`, returning opaqueredirect responses (HTTP 301) to the browser, contributing to redirect chains
+
+### Files Modified
+- `service-worker.js` — CACHE_VERSION bumped to `sokoni-20260628-v3`; `networkFirstPage()` now uses `redirect:'follow'` so all cleanUrls 301s are resolved inside the SW before returning to the browser
+- `sw-register.js` — Removed explicit FCM SW registration at scope `/`; added proactive cleanup to unregister any stale FCM SW previously installed at root scope
+
+### Root Cause Detail
+- `sw-register.js` registered `firebase-messaging-sw.js` with `scope: "/"` — the same scope as `service-worker.js`. This caused the browser to treat the FCM SW as an update to the main SW registration, triggering `updatefound` on every page load, a phantom "Update Available" toast, and a `controllerchange → window.location.reload()` cycle when users clicked "Update" or when Chrome applied the waiting SW automatically.
+- `networkFirstPage()` used `fetch(request)` where `request` is a navigation with `redirect:'manual'`. Any URL returning a 301 (e.g., `/login.html` → `/login` via Firebase cleanUrls) would return an opaqueredirect (status 0) to the browser, adding to the redirect chain count.
+
+### Security Implications
+None. SW cleanup is transparent to users.
+
+### Performance Implications
+- SW version `v3` forces all users to reinstall with correct caches (one-time overhead)
+- `redirect:'follow'` adds one internal hop for URLs that previously 301-redirected, but eliminates a browser-visible redirect — net reduction in round-trips
+
+### Migration Steps
+None. Deployment is self-healing: existing stale FCM SW registrations are proactively unregistered on first page load.
+
+---
+
 ## 2026-06-20 — Algolia Gap Closure + Full Enterprise Search Stack Audit
 
 ### Summary

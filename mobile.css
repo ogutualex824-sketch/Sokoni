@@ -2399,30 +2399,42 @@ html {
   }
   #slpBackdrop.slp-active { display: block !important; }
 
-  /* Live panel as right-side drawer */
+  /* Live panel as right-side drawer — 90vw / max 420px */
   #sellerLivePanel {
     display: flex !important;
     flex-direction: column !important;
     position: fixed !important;
-    top: 56px !important;
+    top: 0 !important;
     right: 0 !important;
-    width: min(300px, 88vw) !important;
+    width: min(90vw, 420px) !important;
     bottom: 0 !important;
     background: rgba(6,6,6,0.99) !important;
     border-left: 1px solid rgba(113,255,0,0.15) !important;
-    padding: 14px 12px 80px !important;
-    overflow-y: auto !important;
-    gap: 10px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    gap: 0 !important;
     z-index: 8999 !important;
-    scrollbar-width: none !important;
     transform: translateX(110%) !important;
     transition: transform 0.35s cubic-bezier(0.34,1.1,0.64,1) !important;
     box-shadow: -8px 0 48px rgba(0,0,0,0.75) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   }
-  #sellerLivePanel::-webkit-scrollbar { display: none !important; }
   #sellerLivePanel.slp-active {
     transform: translateX(0) !important;
   }
+  /* Scrollable cards body */
+  #slpBody {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    padding: 14px 12px 80px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    scrollbar-width: none !important;
+  }
+  #slpBody::-webkit-scrollbar { display: none !important; }
 
   /* Close button inside the drawer */
   #slpCloseBtn {

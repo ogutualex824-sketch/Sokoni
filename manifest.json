@@ -2,9 +2,9 @@
   "name": "SOKONI — Kenya's Global Marketplace",
   "short_name": "SOKONI",
   "description": "Buy, sell, rent, book and hire — Kenya's all-in-one marketplace.",
-  "version": "1.0.0",
-  "start_url": "./index.html?source=pwa",
-  "scope": "./",
+  "version": "1.1.0",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "id": "sokoni-kenya-marketplace",
 
   "display": "standalone",
@@ -55,28 +55,28 @@
     {
       "name": "Shop Now",
       "short_name": "Shop",
-      "url": "./category.html?cat=all&source=shortcut",
+      "url": "/category?cat=all&source=shortcut",
       "description": "Browse all products",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Flash Sale",
       "short_name": "Deals",
-      "url": "./flashsale.html?source=shortcut",
+      "url": "/flashsale?source=shortcut",
       "description": "Limited time deals",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Sell on Sokoni",
       "short_name": "Sell",
-      "url": "./seller.html?source=shortcut",
+      "url": "/seller?source=shortcut",
       "description": "Seller dashboard",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Track Order",
       "short_name": "Track",
-      "url": "./track.html?source=shortcut",
+      "url": "/track?source=shortcut",
       "description": "Track your delivery",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     }
@@ -87,7 +87,7 @@
   "screenshots": [],
 
   "share_target": {
-    "action": "./product.html",
+    "action": "/product",
     "method": "GET",
     "params": {
       "title": "name",

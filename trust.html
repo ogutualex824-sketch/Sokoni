@@ -85,6 +85,283 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a10;color:white;
 .tp-input::placeholder{color:rgba(255,255,255,0.3);}
 .tp-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:4px;}
 @media(max-width:500px){.passport-score-row{grid-template-columns:1fr 1fr;}}
+
+/* ══════════════════════════════════════════════════════════════
+   PAYMENT TRUST CENTER — Premium Enterprise v2.0
+══════════════════════════════════════════════════════════════ */
+@keyframes stcFadeUp  { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:none; } }
+@keyframes stcFadeIn  { from { opacity:0; } to { opacity:1; } }
+@keyframes stcGlow    { 0%,100%{ opacity:.5; } 50%{ opacity:1; } }
+
+/* Outer container */
+.sk-trust-center {
+  background: linear-gradient(145deg,rgba(0,0,0,0) 0%,rgba(113,255,0,0.02) 40%,rgba(0,212,255,0.025) 100%);
+  border: 1px solid rgba(113,255,0,0.12);
+  border-radius: 28px;
+  padding: 36px 32px;
+  margin: 0 0 32px;
+  position: relative;
+  overflow: hidden;
+  animation: stcFadeUp 0.6s cubic-bezier(0.0,0.0,0.2,1) both;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset;
+}
+/* ambient glows */
+.sk-trust-center::before {
+  content:''; position:absolute; top:-100px; left:-80px;
+  width:350px; height:350px;
+  background: radial-gradient(circle, rgba(113,255,0,0.055) 0%, transparent 70%);
+  pointer-events:none; animation: stcGlow 8s ease-in-out infinite;
+}
+.sk-trust-center::after {
+  content:''; position:absolute; bottom:-80px; right:-80px;
+  width:280px; height:280px;
+  background: radial-gradient(circle, rgba(0,212,255,0.04) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+/* Header */
+.stc-header { display:flex; align-items:flex-start; gap:18px; margin-bottom:32px; position:relative; }
+.stc-icon {
+  font-size:26px; flex-shrink:0;
+  width:58px; height:58px;
+  background: linear-gradient(135deg, rgba(113,255,0,0.12), rgba(0,212,255,0.07));
+  border: 1px solid rgba(113,255,0,0.22);
+  border-radius:18px;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow: 0 0 28px rgba(113,255,0,0.1);
+}
+.stc-title {
+  font-size: clamp(20px,4.5vw,26px);
+  font-weight: 900;
+  color: white;
+  margin-bottom: 7px;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+.stc-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.7;
+  max-width: 500px;
+}
+
+/* Stats row */
+.stc-stats {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.stc-stat {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  padding: 20px 12px;
+  text-align: center;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.stc-stat::before {
+  content:''; position:absolute; inset:0;
+  background: linear-gradient(135deg, rgba(113,255,0,0.03), transparent);
+  opacity:0; transition: opacity 0.2s ease;
+}
+.stc-stat:hover { background:rgba(113,255,0,0.04); border-color:rgba(113,255,0,0.18); transform:translateY(-3px); }
+.stc-stat:hover::before { opacity:1; }
+.stc-stat-num {
+  font-size: clamp(17px,3.5vw,22px);
+  font-weight: 900;
+  color: #71ff00;
+  margin-bottom: 5px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.stc-stat-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.38);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  line-height: 1.4;
+}
+
+/* IntaSend badge card */
+.stc-badge-wrap {
+  text-align: center;
+  padding: 36px 28px 28px;
+  background: rgba(255,255,255,0.016);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 22px;
+  margin-bottom: 28px;
+  position: relative;
+}
+.stc-badge-wrap::before {
+  content: 'OFFICIAL PAYMENT PARTNER';
+  position: absolute; top:0; left:50%;
+  transform: translateX(-50%) translateY(-50%);
+  background: rgba(113,255,0,0.08);
+  border: 1px solid rgba(113,255,0,0.22);
+  border-radius: 999px; padding: 4px 16px;
+  font-size: 9px; font-weight: 800;
+  color: rgba(113,255,0,0.75);
+  letter-spacing: 1.8px; white-space: nowrap;
+}
+.stc-inta-link {
+  display: inline-block;
+  border-radius: 12px;
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), filter 0.25s ease;
+}
+.stc-inta-link:hover,
+.stc-inta-link:focus-visible {
+  transform: scale(1.05) translateY(-2px);
+  filter: drop-shadow(0 8px 28px rgba(113,255,0,0.22));
+}
+.stc-inta-link:focus-visible { outline: 2px solid rgba(113,255,0,0.5); outline-offset: 8px; }
+.stc-inta-badge {
+  max-width: min(375px, 92%);
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+.stc-inta-fallback {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 20px 28px;
+  background: rgba(113,255,0,0.06);
+  border: 1px solid rgba(113,255,0,0.18);
+  border-radius: 14px;
+  color: rgba(255,255,255,0.75);
+  font-size: 14px;
+  font-weight: 700;
+  max-width: 360px;
+  margin: 0 auto;
+}
+.stc-inta-note {
+  font-size: 11px;
+  color: rgba(255,255,255,0.26);
+  margin-top: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.stc-inta-note a { color: rgba(0,212,255,0.55); text-decoration: none; }
+.stc-inta-note a:hover { color: #00d4ff; }
+
+/* Trust indicator chips */
+.stc-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+  justify-content: center;
+}
+.stc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  background: rgba(113,255,0,0.05);
+  border: 1px solid rgba(113,255,0,0.14);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.7);
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.stc-chip:hover {
+  background: rgba(113,255,0,0.1);
+  border-color: rgba(113,255,0,0.32);
+  color: rgba(255,255,255,0.9);
+}
+
+/* Payment methods */
+.stc-methods-label {
+  font-size: 10px; font-weight: 800;
+  color: rgba(255,255,255,0.27);
+  text-transform: uppercase; letter-spacing: 1.8px;
+  text-align: center; margin-bottom: 12px;
+}
+.stc-methods {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  justify-content: center; margin-bottom: 28px;
+}
+.stc-method {
+  padding: 9px 20px;
+  border-radius: 12px;
+  font-size: 13px; font-weight: 800;
+  letter-spacing: 0.3px;
+  border: 1px solid;
+  white-space: nowrap;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  cursor: default;
+}
+.stc-method:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+.stc-method-mpesa  { background:rgba(0,150,30,0.1);  border-color:rgba(0,180,30,0.28);  color:#00c422; }
+.stc-method-visa   { background:rgba(26,69,162,0.1); border-color:rgba(70,120,220,0.28);color:#6a9df8; }
+.stc-method-mc     { background:rgba(200,10,20,0.07);border-color:rgba(235,0,27,0.2);   color:rgba(255,255,255,0.65); }
+.stc-method-apple  { background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.11);color:rgba(255,255,255,0.65); }
+.stc-method-google { background:rgba(66,133,244,0.07);border-color:rgba(66,133,244,0.2); color:rgba(255,255,255,0.65); }
+
+/* Trust paragraph */
+.stc-trust-para {
+  font-size: 13px;
+  color: rgba(255,255,255,0.42);
+  line-height: 1.75;
+  text-align: center;
+  max-width: 580px;
+  margin: 0 auto 28px;
+  padding: 18px 22px;
+  background: rgba(255,255,255,0.014);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Detail cards grid */
+.stc-details {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.stc-detail-item {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  padding: 18px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.055);
+  border-radius: 18px;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.stc-detail-item:hover {
+  background: rgba(255,255,255,0.032);
+  border-color: rgba(0,212,255,0.13);
+  transform: translateY(-2px);
+}
+.stc-detail-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.stc-detail-title { font-size: 13px; font-weight: 800; color: white; margin-bottom: 5px; }
+.stc-detail-text  { font-size: 12px; color: rgba(255,255,255,0.38); line-height: 1.7; }
+
+/* Responsive */
+@media (max-width: 700px) {
+  .sk-trust-center { padding:26px 18px; border-radius:22px; }
+  .stc-header { gap:13px; margin-bottom:24px; }
+  .stc-icon { width:46px; height:46px; font-size:22px; border-radius:14px; }
+  .stc-stats { grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:24px; }
+  .stc-stat  { padding:16px 10px; border-radius:14px; }
+  .stc-badge-wrap { padding:28px 16px 22px; border-radius:18px; }
+  .stc-details { grid-template-columns:1fr; gap:10px; }
+}
+@media (max-width: 420px) {
+  .sk-trust-center { padding:20px 14px; }
+  .stc-title { font-size:18px; }
+  .stc-chip  { font-size:11px; padding:6px 11px; }
+  .stc-stat-num { font-size:16px; }
+  .stc-detail-item { padding:14px; gap:10px; }
+  .stc-inta-badge { max-width:92%; }
+}
 </style>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-premium-v2.css">
@@ -176,14 +453,153 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050a10;color:white;
     <div class="tp-unlock-card"><div class="tp-unlock-icon">⭐</div><div><div class="tp-unlock-name">Priority Support</div><div class="tp-unlock-desc">Verified users get priority in disputes, support and refunds.</div></div></div>
   </div>
 
-  <!-- PAYMENT SECURITY TRUST SIGNAL -->
-  <div style="text-align:center;margin:8px 0 24px;padding:20px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:16px;">
-    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;margin-bottom:14px;">Secured Payments</div>
-    <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;">
-      <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-no-mpesa-hr-dark.png" width="280" alt="IntaSend Secure Payments (PCI-DSS Compliant)" style="max-width:100%;height:auto;">
-    </a>
-    <strong><a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:block;color:rgba(255,255,255,0.4);text-decoration:none;font-size:11px;margin-top:8px;font-weight:600;">Secured by IntaSend Payments</a></strong>
-  </div>
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SECURE PAYMENTS — Enterprise Trust Center v2.0
+  ════════════════════════════════════════════════════════════════════ -->
+  <section class="sk-trust-center" id="paymentTrustCenter" aria-labelledby="stcHeading">
+
+    <!-- Header -->
+    <div class="stc-header">
+      <div class="stc-icon" aria-hidden="true">🔒</div>
+      <div>
+        <h2 class="stc-title" id="stcHeading">Secure Payments</h2>
+        <p class="stc-sub">Every payment on SOKONI is protected using enterprise-grade security and trusted payment infrastructure.</p>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="stc-stats" role="list" aria-label="Payment security statistics">
+      <div class="stc-stat" role="listitem">
+        <div class="stc-stat-num" aria-label="99.9 percent">99.9%</div>
+        <div class="stc-stat-label">Payment Uptime</div>
+      </div>
+      <div class="stc-stat" role="listitem">
+        <div class="stc-stat-num" aria-label="256-bit">256-bit</div>
+        <div class="stc-stat-label">Encryption</div>
+      </div>
+      <div class="stc-stat" role="listitem">
+        <div class="stc-stat-num" aria-label="24/7">24/7</div>
+        <div class="stc-stat-label">Fraud Monitoring</div>
+      </div>
+      <div class="stc-stat" role="listitem">
+        <div class="stc-stat-num" aria-label="Fast">⚡</div>
+        <div class="stc-stat-label">Fast Checkout</div>
+      </div>
+    </div>
+
+    <!-- Official IntaSend Trust Badge -->
+    <div class="stc-badge-wrap">
+      <span style="display:block;text-align:center;">
+        <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" class="stc-inta-link" aria-label="IntaSend security certification — opens in a new tab">
+          <img
+            src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png"
+            width="375"
+            alt="IntaSend Secure Payments (PCI-DSS Compliant)"
+            class="stc-inta-badge"
+            loading="lazy"
+            decoding="async"
+            onerror="this.style.display='none';var f=document.getElementById('stcIntaFallback');if(f)f.style.display='flex';"
+          >
+          <div id="stcIntaFallback" class="stc-inta-fallback" role="img" aria-label="Secure payments powered by IntaSend">
+            🔐 Secure payments powered by IntaSend
+          </div>
+        </a>
+        <strong>
+          <a style="display:block;color:#fafafa;text-decoration:none;font-size:0.8em;margin-top:0.6em;" href="https://intasend.com/security" target="_blank" rel="noopener noreferrer">
+            Secured by IntaSend Payments
+          </a>
+        </strong>
+      </span>
+      <p class="stc-inta-note">CBK-Regulated &nbsp;·&nbsp; PCI DSS Certified &nbsp;·&nbsp; M-Pesa Approved &nbsp;·&nbsp; <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer">Verify certification →</a></p>
+    </div>
+
+    <!-- Trust Indicator Chips (12) -->
+    <div class="stc-indicators" role="list" aria-label="Security certifications">
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> PCI DSS Compliant</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> SSL/TLS Encryption</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Secure M-PESA Payments</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Visa Ready</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Mastercard Ready</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Fraud Detection</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Buyer Protection</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Seller Protection</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Secure Refunds</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Instant Verification</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Encrypted Checkout</div>
+      <div class="stc-chip" role="listitem"><span aria-hidden="true">✓</span> Protected Transactions</div>
+    </div>
+
+    <!-- Accepted Payment Methods (JS-populated: only shows what device supports) -->
+    <div class="stc-methods-label">Accepted Payment Methods</div>
+    <div class="stc-methods" id="stcMethods" role="list" aria-label="Accepted payment methods"></div>
+
+    <!-- Trust paragraph -->
+    <p class="stc-trust-para">
+      Every payment is processed through trusted payment infrastructure using encrypted communication and industry-standard security.
+      SOKONI never exposes your sensitive payment information.
+    </p>
+
+    <!-- Trust Detail Cards (8) -->
+    <div class="stc-details">
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">🔒</span>
+        <div>
+          <div class="stc-detail-title">End-to-End Encryption</div>
+          <div class="stc-detail-text">All payment data is encrypted using 256-bit TLS from your device to the processor. Completely unreadable to anyone in between.</div>
+        </div>
+      </div>
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">🛡️</span>
+        <div>
+          <div class="stc-detail-title">Secure Payment Processing</div>
+          <div class="stc-detail-text">Processed by IntaSend — CBK-regulated and PCI DSS certified. Your money is protected before, during, and after every transaction.</div>
+        </div>
+      </div>
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">💳</span>
+        <div>
+          <div class="stc-detail-title">No Card Storage</div>
+          <div class="stc-detail-text">SOKONI never stores your card number, CVV, or PIN. Card data is tokenised in IntaSend's PCI-DSS vault — inaccessible to us.</div>
+        </div>
+      </div>
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">🔍</span>
+        <div>
+          <div class="stc-detail-title">Fraud Monitoring</div>
+          <div class="stc-detail-text">Real-time fraud detection monitors every transaction 24/7. Suspicious activity is automatically flagged and blocked before it reaches you.</div>
+        </div>
+      </div>
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">🛒</span>
+        <div>
+          <div class="stc-detail-title">Protected Buyer Checkout</div>
+          <div class="stc-detail-text">Every buyer is verified before payment is released. Funds are held securely until delivery is confirmed — you're never left exposed.</div>
+        </div>
+      </div>
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">💰</span>
+        <div>
+          <div class="stc-detail-title">Protected Seller Payouts</div>
+          <div class="stc-detail-text">Sellers receive funds only after order completion is verified. Real-time payment confirmation before every payout is released.</div>
+        </div>
+      </div>
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">↩️</span>
+        <div>
+          <div class="stc-detail-title">Secure Refunds</div>
+          <div class="stc-detail-text">Refunds flow through the same secure pipeline as payments. Full audit trail maintained for every refund transaction.</div>
+        </div>
+      </div>
+      <div class="stc-detail-item">
+        <span class="stc-detail-icon" aria-hidden="true">⚡</span>
+        <div>
+          <div class="stc-detail-title">Real-Time Verification</div>
+          <div class="stc-detail-text">Every payment is verified in real-time before completion. Instant confirmation for both buyer and seller — no waiting, no uncertainty.</div>
+        </div>
+      </div>
+    </div>
+
+  </section>
 
   <!-- VERIFY / BUILD YOUR PASSPORT -->
   <div class="tp-section-h">⚡ Build Your Passport</div>
@@ -370,6 +786,33 @@ function sharePassport() {
 window.sharePassport = sharePassport;
 
 loadPassport();
+
+/* ── Payment method badges — only show what the device supports ── */
+(function() {
+  var methods = [
+    { label: 'M-PESA',      cls: 'stc-method-mpesa' },
+    { label: 'Visa',        cls: 'stc-method-visa'  },
+    { label: 'Mastercard',  cls: 'stc-method-mc'    },
+  ];
+  /* Apple Pay — Safari on iOS / macOS only */
+  try {
+    if (window.ApplePaySession && ApplePaySession.canMakePayments && ApplePaySession.canMakePayments()) {
+      methods.push({ label: ' Apple Pay', cls: 'stc-method-apple' });
+    }
+  } catch(e) {}
+  /* Google Pay — Chrome on Android or Chrome desktop */
+  var ua = navigator.userAgent || '';
+  var isChrome = /Chrome/.test(ua) && !/Edg|OPR/.test(ua);
+  var isAndroid = /Android/.test(ua);
+  if (isChrome || isAndroid) {
+    methods.push({ label: 'Google Pay', cls: 'stc-method-google' });
+  }
+  var el = document.getElementById('stcMethods');
+  if (!el) return;
+  el.innerHTML = methods.map(function(m) {
+    return '<div class="stc-method ' + m.cls + '" role="listitem">' + m.label + '</div>';
+  }).join('');
+})();
 </script>
 <script type="module" src="sokoni-init.js"></script>
 <script src="nav-active.js" defer></script>

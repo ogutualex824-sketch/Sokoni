@@ -1137,6 +1137,42 @@
         <span class="os-total-label">Total</span>
         <span class="os-total-val" id="checkoutTotal">KES 0</span>
       </div>
+      <!-- SOKONI Impact Round-Up -->
+      <div id="coImpactRow" style="margin-top:12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);border-radius:12px;padding:12px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:12px;font-weight:800;color:#f59e0b;">🌱 SOKONI Impact Contribution</span>
+          <label style="position:relative;width:36px;height:20px;cursor:pointer;display:inline-block;">
+            <input type="checkbox" id="coImpactToggle" style="opacity:0;width:0;height:0;position:absolute;" onchange="_updateImpactRow()">
+            <span id="coImpactSlider" style="position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:999px;transition:.2s;"></span>
+            <span id="coImpactThumb" style="position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;left:3px;top:3px;transition:.2s;"></span>
+          </label>
+        </div>
+        <div id="coImpactOpts" style="display:none;">
+          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px;">Add to your order to support community programs:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;" id="coImpactPresets">
+            <button onclick="_setImpact(this,10)" class="co-impact-btn">KSh 10</button>
+            <button onclick="_setImpact(this,50)" class="co-impact-btn">KSh 50</button>
+            <button onclick="_setImpact(this,100)" class="co-impact-btn active">KSh 100</button>
+            <button onclick="_setImpact(this,200)" class="co-impact-btn">KSh 200</button>
+          </div>
+          <select id="coImpactDest" style="width:100%;padding:7px 10px;background:rgba(30,30,30,1);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.7);font-size:11px;font-family:inherit;outline:none;">
+            <option value="General Foundation">General Foundation</option>
+            <option value="education">Education Programs</option>
+            <option value="health">Healthcare Support</option>
+            <option value="food">Food Security</option>
+            <option value="environment">Environmental Conservation</option>
+            <option value="emergency">Emergency Relief</option>
+          </select>
+        </div>
+        <div id="coImpactSummary" style="font-size:11px;color:rgba(255,255,255,.4);">Enable to add a community contribution to your order.</div>
+      </div>
+      <style>
+        .co-impact-btn{padding:5px 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:999px;font-size:11px;font-weight:700;cursor:pointer;color:rgba(255,255,255,.6);font-family:inherit;transition:all .15s;}
+        .co-impact-btn.active{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#f59e0b;}
+        #coImpactToggle:checked~#coImpactSlider{background:#f59e0b;}
+        #coImpactToggle:checked~#coImpactThumb{transform:translateX(16px);}
+      </style>
+
       <!-- Estimated delivery -->
       <div id="estDeliveryRow" style="display:none;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:12px 14px;margin:14px 0 0;">
         <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">📦 ESTIMATED DELIVERY</div>
@@ -1144,8 +1180,15 @@
         <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;" id="estDeliveryNote">Select zone above to calculate</div>
       </div>
 
-      <!-- Trust badge (SokoniTrust module renders this) -->
-      <div data-trust="badge" style="margin-top:14px;"></div>
+      <!-- IntaSend Trust Badge — order summary -->
+      <div style="margin-top:18px;text-align:center;padding:18px 14px 14px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.06);border-radius:16px;position:relative;">
+        <div style="position:absolute;top:0;left:50%;transform:translateX(-50%) translateY(-50%);background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:999px;padding:3px 12px;font-size:9px;font-weight:800;color:rgba(113,255,0,0.75);letter-spacing:1.5px;white-space:nowrap;">SECURE PAYMENTS</div>
+        <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;transition:transform 0.2s ease,filter 0.2s ease;" onmouseover="this.style.transform='scale(1.04)';this.style.filter='drop-shadow(0 4px 16px rgba(113,255,0,0.2))'" onmouseout="this.style.transform='';this.style.filter=''" aria-label="IntaSend security — opens in new tab">
+          <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png" width="260" alt="IntaSend Secure Payments (PCI-DSS Compliant)" loading="lazy" decoding="async" style="max-width:100%;height:auto;display:block;margin:0 auto;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+          <span style="display:none;align-items:center;justify-content:center;gap:8px;padding:12px 16px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.16);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;">🔐 Secured by IntaSend</span>
+        </a>
+        <strong><a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:block;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;margin-top:8px;font-weight:600;">Secured by IntaSend Payments</a></strong>
+      </div>
 
       <!-- Payment status bar (activated during payment flow by JS) -->
       <div id="checkout-status-wrap" style="margin-top:10px;display:none;">
@@ -1225,8 +1268,14 @@
       📨 Send STK Push
     </button>
 
-    <!-- IntaSend trust badge — rendered by SokoniTrust module -->
-    <div id="intasendTrustBadge" data-trust="badge" style="margin-top:16px;"></div>
+    <!-- IntaSend Trust Badge — M-Pesa modal -->
+    <div id="intasendTrustBadge" style="margin-top:20px;text-align:center;">
+      <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;" aria-label="IntaSend security certification">
+        <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png" width="240" alt="IntaSend Secure Payments — PCI-DSS Compliant" loading="lazy" decoding="async" style="max-width:100%;height:auto;display:block;margin:0 auto;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <span style="display:none;align-items:center;justify-content:center;gap:6px;padding:10px 14px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.16);border-radius:10px;color:rgba(255,255,255,0.65);font-size:12px;font-weight:700;">🔐 Secured by IntaSend</span>
+      </a>
+      <strong><a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:block;color:rgba(255,255,255,0.35);text-decoration:none;font-size:10px;margin-top:6px;font-weight:600;">Secured by IntaSend Payments</a></strong>
+    </div>
 
   </div>
 </div>
@@ -1378,6 +1427,24 @@
 
 let selectedPayment = "mpesa";
 let orderTotal = 0;
+let _impactAmt = 100; /* default contribution */
+
+function _updateImpactRow() {
+  const on = document.getElementById('coImpactToggle').checked;
+  document.getElementById('coImpactOpts').style.display = on ? 'block' : 'none';
+  document.getElementById('coImpactSummary').textContent = on
+    ? `KSh ${_impactAmt} will be added to your order total and donated to SOKONI Impact.`
+    : 'Enable to add a community contribution to your order.';
+  updateTotals();
+}
+
+function _setImpact(btn, amt) {
+  document.querySelectorAll('.co-impact-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _impactAmt = amt;
+  document.getElementById('coImpactSummary').textContent = `KSh ${amt} will be donated to SOKONI Impact.`;
+  updateTotals();
+}
 
 /* Load cart items into summary */
 const cart = JSON.parse(localStorage.getItem("cart") || "[]");
@@ -1489,6 +1556,10 @@ function updateTotals(){
       loyaltyDiscRow.style.display = "none";
     }
   }
+
+  /* Add optional Impact contribution to total */
+  const impactOn = document.getElementById('coImpactToggle')?.checked;
+  if (impactOn) orderTotal += _impactAmt;
 
   if(subtotalEl) subtotalEl.textContent = "KES " + subtotal.toLocaleString();
   if(totalEl)    totalEl.textContent    = "KES " + orderTotal.toLocaleString();
@@ -2260,6 +2331,17 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
       }, 800);
     }
   } catch(e){}
+
+  /* SOKONI Impact: process optional checkout donation asynchronously */
+  try {
+    const impactOn = document.getElementById('coImpactToggle')?.checked;
+    if (impactOn && window.firebaseFunctions && window.httpsCallable && _impactAmt > 0) {
+      const impactDest = document.getElementById('coImpactDest')?.value || 'General Foundation';
+      window.httpsCallable(window.firebaseFunctions, 'impactCheckoutDonate')({
+        amount: _impactAmt, orderId, destination: impactDest, type: 'checkout',
+      }).catch(() => {}); /* fire and forget — order is already saved */
+    }
+  } catch(_) {}
 
   /* Show in-page success overlay instead of redirect */
   const overlay = document.getElementById("orderSuccessOverlay");
