@@ -1,4 +1,210 @@
-﻿## [2026-06-29] — CRM Engine v1.0
+﻿## [2026-06-29] — POS Setup Wizard v1.0 (pos-setup.html)
+
+### Summary
+Added `pos-setup.html` — the plug-and-play first-time POS setup wizard for SOKONI. A standalone,
+dark-themed 7-step SPA shown on first POS launch before the merchant reaches `pos.html`. Guides
+merchants through network check, Firebase authentication (Google / Phone OTP / Email), business
+and branch selection, full device provisioning (bootstrapDevice CF, IndexedDB caching, device
+registration, hardware detection), and a final ready screen with animated checkmark and live stats.
+
+### Files Changed
+- `pos-setup.html` — NEW; full 7-step setup wizard, ~850 lines, standalone (no shared-header.js)
+- `CHANGELOG.md` — UPDATED
+
+### UI / UX
+- Dark premium design: `--sk-surface #1a1a2e`, `--sk-card #16213e`, `--sk-primary #7C3AED`
+- Step indicator dots (active pill, done green) with animated CSS slide transitions
+- Mobile-first, responsive at all screen sizes; `max-scale=1.0` prevents zoom on iOS inputs
+- Step 2: live `navigator.onLine` + `connection.effectiveType` with animated pulse ring
+- Step 3: Google popup, Phone OTP with invisible reCAPTCHA, Email/password with tab switcher
+- Step 4: business cards with logo/avatar, search box when >5 businesses, auto-advance if 1
+- Step 5: branch cards, auto-advance if 1, "Add Branch" deep-link
+- Step 6: 4 task progress bars + overall progress bar + aria-live status messages
+- Step 7: SVG animated stroke checkmark, stat tiles (products / payment methods / loyalty)
+
+### Cloud Functions Wired (client calls only)
+| CF | Step | Purpose |
+|---|---|---|
+| `listMerchants` | 4 | Discover merchant portfolio (graceful fallback to token claims) |
+| `getBusinessConfig` | 4 / 5 | Business profile + branch list |
+| `bootstrapDevice` | 6 | Full offline bundle; cached to IndexedDB `sokoni_bootstrap_v1` |
+| `registerDevice` | 6 | Device provisioning record; non-fatal on failure |
+
+### Storage Keys Written
+| Key | Store | Value |
+|---|---|---|
+| `sokoni_device_id` | localStorage | `crypto.randomUUID()` |
+| `sokoni_merchant_id` | localStorage | Selected merchantId |
+| `sokoni_branch_id` | localStorage | Selected branchId |
+| `sokoni_setup_complete` | localStorage | `'1'` |
+| `sokoni_bootstrap_v1` | IndexedDB `sokoni-pos` | Full bootstrap bundle |
+
+### Security
+- All dynamic innerHTML uses `esc()` XSS helper (5-char replacement)
+- Firebase auth errors translated to user-friendly messages; raw errors never shown
+- Phone number normalised and validated (`/^\+254\d{9}$/`) before OTP request
+- Boot guard: redirects to `pos.html` immediately if setup already complete and user authenticated
+
+---
+
+## [2026-06-29] — Self-Healing Engine v1.0 + POS Sync Enhancements v1.1
+
+### Summary
+Added a POS-specific self-healing scheduled engine (`functions/self-heal.js`) that runs every 5
+minutes and auto-detects and repairs 7 platform failure modes. Extended `pos-sync.js` with three
+production enhancements: HMAC-SHA256 digital signatures for offline transactions (Web Crypto API),
+a per-collection conflict detection engine with resolution strategies, and incremental delta sync
+that only pulls records changed since the last syncToken.
+
+### Files Changed
+- `functions/self-heal.js` — NEW; 3 Cloud Functions, 600 lines
+- `pos-sync.js` — UPDATED; +365 lines (Enhancements A, B, C)
+- `functions/index.js` — UPDATED; 3 new CF exports appended
+- `CHANGELOG.md` — UPDATED
+
+### Cloud Functions Added (3)
+| Function | Trigger | Description |
+|---|---|---|
+| `runScheduledSelfHeal` | onSchedule `*/5 * * * *` | Parallel 7-check platform scan; auto-repairs 5 categories; writes selfHealLog |
+| `runManualSelfHeal` | onCall (admin only) | On-demand self-heal; returns full check results to caller |
+| `getSelfHealHistory` | onCall (admin only) | Paginated selfHealLog history; up to 100 entries |
+
+### Self-Healing Checks
+| Check | Collection | Action |
+|---|---|---|
+| `stuck_payments` | `paymentSessions` | Expires sessions stuck > 30 min; queues remoteCommand to device |
+| `sync_queue` | `syncQueue` | Resets failed items (retryCount < 5) with exponential back-off |
+| `inventory_integrity` | `posProducts` | Flags negative qty to adminAlerts; never auto-corrects |
+| `loyalty_drift` | `loyaltyAccounts` | Samples 20 accounts; compares `points` to sub-collection sum; drift > 10 → alert |
+| `stale_devices` | `posDevices` | Marks `connectivity: 'offline'` for devices silent > 2h |
+| `unresolved_alerts` | `adminAlerts` | Escalates critical alerts unresolved > 24h to super-admin |
+| `bootstrap_cache` | `bootstrapCache` | Purges entries older than 10 minutes via batch delete |
+
+### New Collection
+| Collection | Purpose |
+|---|---|
+| `selfHealLog/{logId}` | Full audit record of every self-heal run: checksRun, issuesFound, issuesFixed, overallStatus, per-check results |
+
+### pos-sync.js Enhancements
+**Enhancement A — Digital Signatures**
+- `signTransaction(transaction, deviceId)` — HMAC-SHA256 via SubtleCrypto; canonical payload covers id/amount/timestamp/items; gracefully degrades on non-HTTPS contexts
+- `queueSignedTransaction(transaction)` — convenience wrapper; attaches `_signature`, `_deviceId`, `_signedAt` to every queued transaction
+
+**Enhancement B — Conflict Detection**
+- `detectConflict(localDoc, serverDoc, docType)` — compares server `updatedAt` vs local `_queuedAt`
+- Resolution matrix: payments → `server_wins`; orders → `manual_required`; inventory → `server_wins` if server decreased, else `local_wins`; customer critical fields → `manual_required`, non-critical → `local_wins`; unknown → `server_wins`
+
+**Enhancement C — Delta Sync**
+- `getDeltaSync(merchantId, branchId, since)` — fetches only records with `updatedAt > since`
+- Returns products, employees, discounts arrays; auto-merges into IndexedDB via `_mergeLocalDB`
+- Respects `_deleted: true` tombstones; never downgrades newer local records; emits `pos:sync:delta_complete`
+
+### Security
+- `runManualSelfHeal` and `getSelfHealHistory` enforce `enforceAppCheck: true` + admin/superAdmin custom claim check
+- Self-heal escalation alerts carry `source: 'self_heal_escalation'` to prevent infinite escalation loops
+- HMAC key material (`deviceId + '_sokoni_pos'`) is non-extractable (`extractable: false`) — never leaves the browser
+
+### Performance
+- All 7 self-heal checks execute in a single `Promise.all` — total wall time bounded by slowest check
+- Bootstrap cache purge uses Firestore batch delete (up to 500 ops in one round-trip)
+- Delta sync fires 3 collection queries concurrently via `Promise.all`
+- Self-heal scheduled function: 512 MiB, 240 s timeout — sufficient for large merchant fleets
+
+### Breaking Changes
+None. All existing `PosSyncEngine` methods preserved unchanged; new methods appended to public API object.
+
+---
+
+## [2026-06-29] — Business Bootstrap & Device Manager v1.0
+
+### Summary
+Added two new Cloud Functions files that form the server backbone of SOKONI's Plug-and-Play
+Enterprise POS provisioning system.  A single `bootstrapDevice` call returns everything a POS
+terminal needs to start selling (products, staff, taxes, loyalty, discounts, receipt config,
+feature flags, subscription status) in one parallelised network round-trip.  A companion
+Device Manager module handles the full device lifecycle: registration, heartbeat-based presence,
+remote commands (lock / logout / update / wipe), decommission, and nightly stale-device cleanup.
+
+### Files Changed
+- `functions/business-bootstrap.js` — NEW; 5 Cloud Functions, ~600 lines
+- `functions/device-manager.js` — NEW; 9 Cloud Functions, ~600 lines
+- `functions/index.js` — UPDATED; 14 new CF exports appended
+
+### Cloud Functions Added (14)
+| Function | Module | Description |
+|---|---|---|
+| `bootstrapDevice` | business-bootstrap | Full parallelised bundle; 300-s cache; forceRefresh support |
+| `getIncrementalSync` | business-bootstrap | Delta sync — only records changed since last syncToken |
+| `invalidateBootstrapCache` | business-bootstrap | Admin/owner cache bust; all branches or single branch |
+| `getBusinessConfig` | business-bootstrap | Light pre-branch-selection profile + branch list |
+| `validateDeviceAccess` | business-bootstrap | SHA-256 PIN auth; 5-attempt / 5-min rate limit |
+| `registerDevice` | device-manager | UUID validation; idempotent; re-register on reinstall |
+| `deviceHeartbeat` | device-manager | 30-s keepalive; transactional remote-command delivery |
+| `lockDevice` | device-manager | Queues lock command; device freezes UI on next heartbeat |
+| `unlockDevice` | device-manager | Restores status=active, clears command |
+| `remoteLogout` | device-manager | Queues logout; device returns to login screen |
+| `remoteUpdate` | device-manager | Queues SW/app update to targetVersion |
+| `decommissionDevice` | device-manager | status=decommissioned + wipe command; permanent |
+| `getDeviceList` | device-manager | Online/offline status via lastSeenAt; summary counts |
+| `cleanupStaleDevices` | device-manager | Scheduled 04:00 UTC; suspends 30-day-inactive devices |
+
+### New Collections
+| Collection | Purpose |
+|---|---|
+| `bootstrapCache/{merchantId}_{branchId}` | 5-minute bundle cache; strip sensitive fields |
+| `deviceAuditLog/{deviceId}_{ts}` | Immutable audit trail for all device lifecycle events |
+| `rateLimits/{uid}_pin` | PIN brute-force prevention (5 attempts / 5 min) |
+
+### Security
+- All admin actions (lock/unlock/logout/update/decommission) verify admin token or merchant ownership via `businesses` + `merchants` collections before proceeding.
+- PIN stored and compared as SHA-256 hash; plaintext never persists or traverses the wire.
+- `deviceHeartbeat` opts out of App Check to preserve sub-200 ms latency; authentication (Firebase Auth token) is still enforced.
+- Sensitive fields (hmacKey, passwords, secrets) stripped from cached bootstrap bundle.
+- Decommissioned devices receive a wipe command on every subsequent heartbeat — they cannot be re-registered.
+- Rate-limiting counter is written before PIN comparison to prevent timing side-channels.
+
+### Performance
+- `_buildBundle` fires 14 Firestore reads in a single `Promise.all` — no sequential reads.
+- Cache TTL 300 s; cache hit path requires one document read (< 50 ms).
+- `deviceHeartbeat` uses a single transaction (read + conditional write) — no secondary queries.
+- Expired discounts filtered server-side so devices never see stale vouchers.
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-29] — Firestore Index Rebalance (200/200)
+
+### Summary
+Dropped 4 low-value composite indexes and restored 4 operationally important indexes, keeping the
+total exactly at the 200-index Firestore limit.
+
+### Files Changed
+- `firestore.indexes.json` — UPDATED; -4 low-value indexes, +4 restored operational indexes
+
+### Indexes Dropped (4)
+| Collection | Fields | Reason |
+|---|---|---|
+| `emailLogs` | `status ASC, sentAt DESC` | Admin-only; rarely queried; client-side sort acceptable |
+| `emailLogs` | `status ASC, sentAt ASC` | Admin-only; rarely queried; client-side sort acceptable |
+| `typesenseQueue` | `status ASC, nextAttemptAt ASC` | Internal search-sync queue; admin-only; low direct-query value |
+| `typesenseQueue` | `collection ASC, status ASC, nextAttemptAt ASC` | Internal search-sync queue; admin-only; low direct-query value |
+
+### Indexes Restored (4)
+| Collection | Fields | Reason |
+|---|---|---|
+| `adminAlerts` | `resolved ASC, createdAt DESC` | Admin alert dashboard — unresolved alerts feed |
+| `deliveryLocations` | `riderId ASC, updatedAt DESC` | Rider live-location tracking queries |
+| `etimsAlerts` | `sellerUid ASC, status ASC, createdAt DESC` | eTIMS compliance alert queries per seller |
+| `loyaltyDrawEntries` | `drawId ASC, uid ASC` | Lucky draw deduplication and entry lookup |
+
+### Net Change
+200 → 196 (drop) → 200 (restore) — no change to production limit
+
+---
+
+## [2026-06-29] — CRM Engine v1.0
 
 ### Summary
 Added `functions/crm.js` (13 Cloud Functions) implementing a full Customer Relationship Management

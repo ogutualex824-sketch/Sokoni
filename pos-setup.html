@@ -1,0 +1,2661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#7C3AED">
+  <meta name="description" content="SOKONI Enterprise POS — First-time Setup">
+  <title>SOKONI POS Setup</title>
+
+  <!-- Firebase compat (required before sokoni-config.js) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+  <!-- sokoni-config.js sets window.SOKONI_CONFIG; Firebase init is done inline below -->
+
+  <style>
+    /* ══════════════════════════════════════════════════
+       DESIGN TOKENS
+    ══════════════════════════════════════════════════ */
+    :root {
+      --sk-primary:       #7C3AED;
+      --sk-primary-dark:  #5B21B6;
+      --sk-primary-glow:  rgba(124, 58, 237, 0.35);
+      --sk-accent:        #A78BFA;
+      --sk-surface:       #1a1a2e;
+      --sk-surface-2:     #16213e;
+      --sk-card:          #16213e;
+      --sk-card-hover:    #1e2a50;
+      --sk-border:        rgba(167, 139, 250, 0.18);
+      --sk-text:          #f1f0ff;
+      --sk-text-muted:    #9ca3af;
+      --sk-text-dim:      #6b7280;
+      --sk-green:         #10B981;
+      --sk-green-glow:    rgba(16, 185, 129, 0.3);
+      --sk-amber:         #F59E0B;
+      --sk-amber-glow:    rgba(245, 158, 11, 0.3);
+      --sk-red:           #EF4444;
+      --sk-radius:        14px;
+      --sk-radius-sm:     8px;
+      --sk-transition:    0.38s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ══════════════════════════════════════════════════
+       RESET & BASE
+    ══════════════════════════════════════════════════ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--sk-surface);
+      color: var(--sk-text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      outline: none;
+      font-family: inherit;
+    }
+
+    input, select {
+      font-family: inherit;
+    }
+
+    a {
+      color: var(--sk-accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* ══════════════════════════════════════════════════
+       WIZARD SHELL
+    ══════════════════════════════════════════════════ */
+    #wizard-shell {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--sk-surface);
+      overflow: hidden;
+    }
+
+    /* ── Step indicator bar ── */
+    #step-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 20px 24px 0;
+    }
+
+    .step-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--sk-border);
+      transition: var(--sk-transition);
+    }
+
+    .step-dot.active {
+      width: 28px;
+      border-radius: 4px;
+      background: var(--sk-primary);
+    }
+
+    .step-dot.done {
+      background: var(--sk-green);
+    }
+
+    /* ── Viewport ── */
+    #step-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── Individual steps ── */
+    .step-panel {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 24px 40px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(60px);
+      transition: opacity var(--sk-transition), transform var(--sk-transition);
+      overflow-y: auto;
+    }
+
+    .step-panel.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    .step-panel.exit-left {
+      opacity: 0;
+      transform: translateX(-60px);
+    }
+
+    .step-inner {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ══════════════════════════════════════════════════
+       SHARED COMPONENTS
+    ══════════════════════════════════════════════════ */
+
+    /* Logo */
+    .sk-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sk-logo-mark {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, var(--sk-primary) 0%, #A855F7 100%);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 32px var(--sk-primary-glow);
+    }
+
+    .sk-logo-mark svg {
+      width: 32px;
+      height: 32px;
+    }
+
+    .sk-logo-text {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff 0%, var(--sk-accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Heading hierarchy */
+    .wiz-title {
+      font-size: clamp(22px, 5vw, 30px);
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+      margin-top: 28px;
+    }
+
+    .wiz-sub {
+      font-size: 15px;
+      color: var(--sk-text-muted);
+      text-align: center;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+
+    /* Buttons */
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 340px;
+      padding: 16px 24px;
+      border-radius: var(--sk-radius);
+      font-size: 16px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--sk-primary) 0%, #9333EA 100%);
+      color: #fff;
+      transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 4px 20px var(--sk-primary-glow);
+    }
+
+    .btn-primary:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 340px;
+      padding: 14px 24px;
+      border-radius: var(--sk-radius);
+      font-size: 15px;
+      font-weight: 600;
+      background: transparent;
+      color: var(--sk-accent);
+      border: 1.5px solid var(--sk-border);
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(167, 139, 250, 0.08);
+      border-color: var(--sk-accent);
+    }
+
+    .btn-ghost {
+      background: none;
+      color: var(--sk-text-muted);
+      font-size: 13px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: color 0.2s;
+    }
+
+    .btn-ghost:hover {
+      color: var(--sk-text);
+    }
+
+    /* Card */
+    .sk-card {
+      background: var(--sk-card);
+      border: 1.5px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 18px 20px;
+      width: 100%;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    }
+
+    .sk-card:hover {
+      background: var(--sk-card-hover);
+      border-color: var(--sk-primary);
+    }
+
+    .sk-card.selected {
+      border-color: var(--sk-primary);
+      background: rgba(124, 58, 237, 0.12);
+      box-shadow: 0 0 0 2px var(--sk-primary-glow);
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 2.5px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+
+    .spinner-lg {
+      width: 44px;
+      height: 44px;
+      border-width: 3.5px;
+      border-color: var(--sk-border);
+      border-top-color: var(--sk-primary);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error box */
+    .error-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: var(--sk-radius-sm);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #FCA5A5;
+      width: 100%;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .error-box.visible {
+      display: block;
+    }
+
+    /* Divider */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      color: var(--sk-text-dim);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      margin: 4px 0;
+    }
+
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--sk-border);
+    }
+
+    /* Input */
+    .sk-input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: var(--sk-radius-sm);
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid var(--sk-border);
+      color: var(--sk-text);
+      font-size: 16px;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+
+    .sk-input:focus {
+      outline: none;
+      border-color: var(--sk-primary);
+    }
+
+    .sk-input::placeholder {
+      color: var(--sk-text-dim);
+    }
+
+    /* Input label */
+    .input-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sk-text-muted);
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      align-self: flex-start;
+    }
+
+    /* Search box */
+    .search-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .search-wrap svg {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--sk-text-dim);
+    }
+
+    .search-wrap .sk-input {
+      padding-left: 42px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       STEP 1 — WELCOME
+    ══════════════════════════════════════════════════ */
+    #step-1 .step-inner {
+      gap: 0;
+    }
+
+    .welcome-badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--sk-accent);
+      background: rgba(124, 58, 237, 0.15);
+      border: 1px solid var(--sk-border);
+      border-radius: 20px;
+      padding: 4px 14px;
+      margin-top: 32px;
+      margin-bottom: 0;
+    }
+
+    .welcome-tagline {
+      font-size: 13px;
+      color: var(--sk-text-dim);
+      margin-top: 24px;
+      margin-bottom: 32px;
+    }
+
+    #step-1 .btn-primary {
+      margin-top: 0;
+    }
+
+    #step-1 .btn-ghost {
+      margin-top: 16px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       STEP 2 — NETWORK CHECK
+    ══════════════════════════════════════════════════ */
+    .net-ring-wrap {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      margin: 32px 0 24px;
+    }
+
+    .net-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid transparent;
+    }
+
+    .net-ring.pulse-online {
+      border-color: var(--sk-green);
+      box-shadow: 0 0 0 0 var(--sk-green-glow);
+      animation: pulse-ring-online 2s ease-out infinite;
+    }
+
+    .net-ring.pulse-offline {
+      border-color: var(--sk-amber);
+      box-shadow: 0 0 0 0 var(--sk-amber-glow);
+      animation: pulse-ring-offline 2.5s ease-out infinite;
+    }
+
+    @keyframes pulse-ring-online {
+      0%   { box-shadow: 0 0 0 0 var(--sk-green-glow); }
+      70%  { box-shadow: 0 0 0 22px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    @keyframes pulse-ring-offline {
+      0%   { box-shadow: 0 0 0 0 var(--sk-amber-glow); }
+      70%  { box-shadow: 0 0 0 22px rgba(245, 158, 11, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    }
+
+    .net-icon {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+    }
+
+    .net-status-label {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .net-status-label.online  { color: var(--sk-green); }
+    .net-status-label.offline { color: var(--sk-amber); }
+
+    .net-type-badge {
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(167, 139, 250, 0.12);
+      color: var(--sk-accent);
+      border: 1px solid var(--sk-border);
+      border-radius: 20px;
+      padding: 3px 12px;
+      margin-bottom: 16px;
+    }
+
+    .net-offline-notice {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: var(--sk-radius-sm);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #FCD34D;
+      text-align: center;
+      width: 100%;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .net-offline-notice.visible {
+      display: block;
+    }
+
+    #step-2 .btn-primary {
+      margin-top: 24px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       STEP 3 — SIGN IN
+    ══════════════════════════════════════════════════ */
+    .auth-section {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .btn-google {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: var(--sk-radius);
+      font-size: 15px;
+      font-weight: 600;
+      background: #fff;
+      color: #1a1a1a;
+      border: none;
+      transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+
+    .btn-google:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    .btn-google:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Phone OTP sub-form */
+    .phone-form {
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1.5px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 16px;
+    }
+
+    .phone-form.visible {
+      display: flex;
+    }
+
+    .phone-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .phone-prefix {
+      padding: 14px 12px;
+      border-radius: var(--sk-radius-sm);
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid var(--sk-border);
+      color: var(--sk-text);
+      font-size: 16px;
+      width: 72px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    /* Email/password sub-form */
+    .email-form {
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1.5px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 16px;
+    }
+
+    .email-form.visible {
+      display: flex;
+    }
+
+    .auth-toggle-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-auth-tab {
+      flex: 1;
+      padding: 12px 8px;
+      border-radius: var(--sk-radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      background: transparent;
+      color: var(--sk-text-muted);
+      border: 1.5px solid var(--sk-border);
+      transition: all 0.2s;
+    }
+
+    .btn-auth-tab.active {
+      background: rgba(124, 58, 237, 0.15);
+      border-color: var(--sk-primary);
+      color: var(--sk-accent);
+    }
+
+    /* reCAPTCHA container for phone auth */
+    #recaptcha-container {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* ══════════════════════════════════════════════════
+       STEP 4 — SELECT BUSINESS
+    ══════════════════════════════════════════════════ */
+    .biz-list {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 340px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .biz-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .biz-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .biz-list::-webkit-scrollbar-thumb {
+      background: var(--sk-border);
+      border-radius: 2px;
+    }
+
+    .biz-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .biz-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--sk-primary) 0%, #A855F7 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .biz-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .biz-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .biz-name {
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .biz-type {
+      font-size: 12px;
+      color: var(--sk-text-muted);
+      margin-top: 2px;
+    }
+
+    .biz-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid var(--sk-border);
+      flex-shrink: 0;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sk-card.selected .biz-check {
+      background: var(--sk-primary);
+      border-color: var(--sk-primary);
+    }
+
+    .sk-card.selected .biz-check::after {
+      content: '';
+      width: 6px;
+      height: 10px;
+      border: 2px solid #fff;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg) translate(-1px, -2px);
+    }
+
+    .no-biz-notice {
+      text-align: center;
+      color: var(--sk-text-muted);
+      font-size: 14px;
+      padding: 24px 0;
+    }
+
+    #step-4 .search-wrap {
+      margin-bottom: 8px;
+    }
+
+    #step-4 .btn-primary {
+      margin-top: 20px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       STEP 5 — SELECT BRANCH
+    ══════════════════════════════════════════════════ */
+    .branch-list {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .branch-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .branch-list::-webkit-scrollbar-thumb {
+      background: var(--sk-border);
+      border-radius: 2px;
+    }
+
+    .branch-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .branch-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: rgba(124, 58, 237, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .branch-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .branch-name {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .branch-addr {
+      font-size: 12px;
+      color: var(--sk-text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .branch-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid var(--sk-border);
+      flex-shrink: 0;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sk-card.selected .branch-check {
+      background: var(--sk-primary);
+      border-color: var(--sk-primary);
+    }
+
+    .sk-card.selected .branch-check::after {
+      content: '';
+      width: 6px;
+      height: 10px;
+      border: 2px solid #fff;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg) translate(-1px, -2px);
+    }
+
+    #step-5 .btn-primary {
+      margin-top: 20px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       STEP 6 — PROVISIONING
+    ══════════════════════════════════════════════════ */
+    .provision-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, var(--sk-primary) 0%, #A855F7 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 40px var(--sk-primary-glow);
+      animation: float 3s ease-in-out infinite;
+      margin-bottom: 8px;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-8px); }
+    }
+
+    .provision-tasks {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .prov-task {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--sk-card);
+      border: 1.5px solid var(--sk-border);
+      border-radius: var(--sk-radius-sm);
+      padding: 14px 16px;
+      transition: border-color 0.3s;
+    }
+
+    .prov-task.done {
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    .prov-task.active {
+      border-color: var(--sk-primary);
+    }
+
+    .prov-task.error-state {
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    .prov-task-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(124, 58, 237, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 18px;
+    }
+
+    .prov-task.done .prov-task-icon {
+      background: rgba(16, 185, 129, 0.15);
+    }
+
+    .prov-task-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .prov-task-label {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .prov-progress-bar {
+      height: 3px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .prov-progress-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--sk-primary);
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    .prov-task.done .prov-progress-fill {
+      width: 100% !important;
+      background: var(--sk-green);
+    }
+
+    .prov-task-status {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Checkmark for done tasks */
+    .check-mark-sm {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--sk-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .check-mark-sm::after {
+      content: '';
+      width: 5px;
+      height: 9px;
+      border: 2px solid #fff;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg) translate(-1px, -2px);
+    }
+
+    #prov-live-msg {
+      font-size: 13px;
+      color: var(--sk-text-muted);
+      text-align: center;
+      margin-top: 16px;
+      min-height: 20px;
+      font-style: italic;
+    }
+
+    /* Overall progress */
+    .overall-progress-wrap {
+      width: 100%;
+      margin-top: 16px;
+    }
+
+    .overall-progress-bar {
+      height: 6px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .overall-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--sk-primary) 0%, #A855F7 100%);
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    .overall-progress-pct {
+      font-size: 11px;
+      color: var(--sk-text-dim);
+      text-align: right;
+      margin-top: 4px;
+    }
+
+    /* Celebration check */
+    .celebrate-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .celebrate-wrap.visible {
+      display: flex;
+    }
+
+    /* ══════════════════════════════════════════════════
+       STEP 7 — READY
+    ══════════════════════════════════════════════════ */
+    .ready-check {
+      position: relative;
+      margin: 28px 0 20px;
+    }
+
+    .ready-check svg circle.bg-circle {
+      fill: rgba(16, 185, 129, 0.12);
+      stroke: none;
+    }
+
+    .ready-check svg circle.ring {
+      fill: none;
+      stroke: var(--sk-green);
+      stroke-width: 5;
+      stroke-dasharray: 283;
+      stroke-dashoffset: 283;
+      stroke-linecap: round;
+      transform-origin: center;
+      transform: rotate(-90deg);
+      transition: stroke-dashoffset 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .ready-check svg circle.ring.animate {
+      stroke-dashoffset: 0;
+    }
+
+    .ready-check svg path.tick {
+      fill: none;
+      stroke: var(--sk-green);
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 60;
+      stroke-dashoffset: 60;
+      transition: stroke-dashoffset 0.45s ease 0.7s;
+    }
+
+    .ready-check svg path.tick.animate {
+      stroke-dashoffset: 0;
+    }
+
+    .ready-stats {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      margin-top: 4px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .ready-stat {
+      flex: 1;
+      min-width: 90px;
+      background: var(--sk-card);
+      border: 1.5px solid var(--sk-border);
+      border-radius: var(--sk-radius-sm);
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .ready-stat-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--sk-accent);
+      line-height: 1.1;
+    }
+
+    .ready-stat-lbl {
+      font-size: 11px;
+      color: var(--sk-text-muted);
+      margin-top: 3px;
+      font-weight: 500;
+    }
+
+    .ready-biz-name {
+      font-size: 13px;
+      color: var(--sk-text-muted);
+      margin-top: 6px;
+    }
+
+    .ready-biz-name strong {
+      color: var(--sk-text);
+    }
+
+    #step-7 .btn-primary {
+      margin-top: 24px;
+    }
+
+    #step-7 .btn-secondary {
+      margin-top: 10px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       TOAST
+    ══════════════════════════════════════════════════ */
+    #toast-root {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      min-width: 240px;
+      max-width: calc(100vw - 48px);
+    }
+
+    .toast {
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--sk-text);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      animation: toast-in 0.3s ease forwards;
+      pointer-events: auto;
+    }
+
+    .toast.error  { border-color: rgba(239,68,68,0.5);  background: rgba(239,68,68,0.1); color: #FCA5A5; }
+    .toast.success { border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.1); color: #6EE7B7; }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ══════════════════════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════════════════════ */
+    @media (min-width: 640px) {
+      .step-panel {
+        padding: 32px 40px 48px;
+      }
+
+      #step-bar {
+        padding-top: 28px;
+      }
+    }
+
+    @media (max-height: 600px) {
+      .step-panel {
+        justify-content: flex-start;
+        padding-top: 16px;
+      }
+
+      .net-ring-wrap {
+        margin: 16px 0 12px;
+      }
+
+      .welcome-badge {
+        margin-top: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     WIZARD SHELL
+════════════════════════════════════════════════════════════════ -->
+<div id="wizard-shell" role="main" aria-label="SOKONI POS Setup Wizard">
+
+  <!-- Step indicator bar -->
+  <nav id="step-bar" aria-label="Setup progress">
+    <div class="step-dot active" id="dot-1" aria-label="Step 1: Welcome"></div>
+    <div class="step-dot"        id="dot-2" aria-label="Step 2: Network check"></div>
+    <div class="step-dot"        id="dot-3" aria-label="Step 3: Sign in"></div>
+    <div class="step-dot"        id="dot-4" aria-label="Step 4: Select business"></div>
+    <div class="step-dot"        id="dot-5" aria-label="Step 5: Select branch"></div>
+    <div class="step-dot"        id="dot-6" aria-label="Step 6: Provisioning"></div>
+    <div class="step-dot"        id="dot-7" aria-label="Step 7: Ready"></div>
+  </nav>
+
+  <!-- Viewport -->
+  <div id="step-viewport">
+
+    <!-- ═══════ STEP 1 — WELCOME ═══════ -->
+    <section id="step-1" class="step-panel active" aria-label="Welcome to SOKONI POS">
+      <div class="step-inner">
+
+        <div class="sk-logo">
+          <div class="sk-logo-mark">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M8 8h16l-3 9H11L8 8z" fill="#fff" opacity="0.9"/>
+              <circle cx="13" cy="24" r="2.5" fill="#fff"/>
+              <circle cx="21" cy="24" r="2.5" fill="#fff"/>
+              <path d="M4 5h3.5l.5 3" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="sk-logo-text">SOKONI</span>
+        </div>
+
+        <span class="welcome-badge" aria-label="Enterprise edition">Enterprise POS</span>
+
+        <h1 class="wiz-title">The Complete Retail<br>Operating System</h1>
+        <p class="wiz-sub">Accept payments, manage inventory, track loyalty,<br>and grow your business — all in one place.</p>
+
+        <p class="welcome-tagline">Designed for Kenyan merchants. Built for scale.</p>
+
+        <button class="btn-primary" id="btn-welcome-start" aria-label="Get started with POS setup">
+          Get Started
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+        <button class="btn-ghost" id="btn-already-setup" aria-label="Already set up? Sign in to POS">
+          Already set up? Sign in to POS
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ═══════ STEP 2 — NETWORK CHECK ═══════ -->
+    <section id="step-2" class="step-panel" aria-label="Network connectivity check">
+      <div class="step-inner">
+
+        <h2 class="wiz-title" style="margin-top: 0">Network Check</h2>
+        <p class="wiz-sub">We'll confirm your connection before setup.</p>
+
+        <div class="net-ring-wrap" role="img" id="net-ring-container" aria-label="Connection status indicator">
+          <div class="net-ring" id="net-ring"></div>
+          <div class="net-icon" id="net-icon" aria-hidden="true">📡</div>
+        </div>
+
+        <p class="net-status-label" id="net-status-label">Checking...</p>
+        <div class="net-type-badge" id="net-type-badge" aria-live="polite">Detecting...</div>
+
+        <div class="net-offline-notice" id="net-offline-notice" role="status">
+          Offline mode available — you can still continue.<br>
+          Data will sync automatically when connection is restored.
+        </div>
+
+        <button class="btn-primary" id="btn-net-continue" aria-label="Continue to sign in">
+          Continue
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ═══════ STEP 3 — SIGN IN ═══════ -->
+    <section id="step-3" class="step-panel" aria-label="Sign in to your account">
+      <div class="step-inner">
+
+        <div class="sk-logo">
+          <div class="sk-logo-mark" style="width:44px;height:44px;border-radius:12px;">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:24px;height:24px;">
+              <path d="M8 8h16l-3 9H11L8 8z" fill="#fff" opacity="0.9"/>
+              <circle cx="13" cy="24" r="2.5" fill="#fff"/>
+              <circle cx="21" cy="24" r="2.5" fill="#fff"/>
+            </svg>
+          </div>
+        </div>
+
+        <h2 class="wiz-title" style="margin-top:20px">Sign In</h2>
+        <p class="wiz-sub">Access your merchant account to continue.</p>
+
+        <!-- Spinner (hidden until auth in progress) -->
+        <div id="auth-spinner" style="margin-top:28px;display:none;" aria-live="polite" aria-label="Signing in, please wait">
+          <div class="spinner spinner-lg"></div>
+        </div>
+
+        <div class="auth-section" id="auth-section">
+
+          <!-- Google sign in -->
+          <button class="btn-google" id="btn-google-signin" aria-label="Sign in with Google">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <div class="divider">or</div>
+
+          <!-- Auth method tabs -->
+          <div class="auth-toggle-row" role="group" aria-label="Alternative sign-in methods">
+            <button class="btn-auth-tab active" id="tab-phone" aria-pressed="true" aria-label="Sign in with phone number">
+              📱 Phone
+            </button>
+            <button class="btn-auth-tab" id="tab-email" aria-pressed="false" aria-label="Sign in with email and password">
+              ✉️ Email
+            </button>
+          </div>
+
+          <!-- Phone OTP form -->
+          <div class="phone-form visible" id="phone-form" aria-label="Phone number sign in form">
+            <p class="input-label">Phone Number</p>
+            <div class="phone-row">
+              <input type="tel" class="sk-input phone-prefix" value="+254" readonly aria-label="Country code Kenya" id="phone-prefix">
+              <input type="tel" class="sk-input" id="phone-number-input" placeholder="7XX XXX XXX"
+                     aria-label="Phone number without country code" autocomplete="tel-national"
+                     inputmode="tel" maxlength="10">
+            </div>
+            <div id="otp-row" style="display:none;" aria-label="One-time password entry">
+              <p class="input-label" style="margin-top:4px;">Verification Code</p>
+              <input type="text" class="sk-input" id="otp-input" placeholder="6-digit code"
+                     aria-label="Enter the 6-digit OTP sent to your phone"
+                     inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+            </div>
+            <div id="recaptcha-container" aria-hidden="true"></div>
+            <button class="btn-primary" id="btn-send-otp" style="margin-top:4px;" aria-label="Send OTP to phone">
+              Send Code
+            </button>
+          </div>
+
+          <!-- Email / password form -->
+          <div class="email-form" id="email-form" aria-label="Email and password sign in form">
+            <p class="input-label">Email</p>
+            <input type="email" class="sk-input" id="email-input" placeholder="your@email.com"
+                   aria-label="Email address" autocomplete="email" inputmode="email">
+            <p class="input-label" style="margin-top:8px;">Password</p>
+            <input type="password" class="sk-input" id="password-input" placeholder="••••••••"
+                   aria-label="Password" autocomplete="current-password" minlength="8">
+            <button class="btn-primary" id="btn-email-signin" style="margin-top:4px;" aria-label="Sign in with email and password">
+              Sign In
+            </button>
+          </div>
+
+          <!-- Auth error -->
+          <div class="error-box" id="auth-error" role="alert"></div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ STEP 4 — SELECT BUSINESS ═══════ -->
+    <section id="step-4" class="step-panel" aria-label="Select your business">
+      <div class="step-inner">
+
+        <h2 class="wiz-title" style="margin-top:0">Your Businesses</h2>
+        <p class="wiz-sub">Select the business you want to operate.</p>
+
+        <div style="width:100%;margin-top:24px;">
+
+          <!-- Search (shown when >5 businesses) -->
+          <div class="search-wrap" id="biz-search-wrap" style="display:none;" aria-label="Search businesses">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="search" class="sk-input" id="biz-search" placeholder="Search businesses..."
+                   aria-label="Search businesses" autocomplete="off">
+          </div>
+
+          <!-- Loading state -->
+          <div id="biz-loading" style="display:flex;align-items:center;justify-content:center;padding:40px 0;gap:12px;">
+            <div class="spinner spinner-lg"></div>
+          </div>
+
+          <!-- Business list -->
+          <div class="biz-list" id="biz-list" role="list" aria-label="Available businesses" style="display:none;"></div>
+
+          <!-- No businesses -->
+          <div class="no-biz-notice" id="biz-empty" style="display:none;" role="status">
+            <p style="font-size:32px;margin-bottom:8px;">🏪</p>
+            <p style="font-weight:600;color:var(--sk-text);margin-bottom:6px;">No businesses found</p>
+            <p>You haven't registered a business yet.</p>
+            <a href="index.html#register" style="margin-top:12px;display:inline-block;font-weight:600;">
+              Create your first business →
+            </a>
+          </div>
+
+          <!-- Error -->
+          <div class="error-box" id="biz-error" role="alert" style="margin-top:12px;"></div>
+
+        </div>
+
+        <button class="btn-primary" id="btn-biz-continue" disabled aria-label="Continue with selected business">
+          Continue
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ═══════ STEP 5 — SELECT BRANCH ═══════ -->
+    <section id="step-5" class="step-panel" aria-label="Select your branch">
+      <div class="step-inner">
+
+        <h2 class="wiz-title" style="margin-top:0">Select Branch</h2>
+        <p class="wiz-sub" id="step5-sub">Choose a branch to operate from.</p>
+
+        <div style="width:100%;margin-top:24px;">
+
+          <!-- Loading state -->
+          <div id="branch-loading" style="display:none;align-items:center;justify-content:center;padding:40px 0;gap:12px;">
+            <div class="spinner spinner-lg"></div>
+          </div>
+
+          <!-- Branch list -->
+          <div class="branch-list" id="branch-list" role="list" aria-label="Available branches"></div>
+
+          <!-- Error -->
+          <div class="error-box" id="branch-error" role="alert" style="margin-top:12px;"></div>
+
+        </div>
+
+        <button class="btn-primary" id="btn-branch-continue" disabled aria-label="Continue with selected branch">
+          Continue
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+
+        <a href="admin-os.html" class="btn-ghost" style="margin-top:12px;" aria-label="Add a new branch">
+          + Add Branch
+        </a>
+
+      </div>
+    </section>
+
+    <!-- ═══════ STEP 6 — PROVISIONING ═══════ -->
+    <section id="step-6" class="step-panel" aria-label="Provisioning your POS device">
+      <div class="step-inner">
+
+        <div class="provision-icon" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <path d="M8 21h8M12 17v4"/>
+            <path d="M7 8l3 3 5-5"/>
+          </svg>
+        </div>
+
+        <h2 class="wiz-title" style="margin-top:0">Provisioning Device</h2>
+        <p class="wiz-sub">Setting up your POS — this takes just a few seconds.</p>
+
+        <!-- Overall progress -->
+        <div class="overall-progress-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="overall-progress-bar-wrap">
+          <div class="overall-progress-bar">
+            <div class="overall-progress-fill" id="overall-progress-fill"></div>
+          </div>
+          <p class="overall-progress-pct" id="overall-progress-pct">0%</p>
+        </div>
+
+        <!-- Individual tasks -->
+        <div class="provision-tasks" aria-label="Provisioning tasks">
+
+          <div class="prov-task" id="prov-task-0" aria-label="Bootstrap configuration task">
+            <div class="prov-task-icon">⚡</div>
+            <div class="prov-task-body">
+              <p class="prov-task-label" id="prov-label-0">Downloading business configuration...</p>
+              <div class="prov-progress-bar">
+                <div class="prov-progress-fill" id="prov-fill-0" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="prov-task-status" id="prov-status-0">
+              <div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>
+            </div>
+          </div>
+
+          <div class="prov-task" id="prov-task-1" aria-label="Device registration task">
+            <div class="prov-task-icon">🔒</div>
+            <div class="prov-task-body">
+              <p class="prov-task-label" id="prov-label-1">Registering device securely...</p>
+              <div class="prov-progress-bar">
+                <div class="prov-progress-fill" id="prov-fill-1" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="prov-task-status" id="prov-status-1">
+              <div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--sk-border);"></div>
+            </div>
+          </div>
+
+          <div class="prov-task" id="prov-task-2" aria-label="Payments and loyalty configuration">
+            <div class="prov-task-icon">💳</div>
+            <div class="prov-task-body">
+              <p class="prov-task-label" id="prov-label-2">Configuring payments &amp; loyalty...</p>
+              <div class="prov-progress-bar">
+                <div class="prov-progress-fill" id="prov-fill-2" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="prov-task-status" id="prov-status-2">
+              <div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--sk-border);"></div>
+            </div>
+          </div>
+
+          <div class="prov-task" id="prov-task-3" aria-label="Hardware detection task">
+            <div class="prov-task-icon">🖨️</div>
+            <div class="prov-task-body">
+              <p class="prov-task-label" id="prov-label-3">Detecting hardware...</p>
+              <div class="prov-progress-bar">
+                <div class="prov-progress-fill" id="prov-fill-3" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="prov-task-status" id="prov-status-3">
+              <div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--sk-border);"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Live message -->
+        <p id="prov-live-msg" aria-live="polite" role="status"></p>
+
+        <!-- Error during provisioning -->
+        <div class="error-box" id="prov-error" role="alert" style="margin-top:12px;"></div>
+
+        <button class="btn-primary" id="btn-prov-retry"
+                style="display:none;margin-top:16px;" aria-label="Retry provisioning">
+          Retry
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ═══════ STEP 7 — READY ═══════ -->
+    <section id="step-7" class="step-panel" aria-label="Setup complete, POS is ready">
+      <div class="step-inner">
+
+        <!-- Animated checkmark -->
+        <div class="ready-check" aria-hidden="true">
+          <svg width="120" height="120" viewBox="0 0 100 100">
+            <circle class="bg-circle" cx="50" cy="50" r="48"/>
+            <circle class="ring" cx="50" cy="50" r="45" id="ready-ring"/>
+            <path class="tick" d="M30 50 L44 64 L70 36" id="ready-tick"/>
+          </svg>
+        </div>
+
+        <h2 class="wiz-title" style="margin-top:0;color:var(--sk-green)">You're Ready to Sell!</h2>
+
+        <p class="ready-biz-name" id="ready-biz-name" aria-live="polite"></p>
+
+        <!-- Stats -->
+        <div class="ready-stats" role="list" aria-label="Setup summary statistics">
+          <div class="ready-stat" role="listitem">
+            <div class="ready-stat-val" id="ready-products">—</div>
+            <div class="ready-stat-lbl">Products</div>
+          </div>
+          <div class="ready-stat" role="listitem">
+            <div class="ready-stat-val" id="ready-payments">—</div>
+            <div class="ready-stat-lbl">Payment Methods</div>
+          </div>
+          <div class="ready-stat" role="listitem">
+            <div class="ready-stat-val" id="ready-loyalty">—</div>
+            <div class="ready-stat-lbl">Loyalty</div>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btn-open-pos" aria-label="Open the POS and start selling">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <path d="M8 21h8M12 17v4"/>
+          </svg>
+          Open POS
+        </button>
+
+        <button class="btn-secondary" id="btn-configure-hw" aria-label="Configure POS hardware like printers and scanners">
+          Configure Hardware
+        </button>
+
+      </div>
+    </section>
+
+  </div><!-- /step-viewport -->
+</div><!-- /wizard-shell -->
+
+<!-- Toast container -->
+<div id="toast-root" aria-live="assertive" role="status"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SCRIPTS
+════════════════════════════════════════════════════════════════ -->
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   FIREBASE INIT
+   Uses compat SDK so we can call firebase.auth() / firebase.functions()
+   matching the CDN scripts loaded in <head>.
+════════════════════════════════════════════════════════════════ */
+'use strict';
+
+const FB_CFG = {
+  apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+  authDomain:        'sokoni-aeb26.firebaseapp.com',
+  projectId:         'sokoni-aeb26',
+  storageBucket:     'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId: '24799054989',
+  appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4',
+};
+
+const _fbApps = firebase.apps;
+const _app    = _fbApps.length ? _fbApps[0] : firebase.initializeApp(FB_CFG);
+const _auth   = firebase.auth(_app);
+const _fns    = firebase.functions(_app);
+_fns.region = 'us-central1';
+
+/* ── CF helper ── */
+function CF(name) {
+  return _fns.httpsCallable(name, { timeout: 30000 });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECURITY — XSS ESCAPER
+   Must be used for ALL dynamic innerHTML insertions.
+════════════════════════════════════════════════════════════════ */
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INDEXEDDB
+   Stores the full bootstrap bundle offline.
+   DB: sokoni-pos | Store: bootstrap
+════════════════════════════════════════════════════════════════ */
+const IDB = (() => {
+  const DB_NAME    = 'sokoni-pos';
+  const DB_VERSION = 1;
+  const STORE      = 'bootstrap';
+
+  let _db = null;
+
+  function _open() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE)) {
+          db.createObjectStore(STORE, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  return {
+    async set(key, value) {
+      const db = await _open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put({ key, value, savedAt: Date.now() });
+        tx.oncomplete = resolve;
+        tx.onerror    = e => reject(e.target.error);
+      });
+    },
+    async get(key) {
+      const db = await _open();
+      return new Promise((resolve, reject) => {
+        const tx  = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).get(key);
+        req.onsuccess = () => resolve(req.result ? req.result.value : null);
+        req.onerror   = e => reject(e.target.error);
+      });
+    },
+  };
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   TOAST
+════════════════════════════════════════════════════════════════ */
+function toast(msg, type = '', duration = 3500) {
+  const root = document.getElementById('toast-root');
+  const el   = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = msg;
+  root.appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   WIZARD STATE
+════════════════════════════════════════════════════════════════ */
+const WIZ = {
+  currentStep:    1,
+  totalSteps:     7,
+  user:           null,
+  businesses:     [],
+  selectedBiz:    null,   // { id, name, logo, businessType }
+  selectedBranch: null,   // { id, name, address }
+  deviceId:       null,
+  bootstrapData:  null,
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP NAVIGATION
+════════════════════════════════════════════════════════════════ */
+function goToStep(n) {
+  if (n === WIZ.currentStep) return;
+
+  const fromEl  = document.getElementById('step-' + WIZ.currentStep);
+  const toEl    = document.getElementById('step-' + n);
+  const forward = n > WIZ.currentStep;
+
+  // Update dots
+  const dots = document.querySelectorAll('.step-dot');
+  dots.forEach((dot, i) => {
+    const stepNum = i + 1;
+    dot.classList.remove('active', 'done');
+    if (stepNum < n)       dot.classList.add('done');
+    else if (stepNum === n) dot.classList.add('active');
+  });
+
+  // Animate out
+  if (fromEl) {
+    fromEl.classList.remove('active');
+    fromEl.classList.add(forward ? 'exit-left' : '');
+    // Clean up after transition
+    setTimeout(() => {
+      if (fromEl) fromEl.classList.remove('exit-left');
+    }, 420);
+  }
+
+  // Animate in
+  if (toEl) {
+    // Set initial position for back transitions
+    if (!forward) {
+      toEl.style.transform = 'translateX(-60px)';
+    } else {
+      toEl.style.transform = '';
+    }
+    requestAnimationFrame(() => {
+      toEl.classList.add('active');
+      toEl.style.transform = '';
+    });
+  }
+
+  WIZ.currentStep = n;
+  onStepEnter(n);
+}
+
+/* ── Called when a step becomes active ── */
+function onStepEnter(step) {
+  if (step === 2) initNetworkStep();
+  if (step === 3) initAuthStep();
+  if (step === 4) initBizStep();
+  if (step === 5) initBranchStep();
+  if (step === 6) initProvisionStep();
+  if (step === 7) initReadyStep();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP 1 — WELCOME
+════════════════════════════════════════════════════════════════ */
+document.getElementById('btn-welcome-start').addEventListener('click', () => {
+  goToStep(2);
+});
+
+document.getElementById('btn-already-setup').addEventListener('click', () => {
+  window.location.href = 'pos.html';
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP 2 — NETWORK CHECK
+════════════════════════════════════════════════════════════════ */
+function initNetworkStep() {
+  updateNetworkUI();
+
+  // Listen for changes
+  window.addEventListener('online',  updateNetworkUI);
+  window.addEventListener('offline', updateNetworkUI);
+}
+
+function updateNetworkUI() {
+  const online       = navigator.onLine;
+  const ring         = document.getElementById('net-ring');
+  const icon         = document.getElementById('net-icon');
+  const label        = document.getElementById('net-status-label');
+  const typeBadge    = document.getElementById('net-type-badge');
+  const offlineNote  = document.getElementById('net-offline-notice');
+
+  ring.className = 'net-ring ' + (online ? 'pulse-online' : 'pulse-offline');
+
+  if (online) {
+    icon.textContent        = '✅';
+    label.textContent       = 'Connected';
+    label.className         = 'net-status-label online';
+    offlineNote.classList.remove('visible');
+
+    // Connection type
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    let connType = 'Online';
+    if (conn) {
+      const eff = conn.effectiveType || '';
+      if      (eff === '4g')    connType = '4G / LTE';
+      else if (eff === 'wifi')  connType = 'WiFi';
+      else if (eff === '3g')    connType = '3G';
+      else if (eff === '2g')    connType = '2G (Slow)';
+      else if (eff === 'slow-2g') connType = 'Very Slow';
+      else if (eff)             connType = eff.toUpperCase();
+      else                      connType = 'Online';
+    }
+    typeBadge.textContent = connType;
+  } else {
+    icon.textContent       = '⚠️';
+    label.textContent      = 'Offline';
+    label.className        = 'net-status-label offline';
+    typeBadge.textContent  = 'No Connection';
+    offlineNote.classList.add('visible');
+  }
+}
+
+document.getElementById('btn-net-continue').addEventListener('click', () => {
+  window.removeEventListener('online',  updateNetworkUI);
+  window.removeEventListener('offline', updateNetworkUI);
+  goToStep(3);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP 3 — SIGN IN
+════════════════════════════════════════════════════════════════ */
+let _recaptchaVerifier  = null;
+let _confirmationResult = null;
+let _otpSent            = false;
+
+function initAuthStep() {
+  // Check if already signed in
+  const user = _auth.currentUser;
+  if (user) {
+    WIZ.user = user;
+    goToStep(4);
+  }
+}
+
+function showAuthSpinner(show) {
+  document.getElementById('auth-spinner').style.display = show ? 'flex' : 'none';
+  document.getElementById('auth-section').style.display  = show ? 'none'  : 'flex';
+}
+
+function showAuthError(msg) {
+  const box = document.getElementById('auth-error');
+  box.textContent = msg;
+  box.classList.add('visible');
+}
+
+function clearAuthError() {
+  const box = document.getElementById('auth-error');
+  box.textContent = '';
+  box.classList.remove('visible');
+}
+
+/* ── Google sign-in ── */
+document.getElementById('btn-google-signin').addEventListener('click', async () => {
+  clearAuthError();
+  showAuthSpinner(true);
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope('email');
+    const result = await _auth.signInWithPopup(provider);
+    WIZ.user = result.user;
+    goToStep(4);
+  } catch (err) {
+    showAuthSpinner(false);
+    if (err.code === 'auth/popup-closed-by-user') {
+      // User dismissed — silent
+    } else if (err.code === 'auth/network-request-failed') {
+      showAuthError('Network error. Please check your connection and try again.');
+    } else {
+      showAuthError('Sign-in failed. Please try again.');
+    }
+  }
+});
+
+/* ── Auth tabs ── */
+document.getElementById('tab-phone').addEventListener('click', () => {
+  document.getElementById('tab-phone').classList.add('active');
+  document.getElementById('tab-phone').setAttribute('aria-pressed', 'true');
+  document.getElementById('tab-email').classList.remove('active');
+  document.getElementById('tab-email').setAttribute('aria-pressed', 'false');
+  document.getElementById('phone-form').classList.add('visible');
+  document.getElementById('email-form').classList.remove('visible');
+  clearAuthError();
+});
+
+document.getElementById('tab-email').addEventListener('click', () => {
+  document.getElementById('tab-email').classList.add('active');
+  document.getElementById('tab-email').setAttribute('aria-pressed', 'true');
+  document.getElementById('tab-phone').classList.remove('active');
+  document.getElementById('tab-phone').setAttribute('aria-pressed', 'false');
+  document.getElementById('email-form').classList.add('visible');
+  document.getElementById('phone-form').classList.remove('visible');
+  clearAuthError();
+});
+
+/* ── Phone OTP ── */
+function ensureRecaptcha() {
+  if (!_recaptchaVerifier) {
+    _recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      size: 'invisible',
+      callback: () => {},
+    });
+  }
+  return _recaptchaVerifier;
+}
+
+document.getElementById('btn-send-otp').addEventListener('click', async () => {
+  clearAuthError();
+
+  if (_otpSent) {
+    // Verify OTP
+    const otp = document.getElementById('otp-input').value.trim();
+    if (!/^\d{6}$/.test(otp)) {
+      showAuthError('Please enter the 6-digit code sent to your phone.');
+      return;
+    }
+    showAuthSpinner(true);
+    try {
+      const result = await _confirmationResult.confirm(otp);
+      WIZ.user = result.user;
+      goToStep(4);
+    } catch (err) {
+      showAuthSpinner(false);
+      if (err.code === 'auth/invalid-verification-code') {
+        showAuthError('Incorrect code. Please check the SMS and try again.');
+      } else if (err.code === 'auth/code-expired') {
+        showAuthError('The code has expired. Please request a new one.');
+        _resetOtpState();
+      } else {
+        showAuthError('Verification failed. Please try again.');
+      }
+    }
+    return;
+  }
+
+  // Send OTP
+  const rawPhone = document.getElementById('phone-number-input').value.trim().replace(/\s/g, '');
+  if (!rawPhone) {
+    showAuthError('Please enter your phone number.');
+    return;
+  }
+  // Normalise: strip leading zero if present, prepend +254
+  let phone = rawPhone;
+  if (phone.startsWith('0'))   phone = phone.slice(1);
+  if (!phone.startsWith('+')) phone = '+254' + phone;
+  if (!/^\+254\d{9}$/.test(phone)) {
+    showAuthError('Please enter a valid Kenyan phone number (e.g. 07XX XXX XXX).');
+    return;
+  }
+
+  showAuthSpinner(true);
+  try {
+    const verifier        = ensureRecaptcha();
+    _confirmationResult   = await _auth.signInWithPhoneNumber(phone, verifier);
+    _otpSent              = true;
+    showAuthSpinner(false);
+    document.getElementById('otp-row').style.display = 'block';
+    document.getElementById('btn-send-otp').textContent = 'Verify Code';
+    document.getElementById('otp-input').focus();
+    toast('Code sent! Check your SMS.', 'success');
+  } catch (err) {
+    showAuthSpinner(false);
+    if (_recaptchaVerifier) {
+      try { _recaptchaVerifier.clear(); } catch (_) {}
+      _recaptchaVerifier = null;
+    }
+    if (err.code === 'auth/invalid-phone-number') {
+      showAuthError('Invalid phone number format. Please use format: 07XX XXX XXX.');
+    } else if (err.code === 'auth/too-many-requests') {
+      showAuthError('Too many attempts. Please wait a few minutes and try again.');
+    } else if (err.code === 'auth/network-request-failed') {
+      showAuthError('Network error. Please check your connection and try again.');
+    } else {
+      showAuthError('Could not send verification code. Please try again.');
+    }
+  }
+});
+
+function _resetOtpState() {
+  _otpSent = false;
+  _confirmationResult = null;
+  document.getElementById('otp-row').style.display = 'none';
+  document.getElementById('btn-send-otp').textContent = 'Send Code';
+  document.getElementById('otp-input').value = '';
+}
+
+/* ── Email / password ── */
+document.getElementById('btn-email-signin').addEventListener('click', async () => {
+  clearAuthError();
+  const email    = document.getElementById('email-input').value.trim();
+  const password = document.getElementById('password-input').value;
+
+  if (!email || !password) {
+    showAuthError('Please enter your email and password.');
+    return;
+  }
+
+  // Basic email format validation
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showAuthError('Please enter a valid email address.');
+    return;
+  }
+
+  showAuthSpinner(true);
+  try {
+    const result = await _auth.signInWithEmailAndPassword(email, password);
+    WIZ.user = result.user;
+    goToStep(4);
+  } catch (err) {
+    showAuthSpinner(false);
+    if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' ||
+        err.code === 'auth/invalid-credential') {
+      showAuthError('Incorrect email or password. Please try again.');
+    } else if (err.code === 'auth/user-disabled') {
+      showAuthError('Your account has been disabled. Please contact support.');
+    } else if (err.code === 'auth/too-many-requests') {
+      showAuthError('Too many failed attempts. Please wait before trying again.');
+    } else if (err.code === 'auth/network-request-failed') {
+      showAuthError('Network error. Please check your connection.');
+    } else {
+      showAuthError('Sign-in failed. Please check your details and try again.');
+    }
+  }
+});
+
+/* Allow Enter key to submit email form */
+document.getElementById('password-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-email-signin').click();
+});
+
+/* Auth state observer — in case user was already signed in */
+_auth.onAuthStateChanged(user => {
+  if (user && WIZ.currentStep === 3) {
+    WIZ.user = user;
+    goToStep(4);
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP 4 — SELECT BUSINESS
+════════════════════════════════════════════════════════════════ */
+let _bizAllItems = [];
+
+async function initBizStep() {
+  _bizAllItems     = [];
+  WIZ.selectedBiz  = null;
+
+  document.getElementById('btn-biz-continue').disabled = true;
+  document.getElementById('biz-loading').style.display  = 'flex';
+  document.getElementById('biz-list').style.display     = 'none';
+  document.getElementById('biz-empty').style.display    = 'none';
+  document.getElementById('biz-error').classList.remove('visible');
+  document.getElementById('biz-search-wrap').style.display = 'none';
+
+  try {
+    // Try fetching all businesses the user owns or belongs to
+    const uid      = WIZ.user.uid;
+    const fn       = CF('getBusinessConfig');
+
+    // getBusinessConfig needs a merchantId — we need to discover merchants first.
+    // We'll query the businesses collection via the merchantList CF if available,
+    // else fall back to the user's custom claims / Firestore SDK is not bundled here.
+    // Strategy: call a discovery CF (listMerchants); gracefully fall back to
+    // prompting the user to enter their merchant ID.
+    let businesses = [];
+
+    // Attempt listMerchants CF (may not exist on all deployments)
+    try {
+      const listFn = CF('listMerchants');
+      const res    = await listFn({ uid });
+      businesses   = (res.data && Array.isArray(res.data.merchants))
+                   ? res.data.merchants
+                   : [];
+    } catch (_) {
+      // If listMerchants doesn't exist, pull from user's token claims
+      const token = await WIZ.user.getIdTokenResult(true);
+      const merchantIds = token.claims.merchantIds ||
+                          (token.claims.merchantId ? [token.claims.merchantId] : []);
+
+      if (merchantIds.length === 0) {
+        // Prompt user to enter merchant ID
+        renderBizManualEntry();
+        return;
+      }
+
+      // Fetch each merchant via getBusinessConfig
+      const results = await Promise.allSettled(
+        merchantIds.map(mid => CF('getBusinessConfig')({ merchantId: mid }).then(r => ({
+          id:           mid,
+          name:         r.data.business.name,
+          logo:         r.data.business.logo,
+          businessType: r.data.business.businessType,
+          branches:     r.data.branches,
+        })))
+      );
+      businesses = results
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value);
+    }
+
+    _bizAllItems = businesses;
+
+    document.getElementById('biz-loading').style.display = 'none';
+
+    if (businesses.length === 0) {
+      document.getElementById('biz-empty').style.display = 'block';
+      return;
+    }
+
+    // Auto-select if only 1
+    if (businesses.length === 1) {
+      WIZ.selectedBiz = businesses[0];
+      // Store branches if available
+      if (businesses[0].branches) WIZ._bizBranches = businesses[0].branches;
+      goToStep(5);
+      return;
+    }
+
+    // Show search if >5
+    if (businesses.length > 5) {
+      document.getElementById('biz-search-wrap').style.display = 'block';
+    }
+
+    renderBizList(businesses);
+
+  } catch (err) {
+    document.getElementById('biz-loading').style.display = 'none';
+    const errBox = document.getElementById('biz-error');
+    errBox.textContent = 'Could not load your businesses. Please check your connection and try again.';
+    errBox.classList.add('visible');
+  }
+}
+
+function renderBizList(items) {
+  const list = document.getElementById('biz-list');
+  list.style.display = 'flex';
+  list.innerHTML = items.map((biz, idx) => {
+    const initial = esc((biz.name || '?')[0].toUpperCase());
+    const name    = esc(biz.name || 'Unnamed Business');
+    const type    = esc(biz.businessType || '');
+    const logo    = biz.logo ? `<img src="${esc(biz.logo)}" alt="" loading="lazy">` : initial;
+    return `
+      <div class="sk-card biz-card" role="listitem" tabindex="0"
+           data-idx="${idx}" aria-label="Select ${name}"
+           onclick="selectBiz(${idx})"
+           onkeydown="if(event.key==='Enter'||event.key===' ')selectBiz(${idx})">
+        <div class="biz-avatar">${logo}</div>
+        <div class="biz-info">
+          <div class="biz-name">${name}</div>
+          ${type ? `<div class="biz-type">${type}</div>` : ''}
+        </div>
+        <div class="biz-check" id="biz-check-${idx}"></div>
+      </div>`;
+  }).join('');
+}
+
+function selectBiz(idx) {
+  // Deselect all
+  document.querySelectorAll('#biz-list .sk-card').forEach(c => c.classList.remove('selected'));
+  // Select this one
+  const card = document.querySelector(`#biz-list [data-idx="${idx}"]`);
+  if (card) card.classList.add('selected');
+
+  WIZ.selectedBiz = _bizAllItems[idx];
+  if (_bizAllItems[idx].branches) WIZ._bizBranches = _bizAllItems[idx].branches;
+  document.getElementById('btn-biz-continue').disabled = false;
+}
+
+/* Manual merchant ID entry fallback */
+function renderBizManualEntry() {
+  document.getElementById('biz-loading').style.display = 'none';
+  const list = document.getElementById('biz-list');
+  list.style.display = 'block';
+  list.innerHTML = `
+    <div style="width:100%;display:flex;flex-direction:column;gap:10px;">
+      <p style="font-size:13px;color:var(--sk-text-muted);text-align:center;margin-bottom:4px;">
+        Enter your Merchant ID to connect your business.
+      </p>
+      <label class="input-label" for="manual-merchant-id">Merchant ID</label>
+      <input type="text" class="sk-input" id="manual-merchant-id"
+             placeholder="e.g. abc123XYZ" aria-label="Merchant ID" autocomplete="off">
+      <button class="btn-primary" onclick="loadManualMerchant()" style="margin-top:4px;"
+              aria-label="Load business by merchant ID">
+        Load Business
+      </button>
+      <div class="error-box" id="manual-biz-error" role="alert"></div>
+    </div>`;
+}
+
+async function loadManualMerchant() {
+  const mid   = (document.getElementById('manual-merchant-id') || {}).value?.trim();
+  const errEl = document.getElementById('manual-biz-error');
+  if (!mid) {
+    errEl.textContent = 'Please enter your Merchant ID.';
+    errEl.classList.add('visible');
+    return;
+  }
+  errEl.classList.remove('visible');
+  try {
+    const res = await CF('getBusinessConfig')({ merchantId: mid });
+    const biz = {
+      id:           mid,
+      name:         res.data.business.name,
+      logo:         res.data.business.logo,
+      businessType: res.data.business.businessType,
+    };
+    WIZ.selectedBiz    = biz;
+    WIZ._bizBranches   = res.data.branches || [];
+    WIZ.selectedMerchantId = mid;
+    goToStep(5);
+  } catch (err) {
+    errEl.textContent = 'Business not found or access denied. Check your Merchant ID.';
+    errEl.classList.add('visible');
+  }
+}
+
+/* Business search filter */
+document.getElementById('biz-search').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+  const filtered = q
+    ? _bizAllItems.filter(b => (b.name || '').toLowerCase().includes(q))
+    : _bizAllItems;
+  renderBizList(filtered);
+  WIZ.selectedBiz = null;
+  document.getElementById('btn-biz-continue').disabled = true;
+});
+
+document.getElementById('btn-biz-continue').addEventListener('click', () => {
+  if (!WIZ.selectedBiz) return;
+  goToStep(5);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP 5 — SELECT BRANCH
+════════════════════════════════════════════════════════════════ */
+let _branches = [];
+
+async function initBranchStep() {
+  _branches          = [];
+  WIZ.selectedBranch = null;
+
+  document.getElementById('btn-branch-continue').disabled = true;
+  document.getElementById('branch-error').classList.remove('visible');
+
+  // Sub-heading with biz name
+  if (WIZ.selectedBiz) {
+    document.getElementById('step5-sub').textContent =
+      'Choose a branch for ' + (WIZ.selectedBiz.name || 'your business') + '.';
+  }
+
+  // If we already have branches from step 4, use them
+  if (WIZ._bizBranches && WIZ._bizBranches.length > 0) {
+    _branches = WIZ._bizBranches;
+  } else {
+    // Fetch via CF
+    document.getElementById('branch-loading').style.display = 'flex';
+    try {
+      const mid = WIZ.selectedBiz.id;
+      const res = await CF('getBusinessConfig')({ merchantId: mid });
+      _branches = res.data.branches || [];
+      document.getElementById('branch-loading').style.display = 'none';
+    } catch (err) {
+      document.getElementById('branch-loading').style.display = 'none';
+      const errBox = document.getElementById('branch-error');
+      errBox.textContent = 'Could not load branches. Please try again.';
+      errBox.classList.add('visible');
+      return;
+    }
+  }
+
+  if (_branches.length === 0) {
+    const errBox = document.getElementById('branch-error');
+    errBox.textContent = 'No active branches found for this business.';
+    errBox.classList.add('visible');
+    return;
+  }
+
+  // Auto-select if only 1
+  if (_branches.length === 1) {
+    WIZ.selectedBranch = _branches[0];
+    goToStep(6);
+    return;
+  }
+
+  renderBranchList(_branches);
+}
+
+function renderBranchList(branches) {
+  const list = document.getElementById('branch-list');
+  list.innerHTML = branches.map((br, idx) => {
+    const name = esc(br.name || 'Branch ' + (idx + 1));
+    const addr = esc(br.address || '');
+    return `
+      <div class="sk-card branch-card" role="listitem" tabindex="0"
+           data-idx="${idx}" aria-label="Select branch ${name}"
+           onclick="selectBranch(${idx})"
+           onkeydown="if(event.key==='Enter'||event.key===' ')selectBranch(${idx})">
+        <div class="branch-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--sk-accent)"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        </div>
+        <div class="branch-info">
+          <div class="branch-name">${name}</div>
+          ${addr ? `<div class="branch-addr">${addr}</div>` : ''}
+        </div>
+        <div class="branch-check" id="branch-check-${idx}"></div>
+      </div>`;
+  }).join('');
+}
+
+function selectBranch(idx) {
+  document.querySelectorAll('#branch-list .sk-card').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector(`#branch-list [data-idx="${idx}"]`);
+  if (card) card.classList.add('selected');
+  WIZ.selectedBranch = _branches[idx];
+  document.getElementById('btn-branch-continue').disabled = false;
+}
+
+document.getElementById('btn-branch-continue').addEventListener('click', () => {
+  if (!WIZ.selectedBranch) return;
+  goToStep(6);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP 6 — PROVISIONING
+════════════════════════════════════════════════════════════════ */
+const PROV_TASKS = [
+  { id: 0, icon: '⚡', labelDone: 'Configuration downloaded' },
+  { id: 1, icon: '🔒', labelDone: 'Device registered'        },
+  { id: 2, icon: '💳', labelDone: 'Payments & loyalty ready'  },
+  { id: 3, icon: '🖨️', labelDone: 'Hardware detected'         },
+];
+
+let _provCompleted = 0;
+
+function setProvTask(taskId, state, labelOverride) {
+  const task   = document.getElementById('prov-task-'   + taskId);
+  const fill   = document.getElementById('prov-fill-'   + taskId);
+  const status = document.getElementById('prov-status-' + taskId);
+  const label  = document.getElementById('prov-label-'  + taskId);
+
+  if (!task) return;
+
+  task.classList.remove('active', 'done', 'error-state');
+
+  if (state === 'active') {
+    task.classList.add('active');
+    if (fill) fill.style.width = '45%';
+    status.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div>';
+
+  } else if (state === 'done') {
+    task.classList.add('done');
+    if (fill) fill.style.width = '100%';
+    status.innerHTML = '<div class="check-mark-sm"></div>';
+    if (labelOverride) label.textContent = labelOverride;
+    else if (PROV_TASKS[taskId]) label.textContent = PROV_TASKS[taskId].labelDone;
+    _provCompleted++;
+    updateOverallProgress();
+
+  } else if (state === 'error') {
+    task.classList.add('error-state');
+    status.innerHTML = '<span style="font-size:16px;">❌</span>';
+  }
+}
+
+function updateOverallProgress() {
+  const pct  = Math.round((_provCompleted / PROV_TASKS.length) * 100);
+  const fill = document.getElementById('overall-progress-fill');
+  const pctEl = document.getElementById('overall-progress-pct');
+  const wrap  = document.getElementById('overall-progress-bar-wrap');
+  if (fill)  fill.style.width = pct + '%';
+  if (pctEl) pctEl.textContent = pct + '%';
+  if (wrap)  wrap.setAttribute('aria-valuenow', pct);
+}
+
+function setLiveMsg(msg) {
+  const el = document.getElementById('prov-live-msg');
+  if (el) el.textContent = msg;
+}
+
+async function initProvisionStep() {
+  _provCompleted = 0;
+  updateOverallProgress();
+  document.getElementById('prov-error').classList.remove('visible');
+  document.getElementById('btn-prov-retry').style.display = 'none';
+
+  // Reset all tasks to initial state
+  PROV_TASKS.forEach(t => {
+    const task   = document.getElementById('prov-task-'   + t.id);
+    const fill   = document.getElementById('prov-fill-'   + t.id);
+    const status = document.getElementById('prov-status-' + t.id);
+    if (task) { task.className = 'prov-task'; }
+    if (fill) { fill.style.width = '0%'; }
+    if (status) { status.innerHTML = '<div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--sk-border);"></div>'; }
+  });
+  // Restore initial labels
+  const initialLabels = [
+    'Downloading business configuration...',
+    'Registering device securely...',
+    'Configuring payments & loyalty...',
+    'Detecting hardware...',
+  ];
+  initialLabels.forEach((lbl, i) => {
+    const el = document.getElementById('prov-label-' + i);
+    if (el) el.textContent = lbl;
+  });
+
+  // Ensure deviceId
+  let deviceId = localStorage.getItem('sokoni_device_id');
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem('sokoni_device_id', deviceId);
+  }
+  WIZ.deviceId = deviceId;
+
+  const merchantId = WIZ.selectedBiz ? WIZ.selectedBiz.id : null;
+  const branchId   = WIZ.selectedBranch ? WIZ.selectedBranch.id : null;
+
+  if (!merchantId || !branchId) {
+    showProvError('Configuration error — please restart the setup.');
+    return;
+  }
+
+  // ── TASK 0: Bootstrap bundle ──
+  setProvTask(0, 'active');
+  setLiveMsg('Connecting to SOKONI servers...');
+
+  let bootstrapData = null;
+  try {
+    const bootstrapFn = CF('bootstrapDevice');
+    const res = await bootstrapFn({
+      merchantId,
+      branchId,
+      deviceId,
+    });
+    bootstrapData    = res.data;
+    WIZ.bootstrapData = bootstrapData;
+
+    // Update label with real product count
+    const productCount = bootstrapData.products ? bootstrapData.products.length : 0;
+    document.getElementById('prov-label-0').textContent =
+      `Loaded ${productCount} product${productCount !== 1 ? 's' : ''}`;
+    setProvTask(0, 'done');
+
+    setLiveMsg('Saving offline bundle...');
+    // Save to IndexedDB
+    await IDB.set('sokoni_bootstrap_v1', bootstrapData).catch(() => {});
+
+  } catch (err) {
+    setProvTask(0, 'error');
+    showProvError('Could not download business configuration. Please check your connection and retry.');
+    return;
+  }
+
+  // ── TASK 1: Device registration (parallel-ish — runs after bootstrap) ──
+  setProvTask(1, 'active');
+  setLiveMsg('Securing device registration...');
+
+  try {
+    const platform   = navigator.userAgentData?.platform || navigator.platform || 'Web';
+    const appVersion = '4.0.0';
+    const regFn = CF('registerDevice');
+    await regFn({
+      deviceId,
+      merchantId,
+      branchId,
+      platform,
+      appVersion,
+    });
+    setProvTask(1, 'done');
+  } catch (err) {
+    // Non-fatal: registration may fail if CF doesn't exist yet
+    // Still mark done — device runs fine without registration on first install
+    document.getElementById('prov-label-1').textContent = 'Device ready (registration pending)';
+    setProvTask(1, 'done');
+  }
+
+  // ── TASK 2: Payments & loyalty ──
+  setProvTask(2, 'active');
+  setLiveMsg('Setting up payment methods and loyalty...');
+
+  await _delay(350); // simulate brief config parsing time
+
+  if (bootstrapData) {
+    const pmCount = Array.isArray(bootstrapData.paymentMethods)
+      ? bootstrapData.paymentMethods.length : 0;
+    const loyaltyOn = bootstrapData.loyalty?.enabled ? 'Enabled' : 'Disabled';
+    document.getElementById('prov-label-2').textContent =
+      `${pmCount} payment method${pmCount !== 1 ? 's' : ''} · Loyalty ${loyaltyOn}`;
+  }
+  setProvTask(2, 'done');
+
+  // ── TASK 3: Hardware detection ──
+  setProvTask(3, 'active');
+  setLiveMsg('Scanning for connected hardware...');
+
+  try {
+    // Graceful no-op if SokoniHardware is not loaded
+    if (window.SokoniHardware && typeof window.SokoniHardware.detect === 'function') {
+      const hw = await window.SokoniHardware.detect();
+      const found = hw && hw.devices ? hw.devices.length : 0;
+      document.getElementById('prov-label-3').textContent =
+        found > 0
+          ? `${found} device${found !== 1 ? 's' : ''} detected`
+          : 'No hardware detected (can configure later)';
+    } else {
+      document.getElementById('prov-label-3').textContent = 'Hardware scan ready (configure later)';
+    }
+    setProvTask(3, 'done');
+  } catch (_) {
+    document.getElementById('prov-label-3').textContent = 'Hardware scan skipped';
+    setProvTask(3, 'done');
+  }
+
+  // ── Persist state ──
+  localStorage.setItem('sokoni_merchant_id', merchantId);
+  localStorage.setItem('sokoni_branch_id',   branchId);
+  localStorage.setItem('sokoni_setup_complete', '1');
+
+  setLiveMsg('All done!');
+  await _delay(600);
+
+  goToStep(7);
+}
+
+function showProvError(msg) {
+  const errBox = document.getElementById('prov-error');
+  errBox.textContent = msg;
+  errBox.classList.add('visible');
+  document.getElementById('btn-prov-retry').style.display = 'flex';
+  setLiveMsg('');
+}
+
+document.getElementById('btn-prov-retry').addEventListener('click', () => {
+  initProvisionStep();
+});
+
+function _delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STEP 7 — READY
+════════════════════════════════════════════════════════════════ */
+function initReadyStep() {
+  // Animate checkmark
+  requestAnimationFrame(() => {
+    const ring = document.getElementById('ready-ring');
+    const tick = document.getElementById('ready-tick');
+    if (ring) ring.classList.add('animate');
+    if (tick) tick.classList.add('animate');
+  });
+
+  // Business / branch info
+  const bizName    = WIZ.selectedBiz    ? WIZ.selectedBiz.name    : '';
+  const branchName = WIZ.selectedBranch ? WIZ.selectedBranch.name : '';
+  const bizEl = document.getElementById('ready-biz-name');
+  if (bizEl) {
+    bizEl.innerHTML = `<strong>${esc(bizName)}</strong>${branchName ? ' · ' + esc(branchName) : ''}`;
+  }
+
+  // Stats from bootstrap
+  const data = WIZ.bootstrapData;
+  if (data) {
+    const productsEl  = document.getElementById('ready-products');
+    const paymentsEl  = document.getElementById('ready-payments');
+    const loyaltyEl   = document.getElementById('ready-loyalty');
+
+    const productCount = Array.isArray(data.products) ? data.products.length : 0;
+    const pmCount      = Array.isArray(data.paymentMethods) ? data.paymentMethods.length : 0;
+    const loyaltyOn    = data.loyalty?.enabled;
+
+    if (productsEl)  productsEl.textContent  = productCount;
+    if (paymentsEl)  paymentsEl.textContent  = pmCount;
+    if (loyaltyEl)   loyaltyEl.textContent   = loyaltyOn ? 'On' : 'Off';
+  }
+}
+
+document.getElementById('btn-open-pos').addEventListener('click', () => {
+  window.location.href = 'pos.html';
+});
+
+document.getElementById('btn-configure-hw').addEventListener('click', () => {
+  window.location.href = 'pos-hardware-wizard.html';
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   BOOT — check if setup already done
+════════════════════════════════════════════════════════════════ */
+(function boot() {
+  // If setup is already complete and user is signed in, redirect directly.
+  // The user must still be authenticated for this to apply.
+  const setupDone = localStorage.getItem('sokoni_setup_complete') === '1';
+  if (setupDone && _auth.currentUser) {
+    window.location.replace('pos.html');
+    return;
+  }
+
+  // On auth state ready, if user exists and setup is done, redirect
+  _auth.onAuthStateChanged(user => {
+    if (user && localStorage.getItem('sokoni_setup_complete') === '1') {
+      window.location.replace('pos.html');
+    }
+  });
+})();
+</script>
+</body>
+</html>

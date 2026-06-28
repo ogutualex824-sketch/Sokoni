@@ -8910,3 +8910,29 @@ exports.createSupportTicket     = crm.createSupportTicket;
 exports.updateSupportTicket     = crm.updateSupportTicket;
 exports.getCRMDashboard         = crm.getCRMDashboard;
 exports.computeChurnRiskDaily   = crm.computeChurnRiskDaily;
+
+/* ── Business Bootstrap & Instant Provisioning v1.0 ────────────────────── */
+const bootstrap = require('./business-bootstrap');
+exports.bootstrapDevice           = bootstrap.bootstrapDevice;
+exports.getIncrementalSync        = bootstrap.getIncrementalSync;
+exports.invalidateBootstrapCache  = bootstrap.invalidateBootstrapCache;
+exports.getBusinessConfig         = bootstrap.getBusinessConfig;
+exports.validateDeviceAccess      = bootstrap.validateDeviceAccess;
+
+/* ── Device Manager v1.0 ────────────────────────────────────────────────── */
+const deviceMgr = require('./device-manager');
+exports.registerDevice            = deviceMgr.registerDevice;
+exports.deviceHeartbeat           = deviceMgr.deviceHeartbeat;
+exports.lockDevice                = deviceMgr.lockDevice;
+exports.unlockDevice              = deviceMgr.unlockDevice;
+exports.remoteLogout              = deviceMgr.remoteLogout;
+exports.remoteUpdate              = deviceMgr.remoteUpdate;
+exports.decommissionDevice        = deviceMgr.decommissionDevice;
+exports.getDeviceList             = deviceMgr.getDeviceList;
+exports.cleanupStaleDevices       = deviceMgr.cleanupStaleDevices;
+
+/* ── Self-Healing Engine v1.0 ────────────────────────────────────────────── */
+const selfHeal = require('./self-heal');
+exports.runScheduledSelfHeal  = selfHeal.runScheduledSelfHeal;
+exports.runManualSelfHeal     = selfHeal.runManualSelfHeal;
+exports.getSelfHealHistory    = selfHeal.getSelfHealHistory;

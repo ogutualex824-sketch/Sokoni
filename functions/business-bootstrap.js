@@ -1,0 +1,803 @@
+/* ================================================================
+   SOKONI SmartPOS — Business Bootstrap & Instant Provisioning v1.0
+   functions/business-bootstrap.js | 2026-06-29
+
+   One-call POS provisioning: returns everything a device needs
+   to start selling in a single network round-trip.
+   All Firestore reads are parallelised — target <5 s cold, <100 ms
+   cached.
+
+   5 Cloud Functions:
+     bootstrapDevice          — full bundle (cache-first)
+     getIncrementalSync       — delta sync since last token
+     invalidateBootstrapCache — admin / owner cache bust
+     getBusinessConfig        — light pre-branch-selection profile
+     validateDeviceAccess     — PIN authentication with rate-limit
+
+   Collections written:
+     bootstrapCache/{merchantId}_{branchId}
+     posDevices/{deviceId}
+     rateLimits/{uid}_pin
+
+   Region: us-central1 | Runtime: Node.js 22
+   Platform: Firebase Gen2 Cloud Functions
+================================================================ */
+'use strict';
+
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const admin  = require('firebase-admin');
+const crypto = require('crypto');
+
+const db     = admin.firestore();
+const F      = admin.firestore.FieldValue;
+const REGION = 'us-central1';
+const OPT    = {
+  region:          REGION,
+  enforceAppCheck: true,
+  timeoutSeconds:  30,
+  memory:          '512MiB',
+};
+
+/* ── Cache TTL ─────────────────────────────────────────────────── */
+const CACHE_TTL_MS   = 5 * 60 * 1000;   // 5 minutes
+const CACHE_TTL_SECS = 300;
+
+/* ── Structured logger ──────────────────────────────────────────── */
+function _log(severity, message, extra = {}) {
+  const fn = severity === 'ERROR'   ? console.error
+           : severity === 'WARNING' ? console.warn
+           : console.log;
+  fn(JSON.stringify({ severity, message, service: 'business-bootstrap', ...extra }));
+}
+
+/* ── Sanitise strings (XSS) ────────────────────────────────────── */
+function _san(v, max = 500) {
+  if (typeof v !== 'string') return String(v || '').slice(0, max);
+  return v.replace(/[<>"'&]/g, c => ({
+    '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;',
+  }[c])).trim().slice(0, max);
+}
+
+/* ── HttpsError shorthand ───────────────────────────────────────── */
+function _err(msg, code = 'invalid-argument') {
+  throw new HttpsError(code, msg);
+}
+
+/* ── Require authenticated uid ──────────────────────────────────── */
+function _requireAuth(req) {
+  if (!req.auth?.uid) _err('Authentication required.', 'unauthenticated');
+  return req.auth.uid;
+}
+
+/* ── Admin / super-admin token guard ───────────────────────────── */
+function _isAdmin(req) {
+  return !!(req.auth?.token?.admin || req.auth?.token?.superAdmin);
+}
+
+/* ── UUID-v4 format guard ───────────────────────────────────────── */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function _isUUID(s) { return UUID_RE.test(s); }
+
+/* ── sha256 helper ──────────────────────────────────────────────── */
+function _sha256(s) {
+  return crypto.createHash('sha256').update(String(s)).digest('hex');
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   _assertMerchantAccess
+   Verifies the caller belongs to the merchant: either they are an
+   admin/super-admin, the business owner, OR they appear in posStaff
+   for the given branch.  Returns uid.
+───────────────────────────────────────────────────────────────── */
+async function _assertMerchantAccess(req, merchantId, branchId) {
+  const uid = _requireAuth(req);
+  if (_isAdmin(req)) return uid;                // platform admins bypass
+
+  // Check if the user is the business owner
+  const bizRef  = db.collection('businesses').doc(merchantId);
+  const staffRef = db.collection('posStaff')
+    .where('branchId', '==', branchId)
+    .where('uid', '==', uid)
+    .where('status', '==', 'active')
+    .limit(1);
+
+  const [bizSnap, staffSnap] = await Promise.all([bizRef.get(), staffRef.get()]);
+
+  if (bizSnap.exists && bizSnap.data().ownerId === uid) return uid;
+  if (!staffSnap.empty) return uid;
+
+  // Also check the merchants collection (some modules write ownerId there)
+  const merchantSnap = await db.collection('merchants').doc(merchantId).get();
+  if (merchantSnap.exists) {
+    const m = merchantSnap.data();
+    if (m.ownerId === uid) return uid;
+    if (Array.isArray(m.adminUids) && m.adminUids.includes(uid)) return uid;
+  }
+
+  _err('Access denied — you do not belong to this merchant.', 'permission-denied');
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   _buildBundle
+   Fetches all POS configuration in one parallelised batch.
+   Sensitive fields (passwords, hmacKey, secrets) are stripped.
+───────────────────────────────────────────────────────────────── */
+async function _buildBundle(merchantId, branchId) {
+  const t0 = Date.now();
+
+  const [
+    businessSnap, branchSnap, productsSnap, categoriesSnap,
+    employeesSnap, rolesSnap, taxSnap, paymentMethodsSnap,
+    loyaltySnap, discountsSnap, receiptConfigSnap, featureFlagsSnap,
+    subscriptionSnap, suppliersSnap,
+  ] = await Promise.all([
+    db.collection('businesses').doc(merchantId).get(),
+    db.collection('branches').doc(branchId).get(),
+    db.collection('posProducts')
+      .where('merchantId', '==', merchantId)
+      .where('status', '==', 'active')
+      .limit(500)
+      .get(),
+    db.collection('categories')
+      .where('merchantId', '==', merchantId)
+      .get(),
+    db.collection('posStaff')
+      .where('branchId', '==', branchId)
+      .where('status', '==', 'active')
+      .get(),
+    db.collection('posRoles')
+      .where('merchantId', '==', merchantId)
+      .get(),
+    db.collection('taxConfig').doc(merchantId).get(),
+    db.collection('paymentMethods')
+      .where('merchantId', '==', merchantId)
+      .where('enabled', '==', true)
+      .get(),
+    db.collection('loyaltyMerchantConfigs').doc(merchantId).get(),
+    db.collection('posDiscounts')
+      .where('merchantId', '==', merchantId)
+      .where('active', '==', true)
+      .get(),
+    db.collection('receiptConfig').doc(merchantId).get(),
+    db.collection('featureFlags').doc(merchantId).get(),
+    db.collection('subscriptions')
+      .where('merchantId', '==', merchantId)
+      .where('status', 'in', ['active', 'trialing'])
+      .limit(1)
+      .get(),
+    db.collection('procSuppliers')
+      .where('merchantId', '==', merchantId)
+      .where('status', '==', 'active')
+      .limit(50)
+      .get(),
+  ]);
+
+  /* ── Business ───────────────────────────────────────────────── */
+  const biz = businessSnap.exists ? businessSnap.data() : {};
+  const business = {
+    id:           merchantId,
+    name:         _san(biz.name || '', 200),
+    logo:         biz.logo || null,
+    address:      _san(biz.address || '', 300),
+    phone:        _san(biz.phone || '', 30),
+    email:        _san(biz.email || '', 200),
+    currency:     'KES',
+    kraPin:       _san(biz.kraPin || '', 20),
+    businessType: _san(biz.businessType || '', 100),
+  };
+
+  /* ── Branch ─────────────────────────────────────────────────── */
+  const br = branchSnap.exists ? branchSnap.data() : {};
+  const branch = {
+    id:       branchId,
+    name:     _san(br.name || '', 200),
+    address:  _san(br.address || '', 300),
+    phone:    _san(br.phone || '', 30),
+    timezone: 'Africa/Nairobi',
+  };
+
+  /* ── Products ───────────────────────────────────────────────── */
+  const products = productsSnap.docs.map(d => {
+    const p = d.data();
+    return {
+      id:             d.id,
+      name:           _san(p.name || '', 200),
+      sku:            _san(p.sku || '', 100),
+      barcode:        _san(p.barcode || '', 100),
+      price:          Number(p.price) || 0,
+      cost:           Number(p.cost) || 0,
+      categoryId:     p.categoryId || null,
+      vatRate:        Number(p.vatRate) || 0.16,
+      trackInventory: p.trackInventory !== false,
+      qty:            Number(p.qty) || 0,
+      reorderPoint:   Number(p.reorderPoint) || 5,
+      image:          p.image || null,
+    };
+  });
+
+  /* ── Categories ─────────────────────────────────────────────── */
+  const categories = categoriesSnap.docs.map(d => {
+    const c = d.data();
+    return {
+      id:       d.id,
+      name:     _san(c.name || '', 200),
+      parentId: c.parentId || null,
+      icon:     c.icon || null,
+    };
+  });
+
+  /* ── Employees — strip PIN and password ─────────────────────── */
+  const employees = employeesSnap.docs.map(d => {
+    const e = d.data();
+    return {
+      id:          d.id,
+      name:        _san(e.name || e.displayName || '', 200),
+      // PIN is stored as SHA-256 hash; we send the hash so the device can
+      // do local comparison without round-trips, but never the plaintext.
+      pin:         e.pinHash || null,
+      role:        _san(e.role || 'cashier', 100),
+      permissions: Array.isArray(e.permissions) ? e.permissions : [],
+      photo:       e.photoURL || e.photo || null,
+    };
+  });
+
+  /* ── Roles ──────────────────────────────────────────────────── */
+  const roles = rolesSnap.docs.map(d => {
+    const r = d.data();
+    return {
+      id:          d.id,
+      name:        _san(r.name || '', 100),
+      permissions: Array.isArray(r.permissions) ? r.permissions : [],
+    };
+  });
+
+  /* ── Tax ────────────────────────────────────────────────────── */
+  const tax = taxSnap.exists ? taxSnap.data() : {};
+  const taxConfig = {
+    vatEnabled:   tax.vatEnabled !== false,
+    vatRate:      Number(tax.vatRate) || 0.16,
+    etimsEnabled: tax.etimsEnabled === true,
+    kraPin:       _san(tax.kraPin || biz.kraPin || '', 20),
+  };
+
+  /* ── Payment methods ────────────────────────────────────────── */
+  const paymentMethods = paymentMethodsSnap.empty
+    ? ['cash', 'mpesa']
+    : paymentMethodsSnap.docs.map(d => _san(d.data().type || d.id, 50));
+
+  /* ── Loyalty — hmacKey is server-side only, never sent ─────── */
+  const loy = loyaltySnap.exists ? loyaltySnap.data() : {};
+  const loyalty = {
+    enabled:          loy.enabled === true,
+    pointsPerShilling: Number(loy.pointsPerShilling) || 1,
+    tiers:            Array.isArray(loy.tiers) ? loy.tiers : [],
+    cashbackRate:     Number(loy.cashbackRate) || 0,
+    hmacKey:          null,   // never exposed to device
+  };
+
+  /* ── Discounts ──────────────────────────────────────────────── */
+  const now = Date.now();
+  const discounts = discountsSnap.docs
+    .map(d => {
+      const dis = d.data();
+      const validUntil = dis.validUntil?.toDate ? dis.validUntil.toDate() : null;
+      return {
+        id:         d.id,
+        name:       _san(dis.name || '', 200),
+        type:       dis.type || 'percentage',
+        value:      Number(dis.value) || 0,
+        minOrder:   Number(dis.minOrder) || 0,
+        validUntil: validUntil ? validUntil.toISOString() : null,
+        code:       dis.code ? _san(dis.code, 50) : null,
+      };
+    })
+    .filter(d => !d.validUntil || new Date(d.validUntil).getTime() > now);
+
+  /* ── Receipt config ─────────────────────────────────────────── */
+  const rc = receiptConfigSnap.exists ? receiptConfigSnap.data() : {};
+  const receipt = {
+    header:           _san(rc.header || business.name, 300),
+    footer:           _san(rc.footer || 'Thank you for shopping with us!', 300),
+    logo:             rc.logo || business.logo || null,
+    showLoyaltyPoints: rc.showLoyaltyPoints !== false,
+    showVAT:          rc.showVAT !== false,
+    printerType:      rc.printerType || 'thermal_80mm',
+  };
+
+  /* ── Feature flags ──────────────────────────────────────────── */
+  const ff = featureFlagsSnap.exists ? featureFlagsSnap.data() : {};
+  const featureFlags = {
+    inventory:    ff.inventory !== false,
+    loyalty:      ff.loyalty !== false,
+    delivery:     ff.delivery !== false,
+    marketplace:  ff.marketplace !== false,
+    etims:        ff.etims !== false,
+    aiAssistant:  ff.aiAssistant !== false,
+  };
+
+  /* ── Subscription ───────────────────────────────────────────── */
+  let subscription = { plan: 'free', status: 'active', expiresAt: null };
+  if (!subscriptionSnap.empty) {
+    const sub = subscriptionSnap.docs[0].data();
+    subscription = {
+      plan:      _san(sub.plan || 'free', 100),
+      status:    _san(sub.status || 'active', 50),
+      expiresAt: sub.expiresAt?.toDate ? sub.expiresAt.toDate().toISOString() : null,
+    };
+  }
+
+  /* ── Suppliers ──────────────────────────────────────────────── */
+  const suppliers = suppliersSnap.docs.map(d => {
+    const s = d.data();
+    return {
+      id:    d.id,
+      name:  _san(s.name || '', 200),
+      phone: _san(s.phone || '', 30),
+    };
+  });
+
+  const builtAt = new Date().toISOString();
+  const buildMs = Date.now() - t0;
+
+  _log('INFO', '_buildBundle complete', { merchantId, branchId, buildMs });
+
+  return {
+    version:    1,
+    syncToken:  `${merchantId}_${branchId}_${Date.now()}`,
+    business,
+    branch,
+    products,
+    categories,
+    employees,
+    roles,
+    tax:            taxConfig,
+    paymentMethods,
+    loyalty,
+    discounts,
+    receipt,
+    featureFlags,
+    subscription,
+    suppliers,
+    builtAt,
+    ttlSeconds: CACHE_TTL_SECS,
+    _buildMs:   buildMs,
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CF 1 — bootstrapDevice
+   Returns the full cached or freshly-built bundle.
+   Called once per device launch / shift start.
+═══════════════════════════════════════════════════════════════════ */
+exports.bootstrapDevice = onCall(OPT, async (req) => {
+  const uid = _requireAuth(req);
+
+  const {
+    merchantId,
+    branchId,
+    deviceId    = null,
+    forceRefresh = false,
+  } = req.data || {};
+
+  if (!merchantId) _err('merchantId is required.');
+  if (!branchId)   _err('branchId is required.');
+
+  const safeMerchantId = _san(merchantId, 128);
+  const safeBranchId   = _san(branchId, 128);
+
+  await _assertMerchantAccess(req, safeMerchantId, safeBranchId);
+
+  const cacheId  = `${safeMerchantId}_${safeBranchId}`;
+  const cacheRef = db.collection('bootstrapCache').doc(cacheId);
+
+  let bundle   = null;
+  let cached   = false;
+  const buildStart = Date.now();
+
+  if (!forceRefresh) {
+    const cacheSnap = await cacheRef.get();
+    if (cacheSnap.exists) {
+      const c = cacheSnap.data();
+      const builtAt = c.builtAt?.toDate ? c.builtAt.toDate() : null;
+      if (builtAt && Date.now() - builtAt.getTime() < CACHE_TTL_MS) {
+        bundle = c.bundle;
+        cached = true;
+        _log('INFO', 'bootstrapDevice cache hit', { merchantId: safeMerchantId, branchId: safeBranchId, uid });
+      }
+    }
+  }
+
+  if (!bundle) {
+    bundle = await _buildBundle(safeMerchantId, safeBranchId);
+
+    // Write to cache (don't await — don't block the response)
+    cacheRef.set({
+      bundle,
+      version:    bundle.version,
+      builtAt:    F.serverTimestamp(),
+      ttlSeconds: CACHE_TTL_SECS,
+    }).catch(e => _log('WARNING', 'Failed to write bootstrapCache', { error: e.message }));
+  }
+
+  // Register / update device if deviceId provided
+  if (deviceId) {
+    const safeDeviceId = _san(deviceId, 200);
+    const deviceRef = db.collection('posDevices').doc(safeDeviceId);
+    deviceRef.set({
+      deviceId:   safeDeviceId,
+      merchantId: safeMerchantId,
+      branchId:   safeBranchId,
+      cashierId:  uid,
+      lastSeenAt: F.serverTimestamp(),
+      lastSyncAt: F.serverTimestamp(),
+      status:     'active',
+    }, { merge: true }).catch(e =>
+      _log('WARNING', 'Failed to update posDevice on bootstrap', { error: e.message })
+    );
+  }
+
+  return {
+    ...bundle,
+    cached,
+    buildMs: Date.now() - buildStart,
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   CF 2 — getIncrementalSync
+   Returns only the records that changed after `since` timestamp.
+   Keeps traffic minimal between full bootstraps.
+═══════════════════════════════════════════════════════════════════ */
+exports.getIncrementalSync = onCall(OPT, async (req) => {
+  const uid = _requireAuth(req);
+
+  const {
+    merchantId,
+    branchId,
+    since,
+  } = req.data || {};
+
+  if (!merchantId) _err('merchantId is required.');
+  if (!branchId)   _err('branchId is required.');
+  if (!since)      _err('since timestamp is required.');
+
+  const safeMerchantId = _san(merchantId, 128);
+  const safeBranchId   = _san(branchId, 128);
+
+  const sinceDate = new Date(since);
+  if (isNaN(sinceDate.getTime())) _err('since must be a valid ISO timestamp.');
+
+  await _assertMerchantAccess(req, safeMerchantId, safeBranchId);
+
+  _log('INFO', 'getIncrementalSync', { merchantId: safeMerchantId, branchId: safeBranchId, since, uid });
+
+  const [productsSnap, employeesSnap, discountsSnap, flagsSnap] = await Promise.all([
+    db.collection('posProducts')
+      .where('merchantId', '==', safeMerchantId)
+      .where('status', '==', 'active')
+      .where('updatedAt', '>', sinceDate)
+      .limit(200)
+      .get(),
+    db.collection('posStaff')
+      .where('branchId', '==', safeBranchId)
+      .where('status', '==', 'active')
+      .where('updatedAt', '>', sinceDate)
+      .limit(100)
+      .get(),
+    db.collection('posDiscounts')
+      .where('merchantId', '==', safeMerchantId)
+      .where('active', '==', true)
+      .where('updatedAt', '>', sinceDate)
+      .limit(100)
+      .get(),
+    db.collection('featureFlags').doc(safeMerchantId).get(),
+  ]);
+
+  const products = productsSnap.docs.map(d => {
+    const p = d.data();
+    return {
+      id:             d.id,
+      name:           _san(p.name || '', 200),
+      sku:            _san(p.sku || '', 100),
+      barcode:        _san(p.barcode || '', 100),
+      price:          Number(p.price) || 0,
+      cost:           Number(p.cost) || 0,
+      categoryId:     p.categoryId || null,
+      vatRate:        Number(p.vatRate) || 0.16,
+      trackInventory: p.trackInventory !== false,
+      qty:            Number(p.qty) || 0,
+      reorderPoint:   Number(p.reorderPoint) || 5,
+      image:          p.image || null,
+      updatedAt:      p.updatedAt?.toDate ? p.updatedAt.toDate().toISOString() : null,
+    };
+  });
+
+  const employees = employeesSnap.docs.map(d => {
+    const e = d.data();
+    return {
+      id:          d.id,
+      name:        _san(e.name || e.displayName || '', 200),
+      pin:         e.pinHash || null,
+      role:        _san(e.role || 'cashier', 100),
+      permissions: Array.isArray(e.permissions) ? e.permissions : [],
+      photo:       e.photoURL || e.photo || null,
+      updatedAt:   e.updatedAt?.toDate ? e.updatedAt.toDate().toISOString() : null,
+    };
+  });
+
+  const now = Date.now();
+  const discounts = discountsSnap.docs
+    .map(d => {
+      const dis = d.data();
+      const validUntil = dis.validUntil?.toDate ? dis.validUntil.toDate() : null;
+      return {
+        id:         d.id,
+        name:       _san(dis.name || '', 200),
+        type:       dis.type || 'percentage',
+        value:      Number(dis.value) || 0,
+        minOrder:   Number(dis.minOrder) || 0,
+        validUntil: validUntil ? validUntil.toISOString() : null,
+        code:       dis.code ? _san(dis.code, 50) : null,
+        updatedAt:  dis.updatedAt?.toDate ? dis.updatedAt.toDate().toISOString() : null,
+      };
+    })
+    .filter(d => !d.validUntil || new Date(d.validUntil).getTime() > now);
+
+  const ff = flagsSnap.exists ? flagsSnap.data() : {};
+  const featureFlags = {
+    inventory:   ff.inventory !== false,
+    loyalty:     ff.loyalty !== false,
+    delivery:    ff.delivery !== false,
+    marketplace: ff.marketplace !== false,
+    etims:       ff.etims !== false,
+    aiAssistant: ff.aiAssistant !== false,
+  };
+
+  const newSyncToken = `${safeMerchantId}_${safeBranchId}_${Date.now()}`;
+
+  return {
+    changes: { products, employees, discounts, featureFlags },
+    newSyncToken,
+    serverTime: new Date().toISOString(),
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   CF 3 — invalidateBootstrapCache
+   Admin / owner can bust the cache for a merchant (all branches or
+   a single branch).  Also called internally when data changes.
+═══════════════════════════════════════════════════════════════════ */
+exports.invalidateBootstrapCache = onCall(OPT, async (req) => {
+  const uid = _requireAuth(req);
+
+  const { merchantId, branchId = null } = req.data || {};
+  if (!merchantId) _err('merchantId is required.');
+
+  const safeMerchantId = _san(merchantId, 128);
+
+  // Only admin or the business owner may invalidate
+  if (!_isAdmin(req)) {
+    const bizSnap = await db.collection('businesses').doc(safeMerchantId).get();
+    const merchantSnap = await db.collection('merchants').doc(safeMerchantId).get();
+    const isOwner =
+      (bizSnap.exists && bizSnap.data().ownerId === uid) ||
+      (merchantSnap.exists && (
+        merchantSnap.data().ownerId === uid ||
+        (Array.isArray(merchantSnap.data().adminUids) && merchantSnap.data().adminUids.includes(uid))
+      ));
+    if (!isOwner) _err('Only the merchant owner or platform admin may invalidate the cache.', 'permission-denied');
+  }
+
+  const cacheRef = db.collection('bootstrapCache');
+
+  if (branchId) {
+    // Single branch
+    const docId = `${safeMerchantId}_${_san(branchId, 128)}`;
+    await cacheRef.doc(docId).delete();
+    _log('INFO', 'invalidateBootstrapCache — single branch', { merchantId: safeMerchantId, branchId, uid });
+    return { invalidated: [docId] };
+  } else {
+    // All branches for this merchant
+    const snap = await cacheRef
+      .where('bundle.business.id', '==', safeMerchantId)
+      .get();
+
+    // Fallback: delete by known prefix pattern using a batch
+    const batch   = db.batch();
+    const deleted = [];
+
+    if (!snap.empty) {
+      snap.docs.forEach(d => { batch.delete(d.ref); deleted.push(d.id); });
+    } else {
+      // Query by branchId prefix isn't supported in Firestore; fetch candidate
+      // documents via a range query on the document ID string.
+      const rangeSnap = await cacheRef
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .startAt(`${safeMerchantId}_`)
+        .endAt(`${safeMerchantId}_`)
+        .get();
+      rangeSnap.docs.forEach(d => { batch.delete(d.ref); deleted.push(d.id); });
+    }
+
+    if (deleted.length > 0) await batch.commit();
+
+    _log('INFO', 'invalidateBootstrapCache — all branches', { merchantId: safeMerchantId, deleted, uid });
+    return { invalidated: deleted };
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   CF 4 — getBusinessConfig
+   Lightweight pre-branch-selection call.
+   Returns business profile + list of branches.
+   Used by the POS setup wizard before the user picks a branch.
+═══════════════════════════════════════════════════════════════════ */
+exports.getBusinessConfig = onCall(OPT, async (req) => {
+  const uid = _requireAuth(req);
+
+  const { merchantId } = req.data || {};
+  if (!merchantId) _err('merchantId is required.');
+
+  const safeMerchantId = _san(merchantId, 128);
+
+  // Caller must be admin, business owner, or a staff member for ANY branch
+  if (!_isAdmin(req)) {
+    const [bizSnap, merchantSnap, staffSnap] = await Promise.all([
+      db.collection('businesses').doc(safeMerchantId).get(),
+      db.collection('merchants').doc(safeMerchantId).get(),
+      db.collection('posStaff')
+        .where('merchantId', '==', safeMerchantId)
+        .where('uid', '==', uid)
+        .where('status', '==', 'active')
+        .limit(1)
+        .get(),
+    ]);
+
+    const isOwner =
+      (bizSnap.exists && bizSnap.data().ownerId === uid) ||
+      (merchantSnap.exists && (
+        merchantSnap.data().ownerId === uid ||
+        (Array.isArray(merchantSnap.data().adminUids) && merchantSnap.data().adminUids.includes(uid))
+      ));
+
+    if (!isOwner && staffSnap.empty) {
+      _err('Access denied.', 'permission-denied');
+    }
+  }
+
+  const [bizSnap, branchesSnap] = await Promise.all([
+    db.collection('businesses').doc(safeMerchantId).get(),
+    db.collection('branches')
+      .where('merchantId', '==', safeMerchantId)
+      .where('status', '==', 'active')
+      .orderBy('name')
+      .get(),
+  ]);
+
+  if (!bizSnap.exists) _err('Business not found.', 'not-found');
+
+  const biz = bizSnap.data();
+  const business = {
+    id:           safeMerchantId,
+    name:         _san(biz.name || '', 200),
+    logo:         biz.logo || null,
+    address:      _san(biz.address || '', 300),
+    phone:        _san(biz.phone || '', 30),
+    email:        _san(biz.email || '', 200),
+    currency:     'KES',
+    kraPin:       _san(biz.kraPin || '', 20),
+    businessType: _san(biz.businessType || '', 100),
+  };
+
+  const branches = branchesSnap.docs.map(d => {
+    const b = d.data();
+    return {
+      id:      d.id,
+      name:    _san(b.name || '', 200),
+      address: _san(b.address || '', 300),
+    };
+  });
+
+  _log('INFO', 'getBusinessConfig', { merchantId: safeMerchantId, branchCount: branches.length, uid });
+
+  return { business, branches };
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   CF 5 — validateDeviceAccess
+   PIN-based staff authentication for a specific branch.
+   Rate-limited: max 5 attempts per uid per 5 minutes.
+   PIN is stored as SHA-256 hash; comparison done server-side.
+═══════════════════════════════════════════════════════════════════ */
+exports.validateDeviceAccess = onCall(OPT, async (req) => {
+  const uid = _requireAuth(req);
+
+  const { merchantId, branchId, pin } = req.data || {};
+  if (!merchantId) _err('merchantId is required.');
+  if (!branchId)   _err('branchId is required.');
+  if (!pin)        _err('pin is required.');
+  if (typeof pin !== 'string' || pin.length < 4 || pin.length > 20) {
+    _err('pin must be 4–20 characters.');
+  }
+
+  const safeMerchantId = _san(merchantId, 128);
+  const safeBranchId   = _san(branchId, 128);
+
+  /* ── Rate limit: 5 attempts per uid per 5 minutes ──────────── */
+  const RATE_WINDOW_MS = 5 * 60 * 1000;
+  const MAX_ATTEMPTS   = 5;
+  const rateLimitId    = `${uid}_pin`;
+  const rateLimitRef   = db.collection('rateLimits').doc(rateLimitId);
+
+  const rl = await rateLimitRef.get();
+  if (rl.exists) {
+    const r = rl.data();
+    const windowStart = r.windowStart?.toDate ? r.windowStart.toDate() : null;
+    if (windowStart && Date.now() - windowStart.getTime() < RATE_WINDOW_MS) {
+      if ((r.attempts || 0) >= MAX_ATTEMPTS) {
+        _log('WARNING', 'validateDeviceAccess rate-limit hit', { uid, merchantId: safeMerchantId });
+        _err('Too many PIN attempts. Please wait 5 minutes and try again.', 'resource-exhausted');
+      }
+    }
+  }
+
+  // Increment attempt counter (write before checking PIN — prevents timing attacks)
+  await rateLimitRef.set({
+    uid,
+    attempts:    F.increment(1),
+    windowStart: rl.exists ? rl.data().windowStart : F.serverTimestamp(),
+    lastAttempt: F.serverTimestamp(),
+  }, { merge: true });
+
+  /* ── Hash the incoming PIN and compare ─────────────────────── */
+  const pinHash = _sha256(pin);
+
+  const staffSnap = await db.collection('posStaff')
+    .where('branchId', '==', safeBranchId)
+    .where('pinHash', '==', pinHash)
+    .where('status', '==', 'active')
+    .limit(1)
+    .get();
+
+  if (staffSnap.empty) {
+    _log('WARNING', 'validateDeviceAccess — invalid PIN', { uid, merchantId: safeMerchantId, branchId: safeBranchId });
+    return { valid: false, employee: null };
+  }
+
+  // Success — reset rate limit window
+  await rateLimitRef.set({
+    uid,
+    attempts:    0,
+    windowStart: F.serverTimestamp(),
+    lastSuccess: F.serverTimestamp(),
+  });
+
+  const emp = staffSnap.docs[0];
+  const e   = emp.data();
+
+  _log('INFO', 'validateDeviceAccess — success', {
+    uid,
+    staffId: emp.id,
+    merchantId: safeMerchantId,
+    branchId: safeBranchId,
+  });
+
+  return {
+    valid: true,
+    employee: {
+      id:          emp.id,
+      name:        _san(e.name || e.displayName || '', 200),
+      role:        _san(e.role || 'cashier', 100),
+      permissions: Array.isArray(e.permissions) ? e.permissions : [],
+    },
+  };
+});
+
+/* ── Exports ─────────────────────────────────────────────────────── */
+module.exports = {
+  bootstrapDevice:          exports.bootstrapDevice,
+  getIncrementalSync:       exports.getIncrementalSync,
+  invalidateBootstrapCache: exports.invalidateBootstrapCache,
+  getBusinessConfig:        exports.getBusinessConfig,
+  validateDeviceAccess:     exports.validateDeviceAccess,
+};

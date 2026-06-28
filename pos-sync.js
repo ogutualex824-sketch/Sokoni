@@ -340,4 +340,370 @@
   } else {
     window.addEventListener('pos:db:ready', init, { once: true });
   }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ENHANCEMENT A — Digital Signatures for Offline Transactions
+     Uses Web Crypto API (SubtleCrypto / HMAC-SHA256) to produce a tamper-
+     evident signature for every transaction queued while offline.
+     The signature is client-side only (non-secret key material) — its purpose
+     is integrity verification, not authentication. The server validates the
+     signature on sync to detect any in-flight mutation of queued records.
+  ══════════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Signs a transaction using HMAC-SHA256 keyed from deviceId.
+   * @param {Object} transaction - The transaction object to sign.
+   * @param {string} deviceId    - The POS device ID (used as key material).
+   * @returns {Promise<string>}  - Hex-encoded HMAC signature.
+   */
+  async function signTransaction(transaction, deviceId) {
+    if (!window.crypto?.subtle) {
+      /* Graceful degradation: Web Crypto not available (non-HTTPS or old browser) */
+      console.warn('[PosSyncEngine] SubtleCrypto unavailable — transaction will be unsigned');
+      return null;
+    }
+    try {
+      /* Canonical payload: only stable, fraud-relevant fields */
+      const payload = JSON.stringify({
+        id:        transaction.id,
+        deviceId,
+        amount:    transaction.total,
+        timestamp: transaction.timestamp,
+        items:     Array.isArray(transaction.items) ? transaction.items.length : 0,
+      });
+
+      /* Import HMAC key from deviceId + fixed domain suffix */
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(deviceId + '_sokoni_pos'),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,       // not extractable
+        ['sign']
+      );
+
+      const signatureBuffer = await crypto.subtle.sign(
+        'HMAC',
+        keyMaterial,
+        new TextEncoder().encode(payload)
+      );
+
+      /* Convert ArrayBuffer → lowercase hex string */
+      return Array.from(new Uint8Array(signatureBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch (err) {
+      console.error('[PosSyncEngine] signTransaction failed:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Queues a transaction for offline sync with an attached digital signature.
+   * Call this instead of directly pushing to PosDB.syncQueue for transactions.
+   * @param {Object} transaction - The full transaction record.
+   * @returns {Promise<Object>} - The enriched queue item that was stored.
+   */
+  async function queueSignedTransaction(transaction) {
+    const deviceId  = _getDeviceId();
+    const signature = await signTransaction(transaction, deviceId);
+
+    const queueItem = {
+      type: 'transaction',
+      data: {
+        ...transaction,
+        _signature: signature,
+        _deviceId:  deviceId,
+        _signedAt:  new Date().toISOString(),
+      },
+      retries:   0,
+      status:    'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (window.PosDB?.syncQueue?.add) {
+      await PosDB.syncQueue.add(queueItem);
+    }
+
+    _emit('sync:transaction_queued', {
+      transactionId: transaction.id,
+      signed:        !!signature,
+    });
+
+    return queueItem;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ENHANCEMENT B — Conflict Detection
+     Compares a locally-queued record against its current server state.
+     Each collection type has its own resolution strategy.
+  ══════════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Detects sync conflicts between a local (offline-queued) document and the
+   * current server document fetched at sync time.
+   *
+   * @param {Object} localDoc  - The locally-queued document (has `_queuedAt` ISO string).
+   * @param {Object} serverDoc - The current server document (has `updatedAt`).
+   * @param {string} docType   - One of: 'transaction' | 'product_update' | 'customer' | 'order' | ...
+   * @returns {{ hasConflict: boolean, resolution: string, reason: string }}
+   */
+  function detectConflict(localDoc, serverDoc, docType = 'unknown') {
+    const NO_CONFLICT = { hasConflict: false, resolution: 'none', reason: 'no_conflict' };
+
+    if (!serverDoc || !serverDoc.updatedAt) return NO_CONFLICT;
+
+    /* Normalise timestamps to milliseconds for reliable comparison */
+    const serverUpdatedMs = _toMs(serverDoc.updatedAt);
+    const localQueuedMs   = _toMs(localDoc._queuedAt || localDoc._syncedAt);
+
+    /* No conflict if server hasn't changed since we went offline */
+    if (!serverUpdatedMs || !localQueuedMs || serverUpdatedMs <= localQueuedMs) {
+      return NO_CONFLICT;
+    }
+
+    /* Server changed while we were offline — apply per-type resolution rules */
+
+    /* ── Payments: financial data always defers to server ── */
+    if (docType === 'transaction' || docType === 'refund' || docType === 'void') {
+      return {
+        hasConflict: true,
+        resolution:  'server_wins',
+        reason:      'financial_data_immutable',
+      };
+    }
+
+    /* ── Orders: never overwrite automatically ── */
+    if (docType === 'order') {
+      return {
+        hasConflict: true,
+        resolution:  'manual_required',
+        reason:      'order_conflict_requires_review',
+      };
+    }
+
+    /* ── Inventory / product quantities ── */
+    if (docType === 'product_update' || docType === 'stock_movement') {
+      const serverQty = Number(serverDoc.qty ?? serverDoc.quantity ?? NaN);
+      const localQty  = Number(localDoc.qty  ?? localDoc.quantity  ?? NaN);
+
+      if (!isNaN(serverQty) && !isNaN(localQty)) {
+        /* Server decreased stock → something sold elsewhere; respect server */
+        if (serverQty < localQty) {
+          return {
+            hasConflict: true,
+            resolution:  'server_wins',
+            reason:      'server_stock_decreased_concurrently',
+          };
+        }
+        /* Only local changed → local is safe to apply */
+        return {
+          hasConflict: true,
+          resolution:  'local_wins',
+          reason:      'only_local_quantity_changed',
+        };
+      }
+      /* Can't determine — defer to server for safety */
+      return {
+        hasConflict: true,
+        resolution:  'server_wins',
+        reason:      'qty_comparison_inconclusive',
+      };
+    }
+
+    /* ── Customer profile ── */
+    if (docType === 'customer') {
+      const CRITICAL_FIELDS = ['email', 'phone', 'phoneNumber'];
+      const serverChanged   = CRITICAL_FIELDS.some(f =>
+        serverDoc[f] && localDoc[f] && serverDoc[f] !== localDoc[f]
+      );
+      if (serverChanged) {
+        return {
+          hasConflict: true,
+          resolution:  'manual_required',
+          reason:      'critical_customer_field_conflict',
+        };
+      }
+      /* Non-critical fields: local wins (e.g., name update, loyalty card scan) */
+      return {
+        hasConflict: true,
+        resolution:  'local_wins',
+        reason:      'non_critical_customer_field',
+      };
+    }
+
+    /* ── Default: server wins for unrecognised types ── */
+    return {
+      hasConflict: true,
+      resolution:  'server_wins',
+      reason:      'unknown_type_default_server_wins',
+    };
+  }
+
+  /** Normalises a timestamp value to epoch milliseconds. */
+  function _toMs(ts) {
+    if (!ts) return null;
+    if (typeof ts === 'number')        return ts;
+    if (typeof ts === 'string')        return Date.parse(ts) || null;
+    if (ts.toDate instanceof Function) return ts.toDate().getTime(); // Firestore Timestamp
+    if (ts instanceof Date)            return ts.getTime();
+    return null;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ENHANCEMENT C — Incremental (Delta) Sync
+     Only fetches records updated since `since` (the syncToken returned by
+     bootstrapDevice). Merges results into local IndexedDB without touching
+     records older than the delta window.
+  ══════════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Fetches only records updated since `since` from the server.
+   * Merges into local IndexedDB: update existing by id, insert new ones.
+   * Records with `_deleted: true` are removed from local storage.
+   *
+   * @param {string} merchantId  - Merchant ID for scoping the query.
+   * @param {string} branchId    - Branch ID for scoping the query.
+   * @param {number|string|Date} since - Timestamp of last successful sync.
+   * @returns {Promise<{ products: Array, employees: Array, discounts: Array, serverTime: string }>}
+   */
+  async function getDeltaSync(merchantId, branchId, since) {
+    if (!merchantId || !branchId) {
+      console.warn('[PosSyncEngine] getDeltaSync: merchantId and branchId are required');
+      return { products: [], employees: [], discounts: [], serverTime: null };
+    }
+    if (!navigator.onLine) {
+      return { skipped: true, reason: 'offline', products: [], employees: [], discounts: [] };
+    }
+    if (!await _ensureFS()) {
+      return { skipped: true, reason: 'firestore_sdk_missing', products: [], employees: [], discounts: [] };
+    }
+    const db = _db();
+    if (!db) {
+      return { skipped: true, reason: 'firestore_not_init', products: [], employees: [], discounts: [] };
+    }
+
+    /* Normalise `since` to a JS Date for Firestore where-clause */
+    let sinceDate;
+    try {
+      if (since instanceof Date) {
+        sinceDate = since;
+      } else if (typeof since === 'number') {
+        sinceDate = new Date(since);
+      } else if (typeof since === 'string') {
+        sinceDate = new Date(since);
+      } else if (since?.toDate instanceof Function) {
+        sinceDate = since.toDate();
+      } else {
+        /* Fallback: sync last 24 hours if no valid token */
+        sinceDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        console.warn('[PosSyncEngine] getDeltaSync: invalid `since` — defaulting to last 24h');
+      }
+    } catch (_) {
+      sinceDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    }
+
+    const serverTime = new Date().toISOString();
+
+    try {
+      const {
+        getDocs, collection, query, where, orderBy,
+      } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+
+      /* ── Helper: query a collection for delta records ── */
+      const fetchDelta = async (collectionName, extraWheres = []) => {
+        const constraints = [
+          where('merchantId', '==', merchantId),
+          where('updatedAt',  '>',  sinceDate),
+          orderBy('updatedAt', 'asc'),
+          ...extraWheres,
+        ];
+        const q    = query(collection(db, collectionName), ...constraints);
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      };
+
+      /* ── Fetch deltas for all tracked collections ── */
+      const [products, employees, discounts] = await Promise.all([
+        fetchDelta('posProducts',  [where('branchId', '==', branchId)]),
+        fetchDelta('posEmployees', [where('branchId', '==', branchId)]),
+        fetchDelta('posDiscounts'),
+      ]);
+
+      /* ── Merge into local IndexedDB ── */
+      if (window.PosDB) {
+        await _mergeLocalDB('products',  products,  PosDB.products);
+        await _mergeLocalDB('employees', employees, PosDB.employees);
+        await _mergeLocalDB('discounts', discounts, PosDB.discounts);
+      }
+
+      const totals = {
+        products:  products.length,
+        employees: employees.length,
+        discounts: discounts.length,
+      };
+
+      _emit('sync:delta_complete', { ...totals, since: sinceDate.toISOString(), serverTime });
+
+      return { products, employees, discounts, serverTime, totals };
+
+    } catch (err) {
+      console.error('[PosSyncEngine] getDeltaSync failed:', err);
+      _emit('sync:error', { phase: 'delta', error: err.message });
+      return { error: err.message, products: [], employees: [], discounts: [], serverTime };
+    }
+  }
+
+  /**
+   * Merges an array of server records into a local IndexedDB store.
+   * - Updates existing records by id
+   * - Inserts new records
+   * - Removes records with `_deleted: true`
+   *
+   * @param {string} label     - For logging.
+   * @param {Array}  records   - Server delta records.
+   * @param {Object} store     - PosDB store object with .get() / .save() / .delete() methods.
+   */
+  async function _mergeLocalDB(label, records, store) {
+    if (!store || !records.length) return;
+
+    let updated = 0, inserted = 0, deleted = 0;
+
+    for (const record of records) {
+      try {
+        if (record._deleted === true) {
+          if (store.delete) await store.delete(record.id);
+          deleted++;
+          continue;
+        }
+
+        const existing = store.get ? await store.get(record.id) : null;
+        if (existing) {
+          /* Only update if server version is strictly newer */
+          const localTs  = _toMs(existing.updatedAt);
+          const serverTs = _toMs(record.updatedAt);
+          if (!localTs || !serverTs || serverTs > localTs) {
+            await store.save(record);
+            updated++;
+          }
+        } else {
+          await store.save(record);
+          inserted++;
+        }
+      } catch (err) {
+        console.warn(`[PosSyncEngine] _mergeLocalDB(${label}) failed for ${record.id}:`, err);
+      }
+    }
+
+    if (updated + inserted + deleted > 0) {
+      console.info(`[PosSyncEngine] Delta merge [${label}]: +${inserted} new, ~${updated} updated, -${deleted} deleted`);
+    }
+  }
+
+  /* ── Expose new API methods on the public PosSyncEngine object ── */
+  Object.assign(window.PosSyncEngine, {
+    signTransaction,
+    queueSignedTransaction,
+    detectConflict,
+    getDeltaSync,
+  });
 })();
