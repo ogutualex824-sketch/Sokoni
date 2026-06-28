@@ -2,19 +2,42 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    /* ── Helper: reject executable and dangerous MIME types ── */
+    /* ── Helper: reject executable and dangerous MIME types ──────────────────
+       Security 6.0: expanded blocklist covers archives (zip/rar/7z),
+       scripts (sh/bat/ps1), PE/ELF binaries, SVG (XSS vector), and
+       any application/octet-stream (unknown binary).
+       ────────────────────────────────────────────────────────────────────── */
     function notExecutable() {
       return !(request.resource.contentType.matches('application/x-.*')
             || request.resource.contentType.matches('text/x-.*')
             || request.resource.contentType.matches('application/octet-stream')
             || request.resource.contentType.matches('application/java-.*')
-            || request.resource.contentType.matches('application/vnd.microsoft.portable-executable')
-            || request.resource.contentType.matches('application/x-msdownload')
-            || request.resource.contentType.matches('application/x-dosexec')
+            || request.resource.contentType.matches('application/vnd.microsoft.*')
+            || request.resource.contentType.matches('application/x-ms.*')
+            || request.resource.contentType.matches('application/zip')
+            || request.resource.contentType.matches('application/x-zip.*')
+            || request.resource.contentType.matches('application/x-rar.*')
+            || request.resource.contentType.matches('application/x-7z.*')
+            || request.resource.contentType.matches('application/x-tar')
+            || request.resource.contentType.matches('application/gzip')
+            || request.resource.contentType == 'application/x-msdownload'
+            || request.resource.contentType == 'application/x-dosexec'
+            || request.resource.contentType == 'application/x-shellscript'
             || request.resource.contentType == 'text/html'
             || request.resource.contentType == 'text/javascript'
             || request.resource.contentType == 'application/javascript'
+            || request.resource.contentType == 'application/json'
             || request.resource.contentType == 'image/svg+xml');
+    }
+
+    /* ── Helper: only allow explicitly safe image types ── */
+    function safeImageOnly() {
+      return request.resource.contentType == 'image/jpeg'
+          || request.resource.contentType == 'image/jpg'
+          || request.resource.contentType == 'image/png'
+          || request.resource.contentType == 'image/webp'
+          || request.resource.contentType == 'image/gif'
+          || request.resource.contentType == 'image/avif';
     }
 
     /* ── Provider & entertainment stories — 150 MB video or 15 MB image ── */
@@ -26,7 +49,7 @@ service firebase.storage {
                    && (
                         (request.resource.contentType.matches('video/.*')
                           && request.resource.size < 150 * 1024 * 1024)
-                     || (request.resource.contentType.matches('image/.*')
+                     || (safeImageOnly()
                           && request.resource.size < 15 * 1024 * 1024)
                    );
     }
@@ -39,7 +62,7 @@ service firebase.storage {
                    && (
                         (request.resource.contentType.matches('video/.*')
                           && request.resource.size < 150 * 1024 * 1024)
-                     || (request.resource.contentType.matches('image/.*')
+                     || (safeImageOnly()
                           && request.resource.size < 15 * 1024 * 1024)
                    );
     }
@@ -63,45 +86,41 @@ service firebase.storage {
                    && request.resource.size < 150 * 1024 * 1024;
     }
 
-    /* ── Product images — 15 MB max, images only ── */
+    /* ── Product images — 15 MB max, safe image types only ── */
     match /product-images/{uid}/{allPaths=**} {
       allow read:  if true;
       allow write: if request.auth != null
                    && request.auth.uid == uid
-                   && notExecutable()
-                   && request.resource.contentType.matches('image/.*')
+                   && safeImageOnly()
                    && request.resource.size < 15 * 1024 * 1024;
     }
 
-    /* ── Profile avatars — 5 MB max, images only ── */
+    /* ── Profile avatars — 5 MB max, safe image types only ── */
     match /profile-avatars/{uid}/{filename} {
       allow read:  if true;
       allow write: if request.auth != null
                    && request.auth.uid == uid
-                   && notExecutable()
-                   && request.resource.contentType.matches('image/.*')
+                   && safeImageOnly()
                    && request.resource.size < 5 * 1024 * 1024;
     }
 
-    /* ── Seller store banners / logos — 10 MB max ── */
+    /* ── Seller store banners / logos — 10 MB max, safe image types only ── */
     match /seller-assets/{uid}/{allPaths=**} {
       allow read:  if true;
       allow write: if request.auth != null
                    && request.auth.uid == uid
-                   && notExecutable()
-                   && request.resource.contentType.matches('image/.*')
+                   && safeImageOnly()
                    && request.resource.size < 10 * 1024 * 1024;
     }
 
-    /* ── Driver / provider identity documents — 20 MB max (image or PDF only) ── */
+    /* ── Driver / provider identity documents — 20 MB max (safe image or PDF only) ── */
     match /documents/{uid}/{filename} {
       allow read:  if request.auth != null
                    && (request.auth.uid == uid || request.auth.token.admin == true);
       allow write: if request.auth != null
                    && request.auth.uid == uid
-                   && notExecutable()
                    && request.resource.size < 20 * 1024 * 1024
-                   && (request.resource.contentType.matches('image/.*')
+                   && (safeImageOnly()
                     || request.resource.contentType == 'application/pdf');
     }
 
@@ -114,7 +133,7 @@ service firebase.storage {
                    && (
                         (request.resource.contentType.matches('video/.*')
                           && request.resource.size < 80 * 1024 * 1024)
-                     || (request.resource.contentType.matches('image/.*')
+                     || (safeImageOnly()
                           && request.resource.size < 15 * 1024 * 1024)
                    );
     }
@@ -136,6 +155,36 @@ service firebase.storage {
                      || (request.resource.contentType == 'application/pdf'
                           && request.resource.size < 20 * 1024 * 1024)
                    );
+    }
+
+    /* ── Security audit exports — admin-only, PDF/JSON only ── */
+    match /security-exports/{adminUid}/{filename} {
+      allow read:  if request.auth != null
+                   && (request.auth.uid == adminUid
+                       || request.auth.token.role == 'admin'
+                       || request.auth.token.role == 'super_admin');
+      allow write: if request.auth != null
+                   && request.auth.uid == adminUid
+                   && notExecutable()
+                   && (request.resource.contentType == 'application/pdf'
+                    || request.resource.contentType == 'text/csv'
+                    || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                   && request.resource.size < 50 * 1024 * 1024;
+    }
+
+    /* ── KYC / verification documents — strict: image or PDF, admin+owner read ── */
+    match /kyc-documents/{uid}/{filename} {
+      allow read:  if request.auth != null
+                   && (request.auth.uid == uid
+                       || request.auth.token.admin == true
+                       || request.auth.token.role == 'admin'
+                       || request.auth.token.role == 'super_admin');
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && notExecutable()
+                   && request.resource.size < 20 * 1024 * 1024
+                   && (safeImageOnly()
+                    || request.resource.contentType == 'application/pdf');
     }
 
     /* ── Default: deny everything else ── */

@@ -70,7 +70,7 @@ async function _ensureWallet(db, uid) {
 
 // ─── 1. getWalletBalance ───────────────────────────────────────────────────
 
-exports.getWalletBalance = onCall({ cors: true }, async (request) => {
+exports.getWalletBalance = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
 
   const db = getFirestore();
@@ -281,7 +281,7 @@ exports.confirmWalletTopUp = onCall(
 
 // ─── 4. spendFromWallet ────────────────────────────────────────────────────
 
-exports.spendFromWallet = onCall({ cors: true }, async (request) => {
+exports.spendFromWallet = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
 
   const db = getFirestore();
@@ -338,7 +338,7 @@ exports.spendFromWallet = onCall({ cors: true }, async (request) => {
 
 // ─── 5. getWalletTransactions ──────────────────────────────────────────────
 
-exports.getWalletTransactions = onCall({ cors: true }, async (request) => {
+exports.getWalletTransactions = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
 
   const db = getFirestore();
@@ -385,7 +385,7 @@ exports.getWalletTransactions = onCall({ cors: true }, async (request) => {
 
 // ─── 6. requestSellerPayout ────────────────────────────────────────────────
 
-exports.requestSellerPayout = onCall({ cors: true }, async (request) => {
+exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
 
   const db = getFirestore();
@@ -418,25 +418,30 @@ exports.requestSellerPayout = onCall({ cors: true }, async (request) => {
     throw new Error('INVALID_ARGUMENT: bankCode is required for bank payouts');
   }
 
-  // Check wallet balance
-  const walletSnap = await db.collection('wallets').doc(uid).get();
-  const balance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
-  if (balance < amt) {
-    throw new Error(`INSUFFICIENT_FUNDS: Available balance (KSh ${balance}) is less than requested KSh ${amt}`);
-  }
+  /* Atomically check balance and reserve the payout amount to prevent concurrent overdraw */
+  const reqId     = _genId('pout');
+  const walletRef = db.collection('wallets').doc(uid);
+  const reqRef    = db.collection('payoutRequests').doc(reqId);
 
-  const reqId = _genId('pout');
-  await db.collection('payoutRequests').doc(reqId).set({
-    sellerUid: uid,
-    amount: amt,
-    method,
-    accountNumber: sanitizedAccount,
-    bankCode: method === 'bank' ? _san(bankCode, 20) : null,
-    bankName: method === 'bank' ? _san(bankName, 100) : null,
-    status: 'pending',
-    note: null,
-    processedAt: null,
-    createdAt: Timestamp.now(),
+  await db.runTransaction(async (t) => {
+    const walletSnap = await t.get(walletRef);
+    const balance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
+    if (balance < amt) {
+      throw new Error(`INSUFFICIENT_FUNDS: Available balance (KSh ${balance}) is less than requested KSh ${amt}`);
+    }
+    t.update(walletRef, { balance: balance - amt, pendingPayout: admin.firestore.FieldValue.increment(amt) });
+    t.set(reqRef, {
+      sellerUid:     uid,
+      amount:        amt,
+      method,
+      accountNumber: sanitizedAccount,
+      bankCode:      method === 'bank' ? _san(bankCode, 20) : null,
+      bankName:      method === 'bank' ? _san(bankName, 100) : null,
+      status:        'pending',
+      note:          null,
+      processedAt:   null,
+      createdAt:     Timestamp.now(),
+    });
   });
 
   return {
@@ -448,7 +453,7 @@ exports.requestSellerPayout = onCall({ cors: true }, async (request) => {
 
 // ─── 7. getPayoutHistory ───────────────────────────────────────────────────
 
-exports.getPayoutHistory = onCall({ cors: true }, async (request) => {
+exports.getPayoutHistory = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
 
   const db = getFirestore();
@@ -485,7 +490,7 @@ exports.getPayoutHistory = onCall({ cors: true }, async (request) => {
 
 // ─── 8. adminProcessPayout ─────────────────────────────────────────────────
 
-exports.adminProcessPayout = onCall({ cors: true }, async (request) => {
+exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
   _requireAdmin(request);
 
@@ -523,10 +528,13 @@ exports.adminProcessPayout = onCall({ cors: true }, async (request) => {
 
       if (!txSnap.exists) {
         const current = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
-        const newBalance = Math.max(0, current - payout.amount);
+        if (current < payout.amount) {
+          throw new Error(`INSUFFICIENT_FUNDS: Wallet balance (KSh ${current}) insufficient for payout of KSh ${payout.amount}`);
+        }
+        const newBalance = current - payout.amount;
 
         if (walletSnap.exists) {
-          t.update(walletRef, { balance: newBalance });
+          t.update(walletRef, { balance: newBalance, pendingPayout: admin.firestore.FieldValue.increment(-payout.amount) });
         } else {
           t.set(walletRef, {
             uid: payout.sellerUid,
@@ -559,7 +567,7 @@ exports.adminProcessPayout = onCall({ cors: true }, async (request) => {
 
 // ─── 9. adminGetPendingPayouts ─────────────────────────────────────────────
 
-exports.adminGetPendingPayouts = onCall({ cors: true }, async (request) => {
+exports.adminGetPendingPayouts = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
   _requireAdmin(request);
 
@@ -600,7 +608,7 @@ exports.adminGetPendingPayouts = onCall({ cors: true }, async (request) => {
 
 // ─── 10. refundToWallet ────────────────────────────────────────────────────
 
-exports.refundToWallet = onCall({ cors: true }, async (request) => {
+exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
 
   const db = getFirestore();

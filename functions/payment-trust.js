@@ -36,10 +36,9 @@ async function _assertAuth(auth) {
   return auth.uid;
 }
 
-async function _assertAdmin(auth) {
-  const uid  = await _assertAuth(auth);
-  const user = await db.collection('users').doc(uid).get();
-  if (!user.exists || !['admin','superAdmin'].includes(user.data()?.role)) {
+function _assertAdmin(auth) {
+  const uid = _assertAuth(auth);
+  if (!auth?.token?.admin && !auth?.token?.superAdmin) {
     _e('Admin access required', 'permission-denied');
   }
   return uid;

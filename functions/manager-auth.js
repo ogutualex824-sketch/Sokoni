@@ -129,13 +129,18 @@ exports.cleanupAuthRequests = onSchedule(
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 
 exports.registerManagerFCMToken = onCall(
-  { region: 'us-central1' },
+  { region: 'us-central1', enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
 
     const { managerId, token } = request.data;
     if (!managerId || typeof managerId !== 'string') throw new HttpsError('invalid-argument', 'managerId required');
     if (!token || typeof token !== 'string')         throw new HttpsError('invalid-argument', 'token required');
+
+    const isAdmin = request.auth.token?.admin || request.auth.token?.superAdmin;
+    if (managerId !== request.auth.uid && !isAdmin) {
+      throw new HttpsError('permission-denied', 'Cannot register FCM token for another user');
+    }
 
     const db = getFirestore();
     await db.collection('managerFCMTokens').doc(managerId).set({

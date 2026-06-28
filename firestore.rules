@@ -160,15 +160,17 @@ service cloud.firestore {
     }
     match /venueBlockouts/{blockId} {
       allow read:   if isAuthed();
-      allow create: if isAuthed();
+      /* Creator must own the venue they are blocking out */
+      allow create: if isAuthed()
+                    && request.resource.data.createdBy == request.auth.uid
+                    && get(/databases/$(database)/documents/venues/$(request.resource.data.venueId)).data.ownerId == request.auth.uid;
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.createdBy == request.auth.uid);
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.createdBy == request.auth.uid);
     }
     match /bookingHolds/{holdId} {
-
-      allow read:   if isAuthed();
+      allow read:   if isAdmin() || (isAuthed() && resource.data.userId == request.auth.uid);
       allow create: if isAuthed() && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthed() && resource.data.userId == request.auth.uid || isAdmin();
     }
@@ -193,7 +195,7 @@ service cloud.firestore {
     }
 
     match /driverLocations/{driverId} {
-      allow read:   if true;
+      allow read:   if isAuthed();
       allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
       allow update: if isAuthed()
                     && resource.data.uid          == request.auth.uid
@@ -1586,18 +1588,7 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
     }
 
-    match /payments/{paymentId} {
-
-      allow read:   if isAdmin()
-                    || (isAuthed() && resource.data.uid == request.auth.uid);
-
-      allow create: if isAuthed()
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.status == "PENDING"
-                    && request.resource.data.keys().hasAll(['uid','amount','ref','status']);
-
-      allow delete: if isAdmin();
-    }
+    /* payments rules are defined exclusively in the Unified Payment Orchestrator block below (CF-only writes) */
 
     match /subscriptions/{uid} {
       allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
@@ -1838,7 +1829,8 @@ service cloud.firestore {
     }
 
     match /posConfig/{configId} {
-      allow read:   if isAuthed();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.sellerId == request.auth.uid);
       allow write:  if isAdmin();
     }
 
@@ -2329,8 +2321,11 @@ service cloud.firestore {
     }
 
     match /gipDispatch/{jobId} {
-      allow read:   if isAuthed();
-      allow create: if isAuthed();
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['uid','type','status']);
       allow update: if isAuthed()
                     && (isAdmin() || resource.data.assignedAssetId == request.auth.uid);
       allow delete: if isAdmin();
@@ -2488,15 +2483,15 @@ service cloud.firestore {
     }
 
     match /platformServices/{serviceId} {
-      allow read:  if isAuthed();
+      allow read:  if isAdmin();
     }
 
     match /platformHealth/{serviceId} {
-      allow read:  if isAuthed();
+      allow read:  if isAdmin();
     }
 
     match /platformDependencies/{edgeId} {
-      allow read:  if isAuthed();
+      allow read:  if isAdmin();
     }
 
     match /platformEvents/{eventId} {
@@ -2559,7 +2554,11 @@ service cloud.firestore {
 
     match /managerFCMTokens/{managerId} {
       allow read:   if isAdmin();
-      allow write:  if isAuthed();
+      /* Each manager may only write their own FCM token; admins may write any */
+      allow write:  if isAdmin()
+                    || (isAuthed()
+                        && request.auth.uid == managerId
+                        && request.resource.data.uid == request.auth.uid);
     }
 
     match /contactRequests/{reqId} {
@@ -2817,7 +2816,9 @@ service cloud.firestore {
     }
 
     match /trackingShares/{shareId} {
-      allow read:   if isAuthed();           
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.createdBy == request.auth.uid
+                                      || resource.data.sharedWith == request.auth.uid));
       allow create: if isAuthed() && request.resource.data.createdBy == request.auth.uid;
       allow delete: if isAuthed() && resource.data.createdBy == request.auth.uid || isAdmin();
       allow update: if isAdmin();
@@ -3452,6 +3453,54 @@ service cloud.firestore {
       allow write:  if false; // CF-only
     }
 
+    /* ── Missing collections (audit-identified) ─────────────────────── */
+    match /supportTickets/{ticketId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['uid','subject','message','status']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    match /reports/{reportId} {
+      allow read:  if isAdmin();
+      allow create: if isAuthed()
+                    && request.resource.data.reportedBy == request.auth.uid;
+      allow write:  if isAdmin();
+    }
+    match /receiptEvents/{eventId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerId == request.auth.uid);
+      allow write: if false;
+    }
+    match /mediaAssets/{assetId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+    match /posWebhookDeliveryLog/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /posOfflineQueue/{queueId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerId == request.auth.uid);
+      allow write: if false;
+    }
+    match /adminAudit/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /adminAuditLogs/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /adminAuditLog/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     /* ── Enterprise Health & Operations v1.0 ─────────────────────────── */
     match /systemHealthHistory/{snapId} {
       allow read:  if isAdmin();
@@ -3496,6 +3545,34 @@ service cloud.firestore {
     match /_health/{docId} {
       allow read:  if false;
       allow write: if false;
+    }
+
+    /* ── B2B / Wholesale Commerce v1.0 ──────────────────────────────────── */
+    match /wholesaleAccounts/{uid} {
+      allow read: if isAuthed() && (request.auth.uid == uid || isAdmin());
+      allow write: if false; // CF-only
+    }
+    match /wholesaleOrders/{orderId} {
+      allow read: if isAdmin()
+                  || (isAuthed() && resource.data.buyerUid == request.auth.uid)
+                  || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      allow write: if false; // CF-only
+    }
+    match /wholesaleLedger/{ledgerId} {
+      allow read: if isAdmin()
+                  || (isAuthed() && resource.data.buyerUid == request.auth.uid);
+      allow write: if false; // CF-only
+    }
+    match /wholesaleCreditNotes/{noteId} {
+      allow read: if isAdmin()
+                  || (isAuthed() && resource.data.buyerUid == request.auth.uid);
+      allow write: if false; // CF-only
+    }
+
+    /* ── Release Readiness Certification v1.0 ────────────────────────── */
+    match /releaseReports/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only: runReleaseReadinessCheck + approveRelease
     }
 
   }

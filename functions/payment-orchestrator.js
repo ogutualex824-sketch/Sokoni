@@ -13,12 +13,44 @@ const { onCall, HttpsError }  = require('firebase-functions/v2/https');
 const { onSchedule }          = require('firebase-functions/v2/scheduler');
 const { defineSecret }        = require('firebase-functions/params');
 const admin                   = require('firebase-admin');
+const logger                  = require('firebase-functions/logger');
 
 const INTASEND_SK = defineSecret('INTASEND_PRIVATE_KEY');
 
 const db   = admin.firestore;
 const now  = () => admin.firestore.FieldValue.serverTimestamp();
 const incr = (n) => admin.firestore.FieldValue.increment(n);
+
+/* ── Rate limiter (Firestore-backed, cross-instance safe) ── */
+async function _rateLimit(key, maxCalls, windowSec) {
+  const ref  = admin.firestore().collection('rateLimits').doc(`pay_${key}`);
+  const win  = Math.floor(Date.now() / (windowSec * 1000));
+  const docId = `${key}_${win}`;
+  const limitRef = admin.firestore().collection('rateLimits').doc(docId);
+  let ok = false;
+  await admin.firestore().runTransaction(async (t) => {
+    const snap = await t.get(limitRef);
+    const count = snap.exists ? (snap.data().count || 0) : 0;
+    if (count < maxCalls) {
+      t.set(limitRef, { count: count + 1, expiresAt: Date.now() + windowSec * 1000 }, { merge: true });
+      ok = true;
+    }
+  });
+  return ok;
+}
+
+/* ── Metadata sanitizer — allowlist + size guard ── */
+const META_ALLOWLIST = new Set(['serviceDesc', 'note', 'referralCode', 'couponCode', 'channel', 'deviceId']);
+function _sanitizeMeta(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const k of META_ALLOWLIST) {
+    if (raw[k] !== undefined && typeof raw[k] === 'string') {
+      out[k] = raw[k].replace(/[<>"']/g, '').slice(0, 256);
+    }
+  }
+  return out;
+}
 
 /* ── Payment status machine ── */
 const STATUS = {
@@ -107,6 +139,11 @@ function _emitEvent(type, payload, correlationId) {
 ═══════════════════════════════════════════════════════════ */
 exports.createPayment = onCall({ enforceAppCheck: true }, async (request) => {
   const auth = _authRequired(request);
+
+  if (!await _rateLimit(`create_${auth.uid}`, 10, 60)) {
+    throw new HttpsError('resource-exhausted', 'Too many payment requests. Please wait a moment.');
+  }
+
   const {
     amount, currency = 'KES', provider, orderId, referenceId,
     idempotencyKey, metadata: meta = {},
@@ -148,7 +185,7 @@ exports.createPayment = onCall({ enforceAppCheck: true }, async (request) => {
     status:         STATUS.CREATED,
     attempts:       0,
     maxAttempts:    3,
-    metadata:       meta,
+    metadata:       _sanitizeMeta(meta),
     history: [{
       status:    STATUS.CREATED,
       at:        new Date().toISOString(),
@@ -173,6 +210,11 @@ exports.initiatePayment = onCall(
   { enforceAppCheck: true, secrets: [INTASEND_SK] },
   async (request) => {
     const auth = _authRequired(request);
+
+    if (!await _rateLimit(`initiate_${auth.uid}`, 5, 60)) {
+      throw new HttpsError('resource-exhausted', 'Too many payment initiation requests. Please wait a moment.');
+    }
+
     const { paymentId, phone } = request.data || {};
 
     if (!paymentId) throw new HttpsError('invalid-argument', 'paymentId required');
@@ -258,8 +300,9 @@ exports.initiatePayment = onCall(
    Marks payment succeeded/failed.
 ═══════════════════════════════════════════════════════════ */
 exports.confirmPayment = onCall({ enforceAppCheck: true }, async (request) => {
-  const auth   = request.auth;
-  const claims = auth ? (auth.token || {}) : {};
+  /* Authentication is always required — unauthenticated callers cannot confirm payments */
+  const auth   = _authRequired(request);
+  const claims = auth.token || {};
   const isAdmin = claims.admin || claims.role === 'admin' || claims.role === 'super_admin';
   const { paymentId, succeeded, failReason, providerRef } = request.data || {};
 
@@ -271,8 +314,8 @@ exports.confirmPayment = onCall({ enforceAppCheck: true }, async (request) => {
 
   const payment = snap.data();
 
-  /* Only admin, system, or the CF that initiated can confirm */
-  if (!isAdmin && auth && payment.buyerId !== auth.uid) {
+  /* Only admin or the buyer who created this payment can confirm it */
+  if (!isAdmin && payment.buyerId !== auth.uid) {
     throw new HttpsError('permission-denied', 'Access denied');
   }
 

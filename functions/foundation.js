@@ -302,16 +302,27 @@ exports.foundationCheckPayment = onCall(
 
     if (['COMPLETE', 'COMPLETED', 'SUCCESS'].includes(String(state).toUpperCase())) {
       const dateStr = new Date().toLocaleDateString('en-KE', { year:'numeric', month:'long', day:'numeric' });
-      await docRef.update({ status: 'completed', completedAt: _now(), dateStr, updatedAt: _now() });
 
-      /* Update platform stats */
+      /* Atomic batch: donation status + stats + optional recurring record + audit log */
       const statsRef = fdb().collection('foundationStats').doc('current');
+      const auditRef = fdb().collection('foundationAuditLog').doc();
       const batch = fdb().batch();
+
+      batch.update(docRef, { status: 'completed', completedAt: _now(), dateStr, updatedAt: _now() });
       batch.set(statsRef, {
         totalDonations: _incr(don.amount),
         totalDonors:    _incr(1),
         updatedAt:      _now(),
       }, { merge: true });
+      batch.set(auditRef, {
+        event:      'donation_completed',
+        uid,
+        donationId,
+        amount:     don.amount,
+        destination: don.destination,
+        method:     'M-Pesa',
+        timestamp:  _now(),
+      });
 
       /* If recurring, create recurring record */
       if (don.frequency && don.frequency !== 'one-time') {

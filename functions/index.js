@@ -19,6 +19,7 @@ const INTASEND_PRIVATE_KEY = defineSecret("INTASEND_PRIVATE_KEY");
 const AT_API_KEY           = defineSecret("AT_API_KEY");
 const AT_USERNAME          = defineSecret("AT_USERNAME");
 const ALGOLIA_ADMIN_KEY    = defineSecret("ALGOLIA_ADMIN_KEY");
+const SOKONI_HMAC_KEY      = defineSecret("SOKONI_HMAC_KEY");
 
 /* ── Structured logging utility ─────────────────────────────────────────────
    Creates a scoped logger that prefixes every message with a unique
@@ -1366,7 +1367,7 @@ exports.sokoniChat = onRequest(
     /* Rate limit: 30 messages per IP per minute — Firestore-backed so it works across all CF instances */
     const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip || "unknown";
     const _chatRl = await checkRateLimitDurable(`chat_${ip}`, 30, 60);
-    if (!_chatRl.allowed) {
+    if (!_chatRl.ok) {
       res.status(429).json({ error: "Too many messages — please wait a moment before trying again." });
       return;
     }
@@ -8567,3 +8568,29 @@ exports.testSecretAccess             = drModule.testSecretAccess;
 exports.generateDRReport             = drModule.generateDRReport;
 exports.runRecoveryPlaybook          = drModule.runRecoveryPlaybook;
 exports.getDRHistory                 = drModule.getDRHistory;
+
+/* ── B2B / Wholesale Commerce v1.0 ─────────────────────────────────────── */
+const b2bWholesale = require('./b2b-wholesale');
+exports.createWholesaleAccount   = b2bWholesale.createWholesaleAccount;
+exports.approveWholesaleAccount  = b2bWholesale.approveWholesaleAccount;
+exports.createWholesaleOrder     = b2bWholesale.createWholesaleOrder;
+exports.approveWholesaleOrder    = b2bWholesale.approveWholesaleOrder;
+exports.getWholesaleOrders       = b2bWholesale.getWholesaleOrders;
+exports.processWholesalePayment  = b2bWholesale.processWholesalePayment;
+exports.issueWholesaleCreditNote = b2bWholesale.issueWholesaleCreditNote;
+exports.getWholesaleCreditNotes  = b2bWholesale.getWholesaleCreditNotes;
+exports.getWholesaleCatalog      = b2bWholesale.getWholesaleCatalog;
+exports.updateWholesaleProduct   = b2bWholesale.updateWholesaleProduct;
+exports.getWholesaleAnalytics    = b2bWholesale.getWholesaleAnalytics;
+exports.getWholesaleAccount      = b2bWholesale.getWholesaleAccount;
+
+/* ── Release Readiness Certification v1.0 ──────────────────────────────── */
+const relReadiness = require('./release-readiness');
+exports.runReleaseReadinessCheck = relReadiness.runReleaseReadinessCheck;
+exports.checkInfrastructure      = relReadiness.checkInfrastructure;
+exports.checkSecurityReadiness   = relReadiness.checkSecurityReadiness;
+exports.checkPlatformModules     = relReadiness.checkPlatformModules;
+exports.checkPerformanceReadiness= relReadiness.checkPerformanceReadiness;
+exports.checkComplianceReadiness = relReadiness.checkComplianceReadiness;
+exports.approveRelease           = relReadiness.approveRelease;
+exports.getLatestReleaseReport   = relReadiness.getLatestReleaseReport;

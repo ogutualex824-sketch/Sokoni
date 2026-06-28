@@ -100,7 +100,7 @@ async function _auditLog({ actor, action, resource, details, severity }) {
    Returns: { success: true, uid, role }
    Guard  : superAdmin only
 ═══════════════════════════════════════════════════════════════════════════════ */
-exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 10 }, async (request) => {
+exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
   _requireSuperAdmin(request);
 
   const { uid, role } = request.data || {};
@@ -168,7 +168,7 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
    Returns: { success: true, uid, suspended: boolean }
    Guard  : superAdmin only
 ═══════════════════════════════════════════════════════════════════════════════ */
-exports.suspendUser = onCall({ cors: true, region: 'us-central1', maxInstances: 10 }, async (request) => {
+exports.suspendUser = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
   _requireSuperAdmin(request);
 
   const { uid, suspend, reason } = request.data || {};
@@ -254,7 +254,7 @@ exports.suspendUser = onCall({ cors: true, region: 'us-central1', maxInstances: 
    Returns: { success: true, broadcastId: string }
    Guard  : admin OR superAdmin
 ═══════════════════════════════════════════════════════════════════════════════ */
-exports.sendPlatformBroadcast = onCall({ cors: true, region: 'us-central1', maxInstances: 10 }, async (request) => {
+exports.sendPlatformBroadcast = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
   _requireAdmin(request);
 
   const { title, message, priority, audience } = request.data || {};
